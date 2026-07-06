@@ -1,0 +1,5841 @@
+use std::collections::HashMap;
+use std::future::Future;
+use std::io::{Read, Write};
+use std::net::{Shutdown, SocketAddr, TcpListener as StdTcpListener, TcpStream};
+use std::path::{Path, PathBuf};
+use std::pin::Pin;
+use std::process::Stdio;
+use std::sync::{
+    Arc, Mutex,
+    atomic::{AtomicBool, Ordering},
+    mpsc,
+};
+use std::thread::JoinHandle;
+use std::time::Duration;
+
+use portable_pty::{Child, CommandBuilder, MasterPty, PtySize, native_pty_system};
+use russh::keys::{PrivateKeyWithHashAlg, PublicKeyBase64};
+use russh::{ChannelMsg, Disconnect, MethodKind, client};
+use russh_sftp::client::SftpSession;
+use serialport::{DataBits, FlowControl, Parity, SerialPort, StopBits};
+use thiserror::Error;
+use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
+use tokio::sync::{mpsc as tokio_mpsc, oneshot};
+
+mod recording;
+mod stats;
+
+mod docker;
+
+pub use docker::{
+    DOCKER_COMPOSE_PROJECTS_SCRIPT, DOCKER_IMAGES_SCRIPT, DOCKER_NETWORKS_SCRIPT,
+    DOCKER_OVERVIEW_SCRIPT, DOCKER_VOLUMES_SCRIPT, DockerComposeProject, DockerComposeService,
+    DockerComposeServiceContainer, DockerContainer, DockerContainerDetails, DockerContainerMount,
+    DockerContainerNetwork, DockerContainerStats, DockerImage, DockerNetwork, DockerService,
+    DockerVolume, RemoteDockerOverview, docker_container_details_script, parse_compose_projects,
+    parse_compose_services_output, parse_docker_container_details_output,
+    parse_docker_images_output, parse_docker_networks_output, parse_docker_overview_output,
+    parse_docker_stats_output, parse_docker_volumes_output,
+};
+pub use recording::{
+    DEFAULT_HISTORY_SEARCH_LIMIT, DEFAULT_HISTORY_SEARCH_LINES, DEFAULT_MEMORY_LIMIT_BYTES,
+    MAX_HISTORY_SEARCH_LINES, RecordingError, RecordingManager, TerminalHistorySearchRequest,
+    TerminalHistorySearchResponse, TerminalHistorySearchResult, safe_recording_name,
+};
+pub use stats::{
+    CpuInfo, DiskInfo, LoadInfo, MemoryInfo, NetworkInfo, RemoteStats, RemoteStatsService,
+    SYSINFO_SCRIPT, SystemInfo, parse_stats_output,
+};
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct LocalSessionConfig {
+    pub name: String,
+    pub shell_path: Option<String>,
+    pub shell_args: Vec<String>,
+    pub working_dir: Option<PathBuf>,
+    pub cols: u16,
+    pub rows: u16,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TelnetEnterMode {
+    Crlf,
+    Cr,
+    Lf,
+}
+
+impl Default for TelnetEnterMode {
+    fn default() -> Self {
+        Self::Cr
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TelnetSessionConfig {
+    pub name: String,
+    pub host: String,
+    pub port: u16,
+    pub raw_tcp: bool,
+    pub enter_mode: TelnetEnterMode,
+    pub force_character_at_a_time: bool,
+    pub send_naws: bool,
+    pub send_sga: bool,
+    pub cols: u16,
+    pub rows: u16,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SerialSessionConfig {
+    pub name: String,
+    pub port_name: String,
+    pub baud_rate: u32,
+    pub data_bits: u8,
+    pub parity: String,
+    pub stop_bits: String,
+    pub backspace_mode: String,
+}
+
+#[derive(Clone)]
+pub struct SshSessionConfig {
+    pub name: String,
+    pub host: String,
+    pub port: u16,
+    pub username: String,
+    pub password: Option<String>,
+    pub key_auth: Option<SshKeyAuthConfig>,
+    pub otp_id: Option<String>,
+    pub auto_fill_otp: bool,
+    pub proxy_jump: Option<Box<SshSessionConfig>>,
+    pub allow_none_auth: bool,
+    pub backspace_mode: String,
+    pub term: String,
+    pub x11_forwarding: bool,
+    pub x11_display: String,
+    pub cols: u16,
+    pub rows: u16,
+    pub host_key_verifier: Option<Arc<dyn SshHostKeyVerifier>>,
+    pub credential_provider: Option<Arc<dyn SshCredentialProvider>>,
+    pub otp_provider: Option<Arc<dyn SshOtpProvider>>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SshKeyAuthConfig {
+    pub key_data: String,
+    pub cert_data: Option<String>,
+    pub passphrase: Option<String>,
+}
+
+impl std::fmt::Debug for SshSessionConfig {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("SshSessionConfig")
+            .field("name", &self.name)
+            .field("host", &self.host)
+            .field("port", &self.port)
+            .field("username", &self.username)
+            .field("password", &self.password.as_ref().map(|_| "<redacted>"))
+            .field("key_auth", &self.key_auth.as_ref().map(|_| "<redacted>"))
+            .field("otp_id", &self.otp_id)
+            .field("auto_fill_otp", &self.auto_fill_otp)
+            .field("proxy_jump", &self.proxy_jump.is_some())
+            .field("allow_none_auth", &self.allow_none_auth)
+            .field("backspace_mode", &self.backspace_mode)
+            .field("term", &self.term)
+            .field("x11_forwarding", &self.x11_forwarding)
+            .field("x11_display", &self.x11_display)
+            .field("cols", &self.cols)
+            .field("rows", &self.rows)
+            .field("host_key_verifier", &self.host_key_verifier.is_some())
+            .field("credential_provider", &self.credential_provider.is_some())
+            .field("otp_provider", &self.otp_provider.is_some())
+            .finish()
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SshHostKey {
+    pub host: String,
+    pub port: u16,
+    pub host_identifier: String,
+    pub key_type: String,
+    pub key_base64: String,
+    pub fingerprint: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum SshHostKeyDecision {
+    Accept,
+    Reject(String),
+}
+
+pub trait SshHostKeyVerifier: Send + Sync {
+    fn verify(&self, host_key: &SshHostKey) -> Result<SshHostKeyDecision, String>;
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum SshCredentialPromptKind {
+    Password,
+    KeyPassphrase,
+    KeyboardInteractive,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum SshCredentialPromptReason {
+    MissingPassword,
+    PasswordRejected,
+    KeyPassphraseRequired,
+    KeyboardInteractive,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SshCredentialPrompt {
+    pub host: String,
+    pub port: u16,
+    pub username: String,
+    pub connection_name: String,
+    pub kind: SshCredentialPromptKind,
+    pub reason: SshCredentialPromptReason,
+    pub attempt: u32,
+    pub prompt_text: Option<String>,
+    pub echo: bool,
+}
+
+pub trait SshCredentialProvider: Send + Sync {
+    fn request_secret(&self, prompt: &SshCredentialPrompt) -> Result<Option<String>, String>;
+}
+
+pub trait SshOtpProvider: Send + Sync {
+    fn request_otp_code(&self, otp_id: &str) -> Result<Option<String>, String>;
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SshTunnelMode {
+    Local,
+    Remote,
+    Dynamic,
+}
+
+#[derive(Clone)]
+pub struct SshTunnelConfig {
+    pub id: String,
+    pub ssh_config: SshSessionConfig,
+    pub mode: SshTunnelMode,
+    pub bind_host: String,
+    pub listen_port: u16,
+    pub target_host: Option<String>,
+    pub target_port: Option<u16>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SshMultiplexInfo {
+    pub name: String,
+    pub host: String,
+    pub port: u16,
+    pub username: String,
+    pub jump_count: usize,
+}
+
+#[derive(Clone)]
+pub struct SshMultiplexHandle {
+    inner: Arc<SshMultiplexInner>,
+}
+
+type SharedSshHandle = Arc<tokio::sync::Mutex<client::Handle<SshClientHandler>>>;
+type ForwardedTcpIpRegistry = Arc<tokio::sync::Mutex<ForwardedTcpIpDispatch>>;
+
+struct SshMultiplexInner {
+    runtime: Arc<tokio::runtime::Runtime>,
+    target: SharedSshHandle,
+    jumps: Vec<SharedSshHandle>,
+    info: SshMultiplexInfo,
+    forwarded_tcpip: ForwardedTcpIpRegistry,
+    closed: AtomicBool,
+}
+
+#[derive(Default)]
+struct ForwardedTcpIpDispatch {
+    fallback: Option<tokio_mpsc::UnboundedSender<ForwardedTcpIpChannel>>,
+    by_listener: HashMap<(String, u32), tokio_mpsc::UnboundedSender<ForwardedTcpIpChannel>>,
+}
+
+impl std::fmt::Debug for SshMultiplexHandle {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("SshMultiplexHandle")
+            .field("info", &self.inner.info)
+            .field("closed", &self.is_closed())
+            .finish()
+    }
+}
+
+impl SshMultiplexHandle {
+    pub fn info(&self) -> SshMultiplexInfo {
+        self.inner.info.clone()
+    }
+
+    pub fn jump_count(&self) -> usize {
+        self.inner.info.jump_count
+    }
+
+    pub fn is_closed(&self) -> bool {
+        self.inner.closed.load(Ordering::Relaxed)
+    }
+
+    pub fn matches_config(&self, config: &SshSessionConfig) -> bool {
+        self.inner.info.host == config.host
+            && self.inner.info.port == config.port
+            && self.inner.info.username == config.username
+    }
+
+    pub fn ensure_matches_config(&self, config: &SshSessionConfig) -> anyhow::Result<()> {
+        if self.matches_config(config) {
+            return Ok(());
+        }
+        let info = &self.inner.info;
+        anyhow::bail!(
+            "SSH multiplex handle targets {}@{}:{}, but operation targets {}@{}:{}",
+            info.username,
+            info.host,
+            info.port,
+            config.username,
+            config.host,
+            config.port
+        )
+    }
+
+    pub fn disconnect(&self) -> anyhow::Result<()> {
+        if self.inner.closed.swap(true, Ordering::Relaxed) {
+            return Ok(());
+        }
+        let target = self.inner.target.clone();
+        let jumps = self.inner.jumps.clone();
+        self.inner.runtime.block_on(async move {
+            let _ = target
+                .lock()
+                .await
+                .disconnect(Disconnect::ByApplication, "ssh multiplex closed", "en")
+                .await;
+            for jump in jumps {
+                let _ = jump
+                    .lock()
+                    .await
+                    .disconnect(Disconnect::ByApplication, "ssh multiplex closed", "en")
+                    .await;
+            }
+            Ok(())
+        })
+    }
+
+    fn target_handle(&self) -> SharedSshHandle {
+        self.inner.target.clone()
+    }
+
+    fn forwarded_tcpip_registry(&self) -> ForwardedTcpIpRegistry {
+        self.inner.forwarded_tcpip.clone()
+    }
+
+    fn block_on<T, F>(&self, operation: F) -> anyhow::Result<T>
+    where
+        F: Future<Output = anyhow::Result<T>> + Send + 'static,
+        T: Send + 'static,
+    {
+        if self.is_closed() {
+            anyhow::bail!("SSH multiplex handle is closed");
+        }
+        self.inner.runtime.block_on(operation)
+    }
+}
+
+fn forwarded_tcpip_sender_for(
+    dispatch: &ForwardedTcpIpDispatch,
+    connected_address: &str,
+    connected_port: u32,
+) -> Option<tokio_mpsc::UnboundedSender<ForwardedTcpIpChannel>> {
+    dispatch
+        .by_listener
+        .get(&(connected_address.to_string(), connected_port))
+        .or(dispatch.fallback.as_ref())
+        .cloned()
+}
+
+pub fn open_ssh_multiplex_handle(config: SshSessionConfig) -> anyhow::Result<SshMultiplexHandle> {
+    let runtime = Arc::new(
+        tokio::runtime::Builder::new_multi_thread()
+            .enable_all()
+            .thread_name("nyaterm-ssh-multiplex")
+            .build()
+            .map_err(|error| anyhow::anyhow!("failed to start SSH multiplex runtime: {error}"))?,
+    );
+    let forwarded_tcpip = Arc::new(tokio::sync::Mutex::new(ForwardedTcpIpDispatch::default()));
+    let (target, jumps) = runtime.block_on(open_authenticated_ssh_handle_with_sender_registry(
+        &config,
+        Some(forwarded_tcpip.clone()),
+        None,
+    ))?;
+    let info = SshMultiplexInfo {
+        name: config.name,
+        host: config.host,
+        port: config.port,
+        username: config.username,
+        jump_count: jumps.len(),
+    };
+    Ok(SshMultiplexHandle {
+        inner: Arc::new(SshMultiplexInner {
+            runtime,
+            target: Arc::new(tokio::sync::Mutex::new(target)),
+            jumps: jumps
+                .into_iter()
+                .map(|jump| Arc::new(tokio::sync::Mutex::new(jump)))
+                .collect(),
+            info,
+            forwarded_tcpip,
+            closed: AtomicBool::new(false),
+        }),
+    })
+}
+
+impl std::fmt::Debug for SshTunnelConfig {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("SshTunnelConfig")
+            .field("id", &self.id)
+            .field("ssh_config", &self.ssh_config)
+            .field("mode", &self.mode)
+            .field("bind_host", &self.bind_host)
+            .field("listen_port", &self.listen_port)
+            .field("target_host", &self.target_host)
+            .field("target_port", &self.target_port)
+            .finish()
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SshTunnelInfo {
+    pub id: String,
+    pub mode: SshTunnelMode,
+    pub bind_host: String,
+    pub listen_port: u16,
+    pub target_host: Option<String>,
+    pub target_port: Option<u16>,
+}
+
+#[derive(Debug, Default)]
+pub struct SshTunnelManager {
+    active: Mutex<HashMap<String, SshTunnelHandle>>,
+}
+
+#[derive(Debug)]
+struct SshTunnelHandle {
+    info: SshTunnelInfo,
+    shutdown_tx: Option<oneshot::Sender<()>>,
+    worker_thread: Option<JoinHandle<()>>,
+}
+
+struct ForwardedTcpIpChannel {
+    channel: russh::Channel<client::Msg>,
+    connected_address: String,
+    connected_port: u32,
+    originator_address: String,
+    originator_port: u32,
+}
+
+struct X11ChannelOpen {
+    channel: russh::Channel<client::Msg>,
+    originator_address: String,
+    originator_port: u32,
+}
+
+struct X11Forwarder {
+    rx: tokio_mpsc::UnboundedReceiver<X11ChannelOpen>,
+    config: X11ForwardingConfig,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum X11DisplayTarget {
+    Tcp {
+        host: String,
+        port: u16,
+    },
+    #[cfg(unix)]
+    UnixSocket {
+        path: PathBuf,
+    },
+}
+
+impl X11DisplayTarget {
+    pub fn describe(&self) -> String {
+        match self {
+            Self::Tcp { host, port } => format!("{host}:{port}"),
+            #[cfg(unix)]
+            Self::UnixSocket { path } => path.display().to_string(),
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct X11ForwardingConfig {
+    pub target: X11DisplayTarget,
+    pub fallback_target: Option<X11DisplayTarget>,
+    pub fake_cookie: Vec<u8>,
+    pub fake_cookie_hex: String,
+    pub real_cookie: Option<Vec<u8>>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SftpFileType {
+    File,
+    Directory,
+    Symlink,
+    Other,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SftpFileEntry {
+    pub name: String,
+    pub path: String,
+    pub file_type: SftpFileType,
+    pub size: Option<u64>,
+    pub permissions: Option<u32>,
+    pub modified_at: Option<u32>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SftpTransferSummary {
+    pub remote_path: String,
+    pub local_path: PathBuf,
+    pub bytes: u64,
+    pub skipped: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SftpTransferProgress {
+    pub remote_path: String,
+    pub local_path: PathBuf,
+    pub bytes_transferred: u64,
+    pub total_bytes: Option<u64>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SftpDuplicatePolicy {
+    Overwrite,
+    Skip,
+    Rename,
+    Ask,
+}
+
+impl Default for SftpDuplicatePolicy {
+    fn default() -> Self {
+        Self::Overwrite
+    }
+}
+
+impl SftpDuplicatePolicy {
+    pub fn from_legacy_value(value: &str) -> Self {
+        match value {
+            "skip" => Self::Skip,
+            "rename" => Self::Rename,
+            "ask" => Self::Ask,
+            _ => Self::Overwrite,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum SftpTransferDirection {
+    Download,
+    Upload,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SftpDuplicateDecision {
+    Overwrite,
+    Skip,
+    Rename,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SftpDuplicateRequest {
+    pub direction: SftpTransferDirection,
+    pub source_path: String,
+    pub target_path: String,
+    pub is_directory: bool,
+}
+
+pub trait SftpDuplicateResolver: Send + Sync {
+    fn resolve_duplicate(
+        &self,
+        request: &SftpDuplicateRequest,
+    ) -> Result<SftpDuplicateDecision, String>;
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct SftpTransferControl {
+    cancelled: Arc<AtomicBool>,
+    paused: Arc<AtomicBool>,
+}
+
+impl SftpTransferControl {
+    pub fn new() -> Self {
+        Self {
+            cancelled: Arc::new(AtomicBool::new(false)),
+            paused: Arc::new(AtomicBool::new(false)),
+        }
+    }
+
+    pub fn cancel(&self) {
+        self.cancelled.store(true, Ordering::Relaxed);
+        self.paused.store(false, Ordering::Relaxed);
+    }
+
+    pub fn is_cancelled(&self) -> bool {
+        self.cancelled.load(Ordering::Relaxed)
+    }
+
+    pub fn pause(&self) {
+        if !self.is_cancelled() {
+            self.paused.store(true, Ordering::Relaxed);
+        }
+    }
+
+    pub fn resume(&self) {
+        self.paused.store(false, Ordering::Relaxed);
+    }
+
+    pub fn is_paused(&self) -> bool {
+        self.paused.load(Ordering::Relaxed)
+    }
+
+    pub fn check_cancelled(&self) -> anyhow::Result<()> {
+        if self.is_cancelled() {
+            anyhow::bail!(SFTP_TRANSFER_CANCELLED);
+        }
+        Ok(())
+    }
+
+    async fn wait_if_paused(&self) -> anyhow::Result<()> {
+        self.check_cancelled()?;
+        while self.is_paused() {
+            tokio::time::sleep(Duration::from_millis(100)).await;
+            self.check_cancelled()?;
+        }
+        Ok(())
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct SftpService {
+    config: SshSessionConfig,
+    multiplex: Option<SshMultiplexHandle>,
+}
+
+pub const SFTP_TRANSFER_CANCELLED: &str = "SFTP transfer cancelled";
+pub const PROCESS_LIST_UNSUPPORTED_MARKER: &str = "NYATERM_PROCESS_UNSUPPORTED";
+pub const PROCESS_LIST_UNSUPPORTED_ERROR: &str =
+    "Process listing is unsupported on this remote host";
+const PROCESS_TIMEOUT: Duration = Duration::from_secs(10);
+const MIT_MAGIC_COOKIE: &str = "MIT-MAGIC-COOKIE-1";
+const XAUTH_TIMEOUT: Duration = Duration::from_secs(2);
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct RemoteProcess {
+    pub pid: u32,
+    pub ppid: u32,
+    pub user: String,
+    pub state: String,
+    pub cpu_percent: f64,
+    pub memory_percent: f64,
+    pub rss_kb: u64,
+    pub vsz_kb: u64,
+    pub elapsed: String,
+    pub command: String,
+    pub command_line: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RemoteCommandOutput {
+    pub stdout: String,
+    pub stderr: String,
+    pub exit_status: Option<u32>,
+}
+
+#[derive(Debug, Clone)]
+pub struct SshProcessService {
+    config: SshSessionConfig,
+    multiplex: Option<SshMultiplexHandle>,
+}
+
+pub const PROCESS_LIST_SCRIPT: &str = r#"sh -s <<'NYATERM_PROCESS_SCRIPT'
+LC_ALL=C
+export LC_ALL
+
+unsupported() {
+  echo "NYATERM_PROCESS_UNSUPPORTED"
+  exit 42
+}
+
+clean() {
+  printf "%s" "$1" | tr "\011\012\015" "   "
+}
+
+emit() {
+  pid=$(clean "$1")
+  ppid=$(clean "$2")
+  user=$(clean "$3")
+  stat=$(clean "$4")
+  cpu=$(clean "$5")
+  mem=$(clean "$6")
+  rss=$(clean "$7")
+  vsz=$(clean "$8")
+  etime=$(clean "$9")
+  comm=$(clean "${10}")
+  args=$(clean "${11}")
+
+  [ -n "$pid" ] || return 0
+  [ -n "$ppid" ] || ppid=0
+  [ -n "$user" ] || user=-
+  [ -n "$stat" ] || stat=-
+  [ -n "$cpu" ] || cpu=0
+  [ -n "$mem" ] || mem=0
+  [ -n "$rss" ] || rss=0
+  [ -n "$vsz" ] || vsz=0
+  [ -n "$etime" ] || etime=-
+  [ -n "$comm" ] || comm=-
+  [ -n "$args" ] || args=$comm
+
+  printf "PROCESS\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n" \
+    "$pid" "$ppid" "$user" "$stat" "$cpu" "$mem" "$rss" "$vsz" "$etime" "$comm" "$args"
+}
+
+parse_ps_full() {
+  awk '
+  function clean(value) { gsub(/[\t\r\n]/, " ", value); return value }
+  NF >= 10 && $1 ~ /^[0-9]+$/ {
+    args = ""
+    for (i = 11; i <= NF; i++) args = args (args == "" ? "" : " ") $i
+    if (args == "") args = $10
+    printf "PROCESS\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n", \
+      clean($1), clean($2), clean($3), clean($4), clean($5), clean($6), \
+      clean($7), clean($8), clean($9), clean($10), clean(args)
+  }'
+}
+
+parse_ps_basic() {
+  awk '
+  function clean(value) { gsub(/[\t\r\n]/, " ", value); return value }
+  NR == 1 && toupper($1) == "PID" { next }
+  NF >= 6 && $1 ~ /^[0-9]+$/ {
+    args = ""
+    for (i = 7; i <= NF; i++) args = args (args == "" ? "" : " ") $i
+    if (args == "") args = $6
+    printf "PROCESS\t%s\t%s\t%s\t%s\t0\t0\t0\t%s\t-\t%s\t%s\n", \
+      clean($1), clean($2), clean($3), clean($4), clean($5), clean($6), clean(args)
+  }'
+}
+
+parse_ps_minimal() {
+  awk '
+  function clean(value) { gsub(/[\t\r\n]/, " ", value); return value }
+  NR == 1 && toupper($1) == "PID" { next }
+  $1 ~ /^[0-9]+$/ {
+    pid = $1; ppid = 0; user = "-"; stat = "-"; vsz = 0; start = 2
+    if ($2 ~ /^[0-9]+$/) {
+      ppid = $2; start = 3
+      if (NF >= 3 && $3 !~ /^[0-9]+$/) { user = $3; start = 4 }
+    } else if (NF >= 2) {
+      user = $2; start = 3
+    }
+    if (NF >= start && $(start) ~ /^[0-9]+$/ && NF >= start + 1 && $(start + 1) ~ /^[A-Za-z]/) {
+      vsz = $(start); stat = $(start + 1); start += 2
+    } else if (NF >= start && $(start) ~ /^[A-Za-z][A-Za-z+<NsSlL]*$/) {
+      stat = $(start); start += 1
+    }
+    args = ""
+    for (i = start; i <= NF; i++) args = args (args == "" ? "" : " ") $i
+    if (args == "") args = "-"
+    comm = args; sub(/[ ].*$/, "", comm)
+    printf "PROCESS\t%s\t%s\t%s\t%s\t0\t0\t0\t%s\t-\t%s\t%s\n", \
+      clean(pid), clean(ppid), clean(user), clean(stat), clean(vsz), clean(comm), clean(args)
+  }'
+}
+
+emit_proc() {
+  [ -d /proc ] || return 1
+  found=0
+  mem_total=$(awk '/^MemTotal:/ { print $2; exit }' /proc/meminfo 2>/dev/null)
+  [ -n "$mem_total" ] || mem_total=0
+
+  for proc_dir in /proc/[0-9]*; do
+    [ -r "$proc_dir/status" ] || continue
+    pid=${proc_dir##*/}
+    case "$pid" in *[!0-9]*|"") continue ;; esac
+    status=$(awk '
+      /^Name:/ { name=$2 }
+      /^State:/ { state=$2 }
+      /^PPid:/ { ppid=$2 }
+      /^Uid:/ { uid=$2 }
+      /^VmRSS:/ { rss=$2 }
+      /^VmSize:/ { vsz=$2 }
+      END {
+        if (name == "") name="-"; if (state == "") state="-"; if (ppid == "") ppid=0
+        if (uid == "") uid=0; if (rss == "") rss=0; if (vsz == "") vsz=0
+        printf "%s\t%s\t%s\t%s\t%s\t%s\n", name, state, ppid, uid, rss, vsz
+      }' "$proc_dir/status" 2>/dev/null)
+    [ -n "$status" ] || continue
+    old_ifs=$IFS; IFS="	"; set -- $status; IFS=$old_ifs
+    comm=$1; stat=$2; ppid=$3; uid=$4; rss=$5; vsz=$6; user=$uid
+    if [ -r /etc/passwd ]; then
+      resolved_user=$(awk -F: -v uid="$uid" '$3 == uid { print $1; exit }' /etc/passwd 2>/dev/null)
+      [ -n "$resolved_user" ] && user=$resolved_user
+    fi
+    if [ -r "$proc_dir/cmdline" ]; then
+      args=$(tr "\000" " " <"$proc_dir/cmdline" 2>/dev/null)
+    else
+      args=
+    fi
+    [ -n "$args" ] || args=$comm
+    mem=$(awk -v rss="$rss" -v total="$mem_total" 'BEGIN { if (total > 0) printf "%.1f", (rss * 100) / total; else printf "0"; }')
+    emit "$pid" "$ppid" "$user" "$stat" "0" "$mem" "$rss" "$vsz" "-" "$comm" "$args"
+    found=1
+  done
+  [ "$found" -eq 1 ]
+}
+
+if command -v ps >/dev/null 2>&1; then
+  rows=$(ps -eo pid=,ppid=,user=,stat=,pcpu=,pmem=,rss=,vsz=,etime=,comm=,args= --no-headers 2>/dev/null | parse_ps_full)
+  [ -n "$rows" ] && { printf "%s\n" "$rows"; exit 0; }
+  rows=$(ps -axo pid=,ppid=,user=,stat=,pcpu=,pmem=,rss=,vsz=,etime=,comm=,command= 2>/dev/null | parse_ps_full)
+  [ -n "$rows" ] && { printf "%s\n" "$rows"; exit 0; }
+  rows=$(ps -o pid,ppid,user,stat,vsz,comm,args 2>/dev/null | parse_ps_basic)
+  [ -n "$rows" ] && { printf "%s\n" "$rows"; exit 0; }
+  rows=$(ps w 2>/dev/null | parse_ps_minimal)
+  [ -n "$rows" ] && { printf "%s\n" "$rows"; exit 0; }
+  rows=$(ps 2>/dev/null | parse_ps_minimal)
+  [ -n "$rows" ] && { printf "%s\n" "$rows"; exit 0; }
+fi
+
+if emit_proc; then
+  exit 0
+fi
+
+unsupported
+NYATERM_PROCESS_SCRIPT
+"#;
+
+impl Default for SerialSessionConfig {
+    fn default() -> Self {
+        Self {
+            name: "Serial".to_string(),
+            port_name: String::new(),
+            baud_rate: 115_200,
+            data_bits: 8,
+            parity: "none".to_string(),
+            stop_bits: "1".to_string(),
+            backspace_mode: "ctrl_h".to_string(),
+        }
+    }
+}
+
+impl Default for SshSessionConfig {
+    fn default() -> Self {
+        Self {
+            name: "SSH".to_string(),
+            host: String::new(),
+            port: 22,
+            username: "root".to_string(),
+            password: None,
+            key_auth: None,
+            otp_id: None,
+            auto_fill_otp: false,
+            proxy_jump: None,
+            allow_none_auth: false,
+            backspace_mode: "del".to_string(),
+            term: "xterm-256color".to_string(),
+            x11_forwarding: false,
+            x11_display: String::new(),
+            cols: 80,
+            rows: 24,
+            host_key_verifier: None,
+            credential_provider: None,
+            otp_provider: None,
+        }
+    }
+}
+
+impl SshTunnelManager {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    pub fn open(&self, config: SshTunnelConfig) -> anyhow::Result<SshTunnelInfo> {
+        self.open_inner(config, None)
+    }
+
+    pub fn open_with_multiplex(
+        &self,
+        config: SshTunnelConfig,
+        multiplex: SshMultiplexHandle,
+    ) -> anyhow::Result<SshTunnelInfo> {
+        multiplex.ensure_matches_config(&config.ssh_config)?;
+        self.open_inner(config, Some(multiplex))
+    }
+
+    fn open_inner(
+        &self,
+        config: SshTunnelConfig,
+        multiplex: Option<SshMultiplexHandle>,
+    ) -> anyhow::Result<SshTunnelInfo> {
+        if let Some(info) = self
+            .active
+            .lock()
+            .map_err(|_| anyhow::anyhow!("SSH tunnel registry lock is poisoned"))?
+            .get(&config.id)
+            .map(|handle| handle.info.clone())
+        {
+            return Ok(info);
+        }
+
+        validate_tunnel_config(&config)?;
+        let bind_host = normalized_bind_host(&config.bind_host);
+        let (listener, actual_port) = match config.mode {
+            SshTunnelMode::Local | SshTunnelMode::Dynamic => {
+                let listener = StdTcpListener::bind((bind_host.as_str(), config.listen_port))
+                    .map_err(|error| {
+                        anyhow::anyhow!(
+                            "failed to bind tunnel listener {}:{}: {error}",
+                            bind_host,
+                            config.listen_port
+                        )
+                    })?;
+                listener.set_nonblocking(true)?;
+                let actual_port = listener.local_addr()?.port();
+                (Some(listener), actual_port)
+            }
+            SshTunnelMode::Remote => (None, config.listen_port),
+        };
+        let info = SshTunnelInfo {
+            id: config.id.clone(),
+            mode: config.mode,
+            bind_host,
+            listen_port: actual_port,
+            target_host: config.target_host.clone(),
+            target_port: config.target_port,
+        };
+        let (shutdown_tx, shutdown_rx) = oneshot::channel();
+        let (ready_tx, ready_rx) = mpsc::channel();
+        let worker_info = info.clone();
+        let worker_thread = std::thread::spawn(move || {
+            run_tunnel_worker(
+                config,
+                listener,
+                worker_info,
+                shutdown_rx,
+                ready_tx,
+                multiplex,
+            );
+        });
+
+        match ready_rx.recv_timeout(Duration::from_secs(30)) {
+            Ok(Ok(info)) => {
+                self.active
+                    .lock()
+                    .map_err(|_| anyhow::anyhow!("SSH tunnel registry lock is poisoned"))?
+                    .insert(
+                        info.id.clone(),
+                        SshTunnelHandle {
+                            info: info.clone(),
+                            shutdown_tx: Some(shutdown_tx),
+                            worker_thread: Some(worker_thread),
+                        },
+                    );
+                Ok(info)
+            }
+            Ok(Err(error)) => {
+                let _ = shutdown_tx.send(());
+                let _ = worker_thread.join();
+                Err(anyhow::anyhow!(error))
+            }
+            Err(error) => {
+                let _ = shutdown_tx.send(());
+                let _ = worker_thread.join();
+                Err(anyhow::anyhow!("SSH tunnel startup timed out: {error}"))
+            }
+        }
+    }
+
+    pub fn close(&self, tunnel_id: &str) -> anyhow::Result<()> {
+        let Some(mut handle) = self
+            .active
+            .lock()
+            .map_err(|_| anyhow::anyhow!("SSH tunnel registry lock is poisoned"))?
+            .remove(tunnel_id)
+        else {
+            return Ok(());
+        };
+        if let Some(shutdown_tx) = handle.shutdown_tx.take() {
+            let _ = shutdown_tx.send(());
+        }
+        if let Some(worker_thread) = handle.worker_thread.take() {
+            let _ = worker_thread.join();
+        }
+        Ok(())
+    }
+
+    pub fn is_open(&self, tunnel_id: &str) -> anyhow::Result<bool> {
+        Ok(self
+            .active
+            .lock()
+            .map_err(|_| anyhow::anyhow!("SSH tunnel registry lock is poisoned"))?
+            .contains_key(tunnel_id))
+    }
+
+    pub fn list(&self) -> anyhow::Result<Vec<SshTunnelInfo>> {
+        Ok(self
+            .active
+            .lock()
+            .map_err(|_| anyhow::anyhow!("SSH tunnel registry lock is poisoned"))?
+            .values()
+            .map(|handle| handle.info.clone())
+            .collect())
+    }
+}
+
+impl Default for TelnetSessionConfig {
+    fn default() -> Self {
+        Self {
+            name: "Telnet".to_string(),
+            host: String::new(),
+            port: 23,
+            raw_tcp: false,
+            enter_mode: TelnetEnterMode::Cr,
+            force_character_at_a_time: false,
+            send_naws: true,
+            send_sga: true,
+            cols: 80,
+            rows: 24,
+        }
+    }
+}
+
+impl SshProcessService {
+    pub fn new(config: SshSessionConfig) -> Self {
+        Self {
+            config,
+            multiplex: None,
+        }
+    }
+
+    pub fn with_multiplex(
+        config: SshSessionConfig,
+        multiplex: SshMultiplexHandle,
+    ) -> anyhow::Result<Self> {
+        multiplex.ensure_matches_config(&config)?;
+        Ok(Self {
+            config,
+            multiplex: Some(multiplex),
+        })
+    }
+
+    fn exec_command_bytes(
+        &self,
+        command: Vec<u8>,
+        timeout: Duration,
+    ) -> anyhow::Result<RemoteCommandOutput> {
+        if let Some(multiplex) = self.multiplex.clone() {
+            return multiplex.block_on(exec_ssh_command_with_multiplex(
+                multiplex.clone(),
+                command,
+                timeout,
+            ));
+        }
+        run_ssh_exec_operation(exec_ssh_command(self.config.clone(), command, timeout))
+    }
+
+    pub fn list_processes(&self) -> anyhow::Result<Vec<RemoteProcess>> {
+        let output =
+            self.exec_command_bytes(PROCESS_LIST_SCRIPT.as_bytes().to_vec(), PROCESS_TIMEOUT)?;
+        if is_process_list_unsupported(&output.stdout)
+            || is_process_list_unsupported(&output.stderr)
+        {
+            anyhow::bail!(PROCESS_LIST_UNSUPPORTED_ERROR);
+        }
+        let output = ensure_remote_command_success(output, "Failed to list processes")?;
+        if is_process_list_unsupported(&output.stdout)
+            || is_process_list_unsupported(&output.stderr)
+        {
+            anyhow::bail!(PROCESS_LIST_UNSUPPORTED_ERROR);
+        }
+        Ok(parse_process_output(&output.stdout))
+    }
+
+    pub fn signal_process(
+        &self,
+        pid: u32,
+        signal: impl AsRef<str>,
+    ) -> anyhow::Result<RemoteCommandOutput> {
+        let signal = normalize_process_signal(signal.as_ref())?;
+        let output = self.exec_command_bytes(
+            format!("kill -{signal} -- {pid}").into_bytes(),
+            PROCESS_TIMEOUT,
+        )?;
+        ensure_remote_command_success(output, "Failed to signal process")
+    }
+
+    pub fn renice_process(&self, pid: u32, nice: i32) -> anyhow::Result<RemoteCommandOutput> {
+        if !(-20..=19).contains(&nice) {
+            anyhow::bail!("Nice value must be between -20 and 19");
+        }
+        let output = self.exec_command_bytes(
+            format!("renice -n {nice} -p {pid}").into_bytes(),
+            PROCESS_TIMEOUT,
+        )?;
+        ensure_remote_command_success(output, "Failed to renice process")
+    }
+
+    pub fn run_command(
+        &self,
+        command: impl AsRef<str>,
+        timeout: Duration,
+    ) -> anyhow::Result<RemoteCommandOutput> {
+        self.exec_command_bytes(command.as_ref().as_bytes().to_vec(), timeout)
+    }
+}
+
+pub fn run_local_command(
+    command: impl AsRef<str>,
+    cwd: Option<PathBuf>,
+    timeout: Duration,
+) -> anyhow::Result<RemoteCommandOutput> {
+    let command = command.as_ref().to_string();
+    run_ssh_exec_operation(async move {
+        tokio::time::timeout(timeout, async move {
+            let mut child = local_shell_command(&command);
+            if let Some(cwd) = cwd.filter(|value| !value.as_os_str().is_empty()) {
+                child.current_dir(cwd);
+            }
+            child.kill_on_drop(true);
+            child.stdout(Stdio::piped());
+            child.stderr(Stdio::piped());
+            let output = child
+                .output()
+                .await
+                .map_err(|error| anyhow::anyhow!("failed to run local command: {error}"))?;
+            Ok(RemoteCommandOutput {
+                stdout: String::from_utf8_lossy(&output.stdout).to_string(),
+                stderr: String::from_utf8_lossy(&output.stderr).to_string(),
+                exit_status: output
+                    .status
+                    .code()
+                    .and_then(|code| u32::try_from(code).ok()),
+            })
+        })
+        .await
+        .map_err(|_| anyhow::anyhow!("local command timed out"))?
+    })
+}
+
+#[cfg(windows)]
+fn local_shell_command(command: &str) -> tokio::process::Command {
+    let mut child = tokio::process::Command::new("cmd");
+    child.args(["/C", command]);
+    child
+}
+
+#[cfg(not(windows))]
+fn local_shell_command(command: &str) -> tokio::process::Command {
+    let mut child = tokio::process::Command::new("sh");
+    child.args(["-lc", command]);
+    child
+}
+
+impl SftpService {
+    pub fn new(config: SshSessionConfig) -> Self {
+        Self {
+            config,
+            multiplex: None,
+        }
+    }
+
+    pub fn with_multiplex(
+        config: SshSessionConfig,
+        multiplex: SshMultiplexHandle,
+    ) -> anyhow::Result<Self> {
+        multiplex.ensure_matches_config(&config)?;
+        Ok(Self {
+            config,
+            multiplex: Some(multiplex),
+        })
+    }
+
+    fn run_operation<T, F>(&self, operation: F) -> anyhow::Result<T>
+    where
+        T: Send + 'static,
+        F: Future<Output = anyhow::Result<T>> + Send + 'static,
+    {
+        if let Some(multiplex) = self.multiplex.as_ref() {
+            multiplex.block_on(operation)
+        } else {
+            run_sftp_operation(operation)
+        }
+    }
+
+    pub fn list_dir(&self, remote_path: impl AsRef<str>) -> anyhow::Result<Vec<SftpFileEntry>> {
+        let remote_path = remote_path.as_ref().to_string();
+        let config = self.config.clone();
+        let multiplex = self.multiplex.clone();
+        self.run_operation(async move {
+            let session = open_sftp_session(&config, multiplex.as_ref()).await?;
+            let sftp = &session.sftp;
+            let mut entries = Vec::new();
+            for entry in sftp.read_dir(remote_path).await? {
+                let metadata = entry.metadata();
+                entries.push(SftpFileEntry {
+                    name: entry.file_name(),
+                    path: entry.path(),
+                    file_type: match entry.file_type() {
+                        russh_sftp::protocol::FileType::File => SftpFileType::File,
+                        russh_sftp::protocol::FileType::Dir => SftpFileType::Directory,
+                        russh_sftp::protocol::FileType::Symlink => SftpFileType::Symlink,
+                        russh_sftp::protocol::FileType::Other => SftpFileType::Other,
+                    },
+                    size: metadata.size,
+                    permissions: metadata.permissions,
+                    modified_at: metadata.mtime,
+                });
+            }
+            entries.sort_by(|left, right| {
+                (left.file_type != SftpFileType::Directory)
+                    .cmp(&(right.file_type != SftpFileType::Directory))
+                    .then(left.name.cmp(&right.name))
+            });
+            close_sftp_session(session).await;
+            Ok(entries)
+        })
+    }
+
+    pub fn download_file(
+        &self,
+        remote_path: impl AsRef<str>,
+        local_path: impl Into<PathBuf>,
+    ) -> anyhow::Result<SftpTransferSummary> {
+        self.download_file_with_progress(remote_path, local_path, |_| {})
+    }
+
+    pub fn download_file_with_progress<F>(
+        &self,
+        remote_path: impl AsRef<str>,
+        local_path: impl Into<PathBuf>,
+        progress: F,
+    ) -> anyhow::Result<SftpTransferSummary>
+    where
+        F: FnMut(SftpTransferProgress) + Send + 'static,
+    {
+        self.download_file_with_progress_and_control(
+            remote_path,
+            local_path,
+            SftpTransferControl::default(),
+            progress,
+        )
+    }
+
+    pub fn download_file_with_progress_and_control<F>(
+        &self,
+        remote_path: impl AsRef<str>,
+        local_path: impl Into<PathBuf>,
+        control: SftpTransferControl,
+        mut progress: F,
+    ) -> anyhow::Result<SftpTransferSummary>
+    where
+        F: FnMut(SftpTransferProgress) + Send + 'static,
+    {
+        let remote_path = remote_path.as_ref().to_string();
+        let local_path = local_path.into();
+        let config = self.config.clone();
+        let multiplex = self.multiplex.clone();
+        self.run_operation(async move {
+            let session = open_sftp_session(&config, multiplex.as_ref()).await?;
+            let bytes = download_remote_file(
+                &session.sftp,
+                &remote_path,
+                &local_path,
+                &control,
+                &mut progress,
+            )
+            .await?;
+            let summary = SftpTransferSummary {
+                remote_path,
+                local_path,
+                bytes,
+                skipped: false,
+            };
+            close_sftp_session(session).await;
+            Ok(summary)
+        })
+    }
+
+    pub fn download_path_with_progress<F>(
+        &self,
+        remote_path: impl AsRef<str>,
+        local_path: impl Into<PathBuf>,
+        progress: F,
+    ) -> anyhow::Result<SftpTransferSummary>
+    where
+        F: FnMut(SftpTransferProgress) + Send + 'static,
+    {
+        self.download_path_with_progress_and_control(
+            remote_path,
+            local_path,
+            SftpTransferControl::default(),
+            progress,
+        )
+    }
+
+    pub fn download_path_with_progress_and_control<F>(
+        &self,
+        remote_path: impl AsRef<str>,
+        local_path: impl Into<PathBuf>,
+        control: SftpTransferControl,
+        progress: F,
+    ) -> anyhow::Result<SftpTransferSummary>
+    where
+        F: FnMut(SftpTransferProgress) + Send + 'static,
+    {
+        self.download_path_with_progress_options(
+            remote_path,
+            local_path,
+            control,
+            SftpDuplicatePolicy::Overwrite,
+            progress,
+        )
+    }
+
+    pub fn download_path_with_progress_options<F>(
+        &self,
+        remote_path: impl AsRef<str>,
+        local_path: impl Into<PathBuf>,
+        control: SftpTransferControl,
+        duplicate_policy: SftpDuplicatePolicy,
+        progress: F,
+    ) -> anyhow::Result<SftpTransferSummary>
+    where
+        F: FnMut(SftpTransferProgress) + Send + 'static,
+    {
+        self.download_path_with_progress_options_and_resolver(
+            remote_path,
+            local_path,
+            control,
+            duplicate_policy,
+            None,
+            progress,
+        )
+    }
+
+    pub fn download_path_with_progress_options_and_resolver<F>(
+        &self,
+        remote_path: impl AsRef<str>,
+        local_path: impl Into<PathBuf>,
+        control: SftpTransferControl,
+        duplicate_policy: SftpDuplicatePolicy,
+        duplicate_resolver: Option<Arc<dyn SftpDuplicateResolver>>,
+        mut progress: F,
+    ) -> anyhow::Result<SftpTransferSummary>
+    where
+        F: FnMut(SftpTransferProgress) + Send + 'static,
+    {
+        let remote_path = remote_path.as_ref().to_string();
+        let local_path = local_path.into();
+        let config = self.config.clone();
+        let multiplex = self.multiplex.clone();
+        self.run_operation(async move {
+            let session = open_sftp_session(&config, multiplex.as_ref()).await?;
+            let sftp = &session.sftp;
+            control.wait_if_paused().await?;
+            let metadata = sftp.metadata(remote_path.clone()).await?;
+            let is_directory = metadata.file_type() == russh_sftp::protocol::FileType::Dir;
+            let Some(local_path) = resolve_local_download_target(
+                &remote_path,
+                &local_path,
+                is_directory,
+                duplicate_policy,
+                duplicate_resolver.as_deref(),
+            )?
+            else {
+                close_sftp_session(session).await;
+                return Ok(SftpTransferSummary {
+                    remote_path,
+                    local_path,
+                    bytes: 0,
+                    skipped: true,
+                });
+            };
+            let bytes = if is_directory {
+                download_remote_directory(
+                    &sftp,
+                    &remote_path,
+                    &local_path,
+                    &control,
+                    duplicate_policy,
+                    duplicate_resolver.as_deref(),
+                    &mut progress,
+                )
+                .await?
+            } else {
+                download_remote_file(&sftp, &remote_path, &local_path, &control, &mut progress)
+                    .await?
+            };
+            let summary = SftpTransferSummary {
+                remote_path,
+                local_path,
+                bytes,
+                skipped: false,
+            };
+            close_sftp_session(session).await;
+            Ok(summary)
+        })
+    }
+
+    pub fn upload_file(
+        &self,
+        local_path: impl Into<PathBuf>,
+        remote_path: impl AsRef<str>,
+    ) -> anyhow::Result<SftpTransferSummary> {
+        self.upload_file_with_progress(local_path, remote_path, |_| {})
+    }
+
+    pub fn upload_file_with_progress<F>(
+        &self,
+        local_path: impl Into<PathBuf>,
+        remote_path: impl AsRef<str>,
+        progress: F,
+    ) -> anyhow::Result<SftpTransferSummary>
+    where
+        F: FnMut(SftpTransferProgress) + Send + 'static,
+    {
+        self.upload_file_with_progress_and_control(
+            local_path,
+            remote_path,
+            SftpTransferControl::default(),
+            progress,
+        )
+    }
+
+    pub fn upload_file_with_progress_and_control<F>(
+        &self,
+        local_path: impl Into<PathBuf>,
+        remote_path: impl AsRef<str>,
+        control: SftpTransferControl,
+        mut progress: F,
+    ) -> anyhow::Result<SftpTransferSummary>
+    where
+        F: FnMut(SftpTransferProgress) + Send + 'static,
+    {
+        let local_path = local_path.into();
+        let remote_path = remote_path.as_ref().to_string();
+        let config = self.config.clone();
+        let multiplex = self.multiplex.clone();
+        self.run_operation(async move {
+            let remote_path = resolve_remote_upload_target(&local_path, &remote_path)?;
+            let session = open_sftp_session(&config, multiplex.as_ref()).await?;
+            let bytes = upload_local_file(
+                &session.sftp,
+                &local_path,
+                &remote_path,
+                &control,
+                &mut progress,
+            )
+            .await?;
+            let summary = SftpTransferSummary {
+                remote_path,
+                local_path,
+                bytes,
+                skipped: false,
+            };
+            close_sftp_session(session).await;
+            Ok(summary)
+        })
+    }
+
+    pub fn upload_path_with_progress<F>(
+        &self,
+        local_path: impl Into<PathBuf>,
+        remote_path: impl AsRef<str>,
+        progress: F,
+    ) -> anyhow::Result<SftpTransferSummary>
+    where
+        F: FnMut(SftpTransferProgress) + Send + 'static,
+    {
+        self.upload_path_with_progress_and_control(
+            local_path,
+            remote_path,
+            SftpTransferControl::default(),
+            progress,
+        )
+    }
+
+    pub fn upload_path_with_progress_and_control<F>(
+        &self,
+        local_path: impl Into<PathBuf>,
+        remote_path: impl AsRef<str>,
+        control: SftpTransferControl,
+        progress: F,
+    ) -> anyhow::Result<SftpTransferSummary>
+    where
+        F: FnMut(SftpTransferProgress) + Send + 'static,
+    {
+        self.upload_path_with_progress_options(
+            local_path,
+            remote_path,
+            control,
+            SftpDuplicatePolicy::Overwrite,
+            progress,
+        )
+    }
+
+    pub fn upload_path_with_progress_options<F>(
+        &self,
+        local_path: impl Into<PathBuf>,
+        remote_path: impl AsRef<str>,
+        control: SftpTransferControl,
+        duplicate_policy: SftpDuplicatePolicy,
+        progress: F,
+    ) -> anyhow::Result<SftpTransferSummary>
+    where
+        F: FnMut(SftpTransferProgress) + Send + 'static,
+    {
+        self.upload_path_with_progress_options_and_resolver(
+            local_path,
+            remote_path,
+            control,
+            duplicate_policy,
+            None,
+            progress,
+        )
+    }
+
+    pub fn upload_path_with_progress_options_and_resolver<F>(
+        &self,
+        local_path: impl Into<PathBuf>,
+        remote_path: impl AsRef<str>,
+        control: SftpTransferControl,
+        duplicate_policy: SftpDuplicatePolicy,
+        duplicate_resolver: Option<Arc<dyn SftpDuplicateResolver>>,
+        mut progress: F,
+    ) -> anyhow::Result<SftpTransferSummary>
+    where
+        F: FnMut(SftpTransferProgress) + Send + 'static,
+    {
+        let local_path = local_path.into();
+        let remote_path = remote_path.as_ref().to_string();
+        let config = self.config.clone();
+        let multiplex = self.multiplex.clone();
+        self.run_operation(async move {
+            let metadata = tokio::fs::metadata(&local_path).await?;
+            let remote_path = resolve_remote_upload_target(&local_path, &remote_path)?;
+            let session = open_sftp_session(&config, multiplex.as_ref()).await?;
+            let sftp = &session.sftp;
+            control.wait_if_paused().await?;
+            let Some(remote_path) = resolve_remote_write_target(
+                &sftp,
+                &local_path.display().to_string(),
+                &remote_path,
+                metadata.is_dir(),
+                duplicate_policy,
+                duplicate_resolver.as_deref(),
+            )
+            .await?
+            else {
+                close_sftp_session(session).await;
+                return Ok(SftpTransferSummary {
+                    remote_path,
+                    local_path,
+                    bytes: 0,
+                    skipped: true,
+                });
+            };
+            let bytes = if metadata.is_dir() {
+                upload_local_directory(
+                    &sftp,
+                    &local_path,
+                    &remote_path,
+                    &control,
+                    duplicate_policy,
+                    duplicate_resolver.as_deref(),
+                    &mut progress,
+                )
+                .await?
+            } else {
+                upload_local_file(&sftp, &local_path, &remote_path, &control, &mut progress).await?
+            };
+            let summary = SftpTransferSummary {
+                remote_path,
+                local_path,
+                bytes,
+                skipped: false,
+            };
+            close_sftp_session(session).await;
+            Ok(summary)
+        })
+    }
+}
+
+async fn download_remote_file<F>(
+    sftp: &SftpSession,
+    remote_path: &str,
+    local_path: &Path,
+    control: &SftpTransferControl,
+    progress: &mut F,
+) -> anyhow::Result<u64>
+where
+    F: FnMut(SftpTransferProgress) + Send,
+{
+    control.wait_if_paused().await?;
+    if let Some(parent) = local_path
+        .parent()
+        .filter(|parent| !parent.as_os_str().is_empty())
+    {
+        tokio::fs::create_dir_all(parent).await?;
+    }
+    let mut remote = sftp.open(remote_path.to_string()).await?;
+    let total_bytes = remote.metadata().await?.size;
+    let mut local = tokio::fs::File::create(local_path).await?;
+    let mut buffer = vec![0_u8; 64 * 1024];
+    let mut bytes = 0_u64;
+    progress(SftpTransferProgress {
+        remote_path: remote_path.to_string(),
+        local_path: local_path.to_path_buf(),
+        bytes_transferred: bytes,
+        total_bytes,
+    });
+    loop {
+        control.wait_if_paused().await?;
+        let read = remote.read(&mut buffer).await?;
+        if read == 0 {
+            break;
+        }
+        local.write_all(&buffer[..read]).await?;
+        control.wait_if_paused().await?;
+        bytes += read as u64;
+        progress(SftpTransferProgress {
+            remote_path: remote_path.to_string(),
+            local_path: local_path.to_path_buf(),
+            bytes_transferred: bytes,
+            total_bytes,
+        });
+    }
+    local.flush().await?;
+    remote.shutdown().await?;
+    Ok(bytes)
+}
+
+async fn download_remote_directory<F>(
+    sftp: &SftpSession,
+    remote_path: &str,
+    local_path: &Path,
+    control: &SftpTransferControl,
+    duplicate_policy: SftpDuplicatePolicy,
+    duplicate_resolver: Option<&dyn SftpDuplicateResolver>,
+    progress: &mut F,
+) -> anyhow::Result<u64>
+where
+    F: FnMut(SftpTransferProgress) + Send,
+{
+    control.wait_if_paused().await?;
+    tokio::fs::create_dir_all(local_path).await?;
+    let mut total_bytes = 0_u64;
+    let mut pending = vec![(remote_path.to_string(), local_path.to_path_buf())];
+    while let Some((remote_dir, local_dir)) = pending.pop() {
+        control.wait_if_paused().await?;
+        tokio::fs::create_dir_all(&local_dir).await?;
+        for entry in sftp.read_dir(remote_dir.clone()).await? {
+            control.wait_if_paused().await?;
+            let name = entry.file_name();
+            if name == "." || name == ".." {
+                continue;
+            }
+            let remote_child = remote_join(&remote_dir, &name);
+            let local_child = local_dir.join(&name);
+            match entry.file_type() {
+                russh_sftp::protocol::FileType::Dir => {
+                    if let Some(local_child) = resolve_local_download_target(
+                        &remote_child,
+                        &local_child,
+                        true,
+                        duplicate_policy,
+                        duplicate_resolver,
+                    )? {
+                        pending.push((remote_child, local_child));
+                    }
+                }
+                russh_sftp::protocol::FileType::File | russh_sftp::protocol::FileType::Symlink => {
+                    if let Some(local_child) = resolve_local_download_target(
+                        &remote_child,
+                        &local_child,
+                        false,
+                        duplicate_policy,
+                        duplicate_resolver,
+                    )? {
+                        total_bytes += download_remote_file(
+                            sftp,
+                            &remote_child,
+                            &local_child,
+                            control,
+                            progress,
+                        )
+                        .await?;
+                    }
+                }
+                russh_sftp::protocol::FileType::Other => {}
+            }
+        }
+    }
+    Ok(total_bytes)
+}
+
+async fn upload_local_file<F>(
+    sftp: &SftpSession,
+    local_path: &Path,
+    remote_path: &str,
+    control: &SftpTransferControl,
+    progress: &mut F,
+) -> anyhow::Result<u64>
+where
+    F: FnMut(SftpTransferProgress) + Send,
+{
+    control.wait_if_paused().await?;
+    let mut local = tokio::fs::File::open(local_path).await?;
+    let total_bytes = local.metadata().await.ok().map(|metadata| metadata.len());
+    let mut remote = sftp.create(remote_path.to_string()).await?;
+    let mut buffer = vec![0_u8; 64 * 1024];
+    let mut bytes = 0_u64;
+    progress(SftpTransferProgress {
+        remote_path: remote_path.to_string(),
+        local_path: local_path.to_path_buf(),
+        bytes_transferred: bytes,
+        total_bytes,
+    });
+    loop {
+        control.wait_if_paused().await?;
+        let read = local.read(&mut buffer).await?;
+        if read == 0 {
+            break;
+        }
+        remote.write_all(&buffer[..read]).await?;
+        control.wait_if_paused().await?;
+        bytes += read as u64;
+        progress(SftpTransferProgress {
+            remote_path: remote_path.to_string(),
+            local_path: local_path.to_path_buf(),
+            bytes_transferred: bytes,
+            total_bytes,
+        });
+    }
+    remote.flush().await?;
+    remote.shutdown().await?;
+    Ok(bytes)
+}
+
+async fn upload_local_directory<F>(
+    sftp: &SftpSession,
+    local_path: &Path,
+    remote_path: &str,
+    control: &SftpTransferControl,
+    duplicate_policy: SftpDuplicatePolicy,
+    duplicate_resolver: Option<&dyn SftpDuplicateResolver>,
+    progress: &mut F,
+) -> anyhow::Result<u64>
+where
+    F: FnMut(SftpTransferProgress) + Send,
+{
+    control.wait_if_paused().await?;
+    ensure_remote_dir(sftp, remote_path, control).await?;
+    let mut total_bytes = 0_u64;
+    let mut pending = vec![(local_path.to_path_buf(), remote_path.to_string())];
+    while let Some((local_dir, remote_dir)) = pending.pop() {
+        control.wait_if_paused().await?;
+        ensure_remote_dir(sftp, &remote_dir, control).await?;
+        let mut entries = tokio::fs::read_dir(&local_dir).await?;
+        while let Some(entry) = entries.next_entry().await? {
+            control.wait_if_paused().await?;
+            let local_child = entry.path();
+            let file_type = entry.file_type().await?;
+            let name = entry.file_name().to_string_lossy().to_string();
+            let remote_child = remote_join(&remote_dir, &name);
+            if file_type.is_dir() {
+                if let Some(remote_child) = resolve_remote_write_target(
+                    sftp,
+                    &local_child.display().to_string(),
+                    &remote_child,
+                    true,
+                    duplicate_policy,
+                    duplicate_resolver,
+                )
+                .await?
+                {
+                    pending.push((local_child, remote_child));
+                }
+            } else if file_type.is_file() {
+                if let Some(remote_child) = resolve_remote_write_target(
+                    sftp,
+                    &local_child.display().to_string(),
+                    &remote_child,
+                    false,
+                    duplicate_policy,
+                    duplicate_resolver,
+                )
+                .await?
+                {
+                    total_bytes +=
+                        upload_local_file(sftp, &local_child, &remote_child, control, progress)
+                            .await?;
+                }
+            }
+        }
+    }
+    Ok(total_bytes)
+}
+
+async fn ensure_remote_dir(
+    sftp: &SftpSession,
+    remote_path: &str,
+    control: &SftpTransferControl,
+) -> anyhow::Result<()> {
+    control.wait_if_paused().await?;
+    if sftp.try_exists(remote_path.to_string()).await? {
+        return Ok(());
+    }
+    control.wait_if_paused().await?;
+    sftp.create_dir(remote_path.to_string()).await?;
+    Ok(())
+}
+
+fn resolve_remote_upload_target(local_path: &Path, remote_path: &str) -> anyhow::Result<String> {
+    if remote_path == "." || remote_path.ends_with('/') {
+        Ok(remote_join(remote_path, &local_file_name(local_path)?))
+    } else {
+        Ok(remote_path.to_string())
+    }
+}
+
+fn local_file_name(path: &Path) -> anyhow::Result<String> {
+    path.file_name()
+        .map(|name| name.to_string_lossy().to_string())
+        .filter(|name| !name.is_empty())
+        .ok_or_else(|| anyhow::anyhow!("local path has no file name: {}", path.display()))
+}
+
+fn resolve_local_download_target(
+    remote_path: &str,
+    local_path: &Path,
+    is_directory: bool,
+    duplicate_policy: SftpDuplicatePolicy,
+    duplicate_resolver: Option<&dyn SftpDuplicateResolver>,
+) -> anyhow::Result<Option<PathBuf>> {
+    if !local_path.exists() {
+        return Ok(Some(local_path.to_path_buf()));
+    }
+
+    match resolve_duplicate_decision(
+        SftpTransferDirection::Download,
+        remote_path,
+        &local_path.display().to_string(),
+        is_directory,
+        duplicate_policy,
+        duplicate_resolver,
+    )? {
+        SftpDuplicateDecision::Overwrite => Ok(Some(local_path.to_path_buf())),
+        SftpDuplicateDecision::Skip => Ok(None),
+        SftpDuplicateDecision::Rename => resolve_renamed_local_target(local_path).map(Some),
+    }
+}
+
+async fn resolve_remote_write_target(
+    sftp: &SftpSession,
+    local_path: &str,
+    remote_path: &str,
+    is_directory: bool,
+    duplicate_policy: SftpDuplicatePolicy,
+    duplicate_resolver: Option<&dyn SftpDuplicateResolver>,
+) -> anyhow::Result<Option<String>> {
+    if !sftp.try_exists(remote_path.to_string()).await? {
+        return Ok(Some(remote_path.to_string()));
+    }
+
+    match resolve_duplicate_decision(
+        SftpTransferDirection::Upload,
+        local_path,
+        remote_path,
+        is_directory,
+        duplicate_policy,
+        duplicate_resolver,
+    )? {
+        SftpDuplicateDecision::Overwrite => Ok(Some(remote_path.to_string())),
+        SftpDuplicateDecision::Skip => Ok(None),
+        SftpDuplicateDecision::Rename => resolve_renamed_remote_target(sftp, remote_path)
+            .await
+            .map(Some),
+    }
+}
+
+fn resolve_duplicate_decision(
+    direction: SftpTransferDirection,
+    source_path: &str,
+    target_path: &str,
+    is_directory: bool,
+    duplicate_policy: SftpDuplicatePolicy,
+    duplicate_resolver: Option<&dyn SftpDuplicateResolver>,
+) -> anyhow::Result<SftpDuplicateDecision> {
+    match duplicate_policy {
+        SftpDuplicatePolicy::Overwrite => Ok(SftpDuplicateDecision::Overwrite),
+        SftpDuplicatePolicy::Skip => Ok(SftpDuplicateDecision::Skip),
+        SftpDuplicatePolicy::Rename => Ok(SftpDuplicateDecision::Rename),
+        SftpDuplicatePolicy::Ask => {
+            let resolver = duplicate_resolver.ok_or_else(|| {
+                anyhow::anyhow!("SFTP duplicate policy is ask but no resolver is available")
+            })?;
+            resolver
+                .resolve_duplicate(&SftpDuplicateRequest {
+                    direction,
+                    source_path: source_path.to_string(),
+                    target_path: target_path.to_string(),
+                    is_directory,
+                })
+                .map_err(anyhow::Error::msg)
+        }
+    }
+}
+
+fn resolve_renamed_local_target(local_path: &Path) -> anyhow::Result<PathBuf> {
+    let stem = local_path
+        .file_stem()
+        .map(|stem| stem.to_string_lossy().to_string())
+        .filter(|stem| !stem.is_empty())
+        .unwrap_or_else(|| local_file_name(local_path).unwrap_or_else(|_| "download".to_string()));
+    let extension = local_path
+        .extension()
+        .map(|extension| format!(".{}", extension.to_string_lossy()))
+        .unwrap_or_default();
+    let parent = local_path.parent().unwrap_or_else(|| Path::new("."));
+    for index in 1..=999 {
+        let candidate = parent.join(format!("{stem}({index}){extension}"));
+        if !candidate.exists() {
+            return Ok(candidate);
+        }
+    }
+    anyhow::bail!(
+        "unable to find a non-conflicting local path for {}",
+        local_path.display()
+    )
+}
+
+async fn resolve_renamed_remote_target(
+    sftp: &SftpSession,
+    remote_path: &str,
+) -> anyhow::Result<String> {
+    for index in 1..=999 {
+        let candidate = remote_conflict_candidate(remote_path, index);
+        if !sftp.try_exists(candidate.clone()).await? {
+            return Ok(candidate);
+        }
+    }
+    anyhow::bail!("unable to find a non-conflicting remote path for {remote_path}")
+}
+
+fn remote_conflict_candidate(remote_path: &str, index: usize) -> String {
+    let (parent, name) = remote_split_parent_name(remote_path);
+    let (stem, extension) = match name.rsplit_once('.') {
+        Some((stem, extension)) if !stem.is_empty() => (stem.to_string(), format!(".{extension}")),
+        _ => (name, String::new()),
+    };
+    remote_join(&parent, &format!("{stem}({index}){extension}"))
+}
+
+fn remote_split_parent_name(remote_path: &str) -> (String, String) {
+    let trimmed = remote_path.trim_end_matches('/');
+    match trimmed.rsplit_once('/') {
+        Some(("", name)) => ("/".to_string(), name.to_string()),
+        Some((parent, name)) => (parent.to_string(), name.to_string()),
+        None => (".".to_string(), trimmed.to_string()),
+    }
+}
+
+fn remote_join(base: &str, child: &str) -> String {
+    if base.is_empty() || base == "." {
+        child.to_string()
+    } else if base == "/" {
+        format!("/{child}")
+    } else if base.ends_with('/') {
+        format!("{base}{child}")
+    } else {
+        format!("{base}/{child}")
+    }
+}
+
+impl Default for LocalSessionConfig {
+    fn default() -> Self {
+        Self {
+            name: "Local Terminal".to_string(),
+            shell_path: None,
+            shell_args: Vec::new(),
+            working_dir: None,
+            cols: 80,
+            rows: 24,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SessionInfo {
+    pub id: String,
+    pub name: String,
+    pub kind: SessionKind,
+    pub working_dir: Option<PathBuf>,
+    pub cols: u16,
+    pub rows: u16,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SessionKind {
+    LocalPty,
+    Ssh,
+    Telnet,
+    RawTcp,
+    Serial,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum SessionEvent {
+    Output { session_id: String, data: Vec<u8> },
+    Exited { session_id: String },
+    Error { session_id: String, message: String },
+}
+
+#[derive(Debug, Error)]
+pub enum SessionError {
+    #[error("session not found: {0}")]
+    NotFound(String),
+    #[error("failed to open PTY: {0}")]
+    OpenPty(#[source] anyhow::Error),
+    #[error("failed to clone PTY reader: {0}")]
+    CloneReader(#[source] anyhow::Error),
+    #[error("failed to take PTY writer: {0}")]
+    TakeWriter(#[source] anyhow::Error),
+    #[error("failed to spawn shell: {0}")]
+    Spawn(#[source] anyhow::Error),
+    #[error("failed to connect TCP session to {addr}: {source}")]
+    ConnectTcp {
+        addr: String,
+        source: std::io::Error,
+    },
+    #[error("failed to clone TCP stream for session {session_id}: {source}")]
+    CloneTcp {
+        session_id: String,
+        source: std::io::Error,
+    },
+    #[error("failed to open serial port {port_name}: {source}")]
+    OpenSerial {
+        port_name: String,
+        source: serialport::Error,
+    },
+    #[error("failed to clone serial port for session {session_id}: {source}")]
+    CloneSerial {
+        session_id: String,
+        source: serialport::Error,
+    },
+    #[error("failed to create SSH session for {addr}: {source}")]
+    CreateSsh { addr: String, source: anyhow::Error },
+    #[error("failed to write to session {session_id}: {source}")]
+    Write {
+        session_id: String,
+        source: std::io::Error,
+    },
+    #[error("failed to resize session {session_id}: {source}")]
+    Resize {
+        session_id: String,
+        source: anyhow::Error,
+    },
+    #[error("session registry lock is poisoned")]
+    LockPoisoned,
+}
+
+pub struct SessionManager {
+    sessions: Mutex<HashMap<String, ManagedSession>>,
+    event_tx: mpsc::Sender<SessionEvent>,
+    event_rx: Mutex<mpsc::Receiver<SessionEvent>>,
+}
+
+enum ManagedSession {
+    Local(LocalSession),
+    Ssh(SshSession),
+    Tcp(TcpSession),
+    Serial(SerialSession),
+}
+
+struct LocalSession {
+    info: SessionInfo,
+    master: Box<dyn MasterPty + Send>,
+    writer: Box<dyn Write + Send>,
+    child: Box<dyn Child + Send + Sync>,
+    reader_thread: Option<JoinHandle<()>>,
+}
+
+struct TcpSession {
+    info: SessionInfo,
+    writer: TcpStream,
+    reader_stream: TcpStream,
+    config: TelnetSessionConfig,
+    reader_thread: Option<JoinHandle<()>>,
+}
+
+struct SshSession {
+    info: SessionInfo,
+    command_tx: tokio_mpsc::UnboundedSender<SshCommand>,
+    backspace_as_bs: bool,
+    worker_thread: Option<JoinHandle<()>>,
+}
+
+struct SerialSession {
+    info: SessionInfo,
+    writer: Box<dyn SerialPort>,
+    backspace_as_bs: bool,
+    stop_reader: Arc<AtomicBool>,
+    reader_thread: Option<JoinHandle<()>>,
+}
+
+enum SshCommand {
+    Write(Vec<u8>),
+    Resize { cols: u16, rows: u16 },
+    Close,
+}
+
+struct OpenSshShellSession {
+    handle: client::Handle<SshClientHandler>,
+    channel: russh::Channel<client::Msg>,
+    jump_handles: Vec<client::Handle<SshClientHandler>>,
+    x11_forwarder: Option<X11Forwarder>,
+    local_notice: Option<Vec<u8>>,
+}
+
+impl SessionManager {
+    pub fn new() -> Self {
+        let (event_tx, event_rx) = mpsc::channel();
+        Self {
+            sessions: Mutex::new(HashMap::new()),
+            event_tx,
+            event_rx: Mutex::new(event_rx),
+        }
+    }
+
+    pub fn create_local_session(
+        &self,
+        config: LocalSessionConfig,
+    ) -> Result<SessionInfo, SessionError> {
+        let session_id = uuid::Uuid::new_v4().to_string();
+        let pty_system = native_pty_system();
+        let pair = pty_system
+            .openpty(PtySize {
+                rows: config.rows,
+                cols: config.cols,
+                pixel_width: 0,
+                pixel_height: 0,
+            })
+            .map_err(SessionError::OpenPty)?;
+
+        let mut command = build_command(&config);
+        configure_environment(&mut command);
+        if let Some(working_dir) = &config.working_dir {
+            command.cwd(working_dir);
+        }
+
+        let reader = pair
+            .master
+            .try_clone_reader()
+            .map_err(SessionError::CloneReader)?;
+        let writer = pair
+            .master
+            .take_writer()
+            .map_err(SessionError::TakeWriter)?;
+        let child = pair
+            .slave
+            .spawn_command(command)
+            .map_err(SessionError::Spawn)?;
+        drop(pair.slave);
+
+        let info = SessionInfo {
+            id: session_id.clone(),
+            name: config.name,
+            kind: SessionKind::LocalPty,
+            working_dir: config.working_dir.clone(),
+            cols: config.cols,
+            rows: config.rows,
+        };
+        let reader_thread = spawn_reader_thread(session_id.clone(), reader, self.event_tx.clone());
+        let session = LocalSession {
+            info: info.clone(),
+            master: pair.master,
+            writer,
+            child,
+            reader_thread: Some(reader_thread),
+        };
+
+        self.sessions
+            .lock()
+            .map_err(|_| SessionError::LockPoisoned)?
+            .insert(session_id, ManagedSession::Local(session));
+
+        Ok(info)
+    }
+
+    pub fn create_telnet_session(
+        &self,
+        config: TelnetSessionConfig,
+    ) -> Result<SessionInfo, SessionError> {
+        let session_id = uuid::Uuid::new_v4().to_string();
+        let addr = format!("{}:{}", config.host, config.port);
+        let stream = TcpStream::connect(&addr).map_err(|source| SessionError::ConnectTcp {
+            addr: addr.clone(),
+            source,
+        })?;
+        stream.set_nodelay(true).ok();
+        stream
+            .set_read_timeout(Some(Duration::from_millis(250)))
+            .ok();
+
+        let mut writer = stream
+            .try_clone()
+            .map_err(|source| SessionError::CloneTcp {
+                session_id: session_id.clone(),
+                source,
+            })?;
+        let response_writer = stream
+            .try_clone()
+            .map_err(|source| SessionError::CloneTcp {
+                session_id: session_id.clone(),
+                source,
+            })?;
+
+        if let Some(naws) = maybe_build_naws(config.cols, config.rows, &config) {
+            writer.write_all(&naws).ok();
+            writer.flush().ok();
+        }
+
+        let info = SessionInfo {
+            id: session_id.clone(),
+            name: config.name.clone(),
+            kind: if config.raw_tcp {
+                SessionKind::RawTcp
+            } else {
+                SessionKind::Telnet
+            },
+            working_dir: None,
+            cols: config.cols,
+            rows: config.rows,
+        };
+
+        let reader_thread = spawn_tcp_reader_thread(
+            session_id.clone(),
+            stream
+                .try_clone()
+                .map_err(|source| SessionError::CloneTcp {
+                    session_id: session_id.clone(),
+                    source,
+                })?,
+            response_writer,
+            config.clone(),
+            self.event_tx.clone(),
+        );
+
+        let session = TcpSession {
+            info: info.clone(),
+            writer,
+            reader_stream: stream,
+            config,
+            reader_thread: Some(reader_thread),
+        };
+
+        self.sessions
+            .lock()
+            .map_err(|_| SessionError::LockPoisoned)?
+            .insert(session_id, ManagedSession::Tcp(session));
+
+        Ok(info)
+    }
+
+    pub fn create_ssh_session(
+        &self,
+        config: SshSessionConfig,
+    ) -> Result<SessionInfo, SessionError> {
+        let session_id = uuid::Uuid::new_v4().to_string();
+        let addr = format!("{}:{}", config.host, config.port);
+        let (command_tx, command_rx) = tokio_mpsc::unbounded_channel();
+        let (ready_tx, ready_rx) = mpsc::channel();
+        let event_tx = self.event_tx.clone();
+        let worker_config = config.clone();
+        let worker_session_id = session_id.clone();
+        let worker_thread = std::thread::spawn(move || {
+            run_ssh_worker(
+                worker_session_id,
+                worker_config,
+                command_rx,
+                ready_tx,
+                event_tx,
+            );
+        });
+
+        match ready_rx.recv() {
+            Ok(Ok(())) => {}
+            Ok(Err(message)) => {
+                let _ = worker_thread.join();
+                return Err(SessionError::CreateSsh {
+                    addr,
+                    source: anyhow::anyhow!(message),
+                });
+            }
+            Err(error) => {
+                let _ = worker_thread.join();
+                return Err(SessionError::CreateSsh {
+                    addr,
+                    source: anyhow::anyhow!("SSH worker exited before readiness: {error}"),
+                });
+            }
+        }
+
+        let info = SessionInfo {
+            id: session_id.clone(),
+            name: config.name,
+            kind: SessionKind::Ssh,
+            working_dir: None,
+            cols: config.cols,
+            rows: config.rows,
+        };
+        let session = SshSession {
+            info: info.clone(),
+            command_tx,
+            backspace_as_bs: config.backspace_mode == "ctrl_h",
+            worker_thread: Some(worker_thread),
+        };
+
+        self.sessions
+            .lock()
+            .map_err(|_| SessionError::LockPoisoned)?
+            .insert(session_id, ManagedSession::Ssh(session));
+
+        Ok(info)
+    }
+
+    pub fn create_serial_session(
+        &self,
+        config: SerialSessionConfig,
+    ) -> Result<SessionInfo, SessionError> {
+        let session_id = uuid::Uuid::new_v4().to_string();
+        let port = open_serial_port(&config).map_err(|source| SessionError::OpenSerial {
+            port_name: config.port_name.clone(),
+            source,
+        })?;
+        let reader = port
+            .try_clone()
+            .map_err(|source| SessionError::CloneSerial {
+                session_id: session_id.clone(),
+                source,
+            })?;
+
+        let info = SessionInfo {
+            id: session_id.clone(),
+            name: config.name,
+            kind: SessionKind::Serial,
+            working_dir: None,
+            cols: 80,
+            rows: 24,
+        };
+        let stop_reader = Arc::new(AtomicBool::new(false));
+        let reader_thread = spawn_serial_reader_thread(
+            session_id.clone(),
+            reader,
+            stop_reader.clone(),
+            self.event_tx.clone(),
+        );
+        let session = SerialSession {
+            info: info.clone(),
+            writer: port,
+            backspace_as_bs: config.backspace_mode == "ctrl_h",
+            stop_reader,
+            reader_thread: Some(reader_thread),
+        };
+
+        self.sessions
+            .lock()
+            .map_err(|_| SessionError::LockPoisoned)?
+            .insert(session_id, ManagedSession::Serial(session));
+
+        Ok(info)
+    }
+
+    pub fn list_serial_ports(&self) -> Result<Vec<String>, SessionError> {
+        let mut ports = serialport::available_ports()
+            .map_err(|source| SessionError::OpenSerial {
+                port_name: "<list>".to_string(),
+                source,
+            })?
+            .into_iter()
+            .map(|port| port.port_name)
+            .collect::<Vec<_>>();
+        ports.sort_unstable();
+        Ok(ports)
+    }
+
+    pub fn list_sessions(&self) -> Result<Vec<SessionInfo>, SessionError> {
+        let mut sessions = self
+            .sessions
+            .lock()
+            .map_err(|_| SessionError::LockPoisoned)?
+            .values()
+            .map(ManagedSession::info)
+            .collect::<Vec<_>>();
+        sessions.sort_by(|left, right| left.name.cmp(&right.name).then(left.id.cmp(&right.id)));
+        Ok(sessions)
+    }
+
+    pub fn write(&self, session_id: &str, data: &[u8]) -> Result<(), SessionError> {
+        let mut sessions = self
+            .sessions
+            .lock()
+            .map_err(|_| SessionError::LockPoisoned)?;
+        let session = sessions
+            .get_mut(session_id)
+            .ok_or_else(|| SessionError::NotFound(session_id.to_string()))?;
+        session.write(data).map_err(|source| SessionError::Write {
+            session_id: session_id.to_string(),
+            source,
+        })
+    }
+
+    pub fn resize(&self, session_id: &str, cols: u16, rows: u16) -> Result<(), SessionError> {
+        let mut sessions = self
+            .sessions
+            .lock()
+            .map_err(|_| SessionError::LockPoisoned)?;
+        let session = sessions
+            .get_mut(session_id)
+            .ok_or_else(|| SessionError::NotFound(session_id.to_string()))?;
+        session
+            .resize(cols, rows)
+            .map_err(|source| SessionError::Resize {
+                session_id: session_id.to_string(),
+                source,
+            })
+    }
+
+    pub fn close(&self, session_id: &str) -> Result<(), SessionError> {
+        let mut session = self
+            .sessions
+            .lock()
+            .map_err(|_| SessionError::LockPoisoned)?
+            .remove(session_id)
+            .ok_or_else(|| SessionError::NotFound(session_id.to_string()))?;
+        session.close();
+        Ok(())
+    }
+
+    pub fn try_recv_event(&self) -> Result<Option<SessionEvent>, SessionError> {
+        let rx = self
+            .event_rx
+            .lock()
+            .map_err(|_| SessionError::LockPoisoned)?;
+        match rx.try_recv() {
+            Ok(event) => Ok(Some(event)),
+            Err(mpsc::TryRecvError::Empty) => Ok(None),
+            Err(mpsc::TryRecvError::Disconnected) => Ok(Some(SessionEvent::Error {
+                session_id: String::new(),
+                message: "session event channel disconnected".to_string(),
+            })),
+        }
+    }
+
+    pub fn drain_events(&self, max_events: usize) -> Result<Vec<SessionEvent>, SessionError> {
+        let rx = self
+            .event_rx
+            .lock()
+            .map_err(|_| SessionError::LockPoisoned)?;
+        let mut events = Vec::new();
+        for _ in 0..max_events {
+            match rx.try_recv() {
+                Ok(event) => events.push(event),
+                Err(mpsc::TryRecvError::Empty) => break,
+                Err(mpsc::TryRecvError::Disconnected) => {
+                    events.push(SessionEvent::Error {
+                        session_id: String::new(),
+                        message: "session event channel disconnected".to_string(),
+                    });
+                    break;
+                }
+            }
+        }
+        Ok(events)
+    }
+}
+
+impl ManagedSession {
+    fn info(&self) -> SessionInfo {
+        match self {
+            Self::Local(session) => session.info.clone(),
+            Self::Ssh(session) => session.info.clone(),
+            Self::Tcp(session) => session.info.clone(),
+            Self::Serial(session) => session.info.clone(),
+        }
+    }
+
+    fn write(&mut self, data: &[u8]) -> std::io::Result<()> {
+        match self {
+            Self::Local(session) => session
+                .writer
+                .write_all(data)
+                .and_then(|_| session.writer.flush()),
+            Self::Tcp(session) => {
+                let data = normalize_telnet_input(data, &session.config);
+                if session.config.force_character_at_a_time {
+                    for chunk in data.chunks(1) {
+                        session.writer.write_all(chunk)?;
+                        session.writer.flush()?;
+                    }
+                    Ok(())
+                } else {
+                    session.writer.write_all(&data)?;
+                    session.writer.flush()
+                }
+            }
+            Self::Ssh(session) => {
+                let data = if session.backspace_as_bs {
+                    remap_del_to_bs(data)
+                } else {
+                    data.to_vec()
+                };
+                session
+                    .command_tx
+                    .send(SshCommand::Write(data))
+                    .map_err(|_| ssh_worker_stopped())
+            }
+            Self::Serial(session) => {
+                let data = if session.backspace_as_bs {
+                    remap_del_to_bs(data)
+                } else {
+                    data.to_vec()
+                };
+                session
+                    .writer
+                    .write_all(&data)
+                    .and_then(|_| session.writer.flush())
+            }
+        }
+    }
+
+    fn resize(&mut self, cols: u16, rows: u16) -> anyhow::Result<()> {
+        match self {
+            Self::Local(session) => {
+                session.master.resize(PtySize {
+                    rows,
+                    cols,
+                    pixel_width: 0,
+                    pixel_height: 0,
+                })?;
+                session.info.cols = cols;
+                session.info.rows = rows;
+                Ok(())
+            }
+            Self::Tcp(session) => {
+                session.info.cols = cols;
+                session.info.rows = rows;
+                if let Some(naws) = maybe_build_naws(cols, rows, &session.config) {
+                    session.writer.write_all(&naws)?;
+                    session.writer.flush()?;
+                }
+                Ok(())
+            }
+            Self::Ssh(session) => {
+                session.info.cols = cols;
+                session.info.rows = rows;
+                session
+                    .command_tx
+                    .send(SshCommand::Resize { cols, rows })
+                    .map_err(|_| anyhow::anyhow!("SSH worker stopped"))?;
+                Ok(())
+            }
+            Self::Serial(session) => {
+                session.info.cols = cols;
+                session.info.rows = rows;
+                Ok(())
+            }
+        }
+    }
+
+    fn close(&mut self) {
+        match self {
+            Self::Local(session) => {
+                let _ = session.child.kill();
+                if let Some(reader_thread) = session.reader_thread.take() {
+                    let _ = reader_thread.join();
+                }
+            }
+            Self::Tcp(session) => {
+                let _ = session.writer.shutdown(Shutdown::Both);
+                let _ = session.reader_stream.shutdown(Shutdown::Both);
+                if let Some(reader_thread) = session.reader_thread.take() {
+                    let _ = reader_thread.join();
+                }
+            }
+            Self::Ssh(session) => {
+                let _ = session.command_tx.send(SshCommand::Close);
+                if let Some(worker_thread) = session.worker_thread.take() {
+                    let _ = worker_thread.join();
+                }
+            }
+            Self::Serial(session) => {
+                session.stop_reader.store(true, Ordering::Relaxed);
+                if let Some(reader_thread) = session.reader_thread.take() {
+                    let _ = reader_thread.join();
+                }
+            }
+        }
+    }
+}
+
+impl Default for SessionManager {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+fn spawn_reader_thread(
+    session_id: String,
+    mut reader: Box<dyn Read + Send>,
+    event_tx: mpsc::Sender<SessionEvent>,
+) -> JoinHandle<()> {
+    std::thread::spawn(move || {
+        let mut buffer = [0_u8; 8192];
+        loop {
+            match reader.read(&mut buffer) {
+                Ok(0) => {
+                    let _ = event_tx.send(SessionEvent::Exited {
+                        session_id: session_id.clone(),
+                    });
+                    break;
+                }
+                Ok(read) => {
+                    let _ = event_tx.send(SessionEvent::Output {
+                        session_id: session_id.clone(),
+                        data: buffer[..read].to_vec(),
+                    });
+                }
+                Err(error) => {
+                    let _ = event_tx.send(SessionEvent::Error {
+                        session_id: session_id.clone(),
+                        message: error.to_string(),
+                    });
+                    break;
+                }
+            }
+        }
+    })
+}
+
+fn spawn_tcp_reader_thread(
+    session_id: String,
+    mut reader: TcpStream,
+    mut response_writer: TcpStream,
+    config: TelnetSessionConfig,
+    event_tx: mpsc::Sender<SessionEvent>,
+) -> JoinHandle<()> {
+    std::thread::spawn(move || {
+        let mut buffer = [0_u8; 8192];
+        loop {
+            match reader.read(&mut buffer) {
+                Ok(0) => {
+                    let _ = event_tx.send(SessionEvent::Exited {
+                        session_id: session_id.clone(),
+                    });
+                    break;
+                }
+                Ok(read) => {
+                    let visible = if config.raw_tcp {
+                        unescape_iac_iac(&buffer[..read])
+                    } else {
+                        strip_telnet_commands(&buffer[..read], &mut |command, option| {
+                            let response = negotiate_response(
+                                command,
+                                option,
+                                config.send_naws,
+                                config.send_sga,
+                            );
+                            if !response.is_empty() {
+                                let _ = response_writer.write_all(&response);
+                                let _ = response_writer.flush();
+                            }
+                        })
+                    };
+                    if !visible.is_empty() {
+                        let _ = event_tx.send(SessionEvent::Output {
+                            session_id: session_id.clone(),
+                            data: visible,
+                        });
+                    }
+                }
+                Err(error)
+                    if matches!(
+                        error.kind(),
+                        std::io::ErrorKind::WouldBlock | std::io::ErrorKind::TimedOut
+                    ) =>
+                {
+                    continue;
+                }
+                Err(error) => {
+                    let _ = event_tx.send(SessionEvent::Error {
+                        session_id: session_id.clone(),
+                        message: error.to_string(),
+                    });
+                    break;
+                }
+            }
+        }
+    })
+}
+
+fn run_ssh_worker(
+    session_id: String,
+    config: SshSessionConfig,
+    mut command_rx: tokio_mpsc::UnboundedReceiver<SshCommand>,
+    ready_tx: mpsc::Sender<Result<(), String>>,
+    event_tx: mpsc::Sender<SessionEvent>,
+) {
+    let runtime = match tokio::runtime::Builder::new_multi_thread()
+        .enable_all()
+        .thread_name("nyaterm-ssh")
+        .build()
+    {
+        Ok(runtime) => runtime,
+        Err(error) => {
+            let _ = ready_tx.send(Err(format!("failed to start SSH runtime: {error}")));
+            return;
+        }
+    };
+
+    runtime.block_on(async move {
+        let open_session = match open_ssh_shell(&config).await {
+            Ok(session) => {
+                let _ = ready_tx.send(Ok(()));
+                session
+            }
+            Err(error) => {
+                let _ = ready_tx.send(Err(error.to_string()));
+                return;
+            }
+        };
+        let OpenSshShellSession {
+            handle,
+            mut channel,
+            jump_handles,
+            x11_forwarder,
+            local_notice,
+        } = open_session;
+        if let Some(notice) = local_notice {
+            let _ = event_tx.send(SessionEvent::Output {
+                session_id: session_id.clone(),
+                data: notice,
+            });
+        }
+        if let Some(forwarder) = x11_forwarder {
+            spawn_x11_forwarder(event_tx.clone(), session_id.clone(), forwarder);
+        }
+
+        loop {
+            tokio::select! {
+                command = command_rx.recv() => {
+                    match command {
+                        Some(SshCommand::Write(data)) => {
+                            if let Err(error) = channel.data_bytes(data).await {
+                                send_session_error(&event_tx, &session_id, error);
+                                break;
+                            }
+                        }
+                        Some(SshCommand::Resize { cols, rows }) => {
+                            if let Err(error) = channel
+                                .window_change(cols.into(), rows.into(), 0, 0)
+                                .await
+                            {
+                                send_session_error(&event_tx, &session_id, error);
+                                break;
+                            }
+                        }
+                        Some(SshCommand::Close) | None => {
+                            let _ = channel.eof().await;
+                            let _ = channel.close().await;
+                            break;
+                        }
+                    }
+                }
+                message = channel.wait() => {
+                    match message {
+                        Some(ChannelMsg::Data { data }) | Some(ChannelMsg::ExtendedData { data, .. }) => {
+                            let _ = event_tx.send(SessionEvent::Output {
+                                session_id: session_id.clone(),
+                                data: data.to_vec(),
+                            });
+                        }
+                        Some(ChannelMsg::ExitStatus { .. }) | Some(ChannelMsg::Eof) | Some(ChannelMsg::Close) | None => {
+                            let _ = event_tx.send(SessionEvent::Exited {
+                                session_id: session_id.clone(),
+                            });
+                            break;
+                        }
+                        Some(_) => {}
+                    }
+                }
+            }
+        }
+
+        let _ = handle
+            .disconnect(Disconnect::ByApplication, "session closed", "en")
+            .await;
+        for jump_handle in jump_handles {
+            let _ = jump_handle
+                .disconnect(Disconnect::ByApplication, "session closed", "en")
+                .await;
+        }
+    });
+}
+
+async fn open_ssh_shell(config: &SshSessionConfig) -> anyhow::Result<OpenSshShellSession> {
+    let x11_config = if config.x11_forwarding {
+        Some(prepare_x11_forwarding(&config.x11_display).await)
+    } else {
+        None
+    };
+    let (x11_tx, x11_rx) = if x11_config.is_some() {
+        let (tx, rx) = tokio_mpsc::unbounded_channel();
+        (Some(tx), Some(rx))
+    } else {
+        (None, None)
+    };
+    let (handle, jump_handles) =
+        open_authenticated_ssh_handle_with_channel_senders(config, None, x11_tx).await?;
+
+    let channel = handle.channel_open_session().await?;
+    let (x11_forwarder, local_notice) = if let (Some(config), Some(rx)) = (x11_config, x11_rx) {
+        match channel
+            .request_x11(true, false, MIT_MAGIC_COOKIE, &config.fake_cookie_hex, 0)
+            .await
+        {
+            Ok(()) => (Some(X11Forwarder { rx, config }), None),
+            Err(_) => (None, Some(enable_x11_failed_message().into_bytes())),
+        }
+    } else {
+        (None, None)
+    };
+    channel
+        .request_pty(
+            false,
+            &config.term,
+            config.cols.into(),
+            config.rows.into(),
+            0,
+            0,
+            &[],
+        )
+        .await?;
+    channel.request_shell(true).await?;
+    Ok(OpenSshShellSession {
+        handle,
+        channel,
+        jump_handles,
+        x11_forwarder,
+        local_notice,
+    })
+}
+
+fn ssh_client_config() -> Arc<russh::client::Config> {
+    Arc::new(russh::client::Config {
+        inactivity_timeout: Some(Duration::from_secs(30)),
+        ..Default::default()
+    })
+}
+
+fn validate_tunnel_config(config: &SshTunnelConfig) -> anyhow::Result<()> {
+    if config.id.trim().is_empty() {
+        anyhow::bail!("SSH tunnel id is required");
+    }
+    match config.mode {
+        SshTunnelMode::Local | SshTunnelMode::Remote => {
+            if config
+                .target_host
+                .as_deref()
+                .is_none_or(|host| host.trim().is_empty())
+            {
+                anyhow::bail!("{:?} SSH tunnel requires a target host", config.mode);
+            }
+            if config.target_port.unwrap_or(0) == 0 {
+                anyhow::bail!("{:?} SSH tunnel requires a target port", config.mode);
+            }
+        }
+        SshTunnelMode::Dynamic => {}
+    }
+    Ok(())
+}
+
+fn normalized_bind_host(bind_host: &str) -> String {
+    let bind_host = bind_host.trim();
+    if bind_host.is_empty() {
+        "127.0.0.1".to_string()
+    } else {
+        bind_host.to_string()
+    }
+}
+
+fn run_tunnel_worker(
+    config: SshTunnelConfig,
+    listener: Option<StdTcpListener>,
+    mut info: SshTunnelInfo,
+    shutdown_rx: oneshot::Receiver<()>,
+    ready_tx: mpsc::Sender<Result<SshTunnelInfo, String>>,
+    multiplex: Option<SshMultiplexHandle>,
+) {
+    let runtime = match tokio::runtime::Builder::new_multi_thread()
+        .enable_all()
+        .thread_name("nyaterm-ssh-tunnel")
+        .build()
+    {
+        Ok(runtime) => runtime,
+        Err(error) => {
+            let _ = ready_tx.send(Err(format!("failed to start SSH tunnel runtime: {error}")));
+            return;
+        }
+    };
+
+    runtime.block_on(async move {
+        let (forwarded_tx, forwarded_rx) = if config.mode == SshTunnelMode::Remote {
+            let (tx, rx) = tokio_mpsc::unbounded_channel();
+            (Some(tx), Some(rx))
+        } else {
+            (None, None)
+        };
+        let (handle, jump_handles, forwarded_registry, disconnect_on_close) =
+            match multiplex.as_ref() {
+                Some(multiplex) => (
+                    multiplex.target_handle(),
+                    Vec::new(),
+                    Some(multiplex.forwarded_tcpip_registry()),
+                    false,
+                ),
+                None => {
+                    match open_authenticated_ssh_handle_with_forwarded_tx(
+                        &config.ssh_config,
+                        forwarded_tx.clone(),
+                    )
+                    .await
+                    {
+                        Ok((handle, jumps)) => (
+                            Arc::new(tokio::sync::Mutex::new(handle)),
+                            jumps
+                                .into_iter()
+                                .map(|jump| Arc::new(tokio::sync::Mutex::new(jump)))
+                                .collect(),
+                            None,
+                            true,
+                        ),
+                        Err(error) => {
+                            let _ = ready_tx.send(Err(error.to_string()));
+                            return;
+                        }
+                    }
+                }
+            };
+
+        match config.mode {
+            SshTunnelMode::Local => {
+                let Some(listener) = listener else {
+                    let _ =
+                        ready_tx.send(Err("local SSH tunnel listener was not created".to_string()));
+                    return;
+                };
+                let listener = match tokio::net::TcpListener::from_std(listener) {
+                    Ok(listener) => listener,
+                    Err(error) => {
+                        let _ =
+                            ready_tx.send(Err(format!("failed to adopt tunnel listener: {error}")));
+                        return;
+                    }
+                };
+                let target_host = config.target_host.unwrap_or_default();
+                let target_port = config.target_port.unwrap_or_default();
+                let _ = ready_tx.send(Ok(info));
+                run_local_tunnel_loop(
+                    listener,
+                    handle.clone(),
+                    target_host,
+                    target_port,
+                    shutdown_rx,
+                )
+                .await;
+            }
+            SshTunnelMode::Remote => {
+                let target_host = config.target_host.unwrap_or_default();
+                let target_port = config.target_port.unwrap_or_default();
+                let actual_port = match handle
+                    .lock()
+                    .await
+                    .tcpip_forward(&info.bind_host, info.listen_port.into())
+                    .await
+                {
+                    Ok(0) => info.listen_port,
+                    Ok(port) => port.try_into().unwrap_or(info.listen_port),
+                    Err(error) => {
+                        let _ = ready_tx.send(Err(format!(
+                            "failed to request remote SSH tunnel {}:{}: {error}",
+                            info.bind_host, info.listen_port
+                        )));
+                        return;
+                    }
+                };
+                info.listen_port = actual_port;
+                if let (Some(registry), Some(tx)) = (forwarded_registry.as_ref(), forwarded_tx) {
+                    registry
+                        .lock()
+                        .await
+                        .by_listener
+                        .insert((info.bind_host.clone(), info.listen_port.into()), tx);
+                }
+                let _ = ready_tx.send(Ok(info.clone()));
+                run_remote_tunnel_loop(
+                    handle.clone(),
+                    info.bind_host.clone(),
+                    info.listen_port,
+                    target_host,
+                    target_port,
+                    forwarded_rx.expect("remote tunnel receiver"),
+                    shutdown_rx,
+                )
+                .await;
+                if let Some(registry) = forwarded_registry.as_ref() {
+                    registry
+                        .lock()
+                        .await
+                        .by_listener
+                        .remove(&(info.bind_host.clone(), info.listen_port.into()));
+                }
+            }
+            SshTunnelMode::Dynamic => {
+                let Some(listener) = listener else {
+                    let _ = ready_tx.send(Err(
+                        "dynamic SSH tunnel listener was not created".to_string()
+                    ));
+                    return;
+                };
+                let listener = match tokio::net::TcpListener::from_std(listener) {
+                    Ok(listener) => listener,
+                    Err(error) => {
+                        let _ =
+                            ready_tx.send(Err(format!("failed to adopt tunnel listener: {error}")));
+                        return;
+                    }
+                };
+                let _ = ready_tx.send(Ok(info));
+                run_dynamic_tunnel_loop(listener, handle.clone(), shutdown_rx).await;
+            }
+        }
+
+        if disconnect_on_close {
+            let _ = handle
+                .lock()
+                .await
+                .disconnect(Disconnect::ByApplication, "tunnel closed", "en")
+                .await;
+            for jump_handle in jump_handles {
+                let _ = jump_handle
+                    .lock()
+                    .await
+                    .disconnect(Disconnect::ByApplication, "tunnel closed", "en")
+                    .await;
+            }
+        } else {
+            drop(jump_handles);
+        }
+    });
+}
+
+async fn run_local_tunnel_loop(
+    listener: tokio::net::TcpListener,
+    ssh_handle: Arc<tokio::sync::Mutex<client::Handle<SshClientHandler>>>,
+    target_host: String,
+    target_port: u16,
+    mut shutdown_rx: oneshot::Receiver<()>,
+) {
+    loop {
+        tokio::select! {
+            _ = &mut shutdown_rx => break,
+            accepted = listener.accept() => {
+                let Ok((local_stream, peer_addr)) = accepted else {
+                    continue;
+                };
+                let ssh_handle = ssh_handle.clone();
+                let target_host = target_host.clone();
+                tokio::spawn(async move {
+                    let _ = forward_tcp_stream_over_ssh(
+                        local_stream,
+                        ssh_handle,
+                        target_host,
+                        target_port,
+                        peer_addr,
+                    )
+                    .await;
+                });
+            }
+        }
+    }
+}
+
+async fn run_dynamic_tunnel_loop(
+    listener: tokio::net::TcpListener,
+    ssh_handle: Arc<tokio::sync::Mutex<client::Handle<SshClientHandler>>>,
+    mut shutdown_rx: oneshot::Receiver<()>,
+) {
+    loop {
+        tokio::select! {
+            _ = &mut shutdown_rx => break,
+            accepted = listener.accept() => {
+                let Ok((mut local_stream, peer_addr)) = accepted else {
+                    continue;
+                };
+                let ssh_handle = ssh_handle.clone();
+                tokio::spawn(async move {
+                    let Ok((target_host, target_port)) = read_socks5_connect_request(&mut local_stream).await else {
+                        let _ = local_stream.shutdown().await;
+                        return;
+                    };
+                    let _ = forward_tcp_stream_over_ssh(
+                        local_stream,
+                        ssh_handle,
+                        target_host,
+                        target_port,
+                        peer_addr,
+                    )
+                    .await;
+                });
+            }
+        }
+    }
+}
+
+async fn run_remote_tunnel_loop(
+    ssh_handle: Arc<tokio::sync::Mutex<client::Handle<SshClientHandler>>>,
+    listen_addr: String,
+    listen_port: u16,
+    target_host: String,
+    target_port: u16,
+    mut forwarded_rx: tokio_mpsc::UnboundedReceiver<ForwardedTcpIpChannel>,
+    mut shutdown_rx: oneshot::Receiver<()>,
+) {
+    loop {
+        tokio::select! {
+            _ = &mut shutdown_rx => break,
+            forwarded = forwarded_rx.recv() => {
+                let Some(forwarded) = forwarded else {
+                    break;
+                };
+                let target_host = target_host.clone();
+                tokio::spawn(async move {
+                    let _ = forward_remote_channel_to_target(
+                        forwarded,
+                        target_host,
+                        target_port,
+                    )
+                    .await;
+                });
+            }
+        }
+    }
+
+    let _ = ssh_handle
+        .lock()
+        .await
+        .cancel_tcpip_forward(&listen_addr, listen_port.into())
+        .await;
+}
+
+async fn forward_remote_channel_to_target(
+    forwarded: ForwardedTcpIpChannel,
+    target_host: String,
+    target_port: u16,
+) -> anyhow::Result<()> {
+    let ForwardedTcpIpChannel {
+        channel,
+        connected_address,
+        connected_port,
+        originator_address,
+        originator_port,
+    } = forwarded;
+    let _forward_context = (
+        connected_address,
+        connected_port,
+        originator_address,
+        originator_port,
+    );
+    let mut local_stream =
+        tokio::net::TcpStream::connect((target_host.as_str(), target_port)).await?;
+    let mut channel_stream = channel.into_stream();
+    let _ = tokio::io::copy_bidirectional(&mut local_stream, &mut channel_stream).await?;
+    Ok(())
+}
+
+pub fn effective_x11_display(configured: &str) -> String {
+    let trimmed = configured.trim();
+    if !trimmed.is_empty() {
+        return trimmed.to_string();
+    }
+
+    if cfg!(windows) {
+        "localhost:0".to_string()
+    } else {
+        std::env::var("DISPLAY")
+            .ok()
+            .filter(|value| !value.trim().is_empty())
+            .unwrap_or_else(|| ":0".to_string())
+    }
+}
+
+pub async fn prepare_x11_forwarding(configured_display: &str) -> X11ForwardingConfig {
+    let display = effective_x11_display(configured_display);
+    let (target, fallback_target) = resolve_x11_display_targets(&display);
+    let fake_cookie = uuid::Uuid::new_v4().as_bytes().to_vec();
+    let fake_cookie_hex = encode_hex(&fake_cookie);
+    let real_cookie = read_local_x11_auth_cookie(&display).await;
+
+    X11ForwardingConfig {
+        target,
+        fallback_target,
+        fake_cookie,
+        fake_cookie_hex,
+        real_cookie,
+    }
+}
+
+pub fn resolve_x11_display_targets(display: &str) -> (X11DisplayTarget, Option<X11DisplayTarget>) {
+    let target = resolve_x11_display_spec(Some(display));
+
+    #[cfg(unix)]
+    {
+        let fallback = match &target {
+            X11DisplayTarget::UnixSocket { .. } => {
+                display_number(display).map(|n| X11DisplayTarget::Tcp {
+                    host: "localhost".to_string(),
+                    port: 6000 + n,
+                })
+            }
+            _ => None,
+        };
+        (target, fallback)
+    }
+
+    #[cfg(not(unix))]
+    {
+        (target, None)
+    }
+}
+
+pub fn resolve_x11_display_spec(display: Option<&str>) -> X11DisplayTarget {
+    let value = display
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .unwrap_or_else(|| if cfg!(windows) { "localhost:0" } else { ":0" });
+
+    #[cfg(unix)]
+    if value.starts_with('/') {
+        return X11DisplayTarget::UnixSocket {
+            path: PathBuf::from(value),
+        };
+    }
+
+    if let Some(rest) = value.strip_prefix("unix:") {
+        let display = parse_display_number(rest).unwrap_or(0);
+        return platform_display_target(None, display);
+    }
+
+    if let Some(rest) = value.strip_prefix(':') {
+        let display = parse_display_number(rest).unwrap_or(0);
+        return platform_display_target(None, display);
+    }
+
+    if let Some((host, suffix)) = value.rsplit_once(':') {
+        let n = parse_display_number(suffix).unwrap_or(0);
+        let port = if n >= 100 { n } else { 6000 + n };
+        return X11DisplayTarget::Tcp {
+            host: host.to_string(),
+            port,
+        };
+    }
+
+    X11DisplayTarget::Tcp {
+        host: "localhost".to_string(),
+        port: 6000,
+    }
+}
+
+fn platform_display_target(host: Option<&str>, display: u16) -> X11DisplayTarget {
+    #[cfg(unix)]
+    {
+        if host.is_none() {
+            return X11DisplayTarget::UnixSocket {
+                path: PathBuf::from(format!("/tmp/.X11-unix/X{display}")),
+            };
+        }
+    }
+
+    X11DisplayTarget::Tcp {
+        host: host.unwrap_or("localhost").to_string(),
+        port: 6000 + display,
+    }
+}
+
+fn parse_display_number(value: &str) -> Option<u16> {
+    value
+        .split('.')
+        .next()
+        .filter(|part| !part.is_empty())
+        .and_then(|part| part.parse::<u16>().ok())
+}
+
+fn display_number(display: &str) -> Option<u16> {
+    let trimmed = display.trim();
+    if let Some(rest) = trimmed.strip_prefix(':') {
+        return parse_display_number(rest);
+    }
+    if let Some(rest) = trimmed.strip_prefix("unix:") {
+        return parse_display_number(rest);
+    }
+    trimmed
+        .rsplit_once(':')
+        .and_then(|(_host, rest)| parse_display_number(rest))
+        .filter(|n| *n < 100)
+}
+
+enum LocalX11Stream {
+    Tcp(tokio::net::TcpStream),
+    #[cfg(unix)]
+    Unix(tokio::net::UnixStream),
+}
+
+impl AsyncRead for LocalX11Stream {
+    fn poll_read(
+        mut self: std::pin::Pin<&mut Self>,
+        cx: &mut std::task::Context<'_>,
+        buf: &mut tokio::io::ReadBuf<'_>,
+    ) -> std::task::Poll<std::io::Result<()>> {
+        match &mut *self {
+            Self::Tcp(stream) => std::pin::Pin::new(stream).poll_read(cx, buf),
+            #[cfg(unix)]
+            Self::Unix(stream) => std::pin::Pin::new(stream).poll_read(cx, buf),
+        }
+    }
+}
+
+impl AsyncWrite for LocalX11Stream {
+    fn poll_write(
+        mut self: std::pin::Pin<&mut Self>,
+        cx: &mut std::task::Context<'_>,
+        data: &[u8],
+    ) -> std::task::Poll<std::io::Result<usize>> {
+        match &mut *self {
+            Self::Tcp(stream) => std::pin::Pin::new(stream).poll_write(cx, data),
+            #[cfg(unix)]
+            Self::Unix(stream) => std::pin::Pin::new(stream).poll_write(cx, data),
+        }
+    }
+
+    fn poll_flush(
+        mut self: std::pin::Pin<&mut Self>,
+        cx: &mut std::task::Context<'_>,
+    ) -> std::task::Poll<std::io::Result<()>> {
+        match &mut *self {
+            Self::Tcp(stream) => std::pin::Pin::new(stream).poll_flush(cx),
+            #[cfg(unix)]
+            Self::Unix(stream) => std::pin::Pin::new(stream).poll_flush(cx),
+        }
+    }
+
+    fn poll_shutdown(
+        mut self: std::pin::Pin<&mut Self>,
+        cx: &mut std::task::Context<'_>,
+    ) -> std::task::Poll<std::io::Result<()>> {
+        match &mut *self {
+            Self::Tcp(stream) => std::pin::Pin::new(stream).poll_shutdown(cx),
+            #[cfg(unix)]
+            Self::Unix(stream) => std::pin::Pin::new(stream).poll_shutdown(cx),
+        }
+    }
+}
+
+async fn connect_local_x_server(target: &X11DisplayTarget) -> std::io::Result<LocalX11Stream> {
+    match target {
+        X11DisplayTarget::Tcp { host, port } => {
+            tokio::net::TcpStream::connect((host.as_str(), *port))
+                .await
+                .map(LocalX11Stream::Tcp)
+        }
+        #[cfg(unix)]
+        X11DisplayTarget::UnixSocket { path } => tokio::net::UnixStream::connect(path)
+            .await
+            .map(LocalX11Stream::Unix),
+    }
+}
+
+async fn connect_local_x_server_with_fallback(
+    primary: &X11DisplayTarget,
+    fallback: Option<&X11DisplayTarget>,
+) -> std::io::Result<LocalX11Stream> {
+    match connect_local_x_server(primary).await {
+        Ok(stream) => Ok(stream),
+        Err(primary_error) => {
+            if let Some(fallback) = fallback {
+                connect_local_x_server(fallback)
+                    .await
+                    .map_err(|_| primary_error)
+            } else {
+                Err(primary_error)
+            }
+        }
+    }
+}
+
+async fn read_local_x11_auth_cookie(display: &str) -> Option<Vec<u8>> {
+    let xauth = if cfg!(target_os = "macos") && std::path::Path::new("/opt/X11/bin/xauth").exists()
+    {
+        "/opt/X11/bin/xauth"
+    } else {
+        "xauth"
+    };
+
+    let mut command = tokio::process::Command::new(xauth);
+    command
+        .arg("list")
+        .env("DISPLAY", display)
+        .kill_on_drop(true);
+
+    let output = tokio::time::timeout(XAUTH_TIMEOUT, command.output())
+        .await
+        .ok()?
+        .ok()?;
+    if !output.status.success() {
+        return None;
+    }
+
+    let text = String::from_utf8_lossy(&output.stdout);
+    parse_xauth_cookie(&text, display)
+}
+
+fn parse_xauth_cookie(output: &str, display: &str) -> Option<Vec<u8>> {
+    let display_num = display_number(display);
+    let mut fallback = None;
+
+    for line in output.lines() {
+        if !line.contains(MIT_MAGIC_COOKIE) {
+            continue;
+        }
+        let parts = line.split_whitespace().collect::<Vec<_>>();
+        if parts.len() < 3 {
+            continue;
+        }
+        let Some(cookie) = decode_hex(parts[2]) else {
+            continue;
+        };
+        if let Some(n) = display_num {
+            if line.contains(&format!(":{n}")) {
+                return Some(cookie);
+            }
+        }
+        if fallback.is_none() {
+            fallback = Some(cookie);
+        }
+    }
+
+    fallback
+}
+
+pub struct X11AuthRewriter {
+    fake_cookie: Vec<u8>,
+    real_cookie: Option<Vec<u8>>,
+    buffer: Vec<u8>,
+    complete: bool,
+}
+
+impl X11AuthRewriter {
+    pub fn new(fake_cookie: Vec<u8>, real_cookie: Option<Vec<u8>>) -> Self {
+        Self {
+            fake_cookie,
+            real_cookie,
+            buffer: Vec::new(),
+            complete: false,
+        }
+    }
+
+    pub fn push(&mut self, data: &[u8]) -> Vec<u8> {
+        if self.complete {
+            return data.to_vec();
+        }
+
+        self.buffer.extend_from_slice(data);
+        let Some(packet_len) = setup_packet_len(&self.buffer) else {
+            return Vec::new();
+        };
+        if self.buffer.len() < packet_len {
+            return Vec::new();
+        }
+
+        let mut output = std::mem::take(&mut self.buffer);
+        let remainder = output.split_off(packet_len);
+        rewrite_x11_auth_setup_packet(&mut output, &self.fake_cookie, self.real_cookie.as_deref());
+        output.extend_from_slice(&remainder);
+        self.complete = true;
+        output
+    }
+}
+
+fn setup_packet_len(buffer: &[u8]) -> Option<usize> {
+    if buffer.len() < 12 {
+        return None;
+    }
+    let byte_order = buffer[0];
+    let read_u16 = |offset: usize| -> Option<u16> {
+        let bytes = [*buffer.get(offset)?, *buffer.get(offset + 1)?];
+        match byte_order {
+            b'l' => Some(u16::from_le_bytes(bytes)),
+            b'B' => Some(u16::from_be_bytes(bytes)),
+            _ => None,
+        }
+    };
+
+    let auth_protocol_len = read_u16(6)? as usize;
+    let auth_data_len = read_u16(8)? as usize;
+    Some(12 + pad4(auth_protocol_len) + pad4(auth_data_len))
+}
+
+fn pad4(n: usize) -> usize {
+    (n + 3) & !3
+}
+
+pub fn rewrite_x11_auth_setup_packet(
+    buffer: &mut [u8],
+    fake_cookie: &[u8],
+    real_cookie: Option<&[u8]>,
+) -> bool {
+    let Some(real_cookie) = real_cookie else {
+        return false;
+    };
+    if buffer.len() < 12 {
+        return false;
+    }
+
+    let byte_order = buffer[0];
+    let read_u16 = |offset: usize| -> Option<u16> {
+        let bytes = [*buffer.get(offset)?, *buffer.get(offset + 1)?];
+        match byte_order {
+            b'l' => Some(u16::from_le_bytes(bytes)),
+            b'B' => Some(u16::from_be_bytes(bytes)),
+            _ => None,
+        }
+    };
+
+    let protocol_len = read_u16(6).unwrap_or(0) as usize;
+    let auth_len = read_u16(8).unwrap_or(0) as usize;
+    let protocol_start = 12;
+    let protocol_end = protocol_start + protocol_len;
+    let auth_start = protocol_start + pad4(protocol_len);
+    let auth_end = auth_start + auth_len;
+
+    if auth_end > buffer.len() {
+        return false;
+    }
+    if &buffer[protocol_start..protocol_end] != MIT_MAGIC_COOKIE.as_bytes() {
+        return false;
+    }
+    if auth_len != real_cookie.len() || auth_len != fake_cookie.len() {
+        return false;
+    }
+    if &buffer[auth_start..auth_end] != fake_cookie {
+        return false;
+    }
+
+    buffer[auth_start..auth_end].copy_from_slice(real_cookie);
+    true
+}
+
+fn local_x_server_error_message(display_target: &str) -> String {
+    let platform = if cfg!(windows) {
+        X11Platform::Windows
+    } else if cfg!(target_os = "macos") {
+        X11Platform::Macos
+    } else {
+        X11Platform::Linux
+    };
+    local_x_server_error_message_for_platform(display_target, platform)
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum X11Platform {
+    Windows,
+    Macos,
+    Linux,
+}
+
+fn local_x_server_error_message_for_platform(
+    display_target: &str,
+    platform: X11Platform,
+) -> String {
+    let mut lines = vec![
+        "[X11] Could not connect to the local X11 server.".to_string(),
+        format!("[X11] Display target: {display_target}"),
+    ];
+
+    match platform {
+        X11Platform::Windows => {
+            lines.push(
+                "[X11] Windows: install and start VcXsrv or Xming, then try again.".to_string(),
+            );
+        }
+        X11Platform::Macos => {
+            lines.push("[X11] macOS: install and start XQuartz, then try again.".to_string());
+        }
+        X11Platform::Linux => {
+            lines.push(
+                "[X11] Linux: check DISPLAY and make sure Xorg/Xwayland is running.".to_string(),
+            );
+        }
+    }
+
+    format!("{}\r\n", lines.join("\r\n"))
+}
+
+fn enable_x11_failed_message() -> String {
+    "[X11] Could not enable X11 forwarding.\r\n[X11] Make sure sshd_config has X11Forwarding yes and xauth is installed on the server.\r\n".to_string()
+}
+
+fn spawn_x11_forwarder(
+    event_tx: mpsc::Sender<SessionEvent>,
+    session_id: String,
+    mut forwarder: X11Forwarder,
+) {
+    tokio::spawn(async move {
+        while let Some(open) = forwarder.rx.recv().await {
+            let target = forwarder.config.target.clone();
+            let fallback = forwarder.config.fallback_target.clone();
+            let fake_cookie = forwarder.config.fake_cookie.clone();
+            let real_cookie = forwarder.config.real_cookie.clone();
+            let event_tx = event_tx.clone();
+            let session_id = session_id.clone();
+            tokio::spawn(async move {
+                let _ = handle_x11_channel(
+                    event_tx,
+                    session_id,
+                    open,
+                    target,
+                    fallback,
+                    fake_cookie,
+                    real_cookie,
+                )
+                .await;
+            });
+        }
+    });
+}
+
+async fn handle_x11_channel(
+    event_tx: mpsc::Sender<SessionEvent>,
+    session_id: String,
+    open: X11ChannelOpen,
+    target: X11DisplayTarget,
+    fallback: Option<X11DisplayTarget>,
+    fake_cookie: Vec<u8>,
+    real_cookie: Option<Vec<u8>>,
+) -> anyhow::Result<()> {
+    let X11ChannelOpen {
+        channel,
+        originator_address,
+        originator_port,
+    } = open;
+    let _originator = (originator_address, originator_port);
+
+    let local = match connect_local_x_server_with_fallback(&target, fallback.as_ref()).await {
+        Ok(stream) => stream,
+        Err(error) => {
+            let _ = channel.close().await;
+            let _ = event_tx.send(SessionEvent::Output {
+                session_id,
+                data: local_x_server_error_message(&target.describe()).into_bytes(),
+            });
+            anyhow::bail!("failed to connect local X11 server: {error}");
+        }
+    };
+
+    let (mut remote_read, remote_write) = channel.split();
+    let mut remote_writer = remote_write.make_writer();
+    let (mut local_read, mut local_write) = tokio::io::split(local);
+    let mut rewriter = X11AuthRewriter::new(fake_cookie, real_cookie);
+
+    let remote_to_local = async {
+        while let Some(msg) = remote_read.wait().await {
+            match msg {
+                ChannelMsg::Data { data } => {
+                    let rewritten = rewriter.push(&data);
+                    if !rewritten.is_empty() {
+                        local_write.write_all(&rewritten).await?;
+                    }
+                }
+                ChannelMsg::Eof | ChannelMsg::Close => break,
+                _ => {}
+            }
+        }
+        let _ = local_write.shutdown().await;
+        Ok::<(), std::io::Error>(())
+    };
+
+    let local_to_remote = async {
+        let mut buf = [0_u8; 16 * 1024];
+        loop {
+            let n = local_read.read(&mut buf).await?;
+            if n == 0 {
+                break;
+            }
+            remote_writer.write_all(&buf[..n]).await?;
+        }
+        let _ = remote_writer.shutdown().await;
+        Ok::<(), std::io::Error>(())
+    };
+
+    tokio::select! {
+        result = remote_to_local => result?,
+        result = local_to_remote => result?,
+    }
+
+    Ok(())
+}
+
+fn encode_hex(bytes: &[u8]) -> String {
+    const HEX: &[u8; 16] = b"0123456789abcdef";
+    let mut out = String::with_capacity(bytes.len() * 2);
+    for byte in bytes {
+        out.push(HEX[(byte >> 4) as usize] as char);
+        out.push(HEX[(byte & 0x0f) as usize] as char);
+    }
+    out
+}
+
+fn decode_hex(value: &str) -> Option<Vec<u8>> {
+    if !value.len().is_multiple_of(2) {
+        return None;
+    }
+    let mut bytes = Vec::with_capacity(value.len() / 2);
+    let mut chars = value.as_bytes().chunks_exact(2);
+    for chunk in &mut chars {
+        let high = hex_value(chunk[0])?;
+        let low = hex_value(chunk[1])?;
+        bytes.push((high << 4) | low);
+    }
+    Some(bytes)
+}
+
+fn hex_value(byte: u8) -> Option<u8> {
+    match byte {
+        b'0'..=b'9' => Some(byte - b'0'),
+        b'a'..=b'f' => Some(byte - b'a' + 10),
+        b'A'..=b'F' => Some(byte - b'A' + 10),
+        _ => None,
+    }
+}
+
+async fn forward_tcp_stream_over_ssh(
+    mut local_stream: tokio::net::TcpStream,
+    ssh_handle: Arc<tokio::sync::Mutex<client::Handle<SshClientHandler>>>,
+    target_host: String,
+    target_port: u16,
+    peer_addr: SocketAddr,
+) -> anyhow::Result<()> {
+    let channel = {
+        let handle = ssh_handle.lock().await;
+        handle
+            .channel_open_direct_tcpip(
+                target_host,
+                target_port.into(),
+                peer_addr.ip().to_string(),
+                peer_addr.port().into(),
+            )
+            .await?
+    };
+    let mut channel_stream = channel.into_stream();
+    let _ = tokio::io::copy_bidirectional(&mut local_stream, &mut channel_stream).await?;
+    Ok(())
+}
+
+async fn read_socks5_connect_request<S>(stream: &mut S) -> anyhow::Result<(String, u16)>
+where
+    S: AsyncRead + AsyncWrite + Unpin,
+{
+    let mut greeting = [0_u8; 2];
+    stream.read_exact(&mut greeting).await?;
+    if greeting[0] != 0x05 || greeting[1] == 0 {
+        anyhow::bail!("invalid SOCKS5 greeting");
+    }
+    let mut methods = vec![0_u8; greeting[1] as usize];
+    stream.read_exact(&mut methods).await?;
+    if !methods.contains(&0x00) {
+        stream.write_all(&[0x05, 0xff]).await?;
+        anyhow::bail!("SOCKS5 client did not offer no-auth method");
+    }
+    stream.write_all(&[0x05, 0x00]).await?;
+
+    let mut header = [0_u8; 4];
+    stream.read_exact(&mut header).await?;
+    if header[0] != 0x05 || header[1] != 0x01 || header[2] != 0x00 {
+        write_socks5_reply(stream, 0x07).await?;
+        anyhow::bail!("unsupported SOCKS5 request");
+    }
+    let target_host = match header[3] {
+        0x01 => {
+            let mut addr = [0_u8; 4];
+            stream.read_exact(&mut addr).await?;
+            std::net::Ipv4Addr::from(addr).to_string()
+        }
+        0x03 => {
+            let mut len = [0_u8; 1];
+            stream.read_exact(&mut len).await?;
+            let mut domain = vec![0_u8; len[0] as usize];
+            stream.read_exact(&mut domain).await?;
+            String::from_utf8(domain)
+                .map_err(|_| anyhow::anyhow!("SOCKS5 domain is not valid UTF-8"))?
+        }
+        0x04 => {
+            let mut addr = [0_u8; 16];
+            stream.read_exact(&mut addr).await?;
+            std::net::Ipv6Addr::from(addr).to_string()
+        }
+        _ => {
+            write_socks5_reply(stream, 0x08).await?;
+            anyhow::bail!("unsupported SOCKS5 address type");
+        }
+    };
+    let mut port_bytes = [0_u8; 2];
+    stream.read_exact(&mut port_bytes).await?;
+    let target_port = u16::from_be_bytes(port_bytes);
+    write_socks5_reply(stream, 0x00).await?;
+    Ok((target_host, target_port))
+}
+
+async fn write_socks5_reply<S>(stream: &mut S, code: u8) -> std::io::Result<()>
+where
+    S: AsyncWrite + Unpin,
+{
+    stream
+        .write_all(&[0x05, code, 0x00, 0x01, 0, 0, 0, 0, 0, 0])
+        .await
+}
+
+fn run_sftp_operation<T, F>(operation: F) -> anyhow::Result<T>
+where
+    T: Send + 'static,
+    F: Future<Output = anyhow::Result<T>> + Send + 'static,
+{
+    let runtime = tokio::runtime::Builder::new_multi_thread()
+        .enable_all()
+        .thread_name("nyaterm-sftp")
+        .build()
+        .map_err(|error| anyhow::anyhow!("failed to start SFTP runtime: {error}"))?;
+    runtime.block_on(operation)
+}
+
+pub(crate) fn run_ssh_exec_operation<T, F>(operation: F) -> anyhow::Result<T>
+where
+    T: Send + 'static,
+    F: Future<Output = anyhow::Result<T>> + Send + 'static,
+{
+    let runtime = tokio::runtime::Builder::new_multi_thread()
+        .enable_all()
+        .thread_name("nyaterm-ssh-exec")
+        .build()
+        .map_err(|error| anyhow::anyhow!("failed to start SSH exec runtime: {error}"))?;
+    runtime.block_on(operation)
+}
+
+pub(crate) async fn exec_ssh_command(
+    config: SshSessionConfig,
+    command: Vec<u8>,
+    timeout: Duration,
+) -> anyhow::Result<RemoteCommandOutput> {
+    tokio::time::timeout(timeout, async move {
+        let (handle, jump_handles) = open_authenticated_ssh_handle(&config).await?;
+        let channel = open_exec_channel_on_handle(&handle, command).await?;
+        let output = collect_exec_channel(channel).await?;
+        let _ = handle
+            .disconnect(Disconnect::ByApplication, "ssh exec completed", "en")
+            .await;
+        for jump_handle in jump_handles {
+            let _ = jump_handle
+                .disconnect(Disconnect::ByApplication, "ssh exec completed", "en")
+                .await;
+        }
+
+        Ok(output)
+    })
+    .await
+    .map_err(|_| anyhow::anyhow!("remote command timed out"))?
+}
+
+async fn exec_ssh_command_with_multiplex(
+    multiplex: SshMultiplexHandle,
+    command: Vec<u8>,
+    timeout: Duration,
+) -> anyhow::Result<RemoteCommandOutput> {
+    tokio::time::timeout(timeout, async move {
+        let handle = multiplex.target_handle();
+        let channel = {
+            let handle = handle.lock().await;
+            open_exec_channel_on_handle(&handle, command).await?
+        };
+        collect_exec_channel(channel).await
+    })
+    .await
+    .map_err(|_| anyhow::anyhow!("remote command timed out"))?
+}
+
+async fn open_exec_channel_on_handle(
+    handle: &client::Handle<SshClientHandler>,
+    command: Vec<u8>,
+) -> anyhow::Result<russh::Channel<client::Msg>> {
+    let channel = handle
+        .channel_open_session()
+        .await
+        .map_err(|error| anyhow::anyhow!("failed to open exec channel: {error}"))?;
+    channel
+        .exec(true, command)
+        .await
+        .map_err(|error| anyhow::anyhow!("failed to execute remote command: {error}"))?;
+    Ok(channel)
+}
+
+async fn collect_exec_channel(
+    mut channel: russh::Channel<client::Msg>,
+) -> anyhow::Result<RemoteCommandOutput> {
+    let mut stdout = String::new();
+    let mut stderr = String::new();
+    let mut exit_status = None;
+    loop {
+        match channel.wait().await {
+            Some(ChannelMsg::Data { data }) => {
+                stdout.push_str(&String::from_utf8_lossy(&data));
+            }
+            Some(ChannelMsg::ExtendedData { data, .. }) => {
+                stderr.push_str(&String::from_utf8_lossy(&data));
+            }
+            Some(ChannelMsg::ExitStatus {
+                exit_status: status,
+            }) => {
+                exit_status = Some(status);
+            }
+            Some(ChannelMsg::Eof) | Some(ChannelMsg::Close) | None => break,
+            Some(_) => {}
+        }
+    }
+
+    let _ = channel.close().await;
+    Ok(RemoteCommandOutput {
+        stdout,
+        stderr,
+        exit_status,
+    })
+}
+
+pub(crate) fn ensure_remote_command_success(
+    output: RemoteCommandOutput,
+    context: &str,
+) -> anyhow::Result<RemoteCommandOutput> {
+    if matches!(output.exit_status, Some(0) | None) {
+        return Ok(output);
+    }
+
+    let stderr = output.stderr.trim();
+    let stdout = output.stdout.trim();
+    let detail = if !stderr.is_empty() {
+        stderr
+    } else if !stdout.is_empty() {
+        stdout
+    } else {
+        "remote command failed"
+    };
+
+    anyhow::bail!("{context}: {detail}")
+}
+
+pub fn normalize_process_signal(signal: &str) -> anyhow::Result<&'static str> {
+    match signal.trim().to_ascii_uppercase().as_str() {
+        "TERM" | "SIGTERM" | "15" => Ok("TERM"),
+        "KILL" | "SIGKILL" | "9" => Ok("KILL"),
+        "HUP" | "SIGHUP" | "1" => Ok("HUP"),
+        "STOP" | "SIGSTOP" | "19" => Ok("STOP"),
+        "CONT" | "SIGCONT" | "18" => Ok("CONT"),
+        _ => anyhow::bail!("Unsupported process signal"),
+    }
+}
+
+pub fn is_process_list_unsupported(output: &str) -> bool {
+    output
+        .lines()
+        .any(|line| line.trim() == PROCESS_LIST_UNSUPPORTED_MARKER)
+}
+
+pub fn parse_process_output(output: &str) -> Vec<RemoteProcess> {
+    output
+        .lines()
+        .filter_map(|line| {
+            let cols: Vec<&str> = line.split('\t').collect();
+            if cols.len() < 12 || cols[0] != "PROCESS" {
+                return None;
+            }
+
+            Some(RemoteProcess {
+                pid: cols[1].parse().ok()?,
+                ppid: cols[2].parse().unwrap_or(0),
+                user: cols[3].to_string(),
+                state: cols[4].to_string(),
+                cpu_percent: cols[5].parse().unwrap_or(0.0),
+                memory_percent: cols[6].parse().unwrap_or(0.0),
+                rss_kb: cols[7].parse().unwrap_or(0),
+                vsz_kb: cols[8].parse().unwrap_or(0),
+                elapsed: cols[9].to_string(),
+                command: cols[10].to_string(),
+                command_line: cols[11..].join("\t"),
+            })
+        })
+        .collect()
+}
+
+struct OpenSftpSession {
+    sftp: SftpSession,
+    connection: OpenSftpConnection,
+}
+
+enum OpenSftpConnection {
+    Dedicated {
+        handle: client::Handle<SshClientHandler>,
+        jump_handles: Vec<client::Handle<SshClientHandler>>,
+    },
+    Multiplex,
+}
+
+async fn open_sftp_session(
+    config: &SshSessionConfig,
+    multiplex: Option<&SshMultiplexHandle>,
+) -> anyhow::Result<OpenSftpSession> {
+    let (channel, connection) = if let Some(multiplex) = multiplex {
+        multiplex.ensure_matches_config(config)?;
+        let handle = multiplex.target_handle();
+        let channel = {
+            let handle = handle.lock().await;
+            tokio::time::timeout(Duration::from_secs(30), handle.channel_open_session())
+                .await
+                .map_err(|_| anyhow::anyhow!("SFTP channel open timed out"))??
+        };
+        (channel, OpenSftpConnection::Multiplex)
+    } else {
+        let (handle, jump_handles) = open_authenticated_ssh_handle(config).await?;
+        let channel = tokio::time::timeout(Duration::from_secs(30), handle.channel_open_session())
+            .await
+            .map_err(|_| anyhow::anyhow!("SFTP channel open timed out"))??;
+        (
+            channel,
+            OpenSftpConnection::Dedicated {
+                handle,
+                jump_handles,
+            },
+        )
+    };
+    channel
+        .request_subsystem(true, "sftp")
+        .await
+        .map_err(|error| anyhow::anyhow!("failed to start SFTP subsystem: {error}"))?;
+    let sftp = tokio::time::timeout(
+        Duration::from_secs(30),
+        SftpSession::new(channel.into_stream()),
+    )
+    .await
+    .map_err(|_| anyhow::anyhow!("SFTP initialization timed out"))??;
+    Ok(OpenSftpSession { sftp, connection })
+}
+
+async fn close_sftp_session(session: OpenSftpSession) {
+    let OpenSftpSession { sftp, connection } = session;
+    let _ = sftp.close().await;
+    if let OpenSftpConnection::Dedicated {
+        handle,
+        jump_handles,
+    } = connection
+    {
+        let _ = handle
+            .disconnect(Disconnect::ByApplication, "sftp session closed", "en")
+            .await;
+        for jump_handle in jump_handles {
+            let _ = jump_handle
+                .disconnect(Disconnect::ByApplication, "sftp session closed", "en")
+                .await;
+        }
+    }
+}
+
+type SshHandleChain = (
+    client::Handle<SshClientHandler>,
+    Vec<client::Handle<SshClientHandler>>,
+);
+
+fn open_authenticated_ssh_handle(
+    config: &SshSessionConfig,
+) -> Pin<Box<dyn Future<Output = anyhow::Result<SshHandleChain>> + Send + '_>> {
+    open_authenticated_ssh_handle_with_channel_senders(config, None, None)
+}
+
+fn open_authenticated_ssh_handle_with_forwarded_tx(
+    config: &SshSessionConfig,
+    forwarded_tcpip_tx: Option<tokio_mpsc::UnboundedSender<ForwardedTcpIpChannel>>,
+) -> Pin<Box<dyn Future<Output = anyhow::Result<SshHandleChain>> + Send + '_>> {
+    open_authenticated_ssh_handle_with_channel_senders(config, forwarded_tcpip_tx, None)
+}
+
+fn open_authenticated_ssh_handle_with_channel_senders(
+    config: &SshSessionConfig,
+    forwarded_tcpip_tx: Option<tokio_mpsc::UnboundedSender<ForwardedTcpIpChannel>>,
+    x11_tx: Option<tokio_mpsc::UnboundedSender<X11ChannelOpen>>,
+) -> Pin<Box<dyn Future<Output = anyhow::Result<SshHandleChain>> + Send + '_>> {
+    let forwarded_tcpip = forwarded_tcpip_tx.map(|tx| {
+        Arc::new(tokio::sync::Mutex::new(ForwardedTcpIpDispatch {
+            fallback: Some(tx),
+            by_listener: HashMap::new(),
+        }))
+    });
+    open_authenticated_ssh_handle_with_sender_registry(config, forwarded_tcpip, x11_tx)
+}
+
+fn open_authenticated_ssh_handle_with_sender_registry(
+    config: &SshSessionConfig,
+    forwarded_tcpip: Option<ForwardedTcpIpRegistry>,
+    x11_tx: Option<tokio_mpsc::UnboundedSender<X11ChannelOpen>>,
+) -> Pin<Box<dyn Future<Output = anyhow::Result<SshHandleChain>> + Send + '_>> {
+    Box::pin(async move {
+        if let Some(jump_config) = config.proxy_jump.as_deref() {
+            let (jump_handle, mut jump_handles) =
+                open_authenticated_ssh_handle(jump_config).await?;
+            let direct_channel = tokio::time::timeout(
+                Duration::from_secs(30),
+                jump_handle.channel_open_direct_tcpip(
+                    &config.host,
+                    config.port.into(),
+                    "127.0.0.1",
+                    0,
+                ),
+            )
+            .await
+            .map_err(|_| anyhow::anyhow!("SSH ProxyJump direct-tcpip open timed out"))??;
+            let mut handle = tokio::time::timeout(
+                Duration::from_secs(30),
+                client::connect_stream(
+                    ssh_client_config(),
+                    direct_channel.into_stream(),
+                    SshClientHandler {
+                        host: config.host.clone(),
+                        port: config.port,
+                        verifier: config.host_key_verifier.clone(),
+                        forwarded_tcpip: forwarded_tcpip.clone(),
+                        x11_tx: x11_tx.clone(),
+                    },
+                ),
+            )
+            .await
+            .map_err(|_| anyhow::anyhow!("SSH ProxyJump target connection timed out"))??;
+            authenticate_ssh(&mut handle, config).await?;
+            jump_handles.push(jump_handle);
+            return Ok((handle, jump_handles));
+        }
+
+        let mut handle = tokio::time::timeout(
+            Duration::from_secs(30),
+            client::connect(
+                ssh_client_config(),
+                (config.host.as_str(), config.port),
+                SshClientHandler {
+                    host: config.host.clone(),
+                    port: config.port,
+                    verifier: config.host_key_verifier.clone(),
+                    forwarded_tcpip,
+                    x11_tx,
+                },
+            ),
+        )
+        .await
+        .map_err(|_| anyhow::anyhow!("SSH connection timed out"))??;
+
+        authenticate_ssh(&mut handle, config).await?;
+        Ok((handle, Vec::new()))
+    })
+}
+
+async fn authenticate_ssh(
+    handle: &mut client::Handle<SshClientHandler>,
+    config: &SshSessionConfig,
+) -> anyhow::Result<()> {
+    if let Some(key_auth) = config.key_auth.as_ref() {
+        return authenticate_ssh_key(handle, config, key_auth).await;
+    }
+
+    if let Some(password) = config
+        .password
+        .as_deref()
+        .filter(|password| !password.is_empty())
+    {
+        let auth_result = authenticate_password(handle, config, password).await?;
+        if auth_result.success() {
+            return Ok(());
+        }
+        if try_keyboard_interactive_after_auth_result(handle, config, &auth_result).await? {
+            return Ok(());
+        }
+        return authenticate_password_with_prompt(
+            handle,
+            config,
+            SshCredentialPromptReason::PasswordRejected,
+        )
+        .await;
+    } else if config.allow_none_auth {
+        let auth_result = tokio::time::timeout(
+            Duration::from_secs(30),
+            handle.authenticate_none(config.username.clone()),
+        )
+        .await
+        .map_err(|_| anyhow::anyhow!("SSH none authentication timed out"))??;
+        if auth_result.success() {
+            return Ok(());
+        }
+        if try_keyboard_interactive_after_auth_result(handle, config, &auth_result).await? {
+            return Ok(());
+        }
+        anyhow::bail!("SSH none authentication rejected by server");
+    } else {
+        authenticate_password_with_prompt(
+            handle,
+            config,
+            SshCredentialPromptReason::MissingPassword,
+        )
+        .await
+    }
+}
+
+async fn authenticate_ssh_key(
+    handle: &mut client::Handle<SshClientHandler>,
+    config: &SshSessionConfig,
+    key_auth: &SshKeyAuthConfig,
+) -> anyhow::Result<()> {
+    let key = decode_ssh_key_with_prompt(config, key_auth)?;
+    let hash_alg = tokio::time::timeout(Duration::from_secs(30), handle.best_supported_rsa_hash())
+        .await
+        .ok()
+        .and_then(Result::ok)
+        .flatten()
+        .flatten();
+    let cert = key_auth
+        .cert_data
+        .as_deref()
+        .map(russh::keys::Certificate::from_openssh)
+        .transpose()
+        .map_err(|error| anyhow::anyhow!("failed to decode OpenSSH certificate: {error}"))?;
+
+    let auth_result = if let Some(cert) = cert {
+        tokio::time::timeout(
+            Duration::from_secs(30),
+            handle.authenticate_openssh_cert(config.username.clone(), Arc::new(key), cert),
+        )
+        .await
+        .map_err(|_| anyhow::anyhow!("SSH certificate authentication timed out"))??
+    } else {
+        tokio::time::timeout(
+            Duration::from_secs(30),
+            handle.authenticate_publickey(
+                config.username.clone(),
+                PrivateKeyWithHashAlg::new(Arc::new(key), hash_alg),
+            ),
+        )
+        .await
+        .map_err(|_| anyhow::anyhow!("SSH public-key authentication timed out"))??
+    };
+
+    if auth_result.success() {
+        Ok(())
+    } else if try_keyboard_interactive_after_auth_result(handle, config, &auth_result).await? {
+        Ok(())
+    } else {
+        anyhow::bail!("SSH public-key authentication rejected by server")
+    }
+}
+
+async fn authenticate_password(
+    handle: &mut client::Handle<SshClientHandler>,
+    config: &SshSessionConfig,
+    password: &str,
+) -> anyhow::Result<client::AuthResult> {
+    tokio::time::timeout(
+        Duration::from_secs(30),
+        handle.authenticate_password(config.username.clone(), password.to_string()),
+    )
+    .await
+    .map_err(|_| anyhow::anyhow!("SSH password authentication timed out"))?
+    .map_err(anyhow::Error::from)
+}
+
+async fn authenticate_password_with_prompt(
+    handle: &mut client::Handle<SshClientHandler>,
+    config: &SshSessionConfig,
+    reason: SshCredentialPromptReason,
+) -> anyhow::Result<()> {
+    for attempt in 1..=3 {
+        let Some(password) = request_runtime_secret(
+            config,
+            SshCredentialPromptKind::Password,
+            reason,
+            attempt,
+            None,
+            false,
+        )?
+        else {
+            anyhow::bail!("SSH password prompt was cancelled");
+        };
+        if password.is_empty() {
+            continue;
+        }
+        let auth_result = authenticate_password(handle, config, &password).await?;
+        if auth_result.success() {
+            return Ok(());
+        }
+        if try_keyboard_interactive_after_auth_result(handle, config, &auth_result).await? {
+            return Ok(());
+        }
+    }
+    anyhow::bail!("SSH password authentication rejected by server")
+}
+
+const MAX_KEYBOARD_INTERACTIVE_RESTARTS: u32 = 8;
+
+async fn try_keyboard_interactive_after_auth_result(
+    handle: &mut client::Handle<SshClientHandler>,
+    config: &SshSessionConfig,
+    auth_result: &client::AuthResult,
+) -> anyhow::Result<bool> {
+    match auth_result {
+        client::AuthResult::Success => Ok(true),
+        client::AuthResult::Failure {
+            remaining_methods,
+            partial_success: _,
+        } if remaining_methods.contains(&MethodKind::KeyboardInteractive) => {
+            finish_keyboard_interactive(handle, config).await?;
+            Ok(true)
+        }
+        client::AuthResult::Failure { .. } => Ok(false),
+    }
+}
+
+async fn finish_keyboard_interactive(
+    handle: &mut client::Handle<SshClientHandler>,
+    config: &SshSessionConfig,
+) -> anyhow::Result<()> {
+    let mut step = tokio::time::timeout(
+        Duration::from_secs(30),
+        handle.authenticate_keyboard_interactive_start(config.username.clone(), None),
+    )
+    .await
+    .map_err(|_| anyhow::anyhow!("SSH keyboard-interactive authentication timed out"))??;
+    let mut round = 0_u32;
+    let mut restart_count = 0_u32;
+
+    loop {
+        match step {
+            client::KeyboardInteractiveAuthResponse::Success => return Ok(()),
+            client::KeyboardInteractiveAuthResponse::Failure {
+                remaining_methods,
+                partial_success,
+            } => {
+                if partial_success
+                    && remaining_methods.contains(&MethodKind::KeyboardInteractive)
+                    && restart_count < MAX_KEYBOARD_INTERACTIVE_RESTARTS
+                {
+                    restart_count = restart_count.saturating_add(1);
+                    step = tokio::time::timeout(
+                        Duration::from_secs(30),
+                        handle
+                            .authenticate_keyboard_interactive_start(config.username.clone(), None),
+                    )
+                    .await
+                    .map_err(|_| {
+                        anyhow::anyhow!(
+                            "SSH keyboard-interactive restart timed out after partial success"
+                        )
+                    })??;
+                    continue;
+                }
+
+                anyhow::bail!(
+                    "SSH keyboard-interactive authentication rejected by server (remaining methods: {:?}, partial success: {})",
+                    remaining_methods,
+                    partial_success
+                );
+            }
+            client::KeyboardInteractiveAuthResponse::InfoRequest {
+                name,
+                instructions,
+                prompts,
+            } => {
+                round = round.saturating_add(1);
+                let prompt_count = prompts.len();
+                let responses = if prompts.is_empty() {
+                    Vec::new()
+                } else if let Some(password) = config
+                    .password
+                    .as_deref()
+                    .filter(|_| should_auto_fill_password_prompts(&prompts))
+                {
+                    vec![password.to_string()]
+                } else if config.auto_fill_otp && should_auto_fill_otp_prompts(&prompts) {
+                    match request_otp_response(config, prompt_count)? {
+                        Some(responses) => responses,
+                        None => request_keyboard_interactive_responses(
+                            config,
+                            &name,
+                            &instructions,
+                            prompts,
+                            round,
+                        )?,
+                    }
+                } else {
+                    request_keyboard_interactive_responses(
+                        config,
+                        &name,
+                        &instructions,
+                        prompts,
+                        round,
+                    )?
+                };
+
+                step = tokio::time::timeout(
+                    Duration::from_secs(30),
+                    handle.authenticate_keyboard_interactive_respond(responses),
+                )
+                .await
+                .map_err(|_| anyhow::anyhow!("SSH keyboard-interactive response timed out"))??;
+            }
+        }
+    }
+}
+
+fn request_keyboard_interactive_responses(
+    config: &SshSessionConfig,
+    name: &str,
+    instructions: &str,
+    prompts: Vec<client::Prompt>,
+    round: u32,
+) -> anyhow::Result<Vec<String>> {
+    let prompt_count = prompts.len();
+    let mut responses = Vec::with_capacity(prompt_count);
+    for (index, prompt) in prompts.into_iter().enumerate() {
+        let Some(response) = request_runtime_secret(
+            config,
+            SshCredentialPromptKind::KeyboardInteractive,
+            SshCredentialPromptReason::KeyboardInteractive,
+            round,
+            Some(format_keyboard_interactive_prompt(
+                name,
+                instructions,
+                &prompt.prompt,
+                index,
+                prompt_count,
+            )),
+            prompt.echo,
+        )?
+        else {
+            anyhow::bail!("SSH keyboard-interactive prompt was cancelled");
+        };
+        responses.push(response);
+    }
+    Ok(responses)
+}
+
+fn request_otp_response(
+    config: &SshSessionConfig,
+    prompt_count: usize,
+) -> anyhow::Result<Option<Vec<String>>> {
+    let Some(otp_id) = config.otp_id.as_deref().filter(|otp_id| !otp_id.is_empty()) else {
+        return Ok(None);
+    };
+    let Some(provider) = config.otp_provider.as_ref() else {
+        return Ok(None);
+    };
+    let Some(code) = provider
+        .request_otp_code(otp_id)
+        .map_err(|error| anyhow::anyhow!("SSH OTP auto-fill failed: {error}"))?
+    else {
+        return Ok(None);
+    };
+    Ok(Some(vec![code; prompt_count]))
+}
+
+fn format_keyboard_interactive_prompt(
+    name: &str,
+    instructions: &str,
+    prompt: &str,
+    index: usize,
+    prompt_count: usize,
+) -> String {
+    let mut parts = Vec::new();
+    if !name.trim().is_empty() {
+        parts.push(name.trim().to_string());
+    }
+    if !instructions.trim().is_empty() {
+        parts.push(instructions.trim().to_string());
+    }
+    if !prompt.trim().is_empty() {
+        parts.push(prompt.trim().to_string());
+    } else if prompt_count > 1 {
+        parts.push(format!("Response {} of {}", index + 1, prompt_count));
+    } else {
+        parts.push("Response".to_string());
+    }
+    parts.join("\n")
+}
+
+fn should_auto_fill_password_prompts(prompts: &[client::Prompt]) -> bool {
+    prompts.len() == 1
+        && !prompts[0].echo
+        && is_password_keyboard_interactive_prompt(&prompts[0].prompt)
+}
+
+fn should_auto_fill_otp_prompts(prompts: &[client::Prompt]) -> bool {
+    prompts.len() == 1 && is_otp_keyboard_interactive_prompt(&prompts[0].prompt)
+}
+
+fn is_otp_keyboard_interactive_prompt(prompt: &str) -> bool {
+    let normalized = prompt.to_lowercase();
+    let selection_markers = [
+        "select",
+        "choose",
+        "choice",
+        "option",
+        "method",
+        "delivery",
+        "send to",
+        "send via",
+        "push",
+        "sms/email",
+        "sms or email",
+        "email or sms",
+        "选择",
+        "请选择",
+        "选项",
+        "方式",
+        "方法",
+        "发送到",
+        "发送至",
+    ];
+    if selection_markers
+        .iter()
+        .any(|marker| normalized.contains(marker))
+    {
+        return false;
+    }
+
+    [
+        "otp",
+        "totp",
+        "hotp",
+        "2fa",
+        "mfa",
+        "one-time",
+        "one time",
+        "verification code",
+        "authentication code",
+        "auth code",
+        "authenticator",
+        "passcode",
+        "token",
+        "验证码",
+        "校验码",
+        "动态码",
+        "动态密码",
+        "动态口令",
+        "一次性",
+        "令牌",
+        "双因素",
+        "二次",
+        "两步",
+    ]
+    .iter()
+    .any(|marker| normalized.contains(marker))
+}
+
+fn is_password_keyboard_interactive_prompt(prompt: &str) -> bool {
+    let normalized = prompt.to_lowercase();
+    let additional_factor_markers = [
+        "otp",
+        "totp",
+        "hotp",
+        "2fa",
+        "mfa",
+        "one-time",
+        "one time",
+        "verification",
+        "authentication code",
+        "auth code",
+        "authenticator",
+        "passcode",
+        "token",
+        "code",
+        "验证码",
+        "校验码",
+        "动态码",
+        "动态密码",
+        "动态口令",
+        "一次性",
+        "令牌",
+        "双因素",
+        "二次",
+        "两步",
+    ];
+    if additional_factor_markers
+        .iter()
+        .any(|marker| normalized.contains(marker))
+    {
+        return false;
+    }
+
+    ["password", "passphrase", "密码", "口令"]
+        .iter()
+        .any(|marker| normalized.contains(marker))
+}
+
+fn decode_ssh_key_with_prompt(
+    config: &SshSessionConfig,
+    key_auth: &SshKeyAuthConfig,
+) -> anyhow::Result<russh::keys::PrivateKey> {
+    match russh::keys::decode_secret_key(&key_auth.key_data, key_auth.passphrase.as_deref()) {
+        Ok(key) => return Ok(key),
+        Err(error) if config.credential_provider.is_none() => {
+            anyhow::bail!("failed to decode SSH private key: {error}");
+        }
+        Err(_) => {}
+    }
+
+    for attempt in 1..=3 {
+        let Some(passphrase) = request_runtime_secret(
+            config,
+            SshCredentialPromptKind::KeyPassphrase,
+            SshCredentialPromptReason::KeyPassphraseRequired,
+            attempt,
+            None,
+            false,
+        )?
+        else {
+            anyhow::bail!("SSH key passphrase prompt was cancelled");
+        };
+        match russh::keys::decode_secret_key(&key_auth.key_data, Some(&passphrase)) {
+            Ok(key) => return Ok(key),
+            Err(error) if attempt == 3 => {
+                anyhow::bail!("failed to decode SSH private key: {error}");
+            }
+            Err(_) => {}
+        }
+    }
+
+    anyhow::bail!("failed to decode SSH private key")
+}
+
+fn request_runtime_secret(
+    config: &SshSessionConfig,
+    kind: SshCredentialPromptKind,
+    reason: SshCredentialPromptReason,
+    attempt: u32,
+    prompt_text: Option<String>,
+    echo: bool,
+) -> anyhow::Result<Option<String>> {
+    let Some(provider) = config.credential_provider.as_ref() else {
+        anyhow::bail!("SSH runtime credential prompt is unavailable");
+    };
+    provider
+        .request_secret(&SshCredentialPrompt {
+            host: config.host.clone(),
+            port: config.port,
+            username: config.username.clone(),
+            connection_name: config.name.clone(),
+            kind,
+            reason,
+            attempt,
+            prompt_text,
+            echo,
+        })
+        .map_err(|error| anyhow::anyhow!("SSH runtime credential prompt failed: {error}"))
+}
+
+struct SshClientHandler {
+    host: String,
+    port: u16,
+    verifier: Option<Arc<dyn SshHostKeyVerifier>>,
+    forwarded_tcpip: Option<ForwardedTcpIpRegistry>,
+    x11_tx: Option<tokio_mpsc::UnboundedSender<X11ChannelOpen>>,
+}
+
+impl client::Handler for SshClientHandler {
+    type Error = russh::Error;
+
+    async fn check_server_key(
+        &mut self,
+        server_public_key: &russh::keys::PublicKey,
+    ) -> Result<bool, Self::Error> {
+        let Some(verifier) = &self.verifier else {
+            return Ok(false);
+        };
+        let host_identifier = ssh_host_identifier(&self.host, self.port);
+        let host_key = SshHostKey {
+            host: self.host.clone(),
+            port: self.port,
+            host_identifier,
+            key_type: server_public_key.algorithm().to_string(),
+            key_base64: server_public_key.public_key_base64(),
+            fingerprint: server_public_key
+                .fingerprint(Default::default())
+                .to_string(),
+        };
+        match verifier.verify(&host_key) {
+            Ok(SshHostKeyDecision::Accept) => Ok(true),
+            Ok(SshHostKeyDecision::Reject(_)) | Err(_) => Ok(false),
+        }
+    }
+
+    async fn server_channel_open_forwarded_tcpip(
+        &mut self,
+        channel: russh::Channel<client::Msg>,
+        connected_address: &str,
+        connected_port: u32,
+        originator_address: &str,
+        originator_port: u32,
+        reply: russh::client::ChannelOpenHandle,
+        _session: &mut russh::client::Session,
+    ) -> Result<(), Self::Error> {
+        let Some(registry) = self.forwarded_tcpip.as_ref() else {
+            reply
+                .reject(russh::ChannelOpenFailure::AdministrativelyProhibited)
+                .await;
+            return Ok(());
+        };
+        let dispatch = registry.lock().await;
+        let tx = forwarded_tcpip_sender_for(&dispatch, connected_address, connected_port);
+        drop(dispatch);
+        let Some(tx) = tx else {
+            reply
+                .reject(russh::ChannelOpenFailure::AdministrativelyProhibited)
+                .await;
+            return Ok(());
+        };
+        if tx
+            .send(ForwardedTcpIpChannel {
+                channel,
+                connected_address: connected_address.to_string(),
+                connected_port,
+                originator_address: originator_address.to_string(),
+                originator_port,
+            })
+            .is_ok()
+        {
+            reply.accept().await;
+        } else {
+            reply
+                .reject(russh::ChannelOpenFailure::AdministrativelyProhibited)
+                .await;
+        }
+        Ok(())
+    }
+
+    async fn server_channel_open_x11(
+        &mut self,
+        channel: russh::Channel<client::Msg>,
+        originator_address: &str,
+        originator_port: u32,
+        reply: russh::client::ChannelOpenHandle,
+        _session: &mut russh::client::Session,
+    ) -> Result<(), Self::Error> {
+        let Some(tx) = self.x11_tx.as_ref() else {
+            reply
+                .reject(russh::ChannelOpenFailure::AdministrativelyProhibited)
+                .await;
+            return Ok(());
+        };
+        if tx
+            .send(X11ChannelOpen {
+                channel,
+                originator_address: originator_address.to_string(),
+                originator_port,
+            })
+            .is_ok()
+        {
+            reply.accept().await;
+        } else {
+            reply
+                .reject(russh::ChannelOpenFailure::AdministrativelyProhibited)
+                .await;
+        }
+        Ok(())
+    }
+}
+
+fn ssh_host_identifier(host: &str, port: u16) -> String {
+    if port == 22 {
+        host.to_string()
+    } else {
+        format!("[{host}]:{port}")
+    }
+}
+
+fn send_session_error(
+    event_tx: &mpsc::Sender<SessionEvent>,
+    session_id: &str,
+    error: impl std::fmt::Display,
+) {
+    let _ = event_tx.send(SessionEvent::Error {
+        session_id: session_id.to_string(),
+        message: error.to_string(),
+    });
+}
+
+fn ssh_worker_stopped() -> std::io::Error {
+    std::io::Error::new(std::io::ErrorKind::BrokenPipe, "SSH worker stopped")
+}
+
+fn spawn_serial_reader_thread(
+    session_id: String,
+    mut reader: Box<dyn SerialPort>,
+    stop_reader: Arc<AtomicBool>,
+    event_tx: mpsc::Sender<SessionEvent>,
+) -> JoinHandle<()> {
+    std::thread::spawn(move || {
+        let mut buffer = [0_u8; 4096];
+        while !stop_reader.load(Ordering::Relaxed) {
+            match reader.read(&mut buffer) {
+                Ok(0) => continue,
+                Ok(read) => {
+                    let _ = event_tx.send(SessionEvent::Output {
+                        session_id: session_id.clone(),
+                        data: buffer[..read].to_vec(),
+                    });
+                }
+                Err(error)
+                    if matches!(
+                        error.kind(),
+                        std::io::ErrorKind::WouldBlock | std::io::ErrorKind::TimedOut
+                    ) =>
+                {
+                    continue;
+                }
+                Err(error) => {
+                    let _ = event_tx.send(SessionEvent::Error {
+                        session_id: session_id.clone(),
+                        message: error.to_string(),
+                    });
+                    break;
+                }
+            }
+        }
+    })
+}
+
+fn remap_del_to_bs(data: &[u8]) -> Vec<u8> {
+    data.iter()
+        .map(|byte| if *byte == 0x7f { 0x08 } else { *byte })
+        .collect()
+}
+
+fn open_serial_port(config: &SerialSessionConfig) -> serialport::Result<Box<dyn SerialPort>> {
+    serialport::new(&config.port_name, config.baud_rate)
+        .data_bits(parse_data_bits(config.data_bits))
+        .parity(parse_parity(&config.parity))
+        .stop_bits(parse_stop_bits(&config.stop_bits))
+        .flow_control(FlowControl::None)
+        .timeout(Duration::from_millis(10))
+        .open()
+}
+
+fn parse_data_bits(value: u8) -> DataBits {
+    match value {
+        5 => DataBits::Five,
+        6 => DataBits::Six,
+        7 => DataBits::Seven,
+        _ => DataBits::Eight,
+    }
+}
+
+fn parse_parity(value: &str) -> Parity {
+    match value {
+        "odd" => Parity::Odd,
+        "even" => Parity::Even,
+        _ => Parity::None,
+    }
+}
+
+fn parse_stop_bits(value: &str) -> StopBits {
+    match value {
+        "2" => StopBits::Two,
+        _ => StopBits::One,
+    }
+}
+
+const IAC: u8 = 255;
+const WILL: u8 = 251;
+const WONT: u8 = 252;
+const DO: u8 = 253;
+const DONT: u8 = 254;
+const SB: u8 = 250;
+const SE: u8 = 240;
+const OPT_ECHO: u8 = 1;
+const OPT_SUPPRESS_GO_AHEAD: u8 = 3;
+const OPT_NAWS: u8 = 31;
+
+fn negotiate_response(command: u8, option: u8, send_naws: bool, send_sga: bool) -> Vec<u8> {
+    match command {
+        WILL => {
+            if option == OPT_ECHO || (send_sga && option == OPT_SUPPRESS_GO_AHEAD) {
+                vec![IAC, DO, option]
+            } else {
+                vec![IAC, DONT, option]
+            }
+        }
+        DO => {
+            if send_naws && option == OPT_NAWS {
+                vec![IAC, WILL, option]
+            } else {
+                vec![IAC, WONT, option]
+            }
+        }
+        WONT => vec![IAC, DONT, option],
+        DONT => vec![IAC, WONT, option],
+        _ => vec![],
+    }
+}
+
+fn maybe_build_naws(cols: u16, rows: u16, config: &TelnetSessionConfig) -> Option<Vec<u8>> {
+    if config.raw_tcp || !config.send_naws {
+        return None;
+    }
+    Some(vec![
+        IAC,
+        SB,
+        OPT_NAWS,
+        (cols >> 8) as u8,
+        (cols & 0xff) as u8,
+        (rows >> 8) as u8,
+        (rows & 0xff) as u8,
+        IAC,
+        SE,
+    ])
+}
+
+fn unescape_iac_iac(data: &[u8]) -> Vec<u8> {
+    let mut visible = Vec::with_capacity(data.len());
+    let mut index = 0;
+    while index < data.len() {
+        if data[index] == IAC && index + 1 < data.len() && data[index + 1] == IAC {
+            visible.push(IAC);
+            index += 2;
+        } else {
+            visible.push(data[index]);
+            index += 1;
+        }
+    }
+    visible
+}
+
+fn strip_telnet_commands(data: &[u8], on_negotiate: &mut impl FnMut(u8, u8)) -> Vec<u8> {
+    let mut visible = Vec::with_capacity(data.len());
+    let mut index = 0;
+    while index < data.len() {
+        if data[index] == IAC && index + 1 < data.len() {
+            let command = data[index + 1];
+            match command {
+                IAC => {
+                    visible.push(IAC);
+                    index += 2;
+                }
+                WILL | WONT | DO | DONT => {
+                    if index + 2 < data.len() {
+                        on_negotiate(command, data[index + 2]);
+                        index += 3;
+                    } else {
+                        index += 2;
+                    }
+                }
+                SB => {
+                    index += 2;
+                    while index < data.len() {
+                        if data[index] == IAC && index + 1 < data.len() && data[index + 1] == SE {
+                            index += 2;
+                            break;
+                        }
+                        index += 1;
+                    }
+                }
+                _ => index += 2,
+            }
+        } else {
+            visible.push(data[index]);
+            index += 1;
+        }
+    }
+    visible
+}
+
+fn normalize_telnet_input(data: &[u8], config: &TelnetSessionConfig) -> Vec<u8> {
+    if config.raw_tcp {
+        return data.to_vec();
+    }
+    let newline = match config.enter_mode {
+        TelnetEnterMode::Crlf => b"\r\n".as_slice(),
+        TelnetEnterMode::Cr => b"\r".as_slice(),
+        TelnetEnterMode::Lf => b"\n".as_slice(),
+    };
+    let mut normalized = Vec::with_capacity(data.len());
+    for byte in data {
+        match *byte {
+            b'\n' | b'\r' => normalized.extend_from_slice(newline),
+            IAC => normalized.extend_from_slice(&[IAC, IAC]),
+            _ => normalized.push(*byte),
+        }
+    }
+    normalized
+}
+
+fn build_command(config: &LocalSessionConfig) -> CommandBuilder {
+    let shell = config
+        .shell_path
+        .as_deref()
+        .filter(|value| !value.trim().is_empty())
+        .map(str::to_string)
+        .unwrap_or_else(default_shell);
+    let mut command = CommandBuilder::new(&shell);
+    if config.shell_args.is_empty() && cfg!(not(target_os = "windows")) {
+        if should_use_interactive_login_args(&shell) {
+            command.args(["--login", "-i"]);
+        }
+    } else {
+        command.args(config.shell_args.iter().map(String::as_str));
+    }
+    command
+}
+
+fn configure_environment(command: &mut CommandBuilder) {
+    command.env("TERM", "xterm-256color");
+    if cfg!(target_os = "macos") {
+        command.env("LANG", utf8_env_or("LANG", "en_US.UTF-8"));
+        command.env("LC_CTYPE", utf8_env_or("LC_CTYPE", "UTF-8"));
+    }
+}
+
+fn utf8_env_or(name: &str, fallback: &str) -> String {
+    std::env::var(name)
+        .ok()
+        .filter(|value| {
+            let normalized = value.to_ascii_lowercase().replace('_', "-");
+            normalized.contains("utf-8") || normalized.contains("utf8")
+        })
+        .unwrap_or_else(|| fallback.to_string())
+}
+
+fn default_shell() -> String {
+    if cfg!(target_os = "windows") {
+        std::env::var("COMSPEC").unwrap_or_else(|_| "powershell.exe".to_string())
+    } else {
+        std::env::var("SHELL").unwrap_or_else(|_| "/bin/sh".to_string())
+    }
+}
+
+fn should_use_interactive_login_args(program: &str) -> bool {
+    let name = program
+        .rsplit(['/', '\\'])
+        .next()
+        .unwrap_or(program)
+        .to_ascii_lowercase();
+    matches!(name.as_str(), "bash" | "zsh" | "fish")
+}
+
+pub type SharedSessionManager = Arc<SessionManager>;
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::net::TcpListener;
+    use std::time::{Duration, Instant};
+
+    #[test]
+    fn local_session_echoes_output() {
+        if cfg!(target_os = "windows") {
+            return;
+        }
+
+        let manager = SessionManager::new();
+        let info = manager
+            .create_local_session(LocalSessionConfig {
+                name: "test".to_string(),
+                shell_path: Some("/bin/sh".to_string()),
+                shell_args: Vec::new(),
+                working_dir: None,
+                cols: 80,
+                rows: 24,
+            })
+            .expect("local session");
+
+        manager
+            .write(&info.id, b"printf nyaterm-session-ready\\n\n")
+            .expect("write");
+
+        let output = collect_output(&manager, &info.id, Duration::from_secs(3));
+        manager.close(&info.id).expect("close");
+
+        assert!(
+            String::from_utf8_lossy(&output).contains("nyaterm-session-ready"),
+            "output was: {}",
+            String::from_utf8_lossy(&output)
+        );
+    }
+
+    #[test]
+    fn local_session_info_preserves_working_dir() {
+        if cfg!(target_os = "windows") {
+            return;
+        }
+
+        let dir = std::env::temp_dir().join(format!("nyaterm-local-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(&dir).expect("temp dir");
+        let manager = SessionManager::new();
+        let info = manager
+            .create_local_session(LocalSessionConfig {
+                name: "cwd-test".to_string(),
+                shell_path: Some("/bin/sh".to_string()),
+                shell_args: Vec::new(),
+                working_dir: Some(dir.clone()),
+                cols: 80,
+                rows: 24,
+            })
+            .expect("local session");
+        let sessions = manager.list_sessions().expect("sessions");
+        manager.close(&info.id).expect("close");
+        std::fs::remove_dir_all(&dir).ok();
+
+        assert_eq!(sessions[0].working_dir.as_ref(), Some(&dir));
+    }
+
+    #[test]
+    fn local_background_command_uses_working_dir_and_exit_code() {
+        if cfg!(target_os = "windows") {
+            return;
+        }
+
+        let dir = std::env::temp_dir().join(format!("nyaterm-local-bg-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(&dir).expect("temp dir");
+        let output = run_local_command(
+            "printf ready > marker.txt; printf output; exit 7",
+            Some(dir.clone()),
+            Duration::from_secs(3),
+        )
+        .expect("local command");
+        let marker = std::fs::read_to_string(dir.join("marker.txt")).expect("marker");
+        std::fs::remove_dir_all(&dir).ok();
+
+        assert_eq!(marker, "ready");
+        assert_eq!(output.stdout, "output");
+        assert_eq!(output.exit_status, Some(7));
+    }
+
+    #[test]
+    fn resize_updates_session_info() {
+        if cfg!(target_os = "windows") {
+            return;
+        }
+
+        let manager = SessionManager::new();
+        let info = manager
+            .create_local_session(LocalSessionConfig {
+                shell_path: Some("/bin/sh".to_string()),
+                ..Default::default()
+            })
+            .expect("local session");
+        manager.resize(&info.id, 120, 32).expect("resize");
+        let sessions = manager.list_sessions().expect("sessions");
+        manager.close(&info.id).expect("close");
+
+        assert_eq!(sessions[0].cols, 120);
+        assert_eq!(sessions[0].rows, 32);
+    }
+
+    #[test]
+    fn raw_tcp_session_echoes_output() {
+        let listener = TcpListener::bind("127.0.0.1:0").expect("listener");
+        let port = listener.local_addr().expect("addr").port();
+        let server = std::thread::spawn(move || {
+            let (mut stream, _) = listener.accept().expect("accept");
+            stream
+                .set_read_timeout(Some(Duration::from_secs(3)))
+                .expect("timeout");
+            let mut buffer = [0_u8; 64];
+            let read = stream.read(&mut buffer).expect("read");
+            stream.write_all(b"echo:").expect("prefix");
+            stream.write_all(&buffer[..read]).expect("echo");
+        });
+
+        let manager = SessionManager::new();
+        let info = manager
+            .create_telnet_session(TelnetSessionConfig {
+                name: "raw".to_string(),
+                host: "127.0.0.1".to_string(),
+                port,
+                raw_tcp: true,
+                ..Default::default()
+            })
+            .expect("raw tcp");
+
+        manager.write(&info.id, b"hello").expect("write");
+        let output = collect_output_until(&manager, &info.id, "echo:hello", Duration::from_secs(3));
+        manager.close(&info.id).expect("close");
+        server.join().expect("server");
+
+        assert!(String::from_utf8_lossy(&output).contains("echo:hello"));
+    }
+
+    #[test]
+    fn telnet_session_negotiates_and_strips_iac() {
+        let listener = TcpListener::bind("127.0.0.1:0").expect("listener");
+        let port = listener.local_addr().expect("addr").port();
+        let (tx, rx) = mpsc::channel();
+        let server = std::thread::spawn(move || {
+            let (mut stream, _) = listener.accept().expect("accept");
+            stream
+                .set_read_timeout(Some(Duration::from_secs(3)))
+                .expect("timeout");
+            stream
+                .write_all(&[IAC, WILL, OPT_SUPPRESS_GO_AHEAD, b'o', b'k'])
+                .expect("write greeting");
+
+            let mut seen = Vec::new();
+            let started = Instant::now();
+            while started.elapsed() < Duration::from_secs(3) {
+                let mut buffer = [0_u8; 64];
+                match stream.read(&mut buffer) {
+                    Ok(0) => break,
+                    Ok(read) => {
+                        seen.extend_from_slice(&buffer[..read]);
+                        if seen
+                            .windows(3)
+                            .any(|window| window == [IAC, DO, OPT_SUPPRESS_GO_AHEAD])
+                        {
+                            break;
+                        }
+                    }
+                    Err(error)
+                        if matches!(
+                            error.kind(),
+                            std::io::ErrorKind::WouldBlock | std::io::ErrorKind::TimedOut
+                        ) =>
+                    {
+                        continue;
+                    }
+                    Err(error) => panic!("server read failed: {error}"),
+                }
+            }
+            tx.send(seen).expect("send seen");
+        });
+
+        let manager = SessionManager::new();
+        let info = manager
+            .create_telnet_session(TelnetSessionConfig {
+                name: "telnet".to_string(),
+                host: "127.0.0.1".to_string(),
+                port,
+                raw_tcp: false,
+                send_sga: true,
+                ..Default::default()
+            })
+            .expect("telnet");
+
+        let output = collect_output_until(&manager, &info.id, "ok", Duration::from_secs(3));
+        manager.close(&info.id).expect("close");
+        server.join().expect("server");
+        let seen = rx.recv().expect("seen");
+
+        assert_eq!(String::from_utf8_lossy(&output), "ok");
+        assert!(
+            seen.windows(3)
+                .any(|window| { window == [IAC, DO, OPT_SUPPRESS_GO_AHEAD] })
+        );
+    }
+
+    #[test]
+    fn serial_invalid_port_reports_open_error() {
+        let manager = SessionManager::new();
+        let port_name = if cfg!(target_os = "windows") {
+            r"\\.\NyaTermMissingPort".to_string()
+        } else {
+            "/dev/nyaterm-missing-port".to_string()
+        };
+
+        let error = manager
+            .create_serial_session(SerialSessionConfig {
+                port_name: port_name.clone(),
+                ..Default::default()
+            })
+            .expect_err("invalid port should not open");
+
+        match error {
+            SessionError::OpenSerial {
+                port_name: actual, ..
+            } => assert_eq!(actual, port_name),
+            other => panic!("unexpected error: {other}"),
+        }
+    }
+
+    #[test]
+    fn serial_backspace_mode_remaps_delete_to_ctrl_h() {
+        assert_eq!(remap_del_to_bs(b"a\x7fb"), b"a\x08b");
+    }
+
+    #[test]
+    fn ssh_refused_connection_reports_create_error() {
+        let listener = TcpListener::bind("127.0.0.1:0").expect("listener");
+        let port = listener.local_addr().expect("addr").port();
+        drop(listener);
+
+        let manager = SessionManager::new();
+        let error = manager
+            .create_ssh_session(SshSessionConfig {
+                name: "ssh".to_string(),
+                host: "127.0.0.1".to_string(),
+                port,
+                username: "tester".to_string(),
+                password: Some("secret".to_string()),
+                ..Default::default()
+            })
+            .expect_err("closed port should not open");
+
+        match error {
+            SessionError::CreateSsh { addr, .. } => assert_eq!(addr, format!("127.0.0.1:{port}")),
+            other => panic!("unexpected error: {other}"),
+        }
+    }
+
+    #[test]
+    fn ssh_host_identifier_uses_openssh_port_format() {
+        assert_eq!(ssh_host_identifier("example.com", 22), "example.com");
+        assert_eq!(
+            ssh_host_identifier("example.com", 2222),
+            "[example.com]:2222"
+        );
+    }
+
+    #[test]
+    fn remote_join_handles_common_sftp_paths() {
+        assert_eq!(remote_join(".", "file.txt"), "file.txt");
+        assert_eq!(remote_join("", "file.txt"), "file.txt");
+        assert_eq!(remote_join("/", "file.txt"), "/file.txt");
+        assert_eq!(remote_join("/opt", "file.txt"), "/opt/file.txt");
+        assert_eq!(remote_join("/opt/", "file.txt"), "/opt/file.txt");
+    }
+
+    #[test]
+    fn upload_target_uses_local_name_for_remote_directories() {
+        let local = PathBuf::from("/tmp/archive.tar");
+        assert_eq!(
+            resolve_remote_upload_target(&local, ".").expect("target"),
+            "archive.tar"
+        );
+        assert_eq!(
+            resolve_remote_upload_target(&local, "/srv/").expect("target"),
+            "/srv/archive.tar"
+        );
+        assert_eq!(
+            resolve_remote_upload_target(&local, "/srv/custom.tar").expect("target"),
+            "/srv/custom.tar"
+        );
+    }
+
+    #[test]
+    fn tunnel_config_validation_matches_tunnel_modes() {
+        let mut config = SshTunnelConfig {
+            id: "tunnel-1".to_string(),
+            ssh_config: SshSessionConfig::default(),
+            mode: SshTunnelMode::Local,
+            bind_host: String::new(),
+            listen_port: 0,
+            target_host: None,
+            target_port: None,
+        };
+        assert!(
+            validate_tunnel_config(&config)
+                .expect_err("missing target host")
+                .to_string()
+                .contains("target host")
+        );
+
+        config.target_host = Some("127.0.0.1".to_string());
+        assert!(
+            validate_tunnel_config(&config)
+                .expect_err("missing target port")
+                .to_string()
+                .contains("target port")
+        );
+
+        config.target_port = Some(8080);
+        validate_tunnel_config(&config).expect("local tunnel");
+
+        config.mode = SshTunnelMode::Dynamic;
+        config.target_host = None;
+        config.target_port = None;
+        validate_tunnel_config(&config).expect("dynamic tunnel");
+
+        config.mode = SshTunnelMode::Remote;
+        assert!(
+            validate_tunnel_config(&config)
+                .expect_err("remote missing target")
+                .to_string()
+                .contains("target host")
+        );
+        config.target_host = Some("127.0.0.1".to_string());
+        config.target_port = Some(5432);
+        validate_tunnel_config(&config).expect("remote tunnel");
+    }
+
+    #[test]
+    fn forwarded_tcpip_dispatch_prefers_listener_specific_sender() {
+        let (fallback_tx, _fallback_rx) = tokio_mpsc::unbounded_channel();
+        let (specific_tx, _specific_rx) = tokio_mpsc::unbounded_channel();
+        let dispatch = ForwardedTcpIpDispatch {
+            fallback: Some(fallback_tx.clone()),
+            by_listener: HashMap::from([(("127.0.0.1".to_string(), 2022), specific_tx.clone())]),
+        };
+
+        let exact =
+            forwarded_tcpip_sender_for(&dispatch, "127.0.0.1", 2022).expect("specific sender");
+        assert!(exact.same_channel(&specific_tx));
+
+        let fallback =
+            forwarded_tcpip_sender_for(&dispatch, "127.0.0.1", 2200).expect("fallback sender");
+        assert!(fallback.same_channel(&fallback_tx));
+
+        let empty = ForwardedTcpIpDispatch::default();
+        assert!(forwarded_tcpip_sender_for(&empty, "127.0.0.1", 2022).is_none());
+    }
+
+    #[test]
+    fn socks5_connect_parser_accepts_domain_requests() {
+        let runtime = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .expect("runtime");
+        runtime.block_on(async {
+            let (mut client, mut server) = tokio::io::duplex(128);
+            let parser =
+                tokio::spawn(async move { read_socks5_connect_request(&mut server).await });
+
+            client
+                .write_all(&[0x05, 0x01, 0x00])
+                .await
+                .expect("greeting");
+            let mut method_reply = [0_u8; 2];
+            client
+                .read_exact(&mut method_reply)
+                .await
+                .expect("method reply");
+            assert_eq!(method_reply, [0x05, 0x00]);
+
+            let domain = b"example.com";
+            let mut request = vec![0x05, 0x01, 0x00, 0x03, domain.len() as u8];
+            request.extend_from_slice(domain);
+            request.extend_from_slice(&443_u16.to_be_bytes());
+            client.write_all(&request).await.expect("connect request");
+            let mut connect_reply = [0_u8; 10];
+            client
+                .read_exact(&mut connect_reply)
+                .await
+                .expect("connect reply");
+            assert_eq!(connect_reply, [0x05, 0x00, 0x00, 0x01, 0, 0, 0, 0, 0, 0]);
+
+            let (host, port) = parser.await.expect("parser task").expect("parsed");
+            assert_eq!(host, "example.com");
+            assert_eq!(port, 443);
+        });
+    }
+
+    #[test]
+    fn duplicate_policy_parses_legacy_values() {
+        assert_eq!(
+            SftpDuplicatePolicy::from_legacy_value("overwrite"),
+            SftpDuplicatePolicy::Overwrite
+        );
+        assert_eq!(
+            SftpDuplicatePolicy::from_legacy_value("ask"),
+            SftpDuplicatePolicy::Ask
+        );
+        assert_eq!(
+            SftpDuplicatePolicy::from_legacy_value("skip"),
+            SftpDuplicatePolicy::Skip
+        );
+        assert_eq!(
+            SftpDuplicatePolicy::from_legacy_value("rename"),
+            SftpDuplicatePolicy::Rename
+        );
+    }
+
+    #[test]
+    fn local_download_target_applies_skip_and_rename_policy() {
+        let dir = std::env::temp_dir().join(format!("nyaterm-sftp-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(&dir).expect("temp dir");
+        let target = dir.join("archive.tar.gz");
+        std::fs::write(&target, b"existing").expect("target");
+
+        assert_eq!(
+            resolve_local_download_target(
+                "/remote/archive.tar.gz",
+                &target,
+                false,
+                SftpDuplicatePolicy::Skip,
+                None,
+            )
+            .expect("skip"),
+            None
+        );
+        assert_eq!(
+            resolve_local_download_target(
+                "/remote/archive.tar.gz",
+                &target,
+                false,
+                SftpDuplicatePolicy::Rename,
+                None,
+            )
+            .expect("rename"),
+            Some(dir.join("archive.tar(1).gz"))
+        );
+
+        std::fs::remove_dir_all(&dir).expect("cleanup");
+    }
+
+    #[test]
+    fn ask_duplicate_policy_requires_resolver() {
+        let error = resolve_duplicate_decision(
+            SftpTransferDirection::Download,
+            "/remote/file",
+            "/tmp/file",
+            false,
+            SftpDuplicatePolicy::Ask,
+            None,
+        )
+        .expect_err("missing resolver");
+
+        assert!(error.to_string().contains("no resolver"));
+    }
+
+    #[test]
+    fn remote_conflict_candidates_preserve_parent_and_extension() {
+        assert_eq!(
+            remote_conflict_candidate("/srv/archive.tar.gz", 2),
+            "/srv/archive.tar(2).gz"
+        );
+        assert_eq!(remote_conflict_candidate("file", 1), "file(1)");
+        assert_eq!(remote_conflict_candidate("/file", 1), "/file(1)");
+    }
+
+    #[test]
+    fn sftp_transfer_control_reports_standard_cancel_error() {
+        let control = SftpTransferControl::new();
+        assert!(!control.is_cancelled());
+        assert!(!control.is_paused());
+        control.check_cancelled().expect("not cancelled");
+
+        control.pause();
+        assert!(control.is_paused());
+        control.resume();
+        assert!(!control.is_paused());
+
+        control.pause();
+        control.cancel();
+        assert!(control.is_cancelled());
+        assert!(!control.is_paused());
+        let error = control.check_cancelled().expect_err("cancelled");
+        assert_eq!(error.to_string(), SFTP_TRANSFER_CANCELLED);
+    }
+
+    #[test]
+    fn process_parser_reads_legacy_rows() {
+        let rows =
+            "PROCESS\t42\t1\troot\tSs\t0.4\t1.2\t1234\t5678\t01:02\tsshd\t/usr/sbin/sshd -D\n";
+
+        let processes = parse_process_output(rows);
+
+        assert_eq!(processes.len(), 1);
+        assert_eq!(processes[0].pid, 42);
+        assert_eq!(processes[0].ppid, 1);
+        assert_eq!(processes[0].user, "root");
+        assert_eq!(processes[0].cpu_percent, 0.4);
+        assert_eq!(processes[0].command_line, "/usr/sbin/sshd -D");
+    }
+
+    #[test]
+    fn process_parser_preserves_command_lines_containing_tabs() {
+        let rows = "PROCESS\t9\t1\troot\tS\t0\t0\t1\t2\t-\tawk\tawk\twith\ttabs\n";
+
+        let processes = parse_process_output(rows);
+
+        assert_eq!(processes.len(), 1);
+        assert_eq!(processes[0].command_line, "awk\twith\ttabs");
+    }
+
+    #[test]
+    fn process_parser_detects_unsupported_marker() {
+        assert!(is_process_list_unsupported(
+            "warning\nNYATERM_PROCESS_UNSUPPORTED\n"
+        ));
+        assert!(!is_process_list_unsupported(
+            "PROCESS\t1\t0\troot\tS\t0\t0\t0\t0\t-\tsh\tsh\n"
+        ));
+    }
+
+    #[test]
+    fn process_signal_normalization_matches_legacy_allowlist() {
+        assert_eq!(normalize_process_signal("sigterm").unwrap(), "TERM");
+        assert_eq!(normalize_process_signal("9").unwrap(), "KILL");
+        assert_eq!(normalize_process_signal("cont").unwrap(), "CONT");
+        assert!(normalize_process_signal("USR1").is_err());
+    }
+
+    #[test]
+    fn ssh_config_debug_redacts_password() {
+        let config = SshSessionConfig {
+            password: Some("super-secret".to_string()),
+            ..Default::default()
+        };
+        let debug = format!("{config:?}");
+        assert!(debug.contains("<redacted>"));
+        assert!(!debug.contains("super-secret"));
+    }
+
+    #[test]
+    fn ssh_config_debug_redacts_key_material() {
+        let config = SshSessionConfig {
+            key_auth: Some(SshKeyAuthConfig {
+                key_data: "-----BEGIN PRIVATE KEY-----secret-key".to_string(),
+                cert_data: Some("ssh-ed25519-cert-v01@openssh.com secret-cert".to_string()),
+                passphrase: Some("key-passphrase".to_string()),
+            }),
+            ..Default::default()
+        };
+        let debug = format!("{config:?}");
+        assert!(debug.contains("<redacted>"));
+        assert!(!debug.contains("secret-key"));
+        assert!(!debug.contains("secret-cert"));
+        assert!(!debug.contains("key-passphrase"));
+    }
+
+    #[test]
+    fn keyboard_interactive_prompt_classification_is_conservative() {
+        let password_prompts = vec![client::Prompt {
+            prompt: "Password: ".to_string(),
+            echo: false,
+        }];
+        assert!(should_auto_fill_password_prompts(&password_prompts));
+        assert!(!should_auto_fill_otp_prompts(&password_prompts));
+
+        let otp_prompts = vec![client::Prompt {
+            prompt: "Verification code: ".to_string(),
+            echo: false,
+        }];
+        assert!(should_auto_fill_otp_prompts(&otp_prompts));
+        assert!(!should_auto_fill_password_prompts(&otp_prompts));
+
+        let selection_prompts = vec![client::Prompt {
+            prompt: "Choose MFA method: ".to_string(),
+            echo: true,
+        }];
+        assert!(!should_auto_fill_otp_prompts(&selection_prompts));
+        assert!(!should_auto_fill_password_prompts(&selection_prompts));
+    }
+
+    fn x11_target_desc(target: X11DisplayTarget) -> String {
+        target.describe()
+    }
+
+    #[test]
+    fn x11_display_specs_match_legacy_resolution() {
+        assert_eq!(
+            x11_target_desc(resolve_x11_display_spec(Some("localhost:0"))),
+            "localhost:6000"
+        );
+        assert_eq!(
+            x11_target_desc(resolve_x11_display_spec(Some("localhost:1"))),
+            "localhost:6001"
+        );
+        assert_eq!(
+            x11_target_desc(resolve_x11_display_spec(Some("127.0.0.1:0"))),
+            "127.0.0.1:6000"
+        );
+        assert_eq!(
+            x11_target_desc(resolve_x11_display_spec(Some("host.example.com:1"))),
+            "host.example.com:6001"
+        );
+        assert_eq!(
+            x11_target_desc(resolve_x11_display_spec(Some("localhost:6000"))),
+            "localhost:6000"
+        );
+        assert_eq!(
+            x11_target_desc(resolve_x11_display_spec(Some(""))),
+            x11_target_desc(resolve_x11_display_spec(None))
+        );
+
+        #[cfg(unix)]
+        {
+            assert_eq!(
+                x11_target_desc(resolve_x11_display_spec(Some(":0"))),
+                "/tmp/.X11-unix/X0"
+            );
+            assert_eq!(
+                x11_target_desc(resolve_x11_display_spec(Some("unix:0"))),
+                "/tmp/.X11-unix/X0"
+            );
+            assert_eq!(
+                x11_target_desc(resolve_x11_display_spec(Some("/tmp/.X11-unix/X1"))),
+                "/tmp/.X11-unix/X1"
+            );
+        }
+    }
+
+    fn x11_setup_packet(order: u8, protocol: &[u8], cookie: &[u8]) -> Vec<u8> {
+        let mut packet = vec![order, 0, 11, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+        let protocol_len = protocol.len() as u16;
+        let cookie_len = cookie.len() as u16;
+        let protocol_bytes = if order == b'l' {
+            protocol_len.to_le_bytes()
+        } else {
+            protocol_len.to_be_bytes()
+        };
+        let cookie_bytes = if order == b'l' {
+            cookie_len.to_le_bytes()
+        } else {
+            cookie_len.to_be_bytes()
+        };
+        packet[6..8].copy_from_slice(&protocol_bytes);
+        packet[8..10].copy_from_slice(&cookie_bytes);
+        packet.extend_from_slice(protocol);
+        packet.resize(12 + pad4(protocol.len()), 0);
+        packet.extend_from_slice(cookie);
+        packet.resize(12 + pad4(protocol.len()) + pad4(cookie.len()), 0);
+        packet
+    }
+
+    #[test]
+    fn x11_cookie_rewrite_supports_little_and_big_endian_setup() {
+        let fake = [1_u8; 16];
+        let real = [2_u8; 16];
+
+        for order in [b'l', b'B'] {
+            let mut packet = x11_setup_packet(order, MIT_MAGIC_COOKIE.as_bytes(), &fake);
+            assert!(rewrite_x11_auth_setup_packet(
+                &mut packet,
+                &fake,
+                Some(&real)
+            ));
+            assert!(packet.windows(real.len()).any(|window| window == real));
+            assert!(!packet.windows(fake.len()).any(|window| window == fake));
+        }
+    }
+
+    #[test]
+    fn x11_rewriter_buffers_fragmented_setup_packet() {
+        let fake = [1_u8; 16];
+        let real = [2_u8; 16];
+        let packet = x11_setup_packet(b'l', MIT_MAGIC_COOKIE.as_bytes(), &fake);
+        let mut rewriter = X11AuthRewriter::new(fake.to_vec(), Some(real.to_vec()));
+
+        assert!(rewriter.push(&packet[..8]).is_empty());
+        let output = rewriter.push(&packet[8..]);
+        assert_eq!(output.len(), packet.len());
+        assert!(output.windows(real.len()).any(|window| window == real));
+    }
+
+    #[test]
+    fn x11_rewriter_passes_through_mismatched_auth() {
+        let fake = [1_u8; 16];
+        let real = [2_u8; 16];
+        let other = [3_u8; 16];
+        let packet = x11_setup_packet(b'l', MIT_MAGIC_COOKIE.as_bytes(), &other);
+        let mut rewriter = X11AuthRewriter::new(fake.to_vec(), Some(real.to_vec()));
+
+        assert_eq!(rewriter.push(&packet), packet);
+
+        let mut packet = x11_setup_packet(b'l', b"OTHER", &fake);
+        assert!(!rewrite_x11_auth_setup_packet(
+            &mut packet,
+            &fake,
+            Some(&real)
+        ));
+    }
+
+    #[test]
+    fn x11_xauth_cookie_parser_prefers_matching_display() {
+        let output = "\
+host/unix:0  MIT-MAGIC-COOKIE-1  00112233445566778899aabbccddeeff
+host/unix:1  MIT-MAGIC-COOKIE-1  ffeeddccbbaa99887766554433221100
+";
+
+        assert_eq!(
+            parse_xauth_cookie(output, ":1").expect("display 1 cookie"),
+            decode_hex("ffeeddccbbaa99887766554433221100").expect("hex")
+        );
+        assert_eq!(
+            parse_xauth_cookie(output, ":9").expect("fallback cookie"),
+            decode_hex("00112233445566778899aabbccddeeff").expect("hex")
+        );
+    }
+
+    #[test]
+    fn x11_error_messages_are_platform_specific() {
+        let message = local_x_server_error_message("localhost:6000");
+        assert!(message.contains("[X11] Could not connect"));
+        if cfg!(windows) {
+            assert!(message.contains("Windows"));
+        } else if cfg!(target_os = "macos") {
+            assert!(message.contains("macOS"));
+        } else {
+            assert!(message.contains("Linux"));
+        }
+    }
+
+    fn collect_output(manager: &SessionManager, session_id: &str, timeout: Duration) -> Vec<u8> {
+        collect_output_until(manager, session_id, "nyaterm-session-ready", timeout)
+    }
+
+    fn collect_output_until(
+        manager: &SessionManager,
+        session_id: &str,
+        needle: &str,
+        timeout: Duration,
+    ) -> Vec<u8> {
+        let started = Instant::now();
+        let mut output = Vec::new();
+        while started.elapsed() < timeout {
+            for event in manager.drain_events(16).expect("events") {
+                match event {
+                    SessionEvent::Output {
+                        session_id: event_session_id,
+                        data,
+                    } if event_session_id == session_id => output.extend(data),
+                    SessionEvent::Error { message, .. } => panic!("session error: {message}"),
+                    _ => {}
+                }
+            }
+            if String::from_utf8_lossy(&output).contains(needle) {
+                break;
+            }
+            std::thread::sleep(Duration::from_millis(20));
+        }
+        output
+    }
+}

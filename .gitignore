@@ -37,3 +37,8 @@ dist-ssr
 .trae
 
 nyaterm-tauri/
+
+# Rust / native app
+target/
+data/
+nyaterm-portable
