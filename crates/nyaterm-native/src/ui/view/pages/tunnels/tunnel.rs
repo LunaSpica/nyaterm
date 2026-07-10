@@ -1,0 +1,861 @@
+use super::*;
+
+#[derive(Debug, Clone)]
+pub(super) struct TunnelSection {
+    id: String,
+    label: String,
+    group: Option<TunnelGroup>,
+    tunnels: Vec<TunnelConfig>,
+}
+
+pub(super) fn tunnel_sections(
+    tunnels: &[TunnelConfig],
+    groups: &[TunnelGroup],
+) -> Vec<TunnelSection> {
+    let valid_group_ids = groups
+        .iter()
+        .map(|group| group.id.as_str())
+        .collect::<HashSet<_>>();
+    let mut by_group = HashMap::<String, Vec<TunnelConfig>>::new();
+    let mut ungrouped = Vec::<TunnelConfig>::new();
+
+    for tunnel in tunnels {
+        match tunnel.group_id.as_deref() {
+            Some(group_id) if valid_group_ids.contains(group_id) => {
+                by_group
+                    .entry(group_id.to_string())
+                    .or_default()
+                    .push(tunnel.clone());
+            }
+            _ => ungrouped.push(tunnel.clone()),
+        }
+    }
+
+    let mut sections = groups
+        .iter()
+        .cloned()
+        .map(|group| TunnelSection {
+            id: group.id.clone(),
+            label: group.name.clone(),
+            tunnels: by_group.remove(&group.id).unwrap_or_default(),
+            group: Some(group),
+        })
+        .collect::<Vec<_>>();
+
+    if !ungrouped.is_empty() || sections.is_empty() {
+        sections.push(TunnelSection {
+            id: "__ungrouped__".to_string(),
+            label: "Ungrouped".to_string(),
+            group: None,
+            tunnels: ungrouped,
+        });
+    }
+
+    sections
+}
+
+pub(super) fn tunnel_section(
+    section: TunnelSection,
+    open_tunnels: &HashMap<String, SshTunnelInfo>,
+    app: &NyaTermApp,
+    cx: &mut Context<NyaTermApp>,
+) -> impl IntoElement {
+    let item_count = section.tunnels.len();
+    let open_count = section
+        .tunnels
+        .iter()
+        .filter(|tunnel| open_tunnels.contains_key(&tunnel.id))
+        .count();
+    let section_key = format!("tunnel:{}", section.id);
+    let collapsed = !app.network_expanded_sections.contains(&section_key);
+    let section_id_for_toggle = section.id.clone();
+    let mut rows = div().flex().flex_col();
+    if section.tunnels.is_empty() {
+        rows = rows.child(
+            div()
+                .border_t_1()
+                .border_color(rgb(0x253044))
+                .p_3()
+                .text_sm()
+                .text_color(rgb(0x98a3b8))
+                .child("No tunnels in this group."),
+        );
+    } else {
+        for tunnel in section.tunnels {
+            let open_info = open_tunnels.get(&tunnel.id).cloned();
+            let pending = app.pending_tunnels.iter().any(|id| id == &tunnel.id);
+            let connection_label = tunnel
+                .connection_id
+                .as_deref()
+                .and_then(|id| {
+                    app.connections
+                        .iter()
+                        .find(|connection| connection.id == id)
+                        .map(|connection| connection.name.clone())
+                })
+                .unwrap_or_else(|| "Missing connection".to_string());
+            let tunnel_for_open = tunnel.clone();
+            let tunnel_id_for_close = tunnel.id.clone();
+            let tunnel_id_for_edit = tunnel.id.clone();
+            let tunnel_id_for_move = tunnel.id.clone();
+            let tunnel_id_for_delete = tunnel.id.clone();
+            let tunnel_label_for_delete = tunnel_name(&tunnel);
+            let move_picker_open = app
+                .network_move_picker
+                .as_ref()
+                .is_some_and(|picker| picker.tab == NetworkTab::Tunnels && picker.id == tunnel.id);
+            let current_group_id = tunnel.group_id.clone();
+            rows = rows.child(
+                div()
+                    .flex()
+                    .flex_col()
+                    .child(tunnel_network_row(
+                        &tunnel,
+                        connection_label,
+                        open_info,
+                        pending,
+                        app.tunnel_groups.len(),
+                        cx.listener(move |this, _, window, cx| {
+                            this.start_tunnel_job(tunnel_for_open.clone(), window, cx);
+                        }),
+                        cx.listener(move |this, _, _, cx| {
+                            this.close_tunnel_job(tunnel_id_for_close.clone(), cx);
+                        }),
+                        cx.listener(move |this, _, window, cx| {
+                            this.open_network_tunnel_editor(
+                                Some(tunnel_id_for_edit.clone()),
+                                window,
+                                cx,
+                            );
+                        }),
+                        cx.listener(move |this, _, _, cx| {
+                            this.open_network_move_picker(
+                                NetworkTab::Tunnels,
+                                tunnel_id_for_move.clone(),
+                                cx,
+                            );
+                        }),
+                        cx.listener(move |this, _, _, cx| {
+                            this.open_network_delete_confirm(
+                                NetworkTab::Tunnels,
+                                tunnel_id_for_delete.clone(),
+                                tunnel_label_for_delete.clone(),
+                                cx,
+                            );
+                        }),
+                    ))
+                    .when(move_picker_open, |this| {
+                        this.child(tunnel_move_picker(
+                            tunnel.id.clone(),
+                            current_group_id,
+                            &app.tunnel_groups,
+                            cx,
+                        ))
+                    }),
+            );
+        }
+    }
+
+    div()
+        .id(gpui::SharedString::from(format!(
+            "tunnel-section-{}",
+            section.id
+        )))
+        .rounded_md()
+        .border_1()
+        .border_color(rgb(0x2a3140))
+        .bg(rgb(0x151923))
+        .overflow_hidden()
+        .child(
+            div()
+                .px_3()
+                .py_2()
+                .flex()
+                .items_center()
+                .justify_between()
+                .gap_3()
+                .bg(rgb(0x10151e))
+                .child(
+                    div()
+                        .min_w_0()
+                        .flex()
+                        .items_center()
+                        .gap_2()
+                        .child(
+                            div()
+                                .text_sm()
+                                .font_weight(FontWeight(800.))
+                                .text_color(rgb(0xe5edf7))
+                                .child(truncate_preview(&section.label, 48)),
+                        )
+                        .when(section.group.is_none(), |this| {
+                            this.child(status_pill("default", rgb(0x93c5fd), rgb(0x17233a)))
+                        }),
+                )
+                .child(
+                    div()
+                        .flex()
+                        .items_center()
+                        .gap_2()
+                        .child(status_pill("profiles", rgb(0xcbd5e1), rgb(0x202938)))
+                        .child(
+                            div()
+                                .font_family("JetBrains Mono")
+                                .text_xs()
+                                .text_color(rgb(0x98a3b8))
+                                .child(format!("{item_count} · open {open_count}")),
+                        )
+                        .child(small_button(
+                            format!("tunnel-section-toggle-{}", section.id),
+                            if collapsed { "Open" } else { "Close" },
+                            cx.listener(move |this, _, _, cx| {
+                                this.toggle_network_section(
+                                    NetworkTab::Tunnels,
+                                    section_id_for_toggle.clone(),
+                                    cx,
+                                );
+                            }),
+                        )),
+                )
+                .when_some(section.group.clone(), |this, group| {
+                    let rename_id = group.id.clone();
+                    let delete_id = group.id.clone();
+                    let delete_label = group.name.clone();
+                    this.child(
+                        div()
+                            .flex()
+                            .items_center()
+                            .gap_1()
+                            .child(small_button(
+                                format!("tunnel-group-rename-{}", group.id),
+                                "Rename",
+                                cx.listener(move |this, _, _, cx| {
+                                    this.open_network_group_editor(
+                                        NetworkTab::Tunnels,
+                                        Some(rename_id.clone()),
+                                        cx,
+                                    );
+                                }),
+                            ))
+                            .child(small_button(
+                                format!("tunnel-group-delete-{}", group.id),
+                                "Delete",
+                                cx.listener(move |this, _, _, cx| {
+                                    this.open_network_group_delete_confirm(
+                                        NetworkTab::Tunnels,
+                                        delete_id.clone(),
+                                        delete_label.clone(),
+                                        item_count,
+                                        cx,
+                                    );
+                                }),
+                            )),
+                    )
+                }),
+        )
+        .when(!collapsed, |this| this.child(rows))
+}
+
+fn tunnel_move_picker(
+    tunnel_id: String,
+    current_group_id: Option<String>,
+    groups: &[TunnelGroup],
+    cx: &mut Context<NyaTermApp>,
+) -> gpui::Div {
+    let mut targets = div().flex().flex_wrap().items_center().gap_2();
+    if current_group_id.is_none() {
+        targets = targets.child(status_pill(
+            "Ungrouped · current",
+            rgb(0x93c5fd),
+            rgb(0x17233a),
+        ));
+    } else {
+        let target_id = tunnel_id.clone();
+        targets = targets.child(small_button(
+            format!("network-tunnel-move-{tunnel_id}-ungrouped"),
+            "Ungrouped",
+            cx.listener(move |this, _, _, cx| {
+                this.move_tunnel_to_group(target_id.clone(), None, cx);
+            }),
+        ));
+    }
+
+    for group in groups {
+        if current_group_id.as_deref() == Some(group.id.as_str()) {
+            targets = targets.child(status_pill("current", rgb(0x6ee7b7), rgb(0x12342a)));
+            targets = targets.child(
+                div()
+                    .text_xs()
+                    .text_color(rgb(0xcbd5e1))
+                    .child(truncate_preview(&group.name, 36)),
+            );
+        } else {
+            let target_id = tunnel_id.clone();
+            let group_id = group.id.clone();
+            targets = targets.child(small_button(
+                format!("network-tunnel-move-{tunnel_id}-{}", group.id),
+                "Move Here",
+                cx.listener(move |this, _, _, cx| {
+                    this.move_tunnel_to_group(target_id.clone(), Some(group_id.clone()), cx);
+                }),
+            ));
+            targets = targets.child(
+                div()
+                    .text_xs()
+                    .text_color(rgb(0x98a3b8))
+                    .child(truncate_preview(&group.name, 36)),
+            );
+        }
+    }
+
+    div()
+        .border_t_1()
+        .border_color(rgb(0x253044))
+        .bg(rgb(0x10151e))
+        .px_3()
+        .py_2()
+        .flex()
+        .items_center()
+        .gap_3()
+        .child(
+            div()
+                .flex_none()
+                .text_xs()
+                .font_weight(FontWeight(700.))
+                .text_color(rgb(0xcbd5e1))
+                .child("Move to"),
+        )
+        .child(targets)
+}
+
+pub(super) fn tunnel_network_row(
+    tunnel: &TunnelConfig,
+    connection_label: String,
+    open_info: Option<SshTunnelInfo>,
+    pending: bool,
+    group_count: usize,
+    on_open: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
+    on_close: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
+    on_edit: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
+    on_move: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
+    on_delete: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
+) -> impl IntoElement {
+    let supported = tunnel_mode(tunnel).is_some();
+    let is_open = open_info.is_some();
+    let status = if pending {
+        "pending"
+    } else if is_open {
+        "open"
+    } else if supported {
+        "closed"
+    } else {
+        "porting"
+    };
+    let (status_color, status_bg) = tunnel_status_style(pending, is_open, supported);
+    let bind = if tunnel.bind_localhost {
+        "127.0.0.1"
+    } else {
+        "0.0.0.0"
+    };
+    let listen = open_info
+        .as_ref()
+        .map(|info| format!("{}:{}", info.bind_host, info.listen_port))
+        .unwrap_or_else(|| format!("{bind}:{}", tunnel.listen_port));
+    let action = if pending {
+        status_pill("pending", rgb(0xfacc15), rgb(0x3a2f14)).into_any_element()
+    } else if is_open {
+        small_button(
+            format!("network-tunnel-close-{}", tunnel.id),
+            "Close",
+            on_close,
+        )
+        .into_any_element()
+    } else if supported {
+        small_button(
+            format!("network-tunnel-open-{}", tunnel.id),
+            "Open",
+            on_open,
+        )
+        .into_any_element()
+    } else {
+        status_pill("porting", rgb(0xfbbf24), rgb(0x3a2f14)).into_any_element()
+    };
+
+    div()
+        .border_t_1()
+        .border_color(rgb(0x253044))
+        .px_3()
+        .py_3()
+        .flex()
+        .items_center()
+        .gap_3()
+        .hover(|this| this.bg(rgb(0x1c2230)))
+        .child(
+            div()
+                .min_w_0()
+                .flex_1()
+                .flex()
+                .flex_col()
+                .gap_1()
+                .child(
+                    div()
+                        .flex()
+                        .items_center()
+                        .gap_2()
+                        .child(
+                            div()
+                                .min_w_0()
+                                .text_sm()
+                                .font_weight(FontWeight(800.))
+                                .text_color(rgb(0xe5edf7))
+                                .child(truncate_preview(&tunnel_name(tunnel), 52)),
+                        )
+                        .child(status_pill(status, status_color, status_bg)),
+                )
+                .child(div().text_xs().text_color(rgb(0x98a3b8)).child(format!(
+                    "{} · {}",
+                    truncate_preview(&connection_label, 44),
+                    tunnel_mode_label(tunnel)
+                )))
+                .child(
+                    div()
+                        .font_family("JetBrains Mono")
+                        .text_xs()
+                        .text_color(rgb(0x64748b))
+                        .child(truncate_preview(&tunnel_endpoint(tunnel, &listen), 88)),
+                ),
+        )
+        .child(
+            div()
+                .flex()
+                .items_center()
+                .gap_2()
+                .child(status_pill(
+                    if tunnel.auto_open { "auto" } else { "manual" },
+                    if tunnel.auto_open {
+                        rgb(0x6ee7b7)
+                    } else {
+                        rgb(0x93c5fd)
+                    },
+                    rgb(0x17233a),
+                ))
+                .child(status_pill(
+                    if tunnel.bind_localhost {
+                        "local"
+                    } else {
+                        "public"
+                    },
+                    rgb(0xc4b5fd),
+                    rgb(0x251f3f),
+                ))
+                .child(if group_count == 0 {
+                    status_pill("ungrouped", rgb(0x98a3b8), rgb(0x202938)).into_any_element()
+                } else {
+                    small_button(
+                        format!("network-tunnel-move-{}", tunnel.id),
+                        "Move",
+                        on_move,
+                    )
+                    .into_any_element()
+                })
+                .child(small_button(
+                    format!("network-tunnel-edit-{}", tunnel.id),
+                    "Edit",
+                    on_edit,
+                ))
+                .child(small_button(
+                    format!("network-tunnel-delete-{}", tunnel.id),
+                    "Delete",
+                    on_delete,
+                ))
+                .child(action),
+        )
+}
+
+pub(super) fn network_tunnel_editor_panel(
+    editor: NetworkTunnelEditorState,
+    app: &NyaTermApp,
+    focus: &gpui::FocusHandle,
+    cx: &mut Context<NyaTermApp>,
+) -> impl IntoElement {
+    let connection_label = editor
+        .connection_id
+        .as_deref()
+        .and_then(|id| {
+            app.connections
+                .iter()
+                .find(|connection| connection.id == id)
+                .map(|connection| connection.name.clone())
+        })
+        .unwrap_or_else(|| "Select SSH connection".to_string());
+    let group_label = editor
+        .group_id
+        .as_deref()
+        .and_then(|id| {
+            app.tunnel_groups
+                .iter()
+                .find(|group| group.id == id)
+                .map(|group| group.name.clone())
+        })
+        .unwrap_or_else(|| "Ungrouped".to_string());
+    let mode_label = match editor.tunnel_type.as_str() {
+        "remote" => "Remote",
+        "dynamic" => "Dynamic",
+        _ => "Local",
+    };
+    let preview = tunnel_editor_preview(&editor);
+
+    div()
+        .rounded_md()
+        .border_1()
+        .border_color(rgb(0x38bdf8))
+        .bg(rgb(0x102033))
+        .p_3()
+        .flex()
+        .flex_col()
+        .gap_3()
+        .child(
+            div()
+                .flex()
+                .items_center()
+                .justify_between()
+                .gap_3()
+                .child(
+                    div()
+                        .min_w_0()
+                        .flex()
+                        .flex_col()
+                        .gap_1()
+                        .child(
+                            div()
+                                .text_sm()
+                                .font_weight(FontWeight(800.))
+                                .text_color(rgb(0xe5edf7))
+                                .child(if editor.id.is_some() {
+                                    "Edit Tunnel"
+                                } else {
+                                    "New Tunnel"
+                                }),
+                        )
+                        .child(
+                            div()
+                                .text_xs()
+                                .text_color(rgb(0x98a3b8))
+                                .child("Configure SSH forwarding with the same fields as the legacy tunnel dialog."),
+                        ),
+                )
+                .child(status_pill(mode_label, rgb(0x93c5fd), rgb(0x17233a))),
+        )
+        .child(
+            div()
+                .grid()
+                .grid_cols(3)
+                .gap_2()
+                .child(tunnel_editor_input(
+                    "network-tunnel-editor-name",
+                    "Tunnel name",
+                    editor.name.clone(),
+                    editor.focused_field == NetworkTunnelEditorField::Name,
+                    NetworkTunnelEditorField::Name,
+                    focus,
+                    cx,
+                ))
+                .child(tunnel_editor_selector(
+                    "network-tunnel-editor-type",
+                    "Type",
+                    mode_label.to_string(),
+                    cx.listener(|this, _, _, cx| {
+                        this.cycle_network_tunnel_type(cx);
+                    }),
+                ))
+                .child(tunnel_editor_selector(
+                    "network-tunnel-editor-group",
+                    "Group",
+                    group_label,
+                    cx.listener(|this, _, _, cx| {
+                        this.cycle_network_tunnel_group(cx);
+                    }),
+                )),
+        )
+        .child(
+            div()
+                .grid()
+                .grid_cols(2)
+                .gap_2()
+                .child(tunnel_editor_selector(
+                    "network-tunnel-editor-connection",
+                    "SSH connection",
+                    connection_label,
+                    cx.listener(|this, _, _, cx| {
+                        this.cycle_network_tunnel_connection(cx);
+                    }),
+                ))
+                .child(tunnel_editor_input(
+                    "network-tunnel-editor-listen-port",
+                    match editor.tunnel_type.as_str() {
+                        "remote" => "Remote listen port",
+                        "dynamic" => "SOCKS listen port",
+                        _ => "Local listen port",
+                    },
+                    editor.listen_port.clone(),
+                    editor.focused_field == NetworkTunnelEditorField::ListenPort,
+                    NetworkTunnelEditorField::ListenPort,
+                    focus,
+                    cx,
+                )),
+        )
+        .when(!editor.is_dynamic(), |this| {
+            this.child(
+                div()
+                    .grid()
+                    .grid_cols(2)
+                    .gap_2()
+                    .child(tunnel_editor_input(
+                        "network-tunnel-editor-target-host",
+                        match editor.tunnel_type.as_str() {
+                            "remote" => "Remote target host",
+                            _ => "Local target host",
+                        },
+                        editor.target_host.clone(),
+                        editor.focused_field == NetworkTunnelEditorField::TargetHost,
+                        NetworkTunnelEditorField::TargetHost,
+                        focus,
+                        cx,
+                    ))
+                    .child(tunnel_editor_input(
+                        "network-tunnel-editor-target-port",
+                        match editor.tunnel_type.as_str() {
+                            "remote" => "Remote target port",
+                            _ => "Local target port",
+                        },
+                        editor.target_port.clone(),
+                        editor.focused_field == NetworkTunnelEditorField::TargetPort,
+                        NetworkTunnelEditorField::TargetPort,
+                        focus,
+                        cx,
+                    )),
+            )
+        })
+        .child(
+            div()
+                .grid()
+                .grid_cols(3)
+                .gap_2()
+                .child(tunnel_editor_option(
+                    "network-tunnel-editor-bind-local",
+                    "Localhost only",
+                    "127.0.0.1",
+                    editor.bind_localhost,
+                    cx.listener(|this, _, _, cx| {
+                        this.set_network_tunnel_bind_localhost(true, cx);
+                    }),
+                ))
+                .child(tunnel_editor_option(
+                    "network-tunnel-editor-bind-all",
+                    "All interfaces",
+                    "0.0.0.0",
+                    !editor.bind_localhost,
+                    cx.listener(|this, _, _, cx| {
+                        this.set_network_tunnel_bind_localhost(false, cx);
+                    }),
+                ))
+                .child(tunnel_editor_option(
+                    "network-tunnel-editor-auto",
+                    "Auto open",
+                    "with connection",
+                    editor.auto_open,
+                    cx.listener(|this, _, _, cx| {
+                        this.toggle_network_tunnel_auto_open(cx);
+                    }),
+                )),
+        )
+        .child(
+            div()
+                .rounded_sm()
+                .border_1()
+                .border_color(rgb(0x303848))
+                .bg(rgb(0x0d1320))
+                .p_3()
+                .flex()
+                .flex_col()
+                .gap_1()
+                .child(div().text_xs().text_color(rgb(0x8f98aa)).child("Preview"))
+                .child(
+                    div()
+                        .font_family("JetBrains Mono")
+                        .text_xs()
+                        .text_color(rgb(0xe5edf7))
+                        .child(preview),
+                ),
+        )
+        .when_some(editor.error.clone(), |this, error| {
+            this.child(div().text_xs().text_color(rgb(0xfda4af)).child(error))
+        })
+        .child(
+            div()
+                .flex()
+                .items_center()
+                .justify_end()
+                .gap_2()
+                .child(small_button(
+                    "network-tunnel-editor-cancel",
+                    "Cancel",
+                    cx.listener(|this, _, _, cx| {
+                        this.close_network_tunnel_editor(cx);
+                    }),
+                ))
+                .child(small_button(
+                    "network-tunnel-editor-save",
+                    "Save",
+                    cx.listener(|this, _, _, cx| {
+                        this.save_network_tunnel_editor(cx);
+                    }),
+                )),
+        )
+}
+
+pub(super) fn tunnel_editor_input(
+    id: impl Into<String>,
+    label: &'static str,
+    value: String,
+    active: bool,
+    field: NetworkTunnelEditorField,
+    focus: &gpui::FocusHandle,
+    cx: &mut Context<NyaTermApp>,
+) -> impl IntoElement {
+    transfer_input(id, label, value, active)
+        .track_focus(focus)
+        .on_click(cx.listener(move |this, _, window, cx| {
+            this.focus_network_tunnel_editor_field(field, window, cx);
+        }))
+        .on_key_down(cx.listener(|this, event: &KeyDownEvent, _, cx| {
+            cx.stop_propagation();
+            this.handle_network_tunnel_editor_key_down(event, cx);
+        }))
+}
+
+pub(super) fn tunnel_editor_selector(
+    id: impl Into<String>,
+    label: &'static str,
+    value: String,
+    on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
+) -> impl IntoElement {
+    div()
+        .id(gpui::SharedString::from(id.into()))
+        .h(px(46.))
+        .px_3()
+        .py_2()
+        .flex()
+        .flex_col()
+        .gap_1()
+        .rounded_sm()
+        .border_1()
+        .border_color(rgb(0x303848))
+        .bg(rgb(0x0d1320))
+        .cursor_pointer()
+        .hover(|this| this.bg(rgb(0x18202b)))
+        .child(div().text_xs().text_color(rgb(0x8f98aa)).child(label))
+        .child(
+            div()
+                .font_family("JetBrains Mono")
+                .text_xs()
+                .text_color(rgb(0xe5edf7))
+                .child(truncate_preview(&value, 42)),
+        )
+        .on_click(on_click)
+}
+
+pub(super) fn tunnel_editor_option(
+    id: impl Into<String>,
+    title: &'static str,
+    detail: &'static str,
+    active: bool,
+    on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
+) -> impl IntoElement {
+    div()
+        .id(gpui::SharedString::from(id.into()))
+        .rounded_sm()
+        .border_1()
+        .border_color(if active { rgb(0x38bdf8) } else { rgb(0x303848) })
+        .bg(if active { rgb(0x102a3d) } else { rgb(0x0d1320) })
+        .p_3()
+        .flex()
+        .flex_col()
+        .gap_1()
+        .cursor_pointer()
+        .hover(|this| this.bg(rgb(0x18202b)))
+        .child(
+            div()
+                .text_sm()
+                .font_weight(FontWeight(800.))
+                .text_color(if active { rgb(0x7dd3fc) } else { rgb(0xe5edf7) })
+                .child(title),
+        )
+        .child(div().text_xs().text_color(rgb(0x98a3b8)).child(detail))
+        .on_click(on_click)
+}
+
+pub(super) fn tunnel_editor_preview(editor: &NetworkTunnelEditorState) -> String {
+    let bind_host = if editor.bind_localhost {
+        "127.0.0.1"
+    } else {
+        "0.0.0.0"
+    };
+    let listen_port = editor.listen_port.trim();
+    let listen_port = if listen_port.is_empty() {
+        "?"
+    } else {
+        listen_port
+    };
+    if editor.is_dynamic() {
+        return format!("SOCKS {bind_host}:{listen_port}");
+    }
+
+    let target_host = editor.target_host.trim();
+    let target_host = if target_host.is_empty() {
+        "?"
+    } else {
+        target_host
+    };
+    let target_port = editor.target_port.trim();
+    let target_port = if target_port.is_empty() {
+        "?"
+    } else {
+        target_port
+    };
+    if editor.tunnel_type == "remote" {
+        format!("remote {bind_host}:{listen_port} -> {target_host}:{target_port}")
+    } else {
+        format!("local {bind_host}:{listen_port} -> {target_host}:{target_port}")
+    }
+}
+
+pub(super) fn tunnel_status_style(pending: bool, is_open: bool, supported: bool) -> (Hsla, Hsla) {
+    if pending {
+        (rgb(0xfacc15).into(), rgb(0x3a2f14).into())
+    } else if is_open {
+        (rgb(0x6ee7b7).into(), rgb(0x12342a).into())
+    } else if supported {
+        (rgb(0x93c5fd).into(), rgb(0x17253b).into())
+    } else {
+        (rgb(0xfbbf24).into(), rgb(0x3a2f14).into())
+    }
+}
+
+pub(super) fn tunnel_matches(tunnel: &TunnelConfig, query: &str) -> bool {
+    if query.is_empty() {
+        return true;
+    }
+    format!(
+        "{} {} {} {} {} {} {}",
+        tunnel.id,
+        tunnel.name,
+        tunnel.tunnel_type,
+        tunnel.connection_id.as_deref().unwrap_or_default(),
+        tunnel.listen_port,
+        tunnel.target_host,
+        tunnel.target_port
+    )
+    .to_ascii_lowercase()
+    .contains(query)
+}

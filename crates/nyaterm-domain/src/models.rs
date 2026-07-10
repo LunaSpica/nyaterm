@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use serde::{Deserialize, Serialize};
 
 use crate::ai::RiskLevel;
@@ -239,6 +241,61 @@ pub struct TunnelGroupsConfig {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct ProxyConfig {
+    #[serde(default = "uuid_v4")]
+    pub id: String,
+    pub name: String,
+    #[serde(default = "default_proxy_protocol")]
+    pub protocol: String,
+    #[serde(default = "default_proxy_host")]
+    pub host: String,
+    #[serde(default = "default_proxy_port")]
+    pub port: u16,
+    #[serde(default)]
+    pub command: Option<String>,
+    #[serde(default)]
+    pub username: Option<String>,
+    #[serde(default)]
+    pub password: Option<String>,
+    #[serde(default)]
+    pub password_id: Option<String>,
+    #[serde(default)]
+    pub group_id: Option<String>,
+}
+
+impl Default for ProxyConfig {
+    fn default() -> Self {
+        Self {
+            id: uuid_v4(),
+            name: String::new(),
+            protocol: default_proxy_protocol(),
+            host: default_proxy_host(),
+            port: default_proxy_port(),
+            command: None,
+            username: None,
+            password: None,
+            password_id: None,
+            group_id: None,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct ProxyGroup {
+    #[serde(default = "uuid_v4")]
+    pub id: String,
+    pub name: String,
+    #[serde(default)]
+    pub sort_order: u32,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq, Eq)]
+pub struct ProxyGroupsConfig {
+    #[serde(default)]
+    pub groups: Vec<ProxyGroup>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct QuickCommandCategory {
     pub id: String,
     pub name: String,
@@ -409,8 +466,55 @@ pub struct AppSettingsSummary {
     pub terminal_font_family: String,
     pub terminal_font_size: u16,
     pub x11_display: String,
+    pub terminal_scrollback_lines: u32,
+    pub terminal_keep_alive_interval: u32,
+    pub terminal_hardware_acceleration: bool,
+    pub terminal_show_workspace_padding: bool,
+    pub terminal_show_line_numbers: bool,
+    pub terminal_show_timestamps: bool,
+    pub terminal_show_timestamp_milliseconds: bool,
+    pub terminal_show_multi_line_paste_dialog: bool,
+    pub terminal_paste_image_as_path: bool,
+    pub ui_show_remote_stats: bool,
+    pub ui_remote_stats_interval: u32,
+    pub ui_show_process_manager: bool,
+    pub ui_process_manager_interval: u32,
+    pub ui_show_docker_manager: bool,
+    pub ui_docker_manager_interval: u32,
+    #[serde(default = "default_quick_cmd_view_mode")]
+    pub ui_quick_cmd_view_mode: String,
+    #[serde(default = "default_quick_cmd_sort_mode")]
+    pub ui_quick_cmd_sort_mode: String,
+    #[serde(default)]
+    pub ui_file_explorer_auto_sync_cwd_connection_ids: Vec<String>,
+    #[serde(default)]
+    pub ui_file_explorer_favorite_dirs_by_connection_id: HashMap<String, Vec<String>>,
+    pub interaction_copy_on_select: bool,
+    pub interaction_right_click_paste: bool,
+    pub interaction_command_suggestions_enabled: bool,
+    pub interaction_command_suggestion_min_chars: u32,
+    pub interaction_command_suggestion_max_chars: u32,
+    pub interaction_word_separators: String,
+    pub interaction_duplicate_session_command_delay_ms: u32,
+    pub interaction_alt_as_meta: bool,
+    pub interaction_mac_ime_compatibility: bool,
+    pub interaction_tab_double_click_action: String,
+    pub interaction_tab_middle_click_action: String,
+    pub interaction_tab_right_click_action: String,
+    pub interaction_default_encoding: String,
     pub host_key_policy: String,
+    pub transfer_download_path: String,
+    pub transfer_ask_save_location: bool,
     pub transfer_duplicate_strategy: String,
+    pub transfer_editor_type: String,
+    pub transfer_default_editor: String,
+    pub transfer_download_threads: u32,
+    pub transfer_upload_threads: u32,
+    pub transfer_max_retries: u32,
+    pub transfer_buffer_size: u32,
+    pub transfer_default_file_permissions: String,
+    pub transfer_preserve_timestamps: bool,
+    pub transfer_resume_broken_transfer: bool,
     pub recording_path: String,
     pub recording_auto_start: bool,
     pub recording_include_io_labels: bool,
@@ -420,6 +524,10 @@ pub struct AppSettingsSummary {
     pub diagnostics_retention_days: u32,
     pub startup_restore: bool,
     pub confirm_on_close: bool,
+    pub enable_screen_lock: bool,
+    pub idle_lock_minutes: u32,
+    pub has_master_password: bool,
+    pub keybindings: HashMap<String, String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -476,8 +584,51 @@ impl Default for AppSettingsSummary {
             terminal_font_family: "JetBrains Mono".to_string(),
             terminal_font_size: 16,
             x11_display: String::new(),
+            terminal_scrollback_lines: 5000,
+            terminal_keep_alive_interval: 30,
+            terminal_hardware_acceleration: true,
+            terminal_show_workspace_padding: false,
+            terminal_show_line_numbers: false,
+            terminal_show_timestamps: false,
+            terminal_show_timestamp_milliseconds: false,
+            terminal_show_multi_line_paste_dialog: true,
+            terminal_paste_image_as_path: true,
+            ui_show_remote_stats: true,
+            ui_remote_stats_interval: 3,
+            ui_show_process_manager: true,
+            ui_process_manager_interval: 5,
+            ui_show_docker_manager: true,
+            ui_docker_manager_interval: 10,
+            ui_quick_cmd_view_mode: default_quick_cmd_view_mode(),
+            ui_quick_cmd_sort_mode: default_quick_cmd_sort_mode(),
+            ui_file_explorer_auto_sync_cwd_connection_ids: Vec::new(),
+            ui_file_explorer_favorite_dirs_by_connection_id: HashMap::new(),
+            interaction_copy_on_select: false,
+            interaction_right_click_paste: false,
+            interaction_command_suggestions_enabled: true,
+            interaction_command_suggestion_min_chars: 2,
+            interaction_command_suggestion_max_chars: 64,
+            interaction_word_separators: " \t\r\n\"'`~!@#$%^&*()-=+[{]}\\|;:,<.>/?".to_string(),
+            interaction_duplicate_session_command_delay_ms: 1000,
+            interaction_alt_as_meta: false,
+            interaction_mac_ime_compatibility: true,
+            interaction_tab_double_click_action: "disconnect_session".to_string(),
+            interaction_tab_middle_click_action: "rename_tab".to_string(),
+            interaction_tab_right_click_action: "none".to_string(),
+            interaction_default_encoding: "UTF-8".to_string(),
             host_key_policy: "prompt".to_string(),
+            transfer_download_path: String::new(),
+            transfer_ask_save_location: false,
             transfer_duplicate_strategy: "ask".to_string(),
+            transfer_editor_type: "external".to_string(),
+            transfer_default_editor: String::new(),
+            transfer_download_threads: 3,
+            transfer_upload_threads: 3,
+            transfer_max_retries: 2,
+            transfer_buffer_size: 32,
+            transfer_default_file_permissions: "644".to_string(),
+            transfer_preserve_timestamps: true,
+            transfer_resume_broken_transfer: true,
             recording_path: String::new(),
             recording_auto_start: false,
             recording_include_io_labels: true,
@@ -487,8 +638,20 @@ impl Default for AppSettingsSummary {
             diagnostics_retention_days: 7,
             startup_restore: false,
             confirm_on_close: true,
+            enable_screen_lock: false,
+            idle_lock_minutes: 0,
+            has_master_password: false,
+            keybindings: HashMap::new(),
         }
     }
+}
+
+fn default_quick_cmd_view_mode() -> String {
+    "tile".to_string()
+}
+
+fn default_quick_cmd_sort_mode() -> String {
+    "created".to_string()
 }
 
 fn default_highlight_color_dark() -> String {
@@ -541,6 +704,18 @@ fn default_tunnel_type() -> String {
 
 fn default_tunnel_target_host() -> String {
     "127.0.0.1".to_string()
+}
+
+fn default_proxy_protocol() -> String {
+    "socks5".to_string()
+}
+
+fn default_proxy_host() -> String {
+    "127.0.0.1".to_string()
+}
+
+fn default_proxy_port() -> u16 {
+    1080
 }
 
 fn default_backspace_mode_telnet() -> String {

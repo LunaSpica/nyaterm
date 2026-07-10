@@ -16,12 +16,12 @@ use crate::{
     CloudSyncState, CommandHistoryEntry, CredentialCrypto, CredentialCryptoError,
     DecryptedOtpEntry, DecryptedSshKey, Group, KeywordHighlightConfig,
     KeywordHighlightImportResult, KeywordHighlightRule, OAuthDriveSyncSettings, OtpEntry,
-    PortableSnapshotError, PortableSnapshotKind, QuickCommand, QuickCommandCategory,
-    QuickCommandsConfig, RawPortableSnapshot, SavedConnection, SessionsConfig, SshKey,
-    TranslationSettings, TunnelConfig, TunnelGroup, TunnelGroupsConfig, ai_settings_has_secret,
-    merge_masked_ai_settings, merge_masked_cloud_sync_settings, merge_masked_translation_settings,
-    normalize_ai_settings, now_rfc3339, translation_settings_has_secret, trim_ai_audit,
-    trim_ai_history, uuid,
+    PortableSnapshotError, PortableSnapshotKind, ProxyConfig, ProxyGroup, ProxyGroupsConfig,
+    QuickCommand, QuickCommandCategory, QuickCommandsConfig, RawPortableSnapshot, SavedConnection,
+    SessionsConfig, SshKey, TranslationSettings, TunnelConfig, TunnelGroup, TunnelGroupsConfig,
+    ai_settings_has_secret, merge_masked_ai_settings, merge_masked_cloud_sync_settings,
+    merge_masked_translation_settings, normalize_ai_settings, now_rfc3339,
+    translation_settings_has_secret, trim_ai_audit, trim_ai_history, uuid,
 };
 
 const DATABASE_FILE: &str = "nyaterm.redb";
@@ -662,6 +662,53 @@ impl ConnectionStore {
         )
     }
 
+    pub fn list_proxies(&self) -> Result<Vec<ProxyConfig>, StorageError> {
+        let mut proxies: Vec<ProxyConfig> =
+            self.list_json_by_prefix(PROXIES_TABLE, PROXY_PREFIX)?;
+        proxies.sort_by(|left, right| {
+            left.group_id
+                .cmp(&right.group_id)
+                .then(left.name.cmp(&right.name))
+                .then(left.id.cmp(&right.id))
+        });
+        Ok(proxies)
+    }
+
+    pub fn list_proxy_groups(&self) -> Result<Vec<ProxyGroup>, StorageError> {
+        let value = self.load_settings_doc_value(SETTINGS_PROXY_GROUPS, serde_json::json!({}))?;
+        let mut groups: Vec<ProxyGroup> =
+            serde_json::from_value::<ProxyGroupsConfig>(value)?.groups;
+        groups.sort_by(|left, right| {
+            left.sort_order
+                .cmp(&right.sort_order)
+                .then(left.name.cmp(&right.name))
+                .then(left.id.cmp(&right.id))
+        });
+        Ok(groups)
+    }
+
+    pub fn replace_proxies(&self, proxies: &[ProxyConfig]) -> Result<(), StorageError> {
+        let txn = self.db.begin_write()?;
+        clear_prefix_in_txn(&txn, PROXIES_TABLE, PROXY_PREFIX)?;
+        for proxy in proxies {
+            write_json_in_txn(
+                &txn,
+                PROXIES_TABLE,
+                &entity_key(PROXY_PREFIX, &proxy.id),
+                proxy,
+            )?;
+        }
+        txn.commit()?;
+        Ok(())
+    }
+
+    pub fn replace_proxy_groups(&self, groups: &[ProxyGroup]) -> Result<(), StorageError> {
+        self.save_settings_doc_value(
+            SETTINGS_PROXY_GROUPS,
+            &serde_json::json!({ "groups": groups }),
+        )
+    }
+
     pub fn replace_sessions(&self, config: &SessionsConfig) -> Result<(), StorageError> {
         let txn = self.db.begin_write()?;
         replace_sessions_in_txn(&txn, config)?;
@@ -844,16 +891,183 @@ impl ConnectionStore {
             ),
             terminal_font_size: json_u16(&value, &["appearance", "font_size"], 16),
             x11_display: json_string(&value, &["terminal", "x11_display"], ""),
+            terminal_scrollback_lines: json_u32(&value, &["terminal", "scrollback_lines"], 5000)
+                .clamp(100, 100_000),
+            terminal_keep_alive_interval: json_u32(
+                &value,
+                &["terminal", "keep_alive_interval"],
+                30,
+            )
+            .min(600),
+            terminal_hardware_acceleration: json_bool(
+                &value,
+                &["terminal", "hardware_acceleration"],
+                true,
+            ),
+            terminal_show_workspace_padding: json_bool(
+                &value,
+                &["terminal", "show_workspace_padding"],
+                false,
+            ),
+            terminal_show_line_numbers: json_bool(
+                &value,
+                &["terminal", "show_line_numbers"],
+                false,
+            ),
+            terminal_show_timestamps: json_bool(&value, &["terminal", "show_timestamps"], false),
+            terminal_show_timestamp_milliseconds: json_bool(
+                &value,
+                &["terminal", "show_timestamp_milliseconds"],
+                false,
+            ),
+            terminal_show_multi_line_paste_dialog: json_bool(
+                &value,
+                &["terminal", "show_multi_line_paste_dialog"],
+                true,
+            ),
+            terminal_paste_image_as_path: json_bool(
+                &value,
+                &["terminal", "paste_image_as_path"],
+                true,
+            ),
+            ui_show_remote_stats: json_bool(&value, &["ui", "show_remote_stats"], true),
+            ui_remote_stats_interval: json_u32(&value, &["ui", "remote_stats_interval"], 3)
+                .clamp(1, 60),
+            ui_show_process_manager: json_bool(&value, &["ui", "show_process_manager"], true),
+            ui_process_manager_interval: json_u32(&value, &["ui", "process_manager_interval"], 5)
+                .clamp(3, 120),
+            ui_show_docker_manager: json_bool(&value, &["ui", "show_docker_manager"], true),
+            ui_docker_manager_interval: json_u32(&value, &["ui", "docker_manager_interval"], 10)
+                .clamp(3, 120),
+            ui_quick_cmd_view_mode: normalize_quick_cmd_view_mode(&json_string(
+                &value,
+                &["ui", "quick_cmd_view_mode"],
+                "tile",
+            )),
+            ui_quick_cmd_sort_mode: normalize_quick_cmd_sort_mode(&json_string(
+                &value,
+                &["ui", "quick_cmd_sort_mode"],
+                "created",
+            )),
+            ui_file_explorer_auto_sync_cwd_connection_ids: json_string_vec(
+                &value,
+                &["ui", "file_explorer_auto_sync_cwd_connection_ids"],
+                256,
+            ),
+            ui_file_explorer_favorite_dirs_by_connection_id: json_string_vec_map(
+                &value,
+                &["ui", "file_explorer_favorite_dirs_by_connection_id"],
+                12,
+            ),
+            interaction_copy_on_select: json_bool(
+                &value,
+                &["interaction", "copy_on_select"],
+                false,
+            ),
+            interaction_right_click_paste: json_bool(
+                &value,
+                &["interaction", "right_click_paste"],
+                false,
+            ),
+            interaction_command_suggestions_enabled: json_bool(
+                &value,
+                &["interaction", "command_suggestions_enabled"],
+                true,
+            ),
+            interaction_command_suggestion_min_chars: json_u32(
+                &value,
+                &["interaction", "command_suggestion_min_chars"],
+                2,
+            )
+            .clamp(1, 500),
+            interaction_command_suggestion_max_chars: json_u32(
+                &value,
+                &["interaction", "command_suggestion_max_chars"],
+                64,
+            )
+            .clamp(1, 500),
+            interaction_word_separators: json_string(
+                &value,
+                &["interaction", "word_separators"],
+                " \t\r\n\"'`~!@#$%^&*()-=+[{]}\\|;:,<.>/?",
+            ),
+            interaction_duplicate_session_command_delay_ms: json_u32(
+                &value,
+                &["interaction", "duplicate_session_command_delay_ms"],
+                1000,
+            )
+            .min(60_000),
+            interaction_alt_as_meta: json_bool(&value, &["interaction", "alt_as_meta"], false),
+            interaction_mac_ime_compatibility: json_bool(
+                &value,
+                &["interaction", "mac_ime_compatibility"],
+                true,
+            ),
+            interaction_tab_double_click_action: normalize_tab_mouse_action(&json_string(
+                &value,
+                &["interaction", "tab_double_click_action"],
+                "disconnect_session",
+            )),
+            interaction_tab_middle_click_action: normalize_tab_mouse_action(&json_string(
+                &value,
+                &["interaction", "tab_middle_click_action"],
+                "rename_tab",
+            )),
+            interaction_tab_right_click_action: normalize_tab_mouse_action(&json_string(
+                &value,
+                &["interaction", "tab_right_click_action"],
+                "none",
+            )),
+            interaction_default_encoding: normalize_interaction_encoding(&json_string(
+                &value,
+                &["interaction", "default_encoding"],
+                "UTF-8",
+            )),
             host_key_policy: normalize_host_key_policy(&json_string(
                 &value,
                 &["security", "host_key_policy"],
                 "prompt",
             )),
+            transfer_download_path: json_string(&value, &["transfer", "download_path"], ""),
+            transfer_ask_save_location: json_bool(
+                &value,
+                &["transfer", "ask_save_location"],
+                false,
+            ),
             transfer_duplicate_strategy: normalize_transfer_duplicate_strategy(&json_string(
                 &value,
                 &["transfer", "duplicate_strategy"],
                 "ask",
             )),
+            transfer_editor_type: normalize_transfer_editor_type(&json_string(
+                &value,
+                &["transfer", "editor_type"],
+                "external",
+            )),
+            transfer_default_editor: json_string(&value, &["transfer", "default_editor"], ""),
+            transfer_download_threads: json_u32(&value, &["transfer", "download_threads"], 3)
+                .clamp(1, 10),
+            transfer_upload_threads: json_u32(&value, &["transfer", "upload_threads"], 3)
+                .clamp(1, 10),
+            transfer_max_retries: json_u32(&value, &["transfer", "max_transfer_retries"], 2)
+                .min(10),
+            transfer_buffer_size: json_u32(&value, &["transfer", "transfer_buffer_size"], 32)
+                .clamp(8, 256),
+            transfer_default_file_permissions: normalize_transfer_file_permissions(&json_string(
+                &value,
+                &["transfer", "default_file_permissions"],
+                "644",
+            )),
+            transfer_preserve_timestamps: json_bool(
+                &value,
+                &["transfer", "preserve_timestamps"],
+                true,
+            ),
+            transfer_resume_broken_transfer: json_bool(
+                &value,
+                &["transfer", "resume_broken_transfer"],
+                true,
+            ),
             recording_path: json_string(&value, &["transfer", "recording_path"], ""),
             recording_auto_start: json_bool(&value, &["transfer", "recording_auto_start"], false),
             recording_include_io_labels: json_bool(
@@ -879,7 +1093,24 @@ impl ConnectionStore {
             )),
             startup_restore: json_bool(&value, &["general", "startup_restore"], false),
             confirm_on_close: json_bool(&value, &["general", "confirm_on_close"], true),
+            enable_screen_lock: json_bool(&value, &["security", "enable_screen_lock"], false),
+            idle_lock_minutes: u32::from(json_u16(&value, &["security", "idle_lock_minutes"], 0)),
+            has_master_password: value
+                .get("security")
+                .and_then(|security| security.get("master_password"))
+                .and_then(|master_password| master_password.as_str())
+                .is_some_and(|master_password| !master_password.is_empty()),
+            keybindings: json_string_map(&value, &["keybindings"]),
         })
+    }
+
+    pub fn verify_master_password(&self, password: &str) -> Result<bool, StorageError> {
+        let Some(token) = self.load_encrypted_master_password()? else {
+            return Ok(true);
+        };
+        let bootstrap = CredentialCrypto::new(self.portable_key_path.clone(), None);
+        let stored = bootstrap.decrypt_settings_secret(&token)?;
+        Ok(stored == password)
     }
 
     pub fn save_host_key_policy(&self, policy: &str) -> Result<AppSettingsSummary, StorageError> {
@@ -919,6 +1150,374 @@ impl ConnectionStore {
             &mut value,
             &["transfer", "recording_memory_limit_bytes"],
             serde_json::Value::from(settings.recording_memory_limit_bytes),
+        );
+        self.save_settings_value(&value)?;
+        self.load_app_settings_summary()
+    }
+
+    pub fn save_transfer_settings(
+        &self,
+        settings: &AppSettingsSummary,
+    ) -> Result<AppSettingsSummary, StorageError> {
+        let mut value = self.load_settings_value()?;
+        set_nested_json_string(
+            &mut value,
+            &["transfer", "download_path"],
+            settings.transfer_download_path.clone(),
+        );
+        set_nested_json_value(
+            &mut value,
+            &["transfer", "ask_save_location"],
+            serde_json::Value::Bool(settings.transfer_ask_save_location),
+        );
+        set_nested_json_string(
+            &mut value,
+            &["transfer", "duplicate_strategy"],
+            normalize_transfer_duplicate_strategy(&settings.transfer_duplicate_strategy),
+        );
+        set_nested_json_string(
+            &mut value,
+            &["transfer", "editor_type"],
+            normalize_transfer_editor_type(&settings.transfer_editor_type),
+        );
+        set_nested_json_string(
+            &mut value,
+            &["transfer", "default_editor"],
+            settings.transfer_default_editor.clone(),
+        );
+        set_nested_json_value(
+            &mut value,
+            &["transfer", "download_threads"],
+            serde_json::Value::from(settings.transfer_download_threads.clamp(1, 10)),
+        );
+        set_nested_json_value(
+            &mut value,
+            &["transfer", "upload_threads"],
+            serde_json::Value::from(settings.transfer_upload_threads.clamp(1, 10)),
+        );
+        set_nested_json_value(
+            &mut value,
+            &["transfer", "max_transfer_retries"],
+            serde_json::Value::from(settings.transfer_max_retries.min(10)),
+        );
+        set_nested_json_value(
+            &mut value,
+            &["transfer", "transfer_buffer_size"],
+            serde_json::Value::from(settings.transfer_buffer_size.clamp(8, 256)),
+        );
+        set_nested_json_string(
+            &mut value,
+            &["transfer", "default_file_permissions"],
+            normalize_transfer_file_permissions(&settings.transfer_default_file_permissions),
+        );
+        set_nested_json_value(
+            &mut value,
+            &["transfer", "preserve_timestamps"],
+            serde_json::Value::Bool(settings.transfer_preserve_timestamps),
+        );
+        set_nested_json_value(
+            &mut value,
+            &["transfer", "resume_broken_transfer"],
+            serde_json::Value::Bool(settings.transfer_resume_broken_transfer),
+        );
+        self.save_settings_value(&value)?;
+        self.load_app_settings_summary()
+    }
+
+    pub fn save_file_explorer_favorite_dirs(
+        &self,
+        settings: &AppSettingsSummary,
+    ) -> Result<AppSettingsSummary, StorageError> {
+        let mut value = self.load_settings_value()?;
+        set_nested_json_value(
+            &mut value,
+            &["ui", "file_explorer_auto_sync_cwd_connection_ids"],
+            string_vec_json_value(&settings.ui_file_explorer_auto_sync_cwd_connection_ids, 256),
+        );
+        set_nested_json_value(
+            &mut value,
+            &["ui", "file_explorer_favorite_dirs_by_connection_id"],
+            string_vec_map_json_value(
+                &settings.ui_file_explorer_favorite_dirs_by_connection_id,
+                12,
+            ),
+        );
+        self.save_settings_value(&value)?;
+        self.load_app_settings_summary()
+    }
+
+    pub fn save_quick_command_ui_settings(
+        &self,
+        settings: &AppSettingsSummary,
+    ) -> Result<AppSettingsSummary, StorageError> {
+        let mut value = self.load_settings_value()?;
+        set_nested_json_string(
+            &mut value,
+            &["ui", "quick_cmd_view_mode"],
+            normalize_quick_cmd_view_mode(&settings.ui_quick_cmd_view_mode),
+        );
+        set_nested_json_string(
+            &mut value,
+            &["ui", "quick_cmd_sort_mode"],
+            normalize_quick_cmd_sort_mode(&settings.ui_quick_cmd_sort_mode),
+        );
+        self.save_settings_value(&value)?;
+        self.load_app_settings_summary()
+    }
+
+    pub fn save_appearance_settings(
+        &self,
+        settings: &AppSettingsSummary,
+    ) -> Result<AppSettingsSummary, StorageError> {
+        let mut value = self.load_settings_value()?;
+        set_nested_json_string(&mut value, &["appearance", "theme"], settings.theme.clone());
+        set_nested_json_string(
+            &mut value,
+            &["appearance", "font_family"],
+            settings.terminal_font_family.clone(),
+        );
+        set_nested_json_value(
+            &mut value,
+            &["appearance", "font_size"],
+            serde_json::Value::from(settings.terminal_font_size),
+        );
+        set_nested_json_string(
+            &mut value,
+            &["terminal", "x11_display"],
+            settings.x11_display.clone(),
+        );
+        self.save_settings_value(&value)?;
+        self.load_app_settings_summary()
+    }
+
+    pub fn save_terminal_settings(
+        &self,
+        settings: &AppSettingsSummary,
+    ) -> Result<AppSettingsSummary, StorageError> {
+        let mut value = self.load_settings_value()?;
+        set_nested_json_string(
+            &mut value,
+            &["terminal", "x11_display"],
+            settings.x11_display.clone(),
+        );
+        set_nested_json_value(
+            &mut value,
+            &["terminal", "scrollback_lines"],
+            serde_json::Value::from(settings.terminal_scrollback_lines.clamp(100, 100_000)),
+        );
+        set_nested_json_value(
+            &mut value,
+            &["terminal", "keep_alive_interval"],
+            serde_json::Value::from(settings.terminal_keep_alive_interval.min(600)),
+        );
+        set_nested_json_value(
+            &mut value,
+            &["terminal", "hardware_acceleration"],
+            serde_json::Value::Bool(settings.terminal_hardware_acceleration),
+        );
+        set_nested_json_value(
+            &mut value,
+            &["terminal", "show_workspace_padding"],
+            serde_json::Value::Bool(settings.terminal_show_workspace_padding),
+        );
+        set_nested_json_value(
+            &mut value,
+            &["terminal", "show_line_numbers"],
+            serde_json::Value::Bool(settings.terminal_show_line_numbers),
+        );
+        set_nested_json_value(
+            &mut value,
+            &["terminal", "show_timestamps"],
+            serde_json::Value::Bool(settings.terminal_show_timestamps),
+        );
+        set_nested_json_value(
+            &mut value,
+            &["terminal", "show_timestamp_milliseconds"],
+            serde_json::Value::Bool(settings.terminal_show_timestamp_milliseconds),
+        );
+        set_nested_json_value(
+            &mut value,
+            &["terminal", "show_multi_line_paste_dialog"],
+            serde_json::Value::Bool(settings.terminal_show_multi_line_paste_dialog),
+        );
+        set_nested_json_value(
+            &mut value,
+            &["terminal", "paste_image_as_path"],
+            serde_json::Value::Bool(settings.terminal_paste_image_as_path),
+        );
+        set_nested_json_value(
+            &mut value,
+            &["ui", "show_remote_stats"],
+            serde_json::Value::Bool(settings.ui_show_remote_stats),
+        );
+        set_nested_json_value(
+            &mut value,
+            &["ui", "remote_stats_interval"],
+            serde_json::Value::from(settings.ui_remote_stats_interval.clamp(1, 60)),
+        );
+        set_nested_json_value(
+            &mut value,
+            &["ui", "show_process_manager"],
+            serde_json::Value::Bool(settings.ui_show_process_manager),
+        );
+        set_nested_json_value(
+            &mut value,
+            &["ui", "process_manager_interval"],
+            serde_json::Value::from(settings.ui_process_manager_interval.clamp(3, 120)),
+        );
+        set_nested_json_value(
+            &mut value,
+            &["ui", "show_docker_manager"],
+            serde_json::Value::Bool(settings.ui_show_docker_manager),
+        );
+        set_nested_json_value(
+            &mut value,
+            &["ui", "docker_manager_interval"],
+            serde_json::Value::from(settings.ui_docker_manager_interval.clamp(3, 120)),
+        );
+        self.save_settings_value(&value)?;
+        self.load_app_settings_summary()
+    }
+
+    pub fn save_interaction_settings(
+        &self,
+        settings: &AppSettingsSummary,
+    ) -> Result<AppSettingsSummary, StorageError> {
+        let mut value = self.load_settings_value()?;
+        let min_chars = settings
+            .interaction_command_suggestion_min_chars
+            .clamp(1, 500);
+        let max_chars = settings
+            .interaction_command_suggestion_max_chars
+            .clamp(min_chars, 500);
+        set_nested_json_value(
+            &mut value,
+            &["interaction", "copy_on_select"],
+            serde_json::Value::Bool(settings.interaction_copy_on_select),
+        );
+        set_nested_json_value(
+            &mut value,
+            &["interaction", "right_click_paste"],
+            serde_json::Value::Bool(settings.interaction_right_click_paste),
+        );
+        set_nested_json_value(
+            &mut value,
+            &["interaction", "command_suggestions_enabled"],
+            serde_json::Value::Bool(settings.interaction_command_suggestions_enabled),
+        );
+        set_nested_json_value(
+            &mut value,
+            &["interaction", "command_suggestion_min_chars"],
+            serde_json::Value::from(min_chars),
+        );
+        set_nested_json_value(
+            &mut value,
+            &["interaction", "command_suggestion_max_chars"],
+            serde_json::Value::from(max_chars),
+        );
+        set_nested_json_string(
+            &mut value,
+            &["interaction", "word_separators"],
+            settings.interaction_word_separators.clone(),
+        );
+        set_nested_json_value(
+            &mut value,
+            &["interaction", "duplicate_session_command_delay_ms"],
+            serde_json::Value::from(
+                settings
+                    .interaction_duplicate_session_command_delay_ms
+                    .min(60_000),
+            ),
+        );
+        set_nested_json_value(
+            &mut value,
+            &["interaction", "alt_as_meta"],
+            serde_json::Value::Bool(settings.interaction_alt_as_meta),
+        );
+        set_nested_json_value(
+            &mut value,
+            &["interaction", "mac_ime_compatibility"],
+            serde_json::Value::Bool(settings.interaction_mac_ime_compatibility),
+        );
+        set_nested_json_string(
+            &mut value,
+            &["interaction", "tab_double_click_action"],
+            normalize_tab_mouse_action(&settings.interaction_tab_double_click_action),
+        );
+        set_nested_json_string(
+            &mut value,
+            &["interaction", "tab_middle_click_action"],
+            normalize_tab_mouse_action(&settings.interaction_tab_middle_click_action),
+        );
+        set_nested_json_string(
+            &mut value,
+            &["interaction", "tab_right_click_action"],
+            normalize_tab_mouse_action(&settings.interaction_tab_right_click_action),
+        );
+        set_nested_json_string(
+            &mut value,
+            &["interaction", "default_encoding"],
+            normalize_interaction_encoding(&settings.interaction_default_encoding),
+        );
+        self.save_settings_value(&value)?;
+        self.load_app_settings_summary()
+    }
+
+    pub fn save_general_settings(
+        &self,
+        settings: &AppSettingsSummary,
+    ) -> Result<AppSettingsSummary, StorageError> {
+        let mut value = self.load_settings_value()?;
+        set_nested_json_value(
+            &mut value,
+            &["general", "startup_restore"],
+            serde_json::Value::Bool(settings.startup_restore),
+        );
+        set_nested_json_value(
+            &mut value,
+            &["general", "confirm_on_close"],
+            serde_json::Value::Bool(settings.confirm_on_close),
+        );
+        self.save_settings_value(&value)?;
+        self.load_app_settings_summary()
+    }
+
+    pub fn save_screen_lock_settings(
+        &self,
+        settings: &AppSettingsSummary,
+    ) -> Result<AppSettingsSummary, StorageError> {
+        let mut value = self.load_settings_value()?;
+        set_nested_json_value(
+            &mut value,
+            &["security", "enable_screen_lock"],
+            serde_json::Value::Bool(settings.enable_screen_lock),
+        );
+        set_nested_json_value(
+            &mut value,
+            &["security", "idle_lock_minutes"],
+            serde_json::Value::from(settings.idle_lock_minutes),
+        );
+        self.save_settings_value(&value)?;
+        self.load_app_settings_summary()
+    }
+
+    pub fn save_keybindings(
+        &self,
+        keybindings: &HashMap<String, String>,
+    ) -> Result<AppSettingsSummary, StorageError> {
+        let mut value = self.load_settings_value()?;
+        let mut object = serde_json::Map::new();
+        for (id, keys) in keybindings {
+            let id = id.trim();
+            let keys = keys.trim();
+            if !id.is_empty() && !keys.is_empty() {
+                object.insert(id.to_string(), serde_json::Value::String(keys.to_string()));
+            }
+        }
+        set_nested_json_value(
+            &mut value,
+            &["keybindings"],
+            serde_json::Value::Object(object),
         );
         self.save_settings_value(&value)?;
         self.load_app_settings_summary()
@@ -2969,6 +3568,136 @@ fn json_bool(value: &serde_json::Value, path: &[&str], fallback: bool) -> bool {
         .unwrap_or(fallback)
 }
 
+fn json_string_map(value: &serde_json::Value, path: &[&str]) -> HashMap<String, String> {
+    json_path(value, path)
+        .and_then(serde_json::Value::as_object)
+        .map(|object| {
+            object
+                .iter()
+                .filter_map(|(key, value)| {
+                    value
+                        .as_str()
+                        .filter(|value| !value.trim().is_empty())
+                        .map(|value| (key.clone(), value.to_string()))
+                })
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+fn json_string_vec(value: &serde_json::Value, path: &[&str], limit: usize) -> Vec<String> {
+    json_path(value, path)
+        .and_then(serde_json::Value::as_array)
+        .map(|array| {
+            array
+                .iter()
+                .filter_map(|entry| {
+                    entry
+                        .as_str()
+                        .map(str::trim)
+                        .filter(|entry| !entry.is_empty())
+                        .map(ToOwned::to_owned)
+                })
+                .fold(Vec::<String>::new(), |mut values, entry| {
+                    if !values.iter().any(|existing| existing == &entry) {
+                        values.push(entry);
+                    }
+                    values
+                })
+                .into_iter()
+                .take(limit)
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+fn json_string_vec_map(
+    value: &serde_json::Value,
+    path: &[&str],
+    limit_per_key: usize,
+) -> HashMap<String, Vec<String>> {
+    json_path(value, path)
+        .and_then(serde_json::Value::as_object)
+        .map(|object| {
+            object
+                .iter()
+                .filter_map(|(key, value)| {
+                    let values = value
+                        .as_array()?
+                        .iter()
+                        .filter_map(|entry| {
+                            entry
+                                .as_str()
+                                .map(str::trim)
+                                .filter(|entry| !entry.is_empty())
+                                .map(ToOwned::to_owned)
+                        })
+                        .fold(Vec::<String>::new(), |mut values, entry| {
+                            if !values.iter().any(|existing| existing == &entry) {
+                                values.push(entry);
+                            }
+                            values
+                        })
+                        .into_iter()
+                        .take(limit_per_key)
+                        .collect::<Vec<_>>();
+                    (!values.is_empty()).then(|| (key.clone(), values))
+                })
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+fn string_vec_json_value(values: &[String], limit: usize) -> serde_json::Value {
+    serde_json::Value::Array(
+        values
+            .iter()
+            .map(|value| value.trim())
+            .filter(|value| !value.is_empty())
+            .fold(Vec::<String>::new(), |mut values, value| {
+                if !values.iter().any(|existing| existing == value) {
+                    values.push(value.to_string());
+                }
+                values
+            })
+            .into_iter()
+            .take(limit)
+            .map(serde_json::Value::String)
+            .collect(),
+    )
+}
+
+fn string_vec_map_json_value(
+    map: &HashMap<String, Vec<String>>,
+    limit_per_key: usize,
+) -> serde_json::Value {
+    let object = map
+        .iter()
+        .filter_map(|(key, values)| {
+            let key = key.trim();
+            if key.is_empty() {
+                return None;
+            }
+            let values = values
+                .iter()
+                .map(|value| value.trim())
+                .filter(|value| !value.is_empty())
+                .fold(Vec::<String>::new(), |mut values, value| {
+                    if !values.iter().any(|existing| existing == value) {
+                        values.push(value.to_string());
+                    }
+                    values
+                })
+                .into_iter()
+                .take(limit_per_key)
+                .map(serde_json::Value::String)
+                .collect::<Vec<_>>();
+            (!values.is_empty()).then(|| (key.to_string(), serde_json::Value::Array(values)))
+        })
+        .collect();
+    serde_json::Value::Object(object)
+}
+
 fn json_u16(value: &serde_json::Value, path: &[&str], fallback: u16) -> u16 {
     let Some(value) = json_path(value, path) else {
         return fallback;
@@ -2979,6 +3708,21 @@ fn json_u16(value: &serde_json::Value, path: &[&str], fallback: u16) -> u16 {
     if let Some(number) = value.as_f64() {
         if number.is_finite() && number >= 0.0 && number <= f64::from(u16::MAX) {
             return number.round() as u16;
+        }
+    }
+    fallback
+}
+
+fn json_u32(value: &serde_json::Value, path: &[&str], fallback: u32) -> u32 {
+    let Some(value) = json_path(value, path) else {
+        return fallback;
+    };
+    if let Some(number) = value.as_u64() {
+        return number.try_into().unwrap_or(fallback);
+    }
+    if let Some(number) = value.as_f64() {
+        if number.is_finite() && number >= 0.0 && number <= f64::from(u32::MAX) {
+            return number.round() as u32;
         }
     }
     fallback
@@ -3102,6 +3846,58 @@ fn normalize_transfer_duplicate_strategy(strategy: &str) -> String {
     match strategy {
         "ask" | "overwrite" | "skip" | "rename" => strategy.to_string(),
         _ => "ask".to_string(),
+    }
+}
+
+fn normalize_transfer_editor_type(editor_type: &str) -> String {
+    match editor_type {
+        "external" | "internal" => editor_type.to_string(),
+        _ => "external".to_string(),
+    }
+}
+
+fn normalize_transfer_file_permissions(value: &str) -> String {
+    let trimmed = value
+        .trim()
+        .trim_start_matches("0o")
+        .trim_start_matches('0');
+    let normalized = if trimmed.is_empty() { "0" } else { trimmed };
+    if (3..=4).contains(&normalized.len()) && normalized.chars().all(|ch| matches!(ch, '0'..='7')) {
+        normalized.to_string()
+    } else {
+        "644".to_string()
+    }
+}
+
+fn normalize_quick_cmd_view_mode(value: &str) -> String {
+    match value.trim() {
+        "list" | "compact" | "tile" => value.trim().to_string(),
+        _ => "tile".to_string(),
+    }
+}
+
+fn normalize_quick_cmd_sort_mode(value: &str) -> String {
+    match value.trim() {
+        "created" | "name" | "useCount" => value.trim().to_string(),
+        _ => "created".to_string(),
+    }
+}
+
+fn normalize_tab_mouse_action(action: &str) -> String {
+    match action {
+        "none" | "rename_tab" | "copy_tab_name" | "copy_server_ip" | "duplicate_session"
+        | "multiplex_ssh" | "reconnect_session" | "disconnect_session" | "close_tab" => {
+            action.to_string()
+        }
+        _ => "none".to_string(),
+    }
+}
+
+fn normalize_interaction_encoding(encoding: &str) -> String {
+    if encoding.eq_ignore_ascii_case("gbk") {
+        "GBK".to_string()
+    } else {
+        "UTF-8".to_string()
     }
 }
 
@@ -4087,10 +4883,23 @@ mod tests {
             },
             "security": {
                 "host_key_policy": "strict",
+                "enable_screen_lock": true,
+                "idle_lock_minutes": 12,
                 "master_password": "encrypted"
             },
             "transfer": {
+                "download_path": "/tmp/downloads",
+                "ask_save_location": true,
                 "duplicate_strategy": "rename",
+                "editor_type": "internal",
+                "default_editor": "code",
+                "download_threads": 5,
+                "upload_threads": 4,
+                "max_transfer_retries": 6,
+                "transfer_buffer_size": 64,
+                "default_file_permissions": "664",
+                "preserve_timestamps": false,
+                "resume_broken_transfer": false,
                 "recording_path": "/tmp/nyaterm-recordings",
                 "recording_auto_start": true,
                 "recording_include_io_labels": false,
@@ -4098,11 +4907,55 @@ mod tests {
                 "recording_memory_limit_bytes": 1048576
             },
             "terminal": {
-                "x11_display": "localhost:1"
+                "x11_display": "localhost:1",
+                "scrollback_lines": 8000,
+                "keep_alive_interval": 45,
+                "hardware_acceleration": false,
+                "show_workspace_padding": true,
+                "show_line_numbers": true,
+                "show_timestamps": true,
+                "show_timestamp_milliseconds": true,
+                "show_multi_line_paste_dialog": false,
+                "paste_image_as_path": false
+            },
+            "ui": {
+                "show_remote_stats": false,
+                "remote_stats_interval": 9,
+                "show_process_manager": false,
+                "process_manager_interval": 11,
+                "show_docker_manager": false,
+                "docker_manager_interval": 13,
+                "quick_cmd_view_mode": "compact",
+                "quick_cmd_sort_mode": "useCount",
+                "file_explorer_auto_sync_cwd_connection_ids": ["conn-1", "conn-1", " ", "conn-2"],
+                "file_explorer_favorite_dirs_by_connection_id": {
+                    "conn-1": ["/var", "/var", " ", "/opt", "/srv", "/tmp", "/home", "/etc", "/usr", "/bin", "/sbin", "/lib", "/mnt"],
+                    "conn-empty": [],
+                    "conn-invalid": false
+                }
+            },
+            "interaction": {
+                "copy_on_select": true,
+                "right_click_paste": true,
+                "command_suggestions_enabled": false,
+                "command_suggestion_min_chars": 3,
+                "command_suggestion_max_chars": 80,
+                "word_separators": " .,:",
+                "duplicate_session_command_delay_ms": 1500,
+                "alt_as_meta": true,
+                "mac_ime_compatibility": false,
+                "tab_double_click_action": "duplicate_session",
+                "tab_middle_click_action": "close_tab",
+                "tab_right_click_action": "copy_tab_name",
+                "default_encoding": "GBK"
             },
             "diagnostics": {
                 "level": "debug",
                 "retention_days": 3
+            },
+            "keybindings": {
+                "terminal.find": "ctrl+f",
+                "ignored_non_string": false
             },
             "unrelated": {
                 "preserve": true
@@ -4116,8 +4969,79 @@ mod tests {
         assert_eq!(summary.terminal_font_family, "Iosevka");
         assert_eq!(summary.terminal_font_size, 14);
         assert_eq!(summary.x11_display, "localhost:1");
+        assert_eq!(summary.terminal_scrollback_lines, 8000);
+        assert_eq!(summary.terminal_keep_alive_interval, 45);
+        assert!(!summary.terminal_hardware_acceleration);
+        assert!(summary.terminal_show_workspace_padding);
+        assert!(summary.terminal_show_line_numbers);
+        assert!(summary.terminal_show_timestamps);
+        assert!(summary.terminal_show_timestamp_milliseconds);
+        assert!(!summary.terminal_show_multi_line_paste_dialog);
+        assert!(!summary.terminal_paste_image_as_path);
+        assert!(!summary.ui_show_remote_stats);
+        assert_eq!(summary.ui_remote_stats_interval, 9);
+        assert!(!summary.ui_show_process_manager);
+        assert_eq!(summary.ui_process_manager_interval, 11);
+        assert!(!summary.ui_show_docker_manager);
+        assert_eq!(summary.ui_docker_manager_interval, 13);
+        assert_eq!(summary.ui_quick_cmd_view_mode, "compact");
+        assert_eq!(summary.ui_quick_cmd_sort_mode, "useCount");
+        assert_eq!(
+            summary.ui_file_explorer_auto_sync_cwd_connection_ids,
+            vec!["conn-1".to_string(), "conn-2".to_string()]
+        );
+        assert_eq!(
+            summary
+                .ui_file_explorer_favorite_dirs_by_connection_id
+                .get("conn-1"),
+            Some(&vec![
+                "/var".to_string(),
+                "/opt".to_string(),
+                "/srv".to_string(),
+                "/tmp".to_string(),
+                "/home".to_string(),
+                "/etc".to_string(),
+                "/usr".to_string(),
+                "/bin".to_string(),
+                "/sbin".to_string(),
+                "/lib".to_string(),
+                "/mnt".to_string(),
+            ])
+        );
+        assert!(
+            !summary
+                .ui_file_explorer_favorite_dirs_by_connection_id
+                .contains_key("conn-empty")
+        );
+        assert!(summary.interaction_copy_on_select);
+        assert!(summary.interaction_right_click_paste);
+        assert!(!summary.interaction_command_suggestions_enabled);
+        assert_eq!(summary.interaction_command_suggestion_min_chars, 3);
+        assert_eq!(summary.interaction_command_suggestion_max_chars, 80);
+        assert_eq!(summary.interaction_word_separators, " .,:");
+        assert_eq!(summary.interaction_duplicate_session_command_delay_ms, 1500);
+        assert!(summary.interaction_alt_as_meta);
+        assert!(!summary.interaction_mac_ime_compatibility);
+        assert_eq!(
+            summary.interaction_tab_double_click_action,
+            "duplicate_session"
+        );
+        assert_eq!(summary.interaction_tab_middle_click_action, "close_tab");
+        assert_eq!(summary.interaction_tab_right_click_action, "copy_tab_name");
+        assert_eq!(summary.interaction_default_encoding, "GBK");
         assert_eq!(summary.host_key_policy, "strict");
+        assert_eq!(summary.transfer_download_path, "/tmp/downloads");
+        assert!(summary.transfer_ask_save_location);
         assert_eq!(summary.transfer_duplicate_strategy, "rename");
+        assert_eq!(summary.transfer_editor_type, "internal");
+        assert_eq!(summary.transfer_default_editor, "code");
+        assert_eq!(summary.transfer_download_threads, 5);
+        assert_eq!(summary.transfer_upload_threads, 4);
+        assert_eq!(summary.transfer_max_retries, 6);
+        assert_eq!(summary.transfer_buffer_size, 64);
+        assert_eq!(summary.transfer_default_file_permissions, "664");
+        assert!(!summary.transfer_preserve_timestamps);
+        assert!(!summary.transfer_resume_broken_transfer);
         assert_eq!(summary.recording_path, "/tmp/nyaterm-recordings");
         assert!(summary.recording_auto_start);
         assert!(!summary.recording_include_io_labels);
@@ -4127,6 +5051,14 @@ mod tests {
         assert_eq!(summary.diagnostics_retention_days, 3);
         assert!(summary.startup_restore);
         assert!(!summary.confirm_on_close);
+        assert!(summary.enable_screen_lock);
+        assert_eq!(summary.idle_lock_minutes, 12);
+        assert!(summary.has_master_password);
+        assert_eq!(
+            summary.keybindings.get("terminal.find").map(String::as_str),
+            Some("ctrl+f")
+        );
+        assert!(!summary.keybindings.contains_key("ignored_non_string"));
 
         let updated = store.save_host_key_policy("accept").expect("save policy");
         assert_eq!(updated.host_key_policy, "accept");
@@ -4143,6 +5075,254 @@ mod tests {
             json_path(&stored, &["security", "host_key_policy"]).and_then(|value| value.as_str()),
             Some("accept")
         );
+        assert_eq!(
+            json_path(&stored, &["keybindings", "terminal.find"]).and_then(|value| value.as_str()),
+            Some("ctrl+f")
+        );
+
+        let mut transfer_update = summary.clone();
+        transfer_update.transfer_download_path = "/var/tmp/downloads".to_string();
+        transfer_update.transfer_ask_save_location = false;
+        transfer_update.transfer_duplicate_strategy = "overwrite".to_string();
+        transfer_update.transfer_editor_type = "external".to_string();
+        transfer_update.transfer_default_editor = "gedit".to_string();
+        transfer_update.transfer_download_threads = 2;
+        transfer_update.transfer_upload_threads = 6;
+        transfer_update.transfer_max_retries = 3;
+        transfer_update.transfer_buffer_size = 128;
+        transfer_update.transfer_default_file_permissions = "755".to_string();
+        transfer_update.transfer_preserve_timestamps = true;
+        transfer_update.transfer_resume_broken_transfer = true;
+        let updated = store
+            .save_transfer_settings(&transfer_update)
+            .expect("save transfer settings");
+        assert_eq!(updated.transfer_download_path, "/var/tmp/downloads");
+        assert!(!updated.transfer_ask_save_location);
+        assert_eq!(updated.transfer_duplicate_strategy, "overwrite");
+        assert_eq!(updated.transfer_editor_type, "external");
+        assert_eq!(updated.transfer_default_editor, "gedit");
+        assert_eq!(updated.transfer_download_threads, 2);
+        assert_eq!(updated.transfer_upload_threads, 6);
+        assert_eq!(updated.transfer_max_retries, 3);
+        assert_eq!(updated.transfer_buffer_size, 128);
+        assert_eq!(updated.transfer_default_file_permissions, "755");
+        assert!(updated.transfer_preserve_timestamps);
+        assert!(updated.transfer_resume_broken_transfer);
+        let stored = store
+            .load_settings_value()
+            .expect("stored transfer settings");
+        assert_eq!(
+            json_path(&stored, &["transfer", "download_path"]).and_then(|value| value.as_str()),
+            Some("/var/tmp/downloads")
+        );
+        assert_eq!(
+            json_path(&stored, &["transfer", "ask_save_location"])
+                .and_then(|value| value.as_bool()),
+            Some(false)
+        );
+        assert_eq!(
+            json_path(&stored, &["transfer", "duplicate_strategy"])
+                .and_then(|value| value.as_str()),
+            Some("overwrite")
+        );
+        assert_eq!(
+            json_path(&stored, &["transfer", "editor_type"]).and_then(|value| value.as_str()),
+            Some("external")
+        );
+        assert_eq!(
+            json_path(&stored, &["transfer", "default_editor"]).and_then(|value| value.as_str()),
+            Some("gedit")
+        );
+        assert_eq!(
+            json_path(&stored, &["transfer", "download_threads"]).and_then(|value| value.as_u64()),
+            Some(2)
+        );
+        assert_eq!(
+            json_path(&stored, &["transfer", "upload_threads"]).and_then(|value| value.as_u64()),
+            Some(6)
+        );
+        assert_eq!(
+            json_path(&stored, &["transfer", "max_transfer_retries"])
+                .and_then(|value| value.as_u64()),
+            Some(3)
+        );
+        assert_eq!(
+            json_path(&stored, &["transfer", "transfer_buffer_size"])
+                .and_then(|value| value.as_u64()),
+            Some(128)
+        );
+        assert_eq!(
+            json_path(&stored, &["transfer", "default_file_permissions"])
+                .and_then(|value| value.as_str()),
+            Some("755")
+        );
+        assert_eq!(
+            json_path(&stored, &["transfer", "preserve_timestamps"])
+                .and_then(|value| value.as_bool()),
+            Some(true)
+        );
+        assert_eq!(
+            json_path(&stored, &["transfer", "resume_broken_transfer"])
+                .and_then(|value| value.as_bool()),
+            Some(true)
+        );
+        assert_eq!(
+            json_path(&stored, &["unrelated", "preserve"]).and_then(|value| value.as_bool()),
+            Some(true)
+        );
+
+        let mut favorite_update = summary.clone();
+        favorite_update.ui_file_explorer_auto_sync_cwd_connection_ids = vec![
+            "conn-3".to_string(),
+            "conn-3".to_string(),
+            " ".to_string(),
+            "conn-1".to_string(),
+        ];
+        favorite_update
+            .ui_file_explorer_favorite_dirs_by_connection_id
+            .insert(
+                "conn-2".to_string(),
+                vec![
+                    "/data".to_string(),
+                    "/data".to_string(),
+                    " ".to_string(),
+                    "/logs".to_string(),
+                ],
+            );
+        let updated = store
+            .save_file_explorer_favorite_dirs(&favorite_update)
+            .expect("save favorites");
+        assert_eq!(
+            updated.ui_file_explorer_auto_sync_cwd_connection_ids,
+            vec!["conn-3".to_string(), "conn-1".to_string()]
+        );
+        assert_eq!(
+            updated
+                .ui_file_explorer_favorite_dirs_by_connection_id
+                .get("conn-2"),
+            Some(&vec!["/data".to_string(), "/logs".to_string()])
+        );
+        let stored = store.load_settings_value().expect("stored favorites");
+        assert_eq!(
+            json_path(
+                &stored,
+                &["ui", "file_explorer_auto_sync_cwd_connection_ids"]
+            )
+            .and_then(|value| value.as_array())
+            .map(|values| values
+                .iter()
+                .filter_map(serde_json::Value::as_str)
+                .collect::<Vec<_>>()),
+            Some(vec!["conn-3", "conn-1"])
+        );
+        assert_eq!(
+            json_path(
+                &stored,
+                &[
+                    "ui",
+                    "file_explorer_favorite_dirs_by_connection_id",
+                    "conn-2"
+                ]
+            )
+            .and_then(|value| value.as_array())
+            .map(|values| values
+                .iter()
+                .filter_map(serde_json::Value::as_str)
+                .collect::<Vec<_>>()),
+            Some(vec!["/data", "/logs"])
+        );
+
+        let mut next_keybindings = summary.keybindings.clone();
+        next_keybindings.insert("view.openSettings".to_string(), "ctrl+.".to_string());
+        next_keybindings.insert("blank".to_string(), " ".to_string());
+        let updated = store
+            .save_keybindings(&next_keybindings)
+            .expect("save keybindings");
+        assert_eq!(
+            updated
+                .keybindings
+                .get("view.openSettings")
+                .map(String::as_str),
+            Some("ctrl+.")
+        );
+        assert!(!updated.keybindings.contains_key("blank"));
+
+        let mut terminal_update = updated.clone();
+        terminal_update.terminal_scrollback_lines = 12_000;
+        terminal_update.terminal_keep_alive_interval = 20;
+        terminal_update.terminal_show_multi_line_paste_dialog = true;
+        terminal_update.ui_show_remote_stats = true;
+        terminal_update.ui_remote_stats_interval = 4;
+        let saved_terminal = store
+            .save_terminal_settings(&terminal_update)
+            .expect("save terminal settings");
+        assert_eq!(saved_terminal.terminal_scrollback_lines, 12_000);
+        assert_eq!(saved_terminal.terminal_keep_alive_interval, 20);
+        assert!(saved_terminal.terminal_show_multi_line_paste_dialog);
+        assert!(saved_terminal.ui_show_remote_stats);
+        assert_eq!(saved_terminal.ui_remote_stats_interval, 4);
+        let stored = store
+            .load_settings_value()
+            .expect("stored terminal settings");
+        assert_eq!(
+            json_path(&stored, &["terminal", "scrollback_lines"]).and_then(|value| value.as_u64()),
+            Some(12_000)
+        );
+        assert_eq!(
+            json_path(&stored, &["ui", "remote_stats_interval"]).and_then(|value| value.as_u64()),
+            Some(4)
+        );
+
+        let mut quick_command_update = saved_terminal.clone();
+        quick_command_update.ui_quick_cmd_view_mode = "list".to_string();
+        quick_command_update.ui_quick_cmd_sort_mode = "name".to_string();
+        let saved_quick_command_ui = store
+            .save_quick_command_ui_settings(&quick_command_update)
+            .expect("save quick command ui settings");
+        assert_eq!(saved_quick_command_ui.ui_quick_cmd_view_mode, "list");
+        assert_eq!(saved_quick_command_ui.ui_quick_cmd_sort_mode, "name");
+        let stored = store
+            .load_settings_value()
+            .expect("stored quick command ui settings");
+        assert_eq!(
+            json_path(&stored, &["ui", "quick_cmd_view_mode"]).and_then(|value| value.as_str()),
+            Some("list")
+        );
+        assert_eq!(
+            json_path(&stored, &["ui", "quick_cmd_sort_mode"]).and_then(|value| value.as_str()),
+            Some("name")
+        );
+
+        let mut interaction_update = saved_quick_command_ui.clone();
+        interaction_update.interaction_right_click_paste = false;
+        interaction_update.interaction_command_suggestion_min_chars = 4;
+        interaction_update.interaction_command_suggestion_max_chars = 120;
+        interaction_update.interaction_duplicate_session_command_delay_ms = 2_500;
+        interaction_update.interaction_alt_as_meta = false;
+        interaction_update.interaction_tab_double_click_action = "reconnect_session".to_string();
+        interaction_update.interaction_default_encoding = "utf-8".to_string();
+        let saved_interaction = store
+            .save_interaction_settings(&interaction_update)
+            .expect("save interaction settings");
+        assert!(!saved_interaction.interaction_right_click_paste);
+        assert_eq!(
+            saved_interaction.interaction_command_suggestion_min_chars,
+            4
+        );
+        assert_eq!(
+            saved_interaction.interaction_command_suggestion_max_chars,
+            120
+        );
+        assert_eq!(
+            saved_interaction.interaction_duplicate_session_command_delay_ms,
+            2_500
+        );
+        assert!(!saved_interaction.interaction_alt_as_meta);
+        assert_eq!(
+            saved_interaction.interaction_tab_double_click_action,
+            "reconnect_session"
+        );
+        assert_eq!(saved_interaction.interaction_default_encoding, "UTF-8");
 
         let normalized = store.save_host_key_policy("wild").expect("normalize");
         assert_eq!(normalized.host_key_policy, "prompt");
@@ -4165,6 +5345,60 @@ mod tests {
             2 * 1024 * 1024
         );
 
+        let mut lock_update = saved_recording.clone();
+        lock_update.enable_screen_lock = false;
+        lock_update.idle_lock_minutes = 30;
+        let saved_lock = store
+            .save_screen_lock_settings(&lock_update)
+            .expect("save screen lock settings");
+        assert!(!saved_lock.enable_screen_lock);
+        assert_eq!(saved_lock.idle_lock_minutes, 30);
+        assert!(saved_lock.has_master_password);
+        let stored = store.load_settings_value().expect("stored settings");
+        assert_eq!(
+            json_path(&stored, &["security", "master_password"]).and_then(|value| value.as_str()),
+            Some("encrypted")
+        );
+
+        std::fs::remove_dir_all(dir).ok();
+    }
+
+    #[test]
+    fn verifies_encrypted_master_password_from_settings() {
+        let dir = unique_temp_dir("verify-master-password");
+        let store = ConnectionStore::open(&dir).expect("store");
+        let token = encrypt_for_test(b"swordfish", &home_wrapping_key());
+        store
+            .save_settings_value(&serde_json::json!({
+                "security": {
+                    "master_password": token
+                }
+            }))
+            .expect("seed settings");
+
+        assert!(
+            store
+                .verify_master_password("swordfish")
+                .expect("verify correct")
+        );
+        assert!(
+            !store
+                .verify_master_password("wrong")
+                .expect("verify incorrect")
+        );
+
+        std::fs::remove_dir_all(dir).ok();
+    }
+
+    #[test]
+    fn missing_master_password_verifies_without_prompt_secret() {
+        let dir = unique_temp_dir("verify-empty-master-password");
+        let store = ConnectionStore::open(&dir).expect("store");
+        assert!(
+            store
+                .verify_master_password("")
+                .expect("verify without master password")
+        );
         std::fs::remove_dir_all(dir).ok();
     }
 

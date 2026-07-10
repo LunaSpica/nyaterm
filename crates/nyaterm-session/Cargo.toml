@@ -8,6 +8,7 @@ repository.workspace = true
 
 [dependencies]
 anyhow.workspace = true
+async-http-proxy.workspace = true
 portable-pty.workspace = true
 regex.workspace = true
 russh.workspace = true
@@ -18,4 +19,5 @@ serde_json.workspace = true
 thiserror.workspace = true
 time.workspace = true
 tokio.workspace = true
+tokio-socks.workspace = true
 uuid.workspace = true

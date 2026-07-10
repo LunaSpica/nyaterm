@@ -1,0 +1,578 @@
+use super::*;
+
+impl NyaTermApp {
+    pub(in crate::ui::view) fn update_host_key_policy(
+        &mut self,
+        policy: &'static str,
+        cx: &mut Context<Self>,
+    ) {
+        match ConnectionStore::open_with_portable_key_path(
+            self.runtime.config_dir(),
+            self.runtime.portable_key_path().map(ToOwned::to_owned),
+        )
+        .and_then(|store| store.save_host_key_policy(policy))
+        {
+            Ok(settings) => {
+                self.settings = settings;
+                self.terminal_status = format!("host key policy set to {policy}");
+                self.store_status.message = "settings saved".to_string();
+                self.store_status.ready = true;
+            }
+            Err(error) => {
+                self.terminal_status = format!("failed to save host key policy: {error}");
+                self.store_status.message = format!("settings save failed: {error}");
+                self.store_status.ready = false;
+            }
+        }
+        cx.notify();
+    }
+
+    pub(in crate::ui::view) fn toggle_recording_auto_start(&mut self, cx: &mut Context<Self>) {
+        self.settings.recording_auto_start = !self.settings.recording_auto_start;
+        self.save_recording_settings(cx);
+    }
+
+    pub(in crate::ui::view) fn toggle_recording_io_labels(&mut self, cx: &mut Context<Self>) {
+        self.settings.recording_include_io_labels = !self.settings.recording_include_io_labels;
+        self.save_recording_settings(cx);
+    }
+
+    pub(in crate::ui::view) fn toggle_recording_timestamps(&mut self, cx: &mut Context<Self>) {
+        self.settings.recording_include_timestamps = !self.settings.recording_include_timestamps;
+        self.save_recording_settings(cx);
+    }
+
+    pub(in crate::ui::view) fn adjust_recording_memory_limit(
+        &mut self,
+        delta_mib: i64,
+        cx: &mut Context<Self>,
+    ) {
+        let current_mib = (self.settings.recording_memory_limit_bytes / (1024 * 1024)).max(1);
+        let next_mib = if delta_mib.is_negative() {
+            current_mib.saturating_sub(delta_mib.unsigned_abs()).max(1)
+        } else {
+            current_mib.saturating_add(delta_mib as u64).min(512)
+        };
+        self.settings.recording_memory_limit_bytes = next_mib * 1024 * 1024;
+        self.save_recording_settings(cx);
+    }
+
+    pub(in crate::ui::view) fn save_recording_settings(&mut self, cx: &mut Context<Self>) {
+        self.recording_manager
+            .set_memory_limit(self.settings.recording_memory_limit_bytes as usize);
+        match ConnectionStore::open_with_portable_key_path(
+            self.runtime.config_dir(),
+            self.runtime.portable_key_path().map(ToOwned::to_owned),
+        )
+        .and_then(|store| store.save_recording_settings(&self.settings))
+        {
+            Ok(settings) => {
+                self.settings = settings;
+                self.recording_manager
+                    .set_memory_limit(self.settings.recording_memory_limit_bytes as usize);
+                self.store_status.message = "recording settings saved".to_string();
+                self.store_status.ready = true;
+                self.terminal_status = "recording settings saved".to_string();
+            }
+            Err(error) => {
+                self.store_status.message = format!("recording settings save failed: {error}");
+                self.store_status.ready = false;
+                self.terminal_status = self.store_status.message.clone();
+            }
+        }
+        cx.notify();
+    }
+
+    pub(in crate::ui::view) fn update_transfer_duplicate_policy(
+        &mut self,
+        policy: SftpDuplicatePolicy,
+        cx: &mut Context<Self>,
+    ) {
+        self.transfer_duplicate_policy = policy;
+        self.settings.transfer_duplicate_strategy = duplicate_policy_label(policy).to_string();
+        self.save_transfer_settings("transfer duplicate policy saved", cx);
+    }
+
+    pub(in crate::ui::view) fn update_transfer_editor_type(
+        &mut self,
+        editor_type: &'static str,
+        cx: &mut Context<Self>,
+    ) {
+        self.settings.transfer_editor_type = editor_type.to_string();
+        self.save_transfer_settings("transfer editor preference saved", cx);
+    }
+
+    pub(in crate::ui::view) fn toggle_transfer_ask_save_location(
+        &mut self,
+        cx: &mut Context<Self>,
+    ) {
+        self.settings.transfer_ask_save_location = !self.settings.transfer_ask_save_location;
+        self.save_transfer_settings("transfer save-location preference saved", cx);
+    }
+
+    pub(in crate::ui::view) fn toggle_transfer_preserve_timestamps(
+        &mut self,
+        cx: &mut Context<Self>,
+    ) {
+        self.settings.transfer_preserve_timestamps = !self.settings.transfer_preserve_timestamps;
+        self.save_transfer_settings("transfer timestamp preference saved", cx);
+    }
+
+    pub(in crate::ui::view) fn toggle_transfer_resume_broken(&mut self, cx: &mut Context<Self>) {
+        self.settings.transfer_resume_broken_transfer =
+            !self.settings.transfer_resume_broken_transfer;
+        self.save_transfer_settings("transfer resume preference saved", cx);
+    }
+
+    pub(in crate::ui::view) fn adjust_transfer_download_threads(
+        &mut self,
+        delta: i32,
+        cx: &mut Context<Self>,
+    ) {
+        self.settings.transfer_download_threads =
+            adjust_u32_setting(self.settings.transfer_download_threads, delta, 1, 10);
+        self.save_transfer_settings("transfer download concurrency saved", cx);
+    }
+
+    pub(in crate::ui::view) fn adjust_transfer_upload_threads(
+        &mut self,
+        delta: i32,
+        cx: &mut Context<Self>,
+    ) {
+        self.settings.transfer_upload_threads =
+            adjust_u32_setting(self.settings.transfer_upload_threads, delta, 1, 10);
+        self.save_transfer_settings("transfer upload concurrency saved", cx);
+    }
+
+    pub(in crate::ui::view) fn adjust_transfer_max_retries(
+        &mut self,
+        delta: i32,
+        cx: &mut Context<Self>,
+    ) {
+        self.settings.transfer_max_retries =
+            adjust_u32_setting(self.settings.transfer_max_retries, delta, 0, 10);
+        self.save_transfer_settings("transfer retry setting saved", cx);
+    }
+
+    pub(in crate::ui::view) fn adjust_transfer_buffer_size(
+        &mut self,
+        delta: i32,
+        cx: &mut Context<Self>,
+    ) {
+        let step_delta = delta.saturating_mul(8);
+        self.settings.transfer_buffer_size =
+            adjust_u32_setting(self.settings.transfer_buffer_size, step_delta, 8, 256);
+        self.save_transfer_settings("transfer buffer setting saved", cx);
+    }
+
+    pub(in crate::ui::view) fn update_transfer_file_permissions(
+        &mut self,
+        permissions: &'static str,
+        cx: &mut Context<Self>,
+    ) {
+        self.settings.transfer_default_file_permissions = permissions.to_string();
+        self.save_transfer_settings("transfer default permissions saved", cx);
+    }
+
+    pub(in crate::ui::view) fn save_transfer_settings(
+        &mut self,
+        success_status: &'static str,
+        cx: &mut Context<Self>,
+    ) {
+        match ConnectionStore::open_with_portable_key_path(
+            self.runtime.config_dir(),
+            self.runtime.portable_key_path().map(ToOwned::to_owned),
+        )
+        .and_then(|store| store.save_transfer_settings(&self.settings))
+        {
+            Ok(settings) => {
+                self.settings = settings;
+                self.transfer_duplicate_policy = SftpDuplicatePolicy::from_legacy_value(
+                    &self.settings.transfer_duplicate_strategy,
+                );
+                self.store_status.message = "transfer settings saved".to_string();
+                self.store_status.ready = true;
+                self.terminal_status = success_status.to_string();
+            }
+            Err(error) => {
+                self.store_status.message = format!("transfer settings save failed: {error}");
+                self.store_status.ready = false;
+                self.terminal_status = self.store_status.message.clone();
+            }
+        }
+        cx.notify();
+    }
+
+    pub(in crate::ui::view) fn handle_transfer_default_editor_key_down(
+        &mut self,
+        event: &KeyDownEvent,
+        cx: &mut Context<Self>,
+    ) {
+        self.mark_user_activity();
+        let keystroke = &event.keystroke;
+        if keystroke.modifiers.platform || keystroke.modifiers.alt || keystroke.modifiers.control {
+            return;
+        }
+
+        match keystroke.key.as_str() {
+            "backspace" => {
+                self.settings.transfer_default_editor.pop();
+                self.terminal_status = "transfer editor command edited".to_string();
+                cx.notify();
+            }
+            "enter" => {
+                self.save_transfer_settings("transfer editor command saved", cx);
+            }
+            "escape" => {
+                self.terminal_status = "transfer editor command input blurred".to_string();
+                cx.notify();
+            }
+            _ => {
+                if let Some(input) = keystroke
+                    .key_char
+                    .as_deref()
+                    .filter(|input| !input.is_empty())
+                {
+                    self.settings.transfer_default_editor.push_str(input);
+                    self.terminal_status = "transfer editor command edited".to_string();
+                    cx.notify();
+                }
+            }
+        }
+    }
+
+    pub(in crate::ui::view) fn update_x11_display(
+        &mut self,
+        value: &'static str,
+        cx: &mut Context<Self>,
+    ) {
+        self.settings.x11_display = value.to_string();
+        self.save_terminal_settings(cx);
+    }
+
+    pub(in crate::ui::view) fn adjust_terminal_scrollback_lines(
+        &mut self,
+        delta: i32,
+        cx: &mut Context<Self>,
+    ) {
+        let next = (self.settings.terminal_scrollback_lines as i32 + delta).clamp(100, 100_000);
+        self.settings.terminal_scrollback_lines = next as u32;
+        self.enforce_terminal_scrollback_limit();
+        self.save_terminal_settings(cx);
+    }
+
+    pub(in crate::ui::view) fn adjust_terminal_keep_alive_interval(
+        &mut self,
+        delta: i32,
+        cx: &mut Context<Self>,
+    ) {
+        let next = (self.settings.terminal_keep_alive_interval as i32 + delta).clamp(0, 600);
+        self.settings.terminal_keep_alive_interval = next as u32;
+        self.save_terminal_settings(cx);
+    }
+
+    pub(in crate::ui::view) fn toggle_terminal_hardware_acceleration(
+        &mut self,
+        cx: &mut Context<Self>,
+    ) {
+        self.settings.terminal_hardware_acceleration =
+            !self.settings.terminal_hardware_acceleration;
+        self.save_terminal_settings(cx);
+    }
+
+    pub(in crate::ui::view) fn toggle_terminal_workspace_padding(
+        &mut self,
+        cx: &mut Context<Self>,
+    ) {
+        self.settings.terminal_show_workspace_padding =
+            !self.settings.terminal_show_workspace_padding;
+        self.save_terminal_settings(cx);
+    }
+
+    pub(in crate::ui::view) fn toggle_terminal_line_numbers(&mut self, cx: &mut Context<Self>) {
+        self.settings.terminal_show_line_numbers = !self.settings.terminal_show_line_numbers;
+        self.save_terminal_settings(cx);
+    }
+
+    pub(in crate::ui::view) fn toggle_terminal_timestamps(&mut self, cx: &mut Context<Self>) {
+        self.settings.terminal_show_timestamps = !self.settings.terminal_show_timestamps;
+        self.save_terminal_settings(cx);
+    }
+
+    pub(in crate::ui::view) fn toggle_terminal_timestamp_milliseconds(
+        &mut self,
+        cx: &mut Context<Self>,
+    ) {
+        self.settings.terminal_show_timestamp_milliseconds =
+            !self.settings.terminal_show_timestamp_milliseconds;
+        self.save_terminal_settings(cx);
+    }
+
+    pub(in crate::ui::view) fn toggle_multi_line_paste_dialog(&mut self, cx: &mut Context<Self>) {
+        self.settings.terminal_show_multi_line_paste_dialog =
+            !self.settings.terminal_show_multi_line_paste_dialog;
+        self.save_terminal_settings(cx);
+    }
+
+    pub(in crate::ui::view) fn toggle_paste_image_as_path(&mut self, cx: &mut Context<Self>) {
+        self.settings.terminal_paste_image_as_path = !self.settings.terminal_paste_image_as_path;
+        self.save_terminal_settings(cx);
+    }
+
+    pub(in crate::ui::view) fn toggle_remote_stats_panel(&mut self, cx: &mut Context<Self>) {
+        self.settings.ui_show_remote_stats = !self.settings.ui_show_remote_stats;
+        self.save_terminal_settings(cx);
+    }
+
+    pub(in crate::ui::view) fn adjust_remote_stats_interval(
+        &mut self,
+        delta: i32,
+        cx: &mut Context<Self>,
+    ) {
+        let next = (self.settings.ui_remote_stats_interval as i32 + delta).clamp(1, 60);
+        self.settings.ui_remote_stats_interval = next as u32;
+        self.save_terminal_settings(cx);
+    }
+
+    pub(in crate::ui::view) fn toggle_process_manager_panel(&mut self, cx: &mut Context<Self>) {
+        self.settings.ui_show_process_manager = !self.settings.ui_show_process_manager;
+        self.save_terminal_settings(cx);
+    }
+
+    pub(in crate::ui::view) fn adjust_process_manager_interval(
+        &mut self,
+        delta: i32,
+        cx: &mut Context<Self>,
+    ) {
+        let next = (self.settings.ui_process_manager_interval as i32 + delta).clamp(3, 120);
+        self.settings.ui_process_manager_interval = next as u32;
+        self.save_terminal_settings(cx);
+    }
+
+    pub(in crate::ui::view) fn toggle_docker_manager_panel(&mut self, cx: &mut Context<Self>) {
+        self.settings.ui_show_docker_manager = !self.settings.ui_show_docker_manager;
+        self.save_terminal_settings(cx);
+    }
+
+    pub(in crate::ui::view) fn adjust_docker_manager_interval(
+        &mut self,
+        delta: i32,
+        cx: &mut Context<Self>,
+    ) {
+        let next = (self.settings.ui_docker_manager_interval as i32 + delta).clamp(3, 120);
+        self.settings.ui_docker_manager_interval = next as u32;
+        self.save_terminal_settings(cx);
+    }
+
+    pub(in crate::ui::view) fn save_terminal_settings(&mut self, cx: &mut Context<Self>) {
+        match ConnectionStore::open_with_portable_key_path(
+            self.runtime.config_dir(),
+            self.runtime.portable_key_path().map(ToOwned::to_owned),
+        )
+        .and_then(|store| store.save_terminal_settings(&self.settings))
+        {
+            Ok(settings) => {
+                self.settings = settings;
+                self.enforce_terminal_scrollback_limit();
+                self.store_status.message = "terminal settings saved".to_string();
+                self.store_status.ready = true;
+                self.terminal_status = "terminal settings saved".to_string();
+            }
+            Err(error) => {
+                self.store_status.message = format!("terminal settings save failed: {error}");
+                self.store_status.ready = false;
+                self.terminal_status = self.store_status.message.clone();
+            }
+        }
+        cx.notify();
+    }
+
+    pub(in crate::ui::view) fn toggle_startup_restore(&mut self, cx: &mut Context<Self>) {
+        self.settings.startup_restore = !self.settings.startup_restore;
+        self.save_general_settings(cx);
+    }
+
+    pub(in crate::ui::view) fn toggle_confirm_on_close(&mut self, cx: &mut Context<Self>) {
+        self.settings.confirm_on_close = !self.settings.confirm_on_close;
+        self.save_general_settings(cx);
+    }
+
+    pub(in crate::ui::view) fn save_general_settings(&mut self, cx: &mut Context<Self>) {
+        match ConnectionStore::open_with_portable_key_path(
+            self.runtime.config_dir(),
+            self.runtime.portable_key_path().map(ToOwned::to_owned),
+        )
+        .and_then(|store| store.save_general_settings(&self.settings))
+        {
+            Ok(settings) => {
+                self.settings = settings;
+                self.store_status.message = "general settings saved".to_string();
+                self.store_status.ready = true;
+                self.terminal_status = "general settings saved".to_string();
+            }
+            Err(error) => {
+                self.store_status.message = format!("general settings save failed: {error}");
+                self.store_status.ready = false;
+                self.terminal_status = self.store_status.message.clone();
+            }
+        }
+        cx.notify();
+    }
+
+    pub(in crate::ui::view) fn toggle_interaction_copy_on_select(
+        &mut self,
+        cx: &mut Context<Self>,
+    ) {
+        self.settings.interaction_copy_on_select = !self.settings.interaction_copy_on_select;
+        self.save_interaction_settings(cx);
+    }
+
+    pub(in crate::ui::view) fn toggle_interaction_right_click_paste(
+        &mut self,
+        cx: &mut Context<Self>,
+    ) {
+        self.settings.interaction_right_click_paste = !self.settings.interaction_right_click_paste;
+        self.save_interaction_settings(cx);
+    }
+
+    pub(in crate::ui::view) fn toggle_command_suggestions(&mut self, cx: &mut Context<Self>) {
+        self.settings.interaction_command_suggestions_enabled =
+            !self.settings.interaction_command_suggestions_enabled;
+        self.save_interaction_settings(cx);
+    }
+
+    pub(in crate::ui::view) fn adjust_command_suggestion_min_chars(
+        &mut self,
+        delta: i32,
+        cx: &mut Context<Self>,
+    ) {
+        let max_chars = self.settings.interaction_command_suggestion_max_chars;
+        let next = (self.settings.interaction_command_suggestion_min_chars as i32 + delta)
+            .clamp(1, max_chars as i32) as u32;
+        self.settings.interaction_command_suggestion_min_chars = next;
+        self.save_interaction_settings(cx);
+    }
+
+    pub(in crate::ui::view) fn adjust_command_suggestion_max_chars(
+        &mut self,
+        delta: i32,
+        cx: &mut Context<Self>,
+    ) {
+        let min_chars = self.settings.interaction_command_suggestion_min_chars;
+        let next = (self.settings.interaction_command_suggestion_max_chars as i32 + delta)
+            .clamp(min_chars as i32, 500) as u32;
+        self.settings.interaction_command_suggestion_max_chars = next;
+        self.save_interaction_settings(cx);
+    }
+
+    pub(in crate::ui::view) fn adjust_duplicate_session_command_delay(
+        &mut self,
+        delta_ms: i32,
+        cx: &mut Context<Self>,
+    ) {
+        let next = (self.settings.interaction_duplicate_session_command_delay_ms as i32 + delta_ms)
+            .clamp(0, 60_000) as u32;
+        self.settings.interaction_duplicate_session_command_delay_ms = next;
+        self.save_interaction_settings(cx);
+    }
+
+    pub(in crate::ui::view) fn toggle_alt_as_meta(&mut self, cx: &mut Context<Self>) {
+        self.settings.interaction_alt_as_meta = !self.settings.interaction_alt_as_meta;
+        self.save_interaction_settings(cx);
+    }
+
+    pub(in crate::ui::view) fn toggle_mac_ime_compatibility(&mut self, cx: &mut Context<Self>) {
+        self.settings.interaction_mac_ime_compatibility =
+            !self.settings.interaction_mac_ime_compatibility;
+        self.save_interaction_settings(cx);
+    }
+
+    pub(in crate::ui::view) fn set_interaction_encoding(
+        &mut self,
+        encoding: &'static str,
+        cx: &mut Context<Self>,
+    ) {
+        self.settings.interaction_default_encoding = encoding.to_string();
+        self.save_interaction_settings(cx);
+    }
+
+    pub(in crate::ui::view) fn set_interaction_word_separators(
+        &mut self,
+        value: &'static str,
+        cx: &mut Context<Self>,
+    ) {
+        self.settings.interaction_word_separators = value.to_string();
+        self.save_interaction_settings(cx);
+    }
+
+    pub(in crate::ui::view) fn save_interaction_settings(&mut self, cx: &mut Context<Self>) {
+        match ConnectionStore::open_with_portable_key_path(
+            self.runtime.config_dir(),
+            self.runtime.portable_key_path().map(ToOwned::to_owned),
+        )
+        .and_then(|store| store.save_interaction_settings(&self.settings))
+        {
+            Ok(settings) => {
+                self.settings = settings;
+                self.store_status.message = "interaction settings saved".to_string();
+                self.store_status.ready = true;
+                self.terminal_status = "interaction settings saved".to_string();
+            }
+            Err(error) => {
+                self.store_status.message = format!("interaction settings save failed: {error}");
+                self.store_status.ready = false;
+                self.terminal_status = self.store_status.message.clone();
+            }
+        }
+        cx.notify();
+    }
+
+    pub(in crate::ui::view) fn toggle_screen_lock_enabled(&mut self, cx: &mut Context<Self>) {
+        self.settings.enable_screen_lock = !self.settings.enable_screen_lock;
+        self.last_user_activity_at = Instant::now();
+        self.save_screen_lock_settings(cx);
+    }
+
+    pub(in crate::ui::view) fn adjust_idle_lock_minutes(
+        &mut self,
+        delta: i32,
+        cx: &mut Context<Self>,
+    ) {
+        let current = self.settings.idle_lock_minutes as i32;
+        let next = (current + delta).clamp(0, 1440);
+        self.settings.idle_lock_minutes = next as u32;
+        self.last_user_activity_at = Instant::now();
+        self.save_screen_lock_settings(cx);
+    }
+
+    pub(in crate::ui::view) fn save_screen_lock_settings(&mut self, cx: &mut Context<Self>) {
+        match ConnectionStore::open_with_portable_key_path(
+            self.runtime.config_dir(),
+            self.runtime.portable_key_path().map(ToOwned::to_owned),
+        )
+        .and_then(|store| store.save_screen_lock_settings(&self.settings))
+        {
+            Ok(settings) => {
+                self.settings = settings;
+                self.store_status.message = "screen lock settings saved".to_string();
+                self.store_status.ready = true;
+                self.terminal_status = "screen lock settings saved".to_string();
+            }
+            Err(error) => {
+                self.store_status.message = format!("screen lock settings save failed: {error}");
+                self.store_status.ready = false;
+                self.terminal_status = self.store_status.message.clone();
+            }
+        }
+        cx.notify();
+    }
+}
+
+fn adjust_u32_setting(current: u32, delta: i32, min: u32, max: u32) -> u32 {
+    let next = if delta.is_negative() {
+        current.saturating_sub(delta.unsigned_abs())
+    } else {
+        current.saturating_add(delta as u32)
+    };
+    next.clamp(min, max)
+}

@@ -1,0 +1,211 @@
+use gpui::{FontWeight, IntoElement, div, prelude::*, px, rgb};
+use nyaterm_session::SessionKind;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum SendCommandDataType {
+    Text,
+    Hex,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum SendCommandMode {
+    Line,
+    Character,
+    Packet,
+    Byte,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum SendCommandLineEnding {
+    None,
+    Cr,
+    Lf,
+    Crlf,
+}
+
+impl SendCommandLineEnding {
+    fn as_str(self) -> &'static str {
+        match self {
+            SendCommandLineEnding::None => "",
+            SendCommandLineEnding::Cr => "\r",
+            SendCommandLineEnding::Lf => "\n",
+            SendCommandLineEnding::Crlf => "\r\n",
+        }
+    }
+}
+
+fn normalize_send_command_text(value: &str) -> String {
+    value.replace("\r\n", "\n").replace('\r', "\n")
+}
+
+pub(super) fn parse_send_command_hex(value: &str) -> Result<Vec<u8>, String> {
+    let cleaned: String = value.chars().filter(|ch| !ch.is_whitespace()).collect();
+    if cleaned.is_empty() {
+        return Ok(Vec::new());
+    }
+    if cleaned.len() % 2 != 0 {
+        return Err("invalid hex input: odd number of digits".to_string());
+    }
+    if !cleaned.chars().all(|ch| ch.is_ascii_hexdigit()) {
+        return Err("invalid hex input: use 0-9 and A-F".to_string());
+    }
+
+    let mut bytes = Vec::with_capacity(cleaned.len() / 2);
+    for index in (0..cleaned.len()).step_by(2) {
+        let byte = u8::from_str_radix(&cleaned[index..index + 2], 16)
+            .map_err(|error| format!("invalid hex input: {error}"))?;
+        bytes.push(byte);
+    }
+    Ok(bytes)
+}
+
+pub(super) fn build_send_command_units_for(
+    draft: &str,
+    data_type: SendCommandDataType,
+    mode: SendCommandMode,
+    line_ending: SendCommandLineEnding,
+    session_kind: Option<SessionKind>,
+) -> Result<Vec<Vec<u8>>, String> {
+    match data_type {
+        SendCommandDataType::Hex => {
+            let bytes = parse_send_command_hex(draft)?;
+            if bytes.is_empty() {
+                return Ok(Vec::new());
+            }
+            if mode == SendCommandMode::Byte {
+                Ok(bytes.into_iter().map(|byte| vec![byte]).collect())
+            } else {
+                Ok(vec![bytes])
+            }
+        }
+        SendCommandDataType::Text => {
+            let shell_target = matches!(
+                session_kind,
+                Some(SessionKind::LocalPty | SessionKind::Ssh | SessionKind::Telnet) | None
+            );
+            let normalized = normalize_send_command_text(draft);
+            if mode == SendCommandMode::Character {
+                return Ok(normalized
+                    .chars()
+                    .map(|ch| {
+                        if shell_target && ch == '\n' {
+                            b"\r".to_vec()
+                        } else {
+                            ch.to_string().into_bytes()
+                        }
+                    })
+                    .collect());
+            }
+
+            let line_ending = if shell_target {
+                "\r"
+            } else {
+                line_ending.as_str()
+            };
+            Ok(normalized
+                .split('\n')
+                .map(|line| format!("{line}{line_ending}").into_bytes())
+                .collect())
+        }
+    }
+}
+
+pub(super) fn bottom_send_field(label: &'static str, value: impl Into<String>) -> impl IntoElement {
+    let value = value.into();
+    div()
+        .h(px(32.))
+        .min_w(px(112.))
+        .flex_1()
+        .flex()
+        .items_center()
+        .overflow_hidden()
+        .rounded_sm()
+        .border_1()
+        .border_color(rgb(0x303848))
+        .bg(rgb(0x0d1320))
+        .child(
+            div()
+                .flex_none()
+                .px_2()
+                .text_xs()
+                .text_color(rgb(0x8f98aa))
+                .child(label),
+        )
+        .child(
+            div()
+                .min_w_0()
+                .flex_1()
+                .border_l_1()
+                .border_color(rgb(0x202633))
+                .px_2()
+                .text_xs()
+                .font_weight(FontWeight(700.))
+                .text_color(rgb(0xdbeafe))
+                .overflow_hidden()
+                .child(value),
+        )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parses_hex_send_input_with_spacing() {
+        assert_eq!(
+            parse_send_command_hex("48 65 6c 6C 6F").unwrap(),
+            b"Hello".to_vec()
+        );
+        assert!(parse_send_command_hex("48 6").is_err());
+        assert!(parse_send_command_hex("48 ZZ").is_err());
+    }
+
+    #[test]
+    fn builds_shell_line_units_with_terminal_submit_return() {
+        let units = build_send_command_units_for(
+            "pwd\nwhoami",
+            SendCommandDataType::Text,
+            SendCommandMode::Line,
+            SendCommandLineEnding::Crlf,
+            Some(SessionKind::Ssh),
+        )
+        .unwrap();
+        assert_eq!(units, vec![b"pwd\r".to_vec(), b"whoami\r".to_vec()]);
+    }
+
+    #[test]
+    fn builds_serial_line_units_with_configured_line_ending() {
+        let units = build_send_command_units_for(
+            "AT\nATI",
+            SendCommandDataType::Text,
+            SendCommandMode::Line,
+            SendCommandLineEnding::Crlf,
+            Some(SessionKind::Serial),
+        )
+        .unwrap();
+        assert_eq!(units, vec![b"AT\r\n".to_vec(), b"ATI\r\n".to_vec()]);
+    }
+
+    #[test]
+    fn builds_character_and_hex_byte_units() {
+        let text_units = build_send_command_units_for(
+            "a\n",
+            SendCommandDataType::Text,
+            SendCommandMode::Character,
+            SendCommandLineEnding::Lf,
+            Some(SessionKind::LocalPty),
+        )
+        .unwrap();
+        assert_eq!(text_units, vec![b"a".to_vec(), b"\r".to_vec()]);
+
+        let hex_units = build_send_command_units_for(
+            "0A FF",
+            SendCommandDataType::Hex,
+            SendCommandMode::Byte,
+            SendCommandLineEnding::None,
+            Some(SessionKind::Serial),
+        )
+        .unwrap();
+        assert_eq!(hex_units, vec![vec![0x0a], vec![0xff]]);
+    }
+}

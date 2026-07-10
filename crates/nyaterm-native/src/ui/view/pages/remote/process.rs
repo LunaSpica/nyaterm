@@ -1,0 +1,648 @@
+use super::*;
+
+pub(super) fn process_matches(process: &RemoteProcess, normalized_query: &str) -> bool {
+    if normalized_query.is_empty() {
+        return true;
+    }
+    format!(
+        "{} {} {} {} {} {}",
+        process.pid,
+        process.ppid,
+        process.user,
+        process.state,
+        process.command,
+        process.command_line
+    )
+    .to_ascii_lowercase()
+    .contains(normalized_query)
+}
+
+pub(super) fn sort_processes(
+    processes: &mut [RemoteProcess],
+    key: RemoteProcessSortKey,
+    direction: RemoteProcessSortDirection,
+) {
+    processes.sort_by(|left, right| {
+        let ordering = match key {
+            RemoteProcessSortKey::Command => left
+                .command
+                .cmp(&right.command)
+                .then_with(|| left.pid.cmp(&right.pid)),
+            RemoteProcessSortKey::Memory => left
+                .memory_percent
+                .partial_cmp(&right.memory_percent)
+                .unwrap_or(std::cmp::Ordering::Equal)
+                .then_with(|| {
+                    left.rss_kb
+                        .partial_cmp(&right.rss_kb)
+                        .unwrap_or(std::cmp::Ordering::Equal)
+                })
+                .then_with(|| left.pid.cmp(&right.pid)),
+            RemoteProcessSortKey::Pid => left.pid.cmp(&right.pid),
+            RemoteProcessSortKey::User => left
+                .user
+                .cmp(&right.user)
+                .then_with(|| left.pid.cmp(&right.pid)),
+            RemoteProcessSortKey::Cpu => left
+                .cpu_percent
+                .partial_cmp(&right.cpu_percent)
+                .unwrap_or(std::cmp::Ordering::Equal)
+                .then_with(|| {
+                    left.memory_percent
+                        .partial_cmp(&right.memory_percent)
+                        .unwrap_or(std::cmp::Ordering::Equal)
+                })
+                .then_with(|| left.pid.cmp(&right.pid)),
+        };
+
+        match direction {
+            RemoteProcessSortDirection::Ascending => ordering,
+            RemoteProcessSortDirection::Descending => ordering.reverse(),
+        }
+    });
+}
+
+pub(super) fn top_process_ratio(processes: &[RemoteProcess], cpu: bool) -> f64 {
+    processes
+        .iter()
+        .map(|process| {
+            if cpu {
+                process.cpu_percent
+            } else {
+                process.memory_percent
+            }
+        })
+        .fold(0.0, f64::max)
+        / 100.
+}
+
+pub(super) fn process_summary_card(
+    title: &'static str,
+    value: String,
+    ratio: f64,
+) -> impl IntoElement {
+    let ratio = ratio.clamp(0., 1.);
+    div()
+        .rounded_md()
+        .border_1()
+        .border_color(rgb(0x2a3140))
+        .bg(rgb(0x151923))
+        .p_3()
+        .flex()
+        .flex_col()
+        .gap_2()
+        .child(
+            div()
+                .text_xs()
+                .font_weight(FontWeight(800.))
+                .text_color(rgb(0x8f98aa))
+                .child(title),
+        )
+        .child(
+            div()
+                .text_sm()
+                .font_weight(FontWeight(800.))
+                .text_color(usage_color(ratio))
+                .child(value),
+        )
+        .child(stats_progress_bar(ratio))
+}
+
+pub(super) fn process_sort_button(
+    id: impl Into<String>,
+    label: &'static str,
+    active: bool,
+    direction: RemoteProcessSortDirection,
+    on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
+) -> impl IntoElement {
+    div()
+        .id(gpui::SharedString::from(id.into()))
+        .h(px(28.))
+        .px_3()
+        .flex()
+        .items_center()
+        .rounded_sm()
+        .border_1()
+        .border_color(if active { rgb(0x38bdf8) } else { rgb(0x303848) })
+        .bg(if active { rgb(0x102a3d) } else { rgb(0x0d1320) })
+        .text_color(if active { rgb(0x7dd3fc) } else { rgb(0x98a3b8) })
+        .text_xs()
+        .cursor_pointer()
+        .hover(|this| this.bg(rgb(0x18202b)))
+        .child(if active {
+            format!("{label} {}", direction.marker())
+        } else {
+            label.to_string()
+        })
+        .on_click(on_click)
+}
+
+pub(super) fn process_table_header() -> impl IntoElement {
+    div()
+        .grid()
+        .grid_cols(6)
+        .gap_2()
+        .rounded_sm()
+        .border_1()
+        .border_color(rgb(0x253044))
+        .bg(rgb(0x0d1320))
+        .px_3()
+        .py_2()
+        .text_xs()
+        .font_weight(FontWeight(800.))
+        .text_color(rgb(0x8f98aa))
+        .child("Command")
+        .child("PID")
+        .child("CPU")
+        .child("Memory")
+        .child("User")
+        .child("Actions")
+}
+
+pub(super) fn process_table_row(
+    process: &RemoteProcess,
+    selected: bool,
+    on_select: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
+    on_copy_pid: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
+    on_copy_command: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
+    on_term: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
+    on_kill: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
+) -> gpui::Div {
+    div()
+        .border_b_1()
+        .border_color(rgb(0x253044))
+        .bg(if selected {
+            rgb(0x102a3d)
+        } else {
+            rgb(0x151923)
+        })
+        .hover(|this| this.bg(rgb(0x1c2230)))
+        .child(
+            div()
+                .grid()
+                .id(gpui::SharedString::from(format!(
+                    "process-row-{}",
+                    process.pid
+                )))
+                .grid_cols(6)
+                .gap_2()
+                .px_3()
+                .py_2()
+                .items_center()
+                .cursor_pointer()
+                .on_click(on_select)
+                .child(
+                    div()
+                        .min_w_0()
+                        .flex()
+                        .flex_col()
+                        .gap_1()
+                        .child(
+                            div()
+                                .text_sm()
+                                .font_weight(FontWeight(800.))
+                                .text_color(rgb(0xe5edf7))
+                                .child(truncate_preview(&process.command, 42)),
+                        )
+                        .child(
+                            div()
+                                .font_family("JetBrains Mono")
+                                .text_xs()
+                                .text_color(rgb(0x98a3b8))
+                                .child(truncate_preview(&process.command_line, 76)),
+                        ),
+                )
+                .child(process_table_cell(process.pid.to_string(), None))
+                .child(process_table_cell(
+                    format!("{:.1}%", process.cpu_percent),
+                    Some(usage_color(process.cpu_percent / 100.)),
+                ))
+                .child(process_table_cell(
+                    format!("{:.1}%", process.memory_percent),
+                    Some(usage_color(process.memory_percent / 100.)),
+                ))
+                .child(process_table_cell(
+                    truncate_preview(&process.user, 18),
+                    None,
+                ))
+                .child(
+                    div()
+                        .flex()
+                        .items_center()
+                        .gap_1()
+                        .child(icon_action_button(
+                            format!("process-copy-pid-{}", process.pid),
+                            "Copy PID",
+                            on_copy_pid,
+                        ))
+                        .child(icon_action_button(
+                            format!("process-copy-command-{}", process.pid),
+                            "Copy CMD",
+                            on_copy_command,
+                        ))
+                        .child(icon_action_button(
+                            format!("process-term-{}", process.pid),
+                            "TERM",
+                            on_term,
+                        ))
+                        .child(icon_action_button(
+                            format!("process-kill-{}", process.pid),
+                            "KILL",
+                            on_kill,
+                        )),
+                ),
+        )
+}
+
+pub(super) fn process_table_cell(value: String, color: Option<gpui::Hsla>) -> impl IntoElement {
+    div()
+        .min_w_0()
+        .font_family("JetBrains Mono")
+        .text_xs()
+        .text_color(color.unwrap_or_else(|| rgb(0xcbd5e1).into()))
+        .child(value)
+}
+
+pub(super) fn icon_action_button(
+    id: impl Into<String>,
+    label: &'static str,
+    on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
+) -> impl IntoElement {
+    div()
+        .id(gpui::SharedString::from(id.into()))
+        .h(px(24.))
+        .px_2()
+        .flex()
+        .items_center()
+        .rounded_sm()
+        .border_1()
+        .border_color(rgb(0x303848))
+        .bg(rgb(0x0d1320))
+        .text_color(rgb(0xdbeafe))
+        .text_xs()
+        .cursor_pointer()
+        .hover(|this| this.bg(rgb(0x223047)))
+        .child(label)
+        .on_click(on_click)
+}
+
+pub(super) fn process_details(
+    process: &RemoteProcess,
+    nice_draft: String,
+    nice_focus: &gpui::FocusHandle,
+    cx: &mut Context<NyaTermApp>,
+) -> gpui::AnyElement {
+    let command = if process.command_line.trim().is_empty() {
+        process.command.clone()
+    } else {
+        process.command_line.clone()
+    };
+    let pid = process.pid;
+    div()
+        .mx_3()
+        .mb_3()
+        .rounded_sm()
+        .border_1()
+        .border_color(rgb(0x2a3140))
+        .bg(rgb(0x0d1320))
+        .p_3()
+        .flex()
+        .flex_col()
+        .gap_3()
+        .child(
+            div()
+                .font_family("JetBrains Mono")
+                .text_xs()
+                .line_height(px(18.))
+                .text_color(rgb(0xcbd5e1))
+                .child(truncate_preview(&command, 180)),
+        )
+        .child(
+            div()
+                .grid()
+                .grid_cols(6)
+                .gap_2()
+                .child(process_detail_chip("PPID", process.ppid.to_string()))
+                .child(process_detail_chip(
+                    "RSS",
+                    format_file_size(Some(process.rss_kb.saturating_mul(1024))),
+                ))
+                .child(process_detail_chip("State", process.state.clone()))
+                .child(process_detail_chip("User", process.user.clone()))
+                .child(process_detail_chip("PID", process.pid.to_string()))
+                .child(process_detail_chip("Elapsed", process.elapsed.clone())),
+        )
+        .child(
+            div()
+                .flex()
+                .items_center()
+                .gap_2()
+                .flex_wrap()
+                .child(
+                    div()
+                        .flex()
+                        .items_center()
+                        .gap_2()
+                        .child(
+                            transfer_input("process-nice-input", "Nice", nice_draft, true)
+                                .w(px(116.))
+                                .track_focus(nice_focus)
+                                .on_click(cx.listener(|this, _, window, cx| {
+                                    window.focus(&this.process_nice_focus);
+                                    cx.notify();
+                                }))
+                                .on_key_down(cx.listener(
+                                    |this, event: &KeyDownEvent, window, cx| {
+                                        cx.stop_propagation();
+                                        this.handle_process_nice_key_down(event, window, cx);
+                                    },
+                                )),
+                        )
+                        .child(small_button(
+                            format!("process-nice-apply-{pid}"),
+                            "Apply",
+                            cx.listener(move |this, _, window, cx| {
+                                this.apply_process_nice_draft(window, cx);
+                            }),
+                        )),
+                )
+                .child(small_button(
+                    format!("process-nice-low-{pid}"),
+                    "Nice -5",
+                    cx.listener(move |this, _, window, cx| {
+                        this.renice_process(pid, -5, window, cx);
+                    }),
+                ))
+                .child(small_button(
+                    format!("process-nice-zero-{pid}"),
+                    "Nice 0",
+                    cx.listener(move |this, _, window, cx| {
+                        this.renice_process(pid, 0, window, cx);
+                    }),
+                ))
+                .child(small_button(
+                    format!("process-nice-high-{pid}"),
+                    "Nice +5",
+                    cx.listener(move |this, _, window, cx| {
+                        this.renice_process(pid, 5, window, cx);
+                    }),
+                )),
+        )
+        .child(
+            div()
+                .flex()
+                .items_center()
+                .gap_2()
+                .flex_wrap()
+                .child(
+                    div()
+                        .text_xs()
+                        .font_weight(FontWeight(800.))
+                        .text_color(rgb(0x8f98aa))
+                        .child("Signals"),
+                )
+                .child(small_button(
+                    format!("process-signal-term-{pid}"),
+                    "TERM",
+                    cx.listener(move |this, _, window, cx| {
+                        this.request_process_signal(pid, "TERM", window, cx);
+                    }),
+                ))
+                .child(small_button(
+                    format!("process-signal-hup-{pid}"),
+                    "HUP",
+                    cx.listener(move |this, _, window, cx| {
+                        this.request_process_signal(pid, "HUP", window, cx);
+                    }),
+                ))
+                .child(small_button(
+                    format!("process-signal-stop-{pid}"),
+                    "STOP",
+                    cx.listener(move |this, _, window, cx| {
+                        this.request_process_signal(pid, "STOP", window, cx);
+                    }),
+                ))
+                .child(small_button(
+                    format!("process-signal-cont-{pid}"),
+                    "CONT",
+                    cx.listener(move |this, _, window, cx| {
+                        this.request_process_signal(pid, "CONT", window, cx);
+                    }),
+                ))
+                .child(small_button(
+                    format!("process-signal-kill-{pid}"),
+                    "KILL",
+                    cx.listener(move |this, _, window, cx| {
+                        this.request_process_signal(pid, "KILL", window, cx);
+                    }),
+                )),
+        )
+        .into_any_element()
+}
+
+pub(super) fn process_detail_chip(label: &'static str, value: String) -> impl IntoElement {
+    div()
+        .rounded_sm()
+        .border_1()
+        .border_color(rgb(0x253044))
+        .bg(rgb(0x10151e))
+        .px_2()
+        .py_1()
+        .flex()
+        .flex_col()
+        .gap_1()
+        .child(
+            div()
+                .text_xs()
+                .font_weight(FontWeight(800.))
+                .text_color(rgb(0x64748b))
+                .child(label),
+        )
+        .child(
+            div()
+                .font_family("JetBrains Mono")
+                .text_xs()
+                .text_color(rgb(0xdbeafe))
+                .child(truncate_preview(&value, 36)),
+        )
+}
+
+pub(super) fn process_signal_confirm_panel(
+    confirm: RemoteProcessSignalConfirmState,
+    cx: &mut Context<NyaTermApp>,
+) -> impl IntoElement {
+    div()
+        .rounded_md()
+        .border_1()
+        .border_color(rgb(0xfb7185))
+        .bg(rgb(0x2a121a))
+        .p_3()
+        .flex()
+        .items_center()
+        .justify_between()
+        .gap_3()
+        .child(
+            div()
+                .min_w_0()
+                .flex()
+                .flex_col()
+                .gap_1()
+                .child(
+                    div()
+                        .text_sm()
+                        .font_weight(FontWeight(800.))
+                        .text_color(rgb(0xfda4af))
+                        .child(format!(
+                            "Confirm {} for PID {}",
+                            confirm.signal, confirm.pid
+                        )),
+                )
+                .child(
+                    div()
+                        .font_family("JetBrains Mono")
+                        .text_xs()
+                        .text_color(rgb(0xfecdd3))
+                        .child(format!(
+                            "kill -{} -- {} · {}",
+                            confirm.signal,
+                            confirm.pid,
+                            truncate_preview(&confirm.command, 96)
+                        )),
+                ),
+        )
+        .child(
+            div()
+                .flex()
+                .items_center()
+                .gap_2()
+                .child(small_button(
+                    "process-signal-cancel",
+                    "Cancel",
+                    cx.listener(|this, _, _, cx| {
+                        this.cancel_process_signal_confirm(cx);
+                    }),
+                ))
+                .child(small_button(
+                    "process-signal-confirm",
+                    "Confirm",
+                    cx.listener(|this, _, window, cx| {
+                        this.confirm_process_signal(window, cx);
+                    }),
+                )),
+        )
+}
+
+pub(super) fn resource_gauge_card(
+    title: &'static str,
+    value: String,
+    detail: String,
+    ratio: f64,
+) -> impl IntoElement {
+    let ratio = ratio.clamp(0., 1.);
+    div()
+        .rounded_md()
+        .border_1()
+        .border_color(usage_color(ratio))
+        .bg(rgb(0x10151e))
+        .p_4()
+        .flex()
+        .items_center()
+        .gap_3()
+        .child(
+            div()
+                .size(px(64.))
+                .rounded_full()
+                .border_1()
+                .border_color(usage_color(ratio))
+                .bg(rgb(0x151923))
+                .flex()
+                .items_center()
+                .justify_center()
+                .child(
+                    div()
+                        .text_sm()
+                        .font_weight(FontWeight(800.))
+                        .text_color(usage_color(ratio))
+                        .child(value),
+                ),
+        )
+        .child(
+            div()
+                .min_w_0()
+                .flex_1()
+                .flex()
+                .flex_col()
+                .gap_2()
+                .child(
+                    div()
+                        .text_sm()
+                        .font_weight(FontWeight(800.))
+                        .text_color(rgb(0xe5edf7))
+                        .child(title),
+                )
+                .child(
+                    div()
+                        .text_xs()
+                        .line_height(px(17.))
+                        .text_color(rgb(0x98a3b8))
+                        .child(truncate_preview(&detail, 74)),
+                )
+                .child(stats_progress_bar(ratio)),
+        )
+}
+
+pub(super) fn resource_summary_card(
+    title: &'static str,
+    value: String,
+    detail: String,
+    ratio: f64,
+) -> impl IntoElement {
+    let ratio = ratio.clamp(0., 1.);
+    div()
+        .rounded_md()
+        .border_1()
+        .border_color(rgb(0x2a3140))
+        .bg(rgb(0x151923))
+        .p_4()
+        .flex()
+        .flex_col()
+        .gap_2()
+        .child(
+            div()
+                .text_xs()
+                .font_weight(FontWeight(800.))
+                .text_color(rgb(0x8f98aa))
+                .child(title),
+        )
+        .child(
+            div()
+                .font_family("JetBrains Mono")
+                .text_sm()
+                .font_weight(FontWeight(800.))
+                .text_color(usage_color(ratio))
+                .child(value),
+        )
+        .child(
+            div()
+                .text_xs()
+                .line_height(px(17.))
+                .text_color(rgb(0x98a3b8))
+                .child(truncate_preview(&detail, 80)),
+        )
+        .child(stats_progress_bar(ratio))
+}
+
+pub(super) fn usage_color(ratio: f64) -> gpui::Hsla {
+    if ratio >= 0.9 {
+        rgb(0xfb7185).into()
+    } else if ratio >= 0.7 {
+        rgb(0xfacc15).into()
+    } else {
+        rgb(0x38bdf8).into()
+    }
+}
+
+pub(super) fn load_ratio(load1: f64, cores: u32) -> f64 {
+    let cores = cores.max(1) as f64;
+    (load1 / cores).clamp(0., 1.)
+}
