@@ -62,6 +62,9 @@ impl NyaTermApp {
         } else {
             Vec::new()
         };
+        let translation_providers: Vec<(String, String)> = available_translation_providers(
+            &self.translation_settings,
+        );
 
         let mut items = div()
             .id(SharedString::from("terminal-context-menu"))
@@ -154,19 +157,50 @@ impl NyaTermApp {
                         }),
                     )
                 }))
-                .child(terminal_ctx_item(
-                    palette,
-                    "term-ctx-translate",
-                    "Translate Selection",
-                    None,
-                    cx.listener(move |this, _, _, cx| {
-                        this.close_terminal_context_menu(cx);
-                        this.translate_input = selected_for_translate.clone();
-                        this.translate_result = None;
-                        this.translate_status = "selection loaded for translation".to_string();
-                        this.select(NavItem::Translation, cx);
-                    }),
-                ))
+                .children({
+                    let selected = selected_for_translate.clone();
+                    if translation_providers.is_empty() {
+                        vec![terminal_ctx_item(
+                            palette,
+                            "term-ctx-translate",
+                            "Translate Selection",
+                            None,
+                            cx.listener(move |this, _, _, cx| {
+                                this.close_terminal_context_menu(cx);
+                                this.translate_input = selected.clone();
+                                this.translate_result = None;
+                                this.translate_status =
+                                    "selection loaded for translation".to_string();
+                                this.select(NavItem::Translation, cx);
+                            }),
+                        )
+                        .into_any_element()]
+                    } else {
+                        translation_providers
+                            .into_iter()
+                            .map(|(id, label)| {
+                                let selected = selected.clone();
+                                terminal_ctx_item(
+                                    palette,
+                                    format!("term-ctx-translate-{id}"),
+                                    format!("Translate · {label}"),
+                                    None,
+                                    cx.listener(move |this, _, _, cx| {
+                                        this.close_terminal_context_menu(cx);
+                                        this.translate_provider = id.clone();
+                                        this.translate_input = selected.clone();
+                                        this.translate_result = None;
+                                        this.translate_status = format!(
+                                            "selection loaded for {label} translation"
+                                        );
+                                        this.select(NavItem::Translation, cx);
+                                    }),
+                                )
+                                .into_any_element()
+                            })
+                            .collect::<Vec<_>>()
+                    }
+                })
                 .child(terminal_ctx_item(
                     palette,
                     "term-ctx-ai",
@@ -397,3 +431,27 @@ fn urlencoding_minimal(input: &str) -> String {
     }
     out
 }
+
+
+fn available_translation_providers(
+    settings: &nyaterm_domain::TranslationSettings,
+) -> Vec<(String, String)> {
+    let mut providers = vec![
+        ("google".to_string(), "Google".to_string()),
+        ("microsoft".to_string(), "Microsoft".to_string()),
+    ];
+    if !settings.deepl_api_key.trim().is_empty() {
+        providers.push(("deepl".to_string(), "DeepL".to_string()));
+    }
+    if !settings.baidu_app_id.trim().is_empty() && !settings.baidu_app_key.trim().is_empty() {
+        providers.push(("baidu".to_string(), "Baidu".to_string()));
+    }
+    if !settings.ali_app_id.trim().is_empty() && !settings.ali_app_key.trim().is_empty() {
+        providers.push(("ali".to_string(), "Aliyun".to_string()));
+    }
+    if !settings.youdao_app_id.trim().is_empty() && !settings.youdao_app_key.trim().is_empty() {
+        providers.push(("youdao".to_string(), "Youdao".to_string()));
+    }
+    providers
+}
+
