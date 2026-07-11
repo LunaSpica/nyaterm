@@ -3367,6 +3367,7 @@ pub(super) struct SecurityPasswordEditorState {
     pub(super) name: String,
     pub(super) password: String,
     pub(super) has_password: bool,
+    pub(super) show_password: bool,
     pub(super) focused_field: SecurityPasswordEditorField,
     pub(super) error: Option<String>,
 }

@@ -232,6 +232,15 @@ impl NyaTermApp {
         session_id: String,
         cx: &mut Context<Self>,
     ) {
+        if self
+            .active_session_busy_actions
+            .get(&session_id)
+            .is_some()
+        {
+            self.terminal_status = "session action already in progress".to_string();
+            cx.notify();
+            return;
+        }
         if self.is_session_disconnected(&session_id) {
             self.terminal_status = "session already disconnected".to_string();
             cx.notify();
@@ -243,10 +252,14 @@ impl NyaTermApp {
             return;
         }
 
+        self.active_session_busy_actions
+            .insert(session_id.clone(), "disconnect".to_string());
+        self.active_session_menu_id = None;
         // Backend may already be gone (race with Exited); still mark disconnected.
         let _ = self.session_manager.close(&session_id);
         self.recording_manager.cleanup_session(&session_id);
         self.mark_session_disconnected(&session_id, cx);
+        self.active_session_busy_actions.remove(&session_id);
         self.terminal_status = format!("disconnected {}", short_id(&session_id));
         cx.notify();
     }
@@ -316,16 +329,28 @@ impl NyaTermApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        if self
+            .active_session_busy_actions
+            .get(&session_id)
+            .is_some()
+        {
+            self.terminal_status = "session action already in progress".to_string();
+            cx.notify();
+            return;
+        }
         if self.pending_session_name.is_some() {
             self.terminal_status = "wait for the pending session to finish connecting".to_string();
             cx.notify();
             return;
         }
-        let Some(metadata) = self.session_metadata.get(&session_id).cloned() else {
+        if !self.session_metadata.contains_key(&session_id) {
             self.terminal_status = "session cannot be reconnected".to_string();
             cx.notify();
             return;
-        };
+        }
+        self.active_session_busy_actions
+            .insert(session_id.clone(), "reconnect".to_string());
+        self.active_session_menu_id = None;
         let source_index = self
             .session_order
             .iter()
@@ -427,7 +452,7 @@ impl NyaTermApp {
                     Err(error) => {
                         // Put disconnected tab back on failure.
                         self.restore_failed_reconnect(
-                            old_id,
+                            old_id.clone(),
                             metadata,
                             view,
                             seed_output,
@@ -461,7 +486,7 @@ impl NyaTermApp {
                     }
                     Err(error) => {
                         self.restore_failed_reconnect(
-                            old_id,
+                            old_id.clone(),
                             metadata,
                             view,
                             seed_output,
@@ -495,7 +520,7 @@ impl NyaTermApp {
                     }
                     Err(error) => {
                         self.restore_failed_reconnect(
-                            old_id,
+                            old_id.clone(),
                             metadata,
                             view,
                             seed_output,
@@ -574,6 +599,10 @@ impl NyaTermApp {
                 );
             }
         }
+        // Tauri clears busy when reconnect action returns (even if SSH still connecting).
+        self.active_session_busy_actions.remove(&old_id);
+        self.active_session_busy_actions
+            .retain(|id, _| self.session_metadata.contains_key(id));
         self.selected_nav = NavItem::Workspace;
         self.main_mode = MainMode::Workspace;
         cx.notify();
@@ -593,6 +622,8 @@ impl NyaTermApp {
         was_active: bool,
         cx: &mut Context<Self>,
     ) {
+        self.active_session_busy_actions.remove(&old_id);
+
         metadata.disconnected = true;
         self.session_metadata.insert(old_id.clone(), metadata);
         if !self.session_order.iter().any(|id| id == &old_id) {

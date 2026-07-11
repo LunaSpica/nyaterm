@@ -390,6 +390,7 @@ impl NyaTermApp {
         let rename_session_id = session.id.clone();
         let reconnect_session_id = session.id.clone();
         let close_session_id = session.id.clone();
+        let menu_session_id = session.id.clone();
         let custom_color = self.session_tab_colors.get(&session.id).copied();
         let is_active = self.active_session_id.as_deref() == Some(session.id.as_str());
         let is_disconnected = self.is_session_disconnected(&session.id);
@@ -397,57 +398,64 @@ impl NyaTermApp {
             .terminal_views
             .get(&session.id)
             .is_some_and(|view| view.has_unread);
+        let busy_action = self
+            .active_session_busy_actions
+            .get(&session.id)
+            .cloned();
+        let is_busy = busy_action.is_some();
+        let menu_open = self.active_session_menu_id.as_deref() == Some(session.id.as_str());
+        let can_reconnect = !is_busy && self.pending_session_name.is_none();
+        let can_disconnect = !is_busy && !is_disconnected;
         let accent = if let Some(custom_color) = custom_color {
             rgb(custom_color)
         } else if is_disconnected {
-            rgb(palette.danger)
+            rgb(palette.text_dimmed)
         } else if is_active {
             rgb(palette.success)
         } else if has_unread {
             rgb(palette.warning)
         } else {
-            rgb(palette.text_muted)
+            rgb(0x22c55e)
         };
         let row_bg = if let Some(custom_color) = custom_color {
             rgba((custom_color << 8) | if is_active { 0x22 } else { 0x12 })
         } else if is_active {
             rgb(palette.hover)
         } else {
-            rgb(palette.input)
+            rgb(palette.surface)
         };
         let hover_bg = if let Some(custom_color) = custom_color {
             rgba((custom_color << 8) | if is_active { 0x30 } else { 0x20 })
         } else {
             rgb(palette.hover)
         };
-        let status_label = if is_disconnected {
-            "disconnected"
-        } else if is_active {
-            "active"
-        } else if has_unread {
-            "unread"
+        // Tauri ActiveSessions: full display name + type badge + full mono session id.
+        let kind = session_kind_label(session.kind).to_ascii_uppercase();
+        let full_id = session.id.clone();
+        let id_preview = truncate_preview(&full_id, 42);
+        let title = truncate_preview(&display_name, 32);
+        let reconnect_label = if busy_action.as_deref() == Some("reconnect") {
+            "Reconnecting…"
         } else {
-            "open"
+            "Reconnect"
         };
-        let row_title = if is_disconnected {
-            format!("{} · disconnected", truncate_preview(&display_name, 22))
+        let disconnect_label = if busy_action.as_deref() == Some("disconnect") {
+            "Disconnecting…"
         } else {
-            truncate_preview(&display_name, 28)
+            "Disconnect"
         };
 
-        // Tauri ActiveSessions row: compact list item with type badge + icon actions.
-        let kind = session_kind_label(session.kind);
-        let short = short_id(&session.id).to_string();
-        let _ = status_label;
         div()
             .id(SharedString::from(format!(
                 "active-session-row-{session_id}"
             )))
-            .h(px(44.))
+            .relative()
+            .h(px(48.))
             .rounded_md()
             .px_2()
-            .bg(if is_active { row_bg } else { rgb(palette.surface) })
-            .when(is_disconnected, |this| this.opacity(0.78))
+            .bg(row_bg)
+            .when(is_disconnected, |this| this.opacity(0.5))
+            .when(is_busy, |this| this.opacity(0.72))
             .cursor_pointer()
             .hover(move |this| this.bg(hover_bg))
             .child(
@@ -473,19 +481,20 @@ impl NyaTermApp {
                                             .min_w_0()
                                             .flex_1()
                                             .text_xs()
-                                            .font_weight(FontWeight(700.))
+                                            .font_weight(FontWeight(600.))
                                             .text_color(rgb(palette.text))
                                             .overflow_hidden()
-                                            .child(row_title.clone()),
+                                            .child(title),
                                     )
                                     .child(
                                         div()
                                             .px_1()
+                                            .py(px(1.))
                                             .rounded_sm()
-                                            .bg(rgb(palette.surface_elevated))
+                                            .bg(rgb(palette.hover))
                                             .text_size(px(10.))
                                             .font_weight(FontWeight(700.))
-                                            .text_color(rgb(palette.text_muted))
+                                            .text_color(rgb(palette.text_dimmed))
                                             .child(kind),
                                     ),
                             )
@@ -494,7 +503,8 @@ impl NyaTermApp {
                                     .font_family("JetBrains Mono")
                                     .text_size(px(10.))
                                     .text_color(rgb(palette.text_dimmed))
-                                    .child(short),
+                                    .overflow_hidden()
+                                    .child(id_preview),
                             ),
                     )
                     .child(
@@ -502,40 +512,142 @@ impl NyaTermApp {
                             .flex()
                             .items_center()
                             .gap_0()
+                            .flex_none()
                             .child(session_action_svg_button(
                                 palette,
                                 format!("active-session-rename-{rename_session_id}"),
                                 "icons/session/rename.svg",
+                                !is_busy,
                                 cx.listener(move |this, _, window, cx| {
                                     cx.stop_propagation();
+                                    if this
+                                        .active_session_busy_actions
+                                        .contains_key(&rename_session_id)
+                                    {
+                                        return;
+                                    }
+                                    this.active_session_menu_id = None;
                                     this.open_rename_session(rename_session_id.clone(), window, cx);
                                 }),
                             ))
-                            .child(session_action_svg_button(
-                                palette,
-                                format!("active-session-reconnect-{reconnect_session_id}"),
-                                "icons/session/reconnect.svg",
-                                cx.listener(move |this, _, window, cx| {
-                                    cx.stop_propagation();
-                                    this.select_session(reconnect_session_id.clone(), cx);
-                                    this.reconnect_active_session(window, cx);
-                                }),
-                            ))
-                            .child(session_action_svg_button(
-                                palette,
-                                format!("active-session-disconnect-{close_session_id}"),
-                                "icons/session/disconnect.svg",
-                                cx.listener(move |this, _, _, cx| {
-                                    cx.stop_propagation();
-                                    this.disconnect_session(close_session_id.clone(), cx);
-                                }),
-                            )),
+                            .child(
+                                div()
+                                    .relative()
+                                    .child(session_action_svg_button(
+                                        palette,
+                                        format!("active-session-more-{menu_session_id}"),
+                                        "icons/session/more.svg",
+                                        !is_busy,
+                                        cx.listener(move |this, _, _, cx| {
+                                            cx.stop_propagation();
+                                            if this
+                                                .active_session_busy_actions
+                                                .contains_key(&menu_session_id)
+                                            {
+                                                return;
+                                            }
+                                            if this.active_session_menu_id.as_deref()
+                                                == Some(menu_session_id.as_str())
+                                            {
+                                                this.active_session_menu_id = None;
+                                            } else {
+                                                this.active_session_menu_id =
+                                                    Some(menu_session_id.clone());
+                                            }
+                                            cx.notify();
+                                        }),
+                                    ))
+                                    .when(menu_open, |this| {
+                                        this.child(
+                                            div()
+                                                .id(SharedString::from(format!(
+                                                    "active-session-menu-{session_id}"
+                                                )))
+                                                .absolute()
+                                                .top(px(30.))
+                                                .right(px(0.))
+                                                .w(px(148.))
+                                                .rounded_md()
+                                                .border_1()
+                                                .border_color(rgb(palette.border))
+                                                .bg(rgb(palette.surface))
+                                                .shadow_lg()
+                                                .py_1()
+                                                .on_mouse_down(MouseButton::Left, |_, _, cx| {
+                                                    cx.stop_propagation();
+                                                })
+                                                .child(active_session_menu_item(
+                                                    palette,
+                                                    format!(
+                                                        "active-session-reconnect-{reconnect_session_id}"
+                                                    ),
+                                                    reconnect_label,
+                                                    "icons/session/reconnect.svg",
+                                                    can_reconnect,
+                                                    busy_action.as_deref() == Some("reconnect"),
+                                                    false,
+                                                    cx.listener(move |this, _, window, cx| {
+                                                        cx.stop_propagation();
+                                                        this.active_session_menu_id = None;
+                                                        if this
+                                                            .active_session_busy_actions
+                                                            .contains_key(&reconnect_session_id)
+                                                            || this.pending_session_name.is_some()
+                                                        {
+                                                            cx.notify();
+                                                            return;
+                                                        }
+                                                        this.select_session(
+                                                            reconnect_session_id.clone(),
+                                                            cx,
+                                                        );
+                                                        this.reconnect_session(
+                                                            reconnect_session_id.clone(),
+                                                            window,
+                                                            cx,
+                                                        );
+                                                    }),
+                                                ))
+                                                .child(active_session_menu_item(
+                                                    palette,
+                                                    format!(
+                                                        "active-session-disconnect-{close_session_id}"
+                                                    ),
+                                                    disconnect_label,
+                                                    "icons/session/disconnect.svg",
+                                                    can_disconnect,
+                                                    busy_action.as_deref() == Some("disconnect"),
+                                                    true,
+                                                    cx.listener(move |this, _, _, cx| {
+                                                        cx.stop_propagation();
+                                                        this.active_session_menu_id = None;
+                                                        if this
+                                                            .active_session_busy_actions
+                                                            .contains_key(&close_session_id)
+                                                            || this.is_session_disconnected(
+                                                                &close_session_id,
+                                                            )
+                                                        {
+                                                            cx.notify();
+                                                            return;
+                                                        }
+                                                        this.disconnect_session(
+                                                            close_session_id.clone(),
+                                                            cx,
+                                                        );
+                                                    }),
+                                                )),
+                                        )
+                                    }),
+                            ),
                     ),
             )
             .on_click(cx.listener(move |this, _, _, cx| {
+                this.active_session_menu_id = None;
                 this.select_session(session_id.clone(), cx);
             }))
     }
+
 
     fn left_connections_panel(&mut self, cx: &mut Context<Self>) -> impl IntoElement {
         let palette = self.theme_palette();
@@ -1016,25 +1128,32 @@ impl NyaTermApp {
                         let edit_id = entry.id.clone();
                         let delete_id = entry.id.clone();
                         let reveal_id = entry.id.clone();
-                        let revealed = self
+                        let copy_id = entry.id.clone();
+                        let is_revealed = self.security_revealed_passwords.contains_key(&entry.id);
+                        let revealed_value = self
                             .security_revealed_passwords
                             .get(&entry.id)
-                            .cloned()
-                            .unwrap_or_else(|| {
-                                if entry.has_password {
-                                    "••••••••".to_string()
-                                } else {
-                                    "empty".to_string()
-                                }
-                            });
+                            .cloned();
+                        // Tauri: masked until revealed; revealed shows secret + Copy.
+                        let secret_line = if is_revealed {
+                            revealed_value
+                                .clone()
+                                .filter(|v| !v.is_empty())
+                                .unwrap_or_else(|| "empty".to_string())
+                        } else if entry.has_password {
+                            String::new()
+                        } else {
+                            "empty".to_string()
+                        };
                         body = body.child(
                             div()
-                                .h(px(42.))
+                                .min_h(px(42.))
                                 .rounded_md()
                                 .border_1()
                                 .border_color(rgb(palette.border))
                                 .bg(rgb(palette.input))
                                 .px_2()
+                                .py_1()
                                 .flex()
                                 .items_center()
                                 .gap_2()
@@ -1053,14 +1172,47 @@ impl NyaTermApp {
                                                 .overflow_hidden()
                                                 .child(truncate_preview(&entry.name, 28)),
                                         )
-                                        .child(
-                                            div()
-                                                .font_family("JetBrains Mono")
-                                                .text_size(px(10.))
-                                                .text_color(rgb(palette.text_muted))
-                                                .overflow_hidden()
-                                                .child(truncate_preview(&revealed, 20)),
-                                        ),
+                                        .when(is_revealed, |this| {
+                                            this.child(
+                                                div()
+                                                    .flex()
+                                                    .items_start()
+                                                    .gap_1()
+                                                    .child(
+                                                        div()
+                                                            .min_w_0()
+                                                            .flex_1()
+                                                            .font_family("JetBrains Mono")
+                                                            .text_size(px(11.))
+                                                            .text_color(rgb(palette.text_muted))
+                                                            .child(truncate_preview(
+                                                                &secret_line,
+                                                                36,
+                                                            )),
+                                                    )
+                                                    .when(
+                                                        revealed_value
+                                                            .as_ref()
+                                                            .is_some_and(|v| !v.is_empty()),
+                                                        |this| {
+                                                            this.child(small_button(
+                                                                palette,
+                                                                format!("security-pw-copy-{id}"),
+                                                                "Copy",
+                                                                cx.listener(
+                                                                    move |this, _, window, cx| {
+                                                                        this.copy_security_password(
+                                                                            copy_id.clone(),
+                                                                            window,
+                                                                            cx,
+                                                                        );
+                                                                    },
+                                                                ),
+                                                            ))
+                                                        },
+                                                    ),
+                                            )
+                                        }),
                                 )
                                 .child(
                                     div()
@@ -1068,9 +1220,10 @@ impl NyaTermApp {
                                         .flex()
                                         .items_center()
                                         .gap_1()
-                                        .child(small_button(palette, 
+                                        .child(small_button(
+                                            palette,
                                             format!("security-pw-show-{id}"),
-                                            "Show",
+                                            if is_revealed { "Hide" } else { "Show" },
                                             cx.listener(move |this, _, window, cx| {
                                                 this.reveal_security_password(
                                                     reveal_id.clone(),
@@ -1079,7 +1232,8 @@ impl NyaTermApp {
                                                 );
                                             }),
                                         ))
-                                        .child(small_button(palette, 
+                                        .child(small_button(
+                                            palette,
                                             format!("security-pw-edit-{id}"),
                                             "Edit",
                                             cx.listener(move |this, _, window, cx| {
@@ -1090,7 +1244,8 @@ impl NyaTermApp {
                                                 );
                                             }),
                                         ))
-                                        .child(small_button(palette, 
+                                        .child(small_button(
+                                            palette,
                                             format!("security-pw-del-{id}"),
                                             "Del",
                                             cx.listener(move |this, _, _, cx| {
@@ -1116,25 +1271,22 @@ impl NyaTermApp {
                         let edit_id = entry.id.clone();
                         let delete_id = entry.id.clone();
                         let reveal_id = entry.id.clone();
+                        let toggle_id = entry.id.clone();
+                        let is_revealed = self.security_revealed_credentials.contains_key(&entry.id);
                         let secret = self
                             .security_revealed_credentials
                             .get(&entry.id)
                             .cloned()
-                            .unwrap_or_else(|| {
-                                if entry.has_password {
-                                    "••••••••".to_string()
-                                } else {
-                                    "no password".to_string()
-                                }
-                            });
+                            .unwrap_or_default();
                         body = body.child(
                             div()
-                                .h(px(48.))
+                                .min_h(px(48.))
                                 .rounded_md()
                                 .border_1()
                                 .border_color(rgb(palette.border))
                                 .bg(rgb(palette.input))
                                 .px_2()
+                                .py_1()
                                 .flex()
                                 .items_center()
                                 .gap_2()
@@ -1176,11 +1328,15 @@ impl NyaTermApp {
                                                 .text_size(px(10.))
                                                 .text_color(rgb(palette.text_dimmed))
                                                 .overflow_hidden()
-                                                .child(format!(
-                                                    "{} · {}",
-                                                    truncate_preview(&entry.username, 18),
-                                                    truncate_preview(&secret, 12)
-                                                )),
+                                                .child(if is_revealed {
+                                                    format!(
+                                                        "{} · {}",
+                                                        truncate_preview(&entry.username, 18),
+                                                        truncate_preview(&secret, 16)
+                                                    )
+                                                } else {
+                                                    truncate_preview(&entry.username, 28)
+                                                }),
                                         ),
                                 )
                                 .child(
@@ -1193,19 +1349,17 @@ impl NyaTermApp {
                                             palette,
                                             format!("security-cred-toggle-{id}"),
                                             if entry.enabled { "Off" } else { "On" },
-                                            {
-                                                let toggle_id = entry.id.clone();
-                                                cx.listener(move |this, _, _, cx| {
-                                                    this.toggle_security_credential_list_enabled(
-                                                        toggle_id.clone(),
-                                                        cx,
-                                                    );
-                                                })
-                                            },
+                                            cx.listener(move |this, _, _, cx| {
+                                                this.toggle_security_credential_list_enabled(
+                                                    toggle_id.clone(),
+                                                    cx,
+                                                );
+                                            }),
                                         ))
-                                        .child(small_button(palette, 
+                                        .child(small_button(
+                                            palette,
                                             format!("security-cred-show-{id}"),
-                                            "Show",
+                                            if is_revealed { "Hide" } else { "Show" },
                                             cx.listener(move |this, _, window, cx| {
                                                 this.reveal_security_credential_password(
                                                     reveal_id.clone(),
@@ -1214,7 +1368,8 @@ impl NyaTermApp {
                                                 );
                                             }),
                                         ))
-                                        .child(small_button(palette, 
+                                        .child(small_button(
+                                            palette,
                                             format!("security-cred-edit-{id}"),
                                             "Edit",
                                             cx.listener(move |this, _, window, cx| {
@@ -1225,7 +1380,8 @@ impl NyaTermApp {
                                                 );
                                             }),
                                         ))
-                                        .child(small_button(palette, 
+                                        .child(small_button(
+                                            palette,
                                             format!("security-cred-del-{id}"),
                                             "Del",
                                             cx.listener(move |this, _, _, cx| {
@@ -2533,6 +2689,8 @@ impl NyaTermApp {
             } else {
                 " ".to_string()
             }
+        } else if editor.show_password {
+            truncate_preview(&editor.password, 48)
         } else {
             "•".repeat(editor.password.chars().count().min(24))
         };
@@ -2570,20 +2728,36 @@ impl NyaTermApp {
                     this.focus_security_password_field(SecurityPasswordEditorField::Name, window, cx);
                 }),
             ))
-            .child(security_editor_field(
-                palette,
-                "security-pw-value",
-                "Password",
-                password_display,
-                editor.focused_field == SecurityPasswordEditorField::Password,
-                cx.listener(|this, _, window, cx| {
-                    this.focus_security_password_field(
-                        SecurityPasswordEditorField::Password,
-                        window,
-                        cx,
-                    );
-                }),
-            ))
+            .child(
+                div()
+                    .flex()
+                    .items_end()
+                    .gap_1()
+                    .child(
+                        div().min_w_0().flex_1().child(security_editor_field(
+                            palette,
+                            "security-pw-value",
+                            "Password",
+                            password_display,
+                            editor.focused_field == SecurityPasswordEditorField::Password,
+                            cx.listener(|this, _, window, cx| {
+                                this.focus_security_password_field(
+                                    SecurityPasswordEditorField::Password,
+                                    window,
+                                    cx,
+                                );
+                            }),
+                        )),
+                    )
+                    .child(small_button(
+                        palette,
+                        "security-pw-toggle-vis",
+                        if editor.show_password { "Hide" } else { "Show" },
+                        cx.listener(|this, _, _, cx| {
+                            this.toggle_security_password_editor_visibility(cx);
+                        }),
+                    )),
+            )
             .when_some(editor.error.clone(), |this, error| {
                 this.child(
                     div()
@@ -2596,14 +2770,16 @@ impl NyaTermApp {
                 div()
                     .flex()
                     .gap_2()
-                    .child(small_button(palette, 
+                    .child(small_button(
+                        palette,
                         "security-pw-save",
                         "Save",
                         cx.listener(|this, _, window, cx| {
                             this.save_security_password_editor(window, cx);
                         }),
                     ))
-                    .child(small_button(palette, 
+                    .child(small_button(
+                        palette,
                         "security-pw-cancel",
                         "Cancel",
                         cx.listener(|this, _, _, cx| {
@@ -2823,10 +2999,14 @@ fn security_type_chip(palette: crate::ui::theme::ThemePalette,
         .on_click(on_click)
 }
 
-fn session_action_svg_button(palette: crate::ui::theme::ThemePalette,
+fn session_action_svg_button(
+    palette: crate::ui::theme::ThemePalette,
     id: impl Into<String>,
     icon_path: &'static str,
-    on_click: impl Fn(&gpui::ClickEvent, &mut gpui::Window, &mut gpui::App) + 'static,) -> impl IntoElement {    // Tauri ActiveSessions action icons: h-7 ghost.
+    enabled: bool,
+    on_click: impl Fn(&gpui::ClickEvent, &mut gpui::Window, &mut gpui::App) + 'static,
+) -> impl IntoElement {
+    // Tauri ActiveSessions action icons: h-7 ghost.
     div()
         .id(SharedString::from(id.into()))
         .size(px(28.))
@@ -2834,16 +3014,83 @@ fn session_action_svg_button(palette: crate::ui::theme::ThemePalette,
         .items_center()
         .justify_center()
         .rounded_md()
-        .text_color(rgb(palette.text_muted))
-        .cursor_pointer()
-        .hover(|this| this.bg(rgb(palette.surface_elevated)).text_color(rgb(palette.text)))
+        .text_color(rgb(if enabled {
+            palette.text_muted
+        } else {
+            palette.text_dimmed
+        }))
+        .when(enabled, |this| {
+            this.cursor_pointer().hover(|this| {
+                this.bg(rgb(palette.surface_elevated))
+                    .text_color(rgb(palette.text))
+            })
+        })
+        .when(!enabled, |this| this.opacity(0.4))
         .child(
             svg()
                 .size(px(16.))
                 .flex_none()
                 .path(icon_path),
         )
-        .on_click(on_click)
+        .on_click(move |event, window, cx| {
+            if enabled {
+                on_click(event, window, cx);
+            }
+        })
+}
+
+fn active_session_menu_item(
+    palette: crate::ui::theme::ThemePalette,
+    id: impl Into<String>,
+    label: impl Into<String>,
+    icon_path: &'static str,
+    enabled: bool,
+    busy: bool,
+    destructive: bool,
+    on_click: impl Fn(&gpui::ClickEvent, &mut gpui::Window, &mut gpui::App) + 'static,
+) -> impl IntoElement {
+    let label = label.into();
+    let text_color = if !enabled {
+        palette.text_dimmed
+    } else if destructive {
+        palette.danger
+    } else {
+        palette.text
+    };
+    div()
+        .id(SharedString::from(id.into()))
+        .px_3()
+        .h(px(30.))
+        .flex()
+        .items_center()
+        .gap_2()
+        .when(enabled, |this| {
+            this.cursor_pointer()
+                .hover(|this| this.bg(rgb(palette.surface_elevated)))
+        })
+        .when(!enabled, |this| this.opacity(0.5))
+        .child(
+            svg()
+                .size(px(14.))
+                .flex_none()
+                .path(icon_path)
+                .text_color(rgb(text_color)),
+        )
+        .child(
+            div()
+                .text_size(px(12.))
+                .text_color(rgb(text_color))
+                .child(if busy {
+                    format!("{label}")
+                } else {
+                    label
+                }),
+        )
+        .on_click(move |event, window, cx| {
+            if enabled {
+                on_click(event, window, cx);
+            }
+        })
 }
 
 fn format_otp_code_display(code: &str) -> String {

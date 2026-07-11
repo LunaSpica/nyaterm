@@ -617,7 +617,7 @@ impl NyaTermApp {
 
     fn command_history_panel(&mut self, cx: &mut Context<Self>) -> impl IntoElement {
         let palette = self.theme_palette();
-        // Tauri CommandHistory: header meta is shared PanelHeader; body is dense mono list.
+        // Tauri CommandHistory: dense mono list; double-click sends. GPUI: click runs (single-click proxy).
         let history = self.active_session_history_commands();
         let mut rows = div().flex().flex_col().gap_0().p_2();
         if history.is_empty() {
@@ -632,7 +632,6 @@ impl NyaTermApp {
         } else {
             for (index, command) in history.into_iter().enumerate() {
                 let run_index = index;
-                let insert_index = index;
                 rows = rows.child(
                     div()
                         .id(SharedString::from(format!("command-history-row-{index}")))
@@ -645,9 +644,7 @@ impl NyaTermApp {
                         .cursor_pointer()
                         .hover(|this| this.bg(rgb(palette.hover)))
                         .on_click(cx.listener(move |this, _, _, cx| {
-                            // Tauri single-click is not used; double-click runs.
-                            // GPUI: primary click inserts into terminal draft, Run button sends.
-                            this.insert_history_command(insert_index, cx);
+                            this.run_history_command(run_index, cx);
                         }))
                         .child(
                             div()
@@ -664,32 +661,6 @@ impl NyaTermApp {
                                 .text_color(rgb(palette.text))
                                 .overflow_hidden()
                                 .child(truncate_preview(&command, 120)),
-                        )
-                        .child(
-                            div()
-                                .id(SharedString::from(format!("command-history-run-{index}")))
-                                .flex_none()
-                                .px_1()
-                                .h(px(20.))
-                                .rounded_sm()
-                                .text_size(px(10.))
-                                .text_color(rgb(palette.text_muted))
-                                .hover(|this| {
-                                    this.bg(rgb(palette.surface_elevated)).text_color(rgb(palette.accent))
-                                })
-                                .cursor_pointer()
-                                .on_click(cx.listener(move |this, _, _, cx| {
-                                    cx.stop_propagation();
-                                    this.run_history_command(run_index, cx);
-                                }))
-                                .child("Run"),
-                        )
-                        .on_mouse_down(
-                            MouseButton::Right,
-                            cx.listener(move |this, _, _, cx| {
-                                cx.stop_propagation();
-                                this.run_history_command(run_index, cx);
-                            }),
                         ),
                 );
             }
@@ -711,6 +682,7 @@ impl NyaTermApp {
                     .child(rows),
             )
     }
+
 
     pub(in crate::ui::view) fn right_panel(&mut self, cx: &mut Context<Self>) -> impl IntoElement {
         let width = self.right_panel_width.clamp(200., 720.);

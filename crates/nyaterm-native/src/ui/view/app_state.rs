@@ -97,6 +97,10 @@ pub struct NyaTermApp {
     pub(in crate::ui::view) command_search_focus: FocusHandle,
     pub(in crate::ui::view) active_sessions_search_draft: String,
     pub(in crate::ui::view) active_sessions_search_focus: FocusHandle,
+    /// Session id with open reconnect/disconnect overflow menu (Tauri ActiveSessions more menu).
+    pub(in crate::ui::view) active_session_menu_id: Option<String>,
+    /// Per-session reconnect/disconnect busy state ("reconnect" | "disconnect").
+    pub(in crate::ui::view) active_session_busy_actions: HashMap<String, String>,
     pub(in crate::ui::view) quick_switch_open: bool,
     pub(in crate::ui::view) quick_switch_query: String,
     pub(in crate::ui::view) quick_switch_selected_index: usize,
@@ -855,6 +859,8 @@ impl NyaTermApp {
             command_search_focus: cx.focus_handle(),
             active_sessions_search_draft: String::new(),
             active_sessions_search_focus: cx.focus_handle(),
+            active_session_menu_id: None,
+            active_session_busy_actions: HashMap::new(),
             quick_switch_open: false,
             quick_switch_query: String::new(),
             quick_switch_selected_index: 0,
