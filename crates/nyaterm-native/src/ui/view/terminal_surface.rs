@@ -544,10 +544,34 @@ impl NyaTermApp {
                                             (py / cell_h.max(1.)).round() as i32
                                         }
                                     };
-                                    if delta != 0 {
-                                        this.scroll_terminal_by(delta, cx);
-                                        cx.stop_propagation();
+                                    if delta == 0 {
+                                        return;
                                     }
+                                    // Mouse tracking: wheel becomes button 64/65 reports.
+                                    if let Some(cell) = this.point_to_terminal_cell(event.position) {
+                                        let button = if delta > 0 { 64u8 } else { 65u8 };
+                                        let steps = delta.unsigned_abs().min(8);
+                                        let mut reported = false;
+                                        for _ in 0..steps {
+                                            if this.maybe_send_mouse_report(
+                                                button,
+                                                cell.col as u16,
+                                                cell.row as u16,
+                                                true,
+                                                cx,
+                                            ) {
+                                                reported = true;
+                                            } else {
+                                                break;
+                                            }
+                                        }
+                                        if reported {
+                                            cx.stop_propagation();
+                                            return;
+                                        }
+                                    }
+                                    this.scroll_terminal_by(delta, cx);
+                                    cx.stop_propagation();
                                 },
                             ))
                             .on_mouse_down(
@@ -576,6 +600,18 @@ impl NyaTermApp {
                                     cx.listener(move |this, event: &gpui::MouseDownEvent, window, cx| {
                                         this.activate_workspace_pane(session_id.clone(), cx);
                                         window.focus(&this.terminal_focus);
+                                        if let Some(cell) = this.point_to_terminal_cell(event.position) {
+                                            if this.maybe_send_mouse_report(
+                                                2,
+                                                cell.col as u16,
+                                                cell.row as u16,
+                                                true,
+                                                cx,
+                                            ) {
+                                                cx.stop_propagation();
+                                                return;
+                                            }
+                                        }
                                         if this.settings.interaction_right_click_paste {
                                             this.paste_from_clipboard(window, cx);
                                         } else {
@@ -589,12 +625,24 @@ impl NyaTermApp {
                                 MouseButton::Middle,
                                 {
                                     let session_id = output_session_id.clone();
-                                    cx.listener(move |this, _event: &gpui::MouseDownEvent, window, cx| {
+                                    cx.listener(move |this, event: &gpui::MouseDownEvent, window, cx| {
                                         // xterm/Linux middle-click paste convention.
                                         this.activate_workspace_pane(session_id.clone(), cx);
                                         window.focus(&this.terminal_focus);
                                         this.close_terminal_context_menu(cx);
                                         this.close_action_link_menu(cx);
+                                        if let Some(cell) = this.point_to_terminal_cell(event.position) {
+                                            if this.maybe_send_mouse_report(
+                                                1,
+                                                cell.col as u16,
+                                                cell.row as u16,
+                                                true,
+                                                cx,
+                                            ) {
+                                                cx.stop_propagation();
+                                                return;
+                                            }
+                                        }
                                         this.paste_from_clipboard(window, cx);
                                         cx.stop_propagation();
                                     })

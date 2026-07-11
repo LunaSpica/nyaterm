@@ -1208,3 +1208,11 @@ service boundary first:
 - Large-output protection tracks per-session burst size, trims oversized chunks to the
   Tauri visible backlog cap, shows Overloaded/Recovered banners with skipped character
   counts, and recovers after a calm event-pump window (~3s).
+
+## 2026-07-11 Terminal DEC modes: alternate screen + mouse reporting
+
+- `nyaterm-terminal` now tracks DECSET 1049/47/1047 alternate screen (isolated from
+  primary scrollback), 1000/1002/1003 mouse reporting, 1006 SGR encoding, and CSI s/u
+  save/restore cursor.
+- Native UI sends SGR/legacy mouse reports for click/wheel when reporting is active,
+  matching xterm apps (vim/less/tmux) instead of local selection/scroll.

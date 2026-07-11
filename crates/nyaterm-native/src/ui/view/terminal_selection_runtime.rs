@@ -259,6 +259,11 @@ impl NyaTermApp {
         let Some(cell) = self.point_to_terminal_cell(event.position) else {
             return;
         };
+        // Applications with mouse tracking (vim/less/tmux) consume left presses.
+        if self.maybe_send_mouse_report(0, cell.col as u16, cell.row as u16, true, cx) {
+            self.clear_terminal_selection(cx);
+            return;
+        }
         let (rows, cols) = self.active_terminal_grid_size();
         // Shift+click extends the existing selection from its anchor (xterm-style).
         if event.modifiers.shift && event.click_count <= 1 {
@@ -323,6 +328,13 @@ impl NyaTermApp {
     ) {
         if event.button != MouseButton::Left {
             return;
+        }
+        if let Some(cell) = self.point_to_terminal_cell(event.position) {
+            // Mouse tracking release (button 0 / SGR m).
+            if self.maybe_send_mouse_report(0, cell.col as u16, cell.row as u16, false, cx) {
+                self.clear_terminal_selection(cx);
+                return;
+            }
         }
         if !self.terminal_selection_dragging {
             // Stationary click without an active drag can still reposition the

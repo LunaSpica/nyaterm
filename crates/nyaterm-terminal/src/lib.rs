@@ -85,6 +85,20 @@ pub struct TerminalScreen {
     pen: CellStyle,
     /// DECSET 2004 bracketed paste mode.
     bracketed_paste: bool,
+    /// DECSET 1000/1002/1003: mouse reporting enabled (any of these).
+    mouse_reporting: bool,
+    /// DECSET 1006: SGR mouse reporting encoding.
+    mouse_sgr: bool,
+    /// DECSET 1049/47/1047: alternate screen buffer active.
+    alternate_screen: bool,
+    /// Saved main-screen cells when alternate buffer is entered.
+    saved_main_cells: Option<Vec<Vec<Cell>>>,
+    /// Saved main-screen timestamps when alternate buffer is entered.
+    saved_main_timestamps_ms: Option<Vec<Option<u64>>>,
+    /// Saved main-screen cursor when alternate buffer is entered.
+    saved_main_cursor: Option<(usize, usize)>,
+    /// DECSC/DECRC style saved cursor (CSI s / CSI u / DECSET 1048).
+    saved_cursor: Option<(usize, usize)>,
     /// Set when BEL (0x07) is received; UI should flash and clear.
     pending_visual_bell: bool,
     /// Latest OSC 0/2 window title (consumed by the UI layer).
@@ -132,6 +146,13 @@ impl TerminalScreen {
             scrollback_limit: 5_000,
             pen: CellStyle::default(),
             bracketed_paste: false,
+            mouse_reporting: false,
+            mouse_sgr: false,
+            alternate_screen: false,
+            saved_main_cells: None,
+            saved_main_timestamps_ms: None,
+            saved_main_cursor: None,
+            saved_cursor: None,
             pending_visual_bell: false,
             pending_window_title: None,
             window_title: None,
@@ -174,11 +195,27 @@ impl TerminalScreen {
     }
 
     pub fn scrollback_len(&self) -> usize {
-        self.scrollback.len()
+        if self.alternate_screen {
+            0
+        } else {
+            self.scrollback.len()
+        }
     }
 
     pub fn bracketed_paste(&self) -> bool {
         self.bracketed_paste
+    }
+
+    pub fn mouse_reporting(&self) -> bool {
+        self.mouse_reporting
+    }
+
+    pub fn mouse_sgr(&self) -> bool {
+        self.mouse_sgr
+    }
+
+    pub fn alternate_screen(&self) -> bool {
+        self.alternate_screen
     }
 
     /// Consume a pending visual bell flag (BEL / 0x07).
@@ -225,7 +262,8 @@ impl TerminalScreen {
     }
 
     pub fn total_rows(&self) -> usize {
-        self.scrollback.len() + self.rows
+        // Alternate buffer is isolated from primary scrollback history.
+        self.scrollback_len() + self.rows
     }
 
     pub fn clear(&mut self) {
@@ -239,6 +277,13 @@ impl TerminalScreen {
         self.cursor_col = 0;
         self.pen = CellStyle::default();
         self.bracketed_paste = false;
+        self.mouse_reporting = false;
+        self.mouse_sgr = false;
+        self.alternate_screen = false;
+        self.saved_main_cells = None;
+        self.saved_main_timestamps_ms = None;
+        self.saved_main_cursor = None;
+        self.saved_cursor = None;
         self.pending_visual_bell = false;
         self.pending_window_title = None;
         self.window_title = None;
@@ -347,19 +392,21 @@ impl TerminalScreen {
     }
 
     fn row_at(&self, abs_row: usize) -> &[Cell] {
-        if abs_row < self.scrollback.len() {
+        let history = self.scrollback_len();
+        if abs_row < history {
             &self.scrollback[abs_row]
         } else {
-            let live = abs_row - self.scrollback.len();
+            let live = abs_row - history;
             &self.cells[live.min(self.rows.saturating_sub(1))]
         }
     }
 
     fn timestamp_at(&self, abs_row: usize) -> Option<u64> {
-        if abs_row < self.scrollback_timestamps_ms.len() {
-            self.scrollback_timestamps_ms[abs_row]
+        let history = self.scrollback_len();
+        if abs_row < history {
+            self.scrollback_timestamps_ms.get(abs_row).copied().flatten()
         } else {
-            let live = abs_row - self.scrollback.len();
+            let live = abs_row - history;
             self.live_timestamps_ms
                 .get(live.min(self.rows.saturating_sub(1)))
                 .copied()
@@ -440,13 +487,117 @@ impl TerminalScreen {
             } else {
                 None
             };
-            // Keep all rows for fidelity (including blanks).
-            self.scrollback.push(row);
-            self.scrollback_timestamps_ms.push(ts);
+            if self.alternate_screen {
+                // Alternate buffer does not contribute to primary scrollback.
+                let _ = (row, ts);
+            } else {
+                // Keep all rows for fidelity (including blanks).
+                self.scrollback.push(row);
+                self.scrollback_timestamps_ms.push(ts);
+            }
             self.cells.push(vec![Cell::default(); self.cols]);
             self.live_timestamps_ms.push(None);
         }
         self.trim_scrollback();
+    }
+
+    fn enter_alternate_screen(&mut self, clear: bool) {
+        if self.alternate_screen {
+            if clear {
+                for row in &mut self.cells {
+                    row.fill(Cell::default());
+                }
+                self.live_timestamps_ms.fill(None);
+                self.cursor_row = 0;
+                self.cursor_col = 0;
+            }
+            return;
+        }
+        self.saved_main_cells = Some(self.cells.clone());
+        self.saved_main_timestamps_ms = Some(self.live_timestamps_ms.clone());
+        self.saved_main_cursor = Some((self.cursor_row, self.cursor_col));
+        self.alternate_screen = true;
+        if clear {
+            for row in &mut self.cells {
+                row.fill(Cell::default());
+            }
+            self.live_timestamps_ms.fill(None);
+            self.cursor_row = 0;
+            self.cursor_col = 0;
+        }
+    }
+
+    fn leave_alternate_screen(&mut self, clear_before_restore: bool) {
+        if !self.alternate_screen {
+            return;
+        }
+        if clear_before_restore {
+            for row in &mut self.cells {
+                row.fill(Cell::default());
+            }
+            self.live_timestamps_ms.fill(None);
+        }
+        if let Some(cells) = self.saved_main_cells.take() {
+            self.cells = cells;
+        }
+        if let Some(ts) = self.saved_main_timestamps_ms.take() {
+            self.live_timestamps_ms = ts;
+        }
+        if let Some((row, col)) = self.saved_main_cursor.take() {
+            self.cursor_row = row.min(self.rows.saturating_sub(1));
+            self.cursor_col = col.min(self.cols.saturating_sub(1));
+        }
+        self.alternate_screen = false;
+        // Ensure dimensions still match after restore.
+        self.cells.resize_with(self.rows, || vec![Cell::default(); self.cols]);
+        for row in &mut self.cells {
+            row.resize(self.cols, Cell::default());
+        }
+        self.live_timestamps_ms.resize(self.rows, None);
+    }
+
+    fn apply_private_mode(&mut self, mode: u16, enable: bool) {
+        match mode {
+            2004 => self.bracketed_paste = enable,
+            1000 | 1002 | 1003 => {
+                // Any of the classic mouse modes enables reporting; disable clears all.
+                if enable {
+                    self.mouse_reporting = true;
+                } else {
+                    self.mouse_reporting = false;
+                }
+            }
+            1006 => self.mouse_sgr = enable,
+            47 | 1047 => {
+                if enable {
+                    self.enter_alternate_screen(false);
+                } else {
+                    // 1047 clears alternate before restore in xterm; 47 restores as-is.
+                    self.leave_alternate_screen(mode == 1047);
+                }
+            }
+            1048 => {
+                if enable {
+                    self.saved_cursor = Some((self.cursor_row, self.cursor_col));
+                } else if let Some((row, col)) = self.saved_cursor {
+                    self.cursor_row = row.min(self.rows.saturating_sub(1));
+                    self.cursor_col = col.min(self.cols.saturating_sub(1));
+                }
+            }
+            1049 => {
+                if enable {
+                    self.saved_cursor = Some((self.cursor_row, self.cursor_col));
+                    self.enter_alternate_screen(true);
+                } else {
+                    self.leave_alternate_screen(false);
+                    if let Some((row, col)) = self.saved_cursor.take() {
+                        self.cursor_row = row.min(self.rows.saturating_sub(1));
+                        self.cursor_col = col.min(self.cols.saturating_sub(1));
+                    }
+                }
+            }
+            _ => {}
+        }
     }
 
     fn erase_display(&mut self, mode: u16) {
@@ -721,6 +872,43 @@ fn compress_row(row: &[Cell]) -> Vec<StyledSpan> {
     spans
 }
 
+
+/// Encode a mouse event for the active terminal mouse protocol.
+/// `button`: 0 left, 1 middle, 2 right, 3 release, 64/65 wheel up/down.
+/// `col`/`row` are 0-based cell coordinates.
+/// Returns empty when mouse reporting is disabled.
+pub fn encode_mouse_report(
+    screen: &TerminalScreen,
+    button: u8,
+    col: u16,
+    row: u16,
+    press: bool,
+) -> Vec<u8> {
+    if !screen.mouse_reporting() {
+        return Vec::new();
+    }
+    // Terminals report 1-based cells.
+    let col = col.saturating_add(1);
+    let row = row.saturating_add(1);
+    if screen.mouse_sgr() {
+        // SGR extended: CSI < Cb ; Cx ; Cy M/m
+        let mut bytes = vec![0x1b, b'[', b'<'];
+        bytes.extend(button.to_string().as_bytes());
+        bytes.push(b';');
+        bytes.extend(col.to_string().as_bytes());
+        bytes.push(b';');
+        bytes.extend(row.to_string().as_bytes());
+        // Wheel events always use 'M'; release uses 'm'.
+        bytes.push(if press || button >= 64 { b'M' } else { b'm' });
+        return bytes;
+    }
+    // Legacy X10-style: CSI M Cb Cx Cy with 32+ offsets, clamped to 223.
+    let cb = 32u8.saturating_add(button);
+    let cx = 32u8.saturating_add(col.min(223) as u8);
+    let cy = 32u8.saturating_add(row.min(223) as u8);
+    vec![0x1b, b'[', b'M', cb, cx, cy]
+}
+
 impl Perform for TerminalScreen {
     fn print(&mut self, c: char) {
         self.put_char(c);
@@ -747,14 +935,12 @@ impl Perform for TerminalScreen {
         if ignore {
             return;
         }
-        // DEC private modes: CSI ? <n> h/l (e.g. bracketed paste 2004).
+        // DEC private modes: CSI ? <n> h/l (bracketed paste, mouse, alt screen).
         if intermediates == [b'?'] && matches!(action, 'h' | 'l') {
             let enable = action == 'h';
             for param in params.iter() {
                 for value in param.iter() {
-                    if *value == 2004 {
-                        self.bracketed_paste = enable;
-                    }
+                    self.apply_private_mode(*value, enable);
                 }
             }
             return;
@@ -788,6 +974,16 @@ impl Perform for TerminalScreen {
                 self.cursor_col = col.min(self.cols - 1);
             }
             'm' => self.apply_sgr(params),
+            // ANSI.SYS / xterm save/restore cursor (CSI s / CSI u).
+            's' => {
+                self.saved_cursor = Some((self.cursor_row, self.cursor_col));
+            }
+            'u' => {
+                if let Some((row, col)) = self.saved_cursor {
+                    self.cursor_row = row.min(self.rows.saturating_sub(1));
+                    self.cursor_col = col.min(self.cols.saturating_sub(1));
+                }
+            }
             _ => {}
         }
     }
@@ -870,9 +1066,9 @@ impl Perform for TerminalScreen {
                     .get(1)
                     .and_then(|p| p.first().copied())
                     .map(|b| b as char)
-                    .unwrap_or(' ')
+                    .unwrap_or('\0')
             } else {
-                code.chars().nth(3).unwrap_or(' ')
+                code.chars().nth(3).unwrap_or('\0')
             };
             match mark {
                 'A' | 'B' => {
@@ -1051,6 +1247,59 @@ mod tests {
         screen.advance(b"\x1b[?2004l");
         assert!(!screen.bracketed_paste());
     }
+
+    #[test]
+    fn alternate_screen_isolates_main_scrollback() {
+        let mut screen = TerminalScreen::new(10, 3);
+        screen.advance(b"main-line\r\n");
+        screen.advance(b"main-2\r\n");
+        screen.advance(b"main-3\r\n");
+        screen.advance(b"main-4\r\n");
+        let main_scroll = screen.scrollback_len();
+        assert!(main_scroll > 0);
+        // Enter alt screen (xterm 1049): clear alt buffer.
+        screen.advance(b"\x1b[?1049h");
+        assert!(screen.alternate_screen());
+        assert_eq!(screen.scrollback_len(), 0);
+        screen.advance(b"ALT");
+        let snap = screen.viewport_snapshot(0);
+        assert!(snap.lines.iter().any(|line| line.contains('A')));
+        // Leave alt screen and restore main.
+        screen.advance(b"\x1b[?1049l");
+        assert!(!screen.alternate_screen());
+        assert_eq!(screen.scrollback_len(), main_scroll);
+    }
+
+    #[test]
+    fn mouse_reporting_modes_track_decset() {
+        let mut screen = TerminalScreen::new(20, 2);
+        assert!(!screen.mouse_reporting());
+        assert!(!screen.mouse_sgr());
+        screen.advance(b"\x1b[?1000h");
+        screen.advance(b"\x1b[?1006h");
+        assert!(screen.mouse_reporting());
+        assert!(screen.mouse_sgr());
+        screen.advance(b"\x1b[?1000l");
+        screen.advance(b"\x1b[?1006l");
+        assert!(!screen.mouse_reporting());
+        assert!(!screen.mouse_sgr());
+    }
+
+    #[test]
+    fn encode_mouse_report_sgr_and_legacy() {
+        let mut screen = TerminalScreen::new(80, 24);
+        assert!(encode_mouse_report(&screen, 0, 0, 0, true).is_empty());
+        screen.advance(b"\x1b[?1000h");
+        let legacy = encode_mouse_report(&screen, 0, 0, 0, true);
+        assert_eq!(legacy, vec![0x1b, b'[', b'M', 32, 33, 33]);
+        screen.advance(b"\x1b[?1006h");
+        let sgr = encode_mouse_report(&screen, 0, 1, 2, true);
+        assert_eq!(sgr, b"\x1b[<0;2;3M".to_vec());
+        let release = encode_mouse_report(&screen, 0, 1, 2, false);
+        assert_eq!(release, b"\x1b[<0;2;3m".to_vec());
+    }
+
+
 
     #[test]
     fn line_timestamps_are_stamped_on_write() {

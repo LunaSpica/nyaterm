@@ -145,6 +145,44 @@ impl NyaTermApp {
         }
     }
 
+    /// When the active session's screen has mouse reporting enabled, encode and
+    /// send a mouse report instead of performing local selection/scroll.
+    /// Returns true if a report was sent (caller should skip local handling).
+    pub(in crate::ui::view) fn maybe_send_mouse_report(
+        &mut self,
+        button: u8,
+        col: u16,
+        row: u16,
+        press: bool,
+        cx: &mut Context<Self>,
+    ) -> bool {
+        let Some(session_id) = self.active_session_id.clone() else {
+            return false;
+        };
+        if self.is_session_disconnected(&session_id) {
+            return false;
+        }
+        let reporting = self
+            .terminal_views
+            .get(&session_id)
+            .map(|view| view.screen.mouse_reporting())
+            .unwrap_or_else(|| self.terminal_screen.mouse_reporting());
+        if !reporting {
+            return false;
+        }
+        let screen = self
+            .terminal_views
+            .get(&session_id)
+            .map(|view| &view.screen)
+            .unwrap_or(&self.terminal_screen);
+        let bytes = nyaterm_terminal::encode_mouse_report(screen, button, col, row, press);
+        if bytes.is_empty() {
+            return false;
+        }
+        self.send_terminal_input_to_session(session_id, bytes, cx);
+        true
+    }
+
     pub(in crate::ui::view) fn send_terminal_input_to_session(
         &mut self,
         session_id: String,
