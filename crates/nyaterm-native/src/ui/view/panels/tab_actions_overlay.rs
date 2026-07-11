@@ -140,34 +140,49 @@ impl NyaTermApp {
                     .child(
                         div()
                             .flex()
-                            .items_start()
+                            .items_center()
                             .justify_between()
-                            .gap_3()
+                            .gap_2()
+                            .px_1()
+                            .pb_1()
+                            .border_b_1()
+                            .border_color(rgb(palette.border))
                             .child(
                                 div()
                                     .min_w_0()
                                     .flex()
                                     .flex_col()
-                                    .gap_1()
                                     .child(
                                         div()
-                                            .text_sm()
+                                            .text_xs()
                                             .font_weight(FontWeight(800.))
                                             .text_color(rgb(palette.text))
-                                            .child("Tab Actions"),
+                                            .child(if compact {
+                                                truncate_preview(&display_name, 28)
+                                            } else {
+                                                "Tab Actions".to_string()
+                                            }),
                                     )
-                                    .child(div().text_xs().text_color(rgb(palette.text_muted)).child(
-                                        format!(
-                                            "{} · {} · {}",
-                                            truncate_preview(&display_name, 42),
-                                            session_kind_label(session.kind),
-                                            short_id(&session.id)
-                                        ),
+                                    .child(div().text_size(px(10.)).text_color(rgb(palette.text_dimmed)).child(
+                                        if compact {
+                                            format!(
+                                                "{} · {}",
+                                                session_kind_label(session.kind),
+                                                short_id(&session.id)
+                                            )
+                                        } else {
+                                            format!(
+                                                "{} · {} · {}",
+                                                truncate_preview(&display_name, 42),
+                                                session_kind_label(session.kind),
+                                                short_id(&session.id)
+                                            )
+                                        }
                                     )),
                             )
                             .child(small_button(palette, 
                                 "tab-actions-close",
-                                "Close",
+                                "Esc",
                                 cx.listener(|this, _, _, cx| {
                                     this.close_tab_actions(cx);
                                 }),
@@ -175,10 +190,10 @@ impl NyaTermApp {
                     )
                     .child(
                         div()
-                            .mt_4()
+                            .mt_2()
                             .grid()
-                            .grid_cols(2)
-                            .gap_3()
+                            .grid_cols(if compact { 1 } else { 2 })
+                            .gap(if compact { px(6.) } else { px(12.) })
                             .child(
                                 div()
                                     .rounded_md()

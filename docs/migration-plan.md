@@ -1093,3 +1093,8 @@ service boundary first:
 - Deep history search results show total/elapsed summary plus before/match/after
   context lines under each hit (Tauri TerminalSearchBar history densification).
 
+## 2026-07-11 Compact tab actions layout
+
+- Anchored tab actions menu uses a denser single-column layout with a compact
+  header (session name/kind/id + Esc close) for closer Tauri TabContextMenu feel.
+
