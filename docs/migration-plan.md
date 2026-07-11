@@ -758,3 +758,8 @@ service boundary first:
 - Compact mode: 32px single-line rows (label + mono command), ghost icon actions, no card border stack.
 - List mode: ~44px single-row stack (label over command) with trailing badge + icon actions (was multi-row card).
 - Tile trailing actions use icon buttons; command list gap tightened to `gap_1`.
+
+## 2026-07-11 Command Send hex dual-axis guide scroll
+- Track `send_command_hex_scroll_x` + `send_command_hex_scroll_y` (Tauri `hexScroll.left/top`).
+- Wheel handler consumes both axes; guide overlay translates with `-scroll_x/-scroll_y`.
+- Clamp uses approximate viewport (5 lines × 48 chars) against formatted hex display size.

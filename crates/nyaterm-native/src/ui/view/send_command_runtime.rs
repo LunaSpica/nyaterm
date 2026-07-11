@@ -421,6 +421,7 @@ impl NyaTermApp {
             }
         }
         self.apply_send_command_default_interval();
+        self.send_command_hex_scroll_x = 0.;
         self.send_command_hex_scroll_y = 0.;
         self.terminal_status = format!(
             "command send data: {}",
@@ -443,17 +444,25 @@ impl NyaTermApp {
     }
 
     pub(in crate::ui::view) fn clamp_send_command_hex_scroll(&mut self) {
+        // Approximate viewport for guide overlay (Tauri textarea scrollTop/scrollLeft).
         const HEX_LINE_PX: f32 = 15.;
-        let lines = self
-            .send_command_draft
-            .replace("\r\n", "\n")
-            .replace('\r', "\n")
-            .split('\n')
-            .count()
-            .max(1);
-        let max_scroll = (lines as f32) * HEX_LINE_PX;
-        if self.send_command_hex_scroll_y > max_scroll {
-            self.send_command_hex_scroll_y = max_scroll;
-        }
+        const HEX_CHAR_PX: f32 = 7.2;
+        const VIEWPORT_LINES: f32 = 5.;
+        const VIEWPORT_CHARS: f32 = 48.;
+
+        let display = format_send_command_hex_display(&self.send_command_draft);
+        let lines: Vec<&str> = display.lines().collect();
+        let line_count = lines.len().max(1) as f32;
+        let max_line_chars = lines
+            .iter()
+            .map(|line| line.chars().count())
+            .max()
+            .unwrap_or(0) as f32;
+
+        let max_scroll_y = ((line_count - VIEWPORT_LINES).max(0.)) * HEX_LINE_PX;
+        let max_scroll_x = ((max_line_chars - VIEWPORT_CHARS).max(0.)) * HEX_CHAR_PX;
+
+        self.send_command_hex_scroll_y = self.send_command_hex_scroll_y.clamp(0., max_scroll_y);
+        self.send_command_hex_scroll_x = self.send_command_hex_scroll_x.clamp(0., max_scroll_x);
     }
 }

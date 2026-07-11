@@ -509,35 +509,64 @@ impl NyaTermApp {
                                         self.send_command_data_type == SendCommandDataType::Hex,
                                         |this| {
                                             // Tauri overlays dashed 4-byte guides per line above the hex textarea.
-                                            // Scroll-sync: wheel adjusts send_command_hex_scroll_y (like hexScroll.top).
+                                            // Scroll-sync: wheel adjusts hexScroll.{top,left} approximation.
                                             let guide_rows =
                                                 send_command_hex_guide_rows(&self.send_command_draft);
                                             const HEX_LINE_PX: f32 = 15.;
-                                            let line_count = guide_rows.len().max(1);
-                                            let max_scroll = ((line_count as f32) * HEX_LINE_PX)
-                                                .max(0.);
+                                            const HEX_CHAR_PX: f32 = 7.2;
+                                            const VIEWPORT_LINES: f32 = 5.;
+                                            const VIEWPORT_CHARS: f32 = 48.;
+                                            let display = format_send_command_hex_display(
+                                                &self.send_command_draft,
+                                            );
+                                            let lines: Vec<&str> = display.lines().collect();
+                                            let line_count = lines.len().max(1) as f32;
+                                            let max_line_chars = lines
+                                                .iter()
+                                                .map(|line| line.chars().count())
+                                                .max()
+                                                .unwrap_or(0)
+                                                as f32;
+                                            let max_scroll_y =
+                                                ((line_count - VIEWPORT_LINES).max(0.)) * HEX_LINE_PX;
+                                            let max_scroll_x =
+                                                ((max_line_chars - VIEWPORT_CHARS).max(0.))
+                                                    * HEX_CHAR_PX;
                                             let scroll_y = self
                                                 .send_command_hex_scroll_y
-                                                .clamp(0., max_scroll);
+                                                .clamp(0., max_scroll_y);
+                                            let scroll_x = self
+                                                .send_command_hex_scroll_x
+                                                .clamp(0., max_scroll_x);
                                             this.on_scroll_wheel(cx.listener(
                                                 move |this, event: &ScrollWheelEvent, _, cx| {
-                                                    let delta_y = match event.delta {
-                                                        ScrollDelta::Lines(delta) => {
-                                                            delta.y * HEX_LINE_PX
-                                                        }
+                                                    let (delta_x, delta_y) = match event.delta {
+                                                        ScrollDelta::Lines(delta) => (
+                                                            delta.x * HEX_CHAR_PX * 4.,
+                                                            delta.y * HEX_LINE_PX,
+                                                        ),
                                                         ScrollDelta::Pixels(delta) => {
-                                                            f32::from(delta.y)
+                                                            (f32::from(delta.x), f32::from(delta.y))
                                                         }
                                                     };
-                                                    // Match GPUI: scroll_top -= delta.y
-                                                    let next = (this.send_command_hex_scroll_y
+                                                    // Match GPUI / DOM: scroll offsets move opposite wheel delta.
+                                                    let next_y = (this.send_command_hex_scroll_y
                                                         - delta_y)
-                                                        .clamp(0., max_scroll);
-                                                    if (next - this.send_command_hex_scroll_y)
+                                                        .clamp(0., max_scroll_y);
+                                                    let next_x = (this.send_command_hex_scroll_x
+                                                        - delta_x)
+                                                        .clamp(0., max_scroll_x);
+                                                    let changed = (next_y
+                                                        - this.send_command_hex_scroll_y)
                                                         .abs()
                                                         > 0.01
-                                                    {
-                                                        this.send_command_hex_scroll_y = next;
+                                                        || (next_x
+                                                            - this.send_command_hex_scroll_x)
+                                                            .abs()
+                                                            > 0.01;
+                                                    if changed {
+                                                        this.send_command_hex_scroll_y = next_y;
+                                                        this.send_command_hex_scroll_x = next_x;
                                                         cx.stop_propagation();
                                                         cx.notify();
                                                     }
@@ -591,6 +620,7 @@ impl NyaTermApp {
                                                         div()
                                                             .relative()
                                                             .top(px(-scroll_y))
+                                                            .left(px(-scroll_x))
                                                             .flex()
                                                             .flex_col()
                                                             .children(guide_rows.into_iter().map(
