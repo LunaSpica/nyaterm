@@ -232,6 +232,9 @@ impl Render for NyaTermApp {
             .when(self.command_suggestions.is_some(), |this| {
                 this.child(self.command_suggestions_overlay(cx))
             })
+            .when(self.credential_suggestions.is_some(), |this| {
+                this.child(self.credential_suggestions_overlay(cx))
+            })
             .when(self.sync_groups_open, |this| {
                 this.child(self.sync_groups_overlay(cx))
             })

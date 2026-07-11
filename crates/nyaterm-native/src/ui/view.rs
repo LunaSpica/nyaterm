@@ -11,6 +11,7 @@ mod auth_runtime;
 mod cloud_sync_provider;
 mod cloud_sync_runtime;
 mod command_runtime;
+mod credential_autofill_runtime;
 mod config_runtime;
 mod connection_runtime;
 mod connections;

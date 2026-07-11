@@ -18,6 +18,10 @@ impl NyaTermApp {
                                 self.recording_manager
                                     .write_output(&session_id, &result.visible_text);
                                 self.append_terminal_log(&result.visible_text);
+                                self.feed_credential_autofill_output(
+                                    result.visible_text.as_bytes(),
+                                    cx,
+                                );
                             }
                             for captured in result.completed {
                                 self.handle_ai_agent_captured_output(captured, cx);
@@ -25,6 +29,7 @@ impl NyaTermApp {
                         } else {
                             self.recording_manager.write_output(&session_id, &text);
                             self.append_terminal_bytes(&data);
+                            self.feed_credential_autofill_output(&data, cx);
                         }
                     } else {
                         let text = String::from_utf8_lossy(&data);

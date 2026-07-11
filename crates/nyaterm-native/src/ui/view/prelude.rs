@@ -23,6 +23,9 @@ pub(super) use nyaterm_domain::{
     now_rfc3339, parse_agent_model_output, parse_agent_tool_call, parse_model_output,
     pull_local_snapshot, pull_snapshot_with_remote, push_local_snapshot, push_snapshot_with_remote,
     read_cloud_sync_history, redact_context, redact_sensitive_text, search_command_sources,
+    CredentialPromptKind, detect_credential_prompt_kind, extract_credential_prompt_text,
+    find_matching_credentials, find_password_only_fallback_credentials,
+    is_default_password_prompt, strip_terminal_control_sequences, credential_matches_prompt,
     truncate_preview, uuid,
 };
 pub(super) use nyaterm_migration::{LegacyProject, MigrationInventory};
@@ -86,7 +89,7 @@ pub(super) use super::super::models::{
     SecurityPasswordEditorState, SessionLaunchConfig, SessionRuntimeMetadata,
     SearchEngineEditorField, SettingsTab, SnapshotPasswordPromptKind, SnapshotPasswordPromptState, StartupCommandAction,
     StartupCommandRequest, StoreStatus,
-    SyncInputGroup, ActionLinkMenuAction, ActionLinkMenuState, ActionLinkTooltipState, TranslationDialogState, CommandSuggestionItem, CommandSuggestionState, TerminalCellPos, TerminalContextMenuState, TerminalSearchMode, TerminalSelection, TerminalViewState, TransferBrowserColumnResizeState,
+    SyncInputGroup, ActionLinkMenuAction, ActionLinkMenuState, ActionLinkTooltipState, TranslationDialogState, CommandSuggestionItem, CommandSuggestionState, CredentialSuggestionState, PendingCredentialAutofill, TerminalCellPos, TerminalContextMenuState, TerminalSearchMode, TerminalSelection, TerminalViewState, TransferBrowserColumnResizeState,
     TransferBrowserColumnWidths, TransferBrowserContextMenuState,
     TransferBrowserDragSelectionState, TransferBrowserFavoritesMenuState,
     TransferBrowserUploadMenuState,

@@ -183,6 +183,13 @@ impl NyaTermApp {
     }
 
     pub(in crate::ui::view) fn activate_session_id(&mut self, session_id: &str) {
+        // Session switch resets terminal-output credential autofill (Tauri XTerminal remount).
+        self.credential_suggestions = None;
+        self.credential_autofill_buffer.clear();
+        self.credential_autofill_recent.clear();
+        self.credential_autofill_pending = None;
+        self.credential_autofill_sending = false;
+        self.credential_prompt_input_until_ms = 0;
         let previous_session_id = self.active_session_id.clone();
         if previous_session_id.as_deref() != Some(session_id)
             && let Some(previous_session_id) = previous_session_id.as_deref()

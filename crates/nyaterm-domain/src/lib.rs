@@ -2,6 +2,7 @@ pub mod agent_capture;
 pub mod ai;
 pub mod cloud_sync;
 pub mod command_search;
+pub mod credential_autofill;
 pub mod credentials_crypto;
 pub mod diagnostics;
 pub mod models;
@@ -64,6 +65,13 @@ pub use cloud_sync::{
     snippet_remote_path,
 };
 pub use command_search::{fuzzy_search_items, search_command_sources};
+pub use credential_autofill::{
+    CredentialPromptKind, compile_prompt_regex, credential_matches_prompt,
+    detect_credential_prompt_kind, extract_credential_prompt_text,
+    find_matching_credentials, find_password_only_fallback_credentials,
+    get_credential_prompt_pattern, is_default_password_prompt,
+    strip_terminal_control_sequences, validate_prompt_regex,
+};
 pub use credentials_crypto::{CredentialCrypto, CredentialCryptoError};
 pub use diagnostics::{
     DiagnosticsError, DiagnosticsExportInfo, DiagnosticsExportOptions, DiagnosticsRuntimeSnapshot,

@@ -398,6 +398,9 @@ impl NyaTermApp {
         bytes: &[u8],
         cx: &mut Context<Self>,
     ) {
+        if self.credential_suggestions.is_some() || self.is_credential_prompt_input_mode() {
+            return;
+        }
         if !self.settings.interaction_command_suggestions_enabled {
             self.clear_command_suggestion_draft(cx);
             return;
@@ -466,6 +469,10 @@ impl NyaTermApp {
     }
 
     pub(in crate::ui::view) fn refresh_command_suggestions(&mut self, cx: &mut Context<Self>) {
+        if self.credential_suggestions.is_some() || self.is_credential_prompt_input_mode() {
+            self.command_suggestions = None;
+            return;
+        }
         if !self.settings.interaction_command_suggestions_enabled {
             self.command_suggestions = None;
             cx.notify();

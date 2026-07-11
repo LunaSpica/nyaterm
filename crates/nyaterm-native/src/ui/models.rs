@@ -1,7 +1,7 @@
 use gpui::{Pixels, px};
 use nyaterm_domain::{
-    AiAction, AiContext, AiExecutionProfile, ConfigBackupInfo, ConnectionType, DiagnosticsExportInfo,
-    QuickCommand, SavedConnection,
+    AiAction, AiContext, AiExecutionProfile, ConfigBackupInfo, ConnectionType, CredentialPromptKind,
+    DiagnosticsExportInfo, QuickCommand, SavedConnection, SavedCredential,
 };
 use nyaterm_session::{
     LocalSessionConfig, SerialSessionConfig, SftpFileEntry, SftpFileProperties, SftpRemoteTextFile,
@@ -1130,6 +1130,22 @@ pub(super) struct CommandSuggestionState {
     pub(super) selected_index: usize,
     pub(super) cursor_row: usize,
     pub(super) cursor_col: usize,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(super) struct CredentialSuggestionState {
+    pub(super) kind: CredentialPromptKind,
+    pub(super) matches: Vec<SavedCredential>,
+    pub(super) prompt_text: String,
+    pub(super) selected_index: usize,
+    pub(super) cursor_row: usize,
+    pub(super) cursor_col: usize,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(super) struct PendingCredentialAutofill {
+    pub(super) credential_id: String,
+    pub(super) expires_at_ms: u64,
 }
 
 #[derive(Debug, Clone, PartialEq)]

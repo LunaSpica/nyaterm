@@ -11,6 +11,7 @@ impl NyaTermApp {
         self.action_link_menu = None;
         self.action_link_tooltip = None;
         self.command_suggestions = None;
+        self.credential_suggestions = None;
         self.terminal_context_menu = Some(TerminalContextMenuState {
             x: event.position.x,
             y: event.position.y,

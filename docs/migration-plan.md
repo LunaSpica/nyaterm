@@ -1034,3 +1034,14 @@ service boundary first:
 - Popup near terminal cursor with history/quick badges, ↑↓/Enter/Tab/Esc, and
   click-to-run; respects min/max suggestion length settings and dismisses on
   menus/submit/tab-desync/control sequences.
+
+## 2026-07-11 Terminal credential autofill
+
+- Domain helpers port Tauri `credentialAutofill.ts` (ANSI/OSC strip, prompt
+  extraction, username/password detection, custom regex match, default password
+  fallback).
+- GPUI panel near terminal cursor lists matching saved credentials with
+  ↑↓/Enter/Esc/click; username fill arms a 60s pending auto-password send.
+- Detection runs on active session output; session switch resets state; open
+  panel / prompt mode suppresses inline command suggestions.
+

@@ -79,6 +79,14 @@ pub struct NyaTermApp {
     pub(in crate::ui::view) command_suggestions: Option<CommandSuggestionState>,
     /// Local keystroke draft used for inline suggestions (not full OSC133 tracker).
     pub(in crate::ui::view) command_suggestion_draft: String,
+    /// Terminal-output credential autofill panel (Tauri CredentialSuggestions).
+    pub(in crate::ui::view) credential_suggestions: Option<CredentialSuggestionState>,
+    pub(in crate::ui::view) credential_autofill_buffer: String,
+    pub(in crate::ui::view) credential_autofill_recent: HashMap<String, u64>,
+    pub(in crate::ui::view) credential_autofill_pending: Option<PendingCredentialAutofill>,
+    pub(in crate::ui::view) credential_autofill_sending: bool,
+    /// Suppress command suggestions while a password/username prompt is active.
+    pub(in crate::ui::view) credential_prompt_input_until_ms: u64,
 
     pub(in crate::ui::view) command_search_focus: FocusHandle,
     pub(in crate::ui::view) active_sessions_search_draft: String,
@@ -733,6 +741,12 @@ impl NyaTermApp {
             quick_command_search_draft: String::new(),
             command_suggestions: None,
             command_suggestion_draft: String::new(),
+            credential_suggestions: None,
+            credential_autofill_buffer: String::new(),
+            credential_autofill_recent: HashMap::new(),
+            credential_autofill_pending: None,
+            credential_autofill_sending: false,
+            credential_prompt_input_until_ms: 0,
 
             quick_command_search_focus: cx.focus_handle(),
             quick_command_selected_category: "all".to_string(),
