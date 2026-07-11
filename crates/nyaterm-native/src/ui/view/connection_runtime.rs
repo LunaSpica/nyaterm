@@ -213,6 +213,21 @@ impl NyaTermApp {
         cx.notify();
     }
 
+    pub(in crate::ui::view) fn cycle_connection_editor_backspace(
+        &mut self,
+        cx: &mut Context<Self>,
+    ) {
+        if let Some(editor) = self.connection_editor.as_mut() {
+            editor.backspace_mode = match editor.backspace_mode.as_str() {
+                "ctrl-h" | "bs" | "ctrl_h" => "del".to_string(),
+                _ => "ctrl-h".to_string(),
+            };
+            editor.error = None;
+            self.terminal_status = format!("backspace mode: {}", editor.backspace_mode);
+        }
+        cx.notify();
+    }
+
     pub(in crate::ui::view) fn cycle_connection_editor_serial_port(
         &mut self,
         cx: &mut Context<Self>,

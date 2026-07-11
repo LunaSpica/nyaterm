@@ -2,7 +2,7 @@ use gpui::{
     Context, FontWeight, IntoElement, KeyDownEvent, MouseButton, MouseDownEvent, ScrollDelta,
     ScrollWheelEvent, SharedString, div, prelude::*, px, rgb, svg,
 };
-use nyaterm_domain::{Group, SavedConnection, truncate_preview};
+use nyaterm_domain::{Group, ProxyConfig, SavedConnection, truncate_preview};
 use std::collections::HashMap;
 
 use crate::ui::components::small_button;
@@ -1048,7 +1048,7 @@ impl NyaTermApp {
         else {
             return div().into_any_element();
         };
-        let rows = connection_detail_rows(connection);
+        let rows = connection_detail_rows(connection, &self.connections, &self.proxies);
         let mut grid = div().flex().flex_col().gap_1();
         for (label, value) in rows {
             grid = grid.child(
@@ -1521,6 +1521,46 @@ impl NyaTermApp {
                                     "Cycle",
                                     cx.listener(|this, _, _, cx| {
                                         this.cycle_connection_editor_jump(cx);
+                                    }),
+                                )),
+                        )
+                        .child(
+                            div()
+                                .flex()
+                                .items_center()
+                                .justify_between()
+                                .gap_2()
+                                .child(
+                                    div()
+                                        .min_w_0()
+                                        .flex_1()
+                                        .flex()
+                                        .flex_col()
+                                        .gap_1()
+                                        .child(
+                                            div()
+                                                .text_xs()
+                                                .text_color(rgb(palette.text_muted))
+                                                .child(format!(
+                                                    "Backspace · {}",
+                                                    match editor.backspace_mode.as_str() {
+                                                        "ctrl-h" | "bs" | "ctrl_h" => "Ctrl+H (BS)",
+                                                        _ => "DEL (0x7F)",
+                                                    }
+                                                )),
+                                        )
+                                        .child(
+                                            div()
+                                                .text_size(px(10.))
+                                                .text_color(rgb(palette.text_dimmed))
+                                                .child("Terminal backspace key encoding for remote shells."),
+                                        ),
+                                )
+                                .child(small_button(palette,
+                                    "connection-editor-backspace",
+                                    "Cycle",
+                                    cx.listener(|this, _, _, cx| {
+                                        this.cycle_connection_editor_backspace(cx);
                                     }),
                                 )),
                         )
@@ -2499,7 +2539,11 @@ fn menu_item_owned(palette: crate::ui::theme::ThemePalette,
 }
 
 
-fn connection_detail_rows(connection: &SavedConnection) -> Vec<(&'static str, String)> {
+fn connection_detail_rows(
+    connection: &SavedConnection,
+    all_connections: &[SavedConnection],
+    proxies: &[ProxyConfig],
+) -> Vec<(&'static str, String)> {
     let description = connection
         .description
         .as_deref()
@@ -2516,11 +2560,37 @@ fn connection_detail_rows(connection: &SavedConnection) -> Vec<(&'static str, St
             host,
             port,
             username,
+            backspace_mode,
+            x11_forwarding,
             ..
         } => {
             rows.push(("Host", host.clone()));
             rows.push(("Port", port.to_string()));
             rows.push(("User", username.clone()));
+            rows.push((
+                "BS",
+                match backspace_mode.as_str() {
+                    "ctrl-h" | "bs" | "ctrl_h" => "Ctrl+H".to_string(),
+                    _ => "DEL".to_string(),
+                },
+            ));
+            if *x11_forwarding {
+                rows.push(("X11", "on".to_string()));
+            }
+            if let Some(network) = connection.network.as_ref() {
+                if let Some(proxy_id) = network.proxy_id.as_deref() {
+                    let proxy_label = proxies
+                        .iter()
+                        .find(|proxy| proxy.id == proxy_id)
+                        .map(|proxy| proxy.name.clone())
+                        .unwrap_or_else(|| truncate_preview(proxy_id, 16));
+                    rows.push(("Proxy", proxy_label));
+                }
+                if network.proxy_jump_id.is_some() {
+                    let chain = format_jump_host_chain(connection, all_connections);
+                    rows.push(("Jump", chain));
+                }
+            }
         }
         nyaterm_domain::ConnectionType::LocalTerminal {
             shell_path,
@@ -2559,4 +2629,48 @@ fn connection_detail_rows(connection: &SavedConnection) -> Vec<(&'static str, St
     rows.push(("Last", format_last_used_ms(connection.last_used_at_ms)));
     rows.push(("Desc", description));
     rows
+}
+
+fn format_jump_host_chain(
+    connection: &SavedConnection,
+    all_connections: &[SavedConnection],
+) -> String {
+    let Some(mut jump_id) = connection
+        .network
+        .as_ref()
+        .and_then(|network| network.proxy_jump_id.clone())
+    else {
+        return "—".to_string();
+    };
+    let by_id: std::collections::HashMap<&str, &SavedConnection> = all_connections
+        .iter()
+        .map(|item| (item.id.as_str(), item))
+        .collect();
+    let mut seen = std::collections::HashSet::new();
+    seen.insert(connection.id.clone());
+    let mut labels = Vec::new();
+    loop {
+        if !seen.insert(jump_id.clone()) {
+            labels.push("↺ cycle".to_string());
+            break;
+        }
+        let Some(jump) = by_id.get(jump_id.as_str()) else {
+            labels.push(format!("missing:{jump_id}"));
+            break;
+        };
+        labels.push(jump.name.clone());
+        match jump
+            .network
+            .as_ref()
+            .and_then(|network| network.proxy_jump_id.clone())
+        {
+            Some(next) => jump_id = next,
+            None => break,
+        }
+    }
+    if labels.is_empty() {
+        "—".to_string()
+    } else {
+        labels.join(" → ")
+    }
 }

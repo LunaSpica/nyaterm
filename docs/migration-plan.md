@@ -1549,3 +1549,9 @@ service boundary first:
   per-card Name/Base URL/API Key editing with Enter-to-save secret drafts.
 - Enabling a built-in provider seeds a compact default model catalog; disabling
   removes non-credential-bound models for that provider kind.
+
+## 2026-07-12 Connection editor backspace + detail tooltips
+
+- SSH connection editor adds Backspace mode cycle (DEL / Ctrl+H).
+- Connection details tooltip shows BS mode, X11, resolved proxy name, and
+  ProxyJump chain labels (including cycle/missing markers).
