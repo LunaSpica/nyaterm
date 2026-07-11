@@ -1574,3 +1574,8 @@ service boundary first:
   detail tooltip shows args when present.
 - Security Auth OTP list: spaced code display, TOTP remaining-seconds cue,
   Gen/Next + Copy actions, Refresh-all for unlocked secrets; lock clears codes.
+
+## 2026-07-12 Serial backspace + credential enable toggle
+
+- Serial connection editor adds Backspace mode cycle; details show BS.
+- Security Auth credentials list gains On/Off toggle that persists enablement.
