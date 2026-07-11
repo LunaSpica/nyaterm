@@ -74,6 +74,7 @@ impl NyaTermApp {
                 let actions_session_id = session.id.clone();
                 let close_session_id = session.id.clone();
                 let tab_number = tab_index + 1;
+                let kind_icon = session_kind_icon_path(session.kind);
                 let drag_payload = SessionTabDragPayload {
                     session_id: session.id.clone(),
                     display_name: display_name.clone(),
@@ -189,7 +190,19 @@ impl NyaTermApp {
                                     .bg(accent),
                             )
                         })
-                        .child(div().size(px(8.)).rounded_full().bg(accent))
+                        .child(
+                            div()
+                                .size(px(14.))
+                                .flex()
+                                .items_center()
+                                .justify_center()
+                                .child(
+                                    svg()
+                                        .size(px(12.))
+                                        .path(kind_icon)
+                                        .text_color(accent),
+                                ),
+                        )
                         .child(
                             div()
                                 .min_w(px(12.))
@@ -232,6 +245,14 @@ impl NyaTermApp {
                                             .path("icons/sync.svg")
                                             .text_color(rgb(sync_indicator_color)),
                                     ),
+                            )
+                        })
+                        .when(has_unread && !is_active, |this| {
+                            this.child(
+                                div()
+                                    .size(px(8.))
+                                    .rounded_full()
+                                    .bg(rgb(palette.success)),
                             )
                         })
                         .child(
@@ -670,5 +691,14 @@ impl NyaTermApp {
                     this.run_quick_command(index, cx);
                 }
             }))
+    }
+}
+
+fn session_kind_icon_path(kind: SessionKind) -> &'static str {
+    match kind {
+        SessionKind::Ssh => "icons/conn/server.svg",
+        SessionKind::Telnet | SessionKind::RawTcp => "icons/conn/telnet.svg",
+        SessionKind::Serial => "icons/conn/serial.svg",
+        SessionKind::LocalPty => "icons/conn/terminal.svg",
     }
 }

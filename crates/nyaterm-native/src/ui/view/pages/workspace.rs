@@ -125,12 +125,17 @@ impl NyaTermApp {
                     let close_id = tab_id.clone();
                     let actions_id = tab_id.clone();
                     let drop_before_id = tab_id.clone();
-                    let kind_label = self
+                    let (kind_label, kind_icon) = self
                         .ordered_sessions()
                         .into_iter()
                         .find(|session| session.id == *tab_id)
-                        .map(|session| session_kind_label(session.kind))
-                        .unwrap_or("Session");
+                        .map(|session| {
+                            (
+                                session_kind_label(session.kind),
+                                multi_leaf_session_kind_icon(session.kind),
+                            )
+                        })
+                        .unwrap_or(("Session", "icons/conn/terminal.svg"));
                     let custom_color = self.session_tab_colors.get(tab_id).copied();
                     let is_disconnected = self.is_session_disconnected(tab_id);
                     let has_unread = self
@@ -241,7 +246,19 @@ impl NyaTermApp {
                                     );
                                 },
                             ))
-                            .child(div().size(px(7.)).rounded_full().bg(accent))
+                            .child(
+                                div()
+                                    .size(px(12.))
+                                    .flex()
+                                    .items_center()
+                                    .justify_center()
+                                    .child(
+                                        svg()
+                                            .size(px(10.))
+                                            .path(kind_icon)
+                                            .text_color(accent),
+                                    ),
+                            )
                             .when(tab_number > 0, |this| {
                                 this.child(
                                     div()
@@ -280,6 +297,14 @@ impl NyaTermApp {
                                                 .path("icons/sync.svg")
                                                 .text_color(rgb(sync_indicator_color)),
                                         ),
+                                )
+                            })
+                            .when(has_unread && !is_active_tab, |this| {
+                                this.child(
+                                    div()
+                                        .size(px(7.))
+                                        .rounded_full()
+                                        .bg(rgb(palette.success)),
                                 )
                             })
                             .child(
@@ -637,5 +662,16 @@ impl NyaTermApp {
                         .child(label),
                 ),
             )
+    }
+}
+
+fn multi_leaf_session_kind_icon(kind: nyaterm_session::SessionKind) -> &'static str {
+    match kind {
+        nyaterm_session::SessionKind::Ssh => "icons/conn/server.svg",
+        nyaterm_session::SessionKind::Telnet | nyaterm_session::SessionKind::RawTcp => {
+            "icons/conn/telnet.svg"
+        }
+        nyaterm_session::SessionKind::Serial => "icons/conn/serial.svg",
+        nyaterm_session::SessionKind::LocalPty => "icons/conn/terminal.svg",
     }
 }

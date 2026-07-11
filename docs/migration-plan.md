@@ -1326,3 +1326,9 @@ service boundary first:
 - Native serialization writes leaf `root` on each tab, and when a global pane
   split covers every session, emits a single open_tabs entry with the full tree.
 - Global and multi-leaf tab strips show 1-based tab ordinals like Tauri TabBar.
+
+## 2026-07-11 Tab strip kind icons + unread pips
+
+- Session tabs (global + multi-leaf) show connection-kind icons (SSH/Local/Telnet/Serial)
+  tinted by status accent, matching Tauri tab icon density.
+- Inactive tabs with unread output show a green unread pip like Tauri TabBar.
