@@ -648,6 +648,13 @@ impl NyaTermApp {
             };
             self.terminal_scroll_offset = next.min(max);
         }
+        if self.active_terminal_scroll_offset() == 0 {
+            if let Some(session_id) = self.active_session_id.clone() {
+                if let Some(view) = self.terminal_views.get_mut(&session_id) {
+                    view.has_new_while_scrolled = false;
+                }
+            }
+        }
         cx.notify();
     }
 
@@ -742,6 +749,7 @@ impl NyaTermApp {
         if let Some(session_id) = self.active_session_id.clone() {
             if let Some(view) = self.terminal_views.get_mut(&session_id) {
                 view.scroll_offset = 0;
+                view.has_new_while_scrolled = false;
             }
         } else {
             self.terminal_scroll_offset = 0;
@@ -769,6 +777,9 @@ impl NyaTermApp {
             if let Some(view) = self.terminal_views.get_mut(&session_id) {
                 let max = view.screen.scrollback_len();
                 view.scroll_offset = offset.min(max);
+                if view.scroll_offset == 0 {
+                    view.has_new_while_scrolled = false;
+                }
             }
         } else {
             let max = self.terminal_screen.scrollback_len();

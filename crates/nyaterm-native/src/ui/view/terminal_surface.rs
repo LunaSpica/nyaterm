@@ -216,6 +216,10 @@ impl NyaTermApp {
         let output_session_id = session_id.clone();
         let terminal_font_family = self.settings.terminal_font_family.clone();
         let terminal_font_size = self.settings.terminal_font_size as f32;
+        let has_new_while_scrolled = self
+            .terminal_views
+            .get(&session_id)
+            .is_some_and(|view| view.has_new_while_scrolled);
         let show_scroll_to_bottom = is_active && scroll_offset > 0;
         let show_visual_bell = is_active && self.visual_bell_ticks > 0;
         let file_drop_hover = self
@@ -705,8 +709,18 @@ impl NyaTermApp {
                                             div()
                                                 .text_xs()
                                                 .font_weight(FontWeight(700.))
-                                                .text_color(rgb(palette.accent))
-                                                .child("↓ Live"),
+                                                .text_color(rgb(
+                                                    if has_new_while_scrolled {
+                                                        palette.warning
+                                                    } else {
+                                                        palette.accent
+                                                    },
+                                                ))
+                                                .child(if has_new_while_scrolled {
+                                                    "↓ New"
+                                                } else {
+                                                    "↓ Live"
+                                                }),
                                         ),
                                 )
                             })

@@ -20,6 +20,8 @@ pub(super) struct TerminalViewState {
     pub(super) has_unread: bool,
     /// Viewport offset from the live bottom (0 = follow output).
     pub(super) scroll_offset: usize,
+    /// True when output arrived while scrolled into history (FAB "New" affordance).
+    pub(super) has_new_while_scrolled: bool,
 }
 
 impl TerminalViewState {
@@ -29,6 +31,7 @@ impl TerminalViewState {
             screen: TerminalScreen::default(),
             has_unread: false,
             scroll_offset: 0,
+            has_new_while_scrolled: false,
         }
     }
 
@@ -39,6 +42,7 @@ impl TerminalViewState {
             screen,
             has_unread: false,
             scroll_offset: 0,
+            has_new_while_scrolled: false,
         }
     }
 
@@ -46,9 +50,8 @@ impl TerminalViewState {
         self.output.push_str(text);
         self.screen.advance(text.as_bytes());
         trim_terminal_output(&mut self.output);
-        // Keep following the bottom while pinned.
-        if self.scroll_offset == 0 {
-            // no-op
+        if self.scroll_offset > 0 {
+            self.has_new_while_scrolled = true;
         }
         self.clamp_scroll_offset();
     }
@@ -57,6 +60,9 @@ impl TerminalViewState {
         self.screen.advance(data);
         self.output.push_str(&String::from_utf8_lossy(data));
         trim_terminal_output(&mut self.output);
+        if self.scroll_offset > 0 {
+            self.has_new_while_scrolled = true;
+        }
         self.clamp_scroll_offset();
     }
 
@@ -65,6 +71,7 @@ impl TerminalViewState {
         self.screen.clear();
         self.has_unread = false;
         self.scroll_offset = 0;
+        self.has_new_while_scrolled = false;
     }
 
     pub(super) fn clamp_scroll_offset(&mut self) {
