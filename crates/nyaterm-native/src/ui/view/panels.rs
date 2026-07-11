@@ -67,21 +67,19 @@ impl NyaTermApp {
         };
         let unit_result =
             self.build_send_command_units(&self.send_command_draft.clone(), active_kind);
-        let (unit_count, draft_bytes, validation_text, validation_error) = match &unit_result {
+        let (validation_text, validation_error) = match &unit_result {
             Ok(units) => {
                 let bytes = units.iter().map(Vec::len).sum::<usize>();
                 (
-                    units.len(),
-                    bytes,
                     format!(
-                        "{} unit(s) / {} byte(s) / {target_status} / {target_kind}",
+                        "{} unit(s) / {} byte(s) · {target_kind} · {target_status}",
                         units.len(),
                         bytes
                     ),
                     false,
                 )
             }
-            Err(error) => (0, 0, format!("{error} / {target_kind}"), true),
+            Err(error) => (format!("{error} · {target_kind}"), true),
         };
         let preview = if self.send_command_data_type == SendCommandDataType::Hex {
             send_command_hex_preview(&self.send_command_draft)
@@ -94,101 +92,85 @@ impl NyaTermApp {
             "Shell Command"
         };
 
+        // Tauri SendCommandPanel: compact toolbar controls + flex editor + action footer.
         div()
-            .h(px(264.))
+            .h(px(220.))
             .flex_none()
             .flex()
             .flex_col()
             .border_t_1()
             .border_color(rgb(0x30363d))
             .bg(rgb(0x161b22))
-            .p_3()
             .child(
                 div()
+                    .h(px(32.))
+                    .flex_none()
+                    .px_2()
+                    .border_b_1()
+                    .border_color(rgb(0x30363d))
+                    .bg(rgb(0x12171f))
                     .flex()
                     .items_center()
-                    .justify_between()
-                    .gap_3()
-                    .child(
-                        div()
-                            .flex()
-                            .items_center()
-                            .gap_2()
-                            .child(
-                                div()
-                                    .text_xs()
-                                    .font_weight(FontWeight(800.))
-                                    .text_color(rgb(0x8b949e))
-                                    .child("Command Send"),
-                            )
-                            .child(status_pill(
-                                target_status,
-                                if self.active_session_id.is_some() {
-                                    rgb(0x3fb950)
-                                } else {
-                                    rgb(0xff7b72)
-                                },
-                                if self.active_session_id.is_some() {
-                                    rgb(0x12261a)
-                                } else {
-                                    rgb(0x3d1418)
-                                },
-                            )),
-                    )
-                    .child(
-                        div()
-                            .flex()
-                            .items_center()
-                            .gap_2()
-                            .child(small_button(
-                                "bottom-command-send-focus",
-                                "Focus",
-                                cx.listener(|this, _, window, cx| {
-                                    window.focus(&this.send_command_focus);
-                                    this.terminal_status = "command send focused".to_string();
-                                    cx.notify();
-                                }),
-                            ))
-                            .child(small_button(
-                                "bottom-command-send-hide",
-                                "Hide",
-                                cx.listener(|this, _, _, cx| {
-                                    this.bottom_panel = BottomPanelMode::Hidden;
-                                    cx.notify();
-                                }),
-                            )),
-                    ),
-            )
-            .child(
-                div()
-                    .mt_2()
-                    .grid()
-                    .grid_cols(5)
                     .gap_2()
-                    .child(bottom_send_field(
-                        "Target",
-                        truncate_preview(&active_target, 32),
+                    .child(
+                        div()
+                            .text_size(px(11.))
+                            .font_weight(FontWeight(700.))
+                            .text_color(rgb(0x8b949e))
+                            .child("COMMAND SEND"),
+                    )
+                    .child(status_pill(
+                        target_status,
+                        if self.active_session_id.is_some() {
+                            rgb(0x3fb950)
+                        } else {
+                            rgb(0xff7b72)
+                        },
+                        if self.active_session_id.is_some() {
+                            rgb(0x12261a)
+                        } else {
+                            rgb(0x3d1418)
+                        },
                     ))
-                    .child(bottom_send_field("Kind", target_kind))
-                    .child(bottom_send_field("Units", unit_count.to_string()))
-                    .child(bottom_send_field("Bytes", draft_bytes.to_string()))
-                    .child(bottom_send_field(
-                        "Interval",
-                        format!("{:.2}s", self.send_command_interval_seconds),
+                    .child(
+                        div()
+                            .min_w_0()
+                            .flex_1()
+                            .font_family("JetBrains Mono")
+                            .text_size(px(10.))
+                            .text_color(rgb(0x6e7681))
+                            .overflow_hidden()
+                            .child(truncate_preview(&active_target, 42)),
+                    )
+                    .child(small_button(
+                        "bottom-command-send-hide",
+                        "Hide",
+                        cx.listener(|this, _, _, cx| {
+                            this.bottom_panel = BottomPanelMode::Hidden;
+                            cx.notify();
+                        }),
                     )),
             )
             .child(
                 div()
-                    .mt_2()
+                    .flex_1()
+                    .min_h_0()
+                    .p_2()
+                    .flex()
+                    .flex_col()
+                    .gap_2()
+                    .child(
+                div()
                     .flex()
                     .items_center()
                     .justify_between()
-                    .gap_3()
+                    .gap_2()
+                    .flex_wrap()
                     .child(
                         div()
                             .flex()
                             .items_center()
-                            .gap_2()
+                            .gap_1()
                             .flex_wrap()
                             .child(mode_button(
                                 "bottom-command-send-text",
@@ -370,8 +352,8 @@ impl NyaTermApp {
                     self.send_command_draft.clone(),
                     true,
                 )
-                .mt_2()
-                .h(px(58.))
+                .flex_1()
+                .min_h(px(72.))
                 .track_focus(&self.send_command_focus)
                 .on_click(cx.listener(|this, _, window, cx| {
                     window.focus(&this.send_command_focus);
@@ -384,7 +366,10 @@ impl NyaTermApp {
             )
             .child(
                 div()
-                    .mt_2()
+                    .flex_none()
+                    .pt_1()
+                    .border_t_1()
+                    .border_color(rgb(0x30363d))
                     .flex()
                     .items_center()
                     .justify_between()
@@ -397,7 +382,7 @@ impl NyaTermApp {
                             .gap_1()
                             .child(
                                 div()
-                                    .text_xs()
+                                    .text_size(px(11.))
                                     .text_color(if validation_error {
                                         rgb(0xff7b72)
                                     } else {
@@ -448,6 +433,7 @@ impl NyaTermApp {
                                 }),
                             )),
                     ),
+            ),
             )
     }
 }

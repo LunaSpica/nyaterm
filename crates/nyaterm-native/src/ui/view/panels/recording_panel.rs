@@ -7,64 +7,83 @@ impl NyaTermApp {
     ) -> impl IntoElement {
         let active_session_id = self.active_session_id.clone();
         let sessions = self.ordered_sessions();
+        let session_count = sessions.len();
         let recording_count = sessions
             .iter()
             .filter(|session| self.recording_manager.is_recording(&session.id))
             .count();
-        let mut session_rows = div().mt_3().flex().flex_col().gap_1();
+        let query = self.recording_session_filter_query();
+
+        let mut session_rows = div().flex().flex_col().gap_1().p_2();
+        let mut visible_count = 0usize;
         if sessions.is_empty() {
             session_rows = session_rows.child(
                 div()
-                    .rounded_sm()
-                    .border_1()
-                    .border_color(rgb(0x263142))
-                    .bg(rgb(0x0d1320))
-                    .p_3()
-                    .text_xs()
-                    .text_color(rgb(0x98a3b8))
-                    .child("No active sessions."),
+                    .py_4()
+                    .text_center()
+                    .text_size(px(11.))
+                    .text_color(rgb(0x6e7681))
+                    .child("No active sessions"),
             );
         } else {
-            for session in sessions.into_iter().take(8) {
+            for session in sessions {
+                let session_name = self.session_display_name_by_info(&session);
+                let haystack = format!(
+                    "{} {} {} {}",
+                    session_name,
+                    session.name,
+                    session_kind_label(session.kind),
+                    session.id
+                )
+                .to_ascii_lowercase();
+                if !query.is_empty() && !haystack.contains(&query) {
+                    continue;
+                }
+                visible_count += 1;
+
                 let session_id = session.id.clone();
                 let start_session_id = session.id.clone();
                 let save_session_id = session.id.clone();
                 let select_session_id = session.id.clone();
-                let session_name = self.session_display_name_by_info(&session);
                 let start_session_name = session_name.clone();
                 let save_session_name = session_name.clone();
                 let is_current = active_session_id.as_deref() == Some(session.id.as_str());
                 let session_is_recording = self.recording_manager.is_recording(&session.id);
+                let kind = session_kind_label(session.kind);
+                let short = short_id(&session.id).to_string();
+
                 session_rows = session_rows.child(
                     div()
                         .id(SharedString::from(format!(
                             "recording-session-row-{session_id}"
                         )))
-                        .rounded_sm()
+                        .rounded_md()
+                        .px_2()
+                        .py_1()
+                        .bg(if is_current {
+                            rgb(0x122033)
+                        } else {
+                            rgb(0x161b22)
+                        })
                         .border_1()
                         .border_color(if is_current {
-                            rgb(0x3b82f6)
+                            rgb(0x1f6feb)
                         } else {
-                            rgb(0x263142)
+                            rgb(0x161b22)
                         })
-                        .bg(if is_current {
-                            rgb(0x10223b)
-                        } else {
-                            rgb(0x0d1320)
-                        })
-                        .p_2()
                         .flex()
                         .items_center()
                         .gap_2()
                         .cursor_pointer()
-                        .hover(|this| this.bg(rgb(0x182235)))
+                        .hover(|this| this.bg(rgb(0x1c2128)))
                         .on_click(cx.listener(move |this, _, _, cx| {
                             this.select_session(select_session_id.clone(), cx);
                         }))
                         .child(
                             div()
-                                .size(px(7.))
+                                .size(px(8.))
                                 .rounded_full()
+                                .flex_none()
                                 .bg(if session_is_recording {
                                     rgb(0xef4444)
                                 } else {
@@ -77,7 +96,6 @@ impl NyaTermApp {
                                 .flex_1()
                                 .flex()
                                 .flex_col()
-                                .gap_1()
                                 .child(
                                     div()
                                         .flex()
@@ -86,38 +104,68 @@ impl NyaTermApp {
                                         .child(
                                             div()
                                                 .min_w_0()
+                                                .flex_1()
                                                 .text_xs()
-                                                .font_weight(FontWeight(700.))
-                                                .text_color(rgb(0xe5edf7))
+                                                .font_weight(FontWeight(600.))
+                                                .text_color(rgb(0xc9d1d9))
+                                                .overflow_hidden()
                                                 .child(truncate_preview(&session_name, 34)),
                                         )
-                                        .child(status_pill(
-                                            session_kind_label(session.kind),
-                                            rgb(0x93c5fd),
-                                            rgb(0x17233a),
-                                        )),
+                                        .child(
+                                            div()
+                                                .px_1()
+                                                .rounded_sm()
+                                                .bg(rgb(0x21262d))
+                                                .text_size(px(10.))
+                                                .font_weight(FontWeight(700.))
+                                                .text_color(rgb(0x8b949e))
+                                                .child(kind),
+                                        ),
                                 )
                                 .child(
                                     div()
-                                        .font_family("JetBrains Mono")
-                                        .text_size(px(10.))
-                                        .text_color(rgb(0x8f98aa))
-                                        .child(short_id(&session_id).to_string()),
+                                        .flex()
+                                        .items_center()
+                                        .gap_1()
+                                        .child(
+                                            div()
+                                                .font_family("JetBrains Mono")
+                                                .text_size(px(10.))
+                                                .text_color(rgb(0x6e7681))
+                                                .child(short),
+                                        )
+                                        .when(session_is_recording, |this| {
+                                            this.child(
+                                                div()
+                                                    .px_1()
+                                                    .rounded_sm()
+                                                    .bg(rgb(0x3d1418))
+                                                    .text_size(px(10.))
+                                                    .text_color(rgb(0xf85149))
+                                                    .child("● REC"),
+                                            )
+                                        }),
                                 ),
                         )
                         .child(
                             div()
                                 .flex()
                                 .items_center()
-                                .gap_1()
-                                .child(small_button(
+                                .gap_0()
+                                .child(recording_action_svg_button(
                                     format!("recording-session-toggle-{session_id}"),
                                     if session_is_recording {
-                                        "Stop"
+                                        "icons/session/stop.svg"
                                     } else {
-                                        "Start"
+                                        "icons/session/record.svg"
+                                    },
+                                    if session_is_recording {
+                                        rgb(0xf85149)
+                                    } else {
+                                        rgb(0x8b949e)
                                     },
                                     cx.listener(move |this, _, _, cx| {
+                                        cx.stop_propagation();
                                         if this.recording_manager.is_recording(&start_session_id) {
                                             this.stop_recording_for_session(&start_session_id, cx);
                                         } else {
@@ -130,10 +178,12 @@ impl NyaTermApp {
                                         }
                                     }),
                                 ))
-                                .child(small_button(
+                                .child(recording_action_svg_button(
                                     format!("recording-session-save-{session_id}"),
-                                    "Save",
+                                    "icons/session/save.svg",
+                                    rgb(0x8b949e),
                                     cx.listener(move |this, _, _, cx| {
+                                        cx.stop_propagation();
                                         this.prompt_recording_path_for_session(
                                             RecordingPathPromptKind::SaveTranscript,
                                             save_session_id.clone(),
@@ -145,187 +195,139 @@ impl NyaTermApp {
                         ),
                 );
             }
-        }
-        let search = self.recording_search_results();
-        let mut rows = div().mt_3().flex().flex_col().gap_2();
-        match search {
-            Ok(response) if response.results.is_empty() => {
-                rows = rows.child(
+            if visible_count == 0 {
+                session_rows = session_rows.child(
                     div()
-                        .text_xs()
-                        .text_color(rgb(0x98a3b8))
-                        .line_height(px(18.))
-                        .child(if self.recording_search_draft.trim().is_empty() {
-                            "Type to search captured terminal history."
-                        } else {
-                            "No transcript matches."
-                        }),
-                );
-            }
-            Ok(response) => {
-                rows = rows.child(div().text_xs().text_color(rgb(0x64748b)).child(format!(
-                    "{} match(es) · {} ms",
-                    response.total, response.elapsed_ms
-                )));
-                for result in response.results.into_iter().take(4) {
-                    let meta = format!("{} · line {}", result.source, result.line_number);
-                    rows = rows.child(
-                        div()
-                            .border_t_1()
-                            .border_color(rgb(0x2a3140))
-                            .pt_2()
-                            .flex()
-                            .flex_col()
-                            .gap_1()
-                            .child(
-                                div()
-                                    .flex()
-                                    .items_center()
-                                    .justify_between()
-                                    .gap_2()
-                                    .child(
-                                        div()
-                                            .min_w_0()
-                                            .text_xs()
-                                            .font_family("JetBrains Mono")
-                                            .text_color(rgb(0xe5edf7))
-                                            .child(truncate_preview(&result.preview, 120)),
-                                    )
-                                    .child(div().text_xs().text_color(rgb(0x64748b)).child(meta)),
-                            )
-                            .child(div().text_xs().text_color(rgb(0x98a3b8)).child(format!(
-                                "context {} before / {} after",
-                                result.before.len(),
-                                result.after.len()
-                            ))),
-                    );
-                }
-            }
-            Err(error) => {
-                rows = rows.child(
-                    div()
-                        .text_xs()
-                        .text_color(rgb(0xfca5a5))
-                        .line_height(px(18.))
-                        .child(format!("Search failed: {error}")),
+                        .py_4()
+                        .text_center()
+                        .text_size(px(11.))
+                        .text_color(rgb(0x6e7681))
+                        .child("No matching sessions"),
                 );
             }
         }
 
+        let count_label = if query.is_empty() {
+            session_count.to_string()
+        } else {
+            format!("{visible_count}/{session_count}")
+        };
+        let _ = recording_count;
+
+        // Tauri RecordingPanel: PanelHeader(meta count) + search strip + dense session rows.
+        // Shared stack already renders PanelHeader; body is search + list only.
         div()
-            .rounded_md()
-            .border_1()
-            .border_color(rgb(0x2a3140))
-            .bg(rgb(0x151923))
-            .p_4()
+            .size_full()
+            .flex()
+            .flex_col()
+            .overflow_hidden()
+            .bg(rgb(0x161b22))
             .child(
                 div()
+                    .h(px(36.))
+                    .flex_none()
+                    .px_2()
+                    .border_b_1()
+                    .border_color(rgb(0x30363d))
+                    .bg(rgb(0x161b22))
                     .flex()
                     .items_center()
-                    .justify_between()
                     .gap_2()
                     .child(
                         div()
-                            .text_sm()
-                            .font_weight(FontWeight(700.))
-                            .child("Recording"),
+                            .relative()
+                            .flex_1()
+                            .min_w_0()
+                            .child(
+                                div()
+                                    .id(SharedString::from("recording-session-search"))
+                                    .h(px(28.))
+                                    .rounded_md()
+                                    .bg(rgb(0x21262d))
+                                    .px_2()
+                                    .flex()
+                                    .items_center()
+                                    .gap_1()
+                                    .cursor_text()
+                                    .track_focus(&self.recording_search_focus)
+                                    .on_click(cx.listener(|this, _, window, cx| {
+                                        window.focus(&this.recording_search_focus);
+                                        cx.notify();
+                                    }))
+                                    .on_key_down(cx.listener(|this, event: &KeyDownEvent, _, cx| {
+                                        cx.stop_propagation();
+                                        this.handle_recording_search_key_down(event, cx);
+                                    }))
+                                    .child(
+                                        svg()
+                                            .size(px(14.))
+                                            .flex_none()
+                                            .path("icons/fe/search.svg")
+                                            .text_color(rgb(0x8b949e)),
+                                    )
+                                    .child(
+                                        div()
+                                            .min_w_0()
+                                            .flex_1()
+                                            .text_size(px(12.))
+                                            .text_color(if self.recording_search_draft.is_empty() {
+                                                rgb(0x6e7681)
+                                            } else {
+                                                rgb(0xc9d1d9)
+                                            })
+                                            .child(if self.recording_search_draft.is_empty() {
+                                                "Search sessions".to_string()
+                                            } else {
+                                                self.recording_search_draft.clone()
+                                            }),
+                                    ),
+                            ),
                     )
-                    .child(status_pill(
-                        if recording_count > 0 {
-                            "recording"
-                        } else {
-                            "idle"
-                        },
-                        if recording_count > 0 {
-                            rgb(0xfca5a5)
-                        } else {
-                            rgb(0x93c5fd)
-                        },
-                        if recording_count > 0 {
-                            rgb(0x3a1717)
-                        } else {
-                            rgb(0x17233a)
-                        },
-                    )),
+                    .child(
+                        div()
+                            .text_size(px(11.))
+                            .text_color(rgb(0x6e7681))
+                            .child(count_label),
+                    ),
             )
             .child(
                 div()
-                    .mt_3()
-                    .flex()
-                    .items_center()
-                    .gap_2()
-                    .child(small_button(
-                        "recording-start",
-                        "Start",
-                        cx.listener(|this, _, _, cx| {
-                            this.prompt_recording_path(RecordingPathPromptKind::Start, cx);
-                        }),
-                    ))
-                    .child(small_button(
-                        "recording-stop",
-                        "Stop",
-                        cx.listener(|this, _, _, cx| {
-                            this.stop_active_recording(cx);
-                        }),
-                    ))
-                    .child(small_button(
-                        "recording-save-transcript",
-                        "Save",
-                        cx.listener(|this, _, _, cx| {
-                            this.prompt_recording_path(RecordingPathPromptKind::SaveTranscript, cx);
-                        }),
-                    )),
+                    .id(SharedString::from("recording-session-list"))
+                    .flex_1()
+                    .min_h_0()
+                    .overflow_scroll()
+                    .scrollbar_width(px(6.))
+                    .child(session_rows),
             )
-            .child(
-                div()
-                    .mt_3()
-                    .grid()
-                    .grid_cols(3)
-                    .gap_2()
-                    .child(metric(
-                        "Sessions",
-                        self.session_manager
-                            .list_sessions()
-                            .map(|sessions| sessions.len().to_string())
-                            .unwrap_or_else(|_| "0".to_string()),
-                    ))
-                    .child(metric("Recording", recording_count.to_string()))
-                    .child(metric(
-                        "Active",
-                        active_session_id
-                            .as_deref()
-                            .map(short_id)
-                            .unwrap_or("none")
-                            .to_string(),
-                    )),
-            )
-            .child(
-                div()
-                    .mt_3()
-                    .text_xs()
-                    .font_weight(FontWeight(700.))
-                    .text_color(rgb(0x8f98aa))
-                    .child("Session Recording"),
-            )
-            .child(session_rows)
-            .child(
-                transfer_input(
-                    "recording-search-input",
-                    "Transcript Search",
-                    self.recording_search_draft.clone(),
-                    true,
-                )
-                .mt_3()
-                .track_focus(&self.recording_search_focus)
-                .on_click(cx.listener(|this, _, window, cx| {
-                    window.focus(&this.recording_search_focus);
-                    cx.notify();
-                }))
-                .on_key_down(cx.listener(|this, event: &KeyDownEvent, _, cx| {
-                    cx.stop_propagation();
-                    this.handle_recording_search_key_down(event, cx);
-                })),
-            )
-            .child(rows)
     }
+
+    fn recording_session_filter_query(&self) -> String {
+        self.recording_search_draft.trim().to_ascii_lowercase()
+    }
+}
+
+fn recording_action_svg_button(
+    id: impl Into<String>,
+    icon_path: &'static str,
+    color: impl Into<gpui::Hsla>,
+    on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
+) -> impl IntoElement {
+    let color = color.into();
+    div()
+        .id(SharedString::from(id.into()))
+        .size(px(28.))
+        .flex()
+        .items_center()
+        .justify_center()
+        .rounded_md()
+        .text_color(color)
+        .cursor_pointer()
+        .hover(|this| this.bg(rgb(0x21262d)).text_color(rgb(0xc9d1d9)))
+        .child(
+            svg()
+                .size(px(16.))
+                .flex_none()
+                .path(icon_path),
+        )
+        .on_click(on_click)
 }

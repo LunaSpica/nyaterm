@@ -570,6 +570,18 @@ impl NyaTermApp {
                     SharedString::from(count.to_string())
                 }
             }
+            NavItem::Recording => {
+                let count = self
+                    .session_manager
+                    .list_sessions()
+                    .map(|sessions| sessions.len())
+                    .unwrap_or(0);
+                if count == 0 {
+                    SharedString::from("")
+                } else {
+                    SharedString::from(count.to_string())
+                }
+            }
             _ => SharedString::from(""),
         }
     }
