@@ -32,6 +32,7 @@ impl NyaTermApp {
         &mut self,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
+        let palette = self.theme_palette();
         let can_translate = !self.translate_pending && !self.translate_input.trim().is_empty();
         let input_value = if self.translate_input.is_empty() {
             " ".to_string()
@@ -104,10 +105,10 @@ impl NyaTermApp {
                     .grid()
                     .grid_cols(4)
                     .gap_3()
-                    .child(metric("Provider", self.translate_provider.clone()))
-                    .child(metric("Target", self.translate_target_language.clone()))
-                    .child(metric("Detected", detected))
-                    .child(metric("Credentials", credential_status)),
+                    .child(metric(palette, "Provider", self.translate_provider.clone()))
+                    .child(metric(palette, "Target", self.translate_target_language.clone()))
+                    .child(metric(palette, "Detected", detected))
+                    .child(metric(palette, "Credentials", credential_status)),
             )
             .child(
                 div()
@@ -141,7 +142,7 @@ impl NyaTermApp {
                                     .items_center()
                                     .gap_2()
                                     .when(!can_translate, |this| this.opacity(0.45))
-                                    .child(small_button(
+                                    .child(small_button(palette, 
                                         "translate-run",
                                         if self.translate_pending {
                                             "Running"
@@ -272,7 +273,7 @@ impl NyaTermApp {
                                     .items_center()
                                     .gap_2()
                                     .when(!has_result, |this| this.opacity(0.45))
-                                    .child(small_button(
+                                    .child(small_button(palette, 
                                         "translate-copy-result",
                                         "Copy",
                                         cx.listener(|this, _, _, cx| {

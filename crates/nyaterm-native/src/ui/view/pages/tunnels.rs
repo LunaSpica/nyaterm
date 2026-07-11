@@ -32,6 +32,7 @@ use tunnel::{network_tunnel_editor_panel, tunnel_matches, tunnel_section, tunnel
 
 impl NyaTermApp {
     pub(in crate::ui::view) fn tunnels_view(&mut self, cx: &mut Context<Self>) -> impl IntoElement {
+        let palette = self.theme_palette();
         let open_tunnels = self
             .tunnel_manager
             .list()
@@ -256,7 +257,7 @@ impl NyaTermApp {
                                                 }),
                                             ))
                                             .when(self.network_tab == NetworkTab::Tunnels, |this| {
-                                                this.child(small_button(
+                                                this.child(small_button(palette, 
                                                     "network-tunnel-new",
                                                     "+ Tunnel",
                                                     cx.listener(|this, _, window, cx| {
@@ -267,7 +268,7 @@ impl NyaTermApp {
                                                 ))
                                             })
                                             .when(self.network_tab == NetworkTab::Proxies, |this| {
-                                                this.child(small_button(
+                                                this.child(small_button(palette, 
                                                     "network-proxy-new",
                                                     "+ Proxy",
                                                     cx.listener(|this, _, window, cx| {

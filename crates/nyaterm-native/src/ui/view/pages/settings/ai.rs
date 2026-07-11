@@ -239,14 +239,14 @@ impl NyaTermApp {
                             .flex()
                             .items_center()
                             .gap_1()
-                            .child(small_button(
+                            .child(small_button(palette, 
                                 "ai-discover",
                                 ai_discovery_label,
                                 cx.listener(|this, _, _, cx| {
                                     this.discover_ai_models(cx);
                                 }),
                             ))
-                            .child(small_button(
+                            .child(small_button(palette, 
                                 "ai-save",
                                 "Save",
                                 cx.listener(|this, _, _, cx| {
@@ -355,14 +355,14 @@ impl NyaTermApp {
                         div()
                             .flex()
                             .gap_1()
-                            .child(small_button(
+                            .child(small_button(palette, 
                                 "ai-context-minus",
                                 "−50",
                                 cx.listener(|this, _, _, cx| {
                                     this.adjust_ai_context_line_limit(-50, cx);
                                 }),
                             ))
-                            .child(small_button(
+                            .child(small_button(palette, 
                                 "ai-context-plus",
                                 "+50",
                                 cx.listener(|this, _, _, cx| {
@@ -379,14 +379,14 @@ impl NyaTermApp {
                         div()
                             .flex()
                             .gap_1()
-                            .child(small_button(
+                            .child(small_button(palette, 
                                 "ai-timeout-minus",
                                 "−1s",
                                 cx.listener(|this, _, _, cx| {
                                     this.adjust_ai_timeout_ms(-1_000, cx);
                                 }),
                             ))
-                            .child(small_button(
+                            .child(small_button(palette, 
                                 "ai-timeout-plus",
                                 "+1s",
                                 cx.listener(|this, _, _, cx| {
@@ -403,14 +403,14 @@ impl NyaTermApp {
                         div()
                             .flex()
                             .gap_1()
-                            .child(small_button(
+                            .child(small_button(palette, 
                                 "ai-agent-steps-minus",
                                 "−1",
                                 cx.listener(|this, _, _, cx| {
                                     this.adjust_ai_agent_steps(-1, cx);
                                 }),
                             ))
-                            .child(small_button(
+                            .child(small_button(palette, 
                                 "ai-agent-steps-plus",
                                 "+1",
                                 cx.listener(|this, _, _, cx| {
@@ -427,14 +427,14 @@ impl NyaTermApp {
                         div()
                             .flex()
                             .gap_1()
-                            .child(small_button(
+                            .child(small_button(palette, 
                                 "ai-output-lines-minus",
                                 "−1",
                                 cx.listener(|this, _, _, cx| {
                                     this.adjust_ai_terminal_output_lines(-1, cx);
                                 }),
                             ))
-                            .child(small_button(
+                            .child(small_button(palette, 
                                 "ai-output-lines-plus",
                                 "+1",
                                 cx.listener(|this, _, _, cx| {
@@ -574,7 +574,7 @@ impl NyaTermApp {
                                     }
                                 }),
                             ))
-                            .child(small_button(
+                            .child(small_button(palette, 
                                 format!("ai-model-default-{index}"),
                                 "Default",
                                 cx.listener(move |this, _, _, cx| {
@@ -665,7 +665,7 @@ impl NyaTermApp {
                     .child(settings_form_row(palette, 
                         "Catalog",
                         Some(SharedString::from(models_summary)),
-                        small_button(
+                        small_button(palette, 
                             "ai-models-discover",
                             ai_discovery_label,
                             cx.listener(|this, _, _, cx| {
@@ -775,7 +775,7 @@ impl NyaTermApp {
                     .child(settings_form_row(palette, 
                         "Actions",
                         Some(SharedString::from(self.ai_status.clone())),
-                        small_button(
+                        small_button(palette, 
                             "ai-model-tab-save",
                             "Save",
                             cx.listener(|this, _, _, cx| {
@@ -826,7 +826,7 @@ impl NyaTermApp {
                             .flex()
                             .items_center()
                             .gap_1()
-                            .child(small_button(
+                            .child(small_button(palette, 
                                 "ai-file-size-minus",
                                 "-1 MiB",
                                 cx.listener(|this, _, _, cx| {
@@ -843,7 +843,7 @@ impl NyaTermApp {
                                     .text_color(rgb(0xc9d1d9))
                                     .child(format!("{file_size_mb}")),
                             )
-                            .child(small_button(
+                            .child(small_button(palette, 
                                 "ai-file-size-plus",
                                 "+1 MiB",
                                 cx.listener(|this, _, _, cx| {
@@ -858,7 +858,7 @@ impl NyaTermApp {
                             .flex()
                             .items_center()
                             .gap_1()
-                            .child(small_button(
+                            .child(small_button(palette, 
                                 "ai-agent-step-timeout-minus",
                                 "-1s",
                                 cx.listener(|this, _, _, cx| {
@@ -875,7 +875,7 @@ impl NyaTermApp {
                                     .text_color(rgb(0xc9d1d9))
                                     .child(format!("{step_timeout_s}s")),
                             )
-                            .child(small_button(
+                            .child(small_button(palette, 
                                 "ai-agent-step-timeout-plus",
                                 "+1s",
                                 cx.listener(|this, _, _, cx| {
@@ -944,7 +944,7 @@ impl NyaTermApp {
                     .child(settings_form_row(palette, 
                         "Actions",
                         Some(SharedString::from(self.ai_status.clone())),
-                        small_button(
+                        small_button(palette, 
                             "ai-rules-save",
                             "Save",
                             cx.listener(|this, _, _, cx| {

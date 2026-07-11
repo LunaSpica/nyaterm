@@ -5,6 +5,7 @@ impl NyaTermApp {
         &mut self,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
+        let palette = self.theme_palette();
         let input_display = if self.temporary_ssh_link_draft.is_empty() {
             "ssh://root@example.com:22 or ssh -p 2222 user@example.com".to_string()
         } else {
@@ -71,7 +72,7 @@ impl NyaTermApp {
                                             .child("Transient SSH session; password is requested securely during connect."),
                                     ),
                             )
-                            .child(small_button(
+                            .child(small_button(palette, 
                                 "temporary-ssh-link-close",
                                 "Close",
                                 cx.listener(|this, _, _, cx| {
@@ -132,7 +133,7 @@ impl NyaTermApp {
                                     .flex()
                                     .items_center()
                                     .gap_2()
-                                    .child(small_button(
+                                    .child(small_button(palette, 
                                         "temporary-ssh-link-clear",
                                         "Clear",
                                         cx.listener(|this, _, _, cx| {
@@ -142,7 +143,7 @@ impl NyaTermApp {
                                         }),
                                     ))
                                     .child(if can_submit {
-                                        small_button(
+                                        small_button(palette, 
                                             "temporary-ssh-link-connect",
                                             "Connect",
                                             cx.listener(|this, _, window, cx| {

@@ -44,6 +44,7 @@ pub(super) fn section_header(
 }
 
 pub(super) fn capability_line(
+    palette: ThemePalette,
     label: &'static str,
     value: impl Into<SharedString>,
 ) -> impl IntoElement {
@@ -53,21 +54,25 @@ pub(super) fn capability_line(
         .items_center()
         .justify_between()
         .text_sm()
-        .child(div().text_color(rgb(0xcbd5e1)).child(label))
+        .child(div().text_color(rgb(palette.text)).child(label))
         .child(
             div()
                 .text_xs()
-                .text_color(rgb(0x8b949e))
+                .text_color(rgb(palette.text_muted))
                 .child(value.into()),
         )
 }
 
-pub(super) fn session_info_row(label: &'static str, value: String) -> impl IntoElement {
+pub(super) fn session_info_row(
+    palette: ThemePalette,
+    label: &'static str,
+    value: String,
+) -> impl IntoElement {
     div()
         .rounded_sm()
         .border_1()
-        .border_color(rgb(0x263142))
-        .bg(rgb(0x0d1320))
+        .border_color(rgb(palette.border))
+        .bg(rgb(palette.input))
         .px_3()
         .py_2()
         .flex()
@@ -79,7 +84,7 @@ pub(super) fn session_info_row(label: &'static str, value: String) -> impl IntoE
                 .flex_none()
                 .text_xs()
                 .font_weight(FontWeight(700.))
-                .text_color(rgb(0x8f98aa))
+                .text_color(rgb(palette.text_muted))
                 .child(label),
         )
         .child(
@@ -88,17 +93,19 @@ pub(super) fn session_info_row(label: &'static str, value: String) -> impl IntoE
                 .flex_1()
                 .font_family("JetBrains Mono")
                 .text_xs()
-                .text_color(rgb(0xdbeafe))
+                .text_color(rgb(palette.text))
                 .child(value),
         )
 }
 
 pub(super) fn small_button(
+    palette: ThemePalette,
     id: impl Into<String>,
     label: &'static str,
     on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
 ) -> impl IntoElement {
-    // Uses github-dark chrome tokens; callers that need live theme should use themed shells.
+    let hover_bg = palette.hover;
+    let hover_text = palette.text;
     div()
         .id(SharedString::from(id.into()))
         .h(px(28.))
@@ -107,12 +114,12 @@ pub(super) fn small_button(
         .items_center()
         .rounded_sm()
         .border_1()
-        .border_color(rgb(0x30363d))
-        .bg(rgb(0x21262d))
-        .text_color(rgb(0xc9d1d9))
+        .border_color(rgb(palette.border))
+        .bg(rgb(palette.surface_elevated))
+        .text_color(rgb(palette.text))
         .text_xs()
         .cursor_pointer()
-        .hover(|this| this.bg(rgb(0x1c2128)).text_color(rgb(0xffffff)))
+        .hover(move |this| this.bg(rgb(hover_bg)).text_color(rgb(hover_text)))
         .child(label)
         .on_click(on_click)
 }

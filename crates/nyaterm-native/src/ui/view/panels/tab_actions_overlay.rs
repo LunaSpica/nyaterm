@@ -5,6 +5,7 @@ impl NyaTermApp {
         &mut self,
         cx: &mut Context<Self>,
     ) -> gpui::AnyElement {
+        let palette = self.theme_palette();
         let Some(session_id) = self.tab_actions_session_id.clone() else {
             return div().into_any_element();
         };
@@ -155,7 +156,7 @@ impl NyaTermApp {
                                         ),
                                     )),
                             )
-                            .child(small_button(
+                            .child(small_button(palette, 
                                 "tab-actions-close",
                                 "Close",
                                 cx.listener(|this, _, _, cx| {
@@ -184,7 +185,7 @@ impl NyaTermApp {
                                             .child("Color"),
                                     )
                                     .child(div().mt_3().child(swatches))
-                                    .child(div().mt_3().child(small_button(
+                                    .child(div().mt_3().child(small_button(palette, 
                                         "tab-actions-color-reset",
                                         "Reset Color",
                                         cx.listener(move |this, _, _, cx| {

@@ -5,6 +5,7 @@ impl NyaTermApp {
         &mut self,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
+        let palette = self.theme_palette();
         let state = self
             .transfer_unknown_file
             .clone()
@@ -99,21 +100,21 @@ impl NyaTermApp {
                             .flex()
                             .justify_end()
                             .gap_2()
-                            .child(small_button(
+                            .child(small_button(palette, 
                                 "transfer-unknown-cancel",
                                 "Cancel",
                                 cx.listener(|this, _, _, cx| {
                                     this.cancel_transfer_unknown_file(cx);
                                 }),
                             ))
-                            .child(small_button(
+                            .child(small_button(palette, 
                                 "transfer-unknown-internal",
                                 "Open Internal",
                                 cx.listener(|this, _, window, cx| {
                                     this.open_unknown_transfer_file_internal(window, cx);
                                 }),
                             ))
-                            .child(small_button(
+                            .child(small_button(palette, 
                                 "transfer-unknown-external",
                                 "Open External",
                                 cx.listener(|this, _, window, cx| {

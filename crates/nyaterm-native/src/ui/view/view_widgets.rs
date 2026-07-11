@@ -55,6 +55,7 @@ pub(in crate::ui::view) fn menu_bar_button(
 }
 
 pub(in crate::ui::view) fn status_bar_label(
+    palette: ThemePalette,
     label: &'static str,
     value: impl Into<String>,
     value_color: impl Into<gpui::Hsla>,
@@ -69,7 +70,7 @@ pub(in crate::ui::view) fn status_bar_label(
         .px_1()
         .rounded_sm()
         .text_size(px(10.))
-        .text_color(rgb(0x8b949e))
+        .text_color(rgb(palette.text_muted))
         .child(label)
         .child(
             div()
@@ -80,6 +81,7 @@ pub(in crate::ui::view) fn status_bar_label(
 }
 
 pub(in crate::ui::view) fn status_bar_button(
+    palette: ThemePalette,
     id: impl Into<String>,
     label: &'static str,
     value: impl Into<String>,
@@ -88,6 +90,8 @@ pub(in crate::ui::view) fn status_bar_button(
 ) -> impl IntoElement {
     let value = value.into();
     let value_color = value_color.into();
+    let hover_bg = palette.hover;
+    let hover_text = palette.text;
     div()
         .id(SharedString::from(id.into()))
         .h(px(18.))
@@ -97,9 +101,9 @@ pub(in crate::ui::view) fn status_bar_button(
         .px_1()
         .rounded_sm()
         .text_size(px(10.))
-        .text_color(rgb(0x8b949e))
+        .text_color(rgb(palette.text_muted))
         .cursor_pointer()
-        .hover(|this| this.bg(rgb(0x1c2128)).text_color(rgb(0xc9d1d9)))
+        .hover(move |this| this.bg(rgb(hover_bg)).text_color(rgb(hover_text)))
         .child(label)
         .child(
             div()
@@ -189,6 +193,7 @@ pub(in crate::ui::view) fn panel_header(
 
 /// Dimmed full-area modal shell (Tauri Dialog backdrop + centered card).
 pub(in crate::ui::view) fn modal_dialog_shell(
+    palette: ThemePalette,
     id: impl Into<String>,
     width: f32,
     content: impl IntoElement,
@@ -212,8 +217,8 @@ pub(in crate::ui::view) fn modal_dialog_shell(
                 .max_h_full()
                 .rounded_md()
                 .border_1()
-                .border_color(rgb(0x30363d))
-                .bg(rgb(0x0d1117))
+                .border_color(rgb(palette.border))
+                .bg(rgb(palette.bg))
                 .shadow_lg()
                 .child(content),
         )
@@ -221,6 +226,7 @@ pub(in crate::ui::view) fn modal_dialog_shell(
 
 /// Tauri ActionFooter-like Cancel/Save row.
 pub(in crate::ui::view) fn modal_dialog_footer(
+    palette: ThemePalette,
     cancel_id: impl Into<String>,
     save_id: impl Into<String>,
     save_label: &'static str,
@@ -231,27 +237,27 @@ pub(in crate::ui::view) fn modal_dialog_footer(
         .mt_1()
         .pt_3()
         .border_t_1()
-        .border_color(rgb(0x30363d))
+        .border_color(rgb(palette.border))
         .flex()
         .items_center()
         .justify_end()
         .gap_2()
-        .child(small_button(cancel_id, "Cancel", on_cancel))
-        .child(small_button(save_id, save_label, on_save))
+        .child(small_button(palette, cancel_id, "Cancel", on_cancel))
+        .child(small_button(palette, save_id, save_label, on_save))
 }
 
-pub(in crate::ui::view) fn inspector_card(title: &'static str) -> gpui::Div {
+pub(in crate::ui::view) fn inspector_card(palette: ThemePalette, title: &'static str) -> gpui::Div {
     div()
         .rounded_md()
         .border_1()
-        .border_color(rgb(0x2a3140))
-        .bg(rgb(0x151923))
+        .border_color(rgb(palette.border))
+        .bg(rgb(palette.surface))
         .p_4()
         .child(
             div()
                 .text_sm()
                 .font_weight(FontWeight(800.))
-                .text_color(rgb(0xc9d1d9))
+                .text_color(rgb(palette.text))
                 .child(title),
         )
 }
@@ -636,21 +642,23 @@ pub(in crate::ui::view) fn service_status(status: NativeServiceStatus) -> impl I
 }
 
 pub(in crate::ui::view) fn metric(
+    palette: ThemePalette,
     label: &'static str,
     value: impl Into<SharedString>,
 ) -> impl IntoElement {
     div()
         .rounded_md()
         .border_1()
-        .border_color(rgb(0x2a3140))
-        .bg(rgb(0x151923))
+        .border_color(rgb(palette.border))
+        .bg(rgb(palette.surface))
         .p_4()
-        .child(div().text_xs().text_color(rgb(0x98a3b8)).child(label))
+        .child(div().text_xs().text_color(rgb(palette.text_muted)).child(label))
         .child(
             div()
                 .mt_2()
                 .text_2xl()
                 .font_weight(FontWeight(800.))
+                .text_color(rgb(palette.text))
                 .child(value.into()),
         )
 }
@@ -939,7 +947,7 @@ pub(in crate::ui::view) fn connection_row(
             | ConnectionType::Serial { .. }
     );
     let action = if can_connect {
-        small_button(format!("connect-{}", connection.id), "Connect", on_connect).into_any_element()
+        small_button(crate::ui::theme::theme_palette("github-dark"), format!("connect-{}", connection.id), "Connect", on_connect).into_any_element()
     } else {
         status_pill("porting", rgb(0xfbbf24), rgb(0x3a2f14)).into_any_element()
     };
@@ -1068,7 +1076,7 @@ pub(in crate::ui::view) fn compact_connection_row(
                         }
                     }),
                 ))
-                .child(small_button(
+                .child(small_button(crate::ui::theme::theme_palette("github-dark"), 
                     format!("left-connect-{}", connection.id),
                     "Connect",
                     on_connect,
@@ -1143,14 +1151,14 @@ pub(in crate::ui::view) fn compact_tunnel_row(
                     rgb(0x17253b),
                 ))
                 .child(if is_open {
-                    small_button(
+                    small_button(crate::ui::theme::theme_palette("github-dark"), 
                         format!("left-tunnel-close-{}", tunnel.id),
                         "Close",
                         on_close,
                     )
                     .into_any_element()
                 } else {
-                    small_button(format!("left-tunnel-open-{}", tunnel.id), "Open", on_open)
+                    small_button(crate::ui::theme::theme_palette("github-dark"), format!("left-tunnel-open-{}", tunnel.id), "Open", on_open)
                         .into_any_element()
                 }),
         )

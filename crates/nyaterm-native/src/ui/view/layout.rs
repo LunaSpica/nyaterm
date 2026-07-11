@@ -124,7 +124,7 @@ impl NyaTermApp {
                     .items_center()
                     .gap_1()
                     .min_w_0()
-                    .child(status_bar_button(
+                    .child(status_bar_button(palette, 
                         "status-session",
                         "Session",
                         session_status,
@@ -139,12 +139,12 @@ impl NyaTermApp {
                             cx.notify();
                         }),
                     ))
-                    .child(status_bar_label(
+                    .child(status_bar_label(palette, 
                         "Tabs",
                         sessions.len().to_string(),
                         rgb(0x58a6ff),
                     ))
-                    .child(status_bar_button(
+                    .child(status_bar_button(palette, 
                         "status-recording",
                         "Recording",
                         recording_status,
@@ -158,7 +158,7 @@ impl NyaTermApp {
                             cx.notify();
                         }),
                     ))
-                    .child(status_bar_button(
+                    .child(status_bar_button(palette, 
                         "status-transfer",
                         "Transfer",
                         transfer_status,
@@ -174,7 +174,7 @@ impl NyaTermApp {
                             cx.notify();
                         }),
                     ))
-                    .child(status_bar_label("Panel", bottom_panel, rgb(0xc4b5fd))),
+                    .child(status_bar_label(palette, "Panel", bottom_panel, rgb(0xc4b5fd))),
             )
             .child(
                 div()
@@ -183,7 +183,7 @@ impl NyaTermApp {
                     .justify_end()
                     .gap_1()
                     .min_w_0()
-                    .child(status_bar_button(
+                    .child(status_bar_button(palette, 
                         "status-ai",
                         "AI",
                         ai_status,
@@ -197,7 +197,7 @@ impl NyaTermApp {
                             cx.notify();
                         }),
                     ))
-                    .child(status_bar_button(
+                    .child(status_bar_button(palette, 
                         "status-cpu",
                         "CPU",
                         cpu_status,
@@ -207,7 +207,7 @@ impl NyaTermApp {
                             cx.notify();
                         }),
                     ))
-                    .child(status_bar_button(
+                    .child(status_bar_button(palette, 
                         "status-memory",
                         "MEM",
                         mem_status,
@@ -217,7 +217,7 @@ impl NyaTermApp {
                             cx.notify();
                         }),
                     ))
-                    .child(status_bar_label(
+                    .child(status_bar_label(palette, 
                         "Store",
                         if self.store_status.ready {
                             "online"
@@ -230,7 +230,7 @@ impl NyaTermApp {
                             rgb(0xff7b72)
                         },
                     ))
-                    .child(status_bar_button(
+                    .child(status_bar_button(palette, 
                         "status-lock",
                         "Lock",
                         lock_status,
@@ -250,6 +250,7 @@ impl NyaTermApp {
         &mut self,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
+        let palette = self.theme_palette();
         let Some(menu) = self.activity_bar_context_menu.clone() else {
             return div().into_any_element();
         };
@@ -332,21 +333,21 @@ impl NyaTermApp {
                         div()
                             .flex()
                             .gap_2()
-                            .child(small_button(
+                            .child(small_button(palette, 
                                 "activity-move-up",
                                 "Up",
                                 cx.listener(move |this, _, _, cx| {
                                     this.reorder_activity_entry(move_up_id.clone(), -1, cx);
                                 }),
                             ))
-                            .child(small_button(
+                            .child(small_button(palette, 
                                 "activity-move-down",
                                 "Down",
                                 cx.listener(move |this, _, _, cx| {
                                     this.reorder_activity_entry(move_down_id.clone(), 1, cx);
                                 }),
                             ))
-                            .child(small_button(
+                            .child(small_button(palette, 
                                 "activity-toggle-labels",
                                 if self.activity_bar_layout.show_labels {
                                     "Hide Labels"
@@ -365,7 +366,7 @@ impl NyaTermApp {
                             .child("Move to zone"),
                     )
                     .child(zone_buttons)
-                    .child(small_button(
+                    .child(small_button(palette, 
                         "activity-menu-close",
                         "Close",
                         cx.listener(|this, _, _, cx| {

@@ -44,6 +44,7 @@ impl NyaTermApp {
         &mut self,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
+        let palette = self.theme_palette();
         let active_kind = self.active_session_kind();
         let active_target = self
             .active_session_name()
@@ -221,7 +222,7 @@ impl NyaTermApp {
                             .overflow_hidden()
                             .child(truncate_preview(&target_scope_label, 28)),
                     )
-                    .child(small_button(
+                    .child(small_button(palette, 
                         "bottom-command-send-hide",
                         "Hide",
                         cx.listener(|this, _, _, cx| {
@@ -882,7 +883,7 @@ impl NyaTermApp {
                                     .flex()
                                     .items_center()
                                     .gap_1()
-                                    .child(small_button(
+                                    .child(small_button(palette, 
                                         "bottom-command-send-clear",
                                         "Clear",
                                         cx.listener(|this, _, _, cx| {
@@ -892,14 +893,14 @@ impl NyaTermApp {
                                             cx.notify();
                                         }),
                                     ))
-                                    .child(small_button(
+                                    .child(small_button(palette, 
                                         "bottom-command-send-now",
                                         if is_sending { "Stop" } else { "Send" },
                                         cx.listener(|this, _, _, cx| {
                                             this.send_bottom_command(false, cx);
                                         }),
                                     ))
-                                    .child(small_button(
+                                    .child(small_button(palette, 
                                         "bottom-command-send-enter",
                                         if is_sending { "Stop" } else { "Send ↵" },
                                         cx.listener(|this, _, _, cx| {

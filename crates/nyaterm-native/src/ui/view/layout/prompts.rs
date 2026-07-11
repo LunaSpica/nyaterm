@@ -6,6 +6,7 @@ impl NyaTermApp {
         prompt: SftpDuplicatePromptState,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
+        let palette = self.theme_palette();
         let overwrite_id = prompt.id.clone();
         let skip_id = prompt.id.clone();
         let rename_id = prompt.id.clone();
@@ -61,7 +62,7 @@ impl NyaTermApp {
                             .flex()
                             .items_center()
                             .gap_2()
-                            .child(small_button(
+                            .child(small_button(palette, 
                                 format!("duplicate-overwrite-{overwrite_id}"),
                                 "Overwrite",
                                 cx.listener(move |this, _, _, cx| {
@@ -72,7 +73,7 @@ impl NyaTermApp {
                                     );
                                 }),
                             ))
-                            .child(small_button(
+                            .child(small_button(palette, 
                                 format!("duplicate-skip-{skip_id}"),
                                 "Skip",
                                 cx.listener(move |this, _, _, cx| {
@@ -83,7 +84,7 @@ impl NyaTermApp {
                                     );
                                 }),
                             ))
-                            .child(small_button(
+                            .child(small_button(palette, 
                                 format!("duplicate-rename-{rename_id}"),
                                 "Rename",
                                 cx.listener(move |this, _, _, cx| {
@@ -103,6 +104,7 @@ impl NyaTermApp {
         prompt: HostKeyPromptRequest,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
+        let palette = self.theme_palette();
         let accept_id = prompt.id.clone();
         let reject_id = prompt.id.clone();
         let tone = match prompt.issue {
@@ -157,7 +159,7 @@ impl NyaTermApp {
                             .flex()
                             .items_center()
                             .gap_2()
-                            .child(small_button(
+                            .child(small_button(palette, 
                                 format!("host-key-reject-{reject_id}"),
                                 "Reject",
                                 cx.listener(move |this, _, _, cx| {
@@ -168,7 +170,7 @@ impl NyaTermApp {
                                     );
                                 }),
                             ))
-                            .child(small_button(
+                            .child(small_button(palette, 
                                 format!("host-key-accept-{accept_id}"),
                                 "Accept",
                                 cx.listener(move |this, _, _, cx| {
@@ -188,6 +190,7 @@ impl NyaTermApp {
         prompt: CredentialPromptState,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
+        let palette = self.theme_palette();
         let title = match prompt.prompt.kind {
             SshCredentialPromptKind::Password => "SSH Password",
             SshCredentialPromptKind::KeyPassphrase => "SSH Key Passphrase",
@@ -286,14 +289,14 @@ impl NyaTermApp {
                             .flex()
                             .items_center()
                             .gap_2()
-                            .child(small_button(
+                            .child(small_button(palette, 
                                 format!("credential-cancel-{}", prompt.id),
                                 "Cancel",
                                 cx.listener(|this, _, _, cx| {
                                     this.cancel_credential_prompt(cx);
                                 }),
                             ))
-                            .child(small_button(
+                            .child(small_button(palette, 
                                 format!("credential-submit-{}", prompt.id),
                                 "Submit",
                                 cx.listener(|this, _, _, cx| {
@@ -309,6 +312,7 @@ impl NyaTermApp {
         prompt: SnapshotPasswordPromptState,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
+        let palette = self.theme_palette();
         let title = match prompt.kind {
             SnapshotPasswordPromptKind::Export => "Encrypted Snapshot Export",
             SnapshotPasswordPromptKind::Import => "Encrypted Snapshot Import",
@@ -394,14 +398,14 @@ impl NyaTermApp {
                             .flex()
                             .items_center()
                             .gap_2()
-                            .child(small_button(
+                            .child(small_button(palette, 
                                 "snapshot-password-cancel",
                                 "Cancel",
                                 cx.listener(|this, _, _, cx| {
                                     this.cancel_snapshot_password_prompt(cx);
                                 }),
                             ))
-                            .child(small_button(
+                            .child(small_button(palette, 
                                 "snapshot-password-submit",
                                 "Submit",
                                 cx.listener(|this, _, _, cx| {

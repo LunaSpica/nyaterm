@@ -248,7 +248,7 @@ pub(in crate::ui::view::pages::remote) fn docker_compose_services_panel(
                         .overflow_hidden()
                         .child(truncate_preview(&error, 80)),
                 )
-                .child(small_button(
+                .child(small_button(crate::ui::theme::theme_palette("github-dark"), 
                     format!("docker-compose-retry-{project_name}"),
                     "Retry",
                     cx.listener({

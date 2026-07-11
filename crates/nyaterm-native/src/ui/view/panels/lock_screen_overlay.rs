@@ -5,6 +5,7 @@ impl NyaTermApp {
         &mut self,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
+        let palette = self.theme_palette();
         let password_display = if self.lock_password_draft.is_empty() {
             " ".to_string()
         } else {
@@ -191,7 +192,7 @@ impl NyaTermApp {
                                         .child(lock_status.clone()),
                                 )
                             })
-                            .child(small_button(
+                            .child(small_button(palette, 
                                 "lock-screen-unlock",
                                 "Unlock",
                                 cx.listener(|this, _, _, cx| {

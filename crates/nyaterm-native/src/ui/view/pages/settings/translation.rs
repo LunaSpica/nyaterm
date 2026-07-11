@@ -167,7 +167,7 @@ impl NyaTermApp {
                     .child(settings_form_row(palette, 
                         "Actions",
                         None,
-                        small_button(
+                        small_button(palette, 
                             "translation-settings-save",
                             "Save",
                             cx.listener(|this, _, _, cx| {
@@ -191,7 +191,7 @@ impl NyaTermApp {
                         cx,
                     ))
                     .child(
-                        div().child(small_button(
+                        div().child(small_button(palette, 
                             "translation-clear-deepl",
                             "Clear DeepL",
                             cx.listener(|this, _, _, cx| {
@@ -227,7 +227,7 @@ impl NyaTermApp {
                                 cx,
                             )),
                     )
-                    .child(small_button(
+                    .child(small_button(palette, 
                         "translation-clear-baidu",
                         "Clear Baidu",
                         cx.listener(|this, _, _, cx| {
@@ -262,7 +262,7 @@ impl NyaTermApp {
                                 cx,
                             )),
                     )
-                    .child(small_button(
+                    .child(small_button(palette, 
                         "translation-clear-ali",
                         "Clear Ali",
                         cx.listener(|this, _, _, cx| {
@@ -297,7 +297,7 @@ impl NyaTermApp {
                                 cx,
                             )),
                     )
-                    .child(small_button(
+                    .child(small_button(palette, 
                         "translation-clear-youdao",
                         "Clear Youdao",
                         cx.listener(|this, _, _, cx| {

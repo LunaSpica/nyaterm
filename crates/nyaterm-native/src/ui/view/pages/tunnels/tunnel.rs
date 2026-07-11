@@ -242,7 +242,7 @@ pub(super) fn tunnel_section(
                             .flex()
                             .items_center()
                             .gap_1()
-                            .child(small_button(
+                            .child(small_button(crate::ui::theme::theme_palette("github-dark"), 
                                 format!("tunnel-group-rename-{}", group.id),
                                 "Rename",
                                 cx.listener(move |this, _, _, cx| {
@@ -253,7 +253,7 @@ pub(super) fn tunnel_section(
                                     );
                                 }),
                             ))
-                            .child(small_button(
+                            .child(small_button(crate::ui::theme::theme_palette("github-dark"), 
                                 format!("tunnel-group-delete-{}", group.id),
                                 "Delete",
                                 cx.listener(move |this, _, _, cx| {
@@ -287,7 +287,7 @@ fn tunnel_move_picker(
         ));
     } else {
         let target_id = tunnel_id.clone();
-        targets = targets.child(small_button(
+        targets = targets.child(small_button(crate::ui::theme::theme_palette("github-dark"), 
             format!("network-tunnel-move-{tunnel_id}-ungrouped"),
             "Ungrouped",
             cx.listener(move |this, _, _, cx| {
@@ -308,7 +308,7 @@ fn tunnel_move_picker(
         } else {
             let target_id = tunnel_id.clone();
             let group_id = group.id.clone();
-            targets = targets.child(small_button(
+            targets = targets.child(small_button(crate::ui::theme::theme_palette("github-dark"), 
                 format!("network-tunnel-move-{tunnel_id}-{}", group.id),
                 "Move Here",
                 cx.listener(move |this, _, _, cx| {

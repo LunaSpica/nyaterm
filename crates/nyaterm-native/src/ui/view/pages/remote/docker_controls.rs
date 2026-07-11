@@ -142,14 +142,14 @@ pub(in crate::ui::view::pages::remote) fn docker_confirm_panel(
                 .flex()
                 .items_center()
                 .gap_2()
-                .child(small_button(
+                .child(small_button(crate::ui::theme::theme_palette("github-dark"), 
                     "docker-confirm-cancel",
                     "Cancel",
                     cx.listener(|this, _, _, cx| {
                         this.cancel_docker_confirm(cx);
                     }),
                 ))
-                .child(small_button(
+                .child(small_button(crate::ui::theme::theme_palette("github-dark"), 
                     "docker-confirm-run",
                     "Confirm",
                     cx.listener(|this, _, window, cx| {
@@ -166,7 +166,7 @@ pub(in crate::ui::view::pages::remote) fn docker_container_confirm_button(
     container_name: String,
     cx: &mut Context<NyaTermApp>,
 ) -> impl IntoElement {
-    small_button(
+    small_button(crate::ui::theme::theme_palette("github-dark"), 
         format!("docker-{action}-{}", compact_id(&container_id)),
         label,
         cx.listener(move |this, _, _, cx| {

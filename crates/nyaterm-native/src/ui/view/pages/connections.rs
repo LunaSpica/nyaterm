@@ -1104,6 +1104,7 @@ impl NyaTermApp {
         editor: ConnectionEditorState,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
+        let palette = self.theme_palette();
         let title = if editor.id.is_some() {
             "Edit Connection"
         } else {
@@ -1271,7 +1272,7 @@ impl NyaTermApp {
                                     .text_color(rgb(0x8b949e))
                                     .child(format!("Group · {group_label}")),
                             )
-                            .child(small_button(
+                            .child(small_button(palette, 
                                 "connection-editor-group",
                                 "Cycle",
                                 cx.listener(|this, _, _, cx| {
@@ -1337,7 +1338,7 @@ impl NyaTermApp {
                                         .text_color(rgb(0x8b949e))
                                         .child(format!("Auth · {}", editor.auth_mode)),
                                 )
-                                .child(small_button(
+                                .child(small_button(palette, 
                                     "connection-editor-auth",
                                     "Cycle",
                                     cx.listener(|this, _, _, cx| {
@@ -1373,7 +1374,7 @@ impl NyaTermApp {
                                             .text_color(rgb(0x8b949e))
                                             .child(format!("Key · {}", truncate_preview(&key_label, 24))),
                                     )
-                                    .child(small_button(
+                                    .child(small_button(palette, 
                                         "connection-editor-key",
                                         "Cycle",
                                         cx.listener(|this, _, _, cx| {
@@ -1394,7 +1395,7 @@ impl NyaTermApp {
                                         .text_color(rgb(0x8b949e))
                                         .child(format!("OTP · {}", truncate_preview(&otp_label, 24))),
                                 )
-                                .child(small_button(
+                                .child(small_button(palette, 
                                     "connection-editor-otp",
                                     "Cycle",
                                     cx.listener(|this, _, _, cx| {
@@ -1570,7 +1571,7 @@ impl NyaTermApp {
                                             }
                                         )),
                                 )
-                                .child(small_button(
+                                .child(small_button(palette, 
                                     "connection-editor-serial-port",
                                     "Cycle",
                                     cx.listener(|this, _, _, cx| {
@@ -1611,14 +1612,14 @@ impl NyaTermApp {
                     .items_center()
                     .justify_end()
                     .gap_2()
-                    .child(small_button(
+                    .child(small_button(palette, 
                         "connection-editor-close",
                         "Cancel",
                         cx.listener(|this, _, _, cx| {
                             this.close_connection_editor(cx);
                         }),
                     ))
-                    .child(small_button(
+                    .child(small_button(palette, 
                         "connection-editor-save",
                         save_label,
                         cx.listener(|this, _, window, cx| {
@@ -1626,7 +1627,7 @@ impl NyaTermApp {
                         }),
                     )),
             );
-        modal_dialog_shell("connection-editor-modal", 560., card)
+        modal_dialog_shell(palette, "connection-editor-modal", 560., card)
     }
 
     fn connection_group_editor_panel(
@@ -1634,6 +1635,7 @@ impl NyaTermApp {
         editor: ConnectionGroupEditorState,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
+        let palette = self.theme_palette();
         let title = if editor.id.is_some() {
             "Edit Group"
         } else {
@@ -1674,7 +1676,7 @@ impl NyaTermApp {
             .when_some(editor.error.clone(), |this, error| {
                 this.child(div().text_size(px(12.)).text_color(rgb(0xff7b72)).child(error))
             })
-            .child(modal_dialog_footer(
+            .child(modal_dialog_footer(palette, 
                 "connection-group-close",
                 "connection-group-save",
                 "Save",
@@ -1685,13 +1687,14 @@ impl NyaTermApp {
                     this.save_connection_group_editor(cx);
                 }),
             ));
-        modal_dialog_shell("connection-group-editor-modal", 420., card)
+        modal_dialog_shell(palette, "connection-group-editor-modal", 420., card)
     }
     fn connection_delete_confirm_panel(
         &mut self,
         confirm: ConnectionDeleteConfirmState,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
+        let palette = self.theme_palette();
         let card = div()
             .p_4()
             .flex()
@@ -1710,7 +1713,7 @@ impl NyaTermApp {
                     .text_color(rgb(0xc9d1d9))
                     .child(format!("Delete \"{}\"?", confirm.label)),
             )
-            .child(modal_dialog_footer(
+            .child(modal_dialog_footer(palette, 
                 "connection-delete-cancel",
                 "connection-delete-confirm",
                 "Delete",
@@ -1721,13 +1724,14 @@ impl NyaTermApp {
                     this.confirm_connection_delete(cx);
                 }),
             ));
-        modal_dialog_shell("connection-delete-confirm-modal", 420., card)
+        modal_dialog_shell(palette, "connection-delete-confirm-modal", 420., card)
     }
     fn connection_group_delete_confirm_panel(
         &mut self,
         confirm: ConnectionGroupDeleteConfirmState,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
+        let palette = self.theme_palette();
         let card = div()
             .p_4()
             .flex()
@@ -1749,7 +1753,7 @@ impl NyaTermApp {
                         confirm.label, confirm.connection_count, confirm.child_group_count
                     )),
             )
-            .child(modal_dialog_footer(
+            .child(modal_dialog_footer(palette, 
                 "connection-group-delete-cancel",
                 "connection-group-delete-confirm",
                 "Delete",
@@ -1760,7 +1764,7 @@ impl NyaTermApp {
                     this.confirm_connection_group_delete(cx);
                 }),
             ));
-        modal_dialog_shell("connection-group-delete-modal", 440., card)
+        modal_dialog_shell(palette, "connection-group-delete-modal", 440., card)
     }
     fn connection_context_menu_overlay(&mut self, cx: &mut Context<Self>) -> impl IntoElement {
         let state = self.connection_context_menu.clone().unwrap_or(ConnectionContextMenuState {

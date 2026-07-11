@@ -5,6 +5,7 @@ impl NyaTermApp {
         &mut self,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
+        let palette = self.theme_palette();
         let draft_display = if self.rename_draft.is_empty() {
             "Tab name".to_string()
         } else {
@@ -88,7 +89,7 @@ impl NyaTermApp {
                             .items_center()
                             .justify_end()
                             .gap_2()
-                            .child(small_button(
+                            .child(small_button(palette, 
                                 "rename-tab-cancel",
                                 "Cancel",
                                 cx.listener(|this, _, _, cx| {
@@ -96,7 +97,7 @@ impl NyaTermApp {
                                 }),
                             ))
                             .child(div().when(!can_save, |this| this.opacity(0.45)).child(
-                                small_button(
+                                small_button(palette, 
                                     "rename-tab-save",
                                     "Save",
                                     cx.listener(|this, _, _, cx| {
@@ -112,6 +113,7 @@ impl NyaTermApp {
         &mut self,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
+        let palette = self.theme_palette();
         let active_color = self
             .active_session_id
             .as_deref()
@@ -194,14 +196,14 @@ impl NyaTermApp {
                             .items_center()
                             .justify_end()
                             .gap_2()
-                            .child(small_button(
+                            .child(small_button(palette, 
                                 "tab-color-reset",
                                 "Reset",
                                 cx.listener(|this, _, _, cx| {
                                     this.set_active_session_tab_color(None, cx);
                                 }),
                             ))
-                            .child(small_button(
+                            .child(small_button(palette, 
                                 "tab-color-cancel",
                                 "Cancel",
                                 cx.listener(|this, _, _, cx| {
@@ -216,6 +218,7 @@ impl NyaTermApp {
         &mut self,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
+        let palette = self.theme_palette();
         let details = self.active_session_info_details().unwrap_or_default();
         let title = details
             .iter()
@@ -237,7 +240,7 @@ impl NyaTermApp {
             );
         } else {
             for (label, value) in details {
-                rows = rows.child(session_info_row(label, value));
+                rows = rows.child(session_info_row(palette, label, value));
             }
         }
 
@@ -307,14 +310,14 @@ impl NyaTermApp {
                             .items_center()
                             .justify_end()
                             .gap_2()
-                            .child(small_button(
+                            .child(small_button(palette, 
                                 "session-info-copy",
                                 "Copy",
                                 cx.listener(|this, _, _, cx| {
                                     this.copy_active_session_info(cx);
                                 }),
                             ))
-                            .child(small_button(
+                            .child(small_button(palette, 
                                 "session-info-close",
                                 "Close",
                                 cx.listener(|this, _, _, cx| {
@@ -329,6 +332,7 @@ impl NyaTermApp {
         &mut self,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
+        let palette = self.theme_palette();
         let action = self.startup_command_action;
         let command_display = if self.startup_command_draft.is_empty() {
             action.placeholder().to_string()
@@ -431,14 +435,14 @@ impl NyaTermApp {
                                     .flex()
                                     .items_center()
                                     .gap_2()
-                                    .child(small_button(
+                                    .child(small_button(palette, 
                                         "startup-delay-minus",
                                         "-100",
                                         cx.listener(|this, _, _, cx| {
                                             this.adjust_startup_command_delay(-100, cx);
                                         }),
                                     ))
-                                    .child(small_button(
+                                    .child(small_button(palette, 
                                         "startup-delay-zero",
                                         "0",
                                         cx.listener(|this, _, _, cx| {
@@ -446,7 +450,7 @@ impl NyaTermApp {
                                             cx.notify();
                                         }),
                                     ))
-                                    .child(small_button(
+                                    .child(small_button(palette, 
                                         "startup-delay-plus",
                                         "+100",
                                         cx.listener(|this, _, _, cx| {
@@ -469,7 +473,7 @@ impl NyaTermApp {
                             .items_center()
                             .justify_end()
                             .gap_2()
-                            .child(small_button(
+                            .child(small_button(palette, 
                                 "startup-command-cancel",
                                 "Cancel",
                                 cx.listener(|this, _, _, cx| {
@@ -477,7 +481,7 @@ impl NyaTermApp {
                                 }),
                             ))
                             .child(div().when(!can_submit, |this| this.opacity(0.45)).child(
-                                small_button(
+                                small_button(palette, 
                                     "startup-command-submit",
                                     action.submit_label(),
                                     cx.listener(|this, _, window, cx| {

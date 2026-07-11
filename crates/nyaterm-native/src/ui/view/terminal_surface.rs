@@ -12,6 +12,7 @@ impl NyaTermApp {
         show_pane_chrome: bool,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
+        let palette = self.theme_palette();
         let is_active = self.active_session_id.as_deref() == Some(session_id.as_str());
         let mut output = div().flex().flex_col().gap_1();
         let lines = self
@@ -170,56 +171,56 @@ impl NyaTermApp {
                             .border_b_1()
                             .border_color(rgb(0x1d2430))
                             .bg(rgb(0x0d1118))
-                            .child(small_button(
+                            .child(small_button(palette, 
                                 "terminal-start-local",
                                 "Start Local",
                                 cx.listener(|this, _, window, cx| {
                                     this.start_local_session(window, cx);
                                 }),
                             ))
-                            .child(small_button(
+                            .child(small_button(palette, 
                                 "terminal-probe",
                                 "Probe",
                                 cx.listener(|this, _, _, cx| {
                                     this.send_probe_command(cx);
                                 }),
                             ))
-                            .child(small_button(
+                            .child(small_button(palette, 
                                 "terminal-paste",
                                 "Paste",
                                 cx.listener(|this, _, window, cx| {
                                     this.paste_from_clipboard(window, cx);
                                 }),
                             ))
-                            .child(small_button(
+                            .child(small_button(palette, 
                                 "terminal-actions",
                                 "Actions",
                                 cx.listener(|this, _, window, cx| {
                                     this.open_terminal_actions(window, cx);
                                 }),
                             ))
-                            .child(small_button(
+                            .child(small_button(palette, 
                                 "terminal-reconnect",
                                 "Reconnect",
                                 cx.listener(|this, _, window, cx| {
                                     this.reconnect_active_session(window, cx);
                                 }),
                             ))
-                            .child(small_button(
+                            .child(small_button(palette, 
                                 "terminal-duplicate-run",
                                 "Dup+Run",
                                 cx.listener(|this, _, window, cx| {
                                     this.open_startup_command_dialog(window, cx);
                                 }),
                             ))
-                            .child(small_button(
+                            .child(small_button(palette, 
                                 "terminal-close",
                                 "Close",
                                 cx.listener(|this, _, _, cx| {
                                     this.close_active_session(cx);
                                 }),
                             ))
-                            .child(small_button(
+                            .child(small_button(palette, 
                                 "terminal-clear",
                                 "Clear",
                                 cx.listener(|this, _, _, cx| {

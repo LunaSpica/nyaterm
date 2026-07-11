@@ -5,6 +5,7 @@ impl NyaTermApp {
         &mut self,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
+        let palette = self.theme_palette();
         let delete = self
             .quick_command_delete
             .clone()
@@ -59,14 +60,14 @@ impl NyaTermApp {
                             .items_center()
                             .justify_end()
                             .gap_2()
-                            .child(small_button(
+                            .child(small_button(palette, 
                                 "quick-command-delete-cancel",
                                 "Cancel",
                                 cx.listener(|this, _, _, cx| {
                                     this.cancel_delete_quick_command(cx);
                                 }),
                             ))
-                            .child(small_button(
+                            .child(small_button(palette, 
                                 "quick-command-delete-confirm",
                                 "Delete",
                                 cx.listener(|this, _, _, cx| {

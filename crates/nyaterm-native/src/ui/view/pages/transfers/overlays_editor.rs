@@ -8,6 +8,7 @@ impl NyaTermApp {
         &mut self,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
+        let palette = self.theme_palette();
         let prompt =
             self.transfer_external_sync_prompt
                 .clone()
@@ -71,8 +72,8 @@ impl NyaTermApp {
                             .text_color(rgb(0x98a3b8))
                             .child("The externally opened file changed locally."),
                     )
-                    .child(metric("Remote", truncate_preview(&prompt.remote_path, 58)))
-                    .child(metric(
+                    .child(metric(palette, "Remote", truncate_preview(&prompt.remote_path, 58)))
+                    .child(metric(palette, 
                         "Local",
                         truncate_preview(&prompt.local_path.display().to_string(), 58),
                     ))
@@ -81,21 +82,21 @@ impl NyaTermApp {
                             .flex()
                             .justify_end()
                             .gap_2()
-                            .child(small_button(
+                            .child(small_button(palette, 
                                 "transfer-external-sync-ignore",
                                 "Ignore",
                                 cx.listener(|this, _, _, cx| {
                                     this.ignore_pending_external_editor_sync(cx);
                                 }),
                             ))
-                            .child(small_button(
+                            .child(small_button(palette, 
                                 "transfer-external-sync-upload",
                                 "Upload",
                                 cx.listener(|this, _, _, cx| {
                                     this.upload_pending_external_editor_sync(false, cx);
                                 }),
                             ))
-                            .child(small_button(
+                            .child(small_button(palette, 
                                 "transfer-external-sync-always",
                                 "Always Upload",
                                 cx.listener(|this, _, _, cx| {
@@ -110,6 +111,7 @@ impl NyaTermApp {
         &mut self,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
+        let palette = self.theme_palette();
         let state = self.transfer_editor.clone().unwrap_or(TransferEditorState {
             remote_path: String::new(),
             name: String::new(),
@@ -318,21 +320,21 @@ impl NyaTermApp {
                                         format!("{} / {}", active_match + 1, search_matches.len())
                                     }),
                             )
-                            .child(small_button(
+                            .child(small_button(palette, 
                                 "transfer-editor-prev-match",
                                 "Prev",
                                 cx.listener(|this, _, _, cx| {
                                     this.advance_transfer_editor_search(-1, cx);
                                 }),
                             ))
-                            .child(small_button(
+                            .child(small_button(palette, 
                                 "transfer-editor-next-match",
                                 "Next",
                                 cx.listener(|this, _, _, cx| {
                                     this.advance_transfer_editor_search(1, cx);
                                 }),
                             ))
-                            .child(small_button(
+                            .child(small_button(palette, 
                                 "transfer-editor-clear-search",
                                 "Clear",
                                 cx.listener(|this, _, _, cx| {
@@ -389,7 +391,7 @@ impl NyaTermApp {
                                     .flex()
                                     .items_center()
                                     .gap_2()
-                                    .child(small_button(
+                                    .child(small_button(palette, 
                                         "transfer-editor-reload",
                                         if state.reload_confirm {
                                             "Confirm Reload"
@@ -420,7 +422,7 @@ impl NyaTermApp {
                                         }),
                                     ))
                                     .when(state.reload_confirm, |this| {
-                                        this.child(small_button(
+                                        this.child(small_button(palette, 
                                             "transfer-editor-cancel-reload",
                                             "Cancel Reload",
                                             cx.listener(|this, _, _, cx| {
@@ -428,21 +430,21 @@ impl NyaTermApp {
                                             }),
                                         ))
                                     })
-                                    .child(small_button(
+                                    .child(small_button(palette, 
                                         "transfer-editor-save",
                                         if state.saving { "Saving" } else { "Save" },
                                         cx.listener(|this, _, window, cx| {
                                             this.save_transfer_editor(false, window, cx);
                                         }),
                                     ))
-                                    .child(small_button(
+                                    .child(small_button(palette, 
                                         "transfer-editor-force-save",
                                         "Force Save",
                                         cx.listener(|this, _, window, cx| {
                                             this.save_transfer_editor(true, window, cx);
                                         }),
                                     ))
-                                    .child(small_button(
+                                    .child(small_button(palette, 
                                         "transfer-editor-close",
                                         "Close",
                                         cx.listener(|this, _, _, cx| {
@@ -450,21 +452,21 @@ impl NyaTermApp {
                                         }),
                                     ))
                                     .when(state.close_confirm, |this| {
-                                        this.child(small_button(
+                                        this.child(small_button(palette, 
                                             "transfer-editor-save-close",
                                             if state.saving { "Saving" } else { "Save Close" },
                                             cx.listener(|this, _, window, cx| {
                                                 this.save_transfer_editor_and_close(window, cx);
                                             }),
                                         ))
-                                        .child(small_button(
+                                        .child(small_button(palette, 
                                             "transfer-editor-cancel-close",
                                             "Cancel Close",
                                             cx.listener(|this, _, _, cx| {
                                                 this.cancel_transfer_editor_close_confirm(cx);
                                             }),
                                         ))
-                                        .child(small_button(
+                                        .child(small_button(palette, 
                                             "transfer-editor-discard",
                                             "Discard",
                                             cx.listener(|this, _, _, cx| {

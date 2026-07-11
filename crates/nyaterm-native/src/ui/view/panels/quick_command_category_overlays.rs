@@ -5,6 +5,7 @@ impl NyaTermApp {
         &mut self,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
+        let palette = self.theme_palette();
         let delete =
             self.quick_command_category_delete
                 .clone()
@@ -60,14 +61,14 @@ impl NyaTermApp {
                             .items_center()
                             .justify_end()
                             .gap_2()
-                            .child(small_button(
+                            .child(small_button(palette, 
                                 "quick-command-category-delete-cancel",
                                 "Cancel",
                                 cx.listener(|this, _, _, cx| {
                                     this.cancel_delete_quick_command_category(cx);
                                 }),
                             ))
-                            .child(small_button(
+                            .child(small_button(palette, 
                                 "quick-command-category-delete-confirm",
                                 "Delete",
                                 cx.listener(|this, _, _, cx| {
@@ -82,6 +83,7 @@ impl NyaTermApp {
         &mut self,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
+        let palette = self.theme_palette();
         let rename =
             self.quick_command_category_rename
                 .clone()
@@ -165,14 +167,14 @@ impl NyaTermApp {
                             .items_center()
                             .justify_end()
                             .gap_2()
-                            .child(small_button(
+                            .child(small_button(palette, 
                                 "quick-command-category-rename-cancel",
                                 "Cancel",
                                 cx.listener(|this, _, _, cx| {
                                     this.cancel_rename_quick_command_category(cx);
                                 }),
                             ))
-                            .child(small_button(
+                            .child(small_button(palette, 
                                 "quick-command-category-rename-confirm",
                                 "Rename",
                                 cx.listener(|this, _, _, cx| {

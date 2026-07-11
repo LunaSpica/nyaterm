@@ -5,6 +5,7 @@ impl NyaTermApp {
         &mut self,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
+        let palette = self.theme_palette();
         let details =
             self.quick_command_details
                 .clone()
@@ -200,7 +201,7 @@ impl NyaTermApp {
                                     .flex()
                                     .items_center()
                                     .gap_2()
-                                    .child(small_button(
+                                    .child(small_button(palette, 
                                         "quick-command-details-edit",
                                         "Edit",
                                         cx.listener(move |this, _, window, cx| {
@@ -212,14 +213,14 @@ impl NyaTermApp {
                                             );
                                         }),
                                     ))
-                                    .child(small_button(
+                                    .child(small_button(palette, 
                                         "quick-command-details-copy",
                                         "Copy",
                                         cx.listener(|this, _, _, cx| {
                                             this.copy_quick_command_details(cx);
                                         }),
                                     ))
-                                    .child(small_button(
+                                    .child(small_button(palette, 
                                         "quick-command-details-close",
                                         "Close",
                                         cx.listener(|this, _, _, cx| {

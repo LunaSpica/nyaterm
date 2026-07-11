@@ -5,6 +5,7 @@ impl NyaTermApp {
         &mut self,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
+        let palette = self.theme_palette();
         let prompt =
             self.quick_command_variable_prompt
                 .clone()
@@ -95,7 +96,7 @@ impl NyaTermApp {
                                         .flex()
                                         .items_center()
                                         .gap_1()
-                                        .child(small_button(
+                                        .child(small_button(palette, 
                                             format!("quick-command-variable-prev-{index}"),
                                             "Prev",
                                             cx.listener(move |this, _, _, cx| {
@@ -104,7 +105,7 @@ impl NyaTermApp {
                                                 );
                                             }),
                                         ))
-                                        .child(small_button(
+                                        .child(small_button(palette, 
                                             format!("quick-command-variable-next-{index}"),
                                             "Next",
                                             cx.listener(move |this, _, _, cx| {
@@ -239,14 +240,14 @@ impl NyaTermApp {
                                     .flex()
                                     .items_center()
                                     .gap_2()
-                                    .child(small_button(
+                                    .child(small_button(palette, 
                                         "quick-command-variable-cancel",
                                         "Cancel",
                                         cx.listener(|this, _, _, cx| {
                                             this.cancel_quick_command_variable_prompt(cx);
                                         }),
                                     ))
-                                    .child(small_button(
+                                    .child(small_button(palette, 
                                         "quick-command-variable-submit",
                                         if prompt.execute { "Run" } else { "Insert" },
                                         cx.listener(|this, _, _, cx| {

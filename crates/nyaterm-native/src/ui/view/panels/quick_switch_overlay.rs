@@ -5,6 +5,7 @@ impl NyaTermApp {
         &mut self,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
+        let palette = self.theme_palette();
         let items = self.filtered_quick_switch_items();
         if self.quick_switch_selected_index >= items.len() && !items.is_empty() {
             self.quick_switch_selected_index = items.len() - 1;
@@ -199,7 +200,7 @@ impl NyaTermApp {
                                     .flex()
                                     .items_center()
                                     .gap_2()
-                                    .child(small_button(
+                                    .child(small_button(palette, 
                                         "quick-switch-new-ssh",
                                         "New SSH",
                                         cx.listener(|this, _, _, cx| {
@@ -209,7 +210,7 @@ impl NyaTermApp {
                                                 "new SSH session page opened".to_string();
                                         }),
                                     ))
-                                    .child(small_button(
+                                    .child(small_button(palette, 
                                         "quick-switch-close",
                                         "Close",
                                         cx.listener(|this, _, _, cx| {

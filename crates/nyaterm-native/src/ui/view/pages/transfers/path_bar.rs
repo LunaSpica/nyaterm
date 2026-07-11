@@ -171,21 +171,21 @@ impl NyaTermApp {
                             .flex()
                             .items_center()
                             .gap_1()
-                            .child(small_button(
+                            .child(small_button(palette, 
                                 "transfer-browser-copy-current-path",
                                 "Copy",
                                 cx.listener(|this, _, _, cx| {
                                     this.copy_current_transfer_browser_path(cx);
                                 }),
                             ))
-                            .child(small_button(
+                            .child(small_button(palette, 
                                 "transfer-browser-send-current-path",
                                 "Send",
                                 cx.listener(|this, _, _, cx| {
                                     this.send_current_transfer_browser_path_to_terminal(cx);
                                 }),
                             ))
-                            .child(small_button(
+                            .child(small_button(palette, 
                                 "transfer-browser-current-properties",
                                 "Props",
                                 cx.listener(|this, _, window, cx| {

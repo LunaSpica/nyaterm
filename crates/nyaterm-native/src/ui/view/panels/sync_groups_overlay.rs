@@ -5,6 +5,7 @@ impl NyaTermApp {
         &mut self,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
+        let palette = self.theme_palette();
         let selected_group = self.selected_sync_group().cloned();
         let selected_group_id = selected_group.as_ref().map(|group| group.id.clone());
         let mut group_list = div().flex().flex_col().gap_2();
@@ -204,7 +205,7 @@ impl NyaTermApp {
                                             rgb(0x202633)
                                         },
                                     ))
-                                    .child(small_button(
+                                    .child(small_button(palette, 
                                         format!("sync-session-toggle-{session_id}"),
                                         if in_group { "Remove" } else { "Add" },
                                         cx.listener({
@@ -218,7 +219,7 @@ impl NyaTermApp {
                                         }),
                                     ))
                                     .when(in_group, |this| {
-                                        this.child(small_button(
+                                        this.child(small_button(palette, 
                                             format!("sync-session-pause-{session_id}"),
                                             if paused { "Resume" } else { "Pause" },
                                             cx.listener({
@@ -305,14 +306,14 @@ impl NyaTermApp {
                                     .flex()
                                     .items_center()
                                     .gap_2()
-                                    .child(small_button(
+                                    .child(small_button(palette, 
                                         "sync-group-new",
                                         "New",
                                         cx.listener(|this, _, _, cx| {
                                             this.create_sync_group(cx);
                                         }),
                                     ))
-                                    .child(small_button(
+                                    .child(small_button(palette, 
                                         "sync-group-close",
                                         "Close",
                                         cx.listener(|this, _, _, cx| {
@@ -365,7 +366,7 @@ impl NyaTermApp {
                                                     .flex()
                                                     .items_center()
                                                     .gap_2()
-                                                    .child(small_button(
+                                                    .child(small_button(palette, 
                                                         "sync-group-toggle",
                                                         if selected_group
                                                             .as_ref()
@@ -379,7 +380,7 @@ impl NyaTermApp {
                                                             this.toggle_selected_sync_group_enabled(cx);
                                                         }),
                                                     ))
-                                                    .child(small_button(
+                                                    .child(small_button(palette, 
                                                         "sync-group-delete",
                                                         "Delete",
                                                         cx.listener(|this, _, _, cx| {

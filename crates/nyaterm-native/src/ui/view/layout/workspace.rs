@@ -18,6 +18,7 @@ impl NyaTermApp {
         &mut self,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
+        let palette = self.theme_palette();
         let sessions = self.ordered_sessions();
         let session_count = sessions.len();
         let mut tabs = div()
@@ -254,14 +255,14 @@ impl NyaTermApp {
             .px_2()
             .border_l_1()
             .border_color(rgb(0x30363d))
-            .child(small_button(
+            .child(small_button(palette, 
                 "workspace-new-local-session",
                 "+",
                 cx.listener(|this, _, window, cx| {
                     this.start_local_session(window, cx);
                 }),
             ))
-            .child(small_button(
+            .child(small_button(palette, 
                 "workspace-quick-switch",
                 "Switch",
                 cx.listener(|this, _, window, cx| {
@@ -270,7 +271,7 @@ impl NyaTermApp {
             ));
         if self.active_session_id.is_some() {
             session_actions = session_actions
-                .child(small_button(
+                .child(small_button(palette, 
                     "workspace-split-horizontal",
                     "H",
                     cx.listener(|this, _, window, cx| {
@@ -281,7 +282,7 @@ impl NyaTermApp {
                         );
                     }),
                 ))
-                .child(small_button(
+                .child(small_button(palette, 
                     "workspace-split-vertical",
                     "V",
                     cx.listener(|this, _, window, cx| {
@@ -295,21 +296,21 @@ impl NyaTermApp {
         }
         if self.workspace_split.is_some() {
             session_actions = session_actions
-                .child(small_button(
+                .child(small_button(palette, 
                     "workspace-split-ratio-dec",
                     "−",
                     cx.listener(|this, _, _, cx| {
                         this.adjust_workspace_split_ratio(-5, cx);
                     }),
                 ))
-                .child(small_button(
+                .child(small_button(palette, 
                     "workspace-split-ratio-inc",
                     "+",
                     cx.listener(|this, _, _, cx| {
                         this.adjust_workspace_split_ratio(5, cx);
                     }),
                 ))
-                .child(small_button(
+                .child(small_button(palette, 
                     "workspace-unsplit",
                     "Unsplit",
                     cx.listener(|this, _, _, cx| {
@@ -318,7 +319,7 @@ impl NyaTermApp {
                 ));
         }
         if session_count > 0 {
-            session_actions = session_actions.child(small_button(
+            session_actions = session_actions.child(small_button(palette, 
                 "workspace-close-all-sessions",
                 "All",
                 cx.listener(|this, _, window, cx| {
@@ -326,9 +327,7 @@ impl NyaTermApp {
                 }),
             ));
         }
-
-        let palette = self.theme_palette();
-        div()
+div()
             .h(px(36.))  // Tauri TabBar: h-9
             .flex()
             .items_center()
@@ -488,7 +487,7 @@ impl NyaTermApp {
                             .flex()
                             .items_center()
                             .gap_2()
-                            .child(small_button(
+                            .child(small_button(palette, 
                                 "bottom-command-search",
                                 "Search",
                                 cx.listener(|this, _, window, cx| {
@@ -497,7 +496,7 @@ impl NyaTermApp {
                                     cx.notify();
                                 }),
                             ))
-                            .child(small_button(
+                            .child(small_button(palette, 
                                 "bottom-command-refresh",
                                 "Refresh",
                                 cx.listener(|this, _, _, cx| {

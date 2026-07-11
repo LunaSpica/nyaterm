@@ -5,6 +5,7 @@ impl NyaTermApp {
         &mut self,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
+        let palette = self.theme_palette();
         let draft = self
             .multi_line_paste
             .clone()
@@ -124,7 +125,7 @@ impl NyaTermApp {
                             .items_center()
                             .justify_end()
                             .gap_2()
-                            .child(small_button(
+                            .child(small_button(palette, 
                                 "multi-line-paste-cancel",
                                 "Cancel",
                                 cx.listener(|this, _, _, cx| {
@@ -132,7 +133,7 @@ impl NyaTermApp {
                                 }),
                             ))
                             .child(div().when(!can_send, |this| this.opacity(0.45)).child(
-                                small_button(
+                                small_button(palette, 
                                     "multi-line-paste-direct",
                                     "Direct Paste",
                                     cx.listener(|this, _, _, cx| {
@@ -141,7 +142,7 @@ impl NyaTermApp {
                                 ),
                             ))
                             .child(div().when(!can_send, |this| this.opacity(0.45)).child(
-                                small_button(
+                                small_button(palette, 
                                     "multi-line-paste-line",
                                     "Line By Line",
                                     cx.listener(|this, _, _, cx| {

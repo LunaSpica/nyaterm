@@ -149,6 +149,7 @@ impl NyaTermApp {
     }
 
     pub(in crate::ui::view) fn left_workspace_summary(&mut self, cx: &mut Context<Self>) -> impl IntoElement {
+        let palette = self.theme_palette();
         let sessions = self.ordered_sessions();
         let session_count = sessions.len();
         let query = self
@@ -202,19 +203,19 @@ impl NyaTermApp {
                             .text_color(rgb(0x8f98aa))
                             .child("WORKSPACE"),
                     )
-                    .child(capability_line(
+                    .child(capability_line(palette, 
                         "Active Sessions",
                         session_count.to_string(),
                     ))
-                    .child(capability_line(
+                    .child(capability_line(palette, 
                         "Profiles",
                         self.connections.len().to_string(),
                     ))
-                    .child(capability_line(
+                    .child(capability_line(palette, 
                         "Quick Commands",
                         self.quick_commands.len().to_string(),
                     ))
-                    .child(capability_line("Tunnels", self.tunnels.len().to_string())),
+                    .child(capability_line(palette, "Tunnels", self.tunnels.len().to_string())),
             )
             .child(
                 div()
@@ -303,14 +304,14 @@ impl NyaTermApp {
                             .mt_3()
                             .flex()
                             .gap_2()
-                            .child(small_button(
+                            .child(small_button(palette, 
                                 "left-start-local",
                                 "Local",
                                 cx.listener(|this, _, window, cx| {
                                     this.start_local_session(window, cx);
                                 }),
                             ))
-                            .child(small_button(
+                            .child(small_button(palette, 
                                 "left-probe",
                                 "Probe",
                                 cx.listener(|this, _, _, cx| {
@@ -521,6 +522,7 @@ impl NyaTermApp {
     }
 
     fn left_connections_panel(&mut self, cx: &mut Context<Self>) -> impl IntoElement {
+        let palette = self.theme_palette();
         let mut rows = div().flex().flex_col().gap_2();
         if self.connections.is_empty() {
             rows = rows.child(empty_panel("No saved connections imported yet.", self.theme_palette()));
@@ -572,14 +574,14 @@ impl NyaTermApp {
                             .mt_3()
                             .flex()
                             .gap_2()
-                            .child(small_button(
+                            .child(small_button(palette, 
                                 "left-connections-local",
                                 "Local",
                                 cx.listener(|this, _, window, cx| {
                                     this.start_local_session(window, cx);
                                 }),
                             ))
-                            .child(small_button(
+                            .child(small_button(palette, 
                                 "left-connections-refresh",
                                 "Refresh",
                                 cx.listener(|this, _, _, cx| {
@@ -594,6 +596,7 @@ impl NyaTermApp {
     }
 
     fn left_network_panel(&mut self, cx: &mut Context<Self>) -> impl IntoElement {
+        let palette = self.theme_palette();
         let mut rows = div().flex().flex_col().gap_2();
         if self.tunnels.is_empty() {
             rows = rows.child(empty_panel("No SSH tunnels configured.", self.theme_palette()));
@@ -639,15 +642,15 @@ impl NyaTermApp {
                             .text_color(rgb(0x8f98aa))
                             .child("NETWORK"),
                     )
-                    .child(capability_line(
+                    .child(capability_line(palette, 
                         "Configured Tunnels",
                         self.tunnels.len().to_string(),
                     ))
-                    .child(capability_line(
+                    .child(capability_line(palette, 
                         "Pending",
                         self.pending_tunnels.len().to_string(),
                     ))
-                    .child(capability_line(
+                    .child(capability_line(palette, 
                         "Active SSH",
                         if self.active_ssh_config.is_some() {
                             "ready"
@@ -660,6 +663,7 @@ impl NyaTermApp {
     }
 
     fn left_transfers_panel(&mut self, cx: &mut Context<Self>) -> impl IntoElement {
+        let palette = self.theme_palette();
         let mut jobs = div().flex().flex_col().gap_2();
         if self.transfer_jobs.is_empty() {
             jobs = jobs.child(empty_panel("No SFTP transfer jobs yet.", self.theme_palette()));
@@ -687,7 +691,7 @@ impl NyaTermApp {
                             .text_color(rgb(0x8f98aa))
                             .child("SFTP"),
                     )
-                    .child(capability_line(
+                    .child(capability_line(palette, 
                         "SSH Session",
                         if self.active_ssh_config.is_some() {
                             "ready"
@@ -695,11 +699,11 @@ impl NyaTermApp {
                             "none"
                         },
                     ))
-                    .child(capability_line(
+                    .child(capability_line(palette, 
                         "Remote Path",
                         truncate_preview(&self.transfer_remote_path, 28),
                     ))
-                    .child(capability_line(
+                    .child(capability_line(palette, 
                         "Duplicate Policy",
                         duplicate_policy_label(self.transfer_duplicate_policy),
                     ))
@@ -708,14 +712,14 @@ impl NyaTermApp {
                             .mt_3()
                             .flex()
                             .gap_2()
-                            .child(small_button(
+                            .child(small_button(palette, 
                                 "left-sftp-list",
                                 "List",
                                 cx.listener(|this, _, window, cx| {
                                     this.start_sftp_list_job(window, cx);
                                 }),
                             ))
-                            .child(small_button(
+                            .child(small_button(palette, 
                                 "left-sftp-download",
                                 "Download",
                                 cx.listener(|this, _, window, cx| {
@@ -728,6 +732,7 @@ impl NyaTermApp {
     }
 
     fn left_settings_panel(&mut self, _cx: &mut Context<Self>) -> impl IntoElement {
+        let palette = self.theme_palette();
         div()
             .flex()
             .flex_col()
@@ -746,19 +751,19 @@ impl NyaTermApp {
                             .text_color(rgb(0x8f98aa))
                             .child("SETTINGS"),
                     )
-                    .child(capability_line("Theme", self.settings.theme.clone()))
-                    .child(capability_line(
+                    .child(capability_line(palette, "Theme", self.settings.theme.clone()))
+                    .child(capability_line(palette, 
                         "Terminal Font",
                         format!(
                             "{} {}",
                             self.settings.terminal_font_family, self.settings.terminal_font_size
                         ),
                     ))
-                    .child(capability_line(
+                    .child(capability_line(palette, 
                         "Host Key Policy",
                         self.settings.host_key_policy.clone(),
                     ))
-                    .child(capability_line(
+                    .child(capability_line(palette, 
                         "AI",
                         if self.ai_settings.enabled {
                             "enabled"
@@ -955,7 +960,7 @@ impl NyaTermApp {
                                         .flex()
                                         .items_center()
                                         .gap_1()
-                                        .child(small_button(
+                                        .child(small_button(palette, 
                                             format!("security-key-edit-{key_id}"),
                                             "Edit",
                                             cx.listener(move |this, _, window, cx| {
@@ -966,7 +971,7 @@ impl NyaTermApp {
                                                 );
                                             }),
                                         ))
-                                        .child(small_button(
+                                        .child(small_button(palette, 
                                             format!("security-key-del-{key_id}"),
                                             "Del",
                                             cx.listener(move |this, _, _, cx| {
@@ -1044,7 +1049,7 @@ impl NyaTermApp {
                                         .flex()
                                         .items_center()
                                         .gap_1()
-                                        .child(small_button(
+                                        .child(small_button(palette, 
                                             format!("security-pw-show-{id}"),
                                             "Show",
                                             cx.listener(move |this, _, window, cx| {
@@ -1055,7 +1060,7 @@ impl NyaTermApp {
                                                 );
                                             }),
                                         ))
-                                        .child(small_button(
+                                        .child(small_button(palette, 
                                             format!("security-pw-edit-{id}"),
                                             "Edit",
                                             cx.listener(move |this, _, window, cx| {
@@ -1066,7 +1071,7 @@ impl NyaTermApp {
                                                 );
                                             }),
                                         ))
-                                        .child(small_button(
+                                        .child(small_button(palette, 
                                             format!("security-pw-del-{id}"),
                                             "Del",
                                             cx.listener(move |this, _, _, cx| {
@@ -1165,7 +1170,7 @@ impl NyaTermApp {
                                         .flex()
                                         .items_center()
                                         .gap_1()
-                                        .child(small_button(
+                                        .child(small_button(palette, 
                                             format!("security-cred-show-{id}"),
                                             "Show",
                                             cx.listener(move |this, _, window, cx| {
@@ -1176,7 +1181,7 @@ impl NyaTermApp {
                                                 );
                                             }),
                                         ))
-                                        .child(small_button(
+                                        .child(small_button(palette, 
                                             format!("security-cred-edit-{id}"),
                                             "Edit",
                                             cx.listener(move |this, _, window, cx| {
@@ -1187,7 +1192,7 @@ impl NyaTermApp {
                                                 );
                                             }),
                                         ))
-                                        .child(small_button(
+                                        .child(small_button(palette, 
                                             format!("security-cred-del-{id}"),
                                             "Del",
                                             cx.listener(move |this, _, _, cx| {
@@ -1296,7 +1301,7 @@ impl NyaTermApp {
                                         .flex()
                                         .items_center()
                                         .gap_1()
-                                        .child(small_button(
+                                        .child(small_button(palette, 
                                             format!("security-otp-code-{otp_id}"),
                                             "Code",
                                             cx.listener(move |this, _, window, cx| {
@@ -1307,7 +1312,7 @@ impl NyaTermApp {
                                                 );
                                             }),
                                         ))
-                                        .child(small_button(
+                                        .child(small_button(palette, 
                                             format!("security-otp-edit-{otp_id}"),
                                             "Edit",
                                             cx.listener(move |this, _, window, cx| {
@@ -1318,7 +1323,7 @@ impl NyaTermApp {
                                                 );
                                             }),
                                         ))
-                                        .child(small_button(
+                                        .child(small_button(palette, 
                                             format!("security-otp-del-{otp_id}"),
                                             "Del",
                                             cx.listener(move |this, _, _, cx| {
@@ -1357,14 +1362,14 @@ impl NyaTermApp {
                         div()
                             .flex()
                             .gap_2()
-                            .child(small_button(
+                            .child(small_button(palette, 
                                 "security-delete-confirm",
                                 "Delete",
                                 cx.listener(|this, _, _, cx| {
                                     this.confirm_security_delete(cx);
                                 }),
                             ))
-                            .child(small_button(
+                            .child(small_button(palette, 
                                 "security-delete-cancel",
                                 "Cancel",
                                 cx.listener(|this, _, _, cx| {
@@ -1433,7 +1438,7 @@ impl NyaTermApp {
                                                 "MP {master} · K{key_count}/P{password_count}/C{credential_count}/O{otp_count}"
                                             )),
                                     )
-                                    .child(small_button(
+                                    .child(small_button(palette, 
                                         "security-add-item",
                                         "Add",
                                         cx.listener(|this, _, window, cx| {
@@ -1510,7 +1515,7 @@ impl NyaTermApp {
                     .flex()
                     .items_center()
                     .gap_1()
-                    .child(small_button(
+                    .child(small_button(palette, 
                         "security-secrets-toggle",
                         if unlocked && has_master {
                             "Lock"
@@ -1538,6 +1543,7 @@ impl NyaTermApp {
         &mut self,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
+        let palette = self.theme_palette();
         let draft = if self.security_unlock_draft.is_empty() {
             " ".to_string()
         } else {
@@ -1607,14 +1613,14 @@ impl NyaTermApp {
                             .flex()
                             .justify_end()
                             .gap_2()
-                            .child(small_button(
+                            .child(small_button(palette, 
                                 "security-unlock-cancel",
                                 "Cancel",
                                 cx.listener(|this, _, _, cx| {
                                     this.close_security_unlock_prompt(cx);
                                 }),
                             ))
-                            .child(small_button(
+                            .child(small_button(palette, 
                                 "security-unlock-submit",
                                 "Unlock",
                                 cx.listener(|this, _, _, cx| {
@@ -1674,6 +1680,7 @@ impl NyaTermApp {
         editor: SecurityKeyEditorState,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
+        let palette = self.theme_palette();
         let title = if editor.id.is_some() {
             "Edit SSH Key"
         } else {
@@ -1779,7 +1786,7 @@ impl NyaTermApp {
                                         );
                                     })),
                             )
-                            .child(small_button(
+                            .child(small_button(palette, 
                                 "security-key-browse",
                                 "Browse",
                                 cx.listener(|this, _, window, cx| {
@@ -1835,7 +1842,7 @@ impl NyaTermApp {
                                         );
                                     })),
                             )
-                            .child(small_button(
+                            .child(small_button(palette, 
                                 "security-cert-browse",
                                 "Browse",
                                 cx.listener(|this, _, window, cx| {
@@ -1865,14 +1872,14 @@ impl NyaTermApp {
                 div()
                     .flex()
                     .gap_2()
-                    .child(small_button(
+                    .child(small_button(palette, 
                         "security-key-save",
                         "Save",
                         cx.listener(|this, _, window, cx| {
                             this.save_security_key_editor(window, cx);
                         }),
                     ))
-                    .child(small_button(
+                    .child(small_button(palette, 
                         "security-key-cancel",
                         "Cancel",
                         cx.listener(|this, _, _, cx| {
@@ -1887,6 +1894,7 @@ impl NyaTermApp {
         editor: SecurityOtpEditorState,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
+        let palette = self.theme_palette();
         let title = if editor.id.is_some() {
             "Edit OTP"
         } else {
@@ -2058,14 +2066,14 @@ impl NyaTermApp {
                 div()
                     .flex()
                     .gap_2()
-                    .child(small_button(
+                    .child(small_button(palette, 
                         "security-otp-save",
                         "Save",
                         cx.listener(|this, _, window, cx| {
                             this.save_security_otp_editor(window, cx);
                         }),
                     ))
-                    .child(small_button(
+                    .child(small_button(palette, 
                         "security-otp-cancel",
                         "Cancel",
                         cx.listener(|this, _, _, cx| {
@@ -2079,6 +2087,7 @@ impl NyaTermApp {
         &mut self,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
+        let palette = self.theme_palette();
         // Tauri SyncBackupHistoryPanel:
         // shared PanelHeader + status strip + optional conflict card + dense history list.
         let provider = configured_cloud_sync_provider(&self.cloud_sync_settings);
@@ -2299,7 +2308,7 @@ impl NyaTermApp {
                                 .pb_3()
                                 .flex()
                                 .gap_2()
-                                .child(small_button(
+                                .child(small_button(palette, 
                                     "sync-panel-force-pull",
                                     "Use remote",
                                     cx.listener({
@@ -2309,7 +2318,7 @@ impl NyaTermApp {
                                         }
                                     }),
                                 ))
-                                .child(small_button(
+                                .child(small_button(palette, 
                                     "sync-panel-force-push",
                                     "Use local",
                                     cx.listener({
@@ -2319,7 +2328,7 @@ impl NyaTermApp {
                                         }
                                     }),
                                 ))
-                                .child(small_button(
+                                .child(small_button(palette, 
                                     "sync-panel-conflict-dismiss",
                                     "Dismiss",
                                     cx.listener(|this, _, _, cx| {
@@ -2352,7 +2361,7 @@ impl NyaTermApp {
                             .flex()
                             .items_center()
                             .gap_1()
-                            .child(small_button(
+                            .child(small_button(palette, 
                                 "sync-panel-push",
                                 "Push",
                                 cx.listener(|this, _, _, cx| {
@@ -2365,7 +2374,7 @@ impl NyaTermApp {
                                     }
                                 }),
                             ))
-                            .child(small_button(
+                            .child(small_button(palette, 
                                 "sync-panel-pull",
                                 "Pull",
                                 cx.listener(|this, _, _, cx| {
@@ -2378,7 +2387,7 @@ impl NyaTermApp {
                                     }
                                 }),
                             ))
-                            .child(small_button(
+                            .child(small_button(palette, 
                                 "sync-panel-settings",
                                 "Settings",
                                 cx.listener(|this, _, _, cx| {
@@ -2403,6 +2412,7 @@ impl NyaTermApp {
         editor: SecurityPasswordEditorState,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
+        let palette = self.theme_palette();
         let title = if editor.id.is_some() {
             "Edit Password"
         } else {
@@ -2475,14 +2485,14 @@ impl NyaTermApp {
                 div()
                     .flex()
                     .gap_2()
-                    .child(small_button(
+                    .child(small_button(palette, 
                         "security-pw-save",
                         "Save",
                         cx.listener(|this, _, window, cx| {
                             this.save_security_password_editor(window, cx);
                         }),
                     ))
-                    .child(small_button(
+                    .child(small_button(palette, 
                         "security-pw-cancel",
                         "Cancel",
                         cx.listener(|this, _, _, cx| {
@@ -2497,6 +2507,7 @@ impl NyaTermApp {
         editor: SecurityCredentialEditorState,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
+        let palette = self.theme_palette();
         let title = if editor.id.is_some() {
             "Edit Credential"
         } else {
@@ -2537,7 +2548,7 @@ impl NyaTermApp {
                             .text_color(rgb(0xc9d1d9))
                             .child(title),
                     )
-                    .child(small_button(
+                    .child(small_button(palette, 
                         "security-cred-enabled",
                         if editor.enabled { "Enabled" } else { "Disabled" },
                         cx.listener(|this, _, _, cx| {
@@ -2638,14 +2649,14 @@ impl NyaTermApp {
                 div()
                     .flex()
                     .gap_2()
-                    .child(small_button(
+                    .child(small_button(palette, 
                         "security-cred-save",
                         "Save",
                         cx.listener(|this, _, window, cx| {
                             this.save_security_credential_editor(window, cx);
                         }),
                     ))
-                    .child(small_button(
+                    .child(small_button(palette, 
                         "security-cred-cancel",
                         "Cancel",
                         cx.listener(|this, _, _, cx| {

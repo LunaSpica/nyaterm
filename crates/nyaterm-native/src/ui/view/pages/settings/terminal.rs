@@ -41,14 +41,14 @@ impl NyaTermApp {
                                     .text_color(rgb(0xc9d1d9))
                                     .child(scrollback),
                             )
-                            .child(small_button(
+                            .child(small_button(palette, 
                                 "terminal-scrollback-minus",
                                 "−100",
                                 cx.listener(|this, _, _, cx| {
                                     this.adjust_terminal_scrollback_lines(-100, cx);
                                 }),
                             ))
-                            .child(small_button(
+                            .child(small_button(palette, 
                                 "terminal-scrollback-plus",
                                 "+100",
                                 cx.listener(|this, _, _, cx| {
@@ -72,14 +72,14 @@ impl NyaTermApp {
                                     .text_color(rgb(0xc9d1d9))
                                     .child(format!("{keep_alive}s")),
                             )
-                            .child(small_button(
+                            .child(small_button(palette, 
                                 "terminal-keepalive-minus",
                                 "−5",
                                 cx.listener(|this, _, _, cx| {
                                     this.adjust_terminal_keep_alive_interval(-5, cx);
                                 }),
                             ))
-                            .child(small_button(
+                            .child(small_button(palette, 
                                 "terminal-keepalive-plus",
                                 "+5",
                                 cx.listener(|this, _, _, cx| {
@@ -319,7 +319,7 @@ impl NyaTermApp {
                     .child(settings_form_row(palette, 
                         "Open search",
                         Some(SharedString::from("Focus the terminal search bar in the workspace.")),
-                        small_button(
+                        small_button(palette, 
                             "settings-search-open",
                             "Open",
                             cx.listener(|this, _, window, cx| {
@@ -397,7 +397,7 @@ impl NyaTermApp {
                 .child(settings_form_row(palette, 
                     "Import rules",
                     Some(SharedString::from(prompt)),
-                    small_button(
+                    small_button(palette, 
                         "settings-keyword-highlights-import",
                         "Import",
                         cx.listener(|this, _, _, cx| {

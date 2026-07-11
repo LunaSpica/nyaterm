@@ -5,6 +5,7 @@ impl NyaTermApp {
         &mut self,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
+        let palette = self.theme_palette();
         let editor = self
             .quick_command_editor
             .clone()
@@ -431,7 +432,7 @@ impl NyaTermApp {
                                     .flex()
                                     .items_center()
                                     .gap_2()
-                                    .child(small_button(
+                                    .child(small_button(palette, 
                                         "quick-command-editor-cancel",
                                         "Cancel",
                                         cx.listener(|this, _, _, cx| {
@@ -440,7 +441,7 @@ impl NyaTermApp {
                                     ))
                                     .child(
                                         div().when(!can_save, |this| this.opacity(0.45)).child(
-                                            small_button(
+                                            small_button(palette, 
                                                 "quick-command-editor-save",
                                                 "Save",
                                                 cx.listener(|this, _, _, cx| {

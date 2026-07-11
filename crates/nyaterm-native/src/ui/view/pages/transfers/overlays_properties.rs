@@ -5,6 +5,7 @@ impl NyaTermApp {
         &mut self,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
+        let palette = self.theme_palette();
         let state = self
             .transfer_properties
             .clone()
@@ -219,7 +220,7 @@ impl NyaTermApp {
                                         .text_xs()
                                         .text_color(rgb(0xaeb7c8))
                                         .child("Apply recursively")
-                                        .child(small_button(
+                                        .child(small_button(palette, 
                                             "transfer-properties-recursive-toggle",
                                             if state.recursive { "On" } else { "Off" },
                                             cx.listener(|this, _, _, cx| {
@@ -254,7 +255,7 @@ impl NyaTermApp {
                             .items_center()
                             .justify_end()
                             .gap_2()
-                            .child(small_button(
+                            .child(small_button(palette, 
                                 "transfer-properties-copy-path",
                                 "Copy Path",
                                 {
@@ -268,7 +269,7 @@ impl NyaTermApp {
                                     })
                                 },
                             ))
-                            .child(small_button(
+                            .child(small_button(palette, 
                                 "transfer-properties-save",
                                 if state.saving { "Saving" } else { "Save" },
                                 cx.listener(move |this, _, window, cx| {
@@ -277,7 +278,7 @@ impl NyaTermApp {
                                     }
                                 }),
                             ))
-                            .child(small_button(
+                            .child(small_button(palette, 
                                 "transfer-properties-close",
                                 "Close",
                                 cx.listener(|this, _, _, cx| {

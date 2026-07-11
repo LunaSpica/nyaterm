@@ -54,7 +54,7 @@ impl NyaTermApp {
                             .flex()
                             .items_center()
                             .gap_1()
-                            .child(small_button(
+                            .child(small_button(palette, 
                                 "transfer-use-local-draft",
                                 "Use Draft",
                                 cx.listener(|this, _, _, cx| {
@@ -69,7 +69,7 @@ impl NyaTermApp {
                                     this.save_transfer_settings("transfer download path saved", cx);
                                 }),
                             ))
-                            .child(small_button(
+                            .child(small_button(palette, 
                                 "transfer-clear-download",
                                 "Clear",
                                 cx.listener(|this, _, _, cx| {
@@ -231,7 +231,7 @@ impl NyaTermApp {
                     .child(settings_form_row(palette, 
                         "Actions",
                         None,
-                        small_button(
+                        small_button(palette, 
                             "settings-transfer-editor-save",
                             "Save",
                             cx.listener(|this, _, _, cx| {
@@ -270,7 +270,7 @@ impl NyaTermApp {
                             .flex()
                             .items_center()
                             .gap_1()
-                            .child(small_button(
+                            .child(small_button(palette, 
                                 "settings-transfer-download-threads-dec",
                                 "-",
                                 cx.listener(|this, _, _, cx| {
@@ -287,7 +287,7 @@ impl NyaTermApp {
                                     .text_color(rgb(0xc9d1d9))
                                     .child(self.settings.transfer_download_threads.to_string()),
                             )
-                            .child(small_button(
+                            .child(small_button(palette, 
                                 "settings-transfer-download-threads-inc",
                                 "+",
                                 cx.listener(|this, _, _, cx| {
@@ -305,7 +305,7 @@ impl NyaTermApp {
                             .flex()
                             .items_center()
                             .gap_1()
-                            .child(small_button(
+                            .child(small_button(palette, 
                                 "settings-transfer-upload-threads-dec",
                                 "-",
                                 cx.listener(|this, _, _, cx| {
@@ -322,7 +322,7 @@ impl NyaTermApp {
                                     .text_color(rgb(0xc9d1d9))
                                     .child(self.settings.transfer_upload_threads.to_string()),
                             )
-                            .child(small_button(
+                            .child(small_button(palette, 
                                 "settings-transfer-upload-threads-inc",
                                 "+",
                                 cx.listener(|this, _, _, cx| {
@@ -340,7 +340,7 @@ impl NyaTermApp {
                             .flex()
                             .items_center()
                             .gap_1()
-                            .child(small_button(
+                            .child(small_button(palette, 
                                 "settings-transfer-retries-dec",
                                 "-",
                                 cx.listener(|this, _, _, cx| {
@@ -357,7 +357,7 @@ impl NyaTermApp {
                                     .text_color(rgb(0xc9d1d9))
                                     .child(self.settings.transfer_max_retries.to_string()),
                             )
-                            .child(small_button(
+                            .child(small_button(palette, 
                                 "settings-transfer-retries-inc",
                                 "+",
                                 cx.listener(|this, _, _, cx| {
@@ -375,7 +375,7 @@ impl NyaTermApp {
                             .flex()
                             .items_center()
                             .gap_1()
-                            .child(small_button(
+                            .child(small_button(palette, 
                                 "settings-transfer-buffer-dec",
                                 "-",
                                 cx.listener(|this, _, _, cx| {
@@ -392,7 +392,7 @@ impl NyaTermApp {
                                     .text_color(rgb(0xc9d1d9))
                                     .child(self.settings.transfer_buffer_size.to_string()),
                             )
-                            .child(small_button(
+                            .child(small_button(palette, 
                                 "settings-transfer-buffer-inc",
                                 "+",
                                 cx.listener(|this, _, _, cx| {
@@ -511,7 +511,7 @@ impl NyaTermApp {
                             .flex()
                             .items_center()
                             .gap_1()
-                            .child(small_button(
+                            .child(small_button(palette, 
                                 "settings-recording-memory-minus",
                                 "-1 MiB",
                                 cx.listener(|this, _, _, cx| {
@@ -528,7 +528,7 @@ impl NyaTermApp {
                                     .text_color(rgb(0xc9d1d9))
                                     .child(format!("{memory_mib}")),
                             )
-                            .child(small_button(
+                            .child(small_button(palette, 
                                 "settings-recording-memory-plus",
                                 "+1 MiB",
                                 cx.listener(|this, _, _, cx| {
@@ -633,7 +633,7 @@ fn transfer_stepper(
                 .items_center()
                 .justify_between()
                 .gap_2()
-                .child(small_button(dec_id, "-", on_dec))
+                .child(small_button(crate::ui::theme::theme_palette("github-dark"), dec_id, "-", on_dec))
                 .child(
                     div()
                         .min_w(px(38.))
@@ -644,7 +644,7 @@ fn transfer_stepper(
                         .text_color(rgb(0xe5edf7))
                         .child(value.to_string()),
                 )
-                .child(small_button(inc_id, "+", on_inc)),
+                .child(small_button(crate::ui::theme::theme_palette("github-dark"), inc_id, "+", on_inc)),
         )
 }
 

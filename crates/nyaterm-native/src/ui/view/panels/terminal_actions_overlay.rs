@@ -5,6 +5,7 @@ impl NyaTermApp {
         &mut self,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
+        let palette = self.theme_palette();
         let visible_text = self.active_terminal_visible_text();
         let buffer_text = self.active_terminal_buffer_text();
         let visible_lines = visible_text.lines().count();
@@ -93,7 +94,7 @@ impl NyaTermApp {
                                             )),
                                     ),
                             )
-                            .child(small_button(
+                            .child(small_button(palette, 
                                 "terminal-actions-close",
                                 "Close",
                                 cx.listener(|this, _, window, cx| {

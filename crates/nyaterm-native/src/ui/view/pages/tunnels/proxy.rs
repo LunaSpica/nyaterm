@@ -186,7 +186,7 @@ pub(super) fn proxy_section(
                             .flex()
                             .items_center()
                             .gap_1()
-                            .child(small_button(
+                            .child(small_button(crate::ui::theme::theme_palette("github-dark"), 
                                 format!("proxy-group-rename-{}", group.id),
                                 "Rename",
                                 cx.listener(move |this, _, _, cx| {
@@ -197,7 +197,7 @@ pub(super) fn proxy_section(
                                     );
                                 }),
                             ))
-                            .child(small_button(
+                            .child(small_button(crate::ui::theme::theme_palette("github-dark"), 
                                 format!("proxy-group-delete-{}", group.id),
                                 "Delete",
                                 cx.listener(move |this, _, _, cx| {
@@ -360,7 +360,7 @@ fn proxy_move_picker(
         ));
     } else {
         let target_id = proxy_id.clone();
-        targets = targets.child(small_button(
+        targets = targets.child(small_button(crate::ui::theme::theme_palette("github-dark"), 
             format!("network-proxy-move-{proxy_id}-ungrouped"),
             "Ungrouped",
             cx.listener(move |this, _, _, cx| {
@@ -381,7 +381,7 @@ fn proxy_move_picker(
         } else {
             let target_id = proxy_id.clone();
             let group_id = group.id.clone();
-            targets = targets.child(small_button(
+            targets = targets.child(small_button(crate::ui::theme::theme_palette("github-dark"), 
                 format!("network-proxy-move-{proxy_id}-{}", group.id),
                 "Move Here",
                 cx.listener(move |this, _, _, cx| {

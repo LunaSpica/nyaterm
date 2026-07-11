@@ -130,14 +130,14 @@ pub(in crate::ui::view::pages::remote) fn docker_details_panel(
     let mut actions = div().flex().items_center().gap_2();
     if let Some(container_id) = container_id.clone() {
         actions = actions
-            .child(small_button(
+            .child(small_button(crate::ui::theme::theme_palette("github-dark"), 
                 format!("docker-details-refresh-{}", compact_id(&container_id)),
                 "Refresh",
                 cx.listener(move |this, _, window, cx| {
                     this.load_docker_details(container_id.clone(), window, cx);
                 }),
             ))
-            .child(small_button(
+            .child(small_button(crate::ui::theme::theme_palette("github-dark"), 
                 "docker-details-close",
                 "Close",
                 cx.listener(|this, _, _, cx| {
@@ -200,7 +200,7 @@ pub(in crate::ui::view::pages::remote) fn docker_details_panel(
                 .grid()
                 .grid_cols(5)
                 .gap_2()
-                .child(metric(
+                .child(metric(crate::ui::theme::theme_palette("github-dark"), 
                     "CPU",
                     details
                         .stats
@@ -208,7 +208,7 @@ pub(in crate::ui::view::pages::remote) fn docker_details_panel(
                         .map(|stats| format!("{:.1}%", stats.cpu_percent))
                         .unwrap_or_else(|| "n/a".to_string()),
                 ))
-                .child(metric(
+                .child(metric(crate::ui::theme::theme_palette("github-dark"), 
                     "Memory",
                     details
                         .stats
@@ -216,7 +216,7 @@ pub(in crate::ui::view::pages::remote) fn docker_details_panel(
                         .map(|stats| format!("{:.1}%", stats.memory_percent))
                         .unwrap_or_else(|| "n/a".to_string()),
                 ))
-                .child(metric(
+                .child(metric(crate::ui::theme::theme_palette("github-dark"), 
                     "Net IO",
                     details
                         .stats
@@ -224,7 +224,7 @@ pub(in crate::ui::view::pages::remote) fn docker_details_panel(
                         .map(|stats| truncate_preview(&stats.net_io, 24))
                         .unwrap_or_else(|| "n/a".to_string()),
                 ))
-                .child(metric(
+                .child(metric(crate::ui::theme::theme_palette("github-dark"), 
                     "Block IO",
                     details
                         .stats
@@ -232,7 +232,7 @@ pub(in crate::ui::view::pages::remote) fn docker_details_panel(
                         .map(|stats| truncate_preview(&stats.block_io, 24))
                         .unwrap_or_else(|| "n/a".to_string()),
                 ))
-                .child(metric(
+                .child(metric(crate::ui::theme::theme_palette("github-dark"), 
                     "PIDs",
                     details
                         .stats
@@ -464,7 +464,7 @@ fn docker_detail_line(
                 .child(display_value),
         )
         .when(copyable && value.trim() != "-", |this| {
-            this.child(small_button(
+            this.child(small_button(crate::ui::theme::theme_palette("github-dark"), 
                 format!("docker-details-copy-{label}"),
                 "Copy",
                 cx.listener(move |this, _, _, cx| {

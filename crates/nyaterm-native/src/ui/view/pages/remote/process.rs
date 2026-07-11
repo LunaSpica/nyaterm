@@ -571,28 +571,28 @@ pub(super) fn process_details(
                             },
                         )),
                 )
-                .child(small_button(
+                .child(small_button(crate::ui::theme::theme_palette("github-dark"), 
                     format!("process-nice-apply-{pid}"),
                     "Apply",
                     cx.listener(move |this, _, window, cx| {
                         this.apply_process_nice_draft(window, cx);
                     }),
                 ))
-                .child(small_button(
+                .child(small_button(crate::ui::theme::theme_palette("github-dark"), 
                     format!("process-nice-low-{pid}"),
                     "-5",
                     cx.listener(move |this, _, window, cx| {
                         this.renice_process(pid, -5, window, cx);
                     }),
                 ))
-                .child(small_button(
+                .child(small_button(crate::ui::theme::theme_palette("github-dark"), 
                     format!("process-nice-zero-{pid}"),
                     "0",
                     cx.listener(move |this, _, window, cx| {
                         this.renice_process(pid, 0, window, cx);
                     }),
                 ))
-                .child(small_button(
+                .child(small_button(crate::ui::theme::theme_palette("github-dark"), 
                     format!("process-nice-high-{pid}"),
                     "+5",
                     cx.listener(move |this, _, window, cx| {
@@ -607,35 +607,35 @@ pub(super) fn process_details(
                         .text_color(rgb(0x6e7681))
                         .child("SIG"),
                 )
-                .child(small_button(
+                .child(small_button(crate::ui::theme::theme_palette("github-dark"), 
                     format!("process-signal-term-{pid}"),
                     "TERM",
                     cx.listener(move |this, _, window, cx| {
                         this.request_process_signal(pid, "TERM", window, cx);
                     }),
                 ))
-                .child(small_button(
+                .child(small_button(crate::ui::theme::theme_palette("github-dark"), 
                     format!("process-signal-hup-{pid}"),
                     "HUP",
                     cx.listener(move |this, _, window, cx| {
                         this.request_process_signal(pid, "HUP", window, cx);
                     }),
                 ))
-                .child(small_button(
+                .child(small_button(crate::ui::theme::theme_palette("github-dark"), 
                     format!("process-signal-stop-{pid}"),
                     "STOP",
                     cx.listener(move |this, _, window, cx| {
                         this.request_process_signal(pid, "STOP", window, cx);
                     }),
                 ))
-                .child(small_button(
+                .child(small_button(crate::ui::theme::theme_palette("github-dark"), 
                     format!("process-signal-cont-{pid}"),
                     "CONT",
                     cx.listener(move |this, _, window, cx| {
                         this.request_process_signal(pid, "CONT", window, cx);
                     }),
                 ))
-                .child(small_button(
+                .child(small_button(crate::ui::theme::theme_palette("github-dark"), 
                     format!("process-signal-kill-{pid}"),
                     "KILL",
                     cx.listener(move |this, _, window, cx| {
@@ -722,14 +722,14 @@ pub(super) fn process_signal_confirm_panel(
                 .flex()
                 .items_center()
                 .gap_2()
-                .child(small_button(
+                .child(small_button(crate::ui::theme::theme_palette("github-dark"), 
                     "process-signal-cancel",
                     "Cancel",
                     cx.listener(|this, _, _, cx| {
                         this.cancel_process_signal_confirm(cx);
                     }),
                 ))
-                .child(small_button(
+                .child(small_button(crate::ui::theme::theme_palette("github-dark"), 
                     "process-signal-confirm",
                     "Confirm",
                     cx.listener(|this, _, window, cx| {
@@ -741,6 +741,7 @@ pub(super) fn process_signal_confirm_panel(
 
 
 pub(super) fn dense_capability_line(
+    palette: crate::ui::theme::ThemePalette,
     label: &'static str,
     value: impl Into<String>,
 ) -> impl IntoElement {
@@ -754,7 +755,7 @@ pub(super) fn dense_capability_line(
         .child(
             div()
                 .text_size(px(10.))
-                .text_color(rgb(0x6e7681))
+                .text_color(rgb(palette.text_dimmed))
                 .child(label),
         )
         .child(
@@ -762,7 +763,7 @@ pub(super) fn dense_capability_line(
                 .min_w_0()
                 .font_family("JetBrains Mono")
                 .text_size(px(10.))
-                .text_color(rgb(0xc9d1d9))
+                .text_color(rgb(palette.text))
                 .overflow_hidden()
                 .child(value.into()),
         )

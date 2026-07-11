@@ -3,6 +3,7 @@ use gpui::{SharedString, prelude::*};
 
 impl NyaTermApp {
     pub(in crate::ui::view) fn stats_view(&mut self, cx: &mut Context<Self>) -> impl IntoElement {
+        let palette = self.theme_palette();
         let can_refresh = self.active_ssh_config.is_some() && !self.stats_pending;
         let stats = self.remote_stats.clone().unwrap_or_default();
         let memory_total = stats.memory.used.saturating_add(stats.memory.available);
@@ -210,20 +211,17 @@ impl NyaTermApp {
                                     .text_color(rgb(0x8b949e))
                                     .child("System"),
                             )
-                            .child(dense_capability_line(
-                                "OS",
+                            .child(dense_capability_line(palette, "OS",
                                 truncate_preview(&stats.system.os, 52),
                             ))
-                            .child(dense_capability_line("Arch", stats.system.arch.clone()))
-                            .child(dense_capability_line(
-                                "Uptime",
+                            .child(dense_capability_line(palette, "Arch", stats.system.arch.clone()))
+                            .child(dense_capability_line(palette, "Uptime",
                                 format_uptime(stats.system.uptime_sec),
                             ))
-                            .child(dense_capability_line(
-                                "CPU Model",
+                            .child(dense_capability_line(palette, "CPU Model",
                                 truncate_preview(&stats.cpu.model, 52),
                             ))
-                            .child(dense_capability_line("Cores", stats.cpu.cores.to_string())),
+                            .child(dense_capability_line(palette, "Cores", stats.cpu.cores.to_string())),
                     )
                     .child(
                         div()
@@ -233,10 +231,9 @@ impl NyaTermApp {
                             .bg(rgb(0x0d1117))
                             .p_2()
                             .child(div().text_sm().font_weight(FontWeight(700.)).child("Load"))
-                            .child(dense_capability_line("1 min", format!("{:.2}", stats.load.load1)))
-                            .child(dense_capability_line("5 min", format!("{:.2}", stats.load.load5)))
-                            .child(dense_capability_line(
-                                "15 min",
+                            .child(dense_capability_line(palette, "1 min", format!("{:.2}", stats.load.load1)))
+                            .child(dense_capability_line(palette, "5 min", format!("{:.2}", stats.load.load5)))
+                            .child(dense_capability_line(palette, "15 min",
                                 format!("{:.2}", stats.load.load15),
                             ))
                             .when(!stats.cpu.per_core.is_empty(), |this| {
@@ -260,20 +257,16 @@ impl NyaTermApp {
                                     .font_weight(FontWeight(700.))
                                     .child("Memory"),
                             )
-                            .child(dense_capability_line(
-                                "Used",
+                            .child(dense_capability_line(palette, "Used",
                                 format_file_size(Some(stats.memory.used)),
                             ))
-                            .child(dense_capability_line(
-                                "Available",
+                            .child(dense_capability_line(palette, "Available",
                                 format_file_size(Some(stats.memory.available)),
                             ))
-                            .child(dense_capability_line(
-                                "Cached",
+                            .child(dense_capability_line(palette, "Cached",
                                 format_file_size(Some(stats.memory.cached)),
                             ))
-                            .child(dense_capability_line(
-                                "Total",
+                            .child(dense_capability_line(palette, "Total",
                                 format_file_size(Some(memory_total)),
                             ))
                             .child(stats_progress_bar(memory_percent / 100.)),
@@ -363,8 +356,8 @@ fn cpu_core_summary(per_core: &[f64], expanded: bool, cx: &mut Context<NyaTermAp
             .items_center()
             .justify_between()
             .gap_2()
-            .child(dense_capability_line("Per Core", summary))
-            .child(small_button(
+            .child(dense_capability_line(crate::ui::theme::theme_palette("github-dark"), "Per Core", summary))
+            .child(small_button(crate::ui::theme::theme_palette("github-dark"), 
                 "stats-cpu-cores-toggle",
                 if expanded { "Hide" } else { "Show" },
                 cx.listener(|this, _, _, cx| {

@@ -189,7 +189,7 @@ pub(super) fn network_modal_shell(
     width: f32,
     content: impl IntoElement,
 ) -> impl IntoElement {
-    modal_dialog_shell(id, width, content)
+    modal_dialog_shell(crate::ui::theme::theme_palette("github-dark"), id, width, content)
 }
 
 pub(super) fn network_dialog_footer(
@@ -199,6 +199,6 @@ pub(super) fn network_dialog_footer(
     on_cancel: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
     on_save: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
 ) -> impl IntoElement {
-    modal_dialog_footer(cancel_id, save_id, save_label, on_cancel, on_save)
+    modal_dialog_footer(crate::ui::theme::theme_palette("github-dark"), cancel_id, save_id, save_label, on_cancel, on_save)
 }
 

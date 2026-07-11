@@ -295,6 +295,7 @@ impl NyaTermApp {
     }
 
     fn command_center_panel(&mut self, cx: &mut Context<Self>) -> impl IntoElement {
+        let palette = self.theme_palette();
         let sessions = self.session_manager.list_sessions().unwrap_or_default();
         let active_label = self
             .active_session_id
@@ -387,8 +388,8 @@ impl NyaTermApp {
                     .grid()
                     .grid_cols(2)
                     .gap_2()
-                    .child(metric("Active", active_label))
-                    .child(metric("Sync", provider)),
+                    .child(metric(palette, "Active", active_label))
+                    .child(metric(palette, "Sync", provider)),
             )
             .child(
                 div()
@@ -396,28 +397,28 @@ impl NyaTermApp {
                     .flex()
                     .flex_wrap()
                     .gap_2()
-                    .child(small_button(
+                    .child(small_button(palette, 
                         "command-center-new-session",
                         "New",
                         cx.listener(|this, _, _, cx| {
                             this.select(NavItem::Connections, cx);
                         }),
                     ))
-                    .child(small_button(
+                    .child(small_button(palette, 
                         "command-center-active-sessions",
                         "Sessions",
                         cx.listener(|this, _, _, cx| {
                             this.select(NavItem::Workspace, cx);
                         }),
                     ))
-                    .child(small_button(
+                    .child(small_button(palette, 
                         "command-center-settings",
                         "Settings",
                         cx.listener(|this, _, _, cx| {
                             this.select(NavItem::Settings, cx);
                         }),
                     ))
-                    .child(small_button(
+                    .child(small_button(palette, 
                         "command-center-update-check",
                         "Updates",
                         cx.listener(|this, _, _, cx| {
@@ -431,7 +432,7 @@ impl NyaTermApp {
                     .flex()
                     .flex_wrap()
                     .gap_2()
-                    .child(small_button(
+                    .child(small_button(palette, 
                         "command-center-sync-push",
                         "Push",
                         cx.listener(move |this, _, _, cx| {
@@ -442,7 +443,7 @@ impl NyaTermApp {
                             }
                         }),
                     ))
-                    .child(small_button(
+                    .child(small_button(palette, 
                         "command-center-sync-pull",
                         "Pull",
                         cx.listener(move |this, _, _, cx| {
@@ -453,14 +454,14 @@ impl NyaTermApp {
                             }
                         }),
                     ))
-                    .child(small_button(
+                    .child(small_button(palette, 
                         "command-center-sync-history",
                         "History",
                         cx.listener(|this, _, _, cx| {
                             this.select(NavItem::Settings, cx);
                         }),
                     ))
-                    .child(small_button(
+                    .child(small_button(palette, 
                         "command-center-migration",
                         "Migration",
                         cx.listener(|this, _, _, cx| {
@@ -484,6 +485,7 @@ impl NyaTermApp {
     }
 
     fn command_search_panel(&mut self, cx: &mut Context<Self>) -> impl IntoElement {
+        let palette = self.theme_palette();
         let results = self.command_search_results();
         let mut rows = div().mt_3().flex().flex_col().gap_2();
         if results.is_empty() {
@@ -539,14 +541,14 @@ impl NyaTermApp {
                                 .items_center()
                                 .justify_end()
                                 .gap_1()
-                                .child(small_button(
+                                .child(small_button(palette, 
                                     format!("command-search-insert-{index}"),
                                     "Insert",
                                     cx.listener(move |this, _, _, cx| {
                                         this.insert_command_search_result(index, cx);
                                     }),
                                 ))
-                                .child(small_button(
+                                .child(small_button(palette, 
                                     format!("command-search-run-{index}"),
                                     "Run",
                                     cx.listener(move |this, _, _, cx| {
@@ -1421,12 +1423,12 @@ impl NyaTermApp {
                     .flex_wrap()
                     .items_center()
                     .gap_1()
-                    .child(small_button(
+                    .child(small_button(crate::ui::theme::theme_palette("github-dark"), 
                         format!("ai-command-insert-{key}"),
                         "Insert",
                         on_insert,
                     ))
-                    .child(small_button(
+                    .child(small_button(crate::ui::theme::theme_palette("github-dark"), 
                         format!("ai-command-copy-{key}"),
                         "Copy",
                         cx.listener(move |this, _, _, cx| {
@@ -1437,12 +1439,12 @@ impl NyaTermApp {
                             cx.notify();
                         }),
                     ))
-                    .child(small_button(
+                    .child(small_button(crate::ui::theme::theme_palette("github-dark"), 
                         format!("ai-command-save-{key}"),
                         "Save",
                         on_save,
                     ))
-                    .child(small_button(
+                    .child(small_button(crate::ui::theme::theme_palette("github-dark"), 
                         format!("ai-command-run-{key}"),
                         "Run",
                         on_run,
@@ -1984,6 +1986,7 @@ impl NyaTermApp {
     }
 
     fn right_stats_panel(&mut self, cx: &mut Context<Self>) -> impl IntoElement {
+        let palette = self.theme_palette();
         let stats = self.remote_stats.clone().unwrap_or_default();
         let memory_total = stats.memory.used.saturating_add(stats.memory.available);
         let memory_percent = if memory_total > 0 {
@@ -2003,8 +2006,8 @@ impl NyaTermApp {
             .flex_col()
             .gap_3()
             .child(
-                inspector_card("Resource Monitor")
-                    .child(capability_line(
+                inspector_card(palette, "Resource Monitor")
+                    .child(capability_line(palette, 
                         "SSH",
                         if self.active_ssh_config.is_some() {
                             "ready"
@@ -2012,7 +2015,7 @@ impl NyaTermApp {
                             "none"
                         },
                     ))
-                    .child(capability_line(
+                    .child(capability_line(palette, 
                         "Host",
                         if stats.system.hostname.trim().is_empty() {
                             "n/a".to_string()
@@ -2020,10 +2023,10 @@ impl NyaTermApp {
                             truncate_preview(&stats.system.hostname, 34)
                         },
                     ))
-                    .child(capability_line("CPU", format!("{:.1}%", stats.cpu.usage)))
-                    .child(capability_line("Memory", format!("{memory_percent:.0}%")))
-                    .child(capability_line("Disk", disk_summary))
-                    .child(div().mt_3().child(small_button(
+                    .child(capability_line(palette, "CPU", format!("{:.1}%", stats.cpu.usage)))
+                    .child(capability_line(palette, "Memory", format!("{memory_percent:.0}%")))
+                    .child(capability_line(palette, "Disk", disk_summary))
+                    .child(div().mt_3().child(small_button(palette, 
                         "right-stats-refresh",
                         if self.stats_pending {
                             "Loading"
@@ -2035,11 +2038,12 @@ impl NyaTermApp {
                         }),
                     ))),
             )
-            .child(inspector_card("Networks").child(compact_network_rows(&stats.networks)))
+            .child(inspector_card(palette, "Networks").child(compact_network_rows(&stats.networks)))
             .child(inspector_status_line(self.stats_status.clone()))
     }
 
     fn right_process_panel(&mut self, cx: &mut Context<Self>) -> impl IntoElement {
+        let palette = self.theme_palette();
         let top_process = self.processes.iter().max_by(|left, right| {
             left.cpu_percent
                 .partial_cmp(&right.cpu_percent)
@@ -2060,8 +2064,8 @@ impl NyaTermApp {
             .flex_col()
             .gap_3()
             .child(
-                inspector_card("Process Manager")
-                    .child(capability_line(
+                inspector_card(palette, "Process Manager")
+                    .child(capability_line(palette, 
                         "SSH",
                         if self.active_ssh_config.is_some() {
                             "ready"
@@ -2069,12 +2073,12 @@ impl NyaTermApp {
                             "none"
                         },
                     ))
-                    .child(capability_line(
+                    .child(capability_line(palette, 
                         "Processes",
                         self.processes.len().to_string(),
                     ))
-                    .child(capability_line("Top CPU", top_label))
-                    .child(div().mt_3().child(small_button(
+                    .child(capability_line(palette, "Top CPU", top_label))
+                    .child(div().mt_3().child(small_button(palette, 
                         "right-process-refresh",
                         if self.process_pending {
                             "Loading"
@@ -2086,11 +2090,12 @@ impl NyaTermApp {
                         }),
                     ))),
             )
-            .child(inspector_card("Hot Processes").child(compact_process_rows(&self.processes)))
+            .child(inspector_card(palette, "Hot Processes").child(compact_process_rows(&self.processes)))
             .child(inspector_status_line(self.process_status.clone()))
     }
 
     fn right_docker_panel(&mut self, cx: &mut Context<Self>) -> impl IntoElement {
+        let palette = self.theme_palette();
         let overview = self.docker_overview.clone().unwrap_or_default();
         let running = overview
             .containers
@@ -2103,8 +2108,8 @@ impl NyaTermApp {
             .flex_col()
             .gap_3()
             .child(
-                inspector_card("Docker")
-                    .child(capability_line(
+                inspector_card(palette, "Docker")
+                    .child(capability_line(palette, 
                         "SSH",
                         if self.active_ssh_config.is_some() {
                             "ready"
@@ -2112,20 +2117,20 @@ impl NyaTermApp {
                             "none"
                         },
                     ))
-                    .child(capability_line(
+                    .child(capability_line(palette, 
                         "Available",
                         if overview.available { "yes" } else { "no" },
                     ))
-                    .child(capability_line(
+                    .child(capability_line(palette, 
                         "Version",
                         truncate_preview(&overview.version, 24),
                     ))
-                    .child(capability_line(
+                    .child(capability_line(palette, 
                         "Containers",
                         overview.containers.len().to_string(),
                     ))
-                    .child(capability_line("Running", running.to_string()))
-                    .child(div().mt_3().child(small_button(
+                    .child(capability_line(palette, "Running", running.to_string()))
+                    .child(div().mt_3().child(small_button(palette, 
                         "right-docker-refresh",
                         if self.docker_pending {
                             "Loading"
@@ -2138,13 +2143,14 @@ impl NyaTermApp {
                     ))),
             )
             .child(
-                inspector_card("Containers")
+                inspector_card(palette, "Containers")
                     .child(compact_docker_container_rows(&overview.containers)),
             )
             .child(inspector_status_line(self.docker_status.clone()))
     }
 
     fn right_translation_panel(&mut self, cx: &mut Context<Self>) -> impl IntoElement {
+        let palette = self.theme_palette();
         let translated = self
             .translate_result
             .as_ref()
@@ -2161,13 +2167,13 @@ impl NyaTermApp {
             .flex_col()
             .gap_3()
             .child(
-                inspector_card("Translation")
-                    .child(capability_line("Provider", self.translate_provider.clone()))
-                    .child(capability_line(
+                inspector_card(palette, "Translation")
+                    .child(capability_line(palette, "Provider", self.translate_provider.clone()))
+                    .child(capability_line(palette, 
                         "Target",
                         self.translate_target_language.clone(),
                     ))
-                    .child(capability_line("Detected", detected))
+                    .child(capability_line(palette, "Detected", detected))
                     .child(
                         div()
                             .mt_3()
@@ -2181,7 +2187,7 @@ impl NyaTermApp {
                             .mt_3()
                             .flex()
                             .gap_2()
-                            .child(small_button(
+                            .child(small_button(palette, 
                                 "right-translation-run",
                                 if self.translate_pending {
                                     "Translating"
@@ -2192,7 +2198,7 @@ impl NyaTermApp {
                                     this.run_translation(window, cx);
                                 }),
                             ))
-                            .child(small_button(
+                            .child(small_button(palette, 
                                 "right-translation-save",
                                 "Save",
                                 cx.listener(|this, _, _, cx| {
@@ -2211,7 +2217,7 @@ pub(in crate::ui::view) fn disabled_inspector_panel(title: &'static str, detail:
         .flex_col()
         .gap_3()
         .child(
-            inspector_card(title)
+            inspector_card(crate::ui::theme::theme_palette("github-dark"), title)
                 .child(
                     div()
                         .mt_3()

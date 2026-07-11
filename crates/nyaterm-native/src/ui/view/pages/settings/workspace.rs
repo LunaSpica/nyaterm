@@ -213,7 +213,7 @@ impl NyaTermApp {
                             .flex()
                             .items_center()
                             .gap_1()
-                            .child(small_button(
+                            .child(small_button(palette, 
                                 "appearance-font-minus",
                                 "−",
                                 cx.listener(|this, _, _, cx| {
@@ -230,14 +230,14 @@ impl NyaTermApp {
                                     .text_color(rgb(0xc9d1d9))
                                     .child(font_size_label),
                             )
-                            .child(small_button(
+                            .child(small_button(palette, 
                                 "appearance-font-plus",
                                 "+",
                                 cx.listener(|this, _, _, cx| {
                                     this.adjust_terminal_font_size(1, cx);
                                 }),
                             ))
-                            .child(small_button(
+                            .child(small_button(palette, 
                                 "appearance-font-reset",
                                 "Reset",
                                 cx.listener(|this, _, _, cx| {
@@ -407,28 +407,28 @@ impl NyaTermApp {
                                         self.settings.interaction_command_suggestion_max_chars
                                     )),
                             )
-                            .child(small_button(
+                            .child(small_button(palette, 
                                 "interaction-suggest-min-minus",
                                 "Min −",
                                 cx.listener(|this, _, _, cx| {
                                     this.adjust_command_suggestion_min_chars(-1, cx);
                                 }),
                             ))
-                            .child(small_button(
+                            .child(small_button(palette, 
                                 "interaction-suggest-min-plus",
                                 "Min +",
                                 cx.listener(|this, _, _, cx| {
                                     this.adjust_command_suggestion_min_chars(1, cx);
                                 }),
                             ))
-                            .child(small_button(
+                            .child(small_button(palette, 
                                 "interaction-suggest-max-minus",
                                 "Max −",
                                 cx.listener(|this, _, _, cx| {
                                     this.adjust_command_suggestion_max_chars(-1, cx);
                                 }),
                             ))
-                            .child(small_button(
+                            .child(small_button(palette, 
                                 "interaction-suggest-max-plus",
                                 "Max +",
                                 cx.listener(|this, _, _, cx| {
@@ -507,14 +507,14 @@ impl NyaTermApp {
                                     .text_color(rgb(0xc9d1d9))
                                     .child(format!("{delay_ms} ms")),
                             )
-                            .child(small_button(
+                            .child(small_button(palette, 
                                 "interaction-dup-delay-minus",
                                 "−100",
                                 cx.listener(|this, _, _, cx| {
                                     this.adjust_duplicate_session_command_delay(-100, cx);
                                 }),
                             ))
-                            .child(small_button(
+                            .child(small_button(palette, 
                                 "interaction-dup-delay-plus",
                                 "+100",
                                 cx.listener(|this, _, _, cx| {
@@ -533,7 +533,7 @@ impl NyaTermApp {
                     .child(settings_form_row(palette, 
                         "Double-click",
                         Some(SharedString::from(double_action)),
-                        small_button(
+                        small_button(palette, 
                             "interaction-cycle-double",
                             "Cycle",
                             cx.listener(|this, _, _, cx| {
@@ -544,7 +544,7 @@ impl NyaTermApp {
                     .child(settings_form_row(palette, 
                         "Middle-click",
                         Some(SharedString::from(middle_action)),
-                        small_button(
+                        small_button(palette, 
                             "interaction-cycle-middle",
                             "Cycle",
                             cx.listener(|this, _, _, cx| {
@@ -555,7 +555,7 @@ impl NyaTermApp {
                     .child(settings_form_row(palette, 
                         "Right-click",
                         Some(SharedString::from(right_action)),
-                        small_button(
+                        small_button(palette, 
                             "interaction-cycle-right",
                             "Cycle",
                             cx.listener(|this, _, _, cx| {
@@ -613,7 +613,7 @@ impl NyaTermApp {
                             SHORTCUT_REGISTRY.len()
                         ))),
                         if overrides > 0 {
-                            small_button(
+                            small_button(palette, 
                                 "keybindings-reset-all",
                                 "Reset All",
                                 cx.listener(|this, _, _, cx| {
@@ -690,6 +690,7 @@ impl NyaTermApp {
         shortcut: &'static ShortcutDefinition,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
+        let palette = self.theme_palette();
         let (badge_fg, badge_bg) = match shortcut.native_status {
             ShortcutNativeStatus::Supported => (rgb(0x3fb950), rgb(0x12261c)),
             ShortcutNativeStatus::Partial => (rgb(0x58a6ff), rgb(0x122033)),
@@ -803,14 +804,14 @@ impl NyaTermApp {
                     .items_center()
                     .gap_1()
                     .when(is_recording, |this| {
-                        this.child(small_button(
+                        this.child(small_button(palette, 
                             format!("keybinding-save-{}", shortcut.id),
                             "Save",
                             cx.listener(|this, _, _, cx| {
                                 this.confirm_keybinding_recording(cx);
                             }),
                         ))
-                        .child(small_button(
+                        .child(small_button(palette, 
                             format!("keybinding-cancel-{}", shortcut.id),
                             "Cancel",
                             cx.listener(|this, _, _, cx| {
@@ -819,7 +820,7 @@ impl NyaTermApp {
                         ))
                     })
                     .when(!is_recording, |this| {
-                        this.child(small_button(
+                        this.child(small_button(palette, 
                             format!("keybinding-record-{}", shortcut.id),
                             "Record",
                             cx.listener(move |this, _, window, cx| {
@@ -828,7 +829,7 @@ impl NyaTermApp {
                         ))
                     })
                     .when(is_custom && !is_recording, |this| {
-                        this.child(small_button(
+                        this.child(small_button(palette, 
                             format!("keybinding-reset-{}", shortcut.id),
                             "Reset",
                             cx.listener(move |this, _, _, cx| {

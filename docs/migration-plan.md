@@ -819,3 +819,9 @@ service boundary first:
 - All Settings tabs (workspace/AI/terminal/transfer/security/sync/translation) inject `let palette = self.theme_palette()` and pass it through.
 - Free helper `ai_action_list` takes palette and themes action catalog rows (border/input/text/success).
 - Choice-chip selected fill uses theme-aware accent tint (dark / light / catppuccin); switch on/off uses accent/border + hover tokens.
+
+## 2026-07-11 Shared control ThemePalette expansion
+- `small_button`, `capability_line`, `session_info_row` take live ThemePalette.
+- Status bar controls (`status_bar_label` / `status_bar_button`), modal shell/footer, `inspector_card`, and `metric` themed.
+- Resource monitor `dense_capability_line` and transfer `queue_metric` take palette tokens.
+- Call sites across shell, overlays, transfers, remote panels, and settings inject `theme_palette()` (methods) or dark fallback (free helpers).

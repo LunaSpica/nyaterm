@@ -51,14 +51,14 @@ impl NyaTermApp {
                         div()
                             .flex()
                             .gap_1()
-                            .child(small_button(
+                            .child(small_button(palette, 
                                 "settings-config-export",
                                 "Export",
                                 cx.listener(|this, _, _, cx| {
                                     this.prompt_config_export(cx);
                                 }),
                             ))
-                            .child(small_button(
+                            .child(small_button(palette, 
                                 "settings-config-import",
                                 "Import",
                                 cx.listener(|this, _, _, cx| {
@@ -74,14 +74,14 @@ impl NyaTermApp {
                         div()
                             .flex()
                             .gap_1()
-                            .child(small_button(
+                            .child(small_button(palette, 
                                 "settings-portable-export",
                                 "Export .nya",
                                 cx.listener(|this, _, _, cx| {
                                     this.prompt_portable_snapshot_export(cx);
                                 }),
                             ))
-                            .child(small_button(
+                            .child(small_button(palette, 
                                 "settings-portable-import",
                                 "Import .nya",
                                 cx.listener(|this, _, _, cx| {
@@ -97,14 +97,14 @@ impl NyaTermApp {
                         div()
                             .flex()
                             .gap_1()
-                            .child(small_button(
+                            .child(small_button(palette, 
                                 "settings-encrypted-portable-export",
                                 "Encrypt .nya",
                                 cx.listener(|this, _, _, cx| {
                                     this.prompt_encrypted_portable_snapshot_export(cx);
                                 }),
                             ))
-                            .child(small_button(
+                            .child(small_button(palette, 
                                 "settings-encrypted-portable-import",
                                 "Decrypt .nya",
                                 cx.listener(|this, _, _, cx| {
@@ -146,14 +146,14 @@ impl NyaTermApp {
                         div()
                             .flex()
                             .gap_1()
-                            .child(small_button(
+                            .child(small_button(palette, 
                                 "settings-diagnostics-export",
                                 "Export",
                                 cx.listener(|this, _, _, cx| {
                                     this.prompt_diagnostics_export(cx);
                                 }),
                             ))
-                            .child(small_button(
+                            .child(small_button(palette, 
                                 "settings-diagnostics-logs",
                                 "Logs",
                                 cx.listener(|this, _, _, cx| {
@@ -180,7 +180,7 @@ impl NyaTermApp {
                     .child(settings_form_row(palette, 
                         "Native update",
                         Some(SharedString::from(truncate_preview(&self.update_status, 96))),
-                        small_button(
+                        small_button(palette, 
                             "settings-update-check",
                             if self.update_pending {
                                 "Checking"
@@ -257,6 +257,7 @@ impl NyaTermApp {
         conflict: CloudSyncConflictState,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
+        let palette = self.theme_palette();
         let provider_action = conflict.provider_action;
         let local_hash = self
             .cloud_sync_state
@@ -313,21 +314,21 @@ impl NyaTermApp {
                             .flex()
                             .items_center()
                             .gap_2()
-                            .child(small_button(
+                            .child(small_button(palette, 
                                 "cloud-conflict-force-push",
                                 "Force Push",
                                 cx.listener(move |this, _, _, cx| {
                                     this.prompt_cloud_sync_force_push(provider_action, cx);
                                 }),
                             ))
-                            .child(small_button(
+                            .child(small_button(palette, 
                                 "cloud-conflict-force-pull",
                                 "Force Pull",
                                 cx.listener(move |this, _, _, cx| {
                                     this.prompt_cloud_sync_force_pull(provider_action, cx);
                                 }),
                             ))
-                            .child(small_button(
+                            .child(small_button(palette, 
                                 "cloud-conflict-dismiss",
                                 "Dismiss",
                                 cx.listener(|this, _, _, cx| {
@@ -486,7 +487,7 @@ impl NyaTermApp {
                         Some(SharedString::from(format!(
                             "provider {cloud_provider_label} · rev {cloud_last_revision} · hash {cloud_last_hash}"
                         ))),
-                        small_button(
+                        small_button(palette, 
                             "cloud-sync-save",
                             "Save",
                             cx.listener(|this, _, _, cx| {
@@ -922,14 +923,14 @@ impl NyaTermApp {
                         div()
                             .flex()
                             .gap_1()
-                            .child(small_button(
+                            .child(small_button(palette, 
                                 "settings-cloud-sync-push",
                                 "Push Local",
                                 cx.listener(|this, _, _, cx| {
                                     this.prompt_local_cloud_sync_push(cx);
                                 }),
                             ))
-                            .child(small_button(
+                            .child(small_button(palette, 
                                 "settings-cloud-sync-pull",
                                 "Pull Local",
                                 cx.listener(|this, _, _, cx| {
@@ -947,14 +948,14 @@ impl NyaTermApp {
                         div()
                             .flex()
                             .gap_1()
-                            .child(small_button(
+                            .child(small_button(palette, 
                                 "settings-provider-cloud-sync-push",
                                 "Push Provider",
                                 cx.listener(|this, _, _, cx| {
                                     this.prompt_provider_cloud_sync_push(cx);
                                 }),
                             ))
-                            .child(small_button(
+                            .child(small_button(palette, 
                                 "settings-provider-cloud-sync-pull",
                                 "Pull Provider",
                                 cx.listener(|this, _, _, cx| {

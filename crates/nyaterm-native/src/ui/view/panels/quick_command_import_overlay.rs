@@ -5,6 +5,7 @@ impl NyaTermApp {
         &mut self,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
+        let palette = self.theme_palette();
         div()
             .id(SharedString::from("quick-command-import-overlay"))
             .absolute()
@@ -61,7 +62,7 @@ impl NyaTermApp {
                                             .child("WindTerm, Xshell, or NyaTerm JSON"),
                                     ),
                             )
-                            .child(small_button(
+                            .child(small_button(palette, 
                                 "quick-command-import-close-top",
                                 "Close",
                                 cx.listener(|this, _, _, cx| {
@@ -129,7 +130,7 @@ impl NyaTermApp {
                                     .text_color(rgb(0x98a3b8))
                                     .child("Imports merge with existing commands and update matching IDs."),
                             )
-                            .child(small_button(
+                            .child(small_button(palette, 
                                 "quick-command-import-close",
                                 "Cancel",
                                 cx.listener(|this, _, _, cx| {

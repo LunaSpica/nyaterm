@@ -355,7 +355,7 @@ pub(super) fn transfer_job_row(
     let mut status_action = div().flex().items_center().gap_1();
     if job.status == TransferJobStatus::Running && job.control.is_some() {
         let job_id = job.id.clone();
-        status_action = status_action.child(small_button(
+        status_action = status_action.child(small_button(crate::ui::theme::theme_palette("github-dark"), 
             format!("transfer-pause-{job_id}"),
             "Pause",
             cx.listener(move |this, _, _, cx| {
@@ -365,7 +365,7 @@ pub(super) fn transfer_job_row(
     }
     if job.status == TransferJobStatus::Paused && job.control.is_some() {
         let job_id = job.id.clone();
-        status_action = status_action.child(small_button(
+        status_action = status_action.child(small_button(crate::ui::theme::theme_palette("github-dark"), 
             format!("transfer-resume-{job_id}"),
             "Resume",
             cx.listener(move |this, _, _, cx| {
@@ -379,7 +379,7 @@ pub(super) fn transfer_job_row(
     ) && job.control.is_some()
     {
         let job_id = job.id.clone();
-        status_action = status_action.child(small_button(
+        status_action = status_action.child(small_button(crate::ui::theme::theme_palette("github-dark"), 
             format!("transfer-cancel-{job_id}"),
             "Cancel",
             cx.listener(move |this, _, _, cx| {
@@ -393,7 +393,7 @@ pub(super) fn transfer_job_row(
     ) {
         if can_retry {
             let job_id = job.id.clone();
-            status_action = status_action.child(small_button(
+            status_action = status_action.child(small_button(crate::ui::theme::theme_palette("github-dark"), 
                 format!("transfer-retry-job-{job_id}"),
                 "Retry",
                 cx.listener(move |this, _, window, cx| {
@@ -402,7 +402,7 @@ pub(super) fn transfer_job_row(
             ));
         }
         let job_id = job.id.clone();
-        status_action = status_action.child(small_button(
+        status_action = status_action.child(small_button(crate::ui::theme::theme_palette("github-dark"), 
             format!("transfer-delete-job-{job_id}"),
             "Delete",
             cx.listener(move |this, _, _, cx| {
@@ -412,7 +412,7 @@ pub(super) fn transfer_job_row(
     }
     if can_reveal_local_target {
         let job_id = job.id.clone();
-        status_action = status_action.child(small_button(
+        status_action = status_action.child(small_button(crate::ui::theme::theme_palette("github-dark"), 
             format!("transfer-open-target-dir-{job_id}"),
             "Open Dir",
             cx.listener(move |this, _, _, cx| {
@@ -791,6 +791,7 @@ pub(super) fn transfer_queue_counts(
 }
 
 pub(super) fn queue_metric(
+    palette: crate::ui::theme::ThemePalette,
     label: &'static str,
     value: usize,
     color: impl Into<Hsla>,
@@ -801,13 +802,13 @@ pub(super) fn queue_metric(
         .items_center()
         .gap_1()
         .rounded_sm()
-        .bg(rgb(0x10151e))
+        .bg(rgb(palette.input))
         .px_2()
         .py_1()
         .child(
             div()
                 .text_size(px(10.))
-                .text_color(rgb(0x98a3b8))
+                .text_color(rgb(palette.text_muted))
                 .child(label),
         )
         .child(

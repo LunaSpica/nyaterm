@@ -114,7 +114,7 @@ impl NyaTermApp {
                             .flex()
                             .items_center()
                             .gap_1()
-                            .child(small_button(
+                            .child(small_button(palette, 
                                 format!("quick-command-category-rename-{}", rename_id),
                                 "Rename",
                                 cx.listener(move |this, _, window, cx| {
@@ -125,7 +125,7 @@ impl NyaTermApp {
                                     );
                                 }),
                             ))
-                            .child(small_button(
+                            .child(small_button(palette, 
                                 format!("quick-command-category-delete-{}", delete_id),
                                 "Delete",
                                 cx.listener(move |this, _, _, cx| {
@@ -171,7 +171,7 @@ impl NyaTermApp {
                         "No quick commands match the current filters."
                     })
                     .when(total_commands == 0, |this| {
-                        this.child(small_button(
+                        this.child(small_button(palette, 
                             "quick-command-empty-add",
                             "Add Command",
                             cx.listener(|this, _, window, cx| {
@@ -691,14 +691,14 @@ impl NyaTermApp {
                             this.set_quick_command_sort_mode(QuickCommandSortMode::Usage, cx);
                         }),
                     ))
-                    .child(small_button(
+                    .child(small_button(palette, 
                         "quick-command-add",
                         "Add",
                         cx.listener(|this, _, window, cx| {
                             this.open_new_quick_command_editor(window, cx);
                         }),
                     ))
-                    .child(small_button(
+                    .child(small_button(palette, 
                         "quick-command-import",
                         if self.quick_command_import_path_prompt.is_some() {
                             "..."

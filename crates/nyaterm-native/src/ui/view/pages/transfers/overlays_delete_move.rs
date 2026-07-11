@@ -5,6 +5,7 @@ impl NyaTermApp {
         &mut self,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
+        let palette = self.theme_palette();
         let state = self.transfer_delete.clone().unwrap_or(TransferDeleteState {
             remote_path: String::new(),
             name: String::new(),
@@ -96,14 +97,14 @@ impl NyaTermApp {
                             .items_center()
                             .justify_end()
                             .gap_2()
-                            .child(small_button(
+                            .child(small_button(palette, 
                                 "transfer-delete-cancel",
                                 "Cancel",
                                 cx.listener(|this, _, _, cx| {
                                     this.close_transfer_delete_dialog(cx);
                                 }),
                             ))
-                            .child(small_button(
+                            .child(small_button(palette, 
                                 "transfer-delete-confirm",
                                 "Delete",
                                 cx.listener(|this, _, window, cx| {
@@ -118,6 +119,7 @@ impl NyaTermApp {
         &mut self,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
+        let palette = self.theme_palette();
         let state = self.transfer_move.clone().unwrap_or(TransferMoveState {
             old_path: String::new(),
             name: String::new(),
@@ -226,7 +228,7 @@ impl NyaTermApp {
                             .items_center()
                             .justify_end()
                             .gap_2()
-                            .child(small_button(
+                            .child(small_button(palette, 
                                 "transfer-move-cancel",
                                 "Cancel",
                                 cx.listener(|this, _, _, cx| {
@@ -234,7 +236,7 @@ impl NyaTermApp {
                                 }),
                             ))
                             .child(div().when(has_error, |this| this.opacity(0.45)).child(
-                                small_button(
+                                small_button(palette, 
                                     "transfer-move-save",
                                     "Save",
                                     cx.listener(|this, _, window, cx| {

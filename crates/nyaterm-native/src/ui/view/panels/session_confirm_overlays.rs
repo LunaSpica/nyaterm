@@ -5,6 +5,7 @@ impl NyaTermApp {
         &mut self,
         cx: &mut Context<Self>,
     ) -> gpui::AnyElement {
+        let palette = self.theme_palette();
         let sessions = self.ordered_sessions();
         let session_count = sessions.len();
         let mut session_list = div().mt_3().flex().flex_col().gap_1();
@@ -109,7 +110,7 @@ impl NyaTermApp {
                             .items_center()
                             .justify_end()
                             .gap_2()
-                            .child(small_button(
+                            .child(small_button(palette, 
                                 "close-all-sessions-cancel",
                                 "Cancel",
                                 cx.listener(|this, _, _, cx| {

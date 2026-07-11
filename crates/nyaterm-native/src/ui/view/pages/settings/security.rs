@@ -100,14 +100,14 @@ impl NyaTermApp {
                                     .text_color(rgb(0xc9d1d9))
                                     .child(idle_label),
                             )
-                            .child(small_button(
+                            .child(small_button(palette, 
                                 "settings-idle-lock-minus",
                                 "−5",
                                 cx.listener(|this, _, _, cx| {
                                     this.adjust_idle_lock_minutes(-5, cx);
                                 }),
                             ))
-                            .child(small_button(
+                            .child(small_button(palette, 
                                 "settings-idle-lock-plus",
                                 "+5",
                                 cx.listener(|this, _, _, cx| {
