@@ -738,3 +738,9 @@ service boundary first:
 
 ## 2026-07-11 Docker container details densify
 - Details empty state, key/value lines, mounts, and networks use denser mono chrome matching panel system.
+
+## 2026-07-11 Process responsive display modes
+- `ProcessDisplayMode` from `right_panel_width` (compact <320, narrow <430, medium <540, else wide).
+- Compact: 62px rows (command + PID/CPU), no table header.
+- Narrow hides Mem; non-wide hides User; sort keys coerce when columns hidden.
+- Details height scales by mode; virtual list row math follows mode.

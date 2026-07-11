@@ -110,6 +110,44 @@ pub(super) fn process_summary_card(
         .child(stats_progress_bar(ratio))
 }
 
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) enum ProcessDisplayMode {
+    Compact,
+    Narrow,
+    Medium,
+    Wide,
+}
+
+pub(super) fn process_display_mode(panel_width: f32) -> ProcessDisplayMode {
+    // Tauri getProcessDisplayMode thresholds.
+    if panel_width > 0. && panel_width < 320. {
+        ProcessDisplayMode::Compact
+    } else if panel_width > 0. && panel_width < 430. {
+        ProcessDisplayMode::Narrow
+    } else if panel_width > 0. && panel_width < 540. {
+        ProcessDisplayMode::Medium
+    } else {
+        ProcessDisplayMode::Wide
+    }
+}
+
+pub(super) fn process_row_height_px(mode: ProcessDisplayMode) -> f32 {
+    match mode {
+        ProcessDisplayMode::Compact => 62.,
+        _ => 38.,
+    }
+}
+
+pub(super) fn process_details_height_px(mode: ProcessDisplayMode) -> f32 {
+    // Native densified shells (Tauri uses 176/218/274).
+    match mode {
+        ProcessDisplayMode::Compact => 168.,
+        ProcessDisplayMode::Narrow => 140.,
+        _ => 114.,
+    }
+}
+
 pub(super) fn process_sort_button(
     id: impl Into<String>,
     label: &'static str,
@@ -167,6 +205,7 @@ pub(super) fn process_table_header() -> impl IntoElement {
 
 pub(super) fn process_table_row(
     process: &RemoteProcess,
+    mode: ProcessDisplayMode,
     selected: bool,
     menu_open: bool,
     on_select: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
@@ -179,8 +218,7 @@ pub(super) fn process_table_row(
     on_cont: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
     on_kill: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
 ) -> gpui::Div {
-    // Tauri ProcessManager: denser mono table + ⋮ overflow actions.
-    // Tauri: left accent based on load / selection.
+    // Tauri ProcessManager: left accent + mode-aware columns (compact/narrow/medium/wide).
     let accent = if process.cpu_percent >= 80.0 {
         rgb(0xf85149)
     } else if process.memory_percent >= 80.0 {
@@ -190,6 +228,189 @@ pub(super) fn process_table_row(
     } else {
         rgb(0x30363d)
     };
+    let show_memory = !matches!(mode, ProcessDisplayMode::Narrow | ProcessDisplayMode::Compact);
+    let show_user = matches!(mode, ProcessDisplayMode::Wide);
+    let cols = match mode {
+        ProcessDisplayMode::Compact => 2,
+        ProcessDisplayMode::Narrow => 4,
+        ProcessDisplayMode::Medium => 5,
+        ProcessDisplayMode::Wide => 6,
+    };
+    let row_h = process_row_height_px(mode);
+
+    let menu = div()
+        .relative()
+        .flex()
+        .items_center()
+        .justify_end()
+        .child(compact_remote_svg_button(
+            format!("process-menu-{}", process.pid),
+            "icons/conn/more.svg",
+            on_menu,
+        ))
+        .when(menu_open, |this| {
+            this.child(
+                div()
+                    .id(gpui::SharedString::from(format!(
+                        "process-menu-pop-{}",
+                        process.pid
+                    )))
+                    .absolute()
+                    .top(px(26.))
+                    .right_0()
+                    .w(px(148.))
+                    .rounded_md()
+                    .border_1()
+                    .border_color(rgb(0x30363d))
+                    .bg(rgb(0x161b22))
+                    .shadow_lg()
+                    .py_1()
+                    .flex()
+                    .flex_col()
+                    .on_mouse_down(gpui::MouseButton::Left, |_, _, _| {})
+                    .child(process_menu_item(
+                        format!("process-copy-pid-{}", process.pid),
+                        "Copy PID",
+                        on_copy_pid,
+                    ))
+                    .child(process_menu_item(
+                        format!("process-copy-cmd-{}", process.pid),
+                        "Copy Command",
+                        on_copy_command,
+                    ))
+                    .child(process_menu_sep())
+                    .child(process_menu_item(
+                        format!("process-term-{}", process.pid),
+                        "TERM",
+                        on_term,
+                    ))
+                    .child(process_menu_item(
+                        format!("process-hup-{}", process.pid),
+                        "HUP",
+                        on_hup,
+                    ))
+                    .child(process_menu_item(
+                        format!("process-stop-{}", process.pid),
+                        "STOP",
+                        on_stop,
+                    ))
+                    .child(process_menu_item(
+                        format!("process-cont-{}", process.pid),
+                        "CONT",
+                        on_cont,
+                    ))
+                    .child(process_menu_item(
+                        format!("process-kill-{}", process.pid),
+                        "KILL",
+                        on_kill,
+                    )),
+            )
+        });
+
+    let body = if mode == ProcessDisplayMode::Compact {
+        // Tauri CompactProcessRow: command + PID/CPU mono line + menu.
+        div()
+            .id(gpui::SharedString::from(format!(
+                "process-row-{}",
+                process.pid
+            )))
+            .h(px(row_h))
+            .px_2()
+            .pl(px(10.))
+            .flex()
+            .items_center()
+            .gap_2()
+            .cursor_pointer()
+            .on_click(on_select)
+            .child(
+                div()
+                    .min_w_0()
+                    .flex_1()
+                    .flex()
+                    .flex_col()
+                    .justify_center()
+                    .child(
+                        div()
+                            .text_size(px(12.))
+                            .font_weight(FontWeight(600.))
+                            .text_color(rgb(0xe5edf7))
+                            .overflow_hidden()
+                            .child(truncate_preview(&process.command, 36)),
+                    )
+                    .child(
+                        div()
+                            .font_family("JetBrains Mono")
+                            .text_size(px(10.))
+                            .text_color(rgb(0x6e7681))
+                            .overflow_hidden()
+                            .child(format!(
+                                "PID {} · {:.1}%",
+                                process.pid, process.cpu_percent
+                            )),
+                    ),
+            )
+            .child(menu)
+    } else {
+        let mut grid = div()
+            .grid()
+            .id(gpui::SharedString::from(format!(
+                "process-row-{}",
+                process.pid
+            )))
+            .grid_cols(cols)
+            .gap_1()
+            .h(px(row_h))
+            .px_2()
+            .pl(px(10.))
+            .items_center()
+            .cursor_pointer()
+            .on_click(on_select)
+            .child(
+                div()
+                    .min_w_0()
+                    .flex()
+                    .flex_col()
+                    .justify_center()
+                    .child(
+                        div()
+                            .text_size(px(12.))
+                            .font_weight(FontWeight(600.))
+                            .text_color(rgb(0xe5edf7))
+                            .overflow_hidden()
+                            .child(truncate_preview(&process.command, 40)),
+                    )
+                    .child(
+                        div()
+                            .font_family("JetBrains Mono")
+                            .text_size(px(10.))
+                            .text_color(rgb(0x6e7681))
+                            .overflow_hidden()
+                            .child(truncate_preview(&process.command_line, 52)),
+                    ),
+            )
+            .child(process_table_cell(process.pid.to_string(), None, true))
+            .child(process_table_cell(
+                format!("{:.1}%", process.cpu_percent),
+                Some(usage_color(process.cpu_percent / 100.)),
+                true,
+            ));
+        if show_memory {
+            grid = grid.child(process_table_cell(
+                format!("{:.1}%", process.memory_percent),
+                Some(usage_color(process.memory_percent / 100.)),
+                true,
+            ));
+        }
+        if show_user {
+            grid = grid.child(process_table_cell(
+                truncate_preview(&process.user, 12),
+                None,
+                false,
+            ));
+        }
+        grid.child(menu)
+    };
+
     div()
         .relative()
         .border_b_1()
@@ -209,133 +430,10 @@ pub(super) fn process_table_row(
                 .w(px(2.))
                 .bg(accent),
         )
-        .child(
-            div()
-                .grid()
-                .id(gpui::SharedString::from(format!(
-                    "process-row-{}",
-                    process.pid
-                )))
-                .grid_cols(6)
-                .gap_1()
-                .h(px(38.))
-                .px_2()
-                .pl(px(10.))
-                .items_center()
-                .cursor_pointer()
-                .on_click(on_select)
-                .child(
-                    div()
-                        .min_w_0()
-                        .flex()
-                        .flex_col()
-                        .justify_center()
-                        .child(
-                            div()
-                                .text_size(px(12.))
-                                .font_weight(FontWeight(600.))
-                                .text_color(rgb(0xe5edf7))
-                                .overflow_hidden()
-                                .child(truncate_preview(&process.command, 40)),
-                        )
-                        .child(
-                            div()
-                                .font_family("JetBrains Mono")
-                                .text_size(px(10.))
-                                .text_color(rgb(0x6e7681))
-                                .overflow_hidden()
-                                .child(truncate_preview(&process.command_line, 52)),
-                        ),
-                )
-                .child(process_table_cell(process.pid.to_string(), None, true))
-                .child(process_table_cell(
-                    format!("{:.1}%", process.cpu_percent),
-                    Some(usage_color(process.cpu_percent / 100.)),
-                    true,
-                ))
-                .child(process_table_cell(
-                    format!("{:.1}%", process.memory_percent),
-                    Some(usage_color(process.memory_percent / 100.)),
-                    true,
-                ))
-                .child(process_table_cell(
-                    truncate_preview(&process.user, 12),
-                    None,
-                    false,
-                ))
-                .child(
-                    div()
-                        .relative()
-                        .flex()
-                        .items_center()
-                        .justify_end()
-                        .child(compact_remote_svg_button(
-                            format!("process-menu-{}", process.pid),
-                            "icons/conn/more.svg",
-                            on_menu,
-                        ))
-                        .when(menu_open, |this| {
-                            this.child(
-                                div()
-                                    .id(gpui::SharedString::from(format!(
-                                        "process-menu-pop-{}",
-                                        process.pid
-                                    )))
-                                    .absolute()
-                                    .top(px(26.))
-                                    .right_0()
-                                    .w(px(148.))
-                                    .rounded_md()
-                                    .border_1()
-                                    .border_color(rgb(0x30363d))
-                                    .bg(rgb(0x161b22))
-                                    .shadow_lg()
-                                    .py_1()
-                                    .flex()
-                                    .flex_col()
-                                    .on_mouse_down(gpui::MouseButton::Left, |_, _, _| {})
-                                    .child(process_menu_item(
-                                        format!("process-copy-pid-{}", process.pid),
-                                        "Copy PID",
-                                        on_copy_pid,
-                                    ))
-                                    .child(process_menu_item(
-                                        format!("process-copy-cmd-{}", process.pid),
-                                        "Copy Command",
-                                        on_copy_command,
-                                    ))
-                                    .child(process_menu_sep())
-                                    .child(process_menu_item(
-                                        format!("process-term-{}", process.pid),
-                                        "TERM",
-                                        on_term,
-                                    ))
-                                    .child(process_menu_item(
-                                        format!("process-hup-{}", process.pid),
-                                        "HUP",
-                                        on_hup,
-                                    ))
-                                    .child(process_menu_item(
-                                        format!("process-stop-{}", process.pid),
-                                        "STOP",
-                                        on_stop,
-                                    ))
-                                    .child(process_menu_item(
-                                        format!("process-cont-{}", process.pid),
-                                        "CONT",
-                                        on_cont,
-                                    ))
-                                    .child(process_menu_sep())
-                                    .child(process_menu_item(
-                                        format!("process-kill-{}", process.pid),
-                                        "KILL",
-                                        on_kill,
-                                    )),
-                            )
-                        }),
-                ),
-        )
+        .child(body)
 }
+
+
 
 fn process_menu_item(
     id: impl Into<String>,
@@ -401,6 +499,7 @@ pub(super) fn icon_action_button(
 
 pub(super) fn process_details(
     process: &RemoteProcess,
+    mode: ProcessDisplayMode,
     nice_draft: String,
     nice_focus: &gpui::FocusHandle,
     cx: &mut Context<NyaTermApp>,
@@ -412,10 +511,11 @@ pub(super) fn process_details(
         process.command_line.clone()
     };
     let pid = process.pid;
+    let details_h = process_details_height_px(mode) - 2.; // account for mb_1
     div()
         .mx_2()
         .mb_1()
-        .h(px(112.))
+        .h(px(details_h))
         .overflow_hidden()
         .rounded_md()
         .border_1()
