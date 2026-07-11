@@ -24,6 +24,8 @@ pub struct CellStyle {
 struct Cell {
     ch: char,
     style: CellStyle,
+    /// Index into `TerminalScreen::hyperlinks` (None = no OSC 8 link).
+    hyperlink: Option<u16>,
 }
 
 impl Default for Cell {
@@ -31,6 +33,7 @@ impl Default for Cell {
         Self {
             ch: ' ',
             style: CellStyle::default(),
+            hyperlink: None,
         }
     }
 }
@@ -41,12 +44,22 @@ pub struct StyledSpan {
     pub style: CellStyle,
 }
 
+/// Inclusive character range on a snapshot line with an OSC 8 URI.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct HyperlinkSpan {
+    pub start_col: usize,
+    pub end_col: usize,
+    pub uri: String,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TerminalSnapshot {
     pub lines: Vec<String>,
     pub styled_lines: Vec<Vec<StyledSpan>>,
     /// Wall-clock stamp (unix ms) for each viewport row, if the line was written.
     pub line_timestamps_ms: Vec<Option<u64>>,
+    /// OSC 8 hyperlink spans per viewport line (char columns).
+    pub hyperlink_lines: Vec<Vec<HyperlinkSpan>>,
     pub cursor_row: usize,
     pub cursor_col: usize,
     /// Rows available above the live screen (scrollback).
@@ -78,6 +91,10 @@ pub struct TerminalScreen {
     pending_window_title: Option<String>,
     /// Current window title last set by OSC 0/2.
     window_title: Option<String>,
+    /// Hyperlink URI pool for OSC 8 (index stored on cells).
+    hyperlinks: Vec<String>,
+    /// Active OSC 8 hyperlink index while printing (None = closed).
+    current_hyperlink: Option<u16>,
 }
 
 impl Default for TerminalScreen {
@@ -106,6 +123,8 @@ impl TerminalScreen {
             pending_visual_bell: false,
             pending_window_title: None,
             window_title: None,
+            hyperlinks: Vec::new(),
+            current_hyperlink: None,
         }
     }
 
@@ -179,6 +198,8 @@ impl TerminalScreen {
         self.pending_visual_bell = false;
         self.pending_window_title = None;
         self.window_title = None;
+        self.hyperlinks.clear();
+        self.current_hyperlink = None;
     }
 
     pub fn advance(&mut self, bytes: &[u8]) {
@@ -203,12 +224,14 @@ impl TerminalScreen {
         let mut lines = Vec::with_capacity(self.rows);
         let mut styled_lines = Vec::with_capacity(self.rows);
         let mut line_timestamps_ms = Vec::with_capacity(self.rows);
+        let mut hyperlink_lines = Vec::with_capacity(self.rows);
         for abs_row in start..end {
             let row = self.row_at(abs_row);
             let text: String = row.iter().map(|cell| cell.ch).collect();
             lines.push(text.trim_end().to_string());
             styled_lines.push(compress_row(row));
             line_timestamps_ms.push(self.timestamp_at(abs_row));
+            hyperlink_lines.push(compress_hyperlinks(row, &self.hyperlinks));
         }
         // Pad if history shorter than a full viewport (should be rare after clamp).
         while lines.len() < self.rows {
@@ -218,6 +241,7 @@ impl TerminalScreen {
                 style: CellStyle::default(),
             }]);
             line_timestamps_ms.push(None);
+            hyperlink_lines.push(Vec::new());
         }
 
         let cursor_abs = self.scrollback.len() + self.cursor_row;
@@ -234,6 +258,7 @@ impl TerminalScreen {
             lines,
             styled_lines,
             line_timestamps_ms,
+            hyperlink_lines,
             cursor_row,
             cursor_col: self.cursor_col,
             scrollback_len: self.scrollback.len(),
@@ -330,6 +355,7 @@ impl TerminalScreen {
         self.cells[self.cursor_row][self.cursor_col] = Cell {
             ch: c,
             style: self.pen,
+            hyperlink: self.current_hyperlink,
         };
         self.cursor_col += 1;
     }
@@ -575,6 +601,33 @@ fn map_256_to_ansi16(idx: u16) -> u8 {
     }
 }
 
+
+fn compress_hyperlinks(row: &[Cell], pool: &[String]) -> Vec<HyperlinkSpan> {
+    let mut spans = Vec::new();
+    let mut col = 0usize;
+    while col < row.len() {
+        let Some(idx) = row[col].hyperlink else {
+            col += 1;
+            continue;
+        };
+        let start = col;
+        col += 1;
+        while col < row.len() && row[col].hyperlink == Some(idx) {
+            col += 1;
+        }
+        if let Some(uri) = pool.get(idx as usize) {
+            if !uri.is_empty() {
+                spans.push(HyperlinkSpan {
+                    start_col: start,
+                    end_col: col.saturating_sub(1),
+                    uri: uri.clone(),
+                });
+            }
+        }
+    }
+    spans
+}
+
 fn compress_row(row: &[Cell]) -> Vec<StyledSpan> {
     let mut spans = Vec::new();
     let mut end = row.len();
@@ -697,6 +750,31 @@ impl Perform for TerminalScreen {
             let clipped: String = title.chars().take(120).collect();
             self.window_title = Some(clipped.clone());
             self.pending_window_title = Some(clipped);
+            return;
+        }
+        // OSC 8 ; params ; uri ST — hyperlink start/end (empty uri closes).
+        if code == "8" {
+            // params[0]=8, params[1]=id params, params[2]=uri (may be missing/empty)
+            let uri = params
+                .get(2)
+                .map(|p| String::from_utf8_lossy(p).to_string())
+                .unwrap_or_default();
+            let uri = uri.trim();
+            if uri.is_empty() {
+                self.current_hyperlink = None;
+            } else {
+                let clipped: String = uri.chars().take(2048).collect();
+                let idx = if let Some(pos) = self.hyperlinks.iter().position(|u| u == &clipped) {
+                    pos
+                } else {
+                    if self.hyperlinks.len() >= u16::MAX as usize {
+                        self.hyperlinks.clear();
+                    }
+                    self.hyperlinks.push(clipped);
+                    self.hyperlinks.len() - 1
+                };
+                self.current_hyperlink = Some(idx as u16);
+            }
         }
     }
 }
@@ -704,6 +782,19 @@ impl Perform for TerminalScreen {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn osc8_hyperlink_spans() {
+        let mut screen = TerminalScreen::new(40, 3);
+        // OSC 8 ;;uri BEL text OSC 8 ;; BEL
+        screen.advance(b"\x1b]8;;https://example.com\x07click\x1b]8;;\x07 plain");
+        let snap = screen.viewport_snapshot(0);
+        let spans = &snap.hyperlink_lines[0];
+        assert_eq!(spans.len(), 1);
+        assert_eq!(spans[0].uri, "https://example.com");
+        assert_eq!(spans[0].start_col, 0);
+        assert_eq!(spans[0].end_col, 4); // "click"
+    }
 
     #[test]
     fn osc_sets_window_title() {

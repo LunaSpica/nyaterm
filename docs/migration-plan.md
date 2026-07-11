@@ -1178,3 +1178,10 @@ service boundary first:
   auto-accepts when remote ZMODEM upload headers are detected.
 - Download detection opens a native folder picker; cancel aborts the transfer.
 - Progress/complete/failed update `terminal_status` (transfer-list polish later).
+
+## 2026-07-11 OSC 8 hyperlinks
+
+- `TerminalScreen` tracks OSC 8 URI pool + per-cell indices; viewport snapshots
+  expose `hyperlink_lines` with char column ranges.
+- Terminal paint merges OSC 8 ranges into link underlines alongside action-links.
+- Ctrl/Cmd-click opens http(s)/mailto OSC 8 URIs via the system opener.

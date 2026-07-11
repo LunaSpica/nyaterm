@@ -29,6 +29,7 @@ impl NyaTermApp {
         let lines = snapshot.lines;
         let styled_lines = snapshot.styled_lines;
         let line_timestamps_ms = snapshot.line_timestamps_ms;
+        let hyperlink_lines = snapshot.hyperlink_lines;
         let cursor_row = snapshot.cursor_row;
         let cursor_col = snapshot.cursor_col;
         let show_line_numbers = self.settings.terminal_show_line_numbers;
@@ -101,7 +102,7 @@ impl NyaTermApp {
             } else {
                 None
             };
-            let link_ranges: Vec<(usize, usize)> = if self.settings.terminal_action_links_enabled {
+            let mut link_ranges: Vec<(usize, usize)> = if self.settings.terminal_action_links_enabled {
                 find_action_links(
                     &line,
                     &self.settings.terminal_action_links_matchers,
@@ -118,6 +119,16 @@ impl NyaTermApp {
             } else {
                 Vec::new()
             };
+            // OSC 8 hyperlinks from the terminal model (always paint when present).
+            if let Some(spans) = hyperlink_lines.get(line_index) {
+                for span in spans {
+                    let start = span.start_col;
+                    let end = span.end_col.saturating_add(1);
+                    if end > start {
+                        link_ranges.push((start, end));
+                    }
+                }
+            }
             let empty_ranges: [(usize, usize); 0] = [];
             let line_search_ranges = search_ranges_by_line
                 .get(&line_index)

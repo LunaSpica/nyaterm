@@ -727,11 +727,59 @@ impl NyaTermApp {
         self.action_link_at_point(event.position())
     }
 
+    /// Ctrl/Cmd-click OSC 8 hyperlinks (uri from the terminal screen model).
+    pub(in crate::ui::view) fn try_activate_osc8_hyperlink_at_click(
+        &mut self,
+        event: &ClickEvent,
+        cx: &mut Context<Self>,
+    ) -> bool {
+        let Some(pos) = self.point_to_terminal_cell(event.position()) else {
+            return false;
+        };
+        let session_id = self.active_session_id.clone().unwrap_or_default();
+        let scroll_offset = self.active_terminal_scroll_offset();
+        let snapshot = self
+            .terminal_views
+            .get(&session_id)
+            .map(|view| view.screen.viewport_snapshot(scroll_offset))
+            .unwrap_or_else(|| self.terminal_screen.viewport_snapshot(scroll_offset));
+        let Some(spans) = snapshot.hyperlink_lines.get(pos.row) else {
+            return false;
+        };
+        let col = pos.col;
+        let Some(span) = spans
+            .iter()
+            .find(|span| col >= span.start_col && col <= span.end_col)
+        else {
+            return false;
+        };
+        let url = span.uri.clone();
+        // Only open common URL schemes for safety (Tauri oscLinkHandler parity).
+        let lower = url.to_ascii_lowercase();
+        if !(lower.starts_with("http://")
+            || lower.starts_with("https://")
+            || lower.starts_with("mailto:"))
+        {
+            self.terminal_status = format!("blocked OSC 8 scheme: {url}");
+            cx.notify();
+            return true;
+        }
+        match open_external_url_for_action(&url) {
+            Ok(()) => self.terminal_status = format!("opened OSC 8 link: {url}"),
+            Err(error) => self.terminal_status = format!("open OSC 8 link failed: {error}"),
+        }
+        cx.notify();
+        true
+    }
+
     pub(in crate::ui::view) fn try_activate_action_link_at_click(
         &mut self,
         event: &ClickEvent,
         cx: &mut Context<Self>,
     ) -> bool {
+        if self.try_activate_osc8_hyperlink_at_click(event, cx) {
+            return true;
+        }
         let Some((item, actions)) = self.action_link_at_click(event) else {
             return false;
         };
