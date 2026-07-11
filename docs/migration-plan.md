@@ -706,3 +706,6 @@ service boundary first:
 
 ## 2026-07-11 Docker volumes/networks list windows
 - Volumes and Networks tabs cap first 80 rows with refine-search footer (same pattern as Images).
+
+## 2026-07-11 Process details fixed height for virtual list
+- Expanded process details use fixed 112px shell so spacer math stays stable under selection.

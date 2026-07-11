@@ -381,6 +381,8 @@ pub(super) fn process_details(
     div()
         .mx_2()
         .mb_1()
+        .h(px(112.))
+        .overflow_hidden()
         .rounded_md()
         .border_1()
         .border_color(rgb(0x30363d))
@@ -389,7 +391,7 @@ pub(super) fn process_details(
         .py_2()
         .flex()
         .flex_col()
-        .gap_2()
+        .gap_1()
         .child(
             div()
                 .font_family("JetBrains Mono")

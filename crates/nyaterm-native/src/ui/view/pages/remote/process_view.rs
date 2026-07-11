@@ -22,7 +22,7 @@ impl NyaTermApp {
 
         // Tauri-like virtual list: base row + expanded details height, spacer padding.
         const PROCESS_ROW_PX: f32 = 38.;
-        const PROCESS_DETAILS_PX: f32 = 120.; // dense details strip approx (Tauri uses 176)
+        const PROCESS_DETAILS_PX: f32 = 114.; // fixed details shell + margin
         const PROCESS_VIEWPORT_ROWS: usize = 28;
         const PROCESS_OVERSCAN: usize = 8;
         let selected_pid = self.process_selected_pid;
