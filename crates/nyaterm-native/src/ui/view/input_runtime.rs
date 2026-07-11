@@ -53,11 +53,19 @@ impl NyaTermApp {
             "backspace" => {
                 self.ai_input_value_mut().pop();
                 self.ai_status = "AI settings edited".to_string();
-                cx.notify();
+                if self.ai_focused_field == AiInputField::RequestUserAgent {
+                    self.persist_ai_settings_now(cx);
+                } else {
+                    cx.notify();
+                }
             }
             "escape" => {
                 self.ai_status = "AI input blurred".to_string();
                 cx.notify();
+            }
+            "enter" if self.ai_focused_field == AiInputField::RequestUserAgent => {
+                self.ai_status = "AI request user-agent updated".to_string();
+                self.persist_ai_settings_now(cx);
             }
             _ => {
                 if let Some(input) = keystroke
@@ -67,7 +75,11 @@ impl NyaTermApp {
                 {
                     self.ai_input_value_mut().push_str(input);
                     self.ai_status = "AI settings edited".to_string();
-                    cx.notify();
+                    if self.ai_focused_field == AiInputField::RequestUserAgent {
+                        self.persist_ai_settings_now(cx);
+                    } else {
+                        cx.notify();
+                    }
                 }
             }
         }
@@ -78,6 +90,7 @@ impl NyaTermApp {
             AiInputField::Model => &mut self.ai_model_draft,
             AiInputField::BaseUrl => &mut self.ai_base_url_draft,
             AiInputField::ApiKey => &mut self.ai_secret_draft,
+            AiInputField::RequestUserAgent => &mut self.ai_settings.request_user_agent,
         }
     }
 }

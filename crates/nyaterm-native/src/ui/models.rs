@@ -3623,7 +3623,30 @@ pub(super) enum AiInputField {
     Model,
     BaseUrl,
     ApiKey,
+    RequestUserAgent,
 }
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum AiActionListKind {
+    Terminal,
+    File,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum AiActionEditorField {
+    Name,
+    Prompt,
+}
+
+impl AiActionEditorField {
+    pub(super) fn next(self) -> Self {
+        match self {
+            Self::Name => Self::Prompt,
+            Self::Prompt => Self::Name,
+        }
+    }
+}
+
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) enum TranslateInputField {

@@ -1519,3 +1519,10 @@ service boundary first:
   Test opens `%s` with query `nyaterm`, icon cycle on the header badge.
 - Translation settings: target language chips, provider status cards for Google /
   Microsoft (free) and DeepL/Baidu/Ali/Youdao (configured/not configured).
+
+## 2026-07-12 AI settings densify (General + Rules actions)
+
+- AI General: Request User-Agent field, agent step timeout stepper; toggles and
+  limit steppers auto-persist like Tauri live settings.
+- AI Rules: terminal/file custom action editor with expand, name/prompt edit,
+  enable switch, Add/Delete (Tauri ActionListEditor parity).

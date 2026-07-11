@@ -15,18 +15,18 @@ impl NyaTermApp {
     pub(in crate::ui::view) fn toggle_ai_enabled(&mut self, cx: &mut Context<Self>) {
         self.ai_settings.enabled = !self.ai_settings.enabled;
         self.ai_status = if self.ai_settings.enabled {
-            "AI enabled; save to persist"
+            "AI enabled"
         } else {
-            "AI disabled; save to persist"
+            "AI disabled"
         }
         .to_string();
-        cx.notify();
+        self.persist_ai_settings_now(cx);
     }
 
     pub(in crate::ui::view) fn set_ai_mode(&mut self, mode: AiMode, cx: &mut Context<Self>) {
         self.ai_settings.default_mode = mode;
-        self.ai_status = "AI mode edited; save to persist".to_string();
-        cx.notify();
+        self.ai_status = "AI mode updated".to_string();
+        self.persist_ai_settings_now(cx);
     }
 
     pub(in crate::ui::view) fn set_ai_command_mode(
@@ -35,38 +35,38 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         self.ai_settings.agent_command_execution_mode = mode;
-        self.ai_status = "Agent command policy edited; save to persist".to_string();
-        cx.notify();
+        self.ai_status = "Agent command policy updated".to_string();
+        self.persist_ai_settings_now(cx);
     }
 
     pub(in crate::ui::view) fn toggle_ai_background_execution(&mut self, cx: &mut Context<Self>) {
         self.ai_settings.agent_background_execution_enabled =
             !self.ai_settings.agent_background_execution_enabled;
         self.ai_status = if self.ai_settings.agent_background_execution_enabled {
-            "Agent background execution enabled; save to persist"
+            "Agent background execution enabled"
         } else {
-            "Agent background execution disabled; save to persist"
+            "Agent background execution disabled"
         }
         .to_string();
-        cx.notify();
+        self.persist_ai_settings_now(cx);
     }
 
     pub(in crate::ui::view) fn toggle_ai_redaction(&mut self, cx: &mut Context<Self>) {
         self.ai_settings.redaction_enabled = !self.ai_settings.redaction_enabled;
-        self.ai_status = "AI redaction edited; save to persist".to_string();
-        cx.notify();
+        self.ai_status = "AI redaction updated".to_string();
+        self.persist_ai_settings_now(cx);
     }
 
     pub(in crate::ui::view) fn toggle_ai_allow_save_command(&mut self, cx: &mut Context<Self>) {
         self.ai_settings.allow_save_command = !self.ai_settings.allow_save_command;
-        self.ai_status = "AI command saving edited; save to persist".to_string();
-        cx.notify();
+        self.ai_status = "AI command saving updated".to_string();
+        self.persist_ai_settings_now(cx);
     }
 
     pub(in crate::ui::view) fn toggle_ai_record_history(&mut self, cx: &mut Context<Self>) {
         self.ai_settings.record_history = !self.ai_settings.record_history;
-        self.ai_status = "AI history recording edited; save to persist".to_string();
-        cx.notify();
+        self.ai_status = "AI history recording updated".to_string();
+        self.persist_ai_settings_now(cx);
     }
 
     pub(in crate::ui::view) fn adjust_ai_context_line_limit(
@@ -76,15 +76,15 @@ impl NyaTermApp {
     ) {
         let current = self.ai_settings.context_line_limit as i32;
         self.ai_settings.context_line_limit = (current + delta).clamp(50, 500) as u32;
-        self.ai_status = "AI context line limit edited; save to persist".to_string();
-        cx.notify();
+        self.ai_status = "AI context line limit updated".to_string();
+        self.persist_ai_settings_now(cx);
     }
 
     pub(in crate::ui::view) fn adjust_ai_timeout_ms(&mut self, delta: i64, cx: &mut Context<Self>) {
         let current = self.ai_settings.timeout_ms as i64;
         self.ai_settings.timeout_ms = (current + delta).clamp(5_000, 300_000) as u64;
-        self.ai_status = "AI timeout edited; save to persist".to_string();
-        cx.notify();
+        self.ai_status = "AI timeout updated".to_string();
+        self.persist_ai_settings_now(cx);
     }
 
     pub(in crate::ui::view) fn adjust_ai_agent_steps(
@@ -94,8 +94,8 @@ impl NyaTermApp {
     ) {
         let current = self.ai_settings.max_agent_steps.unwrap_or(10) as i16;
         self.ai_settings.max_agent_steps = Some((current + delta).clamp(1, 50) as u16);
-        self.ai_status = "AI Agent max steps edited; save to persist".to_string();
-        cx.notify();
+        self.ai_status = "AI Agent max steps updated".to_string();
+        self.persist_ai_settings_now(cx);
     }
 
     pub(in crate::ui::view) fn adjust_ai_agent_step_timeout_ms(
@@ -106,8 +106,8 @@ impl NyaTermApp {
         let current = self.ai_settings.agent_step_timeout_ms.unwrap_or(30_000) as i64;
         self.ai_settings.agent_step_timeout_ms =
             Some((current + delta).clamp(5_000, 120_000) as u64);
-        self.ai_status = "AI Agent step timeout edited; save to persist".to_string();
-        cx.notify();
+        self.ai_status = "AI Agent step timeout updated".to_string();
+        self.persist_ai_settings_now(cx);
     }
 
     pub(in crate::ui::view) fn adjust_ai_terminal_output_lines(
@@ -117,8 +117,8 @@ impl NyaTermApp {
     ) {
         let current = self.ai_settings.terminal_output_lines as i16;
         self.ai_settings.terminal_output_lines = (current + delta).clamp(0, 100) as u16;
-        self.ai_status = "AI terminal output lines edited; save to persist".to_string();
-        cx.notify();
+        self.ai_status = "AI terminal output lines updated".to_string();
+        self.persist_ai_settings_now(cx);
     }
 
     pub(in crate::ui::view) fn adjust_ai_file_size_mb(
@@ -129,8 +129,8 @@ impl NyaTermApp {
         let mb = 1024 * 1024;
         let current = (self.ai_settings.max_ai_file_size_bytes / mb).max(1) as i64;
         self.ai_settings.max_ai_file_size_bytes = (current + delta).clamp(1, 256) as u64 * mb;
-        self.ai_status = "AI file size limit edited; save to persist".to_string();
-        cx.notify();
+        self.ai_status = "AI file size limit updated".to_string();
+        self.persist_ai_settings_now(cx);
     }
 
     pub(in crate::ui::view) fn update_ai_smart_auto_execute_max_risk(
@@ -139,8 +139,8 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         self.ai_settings.agent_smart_auto_execute_max_risk = risk;
-        self.ai_status = "AI smart auto-execute risk edited; save to persist".to_string();
-        cx.notify();
+        self.ai_status = "AI smart auto-execute risk updated".to_string();
+        self.persist_ai_settings_now(cx);
     }
 
     pub(in crate::ui::view) fn toggle_ai_model_enabled(
@@ -165,9 +165,9 @@ impl NyaTermApp {
                     .find(|candidate| candidate.enabled)
                     .map(|candidate| candidate.id.clone());
             }
-            self.ai_status = "AI model list edited; save to persist".to_string();
+            self.ai_status = "AI model list updated".to_string();
         }
-        cx.notify();
+        self.persist_ai_settings_now(cx);
     }
 
     pub(in crate::ui::view) fn set_ai_default_model(
@@ -183,9 +183,9 @@ impl NyaTermApp {
         {
             model.enabled = true;
             self.ai_settings.default_model_id = Some(model.id.clone());
-            self.ai_status = "AI default model edited; save to persist".to_string();
+            self.ai_status = "AI default model updated".to_string();
         }
-        cx.notify();
+        self.persist_ai_settings_now(cx);
     }
 
     pub(in crate::ui::view) fn begin_ai_chat_job(&mut self) -> (u64, Arc<AtomicBool>) {
@@ -358,6 +358,236 @@ impl NyaTermApp {
             }
         }
         cx.notify();
+    }
+
+
+    /// Persist current `ai_settings` without rewriting active profile drafts (Tauri live update).
+    pub(in crate::ui::view) fn persist_ai_settings_now(&mut self, cx: &mut Context<Self>) {
+        let next = self.ai_settings.clone();
+        match ConnectionStore::open_with_portable_key_path(
+            self.runtime.config_dir(),
+            self.runtime.portable_key_path().map(ToOwned::to_owned),
+        )
+        .and_then(|store| store.save_ai_settings(next))
+        {
+            Ok(saved) => {
+                self.ai_settings = saved;
+                self.refresh_ai_usage_counts();
+                if self.ai_status.trim().is_empty() {
+                    self.ai_status = "AI settings saved".to_string();
+                }
+                self.store_status.message = self.ai_status.clone();
+                self.store_status.ready = true;
+            }
+            Err(error) => {
+                self.ai_status = format!("AI settings save failed: {error}");
+                self.store_status.message = self.ai_status.clone();
+                self.store_status.ready = false;
+            }
+        }
+        cx.notify();
+    }
+
+    pub(in crate::ui::view) fn set_ai_request_user_agent(
+        &mut self,
+        value: String,
+        cx: &mut Context<Self>,
+    ) {
+        self.ai_settings.request_user_agent = value;
+        self.ai_status = "AI request user-agent updated".to_string();
+        self.persist_ai_settings_now(cx);
+    }
+
+    pub(in crate::ui::view) fn expand_ai_action(
+        &mut self,
+        kind: AiActionListKind,
+        action_id: String,
+        cx: &mut Context<Self>,
+    ) {
+        let key = (kind, action_id);
+        if self.ai_action_expanded.as_ref() == Some(&key) {
+            self.ai_action_expanded = None;
+            self.ai_action_edit = None;
+        } else {
+            self.ai_action_expanded = Some(key);
+        }
+        cx.notify();
+    }
+
+    pub(in crate::ui::view) fn focus_ai_action_field(
+        &mut self,
+        kind: AiActionListKind,
+        action_id: String,
+        field: AiActionEditorField,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.ai_action_expanded = Some((kind, action_id.clone()));
+        self.ai_action_edit = Some((kind, action_id, field));
+        window.focus(&self.ai_action_focus);
+        cx.notify();
+    }
+
+    pub(in crate::ui::view) fn toggle_ai_action_enabled(
+        &mut self,
+        kind: AiActionListKind,
+        action_id: String,
+        cx: &mut Context<Self>,
+    ) {
+        if let Some(action) = self.ai_action_mut(kind, &action_id) {
+            action.enabled = !action.enabled;
+            self.ai_status = "AI action toggled".to_string();
+            self.persist_ai_settings_now(cx);
+        }
+    }
+
+    pub(in crate::ui::view) fn add_ai_action(
+        &mut self,
+        kind: AiActionListKind,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let id = format!(
+            "ai-action-{}",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|d| d.as_millis())
+                .unwrap_or(0)
+        );
+        let action = nyaterm_domain::AiCustomActionConfig {
+            id: id.clone(),
+            name: "Custom AI action".to_string(),
+            prompt: String::new(),
+            enabled: true,
+        };
+        match kind {
+            AiActionListKind::Terminal => self.ai_settings.terminal_ai_actions.push(action),
+            AiActionListKind::File => self.ai_settings.file_ai_actions.push(action),
+        }
+        self.ai_action_expanded = Some((kind, id.clone()));
+        self.ai_action_edit = Some((kind, id, AiActionEditorField::Name));
+        window.focus(&self.ai_action_focus);
+        self.ai_status = "AI action added".to_string();
+        self.persist_ai_settings_now(cx);
+    }
+
+    pub(in crate::ui::view) fn remove_ai_action(
+        &mut self,
+        kind: AiActionListKind,
+        action_id: String,
+        cx: &mut Context<Self>,
+    ) {
+        match kind {
+            AiActionListKind::Terminal => {
+                self.ai_settings
+                    .terminal_ai_actions
+                    .retain(|action| action.id != action_id);
+            }
+            AiActionListKind::File => {
+                self.ai_settings
+                    .file_ai_actions
+                    .retain(|action| action.id != action_id);
+            }
+        }
+        if self
+            .ai_action_expanded
+            .as_ref()
+            .is_some_and(|(k, id)| *k == kind && id == &action_id)
+        {
+            self.ai_action_expanded = None;
+        }
+        if self
+            .ai_action_edit
+            .as_ref()
+            .is_some_and(|(k, id, _)| *k == kind && id == &action_id)
+        {
+            self.ai_action_edit = None;
+        }
+        self.ai_status = "AI action removed".to_string();
+        self.persist_ai_settings_now(cx);
+    }
+
+    pub(in crate::ui::view) fn handle_ai_action_key_down(
+        &mut self,
+        event: &KeyDownEvent,
+        cx: &mut Context<Self>,
+    ) {
+        cx.stop_propagation();
+        let Some((kind, action_id, field)) = self.ai_action_edit.clone() else {
+            return;
+        };
+        match event.keystroke.key.as_str() {
+            "escape" => {
+                self.ai_action_edit = None;
+                cx.notify();
+                return;
+            }
+            "tab" => {
+                self.ai_action_edit = Some((kind, action_id, field.next()));
+                cx.notify();
+                return;
+            }
+            "enter" if field == AiActionEditorField::Name => {
+                self.ai_action_edit = Some((kind, action_id, AiActionEditorField::Prompt));
+                cx.notify();
+                return;
+            }
+            "enter" if field == AiActionEditorField::Prompt => {
+                if let Some(action) = self.ai_action_mut(kind, &action_id) {
+                    action.prompt.push('\n');
+                    self.persist_ai_settings_now(cx);
+                }
+                return;
+            }
+            "backspace" => {
+                if let Some(action) = self.ai_action_mut(kind, &action_id) {
+                    match field {
+                        AiActionEditorField::Name => {
+                            action.name.pop();
+                        }
+                        AiActionEditorField::Prompt => {
+                            action.prompt.pop();
+                        }
+                    }
+                    self.persist_ai_settings_now(cx);
+                }
+                return;
+            }
+            _ => {}
+        }
+        if let Some(input) = event
+            .keystroke
+            .key_char
+            .as_deref()
+            .filter(|value| !value.is_empty())
+        {
+            if let Some(action) = self.ai_action_mut(kind, &action_id) {
+                match field {
+                    AiActionEditorField::Name => action.name.push_str(input),
+                    AiActionEditorField::Prompt => action.prompt.push_str(input),
+                }
+                self.persist_ai_settings_now(cx);
+            }
+        }
+    }
+
+    fn ai_action_mut(
+        &mut self,
+        kind: AiActionListKind,
+        action_id: &str,
+    ) -> Option<&mut nyaterm_domain::AiCustomActionConfig> {
+        match kind {
+            AiActionListKind::Terminal => self
+                .ai_settings
+                .terminal_ai_actions
+                .iter_mut()
+                .find(|action| action.id == action_id),
+            AiActionListKind::File => self
+                .ai_settings
+                .file_ai_actions
+                .iter_mut()
+                .find(|action| action.id == action_id),
+        }
     }
 
     pub(in crate::ui::view) fn discover_ai_models(&mut self, cx: &mut Context<Self>) {

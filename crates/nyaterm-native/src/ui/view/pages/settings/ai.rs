@@ -127,6 +127,24 @@ impl NyaTermApp {
                             }),
                         ),
                     ))
+                    .child(settings_form_row(
+                        palette,
+                        "Request User-Agent",
+                        Some(SharedString::from(
+                            "HTTP User-Agent for provider API requests (Tauri ai.request_user_agent).",
+                        )),
+                        self.ai_input(
+                            "ai-request-user-agent",
+                            "User-Agent",
+                            if self.ai_settings.request_user_agent.is_empty() {
+                                " ".to_string()
+                            } else {
+                                self.ai_settings.request_user_agent.clone()
+                            },
+                            AiInputField::RequestUserAgent,
+                            cx,
+                        ),
+                    ))
                     .child(settings_form_row(palette, 
                         "Usage snapshot",
                         Some(SharedString::from(format!(
@@ -415,6 +433,33 @@ impl NyaTermApp {
                                 "+1",
                                 cx.listener(|this, _, _, cx| {
                                     this.adjust_ai_agent_steps(1, cx);
+                                }),
+                            )),
+                    ))
+                    .child(settings_form_row(
+                        palette,
+                        "Agent step timeout",
+                        Some(SharedString::from(format!(
+                            "{} ms per agent step",
+                            self.ai_settings.agent_step_timeout_ms.unwrap_or(30_000)
+                        ))),
+                        div()
+                            .flex()
+                            .gap_1()
+                            .child(small_button(
+                                palette,
+                                "ai-agent-step-timeout-minus",
+                                "−1s",
+                                cx.listener(|this, _, _, cx| {
+                                    this.adjust_ai_agent_step_timeout_ms(-1_000, cx);
+                                }),
+                            ))
+                            .child(small_button(
+                                palette,
+                                "ai-agent-step-timeout-plus",
+                                "+1s",
+                                cx.listener(|this, _, _, cx| {
+                                    this.adjust_ai_agent_step_timeout_ms(1_000, cx);
                                 }),
                             )),
                     ))
@@ -953,29 +998,291 @@ impl NyaTermApp {
                         ),
                     )),
             ))
-            .child(ai_action_list(palette, 
+            .child(self.ai_action_editor(
+                palette,
+                AiActionListKind::Terminal,
                 "Terminal Actions",
                 format!(
                     "{terminal_enabled}/{} enabled",
                     self.ai_settings.terminal_ai_actions.len()
                 ),
-                self.ai_settings
-                    .terminal_ai_actions
-                    .iter()
-                    .cloned()
-                    .collect(),
+                cx,
             ))
-            .child(ai_action_list(palette, 
+            .child(self.ai_action_editor(
+                palette,
+                AiActionListKind::File,
                 "File Actions",
                 format!(
                     "{file_enabled}/{} enabled",
                     self.ai_settings.file_ai_actions.len()
                 ),
-                self.ai_settings.file_ai_actions.iter().cloned().collect(),
+                cx,
             ))
     }
-}
 
+    fn ai_action_editor(
+        &mut self,
+        palette: crate::ui::theme::ThemePalette,
+        kind: AiActionListKind,
+        title: &'static str,
+        summary: String,
+        cx: &mut Context<Self>,
+    ) -> impl IntoElement {
+        let actions = match kind {
+            AiActionListKind::Terminal => self.ai_settings.terminal_ai_actions.clone(),
+            AiActionListKind::File => self.ai_settings.file_ai_actions.clone(),
+        };
+        let expanded = self.ai_action_expanded.clone();
+        let edit = self.ai_action_edit.clone();
+
+        settings_form_section(
+            palette,
+            Some(title),
+            None,
+            div()
+                .flex()
+                .flex_col()
+                .gap_2()
+                .child(settings_form_row(
+                    palette,
+                    "Catalog",
+                    Some(SharedString::from(summary)),
+                    small_button(
+                        palette,
+                        format!("ai-action-add-{:?}", kind),
+                        "Add",
+                        cx.listener(move |this, _, window, cx| {
+                            this.add_ai_action(kind, window, cx);
+                        }),
+                    ),
+                ))
+                .when(actions.is_empty(), |this| {
+                    this.child(
+                        div()
+                            .rounded_md()
+                            .border_1()
+                            .border_color(rgb(palette.border))
+                            .bg(rgb(palette.input))
+                            .px_4()
+                            .py_5()
+                            .flex()
+                            .items_center()
+                            .justify_center()
+                            .child(
+                                div()
+                                    .text_size(px(12.))
+                                    .text_color(rgb(palette.text_dimmed))
+                                    .child("No custom actions — Add one."),
+                            ),
+                    )
+                })
+                .children(actions.into_iter().map(|action| {
+                    let is_open = expanded
+                        .as_ref()
+                        .is_some_and(|(k, id)| *k == kind && id == &action.id);
+                    let name_active = edit.as_ref().is_some_and(|(k, id, field)| {
+                        *k == kind && id == &action.id && *field == AiActionEditorField::Name
+                    });
+                    let prompt_active = edit.as_ref().is_some_and(|(k, id, field)| {
+                        *k == kind && id == &action.id && *field == AiActionEditorField::Prompt
+                    });
+                    let action_id = action.id.clone();
+                    let action_id_toggle = action.id.clone();
+                    let action_id_delete = action.id.clone();
+                    let name_value = if action.name.is_empty() {
+                        " ".to_string()
+                    } else {
+                        action.name.clone()
+                    };
+                    let prompt_value = if action.prompt.is_empty() {
+                        " ".to_string()
+                    } else {
+                        action.prompt.clone()
+                    };
+                    div()
+                        .id(SharedString::from(format!(
+                            "ai-action-{}-{}",
+                            match kind {
+                                AiActionListKind::Terminal => "term",
+                                AiActionListKind::File => "file",
+                            },
+                            action.id
+                        )))
+                        .rounded_md()
+                        .border_1()
+                        .border_color(rgb(palette.border))
+                        .bg(rgb(palette.input))
+                        .overflow_hidden()
+                        .flex()
+                        .flex_col()
+                        .child(
+                            div()
+                                .id(SharedString::from(format!(
+                                    "ai-action-header-{}-{}",
+                                    match kind {
+                                        AiActionListKind::Terminal => "term",
+                                        AiActionListKind::File => "file",
+                                    },
+                                    action.id
+                                )))
+                                .px_3()
+                                .py_2()
+                                .flex()
+                                .items_center()
+                                .gap_2()
+                                .cursor_pointer()
+                                .hover(|this| this.bg(rgb(palette.hover)))
+                                .on_click(cx.listener({
+                                    let action_id = action_id.clone();
+                                    move |this, _, _, cx| {
+                                        this.expand_ai_action(kind, action_id.clone(), cx);
+                                    }
+                                }))
+                                .child(
+                                    div()
+                                        .size(px(8.))
+                                        .rounded_full()
+                                        .flex_none()
+                                        .bg(if action.enabled {
+                                            rgb(palette.success)
+                                        } else {
+                                            rgb(palette.border)
+                                        }),
+                                )
+                                .child(
+                                    div()
+                                        .min_w_0()
+                                        .flex_1()
+                                        .text_size(px(12.))
+                                        .font_weight(FontWeight(600.))
+                                        .text_color(rgb(palette.text))
+                                        .overflow_hidden()
+                                        .child(if action.name.trim().is_empty() {
+                                            "Untitled action".to_string()
+                                        } else {
+                                            action.name.clone()
+                                        }),
+                                )
+                                .child(settings_switch(
+                                    palette,
+                                    format!("ai-action-enabled-{}", action.id),
+                                    action.enabled,
+                                    cx.listener(move |this, _, _, cx| {
+                                        this.toggle_ai_action_enabled(
+                                            kind,
+                                            action_id_toggle.clone(),
+                                            cx,
+                                        );
+                                    }),
+                                ))
+                                .child(small_button(
+                                    palette,
+                                    format!("ai-action-delete-{}", action.id),
+                                    "Delete",
+                                    cx.listener(move |this, _, _, cx| {
+                                        this.remove_ai_action(kind, action_id_delete.clone(), cx);
+                                    }),
+                                ))
+                                .child(
+                                    div()
+                                        .text_size(px(11.))
+                                        .text_color(rgb(palette.text_dimmed))
+                                        .child(if is_open { "▾" } else { "▸" }),
+                                ),
+                        )
+                        .when(is_open, |this| {
+                            this.child(
+                                div()
+                                    .border_t_1()
+                                    .border_color(rgb(palette.border))
+                                    .bg(rgb(palette.bg))
+                                    .px_3()
+                                    .py_3()
+                                    .flex()
+                                    .flex_col()
+                                    .gap_2()
+                                    .track_focus(&self.ai_action_focus)
+                                    .on_key_down(cx.listener(|this, event: &KeyDownEvent, _, cx| {
+                                        this.handle_ai_action_key_down(event, cx);
+                                    }))
+                                    .child(
+                                        div()
+                                            .id(SharedString::from(format!(
+                                                "ai-action-name-{}",
+                                                action.id
+                                            )))
+                                            .h(px(28.))
+                                            .px_2()
+                                            .rounded_md()
+                                            .border_1()
+                                            .border_color(if name_active {
+                                                rgb(palette.accent)
+                                            } else {
+                                                rgb(palette.border)
+                                            })
+                                            .bg(rgb(palette.input))
+                                            .flex()
+                                            .items_center()
+                                            .text_size(px(12.))
+                                            .text_color(rgb(palette.text))
+                                            .cursor_pointer()
+                                            .child(name_value)
+                                            .on_click(cx.listener({
+                                                let action_id = action_id.clone();
+                                                move |this, _, window, cx| {
+                                                    this.focus_ai_action_field(
+                                                        kind,
+                                                        action_id.clone(),
+                                                        AiActionEditorField::Name,
+                                                        window,
+                                                        cx,
+                                                    );
+                                                }
+                                            })),
+                                    )
+                                    .child(
+                                        div()
+                                            .id(SharedString::from(format!(
+                                                "ai-action-prompt-{}",
+                                                action.id
+                                            )))
+                                            .min_h(px(72.))
+                                            .px_2()
+                                            .py_2()
+                                            .rounded_md()
+                                            .border_1()
+                                            .border_color(if prompt_active {
+                                                rgb(palette.accent)
+                                            } else {
+                                                rgb(palette.border)
+                                            })
+                                            .bg(rgb(palette.input))
+                                            .font_family("JetBrains Mono")
+                                            .text_size(px(11.))
+                                            .text_color(rgb(palette.text))
+                                            .line_height(px(16.))
+                                            .cursor_pointer()
+                                            .child(prompt_value)
+                                            .on_click(cx.listener({
+                                                let action_id = action_id.clone();
+                                                move |this, _, window, cx| {
+                                                    this.focus_ai_action_field(
+                                                        kind,
+                                                        action_id.clone(),
+                                                        AiActionEditorField::Prompt,
+                                                        window,
+                                                        cx,
+                                                    );
+                                                }
+                                            })),
+                                    ),
+                            )
+                        })
+                })),
+        )
+    }
+
+}
 
 fn ai_setting_hint(palette: crate::ui::theme::ThemePalette, title: &'static str, detail: &'static str) -> impl IntoElement {    div()
         .rounded_sm()
@@ -1051,93 +1358,4 @@ fn ai_risk_label(risk: &RiskLevel) -> String {
         RiskLevel::High => "high".to_string(),
         RiskLevel::Critical => "critical".to_string(),
     }
-}
-
-fn ai_action_list(
-    palette: ThemePalette,
-    title: &'static str,
-    summary: String,
-    actions: Vec<AiCustomActionConfig>,
-) -> impl IntoElement {
-    let rows = actions.into_iter().take(8).fold(
-        div().flex().flex_col().gap_1(),
-        |rows, action| {
-            rows.child(
-                div()
-                    .rounded_md()
-                    .px_2()
-                    .py_1()
-                    .border_1()
-                    .border_color(rgb(palette.surface_elevated))
-                    .bg(rgb(palette.input))
-                    .flex()
-                    .items_center()
-                    .gap_2()
-                    .child(
-                        div()
-                            .size(px(8.))
-                            .rounded_full()
-                            .flex_none()
-                            .bg(if action.enabled {
-                                rgb(palette.success)
-                            } else {
-                                rgb(palette.border)
-                            }),
-                    )
-                    .child(
-                        div()
-                            .min_w_0()
-                            .flex_1()
-                            .flex()
-                            .flex_col()
-                            .child(
-                                div()
-                                    .text_size(px(12.))
-                                    .font_weight(FontWeight(600.))
-                                    .text_color(rgb(palette.text))
-                                    .overflow_hidden()
-                                    .child(truncate_preview(&action.name, 44)),
-                            )
-                            .child(
-                                div()
-                                    .text_size(px(10.))
-                                    .text_color(rgb(palette.text_dimmed))
-                                    .overflow_hidden()
-                                    .child(truncate_preview(&action.prompt, 96)),
-                            ),
-                    )
-                    .child(
-                        div()
-                            .text_size(px(10.))
-                            .font_weight(FontWeight(600.))
-                            .text_color(if action.enabled {
-                                rgb(palette.success)
-                            } else {
-                                rgb(palette.text_muted)
-                            })
-                            .child(if action.enabled { "on" } else { "off" }),
-                    ),
-            )
-        },
-    );
-
-    settings_form_section(
-        palette,
-        Some(title),
-        None,
-        div()
-            .flex()
-            .flex_col()
-            .gap_2()
-            .child(settings_form_row(
-                palette,
-                "Catalog",
-                Some(SharedString::from(summary)),
-                div()
-                    .text_size(px(11.))
-                    .text_color(rgb(palette.text_muted))
-                    .child("Custom"),
-            ))
-            .child(rows),
-    )
 }
