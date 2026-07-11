@@ -689,3 +689,8 @@ service boundary first:
 ## 2026-07-11 Hex typing auto-format + process sort offset
 - Shared `format_send_command_hex_display` in `send_command` crate module; hex key entry/backspace reformats pairs.
 - Process sort toggles reset virtual list offset to top.
+
+## 2026-07-11 Process/Docker wheel virtual lists + multi-line hex guides
+- Process list: spacer virtual window + `on_scroll_wheel` updates `process_list_offset` (no native overflow alone).
+- Docker containers: same pattern with `docker_list_offset`, search resets offset; row range footer.
+- Hex Command Send: per-line 4-byte guide marks (`send_command_hex_guide_rows`) like Tauri `buildHexGuideRows`.

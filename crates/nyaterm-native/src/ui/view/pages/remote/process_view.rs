@@ -20,19 +20,25 @@ impl NyaTermApp {
             self.process_sort_direction,
         );
 
-        // Lightweight virtual window (Tauri useVirtualList): render ~80 rows at a time.
-        const PROCESS_WINDOW: usize = 80;
+        // Tauri-like virtual list: fixed row height, overscan window, spacer padding.
+        const PROCESS_ROW_PX: f32 = 38.;
+        const PROCESS_VIEWPORT_ROWS: usize = 28;
+        const PROCESS_OVERSCAN: usize = 8;
         let total_filtered = filtered_processes.len();
-        let max_offset = total_filtered.saturating_sub(PROCESS_WINDOW);
+        let window_capacity = PROCESS_VIEWPORT_ROWS + PROCESS_OVERSCAN * 2;
+        let max_offset = total_filtered.saturating_sub(PROCESS_VIEWPORT_ROWS.min(total_filtered));
         if self.process_list_offset > max_offset {
             self.process_list_offset = max_offset;
         }
-        let window_start = self.process_list_offset.min(max_offset);
-        let window_end = (window_start + PROCESS_WINDOW).min(total_filtered);
+        let scroll_row = self.process_list_offset.min(max_offset);
+        let window_start = scroll_row.saturating_sub(PROCESS_OVERSCAN);
+        let window_end = (window_start + window_capacity).min(total_filtered);
         let visible_processes = filtered_processes
             .get(window_start..window_end)
             .unwrap_or(&[])
             .to_vec();
+        let pad_top = (window_start as f32) * PROCESS_ROW_PX;
+        let pad_bottom = ((total_filtered.saturating_sub(window_end)) as f32) * PROCESS_ROW_PX;
 
         let top_cpu = self
             .processes
@@ -75,41 +81,12 @@ impl NyaTermApp {
         } else if filtered_processes.is_empty() {
             rows = rows.child(empty_panel("No processes match the current search."));
         } else {
-            if window_start > 0 {
+            if pad_top > 0. {
                 rows = rows.child(
                     div()
-                        .h(px(26.))
-                        .px_2()
-                        .flex()
-                        .items_center()
-                        .justify_between()
-                        .border_b_1()
-                        .border_color(rgb(0x21262d))
-                        .child(
-                            div()
-                                .text_size(px(10.))
-                                .text_color(rgb(0x6e7681))
-                                .child(format!("↑ {window_start} hidden above")),
-                        )
-                        .child(
-                            div()
-                                .id(SharedString::from("process-page-up"))
-                                .px_2()
-                                .h(px(22.))
-                                .flex()
-                                .items_center()
-                                .rounded_md()
-                                .text_size(px(10.))
-                                .text_color(rgb(0x58a6ff))
-                                .cursor_pointer()
-                                .hover(|this| this.bg(rgb(0x21262d)))
-                                .child("Page up")
-                                .on_click(cx.listener(|this, _, _, cx| {
-                                    this.process_list_offset =
-                                        this.process_list_offset.saturating_sub(PROCESS_WINDOW);
-                                    cx.notify();
-                                })),
-                        ),
+                        .h(px(pad_top))
+                        .w_full()
+                        .flex_none(),
                 );
             }
             for process in visible_processes.iter() {
@@ -188,49 +165,18 @@ impl NyaTermApp {
                     ),
                 );
             }
-            if window_end < total_filtered {
-                let remaining = total_filtered - window_end;
+            if pad_bottom > 0. {
                 rows = rows.child(
                     div()
-                        .h(px(26.))
-                        .px_2()
-                        .flex()
-                        .items_center()
-                        .justify_between()
-                        .border_t_1()
-                        .border_color(rgb(0x21262d))
-                        .child(
-                            div()
-                                .text_size(px(10.))
-                                .text_color(rgb(0x6e7681))
-                                .child(format!("↓ {remaining} more below")),
-                        )
-                        .child(
-                            div()
-                                .id(SharedString::from("process-page-down"))
-                                .px_2()
-                                .h(px(22.))
-                                .flex()
-                                .items_center()
-                                .rounded_md()
-                                .text_size(px(10.))
-                                .text_color(rgb(0x58a6ff))
-                                .cursor_pointer()
-                                .hover(|this| this.bg(rgb(0x21262d)))
-                                .child("Page down")
-                                .on_click(cx.listener(move |this, _, _, cx| {
-                                    this.process_list_offset = (this.process_list_offset
-                                        + PROCESS_WINDOW)
-                                        .min(total_filtered.saturating_sub(PROCESS_WINDOW));
-                                    cx.notify();
-                                })),
-                        ),
+                        .h(px(pad_bottom))
+                        .w_full()
+                        .flex_none(),
                 );
             }
         }
 
         // Tauri ProcessManager shell: dense search toolbar + sort strip + scrollable table.
-        let count_label = if total_filtered > PROCESS_WINDOW {
+        let count_label = if total_filtered > PROCESS_VIEWPORT_ROWS {
             format!(
                 "{window_start}-{window_end}/{total_filtered} · {} total · {} users",
                 self.processes.len(),
@@ -387,10 +333,34 @@ impl NyaTermApp {
                     .id(SharedString::from("process-list-scroll"))
                     .flex_1()
                     .min_h_0()
-                    .overflow_scroll()
-                    .scrollbar_width(px(6.))
+                    .overflow_hidden()
                     .flex()
                     .flex_col()
+                    .on_scroll_wheel(cx.listener(
+                        move |this, event: &ScrollWheelEvent, _, cx| {
+                            let max_offset = total_filtered
+                                .saturating_sub(PROCESS_VIEWPORT_ROWS.min(total_filtered));
+                            if max_offset == 0 {
+                                return;
+                            }
+                            let delta_rows = match event.delta {
+                                ScrollDelta::Lines(delta) => delta.y,
+                                ScrollDelta::Pixels(delta) => {
+                                    f32::from(delta.y) / PROCESS_ROW_PX
+                                }
+                            };
+                            // Match GPUI list semantics: scroll_top -= delta.y
+                            let next = (this.process_list_offset as f32 - delta_rows)
+                                .round()
+                                .clamp(0., max_offset as f32)
+                                as usize;
+                            if next != this.process_list_offset {
+                                this.process_list_offset = next;
+                                cx.stop_propagation();
+                                cx.notify();
+                            }
+                        },
+                    ))
                     .child(rows),
             )
     }

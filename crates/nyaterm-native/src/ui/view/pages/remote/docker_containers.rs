@@ -8,6 +8,7 @@ pub(in crate::ui::view::pages::remote) fn docker_containers_panel(
     filtered_containers: &[DockerContainer],
     query_empty: bool,
     open_menu_id: Option<&str>,
+    list_offset: usize,
     cx: &mut Context<NyaTermApp>,
 ) -> impl IntoElement {
     // Tauri Docker containers tab: dense ~66px rows, left accent, ⋮ action menu.
@@ -56,30 +57,35 @@ pub(in crate::ui::view::pages::remote) fn docker_containers_panel(
             .then(left.name.cmp(&right.name))
     });
 
-    // Lightweight virtual window for large host inventories.
-    const DOCKER_WINDOW: usize = 60;
+    // Tauri-like virtual list: fixed row slot, overscan window, spacer padding + wheel.
+    const DOCKER_ROW_PX: f32 = 52.; // 48px row + ~4px gap
+    const DOCKER_VIEWPORT_ROWS: usize = 16;
+    const DOCKER_OVERSCAN: usize = 6;
     let total = containers.len();
-    let visible = if total > DOCKER_WINDOW {
-        containers.into_iter().take(DOCKER_WINDOW).collect::<Vec<_>>()
-    } else {
-        containers
-    };
-    let truncated = total > DOCKER_WINDOW;
+    let window_capacity = DOCKER_VIEWPORT_ROWS + DOCKER_OVERSCAN * 2;
+    let max_offset = total.saturating_sub(DOCKER_VIEWPORT_ROWS.min(total));
+    let scroll_row = list_offset.min(max_offset);
+    let window_start = scroll_row.saturating_sub(DOCKER_OVERSCAN);
+    let window_end = (window_start + window_capacity).min(total);
+    let visible = containers
+        .get(window_start..window_end)
+        .unwrap_or(&[])
+        .to_vec();
+    let pad_top = (window_start as f32) * DOCKER_ROW_PX;
+    let pad_bottom = ((total.saturating_sub(window_end)) as f32) * DOCKER_ROW_PX;
 
-    let mut rows = div()
-        .id(SharedString::from("docker-containers-scroll"))
-        .size_full()
-        .overflow_scroll()
-        .scrollbar_width(px(6.))
-        .p_2()
-        .flex()
-        .flex_col()
-        .gap_1();
+    let mut rows = div().flex().flex_col().gap_1().p_2();
+    if pad_top > 0. {
+        rows = rows.child(div().h(px(pad_top)).w_full().flex_none());
+    }
     for container in visible {
         let menu_open = open_menu_id == Some(container.id.as_str());
         rows = rows.child(docker_container_row(container, menu_open, cx));
     }
-    if truncated {
+    if pad_bottom > 0. {
+        rows = rows.child(div().h(px(pad_bottom)).w_full().flex_none());
+    }
+    if total > DOCKER_VIEWPORT_ROWS {
         rows = rows.child(
             div()
                 .mt_1()
@@ -92,11 +98,37 @@ pub(in crate::ui::view::pages::remote) fn docker_containers_panel(
                 .text_size(px(10.))
                 .text_color(rgb(0x6e7681))
                 .child(format!(
-                    "Showing first {DOCKER_WINDOW} of {total} containers · refine search to narrow"
+                    "Rows {window_start}-{window_end}/{total} · scroll or refine search"
                 )),
         );
     }
-    rows.into_any_element()
+
+    div()
+        .id(SharedString::from("docker-containers-scroll"))
+        .size_full()
+        .overflow_hidden()
+        .flex()
+        .flex_col()
+        .on_scroll_wheel(cx.listener(move |this, event: &ScrollWheelEvent, _, cx| {
+            let max_offset = total.saturating_sub(DOCKER_VIEWPORT_ROWS.min(total));
+            if max_offset == 0 {
+                return;
+            }
+            let delta_rows = match event.delta {
+                ScrollDelta::Lines(delta) => delta.y,
+                ScrollDelta::Pixels(delta) => f32::from(delta.y) / DOCKER_ROW_PX,
+            };
+            let next = (this.docker_list_offset as f32 - delta_rows)
+                .round()
+                .clamp(0., max_offset as f32) as usize;
+            if next != this.docker_list_offset {
+                this.docker_list_offset = next;
+                cx.stop_propagation();
+                cx.notify();
+            }
+        }))
+        .child(rows)
+        .into_any_element()
 }
 
 fn docker_container_row(

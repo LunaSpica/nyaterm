@@ -52,6 +52,16 @@ impl NyaTermApp {
             .as_deref()
             .map(|id| format!("Recent Logs · {}", compact_id(id)))
             .unwrap_or_else(|| "Recent Logs".to_string());
+        // Keep virtual-list offset valid after search/filter changes.
+        {
+            const DOCKER_VIEWPORT_ROWS: usize = 16;
+            let total = filtered_containers.len();
+            let max_offset = total.saturating_sub(DOCKER_VIEWPORT_ROWS.min(total));
+            if self.docker_list_offset > max_offset {
+                self.docker_list_offset = max_offset;
+            }
+        }
+
         let docker_content = match active_tab {
             DockerTab::Containers => docker_containers_panel(
                 self.docker_overview.is_some(),
@@ -60,6 +70,7 @@ impl NyaTermApp {
                 &filtered_containers,
                 query.is_empty(),
                 self.docker_container_menu_id.as_deref(),
+                self.docker_list_offset,
                 cx,
             )
             .into_any_element(),

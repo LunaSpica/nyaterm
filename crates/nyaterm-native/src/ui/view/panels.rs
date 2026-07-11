@@ -520,8 +520,10 @@ impl NyaTermApp {
                                     .when(
                                         self.send_command_data_type == SendCommandDataType::Hex,
                                         |this| {
-                                            let guide_marks =
-                                                send_command_hex_guide_marks(&self.send_command_draft);
+                                            // Tauri overlays dashed 4-byte guides per line above the hex textarea.
+                                            let guide_rows =
+                                                send_command_hex_guide_rows(&self.send_command_draft);
+                                            const HEX_LINE_PX: f32 = 15.;
                                             this.child(
                                                 div()
                                                     .absolute()
@@ -529,24 +531,29 @@ impl NyaTermApp {
                                                     .px_2()
                                                     .py_1()
                                                     .overflow_hidden()
-                                                    .child(
-                                                        div()
-                                                            .h(px(14.))
-                                                            .relative()
-                                                            .w_full()
-                                                            .children(guide_marks.into_iter().map(
-                                                                |mark| {
-                                                                    div()
-                                                                        .absolute()
-                                                                        .top_0()
-                                                                        .left(px(mark as f32 * 7.2))
-                                                                        .h(px(12.))
-                                                                        .w(px(1.))
-                                                                        .bg(rgb(0x1f6feb))
-                                                                        .opacity(0.55)
-                                                                },
-                                                            )),
-                                                    ),
+                                                    .flex()
+                                                    .flex_col()
+                                                    .children(guide_rows.into_iter().map(
+                                                        |marks| {
+                                                            div()
+                                                                .h(px(HEX_LINE_PX))
+                                                                .relative()
+                                                                .w_full()
+                                                                .flex_none()
+                                                                .children(marks.into_iter().map(
+                                                                    |mark| {
+                                                                        div()
+                                                                            .absolute()
+                                                                            .top(px(1.))
+                                                                            .left(px(mark as f32 * 7.2))
+                                                                            .h(px(HEX_LINE_PX - 2.))
+                                                                            .w(px(1.))
+                                                                            .bg(rgb(0x1f6feb))
+                                                                            .opacity(0.45)
+                                                                    },
+                                                                ))
+                                                        },
+                                                    )),
                                             )
                                         },
                                     )

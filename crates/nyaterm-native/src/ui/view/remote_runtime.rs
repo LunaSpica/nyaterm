@@ -33,11 +33,13 @@ impl NyaTermApp {
         match keystroke.key.as_str() {
             "backspace" => {
                 self.docker_search_draft.pop();
+                self.docker_list_offset = 0;
                 self.docker_status = "Docker search updated".to_string();
                 cx.notify();
             }
             "escape" => {
                 self.docker_search_draft.clear();
+                self.docker_list_offset = 0;
                 self.docker_status = "Docker search cleared".to_string();
                 cx.notify();
             }
@@ -48,6 +50,7 @@ impl NyaTermApp {
                     .filter(|input| !input.is_empty())
                 {
                     self.docker_search_draft.push_str(input);
+                    self.docker_list_offset = 0;
                     self.docker_status = "Docker search updated".to_string();
                     cx.notify();
                 }
