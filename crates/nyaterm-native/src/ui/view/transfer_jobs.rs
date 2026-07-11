@@ -405,6 +405,20 @@ impl NyaTermApp {
             return;
         }
 
+        // ZMODEM jobs have no SFTP control — cancel via the session ZMODEM state.
+        if let TransferJobKind::ZmodemUpload { session_id, .. }
+        | TransferJobKind::ZmodemDownload { session_id, .. } = job.kind.clone()
+        {
+            let id = job.id.clone();
+            job.status = TransferJobStatus::Cancelled;
+            job.detail = "Cancelled".to_string();
+            job.progress = None;
+            self.cancel_zmodem_transfer(&session_id, cx);
+            self.terminal_status = format!("ZMODEM transfer cancelled: {id}");
+            cx.notify();
+            return;
+        }
+
         let Some(control) = job.control.as_ref() else {
             self.terminal_status = format!("transfer {} cannot be cancelled", job.id);
             cx.notify();

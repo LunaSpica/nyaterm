@@ -250,6 +250,16 @@ impl NyaTermApp {
                     self.terminal_status =
                         format!("ZMODEM {dir} {file_name}: {bytes_transferred} bytes");
                 }
+                self.upsert_zmodem_transfer_job(
+                    session_id,
+                    direction,
+                    &file_name,
+                    bytes_transferred,
+                    total_size,
+                    false,
+                    None,
+                    cx,
+                );
             }
             ZmodemEvent::Complete {
                 direction,
@@ -261,6 +271,7 @@ impl NyaTermApp {
                 };
                 self.terminal_status =
                     format!("ZMODEM {dir} complete ({file_count} file(s)) [{session_id}]");
+                self.finish_zmodem_transfer_jobs(session_id, true, None, cx);
                 if let Some(state) = self.zmodem_sessions.get_mut(session_id) {
                     state.transfer = None;
                     state.detector = ZmodemDetector::new();
@@ -270,6 +281,7 @@ impl NyaTermApp {
             }
             ZmodemEvent::Failed { reason } => {
                 self.terminal_status = format!("ZMODEM failed: {reason}");
+                self.finish_zmodem_transfer_jobs(session_id, false, Some(reason.as_str()), cx);
                 if let Some(state) = self.zmodem_sessions.get_mut(session_id) {
                     state.transfer = None;
                     state.detector = ZmodemDetector::new();
@@ -278,8 +290,142 @@ impl NyaTermApp {
                 }
             }
         }
-        let _ = session_id;
         cx.notify();
+    }
+
+    fn upsert_zmodem_transfer_job(
+        &mut self,
+        session_id: &str,
+        direction: ZmodemDirection,
+        file_name: &str,
+        bytes_transferred: u64,
+        total_size: u64,
+        completed: bool,
+        fail_reason: Option<&str>,
+        cx: &mut Context<Self>,
+    ) {
+        let short = short_id(session_id);
+        let kind = match direction {
+            ZmodemDirection::Upload => TransferJobKind::ZmodemUpload {
+                session_id: session_id.to_string(),
+                file_name: file_name.to_string(),
+            },
+            ZmodemDirection::Download => TransferJobKind::ZmodemDownload {
+                session_id: session_id.to_string(),
+                file_name: file_name.to_string(),
+            },
+        };
+        let progress = SftpTransferProgress {
+            remote_path: format!("zmodem://{short}/{file_name}"),
+            local_path: PathBuf::from(file_name),
+            bytes_transferred,
+            total_bytes: (total_size > 0).then_some(total_size),
+        };
+        if let Some(job) = self.transfer_jobs.iter_mut().find(|job| {
+            matches!(
+                &job.kind,
+                TransferJobKind::ZmodemUpload {
+                    session_id: sid,
+                    file_name: name
+                }
+                | TransferJobKind::ZmodemDownload {
+                    session_id: sid,
+                    file_name: name
+                } if sid == session_id && name == file_name
+            ) && matches!(
+                job.status,
+                TransferJobStatus::Running | TransferJobStatus::Cancelling
+            )
+        }) {
+            job.progress = Some(progress);
+            job.detail = if completed {
+                "Complete".to_string()
+            } else if let Some(reason) = fail_reason {
+                format!("Failed: {reason}")
+            } else if total_size > 0 {
+                format!(
+                    "{:.0}%",
+                    (bytes_transferred as f64 / total_size as f64 * 100.).clamp(0., 100.)
+                )
+            } else {
+                format!("{bytes_transferred} bytes")
+            };
+            if completed {
+                job.status = TransferJobStatus::Completed;
+            } else if fail_reason.is_some() {
+                job.status = TransferJobStatus::Failed;
+            }
+            return;
+        }
+
+        let id = self.next_transfer_id("zmodem");
+        let status = if completed {
+            TransferJobStatus::Completed
+        } else if fail_reason.is_some() {
+            TransferJobStatus::Failed
+        } else {
+            TransferJobStatus::Running
+        };
+        let detail = fail_reason
+            .map(|reason| format!("Failed: {reason}"))
+            .unwrap_or_else(|| {
+                if completed {
+                    "Complete".to_string()
+                } else {
+                    format!("Transferring {file_name}")
+                }
+            });
+        self.transfer_jobs.push(TransferJobState {
+            id,
+            kind,
+            status,
+            detail,
+            entries: Vec::new(),
+            summary: None,
+            progress: Some(progress),
+            control: None,
+        });
+        let _ = cx;
+    }
+
+    fn finish_zmodem_transfer_jobs(
+        &mut self,
+        session_id: &str,
+        success: bool,
+        fail_reason: Option<&str>,
+        _cx: &mut Context<Self>,
+    ) {
+        for job in &mut self.transfer_jobs {
+            let is_zmodem = matches!(
+                &job.kind,
+                TransferJobKind::ZmodemUpload {
+                    session_id: sid,
+                    ..
+                }
+                | TransferJobKind::ZmodemDownload {
+                    session_id: sid,
+                    ..
+                } if sid == session_id
+            );
+            if !is_zmodem {
+                continue;
+            }
+            if !matches!(
+                job.status,
+                TransferJobStatus::Running | TransferJobStatus::Cancelling
+            ) {
+                continue;
+            }
+            if success {
+                job.status = TransferJobStatus::Completed;
+                job.detail = "Complete".to_string();
+            } else {
+                job.status = TransferJobStatus::Failed;
+                job.detail = fail_reason
+                    .map(|r| format!("Failed: {r}"))
+                    .unwrap_or_else(|| "Failed".to_string());
+            }
+        }
     }
 
     fn prompt_zmodem_download_directory(&mut self, session_id: String, cx: &mut Context<Self>) {

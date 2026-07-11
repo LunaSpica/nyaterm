@@ -95,6 +95,14 @@ pub struct TerminalScreen {
     hyperlinks: Vec<String>,
     /// Active OSC 8 hyperlink index while printing (None = closed).
     current_hyperlink: Option<u16>,
+    /// OSC 133 shell integration: terminal has emitted marks.
+    shell_integration_enabled: bool,
+    /// OSC 133 C..D: a command is currently running.
+    command_running: bool,
+    /// Edge: command started (C) since last consume.
+    pending_command_started: bool,
+    /// Edge: command finished (D) since last consume.
+    pending_command_finished: bool,
 }
 
 impl Default for TerminalScreen {
@@ -125,6 +133,10 @@ impl TerminalScreen {
             window_title: None,
             hyperlinks: Vec::new(),
             current_hyperlink: None,
+            shell_integration_enabled: false,
+            command_running: false,
+            pending_command_started: false,
+            pending_command_finished: false,
         }
     }
 
@@ -180,6 +192,23 @@ impl TerminalScreen {
         self.pending_window_title.take()
     }
 
+    pub fn shell_integration_enabled(&self) -> bool {
+        self.shell_integration_enabled
+    }
+
+    pub fn command_running(&self) -> bool {
+        self.command_running
+    }
+
+    /// Consume OSC 133 C/D edges for the UI suggestion/history pipeline.
+    pub fn take_shell_command_edges(&mut self) -> (bool, bool) {
+        let started = self.pending_command_started;
+        let finished = self.pending_command_finished;
+        self.pending_command_started = false;
+        self.pending_command_finished = false;
+        (started, finished)
+    }
+
     pub fn total_rows(&self) -> usize {
         self.scrollback.len() + self.rows
     }
@@ -200,6 +229,10 @@ impl TerminalScreen {
         self.window_title = None;
         self.hyperlinks.clear();
         self.current_hyperlink = None;
+        self.shell_integration_enabled = false;
+        self.command_running = false;
+        self.pending_command_started = false;
+        self.pending_command_finished = false;
     }
 
     pub fn advance(&mut self, bytes: &[u8]) {
@@ -775,6 +808,40 @@ impl Perform for TerminalScreen {
                 };
                 self.current_hyperlink = Some(idx as u16);
             }
+            return;
+        }
+        // OSC 133 shell integration (FinalTerm / iTerm / VS Code).
+        // Forms: OSC 133 ; A|B|C|D [; exit] ST  — mark letter is params[1].
+        if code == "133" || code.starts_with("133") {
+            let mark = if code == "133" {
+                params
+                    .get(1)
+                    .and_then(|p| p.first().copied())
+                    .map(|b| b as char)
+                    .unwrap_or(' ')
+            } else {
+                code.chars().nth(3).unwrap_or(' ')
+            };
+            match mark {
+                'A' | 'B' => {
+                    self.shell_integration_enabled = true;
+                    // Prompt / command-start of input: not running.
+                    if mark == 'B' {
+                        self.command_running = false;
+                    }
+                }
+                'C' => {
+                    self.shell_integration_enabled = true;
+                    self.command_running = true;
+                    self.pending_command_started = true;
+                }
+                'D' => {
+                    self.shell_integration_enabled = true;
+                    self.command_running = false;
+                    self.pending_command_finished = true;
+                }
+                _ => {}
+            }
         }
     }
 }
@@ -782,6 +849,24 @@ impl Perform for TerminalScreen {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn osc133_shell_integration_marks() {
+        let mut screen = TerminalScreen::new(40, 3);
+        assert!(!screen.shell_integration_enabled());
+        screen.advance(b"\x1b]133;A\x07");
+        assert!(screen.shell_integration_enabled());
+        screen.advance(b"\x1b]133;C\x07");
+        assert!(screen.command_running());
+        let (started, finished) = screen.take_shell_command_edges();
+        assert!(started);
+        assert!(!finished);
+        screen.advance(b"\x1b]133;D;0\x07");
+        assert!(!screen.command_running());
+        let (started, finished) = screen.take_shell_command_edges();
+        assert!(!started);
+        assert!(finished);
+    }
 
     #[test]
     fn osc8_hyperlink_spans() {

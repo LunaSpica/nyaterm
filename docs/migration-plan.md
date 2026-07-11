@@ -1185,3 +1185,11 @@ service boundary first:
   expose `hyperlink_lines` with char column ranges.
 - Terminal paint merges OSC 8 ranges into link underlines alongside action-links.
 - Ctrl/Cmd-click opens http(s)/mailto OSC 8 URIs via the system opener.
+
+## 2026-07-11 ZMODEM transfer jobs + OSC 133 shell integration
+
+- ZMODEM Progress/Complete/Failed events upsert `TransferJobKind::ZmodemUpload`
+  / `ZmodemDownload` rows with `SftpTransferProgress` so the transfer strip
+  shows live percent; cancel routes through session ZMODEM state.
+- `TerminalScreen` parses OSC 133 A/B/C/D shell-integration marks; command
+  start/finish edges suppress and re-enable command suggestions (Tauri parity).

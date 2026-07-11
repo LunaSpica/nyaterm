@@ -144,6 +144,14 @@ pub(in crate::ui::view) fn transfer_job_title(kind: &TransferJobKind) -> String 
             action_name,
             ..
         } => format!("AI {action_name} <- {remote_path}"),
+        TransferJobKind::ZmodemUpload {
+            file_name,
+            session_id,
+        } => format!("ZMODEM ↑ {file_name} ({session_id})"),
+        TransferJobKind::ZmodemDownload {
+            file_name,
+            session_id,
+        } => format!("ZMODEM ↓ {file_name} ({session_id})"),
     }
 }
 

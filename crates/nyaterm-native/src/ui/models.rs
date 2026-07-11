@@ -1908,6 +1908,16 @@ pub(super) enum TransferJobKind {
         action_id: String,
         action_name: String,
     },
+    /// In-band ZMODEM upload (local files -> remote `rz`).
+    ZmodemUpload {
+        session_id: String,
+        file_name: String,
+    },
+    /// In-band ZMODEM download (remote `sz` -> local directory).
+    ZmodemDownload {
+        session_id: String,
+        file_name: String,
+    },
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

@@ -872,6 +872,8 @@ pub(super) fn transfer_direction_label(kind: &TransferJobKind) -> &'static str  
         TransferJobKind::SaveEditor { .. } => "SAVE",
         TransferJobKind::OpenExternal { .. } => "OPEN",
         TransferJobKind::AiFileAction { .. } => "AI",
+        TransferJobKind::ZmodemUpload { .. } => "Z↑",
+        TransferJobKind::ZmodemDownload { .. } => "Z↓",
     }
 }
 

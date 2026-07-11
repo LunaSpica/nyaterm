@@ -744,6 +744,38 @@ impl NyaTermApp {
         }
     }
 
+
+    /// Apply OSC 133 command-start / command-finish edges (Tauri shell integration).
+    fn apply_shell_integration_edges(
+        &mut self,
+        session_id: &str,
+        started: bool,
+        finished: bool,
+        command_running: bool,
+    ) {
+        // Only affect the active session suggestion pipeline.
+        if self.active_session_id.as_deref() != Some(session_id) {
+            return;
+        }
+        if started {
+            // Command is running: clear tracker and suppress suggestions (Tauri C mark).
+            self.command_input_tracker = TerminalInputState::new();
+            self.command_suggestions = None;
+            self.command_suggestions_suppressed = true;
+            self.command_suggestion_search_gen =
+                self.command_suggestion_search_gen.saturating_add(1);
+        }
+        if finished {
+            // Command finished: re-enable suggestion tracking (Tauri D mark).
+            self.command_suggestions_suppressed = false;
+            self.command_input_tracker = TerminalInputState::new();
+            self.command_suggestions = None;
+            self.command_suggestion_search_gen =
+                self.command_suggestion_search_gen.saturating_add(1);
+        }
+        let _ = command_running;
+    }
+
     pub(in crate::ui::view) fn scroll_terminal_to_bottom(&mut self, cx: &mut Context<Self>) {
         if let Some(session_id) = self.active_session_id.clone() {
             if let Some(view) = self.terminal_views.get_mut(&session_id) {
@@ -958,6 +990,10 @@ impl NyaTermApp {
         text: &str,
         mark_unread: bool,
     ) {
+        let mut shell_started = false;
+        let mut shell_finished = false;
+        let mut shell_running = false;
+
         if let Some(session_id) = session_id {
             let is_active = self.active_session_id.as_deref() == Some(session_id);
             let view = self
@@ -975,6 +1011,11 @@ impl NyaTermApp {
                 self.session_dynamic_titles
                     .insert(session_id.to_string(), title);
             }
+            let (cmd_started, cmd_finished) = view.screen.take_shell_command_edges();
+            let command_running = view.screen.command_running();
+            shell_started |= cmd_started;
+            shell_finished |= cmd_finished;
+            shell_running = command_running;
             if is_active {
                 self.terminal_output.push_str(text);
                 self.terminal_screen.advance(text.as_bytes());
@@ -987,6 +1028,11 @@ impl NyaTermApp {
                     self.session_dynamic_titles
                         .insert(session_id.to_string(), title);
                 }
+                let (cmd_started, cmd_finished) = self.terminal_screen.take_shell_command_edges();
+                let command_running = self.terminal_screen.command_running();
+                shell_started |= cmd_started;
+                shell_finished |= cmd_finished;
+                shell_running = command_running;
             }
         } else {
             self.terminal_output.push_str(text);
@@ -997,7 +1043,17 @@ impl NyaTermApp {
                 self.visual_bell_ticks = 4;
             }
         }
-    }
+            if shell_started || shell_finished {
+            if let Some(session_id) = session_id {
+                self.apply_shell_integration_edges(
+                    session_id,
+                    shell_started,
+                    shell_finished,
+                    shell_running,
+                );
+            }
+        }
+}
 
     pub(in crate::ui::view) fn append_terminal_bytes_for_session(
         &mut self,
@@ -1005,6 +1061,10 @@ impl NyaTermApp {
         data: &[u8],
         mark_unread: bool,
     ) {
+        let mut shell_started = false;
+        let mut shell_finished = false;
+        let mut shell_running = false;
+
         if let Some(session_id) = session_id {
             let is_active = self.active_session_id.as_deref() == Some(session_id);
             let view = self
@@ -1022,6 +1082,11 @@ impl NyaTermApp {
                 self.session_dynamic_titles
                     .insert(session_id.to_string(), title);
             }
+            let (cmd_started, cmd_finished) = view.screen.take_shell_command_edges();
+            let command_running = view.screen.command_running();
+            shell_started |= cmd_started;
+            shell_finished |= cmd_finished;
+            shell_running = command_running;
             if is_active {
                 self.terminal_screen.advance(data);
                 self.terminal_output
@@ -1035,6 +1100,11 @@ impl NyaTermApp {
                     self.session_dynamic_titles
                         .insert(session_id.to_string(), title);
                 }
+                let (cmd_started, cmd_finished) = self.terminal_screen.take_shell_command_edges();
+                let command_running = self.terminal_screen.command_running();
+                shell_started |= cmd_started;
+                shell_finished |= cmd_finished;
+                shell_running = command_running;
             }
         } else {
             self.terminal_screen.advance(data);
@@ -1046,5 +1116,15 @@ impl NyaTermApp {
                 self.visual_bell_ticks = 4;
             }
         }
-    }
+            if shell_started || shell_finished {
+            if let Some(session_id) = session_id {
+                self.apply_shell_integration_edges(
+                    session_id,
+                    shell_started,
+                    shell_finished,
+                    shell_running,
+                );
+            }
+        }
+}
 }
