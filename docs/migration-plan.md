@@ -1532,3 +1532,9 @@ service boundary first:
 - Models tab groups by credential/provider with collapse headers, credential
   enable switches, full model list (no take(12)), Default/Delete for manual
   models, and per-group manual model name + Add.
+
+## 2026-07-12 Temporary SSH dialog chrome densify
+
+- Temporary SSH Link overlay matches Tauri dialog density: section header,
+  live parse preview (user@host:port · name), inline parse errors, accent
+  border when valid, Clear/Connect footer with keyboard hints.
