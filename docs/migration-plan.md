@@ -1561,3 +1561,8 @@ service boundary first:
 - Serial form exposes baud presets, data bits (5–8), parity
   (none/odd/even/mark/space), and stop bits (1/1.5/2) cycle controls.
 - Connection details tooltip shows full serial line settings.
+
+## 2026-07-12 Telnet connection editor densify
+
+- Telnet form adds Backspace mode cycle and Open After Save toggle; details
+  tooltip shows BS mode, raw TCP, and local echo flags.
