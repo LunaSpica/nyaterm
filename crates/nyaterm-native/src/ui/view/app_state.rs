@@ -458,6 +458,10 @@ pub struct NyaTermApp {
     pub(in crate::ui::view) activity_bar_layout: ActivityBarLayoutState,
     pub(in crate::ui::view) activity_bar_context_menu: Option<ActivityBarContextMenuState>,
     pub(in crate::ui::view) title_menu_open: Option<TitleMenu>,
+    /// Open-tabs overflow menu (Tauri TabBar expand-more when many tabs).
+    pub(in crate::ui::view) open_tabs_menu_open: bool,
+    /// New-session menu next to the tab strip + control.
+    pub(in crate::ui::view) new_session_menu_open: bool,
     pub(in crate::ui::view) security_auth_tab: SecurityAuthTab,
     pub(in crate::ui::view) security_key_editor: Option<SecurityKeyEditorState>,
     pub(in crate::ui::view) security_key_editor_focus: FocusHandle,
@@ -1152,6 +1156,8 @@ impl NyaTermApp {
             activity_bar_layout,
             activity_bar_context_menu: None,
             title_menu_open: None,
+            open_tabs_menu_open: false,
+            new_session_menu_open: false,
             security_auth_tab: SecurityAuthTab::Keys,
             security_key_editor: None,
             security_key_editor_focus: cx.focus_handle(),

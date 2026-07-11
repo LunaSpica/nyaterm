@@ -339,6 +339,38 @@ impl NyaTermApp {
         self.open_tab_actions_at(session_id, None, window, cx);
     }
 
+    pub(in crate::ui::view) fn toggle_open_tabs_menu(&mut self, cx: &mut Context<Self>) {
+        self.open_tabs_menu_open = !self.open_tabs_menu_open;
+        if self.open_tabs_menu_open {
+            self.new_session_menu_open = false;
+            self.title_menu_open = None;
+        }
+        cx.notify();
+    }
+
+    pub(in crate::ui::view) fn close_open_tabs_menu(&mut self, cx: &mut Context<Self>) {
+        if self.open_tabs_menu_open {
+            self.open_tabs_menu_open = false;
+            cx.notify();
+        }
+    }
+
+    pub(in crate::ui::view) fn toggle_new_session_menu(&mut self, cx: &mut Context<Self>) {
+        self.new_session_menu_open = !self.new_session_menu_open;
+        if self.new_session_menu_open {
+            self.open_tabs_menu_open = false;
+            self.title_menu_open = None;
+        }
+        cx.notify();
+    }
+
+    pub(in crate::ui::view) fn close_new_session_menu(&mut self, cx: &mut Context<Self>) {
+        if self.new_session_menu_open {
+            self.new_session_menu_open = false;
+            cx.notify();
+        }
+    }
+
     pub(in crate::ui::view) fn open_tab_actions_at(
         &mut self,
         session_id: String,

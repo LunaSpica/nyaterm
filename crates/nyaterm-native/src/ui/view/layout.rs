@@ -1659,6 +1659,10 @@ impl NyaTermApp {
         } else {
             Some(menu)
         };
+        if self.title_menu_open.is_some() {
+            self.open_tabs_menu_open = false;
+            self.new_session_menu_open = false;
+        }
         cx.notify();
     }
 

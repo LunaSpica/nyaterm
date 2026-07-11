@@ -1332,3 +1332,10 @@ service boundary first:
 - Session tabs (global + multi-leaf) show connection-kind icons (SSH/Local/Telnet/Serial)
   tinted by status accent, matching Tauri tab icon density.
 - Inactive tabs with unread output show a green unread pip like Tauri TabBar.
+
+## 2026-07-11 Tab strip open-tabs + new-session menus
+
+- Tauri-style overflow **Open Tabs** menu (shown when ≥4 tabs) lists ordinal,
+  status, and kind for quick activation.
+- Trailing **+** opens a new-session menu: local session, temporary SSH, connections
+  panel, and quick-pick of recent saved connections.

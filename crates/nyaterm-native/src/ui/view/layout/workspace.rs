@@ -331,28 +331,105 @@ impl NyaTermApp {
             );
         }
 
+        // Tauri TabBar trailing chrome: optional open-tabs overflow menu + new session menu.
+        let open_tabs_menu = self.open_tabs_menu_open;
+        let new_session_menu = self.new_session_menu_open;
+        let show_open_tabs_menu = session_count >= 4 || open_tabs_menu;
+
         let mut session_actions = div()
             .h_full()
             .flex()
             .items_center()
-            .gap_1()
-            .px_2()
+            .gap_0()
             .border_l_1()
-            .border_color(rgb(palette.border))
-            .child(small_button(palette, 
-                "workspace-new-local-session",
-                "+",
-                cx.listener(|this, _, window, cx| {
-                    this.start_local_session(window, cx);
-                }),
-            ))
-            .child(small_button(palette, 
-                "workspace-quick-switch",
-                "Switch",
-                cx.listener(|this, _, window, cx| {
-                    this.open_quick_switch(window, cx);
-                }),
-            ));
+            .border_color(rgb(palette.border));
+
+        if show_open_tabs_menu {
+            session_actions = session_actions.child(
+                div()
+                    .relative()
+                    .h_full()
+                    .child(
+                        div()
+                            .id("workspace-open-tabs-menu")
+                            .h_full()
+                            .w(px(32.))
+                            .flex()
+                            .items_center()
+                            .justify_center()
+                            .border_r_1()
+                            .border_color(rgb(palette.border))
+                            .bg(if open_tabs_menu {
+                                rgb(palette.hover)
+                            } else {
+                                rgb(palette.surface)
+                            })
+                            .text_color(rgb(palette.text_muted))
+                            .cursor_pointer()
+                            .hover(|this| this.bg(rgb(palette.hover)).text_color(rgb(palette.text)))
+                            .child("▾")
+                            .on_click(cx.listener(|this, _, _, cx| {
+                                this.toggle_open_tabs_menu(cx);
+                            })),
+                    )
+                    .when(open_tabs_menu, |this| {
+                        this.child(self.render_open_tabs_menu(cx))
+                    }),
+            );
+        }
+
+        session_actions = session_actions
+            .child(
+                div()
+                    .relative()
+                    .h_full()
+                    .child(
+                        div()
+                            .id("workspace-new-session-menu")
+                            .h_full()
+                            .w(px(36.))
+                            .flex()
+                            .items_center()
+                            .justify_center()
+                            .border_r_1()
+                            .border_color(rgb(palette.border))
+                            .bg(if new_session_menu {
+                                rgb(palette.hover)
+                            } else {
+                                rgb(palette.surface)
+                            })
+                            .text_size(px(16.))
+                            .font_weight(FontWeight(700.))
+                            .text_color(rgb(palette.text_muted))
+                            .cursor_pointer()
+                            .hover(|this| this.bg(rgb(palette.hover)).text_color(rgb(palette.text)))
+                            .child("+")
+                            .on_click(cx.listener(|this, _, _, cx| {
+                                this.toggle_new_session_menu(cx);
+                            })),
+                    )
+                    .when(new_session_menu, |this| {
+                        this.child(self.render_new_session_menu(cx))
+                    }),
+            )
+            .child(
+                div()
+                    .h_full()
+                    .flex()
+                    .items_center()
+                    .gap_1()
+                    .px_2()
+                    .child(small_button(
+                        palette,
+                        "workspace-quick-switch",
+                        "Switch",
+                        cx.listener(|this, _, window, cx| {
+                            this.close_open_tabs_menu(cx);
+                            this.close_new_session_menu(cx);
+                            this.open_quick_switch(window, cx);
+                        }),
+                    )),
+            );
         if self.active_session_id.is_some() {
             session_actions = session_actions
                 .child(small_button(palette, 
@@ -459,6 +536,316 @@ impl NyaTermApp {
             .bg(rgb(palette.surface))
             .child(tabs)
             .child(session_actions)
+    }
+
+    fn render_open_tabs_menu(&mut self, cx: &mut Context<Self>) -> impl IntoElement {
+        let palette = self.theme_palette();
+        let sessions = self.ordered_sessions();
+        let active_id = self.active_session_id.clone();
+        let mut menu = div()
+            .id("workspace-open-tabs-dropdown")
+            .absolute()
+            .top(px(36.))
+            .right_0()
+            .w(px(280.))
+            .max_h(px(360.))
+            .overflow_y_scroll()
+            .rounded_md()
+            .border_1()
+            .border_color(rgb(palette.border))
+            .bg(rgb(palette.surface))
+            .shadow_lg()
+            .py_1()
+            .flex()
+            .flex_col()
+                        .child(
+                div()
+                    .px_3()
+                    .py_1()
+                    .text_size(px(10.))
+                    .font_weight(FontWeight(700.))
+                    .text_color(rgb(palette.text_dimmed))
+                    .child("Open Tabs"),
+            )
+            .child(
+                div()
+                    .mx_2()
+                    .my_1()
+                    .h(px(1.))
+                    .bg(rgb(palette.border)),
+            );
+
+        if sessions.is_empty() {
+            menu = menu.child(
+                div()
+                    .px_3()
+                    .py_2()
+                    .text_size(px(12.))
+                    .text_color(rgb(palette.text_muted))
+                    .child("No open sessions"),
+            );
+        } else {
+            for (index, session) in sessions.into_iter().enumerate() {
+                let session_id = session.id.clone();
+                let is_active = active_id.as_deref() == Some(session_id.as_str());
+                let is_disconnected = self.is_session_disconnected(&session_id);
+                let title = self.session_display_name_by_info(&session);
+                let kind = session_kind_label(session.kind);
+                let accent = if let Some(color) = self.session_tab_colors.get(&session_id).copied() {
+                    rgb(color)
+                } else if is_disconnected {
+                    rgb(palette.danger)
+                } else if is_active {
+                    rgb(palette.success)
+                } else {
+                    rgb(palette.text_dimmed)
+                };
+                menu = menu.child(
+                    div()
+                        .id(SharedString::from(format!("open-tabs-menu-{session_id}")))
+                        .h(px(32.))
+                        .px_3()
+                        .flex()
+                        .items_center()
+                        .gap_2()
+                        .cursor_pointer()
+                        .bg(if is_active {
+                            rgb(palette.hover)
+                        } else {
+                            rgb(palette.surface)
+                        })
+                        .hover(|this| this.bg(rgb(palette.hover)))
+                        .on_click(cx.listener(move |this, _, window, cx| {
+                            this.close_open_tabs_menu(cx);
+                            this.select_session(session_id.clone(), cx);
+                            window.focus(&this.terminal_focus);
+                        }))
+                        .child(
+                            div()
+                                .size(px(8.))
+                                .rounded_full()
+                                .bg(accent),
+                        )
+                        .child(
+                            div()
+                                .min_w(px(14.))
+                                .text_size(px(11.))
+                                .font_weight(FontWeight(700.))
+                                .text_color(rgb(palette.text_dimmed))
+                                .child(format!("{}", index + 1)),
+                        )
+                        .child(
+                            div()
+                                .min_w_0()
+                                .flex_1()
+                                .text_size(px(12.))
+                                .font_weight(if is_active {
+                                    FontWeight(700.)
+                                } else {
+                                    FontWeight(500.)
+                                })
+                                .text_color(if is_disconnected {
+                                    rgb(palette.text_dimmed)
+                                } else {
+                                    rgb(palette.text)
+                                })
+                                .overflow_hidden()
+                                .child(truncate_preview(&title, 28)),
+                        )
+                        .child(
+                            div()
+                                .text_size(px(10.))
+                                .text_color(rgb(palette.text_dimmed))
+                                .child(kind),
+                        ),
+                );
+            }
+        }
+        menu
+    }
+
+    fn render_new_session_menu(&mut self, cx: &mut Context<Self>) -> impl IntoElement {
+        let palette = self.theme_palette();
+        // Prefer a few recent / ungrouped connections for quick access.
+        let recent: Vec<_> = self
+            .connections
+            .iter()
+            .cloned()
+            .take(8)
+            .collect();
+        let mut menu = div()
+            .id("workspace-new-session-dropdown")
+            .absolute()
+            .top(px(36.))
+            .right_0()
+            .w(px(280.))
+            .max_h(px(420.))
+            .overflow_y_scroll()
+            .rounded_md()
+            .border_1()
+            .border_color(rgb(palette.border))
+            .bg(rgb(palette.surface))
+            .shadow_lg()
+            .py_1()
+            .flex()
+            .flex_col()
+                        .child(
+                div()
+                    .id("new-session-local")
+                    .h(px(32.))
+                    .px_3()
+                    .flex()
+                    .items_center()
+                    .gap_2()
+                    .cursor_pointer()
+                    .hover(|this| this.bg(rgb(palette.hover)))
+                    .on_click(cx.listener(|this, _, window, cx| {
+                        this.close_new_session_menu(cx);
+                        this.start_local_session(window, cx);
+                    }))
+                    .child(
+                        svg()
+                            .size(px(12.))
+                            .path("icons/conn/terminal.svg")
+                            .text_color(rgb(palette.success)),
+                    )
+                    .child(
+                        div()
+                            .text_size(px(12.))
+                            .text_color(rgb(palette.text))
+                            .child("New Local Session"),
+                    ),
+            )
+            .child(
+                div()
+                    .id("new-session-temp-ssh")
+                    .h(px(32.))
+                    .px_3()
+                    .flex()
+                    .items_center()
+                    .gap_2()
+                    .cursor_pointer()
+                    .hover(|this| this.bg(rgb(palette.hover)))
+                    .on_click(cx.listener(|this, _, window, cx| {
+                        this.close_new_session_menu(cx);
+                        this.open_temporary_ssh_link_dialog(window, cx);
+                    }))
+                    .child(
+                        svg()
+                            .size(px(12.))
+                            .path("icons/conn/server.svg")
+                            .text_color(rgb(palette.accent)),
+                    )
+                    .child(
+                        div()
+                            .text_size(px(12.))
+                            .text_color(rgb(palette.text))
+                            .child("Temporary SSH Link"),
+                    ),
+            )
+            .child(
+                div()
+                    .id("new-session-connections")
+                    .h(px(32.))
+                    .px_3()
+                    .flex()
+                    .items_center()
+                    .gap_2()
+                    .cursor_pointer()
+                    .hover(|this| this.bg(rgb(palette.hover)))
+                    .on_click(cx.listener(|this, _, _, cx| {
+                        this.close_new_session_menu(cx);
+                        this.ensure_panel_open(NavItem::Connections);
+                        cx.notify();
+                    }))
+                    .child(
+                        div()
+                            .text_size(px(12.))
+                            .text_color(rgb(palette.text))
+                            .child("All Connections…"),
+                    ),
+            );
+
+        if !recent.is_empty() {
+            menu = menu
+                .child(
+                    div()
+                        .mx_2()
+                        .my_1()
+                        .h(px(1.))
+                        .bg(rgb(palette.border)),
+                )
+                .child(
+                    div()
+                        .px_3()
+                        .py_1()
+                        .text_size(px(10.))
+                        .font_weight(FontWeight(700.))
+                        .text_color(rgb(palette.text_dimmed))
+                        .child("Saved Connections"),
+                );
+            for connection in recent {
+                let connection_id = connection.id.clone();
+                let name = connection.name.clone();
+                let kind = match &connection.config {
+                    ConnectionType::Ssh { .. } => "SSH",
+                    ConnectionType::Telnet { .. } => "Telnet",
+                    ConnectionType::Serial { .. } => "Serial",
+                    ConnectionType::LocalTerminal { .. } => "Local",
+                    _ => "Conn",
+                };
+                let icon = match &connection.config {
+                    ConnectionType::Ssh { .. } => "icons/conn/server.svg",
+                    ConnectionType::Telnet { .. } => "icons/conn/telnet.svg",
+                    ConnectionType::Serial { .. } => "icons/conn/serial.svg",
+                    _ => "icons/conn/terminal.svg",
+                };
+                menu = menu.child(
+                    div()
+                        .id(SharedString::from(format!("new-session-conn-{connection_id}")))
+                        .h(px(32.))
+                        .px_3()
+                        .flex()
+                        .items_center()
+                        .gap_2()
+                        .cursor_pointer()
+                        .hover(|this| this.bg(rgb(palette.hover)))
+                        .on_click(cx.listener(move |this, _, window, cx| {
+                            this.close_new_session_menu(cx);
+                            if let Some(connection) = this
+                                .connections
+                                .iter()
+                                .find(|item| item.id == connection_id)
+                                .cloned()
+                            {
+                                this.start_saved_connection(connection, window, cx);
+                            }
+                        }))
+                        .child(
+                            svg()
+                                .size(px(12.))
+                                .path(icon)
+                                .text_color(rgb(palette.text_muted)),
+                        )
+                        .child(
+                            div()
+                                .min_w_0()
+                                .flex_1()
+                                .text_size(px(12.))
+                                .text_color(rgb(palette.text))
+                                .overflow_hidden()
+                                .child(truncate_preview(&name, 26)),
+                        )
+                        .child(
+                            div()
+                                .text_size(px(10.))
+                                .text_color(rgb(palette.text_dimmed))
+                                .child(kind),
+                        ),
+                );
+            }
+        }
+        menu
     }
 
     pub(in crate::ui::view) fn empty_workspace_state(
