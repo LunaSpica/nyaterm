@@ -97,7 +97,7 @@ impl NyaTermApp {
                                 .text_color(if selected {
                                     rgb(0xbfdbfe)
                                 } else {
-                                    rgb(0x98a3b8)
+                                    rgb(palette.text_muted)
                                 })
                                 .child(option.count.to_string()),
                         )
@@ -155,7 +155,7 @@ impl NyaTermApp {
                 div()
                     .rounded_sm()
                     .border_1()
-                    .border_color(rgb(0x30363d))
+                    .border_color(rgb(palette.border))
                     .bg(rgb(0x0d1320))
                     .p_2()
                     .flex()
@@ -163,7 +163,7 @@ impl NyaTermApp {
                     .items_start()
                     .gap_2()
                     .text_xs()
-                    .text_color(rgb(0x98a3b8))
+                    .text_color(rgb(palette.text_muted))
                     .line_height(px(18.))
                     .child(if total_commands == 0 {
                         "No quick commands saved yet."
@@ -205,7 +205,7 @@ impl NyaTermApp {
                         .h(px(34.))
                         .rounded_sm()
                         .border_1()
-                        .border_color(rgb(0x30363d))
+                        .border_color(rgb(palette.border))
                         .bg(rgb(0x0d1320))
                         .px_2()
                         .flex()
@@ -242,7 +242,7 @@ impl NyaTermApp {
                                                 .min_w_0()
                                                 .text_xs()
                                                 .font_weight(FontWeight(800.))
-                                                .text_color(rgb(0xe5edf7))
+                                                .text_color(rgb(palette.text))
                                                 .overflow_hidden()
                                                 .child(truncate_preview(&command.label, 28)),
                                         )
@@ -389,7 +389,7 @@ impl NyaTermApp {
                                             .max_w(px(140.))
                                             .text_size(px(11.))
                                             .font_weight(FontWeight(600.))
-                                            .text_color(rgb(0xe5edf7))
+                                            .text_color(rgb(palette.text))
                                             .overflow_hidden()
                                             .child(truncate_preview(&command.label, 28)),
                                     )
@@ -399,7 +399,7 @@ impl NyaTermApp {
                                             .flex_1()
                                             .font_family("JetBrains Mono")
                                             .text_size(px(11.))
-                                            .text_color(rgb(0x8b949e))
+                                            .text_color(rgb(palette.text_muted))
                                             .overflow_hidden()
                                             .child(truncate_preview(&command.command, 96)),
                                     ),
@@ -478,7 +478,7 @@ impl NyaTermApp {
                             .w_full()
                             .rounded_md()
                             .border_1()
-                            .border_color(rgb(0x30363d))
+                            .border_color(rgb(palette.border))
                             .bg(rgb(0x121820))
                             .px_2()
                             .py_1()
@@ -524,7 +524,7 @@ impl NyaTermApp {
                                                             .min_w_0()
                                                             .text_size(px(12.))
                                                             .font_weight(FontWeight(600.))
-                                                            .text_color(rgb(0xe5edf7))
+                                                            .text_color(rgb(palette.text))
                                                             .overflow_hidden()
                                                             .child(truncate_preview(
                                                                 &command.label,
@@ -548,7 +548,7 @@ impl NyaTermApp {
                                                     .min_w_0()
                                                     .font_family("JetBrains Mono")
                                                     .text_size(px(11.))
-                                                    .text_color(rgb(0x8b949e))
+                                                    .text_color(rgb(palette.text_muted))
                                                     .overflow_hidden()
                                                     .child(truncate_preview(
                                                         &command.command,
@@ -579,8 +579,8 @@ impl NyaTermApp {
                     .flex_none()
                     .px_2()
                     .border_b_1()
-                    .border_color(rgb(0x30363d))
-                    .bg(rgb(0x12171f))
+                    .border_color(rgb(palette.border))
+                    .bg(rgb(palette.section_header))
                     .flex()
                     .items_center()
                     .gap_2()
@@ -588,13 +588,13 @@ impl NyaTermApp {
                         div()
                             .text_size(px(11.))
                             .font_weight(FontWeight(700.))
-                            .text_color(rgb(0x8b949e))
+                            .text_color(rgb(palette.text_muted))
                             .child("QUICK COMMANDS"),
                     )
                     .child(
                         div()
                             .text_size(px(11.))
-                            .text_color(rgb(0x6e7681))
+                            .text_color(rgb(palette.text_dimmed))
                             .child(if visible_commands == total_commands {
                                 total_commands.to_string()
                             } else {
@@ -609,8 +609,8 @@ impl NyaTermApp {
                             .w(px(144.))
                             .rounded_md()
                             .border_1()
-                            .border_color(rgb(0x30363d))
-                            .bg(rgb(0x0d1117))
+                            .border_color(rgb(palette.border))
+                            .bg(rgb(palette.bg))
                             .px_2()
                             .flex()
                             .items_center()
@@ -630,7 +630,7 @@ impl NyaTermApp {
                                     .size(px(14.))
                                     .flex_none()
                                     .path("icons/fe/search.svg")
-                                    .text_color(rgb(0x8b949e)),
+                                    .text_color(rgb(palette.text_muted)),
                             )
                             .child(
                                 div()
@@ -638,9 +638,9 @@ impl NyaTermApp {
                                     .flex_1()
                                     .text_size(px(11.))
                                     .text_color(if self.quick_command_search_draft.is_empty() {
-                                        rgb(0x6e7681)
+                                        rgb(palette.text_dimmed)
                                     } else {
-                                        rgb(0xc9d1d9)
+                                        rgb(palette.text)
                                     })
                                     .child(if self.quick_command_search_draft.is_empty() {
                                         "Search".to_string()
@@ -732,11 +732,11 @@ impl NyaTermApp {
                                     div()
                                         .rounded_sm()
                                         .border_1()
-                                        .border_color(rgb(0x30363d))
+                                        .border_color(rgb(palette.border))
                                         .bg(rgb(0x0d1320))
                                         .p_2()
                                         .text_xs()
-                                        .text_color(rgb(0x98a3b8))
+                                        .text_color(rgb(palette.text_muted))
                                         .child(format!(
                                             "Showing all {visible_commands} matching quick commands."
                                         )),

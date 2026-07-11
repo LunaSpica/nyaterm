@@ -825,3 +825,9 @@ service boundary first:
 - Status bar controls (`status_bar_label` / `status_bar_button`), modal shell/footer, `inspector_card`, and `metric` themed.
 - Resource monitor `dense_capability_line` and transfer `queue_metric` take palette tokens.
 - Call sites across shell, overlays, transfers, remote panels, and settings inject `theme_palette()` (methods) or dark fallback (free helpers).
+
+## 2026-07-11 Inspector + sidebar interior palette densify
+- AI inspector interiors (transcript empty state, agent step cards, command cards, execution mode menu/history popover, message bubbles) replace github-dark hardcodes with ThemePalette.
+- Right-side command center/search panels and disabled inspector panel themed.
+- Left sidebar panels (connections/network/transfers/security auth/session rows/nav buttons) densify palette borders/text/surfaces.
+- Quick Commands panel interior surfaces follow live theme.

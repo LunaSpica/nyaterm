@@ -287,7 +287,7 @@ impl NyaTermApp {
                         this.child(
                             div()
                                 .text_size(px(10.))
-                                .text_color(rgb(0xd29922))
+                                .text_color(rgb(palette.warning))
                                 .child("File action ready — press send to run"),
                         )
                     }),
@@ -310,7 +310,7 @@ impl NyaTermApp {
             session_rows = session_rows.child(
                 div()
                     .text_xs()
-                    .text_color(rgb(0x98a3b8))
+                    .text_color(rgb(palette.text_muted))
                     .child("No active runtime sessions."),
             );
         } else {
@@ -324,7 +324,7 @@ impl NyaTermApp {
                         .justify_between()
                         .gap_2()
                         .border_t_1()
-                        .border_color(rgb(0x2a3140))
+                        .border_color(rgb(palette.border))
                         .pt_2()
                         .child(
                             div()
@@ -336,10 +336,10 @@ impl NyaTermApp {
                                     div()
                                         .text_xs()
                                         .font_weight(FontWeight(700.))
-                                        .text_color(rgb(0xe5edf7))
+                                        .text_color(rgb(palette.text))
                                         .child(truncate_preview(&display_name, 42)),
                                 )
-                                .child(div().text_xs().text_color(rgb(0x98a3b8)).child(format!(
+                                .child(div().text_xs().text_color(rgb(palette.text_muted)).child(format!(
                                     "{} · {}",
                                     session_kind_label(session.kind),
                                     compact_id(&session.id)
@@ -365,8 +365,8 @@ impl NyaTermApp {
         div()
             .rounded_md()
             .border_1()
-            .border_color(rgb(0x2a3140))
-            .bg(rgb(0x151923))
+            .border_color(rgb(palette.border))
+            .bg(rgb(palette.surface))
             .p_4()
             .child(
                 div()
@@ -473,7 +473,7 @@ impl NyaTermApp {
                 div()
                     .mt_3()
                     .text_xs()
-                    .text_color(rgb(0x98a3b8))
+                    .text_color(rgb(palette.text_muted))
                     .line_height(px(18.))
                     .child(format!(
                         "{sync_label} sync · {} · {}",
@@ -492,7 +492,7 @@ impl NyaTermApp {
             rows = rows.child(
                 div()
                     .text_xs()
-                    .text_color(rgb(0x98a3b8))
+                    .text_color(rgb(palette.text_muted))
                     .line_height(px(18.))
                     .child("No matches."),
             );
@@ -506,7 +506,7 @@ impl NyaTermApp {
                 rows = rows.child(
                     div()
                         .border_t_1()
-                        .border_color(rgb(0x2a3140))
+                        .border_color(rgb(palette.border))
                         .pt_2()
                         .flex()
                         .flex_col()
@@ -522,16 +522,16 @@ impl NyaTermApp {
                                         .min_w_0()
                                         .text_xs()
                                         .font_weight(FontWeight(700.))
-                                        .text_color(rgb(0xe5edf7))
+                                        .text_color(rgb(palette.text))
                                         .child(truncate_preview(&result.display, 44)),
                                 )
-                                .child(div().text_xs().text_color(rgb(0x64748b)).child(meta)),
+                                .child(div().text_xs().text_color(rgb(palette.text_dimmed)).child(meta)),
                         )
                         .child(
                             div()
                                 .font_family("JetBrains Mono")
                                 .text_xs()
-                                .text_color(rgb(0xaeb7c8))
+                                .text_color(rgb(palette.text_muted))
                                 .line_height(px(18.))
                                 .child(truncate_preview(&result.command, 120)),
                         )
@@ -563,8 +563,8 @@ impl NyaTermApp {
         div()
             .rounded_md()
             .border_1()
-            .border_color(rgb(0x2a3140))
-            .bg(rgb(0x151923))
+            .border_color(rgb(palette.border))
+            .bg(rgb(palette.surface))
             .p_4()
             .child(
                 div()
@@ -611,6 +611,7 @@ impl NyaTermApp {
     }
 
     fn command_history_panel(&mut self, cx: &mut Context<Self>) -> impl IntoElement {
+        let palette = self.theme_palette();
         // Tauri CommandHistory: header meta is shared PanelHeader; body is dense mono list.
         let history = self.active_session_history_commands();
         let mut rows = div().flex().flex_col().gap_0().p_2();
@@ -620,7 +621,7 @@ impl NyaTermApp {
                     .py_4()
                     .text_center()
                     .text_size(px(11.))
-                    .text_color(rgb(0x6e7681))
+                    .text_color(rgb(palette.text_dimmed))
                     .child("No commands yet"),
             );
         } else {
@@ -637,7 +638,7 @@ impl NyaTermApp {
                         .items_center()
                         .gap_1()
                         .cursor_pointer()
-                        .hover(|this| this.bg(rgb(0x1c2128)))
+                        .hover(|this| this.bg(rgb(palette.hover)))
                         .on_click(cx.listener(move |this, _, _, cx| {
                             // Tauri single-click is not used; double-click runs.
                             // GPUI: primary click inserts into terminal draft, Run button sends.
@@ -646,7 +647,7 @@ impl NyaTermApp {
                         .child(
                             div()
                                 .text_size(px(10.))
-                                .text_color(rgb(0x6e7681))
+                                .text_color(rgb(palette.text_dimmed))
                                 .child("›"),
                         )
                         .child(
@@ -655,7 +656,7 @@ impl NyaTermApp {
                                 .flex_1()
                                 .font_family("JetBrains Mono")
                                 .text_size(px(12.))
-                                .text_color(rgb(0xc9d1d9))
+                                .text_color(rgb(palette.text))
                                 .overflow_hidden()
                                 .child(truncate_preview(&command, 120)),
                         )
@@ -667,9 +668,9 @@ impl NyaTermApp {
                                 .h(px(20.))
                                 .rounded_sm()
                                 .text_size(px(10.))
-                                .text_color(rgb(0x8b949e))
+                                .text_color(rgb(palette.text_muted))
                                 .hover(|this| {
-                                    this.bg(rgb(0x21262d)).text_color(rgb(0x58a6ff))
+                                    this.bg(rgb(palette.surface_elevated)).text_color(rgb(palette.accent))
                                 })
                                 .cursor_pointer()
                                 .on_click(cx.listener(move |this, _, _, cx| {
@@ -694,7 +695,7 @@ impl NyaTermApp {
             .flex()
             .flex_col()
             .overflow_hidden()
-            .bg(rgb(0x161b22))
+            .bg(rgb(palette.surface))
             .child(
                 div()
                     .id(SharedString::from("command-history-list"))
@@ -801,6 +802,7 @@ impl NyaTermApp {
         enabled: bool,
         cx: &mut Context<Self>,
     ) -> gpui::AnyElement {
+        let palette = self.theme_palette();
         let has_model = !self.ai_model_draft.trim().is_empty()
             || self
                 .ai_settings
@@ -820,12 +822,12 @@ impl NyaTermApp {
                     svg()
                         .size(px(36.))
                         .path("icons/ai.svg")
-                        .text_color(rgb(0x8b949e)),
+                        .text_color(rgb(palette.text_muted)),
                 )
                 .child(
                     div()
                         .text_size(px(12.))
-                        .text_color(rgb(0x8b949e))
+                        .text_color(rgb(palette.text_muted))
                         .child("Go to Settings to enable AI"),
                 )
                 .child(
@@ -834,14 +836,14 @@ impl NyaTermApp {
                         .h(px(28.))
                         .px_3()
                         .rounded_md()
-                        .bg(rgb(0x21262d))
+                        .bg(rgb(palette.surface_elevated))
                         .flex()
                         .items_center()
                         .text_size(px(11.))
                         .font_weight(FontWeight(600.))
-                        .text_color(rgb(0xc9d1d9))
+                        .text_color(rgb(palette.text))
                         .cursor_pointer()
-                        .hover(|this| this.bg(rgb(0x30363d)))
+                        .hover(|this| this.bg(rgb(palette.border)))
                         .on_click(cx.listener(|this, _, _, cx| {
                             this.settings_active_tab = SettingsTab::AiGeneral;
                             this.open_page(NavItem::Settings, cx);
@@ -870,14 +872,14 @@ impl NyaTermApp {
                         .items_center()
                         .justify_center()
                         .text_size(px(22.))
-                        .text_color(rgb(0xd29922))
+                        .text_color(rgb(palette.warning))
                         .child("!"),
                 )
                 .child(
                     div()
                         .text_size(px(13.))
                         .font_weight(FontWeight(700.))
-                        .text_color(rgb(0xe5edf7))
+                        .text_color(rgb(palette.text))
                         .child("Set up AI Assistant"),
                 )
                 .child(self.ai_setup_step("1", "Add an API key credential"))
@@ -918,18 +920,18 @@ impl NyaTermApp {
                 svg()
                     .size(px(40.))
                     .path("icons/ai.svg")
-                    .text_color(rgb(0x8b949e)),
+                    .text_color(rgb(palette.text_muted)),
             )
             .child(
                 div()
                     .text_size(px(12.))
-                    .text_color(rgb(0x8b949e))
+                    .text_color(rgb(palette.text_muted))
                     .child("Start a conversation"),
             )
             .child(
                 div()
                     .text_size(px(11.))
-                    .text_color(rgb(0x6e7681))
+                    .text_color(rgb(palette.text_dimmed))
                     .child("Ask AI to explain terminal output or generate commands."),
             )
             .child(
@@ -945,13 +947,14 @@ impl NyaTermApp {
     }
 
     fn ai_setup_step(&self, index: &'static str, label: &'static str) -> impl IntoElement {
+        let palette = self.theme_palette();
         div()
             .w_full()
             .max_w(px(280.))
             .rounded_md()
             .border_1()
-            .border_color(rgb(0x30363d))
-            .bg(rgb(0x0d1117))
+            .border_color(rgb(palette.border))
+            .bg(rgb(palette.bg))
             .px_3()
             .py_2()
             .flex()
@@ -961,19 +964,19 @@ impl NyaTermApp {
                 div()
                     .size(px(18.))
                     .rounded_full()
-                    .bg(rgb(0x122033))
+                    .bg(rgb(palette.hover))
                     .flex()
                     .items_center()
                     .justify_center()
                     .text_size(px(10.))
                     .font_weight(FontWeight(800.))
-                    .text_color(rgb(0x58a6ff))
+                    .text_color(rgb(palette.accent))
                     .child(index),
             )
             .child(
                 div()
                     .text_size(px(11.))
-                    .text_color(rgb(0xc9d1d9))
+                    .text_color(rgb(palette.text))
                     .child(label),
             )
     }
@@ -985,14 +988,15 @@ impl NyaTermApp {
         step: AiAgentStepView,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
+        let palette = self.theme_palette();
         // Tauri AgentStepView: collapsible thought, left-accent command shell, optional output.
         let (label, fg, bg) = ai_agent_step_status_style(step.status);
         let border = match step.status {
-            AiAgentStepStatus::Completed => rgb(0x3fb950),
-            AiAgentStepStatus::Failed | AiAgentStepStatus::Cancelled => rgb(0xf85149),
-            AiAgentStepStatus::Running | AiAgentStepStatus::Tool => rgb(0x58a6ff),
-            AiAgentStepStatus::NeedsApproval => rgb(0xd29922),
-            AiAgentStepStatus::Planning => rgb(0x8b949e),
+            AiAgentStepStatus::Completed => rgb(palette.success),
+            AiAgentStepStatus::Failed | AiAgentStepStatus::Cancelled => rgb(palette.danger),
+            AiAgentStepStatus::Running | AiAgentStepStatus::Tool => rgb(palette.accent),
+            AiAgentStepStatus::NeedsApproval => rgb(palette.warning),
+            AiAgentStepStatus::Planning => rgb(palette.text_muted),
         };
         let step_index = step.step_index;
         let thought_open = self.ai_agent_thought_expanded.contains(&step_index);
@@ -1055,14 +1059,14 @@ impl NyaTermApp {
                     .child(
                         div()
                             .text_size(px(11.))
-                            .text_color(rgb(0x8b949e))
+                            .text_color(rgb(palette.text_muted))
                             .child(if thought_open { "▾" } else { "▸" }),
                     )
                     .child(
                         div()
                             .text_size(px(11.))
                             .font_weight(FontWeight(700.))
-                            .text_color(rgb(0xe5edf7))
+                            .text_color(rgb(palette.text))
                             .child(format!("#{}", step.step_index.saturating_add(1))),
                     )
                     .child(
@@ -1070,7 +1074,7 @@ impl NyaTermApp {
                             .min_w_0()
                             .flex_1()
                             .text_size(px(11.))
-                            .text_color(rgb(0x8b949e))
+                            .text_color(rgb(palette.text_muted))
                             .overflow_hidden()
                             .child(if thought_label.is_empty() {
                                 truncate_preview(&step.title, 36)
@@ -1091,7 +1095,7 @@ impl NyaTermApp {
                     div()
                         .ml_4()
                         .text_size(px(11.))
-                        .text_color(rgb(0x8b949e))
+                        .text_color(rgb(palette.text_muted))
                         .line_height(px(16.))
                         .child(markdown_content_view(&truncate_preview(
                             &thought_text,
@@ -1106,17 +1110,17 @@ impl NyaTermApp {
                 .ml_1()
                 .rounded_md()
                 .border_1()
-                .border_color(rgb(0x30363d))
+                .border_color(rgb(palette.border))
                 .border_l_2()
                 .border_color(border)
-                .bg(rgb(0x0d1117))
+                .bg(rgb(palette.bg))
                 .overflow_hidden()
                 .child(
                     div()
                         .px_2()
                         .py_1()
                         .border_b_1()
-                        .border_color(rgb(0x21262d))
+                        .border_color(rgb(palette.surface_elevated))
                         .flex()
                         .items_center()
                         .gap_2()
@@ -1124,14 +1128,14 @@ impl NyaTermApp {
                             div()
                                 .text_size(px(10.))
                                 .font_weight(FontWeight(700.))
-                                .text_color(rgb(0x8b949e))
+                                .text_color(rgb(palette.text_muted))
                                 .child("SHELL"),
                         )
                         .child(
                             div()
                                 .ml_auto()
                                 .text_size(px(10.))
-                                .text_color(rgb(0x6e7681))
+                                .text_color(rgb(palette.text_dimmed))
                                 .child(truncate_preview(&step.title, 24)),
                         ),
                 )
@@ -1141,7 +1145,7 @@ impl NyaTermApp {
                         .py_1()
                         .font_family("JetBrains Mono")
                         .text_size(px(11.))
-                        .text_color(rgb(0xc9d1d9))
+                        .text_color(rgb(palette.text))
                         .line_height(px(16.))
                         .child(truncate_preview(&command_text, 600)),
                 );
@@ -1156,25 +1160,25 @@ impl NyaTermApp {
                             .px_2()
                             .py_1()
                             .border_t_1()
-                            .border_color(rgb(0x21262d))
+                            .border_color(rgb(palette.surface_elevated))
                             .flex()
                             .items_center()
                             .gap_1()
                             .cursor_pointer()
-                            .hover(|this| this.bg(rgb(0x161b22)))
+                            .hover(|this| this.bg(rgb(palette.surface)))
                             .on_click(cx.listener(move |this, _, _, cx| {
                                 this.toggle_ai_agent_output_expanded(step_index, cx);
                             }))
                             .child(
                                 div()
                                     .text_size(px(10.))
-                                    .text_color(rgb(0x8b949e))
+                                    .text_color(rgb(palette.text_muted))
                                     .child(if output_open { "▾" } else { "▸" }),
                             )
                             .child(
                                 div()
                                     .text_size(px(10.))
-                                    .text_color(rgb(0x8b949e))
+                                    .text_color(rgb(palette.text_muted))
                                     .child(if output_open {
                                         "Hide output"
                                     } else {
@@ -1191,7 +1195,7 @@ impl NyaTermApp {
                             .overflow_hidden()
                             .font_family("JetBrains Mono")
                             .text_size(px(10.))
-                            .text_color(rgb(0x8b949e))
+                            .text_color(rgb(palette.text_muted))
                             .line_height(px(14.))
                             .child(truncate_preview(&obs, 1200)),
                     );
@@ -1202,9 +1206,9 @@ impl NyaTermApp {
                         .px_2()
                         .py_1()
                         .border_t_1()
-                        .border_color(rgb(0x21262d))
+                        .border_color(rgb(palette.surface_elevated))
                         .text_size(px(10.))
-                        .text_color(rgb(0x58a6ff))
+                        .text_color(rgb(palette.accent))
                         .child("Executing…"),
                 );
             }
@@ -1216,13 +1220,13 @@ impl NyaTermApp {
                     .ml_4()
                     .rounded_md()
                     .border_1()
-                    .border_color(rgb(0x30363d))
-                    .bg(rgb(0x0d1117))
+                    .border_color(rgb(palette.border))
+                    .bg(rgb(palette.bg))
                     .px_2()
                     .py_1()
                     .font_family("JetBrains Mono")
                     .text_size(px(10.))
-                    .text_color(rgb(0x8b949e))
+                    .text_color(rgb(palette.text_muted))
                     .child(truncate_preview(&obs, 400)),
             );
         }
@@ -1341,12 +1345,13 @@ impl NyaTermApp {
         on_run: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
         cx: &mut Context<Self>,
     ) -> gpui::AnyElement {
+        let palette = cx.entity().read(cx).theme_palette();
         div()
             .id(SharedString::from(format!("ai-command-card-{key}")))
             .rounded_md()
             .border_1()
-            .border_color(rgb(0x30363d))
-            .bg(rgb(0x0d1117))
+            .border_color(rgb(palette.border))
+            .bg(rgb(palette.bg))
             .p_2()
             .flex()
             .flex_col()
@@ -1363,7 +1368,7 @@ impl NyaTermApp {
                             .flex_1()
                             .text_size(px(12.))
                             .font_weight(FontWeight(700.))
-                            .text_color(rgb(0xe5edf7))
+                            .text_color(rgb(palette.text))
                             .overflow_hidden()
                             .child(truncate_preview(&title, 48)),
                     )
@@ -1376,13 +1381,13 @@ impl NyaTermApp {
                     .overflow_hidden()
                     .rounded_md()
                     .border_1()
-                    .border_color(rgb(0x30363d))
-                    .bg(rgb(0x161b22))
+                    .border_color(rgb(palette.border))
+                    .bg(rgb(palette.surface))
                     .px_2()
                     .py_1()
                     .font_family("JetBrains Mono")
                     .text_size(px(11.))
-                    .text_color(rgb(0xc9d1d9))
+                    .text_color(rgb(palette.text))
                     .line_height(px(16.))
                     .child(truncate_preview(&command, 1600)),
             )
@@ -1394,7 +1399,7 @@ impl NyaTermApp {
                     .child(
                         div()
                             .text_size(px(11.))
-                            .text_color(rgb(0x8b949e))
+                            .text_color(rgb(palette.text_muted))
                             .line_height(px(16.))
                             .child(truncate_preview(&explanation, 320)),
                     )
@@ -1402,7 +1407,7 @@ impl NyaTermApp {
                         this.child(
                             div()
                                 .text_size(px(11.))
-                                .text_color(rgb(0x6e7681))
+                                .text_color(rgb(palette.text_dimmed))
                                 .line_height(px(16.))
                                 .child(truncate_preview(&expected, 220)),
                         )
@@ -1411,7 +1416,7 @@ impl NyaTermApp {
                         this.child(
                             div()
                                 .text_size(px(11.))
-                                .text_color(rgb(0x6e7681))
+                                .text_color(rgb(palette.text_dimmed))
                                 .line_height(px(16.))
                                 .child(format!("Rollback: {}", truncate_preview(&rollback, 160))),
                         )
@@ -1423,12 +1428,14 @@ impl NyaTermApp {
                     .flex_wrap()
                     .items_center()
                     .gap_1()
-                    .child(small_button(crate::ui::theme::theme_palette("github-dark"), 
+                    .child(small_button(
+                        palette,
                         format!("ai-command-insert-{key}"),
                         "Insert",
                         on_insert,
                     ))
-                    .child(small_button(crate::ui::theme::theme_palette("github-dark"), 
+                    .child(small_button(
+                        palette,
                         format!("ai-command-copy-{key}"),
                         "Copy",
                         cx.listener(move |this, _, _, cx| {
@@ -1439,12 +1446,14 @@ impl NyaTermApp {
                             cx.notify();
                         }),
                     ))
-                    .child(small_button(crate::ui::theme::theme_palette("github-dark"), 
+                    .child(small_button(
+                        palette,
                         format!("ai-command-save-{key}"),
                         "Save",
                         on_save,
                     ))
-                    .child(small_button(crate::ui::theme::theme_palette("github-dark"), 
+                    .child(small_button(
+                        palette,
                         format!("ai-command-run-{key}"),
                         "Run",
                         on_run,
@@ -1454,6 +1463,7 @@ impl NyaTermApp {
     }
 
     fn ai_execution_mode_menu(&mut self, cx: &mut Context<Self>) -> impl IntoElement {
+        let palette = self.theme_palette();
         let current = self.ai_settings.agent_command_execution_mode.clone();
         div()
             .id(SharedString::from("ai-execution-mode-menu"))
@@ -1463,8 +1473,8 @@ impl NyaTermApp {
             .w(px(260.))
             .rounded_md()
             .border_1()
-            .border_color(rgb(0x30363d))
-            .bg(rgb(0x161b22))
+            .border_color(rgb(palette.border))
+            .bg(rgb(palette.surface))
             .shadow_lg()
             .py_1()
             .flex()
@@ -1476,7 +1486,7 @@ impl NyaTermApp {
                     .py_1()
                     .text_size(px(11.))
                     .font_weight(FontWeight(700.))
-                    .text_color(rgb(0xc9d1d9))
+                    .text_color(rgb(palette.text))
                     .child("Agent command execution"),
             )
             .child(self.ai_execution_mode_item(
@@ -1514,6 +1524,7 @@ impl NyaTermApp {
         selected: bool,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
+        let palette = self.theme_palette();
         div()
             .id(SharedString::from(id))
             .px_3()
@@ -1522,7 +1533,7 @@ impl NyaTermApp {
             .items_start()
             .gap_2()
             .cursor_pointer()
-            .hover(|this| this.bg(rgb(0x21262d)))
+            .hover(|this| this.bg(rgb(palette.surface_elevated)))
             .on_click(cx.listener(move |this, _, _, cx| {
                 this.set_ai_command_mode(mode.clone(), cx);
                 this.save_ai_settings(cx);
@@ -1549,28 +1560,29 @@ impl NyaTermApp {
                             .text_size(px(12.))
                             .font_weight(FontWeight(600.))
                             .text_color(if selected {
-                                rgb(0x58a6ff)
+                                rgb(palette.accent)
                             } else {
-                                rgb(0xc9d1d9)
+                                rgb(palette.text)
                             })
                             .child(title),
                     )
                     .child(
                         div()
                             .text_size(px(10.))
-                            .text_color(rgb(0x8b949e))
+                            .text_color(rgb(palette.text_muted))
                             .child(detail),
                     ),
             )
             .child(
                 div()
                     .text_size(px(12.))
-                    .text_color(rgb(0x58a6ff))
+                    .text_color(rgb(palette.accent))
                     .child(if selected { "✓" } else { "" }),
             )
     }
 
     fn ai_history_popover(&mut self, cx: &mut Context<Self>) -> impl IntoElement {
+        let palette = self.theme_palette();
         // Tauri AIAssistantPanel history card: search + Clear All + date-grouped sessions.
         let query = self.ai_history_query.trim().to_ascii_lowercase();
         let filtered: Vec<_> = self
@@ -1601,7 +1613,7 @@ impl NyaTermApp {
                     .py_4()
                     .text_center()
                     .text_size(px(11.))
-                    .text_color(rgb(0x6e7681))
+                    .text_color(rgb(palette.text_dimmed))
                     .child(if total_count == 0 {
                         "No chat history yet"
                     } else {
@@ -1619,7 +1631,7 @@ impl NyaTermApp {
                         .py_1()
                         .text_size(px(10.))
                         .font_weight(FontWeight(700.))
-                        .text_color(rgb(0x6e7681))
+                        .text_color(rgb(palette.text_dimmed))
                         .child(group.label()),
                 );
                 for session in sessions.into_iter().take(48) {
@@ -1635,8 +1647,8 @@ impl NyaTermApp {
                             .flex()
                             .items_center()
                             .gap_1()
-                            .bg(if active { rgb(0x122033) } else { rgb(0x161b22) })
-                            .hover(|this| this.bg(rgb(0x21262d)))
+                            .bg(if active { rgb(palette.hover) } else { rgb(palette.surface) })
+                            .hover(|this| this.bg(rgb(palette.surface_elevated)))
                             .child(
                                 div()
                                     .id(SharedString::from(format!(
@@ -1646,7 +1658,7 @@ impl NyaTermApp {
                                     .min_w_0()
                                     .flex_1()
                                     .text_size(px(12.))
-                                    .text_color(rgb(0xc9d1d9))
+                                    .text_color(rgb(palette.text))
                                     .overflow_hidden()
                                     .cursor_pointer()
                                     .child(truncate_preview(&session.title, 36))
@@ -1676,8 +1688,8 @@ impl NyaTermApp {
             .max_h(px(352.))
             .rounded_md()
             .border_1()
-            .border_color(rgb(0x30363d))
-            .bg(rgb(0x161b22))
+            .border_color(rgb(palette.border))
+            .bg(rgb(palette.surface))
             .shadow_lg()
             .flex()
             .flex_col()
@@ -1687,7 +1699,7 @@ impl NyaTermApp {
                 div()
                     .p_2()
                     .border_b_1()
-                    .border_color(rgb(0x30363d))
+                    .border_color(rgb(palette.border))
                     .child(
                         div()
                             .id(SharedString::from("ai-history-search"))
@@ -1695,8 +1707,8 @@ impl NyaTermApp {
                             .px_2()
                             .rounded_md()
                             .border_1()
-                            .border_color(rgb(0x30363d))
-                            .bg(rgb(0x0d1117))
+                            .border_color(rgb(palette.border))
+                            .bg(rgb(palette.bg))
                             .flex()
                             .items_center()
                             .gap_2()
@@ -1715,7 +1727,7 @@ impl NyaTermApp {
                                     .size(px(14.))
                                     .flex_none()
                                     .path("icons/ai/search.svg")
-                                    .text_color(rgb(0x6e7681)),
+                                    .text_color(rgb(palette.text_dimmed)),
                             )
                             .child(
                                 div()
@@ -1723,9 +1735,9 @@ impl NyaTermApp {
                                     .flex_1()
                                     .text_size(px(12.))
                                     .text_color(if self.ai_history_query.is_empty() {
-                                        rgb(0x6e7681)
+                                        rgb(palette.text_dimmed)
                                     } else {
-                                        rgb(0xc9d1d9)
+                                        rgb(palette.text)
                                     })
                                     .child(search_display),
                             )
@@ -1739,10 +1751,10 @@ impl NyaTermApp {
                                         .justify_center()
                                         .rounded_sm()
                                         .text_size(px(10.))
-                                        .text_color(rgb(0x8b949e))
+                                        .text_color(rgb(palette.text_muted))
                                         .cursor_pointer()
                                         .hover(|this| {
-                                            this.bg(rgb(0x21262d)).text_color(rgb(0xc9d1d9))
+                                            this.bg(rgb(palette.surface_elevated)).text_color(rgb(palette.text))
                                         })
                                         .on_click(cx.listener(|this, _, window, cx| {
                                             this.ai_history_query.clear();
@@ -1759,7 +1771,7 @@ impl NyaTermApp {
                     .h(px(32.))
                     .px_2()
                     .border_b_1()
-                    .border_color(rgb(0x30363d))
+                    .border_color(rgb(palette.border))
                     .flex()
                     .items_center()
                     .justify_between()
@@ -1767,7 +1779,7 @@ impl NyaTermApp {
                         div()
                             .text_size(px(11.))
                             .font_weight(FontWeight(700.))
-                            .text_color(rgb(0xc9d1d9))
+                            .text_color(rgb(palette.text))
                             .child("History"),
                     )
                     .child(
@@ -1782,10 +1794,10 @@ impl NyaTermApp {
                             .text_color(if total_count == 0 {
                                 rgb(0x484f58)
                             } else {
-                                rgb(0x8b949e)
+                                rgb(palette.text_muted)
                             })
                             .cursor_pointer()
-                            .hover(|this| this.bg(rgb(0x21262d)).text_color(rgb(0xc9d1d9)))
+                            .hover(|this| this.bg(rgb(palette.surface_elevated)).text_color(rgb(palette.text)))
                             .on_click(cx.listener(move |this, _, _, cx| {
                                 if this.ai_sessions.is_empty() {
                                     return;
@@ -1809,6 +1821,7 @@ impl NyaTermApp {
 
 
     fn ai_message_bubble(&self, message: &AiMessage, cx: &mut Context<Self>) -> impl IntoElement {
+        let palette = self.theme_palette();
         let is_user = matches!(message.role, AiMessageRole::User);
         let streaming = self
             .ai_streaming_assistant_id
@@ -1847,12 +1860,12 @@ impl NyaTermApp {
             .border_color(if is_user {
                 rgb(0x1f6feb)
             } else {
-                rgb(0x30363d)
+                rgb(palette.border)
             })
             .bg(if is_user {
-                rgb(0x122033)
+                rgb(palette.hover)
             } else {
-                rgb(0x0d1117)
+                rgb(palette.bg)
             })
             .px_2()
             .py_2()
@@ -1863,7 +1876,7 @@ impl NyaTermApp {
                 div()
                     .text_size(px(10.))
                     .font_weight(FontWeight(700.))
-                    .text_color(rgb(0x8b949e))
+                    .text_color(rgb(palette.text_muted))
                     .child(role_label),
             );
 
@@ -1875,12 +1888,12 @@ impl NyaTermApp {
                     .border_color(if streaming {
                         rgb(0x1f6feb)
                     } else {
-                        rgb(0x30363d)
+                        rgb(palette.border)
                     })
                     .bg(if streaming {
-                        rgb(0x122033)
+                        rgb(palette.hover)
                     } else {
-                        rgb(0x0d1117)
+                        rgb(palette.bg)
                     })
                     .px_2()
                     .py_2()
@@ -1892,9 +1905,9 @@ impl NyaTermApp {
                             .text_size(px(10.))
                             .font_weight(FontWeight(700.))
                             .text_color(if streaming {
-                                rgb(0x58a6ff)
+                                rgb(palette.accent)
                             } else {
-                                rgb(0x8b949e)
+                                rgb(palette.text_muted)
                             })
                             .child(if streaming {
                                 "Thinking…"
@@ -1905,7 +1918,7 @@ impl NyaTermApp {
                     .child(
                         div()
                             .text_size(px(11.))
-                            .text_color(rgb(0x8b949e))
+                            .text_color(rgb(palette.text_muted))
                             .line_height(px(16.))
                             .child(markdown_content_view(&truncate_preview(
                                 &reasoning,
@@ -1919,11 +1932,11 @@ impl NyaTermApp {
                     .rounded_md()
                     .border_1()
                     .border_color(rgb(0x1f6feb))
-                    .bg(rgb(0x122033))
+                    .bg(rgb(palette.hover))
                     .px_2()
                     .py_2()
                     .text_size(px(11.))
-                    .text_color(rgb(0x58a6ff))
+                    .text_color(rgb(palette.accent))
                     .child("Thinking…"),
             );
         }
@@ -1934,7 +1947,7 @@ impl NyaTermApp {
                 bubble = bubble.child(
                     div()
                         .text_size(px(12.))
-                        .text_color(rgb(0xc9d1d9))
+                        .text_color(rgb(palette.text))
                         .line_height(px(18.))
                         .child(display.clone()),
                 );
@@ -1958,7 +1971,7 @@ impl NyaTermApp {
             bubble = bubble.child(
                 div()
                     .text_size(px(10.))
-                    .text_color(rgb(0x58a6ff))
+                    .text_color(rgb(palette.accent))
                     .child("streaming…"),
             );
         }
@@ -2212,25 +2225,26 @@ impl NyaTermApp {
 }
 
 pub(in crate::ui::view) fn disabled_inspector_panel(title: &'static str, detail: &'static str) -> impl IntoElement {
+    let palette = crate::ui::theme::theme_palette("github-dark");
     div()
         .flex()
         .flex_col()
         .gap_3()
         .child(
-            inspector_card(crate::ui::theme::theme_palette("github-dark"), title)
+            inspector_card(palette, title)
                 .child(
                     div()
                         .mt_3()
                         .text_xs()
                         .line_height(px(18.))
-                        .text_color(rgb(0x98a3b8))
+                        .text_color(rgb(palette.text_muted))
                         .child(detail),
                 )
                 .child(
                     div()
                         .mt_3()
                         .text_size(px(10.))
-                        .text_color(rgb(0x64748b))
+                        .text_color(rgb(palette.text_dimmed))
                         .child("The page remains available, but background refresh and actions stay paused while disabled."),
                 ),
         )
@@ -2242,6 +2256,7 @@ fn ai_svg_icon_button(
     icon_path: &'static str,
     on_click: impl Fn(&gpui::ClickEvent, &mut gpui::Window, &mut gpui::App) + 'static,
 ) -> impl gpui::IntoElement {
+    let palette = crate::ui::theme::theme_palette("github-dark");
     use gpui::{SharedString, div, prelude::*, px, rgb, svg};
     div()
         .id(SharedString::from(id.into()))
@@ -2250,9 +2265,9 @@ fn ai_svg_icon_button(
         .items_center()
         .justify_center()
         .rounded_md()
-        .text_color(rgb(0x8b949e))
+        .text_color(rgb(palette.text_muted))
         .cursor_pointer()
-        .hover(|this| this.bg(rgb(0x21262d)).text_color(rgb(0xc9d1d9)))
+        .hover(|this| this.bg(rgb(palette.surface_elevated)).text_color(rgb(palette.text)))
         .child(
             svg()
                 .size(px(16.))
