@@ -28,11 +28,25 @@ impl NyaTermApp {
     }
 
     pub(in crate::ui::view) fn terminal_gutter_width_px(&self) -> f32 {
-        if self.settings.terminal_show_line_numbers {
-            44.
-        } else {
-            0.
+        // Keep in sync with terminal_surface gutter column widths.
+        let mut width = 0.;
+        if self.settings.terminal_show_timestamps {
+            width += if self.settings.terminal_show_timestamp_milliseconds {
+                96.
+            } else {
+                72.
+            };
         }
+        if self.settings.terminal_show_line_numbers {
+            width += 40.;
+        }
+        if self.settings.terminal_show_timestamps && self.settings.terminal_show_line_numbers {
+            width += 4.; // gap_1
+        }
+        if width > 0. {
+            width += 4.; // pr_1 trailing gutter padding
+        }
+        width
     }
 
     pub(in crate::ui::view) fn active_terminal_grid_size(&self) -> (usize, usize) {

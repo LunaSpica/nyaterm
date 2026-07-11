@@ -1,3 +1,4 @@
+use std::time::{SystemTime, UNIX_EPOCH};
 use vte::{Params, Parser, Perform};
 
 const DEFAULT_COLS: u16 = 80;
@@ -44,6 +45,8 @@ pub struct StyledSpan {
 pub struct TerminalSnapshot {
     pub lines: Vec<String>,
     pub styled_lines: Vec<Vec<StyledSpan>>,
+    /// Wall-clock stamp (unix ms) for each viewport row, if the line was written.
+    pub line_timestamps_ms: Vec<Option<u64>>,
     pub cursor_row: usize,
     pub cursor_col: usize,
     /// Rows available above the live screen (scrollback).
@@ -59,8 +62,12 @@ pub struct TerminalScreen {
     cursor_row: usize,
     cursor_col: usize,
     cells: Vec<Vec<Cell>>,
+    /// Parallel timestamps for live screen rows (unix ms).
+    live_timestamps_ms: Vec<Option<u64>>,
     /// Lines scrolled off the top of the live screen (oldest first).
     scrollback: Vec<Vec<Cell>>,
+    /// Parallel timestamps for scrollback rows (unix ms).
+    scrollback_timestamps_ms: Vec<Option<u64>>,
     scrollback_limit: usize,
     pen: CellStyle,
 }
@@ -82,7 +89,9 @@ impl TerminalScreen {
             cursor_row: 0,
             cursor_col: 0,
             cells: vec![vec![Cell::default(); cols]; rows],
+            live_timestamps_ms: vec![None; rows],
             scrollback: Vec::new(),
+            scrollback_timestamps_ms: Vec::new(),
             scrollback_limit: 5_000,
             pen: CellStyle::default(),
         }
@@ -98,6 +107,11 @@ impl TerminalScreen {
         // Keep scrollback column width aligned when possible.
         for row in &mut self.scrollback {
             row.resize(cols, Cell::default());
+        }
+        self.live_timestamps_ms
+            .resize(rows, None);
+        if self.live_timestamps_ms.len() > rows {
+            self.live_timestamps_ms.truncate(rows);
         }
         self.cols = cols;
         self.rows = rows;
@@ -122,7 +136,9 @@ impl TerminalScreen {
         for row in &mut self.cells {
             row.fill(Cell::default());
         }
+        self.live_timestamps_ms.fill(None);
         self.scrollback.clear();
+        self.scrollback_timestamps_ms.clear();
         self.cursor_row = 0;
         self.cursor_col = 0;
         self.pen = CellStyle::default();
@@ -149,11 +165,13 @@ impl TerminalScreen {
 
         let mut lines = Vec::with_capacity(self.rows);
         let mut styled_lines = Vec::with_capacity(self.rows);
+        let mut line_timestamps_ms = Vec::with_capacity(self.rows);
         for abs_row in start..end {
             let row = self.row_at(abs_row);
             let text: String = row.iter().map(|cell| cell.ch).collect();
             lines.push(text.trim_end().to_string());
             styled_lines.push(compress_row(row));
+            line_timestamps_ms.push(self.timestamp_at(abs_row));
         }
         // Pad if history shorter than a full viewport (should be rare after clamp).
         while lines.len() < self.rows {
@@ -162,6 +180,7 @@ impl TerminalScreen {
                 text: String::new(),
                 style: CellStyle::default(),
             }]);
+            line_timestamps_ms.push(None);
         }
 
         let cursor_abs = self.scrollback.len() + self.cursor_row;
@@ -177,6 +196,7 @@ impl TerminalScreen {
         TerminalSnapshot {
             lines,
             styled_lines,
+            line_timestamps_ms,
             cursor_row,
             cursor_col: self.cursor_col,
             scrollback_len: self.scrollback.len(),
@@ -223,10 +243,43 @@ impl TerminalScreen {
         }
     }
 
+    fn timestamp_at(&self, abs_row: usize) -> Option<u64> {
+        if abs_row < self.scrollback_timestamps_ms.len() {
+            self.scrollback_timestamps_ms[abs_row]
+        } else {
+            let live = abs_row - self.scrollback.len();
+            self.live_timestamps_ms
+                .get(live.min(self.rows.saturating_sub(1)))
+                .copied()
+                .flatten()
+        }
+    }
+
+    fn stamp_current_line(&mut self) {
+        if self.cursor_row >= self.live_timestamps_ms.len() {
+            return;
+        }
+        if self.live_timestamps_ms[self.cursor_row].is_none() {
+            self.live_timestamps_ms[self.cursor_row] = Some(now_unix_ms());
+        }
+    }
+
     fn trim_scrollback(&mut self) {
         if self.scrollback.len() > self.scrollback_limit {
             let excess = self.scrollback.len() - self.scrollback_limit;
             self.scrollback.drain(0..excess);
+            if self.scrollback_timestamps_ms.len() > excess {
+                self.scrollback_timestamps_ms.drain(0..excess);
+            } else {
+                self.scrollback_timestamps_ms.clear();
+            }
+        }
+        // Keep parallel arrays aligned.
+        if self.scrollback_timestamps_ms.len() > self.scrollback.len() {
+            self.scrollback_timestamps_ms.truncate(self.scrollback.len());
+        }
+        while self.scrollback_timestamps_ms.len() < self.scrollback.len() {
+            self.scrollback_timestamps_ms.push(None);
         }
     }
 
@@ -236,6 +289,7 @@ impl TerminalScreen {
             self.newline();
             self.carriage_return();
         }
+        self.stamp_current_line();
         self.cells[self.cursor_row][self.cursor_col] = Cell {
             ch: c,
             style: self.pen,
@@ -268,9 +322,16 @@ impl TerminalScreen {
         let count = count.min(self.rows);
         for _ in 0..count {
             let row = self.cells.remove(0);
-            // Only keep non-empty/styled rows to reduce noise? Keep all for fidelity.
+            let ts = if !self.live_timestamps_ms.is_empty() {
+                self.live_timestamps_ms.remove(0)
+            } else {
+                None
+            };
+            // Keep all rows for fidelity (including blanks).
             self.scrollback.push(row);
+            self.scrollback_timestamps_ms.push(ts);
             self.cells.push(vec![Cell::default(); self.cols]);
+            self.live_timestamps_ms.push(None);
         }
         self.trim_scrollback();
     }
@@ -295,6 +356,12 @@ impl TerminalScreen {
                 // CSI 2J/3J: clear display and home cursor (xterm common behavior for our UI).
                 for row in &mut self.cells {
                     row.fill(Cell::default());
+                }
+                self.live_timestamps_ms.fill(None);
+                if mode == 3 {
+                    // CSI 3J also drops scrollback in many terminal emulators.
+                    self.scrollback.clear();
+                    self.scrollback_timestamps_ms.clear();
                 }
                 self.cursor_row = 0;
                 self.cursor_col = 0;
@@ -424,6 +491,13 @@ impl TerminalScreen {
             i += 1;
         }
     }
+}
+
+fn now_unix_ms() -> u64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_millis() as u64)
+        .unwrap_or(0)
 }
 
 fn map_256_to_ansi16(idx: u16) -> u8 {
@@ -629,6 +703,29 @@ mod tests {
             history.lines.iter().any(|l| l.contains("line1") || l.contains("line2")),
             "expected history viewport to include earlier lines: {:?}",
             history.lines
+        );
+    }
+
+    #[test]
+    fn line_timestamps_are_stamped_on_write() {
+        let mut screen = TerminalScreen::new(20, 3);
+        screen.advance(b"hello\nworld");
+        let snap = screen.snapshot();
+        assert!(snap.line_timestamps_ms[0].is_some(), "first written line should be stamped");
+        assert!(snap.line_timestamps_ms[1].is_some(), "second written line should be stamped");
+    }
+
+    #[test]
+    fn scrollback_preserves_line_timestamps() {
+        let mut screen = TerminalScreen::new(8, 2);
+        screen.set_scrollback_limit(100);
+        screen.advance(b"line1\nline2\nline3");
+        assert!(screen.scrollback_len() >= 1);
+        let history = screen.viewport_snapshot(screen.scrollback_len());
+        assert!(
+            history.line_timestamps_ms.iter().any(|ts| ts.is_some()),
+            "history viewport should retain timestamps: {:?}",
+            history.line_timestamps_ms
         );
     }
 }

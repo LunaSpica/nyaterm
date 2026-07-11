@@ -219,6 +219,23 @@ pub(in crate::ui::view) fn format_cloud_provider(provider: &str) -> String {
     }
 }
 
+
+pub(in crate::ui::view) fn format_terminal_line_timestamp_ms(
+    timestamp_ms: u64,
+    include_milliseconds: bool,
+) -> String {
+    let secs = (timestamp_ms / 1000) as i64;
+    let millis = timestamp_ms % 1000;
+    let hours = ((secs % 86_400) / 3_600).rem_euclid(24);
+    let minutes = ((secs % 3_600) / 60).rem_euclid(60);
+    let seconds = (secs % 60).rem_euclid(60);
+    if include_milliseconds {
+        format!("[{hours:02}:{minutes:02}:{seconds:02}.{millis:03}]")
+    } else {
+        format!("[{hours:02}:{minutes:02}:{seconds:02}]")
+    }
+}
+
 pub(in crate::ui::view) fn format_history_timestamp_ms(timestamp_ms: u64) -> String {
     if timestamp_ms == 0 {
         return "never".to_string();

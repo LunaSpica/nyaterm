@@ -27,8 +27,13 @@ impl NyaTermApp {
             .unwrap_or_else(|| self.terminal_screen.viewport_snapshot(scroll_offset));
         let lines = snapshot.lines;
         let styled_lines = snapshot.styled_lines;
+        let line_timestamps_ms = snapshot.line_timestamps_ms;
         let cursor_row = snapshot.cursor_row;
         let cursor_col = snapshot.cursor_col;
+        let show_line_numbers = self.settings.terminal_show_line_numbers;
+        let show_timestamps = self.settings.terminal_show_timestamps;
+        let show_timestamp_ms = self.settings.terminal_show_timestamp_milliseconds;
+        let gutter_enabled = show_line_numbers || show_timestamps;
         let show_cursor = is_active
             && !session_id.is_empty()
             && scroll_offset == 0
@@ -103,18 +108,62 @@ impl NyaTermApp {
                 self.terminal_cell_size().1,
                 palette,
             );
-            if self.settings.terminal_show_line_numbers {
+            if gutter_enabled {
+                let ts_label = if show_timestamps {
+                    line_timestamps_ms
+                        .get(line_index)
+                        .copied()
+                        .flatten()
+                        .map(|ms| format_terminal_line_timestamp_ms(ms, show_timestamp_ms))
+                        .unwrap_or_else(|| {
+                            if show_timestamp_ms {
+                                "             ".to_string()
+                            } else {
+                                "          ".to_string()
+                            }
+                        })
+                } else {
+                    String::new()
+                };
+                let line_label = if show_line_numbers {
+                    format!("{:>5}", abs_start + line_index + 1)
+                } else {
+                    String::new()
+                };
+                let (_, cell_h) = self.terminal_cell_size();
                 output = output.child(
                     div()
                         .flex()
                         .flex_row()
                         .items_center()
+                        .min_h(px(cell_h))
                         .child(
                             div()
-                                .w(px(52.))
+                                .flex()
+                                .flex_row()
+                                .items_center()
+                                .gap_1()
                                 .flex_none()
+                                .pr_1()
                                 .text_color(rgb(palette.text_dimmed))
-                                .child(format!("{:>5}  ", abs_start + line_index + 1)),
+                                .font_family(self.settings.terminal_font_family.clone())
+                                .text_size(px(self.settings.terminal_font_size as f32 * 0.85))
+                                .when(show_timestamps, |this| {
+                                    this.child(
+                                        div()
+                                            .w(px(if show_timestamp_ms { 96. } else { 72. }))
+                                            .flex_none()
+                                            .child(ts_label),
+                                    )
+                                })
+                                .when(show_line_numbers, |this| {
+                                    this.child(
+                                        div()
+                                            .w(px(40.))
+                                            .flex_none()
+                                            .child(line_label),
+                                    )
+                                }),
                         )
                         .child(content),
                 );

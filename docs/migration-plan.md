@@ -965,3 +965,6 @@ service boundary first:
 - Domain settings: `SearchEngineConfig` + load/save under `search.custom_engines`.
 - Settings → Search: edit online search engines (add/remove/toggle menu/name/url).
 - Terminal scrollback scrollbar thumb (drag + track click) with wheel/keyboard.
+
+- Terminal line timestamps: VTE screen stamps first write per row (unix ms),
+  scrollback retains stamps; GPUI gutter renders `[HH:MM:SS(.mmm)]` beside line numbers.
