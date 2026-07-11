@@ -604,14 +604,12 @@ impl NyaTermApp {
         let Some(item) = state.items.get(state.selected_index).cloned() else {
             return;
         };
-        let draft = state.draft.clone();
         let source = item.source.clone();
         let command = item.command;
-        // Replace remaining draft with full command using backspaces + insert.
+        // Tauri replaceCurrentLine path: Ctrl+E (end) + Ctrl+U (kill line) + command.
         let mut payload = String::new();
-        for _ in 0..draft.chars().count() {
-            payload.push('\u{7f}');
-        }
+        payload.push('\u{05}'); // Ctrl+E
+        payload.push('\u{15}'); // Ctrl+U
         payload.push_str(&command);
         if execute {
             payload.push('\n');

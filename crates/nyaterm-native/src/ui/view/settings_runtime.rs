@@ -447,6 +447,10 @@ impl NyaTermApp {
     pub(in crate::ui::view) fn toggle_command_suggestions(&mut self, cx: &mut Context<Self>) {
         self.settings.interaction_command_suggestions_enabled =
             !self.settings.interaction_command_suggestions_enabled;
+        if !self.settings.interaction_command_suggestions_enabled {
+            self.command_suggestions = None;
+            self.command_suggestion_draft.clear();
+        }
         self.save_interaction_settings(cx);
     }
 
