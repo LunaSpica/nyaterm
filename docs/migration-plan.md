@@ -1074,3 +1074,8 @@ service boundary first:
 - Enter records history from the tracker submission snapshot (pending entry)
   instead of only raw input bytes.
 
+## 2026-07-11 Command suggestion 80ms debounce
+
+- Fuzzy suggestion search is debounced 80ms after tracked input changes, with a
+  generation counter cancelling stale timers (Tauri searchTimer parity).
+

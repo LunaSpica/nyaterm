@@ -194,6 +194,7 @@ impl NyaTermApp {
         self.command_suggestions = None;
         self.command_suggestions_suppressed = false;
         self.pending_command_history_entry = None;
+        self.command_suggestion_search_gen = self.command_suggestion_search_gen.saturating_add(1);
         let previous_session_id = self.active_session_id.clone();
         if previous_session_id.as_deref() != Some(session_id)
             && let Some(previous_session_id) = previous_session_id.as_deref()

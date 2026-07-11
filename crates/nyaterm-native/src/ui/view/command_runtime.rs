@@ -373,6 +373,7 @@ impl NyaTermApp {
 
 
     pub(in crate::ui::view) fn dismiss_command_suggestions(&mut self, cx: &mut Context<Self>) {
+        self.command_suggestion_search_gen = self.command_suggestion_search_gen.saturating_add(1);
         let mut changed = false;
         if self.command_suggestions.take().is_some() {
             changed = true;
@@ -384,6 +385,7 @@ impl NyaTermApp {
     }
 
     pub(in crate::ui::view) fn clear_command_suggestion_draft(&mut self, cx: &mut Context<Self>) {
+        self.command_suggestion_search_gen = self.command_suggestion_search_gen.saturating_add(1);
         let mut changed = false;
         if self.command_input_tracker != TerminalInputState::new() {
             self.command_input_tracker = TerminalInputState::new();
@@ -458,6 +460,8 @@ impl NyaTermApp {
         self.command_input_tracker = apply_terminal_input_data(&self.command_input_tracker, text);
 
         if self.command_suggestions_suppressed {
+            self.command_suggestion_search_gen =
+                self.command_suggestion_search_gen.saturating_add(1);
             if self.command_suggestions.take().is_some() {
                 cx.notify();
             }
@@ -465,6 +469,8 @@ impl NyaTermApp {
         }
 
         if is_pager_search_or_command_input(&get_tracked_command(&self.command_input_tracker)) {
+            self.command_suggestion_search_gen =
+                self.command_suggestion_search_gen.saturating_add(1);
             if self.command_suggestions.take().is_some() {
                 cx.notify();
             }
@@ -472,12 +478,30 @@ impl NyaTermApp {
         }
 
         if !can_suggest_from_tracker(&self.command_input_tracker) {
+            self.command_suggestion_search_gen =
+                self.command_suggestion_search_gen.saturating_add(1);
             if self.command_suggestions.take().is_some() {
                 cx.notify();
             }
             return;
         }
-        self.refresh_command_suggestions(cx);
+        self.schedule_command_suggestion_refresh(cx);
+    }
+
+    fn schedule_command_suggestion_refresh(&mut self, cx: &mut Context<Self>) {
+        // Tauri useCommandHistory: 80ms debounce before fuzzy search.
+        self.command_suggestion_search_gen = self.command_suggestion_search_gen.saturating_add(1);
+        let request_id = self.command_suggestion_search_gen;
+        cx.spawn(async move |this, cx| {
+            Timer::after(Duration::from_millis(80)).await;
+            let _ = this.update(cx, |this, cx| {
+                if this.command_suggestion_search_gen != request_id {
+                    return;
+                }
+                this.refresh_command_suggestions(cx);
+            });
+        })
+        .detach();
     }
 
     fn read_active_terminal_input_line(&self) -> Option<String> {

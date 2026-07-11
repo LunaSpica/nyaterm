@@ -83,6 +83,8 @@ pub struct NyaTermApp {
     pub(in crate::ui::view) command_suggestions_suppressed: bool,
     /// Command captured from tracker at Enter, consumed by history recording.
     pub(in crate::ui::view) pending_command_history_entry: Option<String>,
+    /// Bumps to cancel in-flight 80ms suggestion search timers (Tauri searchTimer).
+    pub(in crate::ui::view) command_suggestion_search_gen: u64,
     /// Terminal-output credential autofill panel (Tauri CredentialSuggestions).
     pub(in crate::ui::view) credential_suggestions: Option<CredentialSuggestionState>,
     pub(in crate::ui::view) credential_autofill_buffer: String,
@@ -747,6 +749,7 @@ impl NyaTermApp {
             command_input_tracker: TerminalInputState::new(),
             command_suggestions_suppressed: false,
             pending_command_history_entry: None,
+            command_suggestion_search_gen: 0,
             credential_suggestions: None,
             credential_autofill_buffer: String::new(),
             credential_autofill_recent: HashMap::new(),
