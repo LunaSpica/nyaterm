@@ -349,7 +349,7 @@ impl NyaTermApp {
                         "Disconnect",
                         cx.listener(move |this, _, _, cx| {
                             this.close_tab_actions(cx);
-                            this.close_session(close_session_id.clone(), cx);
+                            this.disconnect_session(close_session_id.clone(), cx);
                         }),
                     ))
                     .child(tab_menu_separator(palette))

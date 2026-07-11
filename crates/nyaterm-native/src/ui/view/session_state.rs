@@ -20,11 +20,17 @@ impl NyaTermApp {
         {
             return Some(name.clone());
         }
-        self.session_manager
+        if let Some(session) = self
+            .session_manager
             .list_sessions()
-            .ok()?
+            .ok()
             .into_iter()
+            .flatten()
             .find(|session| session.id == session_id)
+        {
+            return Some(session.name);
+        }
+        self.disconnected_session_info(session_id)
             .map(|session| session.name)
     }
 
@@ -230,20 +236,25 @@ impl NyaTermApp {
         session_id: String,
         cx: &mut Context<Self>,
     ) {
-        let exists = self
+        let live = self
             .session_manager
             .list_sessions()
             .unwrap_or_default()
             .into_iter()
             .any(|session| session.id == session_id);
-        if !exists {
+        let disconnected = self.is_session_disconnected(&session_id);
+        if !live && !disconnected {
             self.terminal_status = "session no longer exists".to_string();
             self.remove_session_state(&session_id);
             cx.notify();
             return;
         }
         self.activate_session_id(&session_id);
-        self.terminal_status = format!("active {}", short_id(&session_id));
+        self.terminal_status = if disconnected {
+            format!("disconnected {}", short_id(&session_id))
+        } else {
+            format!("active {}", short_id(&session_id))
+        };
         self.selected_nav = NavItem::Workspace;
         cx.notify();
     }

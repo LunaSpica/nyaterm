@@ -357,6 +357,8 @@ pub struct NyaTermApp {
     pub(in crate::ui::view) pending_session_after_id: Option<String>,
     pub(in crate::ui::view) pending_session_insert_index: Option<usize>,
     pub(in crate::ui::view) pending_terminal_seed_output: Option<String>,
+    /// Disconnected session id being replaced by an in-flight reconnect.
+    pub(in crate::ui::view) pending_reconnect_replace_id: Option<String>,
     pub(in crate::ui::view) pending_startup_command: Option<StartupCommandRequest>,
     pub(in crate::ui::view) pending_session_multiplex_key: Option<String>,
     pub(in crate::ui::view) pending_source_connection_id: Option<String>,
@@ -1036,6 +1038,7 @@ impl NyaTermApp {
             pending_session_after_id: None,
             pending_session_insert_index: None,
             pending_terminal_seed_output: None,
+            pending_reconnect_replace_id: None,
             pending_startup_command: None,
             pending_session_multiplex_key: None,
             pending_source_connection_id: None,

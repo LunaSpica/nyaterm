@@ -62,9 +62,73 @@ impl NyaTermApp {
         for session_id in &self.session_order {
             if let Some(session) = by_id.remove(session_id) {
                 ordered.push(session);
+            } else if let Some(info) = self.disconnected_session_info(session_id) {
+                // Keep disconnected tabs in the strip for reconnect (Tauri parity).
+                ordered.push(info);
             }
         }
         ordered.extend(by_id.into_values());
         ordered
+    }
+
+    pub(in crate::ui::view) fn is_session_disconnected(&self, session_id: &str) -> bool {
+        self.session_metadata
+            .get(session_id)
+            .is_some_and(|metadata| metadata.disconnected)
+    }
+
+    pub(in crate::ui::view) fn disconnected_session_info(
+        &self,
+        session_id: &str,
+    ) -> Option<SessionInfo> {
+        let metadata = self.session_metadata.get(session_id)?;
+        if !metadata.disconnected {
+            return None;
+        }
+        Some(session_info_from_metadata(session_id, metadata))
+    }
+}
+
+fn session_info_from_metadata(
+    session_id: &str,
+    metadata: &SessionRuntimeMetadata,
+) -> SessionInfo {
+    match &metadata.launch_config {
+        SessionLaunchConfig::Local(config) => SessionInfo {
+            id: session_id.to_string(),
+            name: config.name.clone(),
+            kind: SessionKind::LocalPty,
+            working_dir: config.working_dir.clone(),
+            cols: config.cols,
+            rows: config.rows,
+        },
+        SessionLaunchConfig::Ssh(config) => SessionInfo {
+            id: session_id.to_string(),
+            name: config.name.clone(),
+            kind: SessionKind::Ssh,
+            working_dir: None,
+            cols: config.cols,
+            rows: config.rows,
+        },
+        SessionLaunchConfig::Telnet(config) => SessionInfo {
+            id: session_id.to_string(),
+            name: config.name.clone(),
+            kind: if config.raw_tcp {
+                SessionKind::RawTcp
+            } else {
+                SessionKind::Telnet
+            },
+            working_dir: None,
+            cols: config.cols,
+            rows: config.rows,
+        },
+        SessionLaunchConfig::Serial(config) => SessionInfo {
+            id: session_id.to_string(),
+            name: config.name.clone(),
+            kind: SessionKind::Serial,
+            working_dir: None,
+            cols: 80,
+            rows: 24,
+        },
     }
 }

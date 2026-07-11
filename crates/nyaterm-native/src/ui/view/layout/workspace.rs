@@ -81,12 +81,15 @@ impl NyaTermApp {
                 let drop_target_session_id = session.id.clone();
                 let custom_color = self.session_tab_colors.get(&session.id).copied();
                 let is_active = self.active_session_id.as_deref() == Some(session.id.as_str());
+                let is_disconnected = self.is_session_disconnected(&session.id);
                 let has_unread = self
                     .terminal_views
                     .get(&session.id)
                     .is_some_and(|view| view.has_unread);
                 let accent = if let Some(custom_color) = custom_color {
                     rgb(custom_color)
+                } else if is_disconnected {
+                    rgb(palette.danger)
                 } else if is_active {
                     rgb(palette.success)
                 } else if has_unread {

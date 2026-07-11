@@ -23,6 +23,7 @@ impl NyaTermApp {
                         source_connection_id: None,
                         ai_execution_profile: AiExecutionProfile::Posix,
                         launch_config: SessionLaunchConfig::Local(config),
+                        disconnected: false,
                     },
                 );
                 self.activate_session_id(&info.id);
@@ -371,6 +372,7 @@ impl NyaTermApp {
                 source_connection_id,
                 ai_execution_profile,
                 launch_config,
+                        disconnected: false,
             },
         );
         self.activate_session_id(&session_id);
@@ -533,6 +535,7 @@ impl NyaTermApp {
                             source_connection_id,
                             ai_execution_profile: self.pending_ai_execution_profile,
                             launch_config,
+                            disconnected: false,
                         },
                     );
                     if let Some(custom_name) = self.pending_session_custom_name.take() {
@@ -556,6 +559,11 @@ impl NyaTermApp {
                         self.move_session_to_index(&session_id, insert_index);
                     }
                     self.pending_ai_execution_profile = AiExecutionProfile::SendOnly;
+                    if let Some(stale_id) = self.pending_reconnect_replace_id.take() {
+                        if stale_id != session_id {
+                            self.remove_session_state(&stale_id);
+                        }
+                    }
                     self.activate_session_id(&session_id);
                     self.terminal_status = format!("running {}", short_id(&session_id));
                     self.append_terminal_log(format!(
@@ -581,6 +589,7 @@ impl NyaTermApp {
                     self.pending_session_multiplex_key = None;
                     self.pending_source_connection_id = None;
                     self.pending_workspace_split = None;
+                    self.pending_reconnect_replace_id = None;
                     self.pending_ai_execution_profile = AiExecutionProfile::SendOnly;
                     self.active_ssh_config = None;
                     self.active_ai_execution_profile = AiExecutionProfile::SendOnly;

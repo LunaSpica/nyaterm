@@ -233,7 +233,7 @@ impl NyaTermApp {
             "duplicate_session" => self.duplicate_active_session(window, cx),
             "multiplex_ssh" => self.multiplex_active_ssh_session(window, cx),
             "reconnect_session" => self.reconnect_active_session(window, cx),
-            "disconnect_session" => self.close_session(session_id, cx),
+            "disconnect_session" => self.disconnect_session(session_id, cx),
             _ => {
                 self.terminal_status = format!("unknown tab action '{action}'");
                 cx.notify();

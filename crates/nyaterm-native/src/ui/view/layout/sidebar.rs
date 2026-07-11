@@ -512,11 +512,11 @@ impl NyaTermApp {
                             ))
                             .child(session_action_svg_button(
                                 palette,
-                                format!("active-session-close-{close_session_id}"),
+                                format!("active-session-disconnect-{close_session_id}"),
                                 "icons/session/disconnect.svg",
                                 cx.listener(move |this, _, _, cx| {
                                     cx.stop_propagation();
-                                    this.close_session(close_session_id.clone(), cx);
+                                    this.disconnect_session(close_session_id.clone(), cx);
                                 }),
                             )),
                     ),

@@ -248,19 +248,24 @@ impl NyaTermApp {
     }
 
     pub(in crate::ui::view) fn next_session_after(&self, session_id: &str) -> Option<String> {
-        let live_ids = self
+        let mut known_ids = self
             .session_manager
             .list_sessions()
             .unwrap_or_default()
             .into_iter()
             .map(|session| session.id)
             .collect::<HashSet<_>>();
+        for (id, meta) in &self.session_metadata {
+            if meta.disconnected {
+                known_ids.insert(id.clone());
+            }
+        }
         self.session_order
             .iter()
-            .find(|candidate| candidate.as_str() != session_id && live_ids.contains(*candidate))
+            .find(|candidate| candidate.as_str() != session_id && known_ids.contains(*candidate))
             .cloned()
             .or_else(|| {
-                live_ids
+                known_ids
                     .into_iter()
                     .find(|candidate| candidate.as_str() != session_id)
             })

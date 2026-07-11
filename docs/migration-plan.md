@@ -1121,3 +1121,14 @@ service boundary first:
 - Command suggestion popup densified to Tauri-like 380px width, uppercase
   compact header, and 11px mono rows.
 
+## 2026-07-11 Disconnect keeps tab + Enter reconnect
+
+- `SessionRuntimeMetadata.disconnected` keeps UI tab/order/metadata when the
+  backend exits or the user chooses Disconnect (Tauri disconnected pane).
+- Exited events no longer remove the tab; they stamp a disconnect banner and
+  keep the buffer for reconnect.
+- Enter (and tab Reconnect) recreate the session from `launch_config`, migrating
+  custom name/color/history; Ctrl+D closes a disconnected tab.
+- Tab strip uses danger accent for disconnected sessions; ordered_sessions
+  synthesizes `SessionInfo` for disconnected ids.
+

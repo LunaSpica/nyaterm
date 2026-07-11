@@ -162,6 +162,8 @@ pub(super) struct SessionRuntimeMetadata {
     pub(super) source_connection_id: Option<String>,
     pub(super) ai_execution_profile: AiExecutionProfile,
     pub(super) launch_config: SessionLaunchConfig,
+    /// Backend closed while the tab is kept for reconnect (Tauri disconnected pane).
+    pub(super) disconnected: bool,
 }
 
 #[derive(Clone)]

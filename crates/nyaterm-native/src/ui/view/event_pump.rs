@@ -39,26 +39,15 @@ impl NyaTermApp {
                 }
                 SessionEvent::Exited { session_id } => {
                     self.recording_manager.cleanup_session(&session_id);
-                    let was_active = self.active_session_id.as_deref() == Some(session_id.as_str());
                     let _ = self.session_manager.close(&session_id);
-                    self.remove_session_state(&session_id);
-                    if was_active {
-                        self.active_session_id = None;
-                        self.active_ssh_config = None;
-                        self.active_ai_execution_profile = AiExecutionProfile::SendOnly;
-                        self.ai_agent_loop = None;
-                        self.ai_agent_capture = AgentOutputCaptureProcessor::new();
-                        if let Some(next_session_id) = self.next_session_after(&session_id) {
-                            self.activate_session_id(&next_session_id);
-                            self.terminal_status =
-                                format!("session exited; active {}", short_id(&next_session_id));
-                        } else {
-                            self.terminal_output = String::from(INITIAL_TERMINAL_BANNER);
-                            self.terminal_screen = initial_terminal_screen();
-                            self.terminal_status = "session exited".to_string();
-                        }
+                    if self.session_metadata.contains_key(&session_id) {
+                        // Keep the tab so the user can reconnect (Tauri disconnected pane).
+                        self.mark_session_disconnected(&session_id, cx);
+                        self.terminal_status =
+                            format!("session disconnected {}", short_id(&session_id));
                     } else {
-                        self.terminal_status = format!("session exited {}", short_id(&session_id));
+                        self.terminal_status =
+                            format!("session exited {}", short_id(&session_id));
                     }
                 }
                 SessionEvent::Error {

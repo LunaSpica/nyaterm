@@ -104,6 +104,13 @@ impl NyaTermApp {
             cx.notify();
             return;
         };
+        if self.is_session_disconnected(&session_id) {
+            // Key handler owns Enter-to-reconnect (needs Window). Block writes here.
+            self.terminal_status =
+                "session disconnected — press Enter to reconnect".to_string();
+            cx.notify();
+            return;
+        }
         // Typing while scrolled in history returns to the live bottom (xterm-like).
         if self.active_terminal_scroll_offset() > 0 {
             self.scroll_terminal_to_bottom(cx);
@@ -374,33 +381,38 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         let was_active = self.active_session_id.as_deref() == Some(session_id.as_str());
+        let disconnected = self.is_session_disconnected(&session_id);
+        // Live backend close is best-effort; disconnected tabs only have UI state left.
         match self.session_manager.close(&session_id) {
-            Ok(()) => {
-                self.recording_manager.cleanup_session(&session_id);
-                self.remove_session_state(&session_id);
-                self.prune_workspace_split();
-                if was_active {
-                    self.ai_agent_loop = None;
-                    self.ai_agent_capture = AgentOutputCaptureProcessor::new();
-                    if let Some(next_session_id) = self.next_session_after(&session_id) {
-                        self.activate_session_id(&next_session_id);
-                        self.terminal_status =
-                            format!("session closed; active {}", short_id(&next_session_id));
-                    } else {
-                        self.active_session_id = None;
-                        self.active_ssh_config = None;
-                        self.active_ai_execution_profile = AiExecutionProfile::SendOnly;
-                        self.terminal_output = String::from(INITIAL_TERMINAL_BANNER);
-                        self.terminal_screen = initial_terminal_screen();
-                        self.terminal_status = "session closed".to_string();
-                    }
-                } else {
-                    self.terminal_status = format!("closed {}", short_id(&session_id));
-                }
-            }
-            Err(error) => {
+            Ok(()) => {}
+            Err(_) if disconnected => {}
+            Err(error) if !disconnected && !self.session_metadata.contains_key(&session_id) => {
                 self.terminal_status = format!("close failed: {error}");
+                cx.notify();
+                return;
             }
+            Err(_) => {}
+        }
+        self.recording_manager.cleanup_session(&session_id);
+        self.remove_session_state(&session_id);
+        self.prune_workspace_split();
+        if was_active {
+            self.ai_agent_loop = None;
+            self.ai_agent_capture = AgentOutputCaptureProcessor::new();
+            if let Some(next_session_id) = self.next_session_after(&session_id) {
+                self.activate_session_id(&next_session_id);
+                self.terminal_status =
+                    format!("session closed; active {}", short_id(&next_session_id));
+            } else {
+                self.active_session_id = None;
+                self.active_ssh_config = None;
+                self.active_ai_execution_profile = AiExecutionProfile::SendOnly;
+                self.terminal_output = String::from(INITIAL_TERMINAL_BANNER);
+                self.terminal_screen = initial_terminal_screen();
+                self.terminal_status = "session closed".to_string();
+            }
+        } else {
+            self.terminal_status = format!("closed {}", short_id(&session_id));
         }
         cx.notify();
     }

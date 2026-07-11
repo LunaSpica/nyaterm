@@ -310,6 +310,32 @@ impl NyaTermApp {
                         if this.handle_smart_input_selection_key(event, cx) {
                             return;
                         }
+                        // Disconnected tab: Enter reconnects; other keys show status (Tauri).
+                        if let Some(session_id) = this.active_session_id.clone() {
+                            if this.is_session_disconnected(&session_id) {
+                                let keystroke = &event.keystroke;
+                                if !keystroke.modifiers.control
+                                    && !keystroke.modifiers.platform
+                                    && !keystroke.modifiers.alt
+                                    && keystroke.key.as_str() == "enter"
+                                {
+                                    this.reconnect_session(session_id, window, cx);
+                                } else if keystroke.key.as_str() == "d"
+                                    && keystroke.modifiers.control
+                                    && !keystroke.modifiers.platform
+                                    && !keystroke.modifiers.alt
+                                {
+                                    // Ctrl+D closes disconnected tab (Tauri onDisconnectedClose).
+                                    this.close_session(session_id, cx);
+                                } else {
+                                    this.terminal_status =
+                                        "session disconnected — press Enter to reconnect"
+                                            .to_string();
+                                    cx.notify();
+                                }
+                                return;
+                            }
+                        }
                         let keystroke = &event.keystroke;
                         let primary = keystroke.modifiers.control || keystroke.modifiers.platform;
                         if primary
