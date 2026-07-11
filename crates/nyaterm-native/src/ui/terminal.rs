@@ -30,6 +30,7 @@ pub(super) fn terminal_line_element(
     search_match: bool,
     active_search_match: bool,
     cursor_col: Option<usize>,
+    cursor_style: &str,
     palette: crate::ui::theme::ThemePalette,
 ) -> impl IntoElement {
     let mut spans = if let Some(ansi) = ansi_spans {
@@ -42,7 +43,7 @@ pub(super) fn terminal_line_element(
         keyword_highlight_spans(line, config)
     };
     if let Some(col) = cursor_col {
-        spans = apply_block_cursor(spans, col, palette);
+        spans = apply_cursor_style(spans, col, cursor_style, palette);
     }
     let mut row = div()
         .flex()
@@ -84,10 +85,11 @@ pub(super) fn terminal_line_element(
     row
 }
 
-/// Paint a block cursor by restyling the cell at `cursor_col` (char index).
-fn apply_block_cursor(
+/// Paint a caret at `cursor_col` (char index) using Tauri cursor styles.
+fn apply_cursor_style(
     spans: Vec<TerminalHighlightSpan>,
     cursor_col: usize,
+    cursor_style: &str,
     palette: crate::ui::theme::ThemePalette,
 ) -> Vec<TerminalHighlightSpan> {
     let mut flat: Vec<(char, Option<u32>, Option<u32>, bool)> = Vec::new();
@@ -107,10 +109,29 @@ fn apply_block_cursor(
         flat.push((' ', None, None, false));
     }
     if let Some(cell) = flat.get_mut(cursor_col) {
-        // Block cursor: invert with theme cursor color (Tauri xterm cursor).
-        cell.1 = Some(palette.terminal_bg);
-        cell.2 = Some(palette.terminal_cursor);
-        cell.3 = false;
+        match cursor_style {
+            "underline" => {
+                // Approximate underline caret: keep glyph, tint with cursor color and dim cell bg.
+                if cell.1.is_none() {
+                    cell.1 = Some(palette.terminal_cursor);
+                }
+                cell.2 = Some(palette.terminal_selection);
+                cell.3 = false;
+            }
+            "bar" => {
+                // Approximate bar caret: thin visual via inverted narrow space marker.
+                cell.0 = '▌';
+                cell.1 = Some(palette.terminal_cursor);
+                cell.2 = None;
+                cell.3 = false;
+            }
+            _ => {
+                // Block cursor: invert with theme cursor color (Tauri xterm cursor).
+                cell.1 = Some(palette.terminal_bg);
+                cell.2 = Some(palette.terminal_cursor);
+                cell.3 = false;
+            }
+        }
     }
 
     // Re-compress adjacent cells with identical style.

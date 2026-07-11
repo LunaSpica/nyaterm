@@ -1218,6 +1218,14 @@ impl ConnectionStore {
                 "JetBrains Mono",
             ),
             terminal_font_size: json_u16(&value, &["appearance", "font_size"], 16),
+            cursor_style: {
+                let raw = json_string(&value, &["appearance", "cursor_style"], "block");
+                match raw.as_str() {
+                    "underline" | "bar" | "block" => raw,
+                    _ => "block".to_string(),
+                }
+            },
+            cursor_blink: json_bool(&value, &["appearance", "cursor_blink"], true),
             x11_display: json_string(&value, &["terminal", "x11_display"], ""),
             terminal_scrollback_lines: json_u32(&value, &["terminal", "scrollback_lines"], 5000)
                 .clamp(100, 100_000),
@@ -1809,6 +1817,19 @@ impl ConnectionStore {
             &mut value,
             &["appearance", "font_size"],
             serde_json::Value::from(settings.terminal_font_size),
+        );
+        set_nested_json_string(
+            &mut value,
+            &["appearance", "cursor_style"],
+            match settings.cursor_style.as_str() {
+                "underline" | "bar" => settings.cursor_style.clone(),
+                _ => "block".to_string(),
+            },
+        );
+        set_nested_json_value(
+            &mut value,
+            &["appearance", "cursor_blink"],
+            serde_json::Value::from(settings.cursor_blink),
         );
         set_nested_json_string(
             &mut value,

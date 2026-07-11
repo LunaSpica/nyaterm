@@ -375,6 +375,9 @@ pub struct NyaTermApp {
     pub(in crate::ui::view) terminal_screen: TerminalScreen,
     pub(in crate::ui::view) terminal_status: String,
     pub(in crate::ui::view) event_pump_started: bool,
+    /// Toggles on the event pump when cursor blink is enabled.
+    pub(in crate::ui::view) cursor_blink_on: bool,
+    pub(in crate::ui::view) cursor_blink_tick: u8,
     pub(in crate::ui::view) selected_nav: NavItem,
     pub(in crate::ui::view) main_mode: MainMode,
     pub(in crate::ui::view) settings_active_tab: SettingsTab,
@@ -1017,6 +1020,8 @@ impl NyaTermApp {
             terminal_screen: initial_terminal_screen(),
             terminal_status: "idle".to_string(),
             event_pump_started: false,
+            cursor_blink_on: true,
+            cursor_blink_tick: 0,
             selected_nav: NavItem::Workspace,
             main_mode: MainMode::Workspace,
             settings_active_tab: SettingsTab::General,

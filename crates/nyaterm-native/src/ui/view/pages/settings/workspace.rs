@@ -404,6 +404,58 @@ impl NyaTermApp {
                             )),
                     )),
             ))
+
+            .child(settings_form_section(palette, 
+                Some("Cursor"),
+                Some("Terminal caret style (Tauri Appearance cursor settings)."),
+                div()
+                    .flex()
+                    .flex_col()
+                    .gap_3()
+                    .child(settings_form_row(palette, 
+                        "Cursor style",
+                        Some(SharedString::from("Block, underline, or vertical bar caret.")),
+                        div()
+                            .flex()
+                            .flex_wrap()
+                            .gap_1()
+                            .child(settings_choice_chip(palette, 
+                                "appearance-cursor-block",
+                                "Block",
+                                self.settings.cursor_style == "block",
+                                cx.listener(|this, _, _, cx| {
+                                    this.set_cursor_style("block", cx);
+                                }),
+                            ))
+                            .child(settings_choice_chip(palette, 
+                                "appearance-cursor-underline",
+                                "Underline",
+                                self.settings.cursor_style == "underline",
+                                cx.listener(|this, _, _, cx| {
+                                    this.set_cursor_style("underline", cx);
+                                }),
+                            ))
+                            .child(settings_choice_chip(palette, 
+                                "appearance-cursor-bar",
+                                "Bar",
+                                self.settings.cursor_style == "bar",
+                                cx.listener(|this, _, _, cx| {
+                                    this.set_cursor_style("bar", cx);
+                                }),
+                            )),
+                    ))
+                    .child(settings_form_row(palette, 
+                        "Cursor blink",
+                        Some(SharedString::from("Blink the caret when the terminal is focused.")),
+                        settings_switch(palette, 
+                            "appearance-cursor-blink",
+                            self.settings.cursor_blink,
+                            cx.listener(|this, _, _, cx| {
+                                this.toggle_cursor_blink(cx);
+                            }),
+                        ),
+                    )),
+            ))
             .child(settings_form_section(palette, 
                 Some("X11 display"),
                 Some("Used when launching remote X11-forwarded tools."),

@@ -52,6 +52,30 @@ impl NyaTermApp {
         self.save_appearance_settings(cx);
     }
 
+    pub(in crate::ui::view) fn set_cursor_style(
+        &mut self,
+        style: &'static str,
+        cx: &mut Context<Self>,
+    ) {
+        let normalized = match style {
+            "underline" | "bar" => style,
+            _ => "block",
+        };
+        self.settings.cursor_style = normalized.to_string();
+        self.save_appearance_settings(cx);
+        self.terminal_status = format!("cursor style → {normalized}");
+    }
+
+    pub(in crate::ui::view) fn toggle_cursor_blink(&mut self, cx: &mut Context<Self>) {
+        self.settings.cursor_blink = !self.settings.cursor_blink;
+        self.save_appearance_settings(cx);
+        self.terminal_status = if self.settings.cursor_blink {
+            "cursor blink on".to_string()
+        } else {
+            "cursor blink off".to_string()
+        };
+    }
+
     pub(in crate::ui::view) fn zoom_terminal_in(&mut self, cx: &mut Context<Self>) {
         self.adjust_terminal_font_size(1, cx);
     }

@@ -24,7 +24,10 @@ impl NyaTermApp {
         let styled_lines = snapshot.styled_lines;
         let cursor_row = snapshot.cursor_row;
         let cursor_col = snapshot.cursor_col;
-        let show_cursor = is_active && !session_id.is_empty();
+        let show_cursor = is_active
+            && !session_id.is_empty()
+            && (!self.settings.cursor_blink || self.cursor_blink_on);
+        let cursor_style = self.settings.cursor_style.as_str();
         let search_matches = if is_active
             && self.terminal_search_open
             && self.terminal_search_mode == TerminalSearchMode::Buffer
@@ -61,6 +64,7 @@ impl NyaTermApp {
                 } else {
                     None
                 },
+                cursor_style,
                 palette,
             );
             if self.settings.terminal_show_line_numbers {

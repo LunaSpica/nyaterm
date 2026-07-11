@@ -911,3 +911,9 @@ service boundary first:
 - Active tab top accent bar (Tauri-like 2px indicator).
 - Tab active/idle backgrounds map to ThemePalette hover/bg instead of hardcoded dark blues.
 - Residual bottom quick-command chrome tokens themed.
+
+## 2026-07-11 Cursor style + blink settings
+- Domain `AppSettingsSummary` loads/saves Tauri `appearance.cursor_style` (`block|underline|bar`) and `cursor_blink`.
+- Settings Appearance adds Cursor section (style chips + blink switch).
+- Terminal painter supports block / underline / bar caret approximations using theme cursor colors.
+- Event pump toggles `cursor_blink_on` (~530ms half-period) so blinking matches focused terminal caret.

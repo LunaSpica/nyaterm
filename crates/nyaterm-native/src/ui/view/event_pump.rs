@@ -148,6 +148,17 @@ impl NyaTermApp {
                                 if this.drive_idle_lock() {
                                     cx.notify();
                                 }
+                                // ~530ms blink half-period (50ms * 11 ticks) when enabled.
+                                if this.settings.cursor_blink {
+                                    this.cursor_blink_tick = this.cursor_blink_tick.wrapping_add(1);
+                                    if this.cursor_blink_tick >= 11 {
+                                        this.cursor_blink_tick = 0;
+                                        this.cursor_blink_on = !this.cursor_blink_on;
+                                    }
+                                } else {
+                                    this.cursor_blink_on = true;
+                                    this.cursor_blink_tick = 0;
+                                }
                                 cx.notify();
                                 this.event_pump_started
                             })

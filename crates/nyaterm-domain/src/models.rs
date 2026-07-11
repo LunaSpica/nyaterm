@@ -522,6 +522,12 @@ pub struct AppSettingsSummary {
     pub language: String,
     pub terminal_font_family: String,
     pub terminal_font_size: u16,
+    /// Terminal cursor style: block | underline | bar (Tauri appearance.cursor_style).
+    #[serde(default = "default_cursor_style")]
+    pub cursor_style: String,
+    /// Whether the terminal caret blinks (Tauri appearance.cursor_blink).
+    #[serde(default = "default_cursor_blink")]
+    pub cursor_blink: bool,
     pub x11_display: String,
     pub terminal_scrollback_lines: u32,
     pub terminal_keep_alive_interval: u32,
@@ -676,6 +682,8 @@ impl Default for AppSettingsSummary {
             language: "zh-CN".to_string(),
             terminal_font_family: "JetBrains Mono".to_string(),
             terminal_font_size: 16,
+            cursor_style: default_cursor_style(),
+            cursor_blink: default_cursor_blink(),
             x11_display: String::new(),
             terminal_scrollback_lines: 5000,
             terminal_keep_alive_interval: 30,
@@ -810,6 +818,14 @@ fn default_quick_cmd_sort_mode() -> String {
 
 fn default_background_image_fit() -> String {
     "cover".to_string()
+}
+
+fn default_cursor_style() -> String {
+    "block".to_string()
+}
+
+fn default_cursor_blink() -> bool {
+    true
 }
 
 fn default_background_image_opacity() -> u8 {
