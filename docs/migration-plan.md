@@ -629,3 +629,7 @@ service boundary first:
 - AI General: enable/redaction/history switches, provider chips, credential inputs, agent mode chips, limit steppers.
 - Translation: provider chips + per-vendor credential sections.
 - Config Backup: export/import rows for JSON, .nya, encrypted .nya.
+
+## 2026-07-11 Command Send progress + stop
+- Mid-send progress card with completed/total units, current round, and percent bar.
+- Send/Send↵ buttons become Stop while a multi-round send is active; cancel uses AtomicBool.

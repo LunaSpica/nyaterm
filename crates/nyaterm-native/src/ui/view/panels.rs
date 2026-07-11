@@ -103,6 +103,21 @@ impl NyaTermApp {
             SendCommandLineEnding::Crlf => "CR+LF",
         };
         let _ = (unit_count, byte_count);
+        let is_sending = self.send_command_sending;
+        let progress_total = self.send_command_progress_total.max(1);
+        let progress_completed = self.send_command_progress_completed.min(progress_total);
+        let progress_ratio = progress_completed as f32 / progress_total as f32;
+        let progress_label = if is_sending {
+            format!(
+                "Sending {}/{} · round {}/{}",
+                progress_completed,
+                self.send_command_progress_total,
+                self.send_command_progress_round.max(1),
+                self.send_command_progress_rounds.max(1)
+            )
+        } else {
+            validation_text.clone()
+        };
 
         // Tauri SendCommandPanel: title row + labeled control groups + editor + action footer.
         div()
@@ -393,6 +408,63 @@ impl NyaTermApp {
                             this.handle_send_command_key_down(event, cx);
                         })),
                     )
+                    .when(is_sending, |this| {
+                        this.child(
+                            div()
+                                .flex_none()
+                                .px_1()
+                                .child(
+                                    div()
+                                        .rounded_md()
+                                        .border_1()
+                                        .border_color(rgb(0x1f6feb))
+                                        .bg(rgb(0x0d1117))
+                                        .px_2()
+                                        .py_1()
+                                        .flex()
+                                        .flex_col()
+                                        .gap_1()
+                                        .child(
+                                            div()
+                                                .flex()
+                                                .items_center()
+                                                .justify_between()
+                                                .gap_2()
+                                                .child(
+                                                    div()
+                                                        .text_size(px(10.))
+                                                        .font_weight(FontWeight(600.))
+                                                        .text_color(rgb(0xc9d1d9))
+                                                        .child(progress_label.clone()),
+                                                )
+                                                .child(
+                                                    div()
+                                                        .text_size(px(10.))
+                                                        .text_color(rgb(0x6e7681))
+                                                        .child(format!(
+                                                            "{:.0}%",
+                                                            progress_ratio * 100.0
+                                                        )),
+                                                ),
+                                        )
+                                        .child(
+                                            div()
+                                                .h(px(6.))
+                                                .w_full()
+                                                .rounded_full()
+                                                .bg(rgb(0x21262d))
+                                                .overflow_hidden()
+                                                .child(
+                                                    div()
+                                                        .h_full()
+                                                        .w(px((280.0 * progress_ratio).max(2.0)))
+                                                        .rounded_full()
+                                                        .bg(rgb(0x1f6feb)),
+                                                ),
+                                        ),
+                                ),
+                        )
+                    })
                     .child(
                         div()
                             .flex_none()
@@ -414,13 +486,19 @@ impl NyaTermApp {
                                     .child(
                                         div()
                                             .text_size(px(10.))
-                                            .text_color(if validation_error {
+                                            .text_color(if validation_error && !is_sending {
                                                 rgb(0xff7b72)
+                                            } else if is_sending {
+                                                rgb(0x58a6ff)
                                             } else {
                                                 rgb(0x8b949e)
                                             })
                                             .overflow_hidden()
-                                            .child(validation_text),
+                                            .child(if is_sending {
+                                                progress_label
+                                            } else {
+                                                validation_text
+                                            }),
                                     )
                                     .child(
                                         div()
@@ -452,16 +530,20 @@ impl NyaTermApp {
                                     ))
                                     .child(small_button(
                                         "bottom-command-send-now",
-                                        "Send",
+                                        if is_sending { "Stop" } else { "Send" },
                                         cx.listener(|this, _, _, cx| {
                                             this.send_bottom_command(false, cx);
                                         }),
                                     ))
                                     .child(small_button(
                                         "bottom-command-send-enter",
-                                        "Send ↵",
+                                        if is_sending { "Stop" } else { "Send ↵" },
                                         cx.listener(|this, _, _, cx| {
-                                            this.send_bottom_command(true, cx);
+                                            if this.send_command_sending {
+                                                this.stop_send_command(cx);
+                                            } else {
+                                                this.send_bottom_command(true, cx);
+                                            }
                                         }),
                                     )),
                             ),

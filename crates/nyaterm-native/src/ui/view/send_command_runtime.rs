@@ -48,6 +48,11 @@ impl NyaTermApp {
         append_enter: bool,
         cx: &mut Context<Self>,
     ) {
+        if self.send_command_sending {
+            self.stop_send_command(cx);
+            return;
+        }
+
         let session_kind = self.active_session_kind();
         let mut draft = self.send_command_draft.clone();
         if append_enter && self.send_command_data_type == SendCommandDataType::Text {
@@ -74,28 +79,72 @@ impl NyaTermApp {
 
         let rounds = self.send_command_count.max(1);
         let interval = self.send_command_interval_seconds.max(0.0);
-        self.terminal_status = format!("sending {} unit(s) x {}", units.len(), rounds);
+        let units_per_round = units.len() as u32;
+        let total_units = units_per_round.saturating_mul(rounds);
+        let cancel = Arc::new(AtomicBool::new(false));
+        self.send_command_cancel = Some(cancel.clone());
+        self.send_command_sending = true;
+        self.send_command_progress_completed = 0;
+        self.send_command_progress_total = total_units;
+        self.send_command_progress_round = 0;
+        self.send_command_progress_rounds = rounds;
+        self.terminal_status = format!("sending {units_per_round} unit(s) × {rounds}");
         cx.notify();
+
         cx.spawn(async move |this, cx| {
             let mut first = true;
-            for _round in 0..rounds {
+            let mut aborted = false;
+            'outer: for round in 1..=rounds {
+                let _ = this.update(cx, |this, cx| {
+                    this.send_command_progress_round = round;
+                    cx.notify();
+                });
                 for unit in &units {
+                    if cancel.load(Ordering::SeqCst) {
+                        aborted = true;
+                        break 'outer;
+                    }
                     if !first && interval > 0.0 {
                         Timer::after(Duration::from_secs_f64(interval)).await;
+                        if cancel.load(Ordering::SeqCst) {
+                            aborted = true;
+                            break 'outer;
+                        }
                     }
                     first = false;
                     let unit = unit.clone();
                     let _ = this.update(cx, |this, cx| {
                         this.send_terminal_input(unit, cx);
+                        this.send_command_progress_completed =
+                            this.send_command_progress_completed.saturating_add(1);
+                        cx.notify();
                     });
                 }
             }
             let _ = this.update(cx, |this, cx| {
-                this.terminal_status = format!("command send completed: {} round(s)", rounds);
+                this.send_command_sending = false;
+                this.send_command_cancel = None;
+                if aborted {
+                    this.terminal_status = format!(
+                        "command send stopped at {}/{}",
+                        this.send_command_progress_completed, this.send_command_progress_total
+                    );
+                } else {
+                    this.terminal_status =
+                        format!("command send completed: {rounds} round(s)");
+                }
                 cx.notify();
             });
         })
         .detach();
+    }
+
+    pub(in crate::ui::view) fn stop_send_command(&mut self, cx: &mut Context<Self>) {
+        if let Some(cancel) = self.send_command_cancel.as_ref() {
+            cancel.store(true, Ordering::SeqCst);
+            self.terminal_status = "stopping command send…".to_string();
+            cx.notify();
+        }
     }
 
     pub(in crate::ui::view) fn build_send_command_units(
