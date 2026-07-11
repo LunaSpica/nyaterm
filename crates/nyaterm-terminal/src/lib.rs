@@ -74,6 +74,10 @@ pub struct TerminalScreen {
     bracketed_paste: bool,
     /// Set when BEL (0x07) is received; UI should flash and clear.
     pending_visual_bell: bool,
+    /// Latest OSC 0/2 window title (consumed by the UI layer).
+    pending_window_title: Option<String>,
+    /// Current window title last set by OSC 0/2.
+    window_title: Option<String>,
 }
 
 impl Default for TerminalScreen {
@@ -100,6 +104,8 @@ impl TerminalScreen {
             pen: CellStyle::default(),
             bracketed_paste: false,
             pending_visual_bell: false,
+            pending_window_title: None,
+            window_title: None,
         }
     }
 
@@ -145,6 +151,16 @@ impl TerminalScreen {
         pending
     }
 
+    /// Latest OSC 0/2 title (does not clear).
+    pub fn window_title(&self) -> Option<&str> {
+        self.window_title.as_deref()
+    }
+
+    /// Consume a pending window-title update from OSC 0/2.
+    pub fn take_window_title(&mut self) -> Option<String> {
+        self.pending_window_title.take()
+    }
+
     pub fn total_rows(&self) -> usize {
         self.scrollback.len() + self.rows
     }
@@ -161,6 +177,8 @@ impl TerminalScreen {
         self.pen = CellStyle::default();
         self.bracketed_paste = false;
         self.pending_visual_bell = false;
+        self.pending_window_title = None;
+        self.window_title = None;
     }
 
     pub fn advance(&mut self, bytes: &[u8]) {
@@ -653,11 +671,48 @@ impl Perform for TerminalScreen {
             _ => {}
         }
     }
+
+    fn osc_dispatch(&mut self, params: &[&[u8]], _bell_terminated: bool) {
+        if params.is_empty() {
+            return;
+        }
+        let code = std::str::from_utf8(params[0]).unwrap_or("").trim();
+        // OSC 0 / 2: set window title (and icon name for 0).
+        if matches!(code, "0" | "2") {
+            let title = params
+                .get(1..)
+                .map(|parts| {
+                    parts
+                        .iter()
+                        .map(|part| String::from_utf8_lossy(part))
+                        .collect::<Vec<_>>()
+                        .join(";")
+                })
+                .unwrap_or_default();
+            let title = title.trim();
+            if title.is_empty() {
+                return;
+            }
+            // Keep titles compact for tab chrome.
+            let clipped: String = title.chars().take(120).collect();
+            self.window_title = Some(clipped.clone());
+            self.pending_window_title = Some(clipped);
+        }
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn osc_sets_window_title() {
+        let mut screen = TerminalScreen::new(20, 5);
+        screen.advance(b"\x1b]2;hello-host\x07");
+        assert_eq!(screen.take_window_title().as_deref(), Some("hello-host"));
+        assert_eq!(screen.window_title(), Some("hello-host"));
+        assert!(screen.take_window_title().is_none());
+    }
 
     #[test]
     fn visual_bell_on_bel() {

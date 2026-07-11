@@ -376,6 +376,8 @@ pub struct NyaTermApp {
     pub(in crate::ui::view) session_order: Vec<String>,
     pub(in crate::ui::view) session_metadata: HashMap<String, SessionRuntimeMetadata>,
     pub(in crate::ui::view) session_custom_names: HashMap<String, String>,
+    /// OSC 0/2 titles from the session PTY (fall back when no custom rename).
+    pub(in crate::ui::view) session_dynamic_titles: HashMap<String, String>,
     pub(in crate::ui::view) session_tab_colors: HashMap<String, u32>,
     pub(in crate::ui::view) ssh_multiplex_handles: HashMap<String, SshMultiplexHandle>,
     pub(in crate::ui::view) terminal_views: HashMap<String, TerminalViewState>,
@@ -1060,6 +1062,7 @@ impl NyaTermApp {
             session_order: Vec::new(),
             session_metadata: HashMap::new(),
             session_custom_names: HashMap::new(),
+            session_dynamic_titles: HashMap::new(),
             session_tab_colors: HashMap::new(),
             ssh_multiplex_handles: HashMap::new(),
             terminal_views: HashMap::new(),

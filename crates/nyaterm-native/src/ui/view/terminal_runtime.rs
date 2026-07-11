@@ -961,6 +961,10 @@ impl NyaTermApp {
             if view.screen.take_visual_bell() {
                 self.visual_bell_ticks = 4;
             }
+            if let Some(title) = view.screen.take_window_title() {
+                self.session_dynamic_titles
+                    .insert(session_id.to_string(), title);
+            }
             if is_active {
                 self.terminal_output.push_str(text);
                 self.terminal_screen.advance(text.as_bytes());
@@ -968,6 +972,10 @@ impl NyaTermApp {
                 trim_terminal_output_to(&mut self.terminal_output, max_bytes);
                 if self.terminal_screen.take_visual_bell() {
                     self.visual_bell_ticks = 4;
+                }
+                if let Some(title) = self.terminal_screen.take_window_title() {
+                    self.session_dynamic_titles
+                        .insert(session_id.to_string(), title);
                 }
             }
         } else {
@@ -1000,6 +1008,10 @@ impl NyaTermApp {
             if view.screen.take_visual_bell() {
                 self.visual_bell_ticks = 4;
             }
+            if let Some(title) = view.screen.take_window_title() {
+                self.session_dynamic_titles
+                    .insert(session_id.to_string(), title);
+            }
             if is_active {
                 self.terminal_screen.advance(data);
                 self.terminal_output
@@ -1008,6 +1020,10 @@ impl NyaTermApp {
                 trim_terminal_output_to(&mut self.terminal_output, max_bytes);
                 if self.terminal_screen.take_visual_bell() {
                     self.visual_bell_ticks = 4;
+                }
+                if let Some(title) = self.terminal_screen.take_window_title() {
+                    self.session_dynamic_titles
+                        .insert(session_id.to_string(), title);
                 }
             }
         } else {

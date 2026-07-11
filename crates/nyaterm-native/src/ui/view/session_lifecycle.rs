@@ -367,6 +367,7 @@ impl NyaTermApp {
         let view = self.terminal_views.remove(&old_id);
         let history = self.session_command_history.remove(&old_id);
         self.session_custom_names.remove(&old_id);
+        let dynamic_title = self.session_dynamic_titles.remove(&old_id);
         self.session_tab_colors.remove(&old_id);
         self.transfer_browser_session_cache.remove(&old_id);
         self.purge_session_from_sync_groups(&old_id);
@@ -386,6 +387,10 @@ impl NyaTermApp {
             if let Some(custom_name) = custom_name.clone() {
                 this.session_custom_names
                     .insert(new_id.to_string(), custom_name);
+            }
+            if let Some(title) = dynamic_title.clone() {
+                this.session_dynamic_titles
+                    .insert(new_id.to_string(), title);
             }
             if let Some(custom_color) = custom_color {
                 this.session_tab_colors
@@ -529,6 +534,10 @@ impl NyaTermApp {
                 if let Some(custom_name_keep) = custom_name.clone() {
                     self.session_custom_names
                         .insert(old_id.clone(), custom_name_keep);
+                }
+                if let Some(title_keep) = dynamic_title.clone() {
+                    self.session_dynamic_titles
+                        .insert(old_id.clone(), title_keep);
                 }
                 if let Some(custom_color_keep) = custom_color {
                     self.session_tab_colors

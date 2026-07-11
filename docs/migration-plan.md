@@ -1160,3 +1160,10 @@ service boundary first:
   report ZMODEM/SFTP guidance until the native ZMODEM pipeline lands.
 - Domain helpers: `quote_local_path`, `format_local_terminal_drop_input`,
   `terminal_drop_overlay_copy`.
+
+## 2026-07-11 OSC 0/2 window title → tab name
+
+- `TerminalScreen` parses OSC 0/2 titles into `window_title` / `take_window_title`.
+- GPUI stores titles in `session_dynamic_titles`; display name priority is
+  custom rename → OSC title → backend session name.
+- Titles migrate across reconnect restore maps and clear with session removal.

@@ -5,16 +5,33 @@ impl NyaTermApp {
         &self,
         session: &SessionInfo,
     ) -> String {
-        self.session_custom_names
+        if let Some(name) = self
+            .session_custom_names
             .get(&session.id)
             .filter(|name| !name.trim().is_empty())
-            .cloned()
-            .unwrap_or_else(|| session.name.clone())
+        {
+            return name.clone();
+        }
+        if let Some(name) = self
+            .session_dynamic_titles
+            .get(&session.id)
+            .filter(|name| !name.trim().is_empty())
+        {
+            return name.clone();
+        }
+        session.name.clone()
     }
 
     pub(in crate::ui::view) fn session_display_name(&self, session_id: &str) -> Option<String> {
         if let Some(name) = self
             .session_custom_names
+            .get(session_id)
+            .filter(|name| !name.trim().is_empty())
+        {
+            return Some(name.clone());
+        }
+        if let Some(name) = self
+            .session_dynamic_titles
             .get(session_id)
             .filter(|name| !name.trim().is_empty())
         {
