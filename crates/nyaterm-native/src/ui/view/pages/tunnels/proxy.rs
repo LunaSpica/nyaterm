@@ -73,8 +73,9 @@ pub(super) fn proxy_section(
             div()
                 .border_t_1()
                 .border_color(rgb(0x253044))
-                .p_3()
-                .text_sm()
+                .px_2()
+                .py_2()
+                .text_size(px(11.))
                 .text_color(rgb(0x98a3b8))
                 .child("No proxies in this group."),
         );
@@ -242,11 +243,11 @@ pub(super) fn proxy_network_row(
     div()
         .border_t_1()
         .border_color(rgb(0x21262d))
-        .px_3()
+        .px_2()
         .py_2()
         .flex()
         .items_center()
-        .gap_3()
+        .gap_2()
         .hover(|this| this.bg(rgb(0x1c2128)))
         .child(
             div()
@@ -256,24 +257,26 @@ pub(super) fn proxy_network_row(
                 .flex_col()
                 .child(
                     div()
-                        .text_sm()
+                        .text_size(px(12.))
                         .font_weight(FontWeight(600.))
                         .text_color(rgb(0xe5edf7))
+                        .overflow_hidden()
                         .child(truncate_preview(&proxy.name, 52)),
                 )
                 .child(
                     div()
-                        .mt(px(2.))
-                        .text_size(px(12.))
+                        .mt(px(1.))
+                        .text_size(px(11.))
                         .text_color(rgb(0x8b949e))
                         .child(proxy_protocol_label(&proxy.protocol)),
                 )
                 .child(
                     div()
-                        .mt(px(2.))
+                        .mt(px(1.))
                         .font_family("JetBrains Mono")
-                        .text_size(px(11.))
+                        .text_size(px(10.))
                         .text_color(rgb(0x6e7681))
+                        .overflow_hidden()
                         .child(truncate_preview(&address, 92)),
                 ),
         )

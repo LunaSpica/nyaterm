@@ -240,7 +240,7 @@ impl NyaTermApp {
                                     .gap_2()
                                     .child(
                                         div()
-                                            .text_sm()
+                                            .text_size(px(12.))
                                             .font_weight(FontWeight(600.))
                                             .text_color(rgb(0xc9d1d9))
                                             .child(config_label),

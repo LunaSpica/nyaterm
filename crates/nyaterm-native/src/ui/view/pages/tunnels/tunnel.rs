@@ -76,8 +76,9 @@ pub(super) fn tunnel_section(
             div()
                 .border_t_1()
                 .border_color(rgb(0x253044))
-                .p_3()
-                .text_sm()
+                .px_2()
+                .py_2()
+                .text_size(px(11.))
                 .text_color(rgb(0x98a3b8))
                 .child("No tunnels in this group."),
         );
@@ -397,14 +398,15 @@ pub(super) fn tunnel_network_row(
         status_pill("porting", rgb(0xfbbf24), rgb(0x3a2f14)).into_any_element()
     };
 
+    // Tauri: px-3 py-2.5; side-panel density uses slightly tighter mono stack.
     div()
         .border_t_1()
         .border_color(rgb(0x21262d))
-        .px_3()
+        .px_2()
         .py_2()
         .flex()
         .items_center()
-        .gap_3()
+        .gap_2()
         .hover(|this| this.bg(rgb(0x1c2128)))
         .child(
             div()
@@ -421,9 +423,10 @@ pub(super) fn tunnel_network_row(
                         .child(
                             div()
                                 .min_w_0()
-                                .text_sm()
+                                .text_size(px(12.))
                                 .font_weight(FontWeight(600.))
                                 .text_color(rgb(0xe5edf7))
+                                .overflow_hidden()
                                 .child(truncate_preview(&tunnel_name(tunnel), 52)),
                         )
                         .child(status_pill(status, status_color, status_bg))
@@ -438,9 +441,10 @@ pub(super) fn tunnel_network_row(
                 )
                 .child(
                     div()
-                        .mt(px(2.))
-                        .text_size(px(12.))
+                        .mt(px(1.))
+                        .text_size(px(11.))
                         .text_color(rgb(0x8b949e))
+                        .overflow_hidden()
                         .child(format!(
                             "{} · {}",
                             truncate_preview(&connection_label, 44),
@@ -449,10 +453,11 @@ pub(super) fn tunnel_network_row(
                 )
                 .child(
                     div()
-                        .mt(px(2.))
+                        .mt(px(1.))
                         .font_family("JetBrains Mono")
-                        .text_size(px(11.))
+                        .text_size(px(10.))
                         .text_color(rgb(0x6e7681))
+                        .overflow_hidden()
                         .child(truncate_preview(&tunnel_endpoint(tunnel, &listen), 88)),
                 ),
         )

@@ -763,3 +763,7 @@ service boundary first:
 - Track `send_command_hex_scroll_x` + `send_command_hex_scroll_y` (Tauri `hexScroll.left/top`).
 - Wheel handler consumes both axes; guide overlay translates with `-scroll_x/-scroll_y`.
 - Clamp uses approximate viewport (5 lines × 48 chars) against formatted hex display size.
+
+## 2026-07-11 Network tunnel/proxy row densify
+- Tunnel/Proxy rows: px_2, gap_2, 12/11/10px type stack with overflow clip (Tauri side-panel density).
+- Empty group states and config label use compact 11–12px chrome.
