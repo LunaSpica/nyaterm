@@ -143,6 +143,8 @@ pub struct NyaTermApp {
     pub(in crate::ui::view) sync_groups_open: bool,
     pub(in crate::ui::view) sync_groups_focus: FocusHandle,
     pub(in crate::ui::view) sync_groups_selected_id: Option<String>,
+    /// Broadcast keyboard input to every live session (Tauri broadcastToAll).
+    pub(in crate::ui::view) broadcast_to_all: bool,
     pub(in crate::ui::view) keyword_highlights: KeywordHighlightConfig,
     pub(in crate::ui::view) settings: AppSettingsSummary,
     pub(in crate::ui::view) keybinding_recording_id: Option<String>,
@@ -851,6 +853,7 @@ impl NyaTermApp {
             sync_groups_open: false,
             sync_groups_focus: cx.focus_handle(),
             sync_groups_selected_id: None,
+            broadcast_to_all: false,
             keyword_highlights,
             settings,
             keybinding_recording_id: None,

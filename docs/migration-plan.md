@@ -1294,3 +1294,9 @@ service boundary first:
 - Ported Tauri `smartSplit` balanced binary tree (auto / horizontal / vertical).
 - View menu + tab actions: Smart Split, Tile Horizontally/Vertically, Merge Windows.
 - Applies full multi-leaf layout (one tab per leaf) and persists `terminal_window_layout`.
+
+## 2026-07-11 Broadcast to All sessions
+
+- Tauri `broadcastToAll` toggle: when enabled, terminal input fans out to every
+  live session in addition to sync-group peers.
+- Exposed via Terminal menu; status line reports enable/disable.

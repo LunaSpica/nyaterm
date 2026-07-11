@@ -151,9 +151,27 @@ impl NyaTermApp {
                 }
             }
         }
+        // Tauri broadcastToAll: fan-out to every other live session.
+        if self.broadcast_to_all {
+            for peer_id in &live_ids {
+                if peer_id != session_id {
+                    peers.insert(peer_id.clone());
+                }
+            }
+        }
         let mut peers = peers.into_iter().collect::<Vec<_>>();
         peers.sort();
         peers
+    }
+
+    pub(in crate::ui::view) fn toggle_broadcast_to_all(&mut self, cx: &mut Context<Self>) {
+        self.broadcast_to_all = !self.broadcast_to_all;
+        self.terminal_status = if self.broadcast_to_all {
+            "broadcast to all sessions enabled".to_string()
+        } else {
+            "broadcast to all sessions disabled".to_string()
+        };
+        cx.notify();
     }
 
     pub(in crate::ui::view) fn active_sync_group_label(&self, session_id: &str) -> Option<String> {

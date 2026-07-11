@@ -173,7 +173,24 @@ impl NyaTermApp {
                             cx.notify();
                         }),
                     ))
-                    .child(status_bar_label(palette, "Panel", bottom_panel, rgb(palette.accent))),
+                    .child(status_bar_label(palette, "Panel", bottom_panel, rgb(palette.accent)))
+                    .child(status_bar_button(palette, 
+                        "status-broadcast",
+                        "Broadcast",
+                        if self.broadcast_to_all {
+                            "on".to_string()
+                        } else {
+                            "off".to_string()
+                        },
+                        if self.broadcast_to_all {
+                            rgb(palette.warning)
+                        } else {
+                            rgb(palette.text_muted)
+                        },
+                        cx.listener(|this, _, _, cx| {
+                            this.toggle_broadcast_to_all(cx);
+                        }),
+                    )),
             )
             .child(
                 div()
@@ -1189,6 +1206,51 @@ impl NyaTermApp {
                         cx.listener(|this, _, window, cx| {
                             this.close_title_menu(cx);
                             this.open_sync_groups(window, cx);
+                        }),
+                    ))
+                    .child(title_menu_item(
+                        palette,
+                        "title-term-broadcast",
+                        if self.broadcast_to_all {
+                            "Broadcast to All ✓"
+                        } else {
+                            "Broadcast to All"
+                        },
+                        None,
+                        cx.listener(|this, _, _, cx| {
+                            this.close_title_menu(cx);
+                            this.toggle_broadcast_to_all(cx);
+                        }),
+                    ))
+                    .child(title_menu_separator(palette))
+                    .child(title_menu_item(
+                        palette,
+                        "title-term-smart-split",
+                        "Smart Split",
+                        None,
+                        cx.listener(|this, _, _, cx| {
+                            this.close_title_menu(cx);
+                            this.apply_smart_split(SmartSplitMode::Auto, cx);
+                        }),
+                    ))
+                    .child(title_menu_item(
+                        palette,
+                        "title-term-tile-h",
+                        "Tile Horizontally",
+                        None,
+                        cx.listener(|this, _, _, cx| {
+                            this.close_title_menu(cx);
+                            this.apply_smart_split(SmartSplitMode::Horizontal, cx);
+                        }),
+                    ))
+                    .child(title_menu_item(
+                        palette,
+                        "title-term-tile-v",
+                        "Tile Vertically",
+                        None,
+                        cx.listener(|this, _, _, cx| {
+                            this.close_title_menu(cx);
+                            this.apply_smart_split(SmartSplitMode::Vertical, cx);
                         }),
                     ))
                     .child(title_menu_separator(palette))
