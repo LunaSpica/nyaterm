@@ -745,6 +745,28 @@ impl NyaTermApp {
     }
 
 
+
+    fn apply_session_cwd(&mut self, session_id: &str, cwd: String) {
+        let changed = self
+            .session_cwds
+            .get(session_id)
+            .map(|prev| prev != &cwd)
+            .unwrap_or(true);
+        self.session_cwds.insert(session_id.to_string(), cwd.clone());
+        // Auto-sync the transfer browser path when enabled for the active SSH session.
+        if changed
+            && self.active_session_id.as_deref() == Some(session_id)
+            && self.transfer_browser_auto_sync_cwd_enabled()
+            && !cwd.trim().is_empty()
+        {
+            if self.transfer_browser_path != cwd {
+                self.transfer_browser_path = cwd.clone();
+                self.transfer_browser_path_draft = cwd.clone();
+                self.transfer_browser_status = format!("cwd synced: {cwd}");
+            }
+        }
+    }
+
     /// Apply OSC 133 command-start / command-finish edges (Tauri shell integration).
     fn apply_shell_integration_edges(
         &mut self,
@@ -993,6 +1015,7 @@ impl NyaTermApp {
         let mut shell_started = false;
         let mut shell_finished = false;
         let mut shell_running = false;
+        let mut pending_cwd: Option<String> = None;
 
         if let Some(session_id) = session_id {
             let is_active = self.active_session_id.as_deref() == Some(session_id);
@@ -1016,6 +1039,9 @@ impl NyaTermApp {
             shell_started |= cmd_started;
             shell_finished |= cmd_finished;
             shell_running = command_running;
+            if let Some(cwd) = view.screen.take_cwd() {
+                pending_cwd = Some(cwd);
+            }
             if is_active {
                 self.terminal_output.push_str(text);
                 self.terminal_screen.advance(text.as_bytes());
@@ -1033,6 +1059,9 @@ impl NyaTermApp {
                 shell_started |= cmd_started;
                 shell_finished |= cmd_finished;
                 shell_running = command_running;
+                if let Some(cwd) = self.terminal_screen.take_cwd() {
+                    pending_cwd = Some(cwd);
+                }
             }
         } else {
             self.terminal_output.push_str(text);
@@ -1053,6 +1082,9 @@ impl NyaTermApp {
                 );
             }
         }
+        if let (Some(session_id), Some(cwd)) = (session_id, pending_cwd) {
+            self.apply_session_cwd(session_id, cwd);
+        }
 }
 
     pub(in crate::ui::view) fn append_terminal_bytes_for_session(
@@ -1064,6 +1096,7 @@ impl NyaTermApp {
         let mut shell_started = false;
         let mut shell_finished = false;
         let mut shell_running = false;
+        let mut pending_cwd: Option<String> = None;
 
         if let Some(session_id) = session_id {
             let is_active = self.active_session_id.as_deref() == Some(session_id);
@@ -1087,6 +1120,9 @@ impl NyaTermApp {
             shell_started |= cmd_started;
             shell_finished |= cmd_finished;
             shell_running = command_running;
+            if let Some(cwd) = view.screen.take_cwd() {
+                pending_cwd = Some(cwd);
+            }
             if is_active {
                 self.terminal_screen.advance(data);
                 self.terminal_output
@@ -1105,6 +1141,9 @@ impl NyaTermApp {
                 shell_started |= cmd_started;
                 shell_finished |= cmd_finished;
                 shell_running = command_running;
+                if let Some(cwd) = self.terminal_screen.take_cwd() {
+                    pending_cwd = Some(cwd);
+                }
             }
         } else {
             self.terminal_screen.advance(data);
@@ -1125,6 +1164,9 @@ impl NyaTermApp {
                     shell_running,
                 );
             }
+        }
+        if let (Some(session_id), Some(cwd)) = (session_id, pending_cwd) {
+            self.apply_session_cwd(session_id, cwd);
         }
 }
 }

@@ -378,6 +378,8 @@ pub struct NyaTermApp {
     pub(in crate::ui::view) session_custom_names: HashMap<String, String>,
     /// OSC 0/2 titles from the session PTY (fall back when no custom rename).
     pub(in crate::ui::view) session_dynamic_titles: HashMap<String, String>,
+    /// Latest OSC 7 working directories per session.
+    pub(in crate::ui::view) session_cwds: HashMap<String, String>,
     /// Per-session ZMODEM detector / transfer state (UI-layer interception).
     pub(in crate::ui::view) zmodem_sessions: HashMap<String, crate::ui::view::zmodem_runtime::ZmodemSessionState>,
     pub(in crate::ui::view) session_tab_colors: HashMap<String, u32>,
@@ -1065,6 +1067,7 @@ impl NyaTermApp {
             session_metadata: HashMap::new(),
             session_custom_names: HashMap::new(),
             session_dynamic_titles: HashMap::new(),
+            session_cwds: HashMap::new(),
             zmodem_sessions: HashMap::new(),
             session_tab_colors: HashMap::new(),
             ssh_multiplex_handles: HashMap::new(),

@@ -1193,3 +1193,10 @@ service boundary first:
   shows live percent; cancel routes through session ZMODEM state.
 - `TerminalScreen` parses OSC 133 A/B/C/D shell-integration marks; command
   start/finish edges suppress and re-enable command suggestions (Tauri parity).
+
+## 2026-07-11 OSC 7 CWD tracking
+
+- `TerminalScreen` parses OSC 7 `file://` paths into `cwd` / `take_cwd`.
+- GPUI stores per-session paths in `session_cwds`, shows them in session info,
+  and when transfer-browser auto-sync-cwd is enabled, updates the browser path
+  from OSC 7 without waiting for SFTP `pwd`.

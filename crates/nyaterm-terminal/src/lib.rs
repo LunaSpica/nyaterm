@@ -103,6 +103,10 @@ pub struct TerminalScreen {
     pending_command_started: bool,
     /// Edge: command finished (D) since last consume.
     pending_command_finished: bool,
+    /// Latest OSC 7 working directory path.
+    cwd: Option<String>,
+    /// Pending OSC 7 cwd update for UI consumption.
+    pending_cwd: Option<String>,
 }
 
 impl Default for TerminalScreen {
@@ -137,6 +141,8 @@ impl TerminalScreen {
             command_running: false,
             pending_command_started: false,
             pending_command_finished: false,
+            cwd: None,
+            pending_cwd: None,
         }
     }
 
@@ -209,6 +215,15 @@ impl TerminalScreen {
         (started, finished)
     }
 
+    pub fn cwd(&self) -> Option<&str> {
+        self.cwd.as_deref()
+    }
+
+    /// Consume a pending OSC 7 working-directory update.
+    pub fn take_cwd(&mut self) -> Option<String> {
+        self.pending_cwd.take()
+    }
+
     pub fn total_rows(&self) -> usize {
         self.scrollback.len() + self.rows
     }
@@ -233,6 +248,8 @@ impl TerminalScreen {
         self.command_running = false;
         self.pending_command_started = false;
         self.pending_command_finished = false;
+        self.cwd = None;
+        self.pending_cwd = None;
     }
 
     pub fn advance(&mut self, bytes: &[u8]) {
@@ -635,6 +652,23 @@ fn map_256_to_ansi16(idx: u16) -> u8 {
 }
 
 
+
+fn parse_osc7_path(payload: &str) -> Option<String> {
+    let after_scheme = payload.strip_prefix("file://")?;
+    let path = if after_scheme.starts_with('/') {
+        after_scheme.to_string()
+    } else {
+        let slash = after_scheme.find('/')?;
+        after_scheme[slash..].to_string()
+    };
+    if path.is_empty() {
+        None
+    } else {
+        // Percent-decode common %20 etc. lightly
+        Some(path.replace("%20", " "))
+    }
+}
+
 fn compress_hyperlinks(row: &[Cell], pool: &[String]) -> Vec<HyperlinkSpan> {
     let mut spans = Vec::new();
     let mut col = 0usize;
@@ -810,6 +844,24 @@ impl Perform for TerminalScreen {
             }
             return;
         }
+        // OSC 7 ; file://host/path — working directory.
+        if code == "7" {
+            let payload = params
+                .get(1..)
+                .map(|parts| {
+                    parts
+                        .iter()
+                        .map(|p| String::from_utf8_lossy(p))
+                        .collect::<Vec<_>>()
+                        .join(";")
+                })
+                .unwrap_or_default();
+            if let Some(path) = parse_osc7_path(payload.trim()) {
+                self.cwd = Some(path.clone());
+                self.pending_cwd = Some(path);
+            }
+            return;
+        }
         // OSC 133 shell integration (FinalTerm / iTerm / VS Code).
         // Forms: OSC 133 ; A|B|C|D [; exit] ST  — mark letter is params[1].
         if code == "133" || code.starts_with("133") {
@@ -849,6 +901,15 @@ impl Perform for TerminalScreen {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn osc7_sets_cwd() {
+        let mut screen = TerminalScreen::new(40, 3);
+        screen.advance(b"\x1b]7;file://host/home/user/proj\x07");
+        assert_eq!(screen.take_cwd().as_deref(), Some("/home/user/proj"));
+        assert_eq!(screen.cwd(), Some("/home/user/proj"));
+        assert!(screen.take_cwd().is_none());
+    }
 
     #[test]
     fn osc133_shell_integration_marks() {

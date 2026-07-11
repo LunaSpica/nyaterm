@@ -153,6 +153,9 @@ impl NyaTermApp {
             ("Endpoint", endpoint),
             ("AI Profile", format!("{:?}", metadata.ai_execution_profile)),
         ];
+        if let Some(cwd) = self.session_cwds.get(session_id) {
+            details.push(("CWD (OSC 7)", cwd.clone()));
+        }
 
         match &metadata.launch_config {
             SessionLaunchConfig::Local(config) => {
