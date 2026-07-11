@@ -325,6 +325,11 @@ impl NyaTermApp {
             return;
         }
         if !self.terminal_selection_dragging {
+            // Stationary click without an active drag can still reposition the
+            // tracked input cursor (Tauri handleTerminalMouseUp smart cursor).
+            if self.terminal_selection.is_none() {
+                self.handle_smart_input_click(event, cx);
+            }
             return;
         }
         if let Some(cell) = self.point_to_terminal_cell(event.position) {
@@ -339,10 +344,135 @@ impl NyaTermApp {
             .is_some_and(|selection| selection.is_empty())
         {
             self.terminal_selection = None;
+            // Empty selection after click: try smart input cursor move.
+            self.handle_smart_input_click(event, cx);
+        } else if let Some(selected) = self.smart_cursor_selected_input_range() {
+            // Collapse caret toward click/edge, then clear selection (Tauri path).
+            let target = if event.click_count >= 2 {
+                selected.end
+            } else if let Some(index) = self.input_index_at_mouse(event.position) {
+                index.clamp(selected.start, selected.end)
+            } else {
+                selected.end
+            };
+            if self.settings.interaction_copy_on_select {
+                let _ = self.copy_terminal_selection(cx);
+            }
+            let _ = self.move_smart_input_cursor(target, cx);
+            self.clear_terminal_selection(cx);
         } else if self.settings.interaction_copy_on_select {
             let _ = self.copy_terminal_selection(cx);
         }
         cx.notify();
+    }
+
+    fn handle_smart_input_click(&mut self, event: &MouseUpEvent, cx: &mut Context<Self>) {
+        if event.modifiers.control
+            || event.modifiers.platform
+            || event.modifiers.alt
+            || event.modifiers.shift
+        {
+            return;
+        }
+        if !self.can_use_smart_cursor_selection() {
+            return;
+        }
+        let Some(target) = self.input_index_at_mouse(event.position) else {
+            return;
+        };
+        let _ = self.move_smart_input_cursor(target, cx);
+    }
+
+    fn input_index_at_mouse(&self, position: Point<Pixels>) -> Option<usize> {
+        if !self.can_use_smart_cursor_selection() {
+            return None;
+        }
+        let state = &self.command_input_tracker;
+        if state.value.is_empty() {
+            return None;
+        }
+        let cell = self.point_to_terminal_cell(position)?;
+        let offset = self.active_terminal_scroll_offset();
+        if offset != 0 {
+            return None;
+        }
+        let snapshot = self
+            .active_session_id
+            .as_deref()
+            .and_then(|session_id| self.terminal_views.get(session_id))
+            .map(|view| view.screen.viewport_snapshot(0))
+            .unwrap_or_else(|| self.terminal_screen.viewport_snapshot(0));
+        if cell.row != snapshot.cursor_row {
+            return None;
+        }
+        let line = snapshot.lines.get(cell.row).map(String::as_str).unwrap_or("");
+        let line_chars: Vec<char> = line.chars().collect();
+        let value_chars: Vec<char> = state.value.chars().collect();
+        if value_chars.is_empty() || value_chars.len() > line_chars.len() {
+            return None;
+        }
+        let mut input_start_col: Option<usize> = None;
+        if snapshot.cursor_col >= value_chars.len() {
+            let candidate = snapshot.cursor_col - value_chars.len();
+            if line_chars
+                .get(candidate..snapshot.cursor_col)
+                .map(|slice| slice == value_chars.as_slice())
+                .unwrap_or(false)
+            {
+                input_start_col = Some(candidate);
+            }
+        }
+        if input_start_col.is_none() {
+            let max_start = line_chars.len().saturating_sub(value_chars.len());
+            for start_col in (0..=max_start).rev() {
+                if line_chars[start_col..start_col + value_chars.len()] == value_chars[..] {
+                    input_start_col = Some(start_col);
+                    break;
+                }
+            }
+        }
+        let input_start_col = input_start_col?;
+        let input_end_col = input_start_col + value_chars.len();
+        if cell.col < input_start_col {
+            return None;
+        }
+        let char_index = if cell.col >= input_end_col {
+            value_chars.len()
+        } else {
+            cell.col - input_start_col
+        };
+        Some(
+            state
+                .value
+                .char_indices()
+                .nth(char_index)
+                .map(|(i, _)| i)
+                .unwrap_or(state.value.len()),
+        )
+    }
+
+    pub(in crate::ui::view) fn move_smart_input_cursor(
+        &mut self,
+        target_cursor: usize,
+        cx: &mut Context<Self>,
+    ) -> bool {
+        if !self.can_use_smart_cursor_selection() {
+            return false;
+        }
+        let mut state = self.command_input_tracker.clone();
+        let next_cursor = target_cursor.min(state.value.len());
+        let payload = build_move_input_cursor_data(&state.value, state.cursor, next_cursor);
+        if payload.is_empty() && next_cursor == state.cursor {
+            return false;
+        }
+        state.cursor = next_cursor;
+        self.command_input_tracker = state;
+        if !payload.is_empty() {
+            self.send_terminal_input_without_suggestion_track(payload.into_bytes(), cx);
+        } else {
+            cx.notify();
+        }
+        true
     }
 
     fn word_bounds_at(&self, cell: TerminalCellPos) -> (usize, usize) {

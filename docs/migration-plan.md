@@ -1113,4 +1113,7 @@ service boundary first:
 - GPUI smart cursor selection: when a painted selection is fully contained in the
   tracked input line, Backspace/Delete removes the range, plain typing replaces it,
   and Left/Right collapse to edges without clearing via normal send path.
+- Smart input click: mouse-up on the tracked command line repositions the shell
+  cursor with CSI left/right moves; finishing a selection fully inside the input
+  collapses the caret and clears the selection (Tauri mouse smart-cursor path).
 
