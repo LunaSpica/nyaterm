@@ -1512,3 +1512,10 @@ service boundary first:
   matching (case-insensitive, invalid patterns skipped).
 - Keybindings settings gain search filter, conflict detection (blocks save), and
   `tab.switchTo` recording hint; saving a default chord clears the override.
+
+## 2026-07-12 Search engines expand/test + Translation provider cards
+
+- Search engines settings: collapsed list headers, expand-to-edit Name/URL,
+  Test opens `%s` with query `nyaterm`, icon cycle on the header badge.
+- Translation settings: target language chips, provider status cards for Google /
+  Microsoft (free) and DeepL/Baidu/Ali/Youdao (configured/not configured).

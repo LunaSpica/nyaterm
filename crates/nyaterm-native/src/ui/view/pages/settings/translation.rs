@@ -151,7 +151,8 @@ impl NyaTermApp {
                                 }),
                             )),
                     )
-                    .child(settings_form_row(palette, 
+                    .child(settings_form_row(
+                        palette,
                         "Target language",
                         Some(SharedString::from(
                             "Default destination language for panel translations.",
@@ -159,11 +160,38 @@ impl NyaTermApp {
                         self.translation_input(
                             "translation-target-language",
                             "Target",
-                            translation_target_value,
+                            translation_target_value.clone(),
                             TranslateInputField::SettingsTargetLanguage,
                             cx,
                         ),
                     ))
+                    .child(
+                        div()
+                            .flex()
+                            .flex_wrap()
+                            .gap_1()
+                            .children(translation_target_languages().iter().map(|(code, label)| {
+                                let code = *code;
+                                let label = *label;
+                                let selected = self
+                                    .translation_settings
+                                    .target_language
+                                    .eq_ignore_ascii_case(code)
+                                    || self.translate_target_language.eq_ignore_ascii_case(code);
+                                settings_choice_chip(
+                                    palette,
+                                    format!("translation-target-{code}"),
+                                    label,
+                                    selected,
+                                    cx.listener(move |this, _, _, cx| {
+                                        this.translation_settings.target_language =
+                                            code.to_string();
+                                        this.translate_target_language = code.to_string();
+                                        this.save_translation_settings(cx);
+                                    }),
+                                )
+                            })),
+                    )
                     .child(settings_form_row(palette, 
                         "Actions",
                         None,
@@ -176,133 +204,203 @@ impl NyaTermApp {
                         ),
                     )),
             ))
-            .child(settings_form_section(palette, 
-                Some("DeepL"),
-                None,
+            .child(settings_form_section(
+                palette,
+                Some("Providers"),
+                Some("Free engines need no key; paid engines store secrets like the Tauri Translation tab."),
                 div()
                     .flex()
                     .flex_col()
-                    .gap_2()
-                    .child(self.translation_input(
-                        "translation-deepl-key",
-                        "DeepL Key",
-                        deepl_key_value,
-                        TranslateInputField::DeeplApiKey,
-                        cx,
+                    .gap_3()
+                    .child(translation_provider_card(
+                        palette,
+                        "Google",
+                        "No key required",
+                        true,
+                        true,
+                        div()
+                            .text_size(px(11.))
+                            .text_color(rgb(palette.text_muted))
+                            .child("Built-in free backend for panel and terminal selection translation."),
                     ))
-                    .child(
-                        div().child(small_button(palette, 
-                            "translation-clear-deepl",
-                            "Clear DeepL",
-                            cx.listener(|this, _, _, cx| {
-                                this.clear_translation_secret("deepl", cx);
-                            }),
-                        )),
-                    ),
-            ))
-            .child(settings_form_section(palette, 
-                Some("Baidu"),
-                None,
-                div()
-                    .flex()
-                    .flex_col()
-                    .gap_2()
-                    .child(
+                    .child(translation_provider_card(
+                        palette,
+                        "Microsoft",
+                        "No key required",
+                        true,
+                        true,
                         div()
-                            .grid()
-                            .grid_cols(2)
+                            .text_size(px(11.))
+                            .text_color(rgb(palette.text_muted))
+                            .child("Built-in free backend (edge-style translator path)."),
+                    ))
+                    .child(translation_provider_card(
+                        palette,
+                        "DeepL",
+                        if self.translation_settings.deepl_api_key.trim().is_empty() {
+                            "Not configured"
+                        } else {
+                            "Configured"
+                        },
+                        !self.translation_settings.deepl_api_key.trim().is_empty(),
+                        false,
+                        div()
+                            .flex()
+                            .flex_col()
                             .gap_2()
                             .child(self.translation_input(
-                                "translation-baidu-app-id",
-                                "Baidu App ID",
-                                baidu_app_id_value,
-                                TranslateInputField::BaiduAppId,
+                                "translation-deepl-api-key",
+                                "DeepL API key",
+                                deepl_key_value,
+                                TranslateInputField::DeeplApiKey,
                                 cx,
                             ))
-                            .child(self.translation_input(
-                                "translation-baidu-app-key",
-                                "Baidu App Key",
-                                baidu_key_value,
-                                TranslateInputField::BaiduAppKey,
-                                cx,
+                            .child(small_button(
+                                palette,
+                                "translation-clear-deepl",
+                                "Clear DeepL",
+                                cx.listener(|this, _, _, cx| {
+                                    this.clear_translation_secret("deepl", cx);
+                                }),
                             )),
-                    )
-                    .child(small_button(palette, 
-                        "translation-clear-baidu",
-                        "Clear Baidu",
-                        cx.listener(|this, _, _, cx| {
-                            this.clear_translation_secret("baidu", cx);
-                        }),
-                    )),
-            ))
-            .child(settings_form_section(palette, 
-                Some("Ali"),
-                None,
-                div()
-                    .flex()
-                    .flex_col()
-                    .gap_2()
-                    .child(
+                    ))
+                    .child(translation_provider_card(
+                        palette,
+                        "Baidu",
+                        if self.translation_settings.baidu_app_id.trim().is_empty()
+                            || self.translation_settings.baidu_app_key.trim().is_empty()
+                        {
+                            "Not configured"
+                        } else {
+                            "Configured"
+                        },
+                        !(self.translation_settings.baidu_app_id.trim().is_empty()
+                            || self.translation_settings.baidu_app_key.trim().is_empty()),
+                        false,
                         div()
-                            .grid()
-                            .grid_cols(2)
+                            .flex()
+                            .flex_col()
                             .gap_2()
-                            .child(self.translation_input(
-                                "translation-ali-app-id",
-                                "Ali App ID",
-                                ali_app_id_value,
-                                TranslateInputField::AliAppId,
-                                cx,
-                            ))
-                            .child(self.translation_input(
-                                "translation-ali-app-key",
-                                "Ali App Key",
-                                ali_key_value,
-                                TranslateInputField::AliAppKey,
-                                cx,
+                            .child(
+                                div()
+                                    .grid()
+                                    .grid_cols(2)
+                                    .gap_2()
+                                    .child(self.translation_input(
+                                        "translation-baidu-app-id",
+                                        "Baidu App ID",
+                                        baidu_app_id_value,
+                                        TranslateInputField::BaiduAppId,
+                                        cx,
+                                    ))
+                                    .child(self.translation_input(
+                                        "translation-baidu-app-key",
+                                        "Baidu App Key",
+                                        baidu_key_value,
+                                        TranslateInputField::BaiduAppKey,
+                                        cx,
+                                    )),
+                            )
+                            .child(small_button(
+                                palette,
+                                "translation-clear-baidu",
+                                "Clear Baidu",
+                                cx.listener(|this, _, _, cx| {
+                                    this.clear_translation_secret("baidu", cx);
+                                }),
                             )),
-                    )
-                    .child(small_button(palette, 
-                        "translation-clear-ali",
-                        "Clear Ali",
-                        cx.listener(|this, _, _, cx| {
-                            this.clear_translation_secret("ali", cx);
-                        }),
-                    )),
-            ))
-            .child(settings_form_section(palette, 
-                Some("Youdao"),
-                None,
-                div()
-                    .flex()
-                    .flex_col()
-                    .gap_2()
-                    .child(
+                    ))
+                    .child(translation_provider_card(
+                        palette,
+                        "Ali",
+                        if self.translation_settings.ali_app_id.trim().is_empty()
+                            || self.translation_settings.ali_app_key.trim().is_empty()
+                        {
+                            "Not configured"
+                        } else {
+                            "Configured"
+                        },
+                        !(self.translation_settings.ali_app_id.trim().is_empty()
+                            || self.translation_settings.ali_app_key.trim().is_empty()),
+                        false,
                         div()
-                            .grid()
-                            .grid_cols(2)
+                            .flex()
+                            .flex_col()
                             .gap_2()
-                            .child(self.translation_input(
-                                "translation-youdao-app-id",
-                                "Youdao App ID",
-                                youdao_app_id_value,
-                                TranslateInputField::YoudaoAppId,
-                                cx,
-                            ))
-                            .child(self.translation_input(
-                                "translation-youdao-app-key",
-                                "Youdao App Key",
-                                youdao_key_value,
-                                TranslateInputField::YoudaoAppKey,
-                                cx,
+                            .child(
+                                div()
+                                    .grid()
+                                    .grid_cols(2)
+                                    .gap_2()
+                                    .child(self.translation_input(
+                                        "translation-ali-app-id",
+                                        "Ali App ID",
+                                        ali_app_id_value,
+                                        TranslateInputField::AliAppId,
+                                        cx,
+                                    ))
+                                    .child(self.translation_input(
+                                        "translation-ali-app-key",
+                                        "Ali App Key",
+                                        ali_key_value,
+                                        TranslateInputField::AliAppKey,
+                                        cx,
+                                    )),
+                            )
+                            .child(small_button(
+                                palette,
+                                "translation-clear-ali",
+                                "Clear Ali",
+                                cx.listener(|this, _, _, cx| {
+                                    this.clear_translation_secret("ali", cx);
+                                }),
                             )),
-                    )
-                    .child(small_button(palette, 
-                        "translation-clear-youdao",
-                        "Clear Youdao",
-                        cx.listener(|this, _, _, cx| {
-                            this.clear_translation_secret("youdao", cx);
-                        }),
+                    ))
+                    .child(translation_provider_card(
+                        palette,
+                        "Youdao",
+                        if self.translation_settings.youdao_app_id.trim().is_empty()
+                            || self.translation_settings.youdao_app_key.trim().is_empty()
+                        {
+                            "Not configured"
+                        } else {
+                            "Configured"
+                        },
+                        !(self.translation_settings.youdao_app_id.trim().is_empty()
+                            || self.translation_settings.youdao_app_key.trim().is_empty()),
+                        false,
+                        div()
+                            .flex()
+                            .flex_col()
+                            .gap_2()
+                            .child(
+                                div()
+                                    .grid()
+                                    .grid_cols(2)
+                                    .gap_2()
+                                    .child(self.translation_input(
+                                        "translation-youdao-app-id",
+                                        "Youdao App ID",
+                                        youdao_app_id_value,
+                                        TranslateInputField::YoudaoAppId,
+                                        cx,
+                                    ))
+                                    .child(self.translation_input(
+                                        "translation-youdao-app-key",
+                                        "Youdao App Key",
+                                        youdao_key_value,
+                                        TranslateInputField::YoudaoAppKey,
+                                        cx,
+                                    )),
+                            )
+                            .child(small_button(
+                                palette,
+                                "translation-clear-youdao",
+                                "Clear Youdao",
+                                cx.listener(|this, _, _, cx| {
+                                    this.clear_translation_secret("youdao", cx);
+                                }),
+                            )),
                     )),
             ))
     }
@@ -320,3 +418,65 @@ fn translation_provider_status(provider: &str) -> &'static str {
         _ => "unknown",
     }
 }
+
+fn translation_provider_card(
+    palette: crate::ui::theme::ThemePalette,
+    title: &'static str,
+    status_label: &'static str,
+    ok: bool,
+    free: bool,
+    body: impl IntoElement,
+) -> impl IntoElement {
+    let (fg, bg) = if free {
+        (palette.accent, palette.hover)
+    } else if ok {
+        (palette.success, 0x12261c)
+    } else {
+        (palette.text_muted, palette.border)
+    };
+    div()
+        .rounded_md()
+        .border_1()
+        .border_color(rgb(palette.border))
+        .bg(rgb(palette.input))
+        .p_3()
+        .flex()
+        .flex_col()
+        .gap_3()
+        .child(
+            div()
+                .flex()
+                .items_center()
+                .justify_between()
+                .gap_2()
+                .child(
+                    div()
+                        .text_size(px(12.))
+                        .font_weight(FontWeight(600.))
+                        .text_color(rgb(palette.text))
+                        .child(title),
+                )
+                .child(status_pill(status_label, rgb(fg), rgb(bg))),
+        )
+        .child(body)
+}
+
+fn translation_target_languages() -> &'static [(&'static str, &'static str)] {
+    &[
+        ("zh-CN", "中文 (简体)"),
+        ("zh-TW", "中文 (繁體)"),
+        ("en", "English"),
+        ("ja", "日本語"),
+        ("ko", "한국어"),
+        ("fr", "Français"),
+        ("de", "Deutsch"),
+        ("es", "Español"),
+        ("pt", "Português"),
+        ("ru", "Русский"),
+        ("it", "Italiano"),
+        ("ar", "العربية"),
+        ("th", "ไทย"),
+        ("vi", "Tiếng Việt"),
+    ]
+}
+

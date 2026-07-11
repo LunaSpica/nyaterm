@@ -111,6 +111,7 @@ pub struct NyaTermApp {
     pub(in crate::ui::view) terminal_search_active_index: usize,
     /// Which search engine row is focused for name/url editing (Settings → Search).
     pub(in crate::ui::view) search_engine_edit_index: Option<usize>,
+    pub(in crate::ui::view) search_engine_expanded_index: Option<usize>,
     pub(in crate::ui::view) search_engine_edit_field: SearchEngineEditorField,
     pub(in crate::ui::view) search_engine_focus: FocusHandle,
     /// Dragging the terminal scrollback scrollbar thumb.
@@ -854,6 +855,7 @@ impl NyaTermApp {
             terminal_search_whole_word: false,
             terminal_search_active_index: 0,
             search_engine_edit_index: None,
+            search_engine_expanded_index: None,
             search_engine_edit_field: SearchEngineEditorField::Name,
             search_engine_focus: cx.focus_handle(),
             terminal_scrollbar_dragging: false,

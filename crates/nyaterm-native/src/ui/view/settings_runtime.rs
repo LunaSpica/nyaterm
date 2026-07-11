@@ -671,6 +671,7 @@ impl NyaTermApp {
                 show_in_menu: true,
             },
         );
+        self.search_engine_expanded_index = Some(0);
         self.search_engine_edit_index = Some(0);
         self.search_engine_edit_field = SearchEngineEditorField::Name;
         self.save_terminal_settings(cx);
@@ -688,6 +689,13 @@ impl NyaTermApp {
         self.settings.search_custom_engines.remove(index);
         if self.settings.search_custom_engines.is_empty() {
             self.settings.search_custom_engines = default_search_engines();
+        }
+        if self.search_engine_expanded_index == Some(index) {
+            self.search_engine_expanded_index = None;
+        } else if let Some(edit) = self.search_engine_expanded_index {
+            if edit > index {
+                self.search_engine_expanded_index = Some(edit - 1);
+            }
         }
         if let Some(edit) = self.search_engine_edit_index {
             if edit == index {
@@ -833,6 +841,49 @@ impl NyaTermApp {
         self.terminal_status = "search engines reset to defaults".to_string();
     }
 
+    pub(in crate::ui::view) fn expand_search_engine(
+        &mut self,
+        index: usize,
+        cx: &mut Context<Self>,
+    ) {
+        if self.search_engine_expanded_index == Some(index) {
+            self.search_engine_expanded_index = None;
+            self.search_engine_edit_index = None;
+        } else {
+            self.search_engine_expanded_index = Some(index);
+        }
+        cx.notify();
+    }
+
+    pub(in crate::ui::view) fn test_search_engine(
+        &mut self,
+        index: usize,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(engine) = self.settings.search_custom_engines.get(index) else {
+            self.terminal_status = "search engine not found".to_string();
+            cx.notify();
+            return;
+        };
+        if !engine.url_template.contains("%s") {
+            self.terminal_status = "search engine URL must include %s".to_string();
+            cx.notify();
+            return;
+        }
+        let url = engine
+            .url_template
+            .replace("%s", &urlencoding_query("nyaterm"));
+        match open_external_url_simple(&url) {
+            Ok(()) => {
+                self.terminal_status = format!("tested search engine: {}", engine.name);
+            }
+            Err(error) => {
+                self.terminal_status = format!("test search engine failed: {error}");
+            }
+        }
+        cx.notify();
+    }
+
 
     pub(in crate::ui::view) fn toggle_terminal_action_links(&mut self, cx: &mut Context<Self>) {
         self.settings.terminal_action_links_enabled = !self.settings.terminal_action_links_enabled;
@@ -898,3 +949,52 @@ fn adjust_u32_setting(current: u32, delta: i32, min: u32, max: u32) -> u32 {
     next.clamp(min, max)
 }
 
+
+
+fn urlencoding_query(query: &str) -> String {
+    let mut out = String::new();
+    for ch in query.chars() {
+        match ch {
+            'A'..='Z' | 'a'..='z' | '0'..='9' | '-' | '_' | '.' | '~' => out.push(ch),
+            ' ' => out.push_str("%20"),
+            _ => {
+                for byte in ch.to_string().into_bytes() {
+                    out.push_str(&format!("%{byte:02X}"));
+                }
+            }
+        }
+    }
+    out
+}
+
+fn open_external_url_simple(url: &str) -> Result<(), String> {
+    #[cfg(target_os = "linux")]
+    {
+        std::process::Command::new("xdg-open")
+            .arg(url)
+            .spawn()
+            .map(|_| ())
+            .map_err(|error| error.to_string())
+    }
+    #[cfg(target_os = "macos")]
+    {
+        std::process::Command::new("open")
+            .arg(url)
+            .spawn()
+            .map(|_| ())
+            .map_err(|error| error.to_string())
+    }
+    #[cfg(target_os = "windows")]
+    {
+        std::process::Command::new("cmd")
+            .args(["/C", "start", "", url])
+            .spawn()
+            .map(|_| ())
+            .map_err(|error| error.to_string())
+    }
+    #[cfg(not(any(target_os = "linux", target_os = "macos", target_os = "windows")))]
+    {
+        let _ = url;
+        Err("open URL is not supported on this platform".to_string())
+    }
+}

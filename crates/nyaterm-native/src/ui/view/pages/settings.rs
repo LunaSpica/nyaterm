@@ -515,10 +515,11 @@ pub(super) fn settings_switch(
 pub(super) fn settings_choice_chip(
     palette: ThemePalette,
     id: impl Into<String>,
-    label: &'static str,
+    label: impl Into<SharedString>,
     selected: bool,
     on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
 ) -> impl IntoElement {
+    let label = label.into();
     let selected_border = palette.accent;
     let idle_border = palette.border;
     // Selected chip bg: light themes tint lightly; dark themes use hover/elevated surface.

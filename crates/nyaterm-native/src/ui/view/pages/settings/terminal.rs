@@ -534,6 +534,7 @@ impl NyaTermApp {
         let engines = self.settings.search_custom_engines.clone();
         let menu_count = engines.iter().filter(|engine| engine.show_in_menu).count();
         let edit_index = self.search_engine_edit_index;
+        let expanded_index = self.search_engine_expanded_index;
         let edit_field = self.search_engine_edit_field;
 
         settings_form_section(
@@ -590,11 +591,14 @@ impl NyaTermApp {
                                 div()
                                     .text_size(px(12.))
                                     .text_color(rgb(palette.text_dimmed))
-                                    .child("No custom engines — Add one for selection online search."),
+                                    .child(
+                                        "No custom engines — Add one for selection online search.",
+                                    ),
                             ),
                     )
                 })
                 .children(engines.into_iter().enumerate().map(|(index, engine)| {
+                    let is_open = expanded_index == Some(index);
                     let name_active =
                         edit_index == Some(index) && edit_field == SearchEngineEditorField::Name;
                     let url_active =
@@ -610,151 +614,191 @@ impl NyaTermApp {
                         engine.url_template.clone()
                     };
                     let has_placeholder = engine.url_template.contains("%s");
+                    let icon_label = search_engine_icon_label(engine.icon.as_deref());
+                    let icon_color = search_engine_icon_color(engine.icon.as_deref());
                     div()
                         .id(SharedString::from(format!("settings-search-engine-{index}")))
                         .rounded_md()
                         .border_1()
                         .border_color(rgb(palette.border))
                         .bg(rgb(palette.input))
-                        .p_3()
+                        .overflow_hidden()
                         .flex()
                         .flex_col()
-                        .gap_2()
                         .child(
                             div()
+                                .id(SharedString::from(format!(
+                                    "settings-search-engine-header-{index}"
+                                )))
+                                .px_3()
+                                .py_2()
                                 .flex()
                                 .items_center()
-                                .justify_between()
                                 .gap_2()
+                                .cursor_pointer()
+                                .hover(|this| this.bg(rgb(palette.hover)))
+                                .on_click(cx.listener(move |this, _, _, cx| {
+                                    this.expand_search_engine(index, cx);
+                                }))
                                 .child(
                                     div()
+                                        .id(SharedString::from(format!(
+                                            "settings-search-engine-icon-{index}"
+                                        )))
+                                        .size(px(22.))
+                                        .rounded_md()
+                                        .bg(rgb(palette.bg))
+                                        .border_1()
+                                        .border_color(rgb(palette.border))
                                         .flex()
                                         .items_center()
-                                        .gap_2()
+                                        .justify_center()
+                                        .text_size(px(10.))
+                                        .font_weight(FontWeight(700.))
+                                        .text_color(rgb(icon_color))
+                                        .child(icon_label)
+                                        .on_click(cx.listener(move |this, _, _, cx| {
+                                            this.cycle_search_engine_icon(index, cx);
+                                        })),
+                                )
+                                .child(
+                                    div()
                                         .min_w_0()
                                         .flex_1()
+                                        .flex()
+                                        .flex_col()
                                         .child(
                                             div()
-                                                .id(SharedString::from(format!(
-                                                    "settings-search-engine-icon-{index}"
-                                                )))
-                                                .h(px(28.))
-                                                .w(px(28.))
-                                                .rounded_md()
-                                                .border_1()
-                                                .border_color(rgb(palette.border))
-                                                .bg(rgb(palette.surface))
-                                                .flex()
-                                                .items_center()
-                                                .justify_center()
-                                                .text_size(px(10.))
-                                                .font_weight(FontWeight(800.))
-                                                .text_color(rgb(search_engine_icon_color(
-                                                    engine.icon.as_deref(),
-                                                )))
-                                                .cursor_pointer()
-                                                .child(search_engine_icon_label(
-                                                    engine.icon.as_deref(),
-                                                ))
-                                                .on_click(cx.listener(move |this, _, _, cx| {
-                                                    this.cycle_search_engine_icon(index, cx);
-                                                })),
-                                        )
-                                        .child(
-                                            div()
-                                                .min_w_0()
-                                                .flex_1()
                                                 .text_size(px(12.))
                                                 .font_weight(FontWeight(700.))
                                                 .text_color(rgb(palette.text))
+                                                .overflow_hidden()
                                                 .child(if engine.name.trim().is_empty() {
                                                     "Unnamed engine".to_string()
                                                 } else {
                                                     engine.name.clone()
                                                 }),
+                                        )
+                                        .child(
+                                            div()
+                                                .text_size(px(10.))
+                                                .text_color(rgb(palette.text_muted))
+                                                .overflow_hidden()
+                                                .child(if engine.url_template.trim().is_empty() {
+                                                    "No URL template".to_string()
+                                                } else {
+                                                    truncate_preview(&engine.url_template, 48)
+                                                }),
                                         ),
                                 )
+                                .child(settings_switch(
+                                    palette,
+                                    format!("settings-search-engine-menu-{index}"),
+                                    engine.show_in_menu,
+                                    cx.listener(move |this, _, _, cx| {
+                                        this.toggle_search_engine_in_menu(index, cx);
+                                    }),
+                                ))
+                                .child(small_button(
+                                    palette,
+                                    format!("settings-search-engine-test-{index}"),
+                                    "Test",
+                                    cx.listener(move |this, _, _, cx| {
+                                        this.test_search_engine(index, cx);
+                                    }),
+                                ))
+                                .child(small_button(
+                                    palette,
+                                    format!("settings-search-engine-del-{index}"),
+                                    "Delete",
+                                    cx.listener(move |this, _, _, cx| {
+                                        this.remove_search_engine(index, cx);
+                                    }),
+                                ))
                                 .child(
                                     div()
-                                        .flex()
-                                        .items_center()
-                                        .gap_1()
-                                        .child(settings_switch(
-                                            palette,
-                                            format!("settings-search-engine-menu-{index}"),
-                                            engine.show_in_menu,
-                                            cx.listener(move |this, _, _, cx| {
-                                                this.toggle_search_engine_in_menu(index, cx);
-                                            }),
-                                        ))
-                                        .child(small_button(
-                                            palette,
-                                            format!("settings-search-engine-del-{index}"),
-                                            "Delete",
-                                            cx.listener(move |this, _, _, cx| {
-                                                this.remove_search_engine(index, cx);
-                                            }),
-                                        )),
+                                        .text_size(px(11.))
+                                        .text_color(rgb(palette.text_dimmed))
+                                        .child(if is_open { "▾" } else { "▸" }),
                                 ),
                         )
-                        .child(
-                            transfer_input(
-                                format!("settings-search-engine-name-{index}"),
-                                "Name",
-                                name_value,
-                                name_active,
-                                palette,
+                        .when(is_open, |this| {
+                            this.child(
+                                div()
+                                    .border_t_1()
+                                    .border_color(rgb(palette.border))
+                                    .bg(rgb(palette.bg))
+                                    .px_3()
+                                    .py_3()
+                                    .flex()
+                                    .flex_col()
+                                    .gap_2()
+                                    .child(
+                                        transfer_input(
+                                            format!("settings-search-engine-name-{index}"),
+                                            "Name",
+                                            name_value,
+                                            name_active,
+                                            palette,
+                                        )
+                                        .track_focus(&self.search_engine_focus)
+                                        .on_click(cx.listener(move |this, _, window, cx| {
+                                            this.focus_search_engine_field(
+                                                index,
+                                                SearchEngineEditorField::Name,
+                                                window,
+                                                cx,
+                                            );
+                                        }))
+                                        .on_key_down(cx.listener(
+                                            |this, event: &KeyDownEvent, _, cx| {
+                                                cx.stop_propagation();
+                                                this.handle_search_engine_key_down(event, cx);
+                                            },
+                                        )),
+                                    )
+                                    .child(
+                                        transfer_input(
+                                            format!("settings-search-engine-url-{index}"),
+                                            "URL template (%s = query)",
+                                            url_value,
+                                            url_active,
+                                            palette,
+                                        )
+                                        .track_focus(&self.search_engine_focus)
+                                        .on_click(cx.listener(move |this, _, window, cx| {
+                                            this.focus_search_engine_field(
+                                                index,
+                                                SearchEngineEditorField::Url,
+                                                window,
+                                                cx,
+                                            );
+                                        }))
+                                        .on_key_down(cx.listener(
+                                            |this, event: &KeyDownEvent, _, cx| {
+                                                cx.stop_propagation();
+                                                this.handle_search_engine_key_down(event, cx);
+                                            },
+                                        )),
+                                    )
+                                    .child(
+                                        div()
+                                            .text_size(px(10.))
+                                            .text_color(rgb(if has_placeholder {
+                                                palette.text_muted
+                                            } else {
+                                                palette.danger
+                                            }))
+                                            .child(if has_placeholder {
+                                                "Ready — Test opens the URL with query \"nyaterm\"."
+                                                    .to_string()
+                                            } else {
+                                                "URL should include %s for the selected text"
+                                                    .to_string()
+                                            }),
+                                    ),
                             )
-                            .track_focus(&self.search_engine_focus)
-                            .on_click(cx.listener(move |this, _, window, cx| {
-                                this.focus_search_engine_field(
-                                    index,
-                                    SearchEngineEditorField::Name,
-                                    window,
-                                    cx,
-                                );
-                            }))
-                            .on_key_down(cx.listener(|this, event: &KeyDownEvent, _, cx| {
-                                cx.stop_propagation();
-                                this.handle_search_engine_key_down(event, cx);
-                            })),
-                        )
-                        .child(
-                            transfer_input(
-                                format!("settings-search-engine-url-{index}"),
-                                "URL template (%s = query)",
-                                url_value,
-                                url_active,
-                                palette,
-                            )
-                            .track_focus(&self.search_engine_focus)
-                            .on_click(cx.listener(move |this, _, window, cx| {
-                                this.focus_search_engine_field(
-                                    index,
-                                    SearchEngineEditorField::Url,
-                                    window,
-                                    cx,
-                                );
-                            }))
-                            .on_key_down(cx.listener(|this, event: &KeyDownEvent, _, cx| {
-                                cx.stop_propagation();
-                                this.handle_search_engine_key_down(event, cx);
-                            })),
-                        )
-                        .child(
-                            div()
-                                .text_size(px(10.))
-                                .text_color(rgb(if has_placeholder {
-                                    palette.text_muted
-                                } else {
-                                    palette.danger
-                                }))
-                                .child(if has_placeholder {
-                                    "Ready for context-menu online search".to_string()
-                                } else {
-                                    "URL should include %s for the selected text".to_string()
-                                }),
-                        )
+                        })
                 })),
         )
     }
