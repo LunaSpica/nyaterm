@@ -398,8 +398,8 @@ impl NyaTermApp {
         send_to_all: bool,
         cx: &mut Context<Self>,
     ) {
-        if execute && !command_text.ends_with('\n') {
-            command_text.push('\n');
+        if execute && !command_text.ends_with('\r') && !command_text.ends_with('\n') {
+            command_text.push('\r');
         }
         let command_bytes = command_text.into_bytes();
         if let Ok(store) = ConnectionStore::open_with_portable_key_path(

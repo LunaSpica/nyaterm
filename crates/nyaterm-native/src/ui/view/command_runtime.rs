@@ -113,8 +113,8 @@ impl NyaTermApp {
             cx.notify();
             return;
         }
-        if execute && !command.ends_with('\n') {
-            command.push('\n');
+        if execute && !command.ends_with('\r') && !command.ends_with('\n') {
+            command.push('\r');
         }
         self.send_terminal_input(command.into_bytes(), cx);
         self.terminal_status = if execute {
@@ -142,8 +142,8 @@ impl NyaTermApp {
             cx.notify();
             return;
         }
-        if execute && !command.ends_with('\n') {
-            command.push('\n');
+        if execute && !command.ends_with('\r') && !command.ends_with('\n') {
+            command.push('\r');
         }
         self.send_terminal_input(command.into_bytes(), cx);
         self.terminal_status = if execute {
@@ -219,8 +219,8 @@ impl NyaTermApp {
             }
             return;
         }
-        if execute && !command.ends_with('\n') {
-            command.push('\n');
+        if execute && !command.ends_with('\r') && !command.ends_with('\n') {
+            command.push('\r');
         }
         let input_bytes = if should_continue_agent {
             match self.begin_ai_agent_observation(&card.command) {
@@ -674,7 +674,7 @@ impl NyaTermApp {
         payload.push('\u{15}'); // Ctrl+U
         payload.push_str(&command);
         if execute {
-            payload.push('\n');
+            payload.push('\r');
         }
         self.command_input_tracker = TerminalInputState::new();
         self.command_suggestions = None;
