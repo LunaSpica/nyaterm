@@ -944,3 +944,10 @@ service boundary first:
 - VTE screen keeps scrolled-off rows up to `terminal.scrollback_lines`.
 - Mouse wheel adjusts per-session `scroll_offset` (0 follows live output).
 - Snapshots/paint/selection/cursor use `viewport_snapshot(offset)`; cursor hides when scrolled away.
+
+## Terminal keyboard scrollback
+
+- `Shift+PageUp/PageDown` page through local scrollback without sending CSI 5~/6~ to the PTY.
+- `Shift+Home/End` jump to oldest history / live bottom.
+- `Ctrl+Shift+Up/Down` scroll one line.
+- Typing while scrolled in history snaps back to the live bottom before sending input.

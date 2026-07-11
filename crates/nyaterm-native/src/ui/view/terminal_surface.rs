@@ -80,6 +80,7 @@ impl NyaTermApp {
                 },
                 cursor_style,
                 selection_cols,
+                self.terminal_cell_size().1,
                 palette,
             );
             if self.settings.terminal_show_line_numbers {
@@ -192,6 +193,9 @@ impl NyaTermApp {
                         if this.handle_global_shortcut(event, window, cx) {
                             return;
                         }
+                        if this.handle_terminal_scroll_key(event, cx) {
+                            return;
+                        }
                         let keystroke = &event.keystroke;
                         let primary = keystroke.modifiers.control || keystroke.modifiers.platform;
                         if primary
@@ -282,8 +286,8 @@ impl NyaTermApp {
                                         ScrollDelta::Lines(delta) => delta.y.round() as i32,
                                         ScrollDelta::Pixels(delta) => {
                                             let py = f32::from(delta.y);
-                                            // ~18px per terminal line.
-                                            (py / 18.).round() as i32
+                                            let (_, cell_h) = this.terminal_cell_size();
+                                            (py / cell_h.max(1.)).round() as i32
                                         }
                                     };
                                     if delta != 0 {

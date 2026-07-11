@@ -83,6 +83,10 @@ impl NyaTermApp {
             cx.notify();
             return;
         };
+        // Typing while scrolled in history returns to the live bottom (xterm-like).
+        if self.active_terminal_scroll_offset() > 0 {
+            self.scroll_terminal_to_bottom(cx);
+        }
         let peers = self.sync_peer_session_ids(&session_id);
         let byte_count = bytes.len();
         self.send_terminal_input_to_session(session_id, bytes.clone(), cx);
@@ -557,6 +561,87 @@ impl NyaTermApp {
             self.terminal_scroll_offset = 0;
         }
         cx.notify();
+    }
+
+    pub(in crate::ui::view) fn scroll_terminal_to_top(&mut self, cx: &mut Context<Self>) {
+        if let Some(session_id) = self.active_session_id.clone() {
+            if let Some(view) = self.terminal_views.get_mut(&session_id) {
+                view.scroll_offset = view.screen.scrollback_len();
+            }
+        } else {
+            self.terminal_scroll_offset = self.terminal_screen.scrollback_len();
+        }
+        cx.notify();
+    }
+
+    pub(in crate::ui::view) fn active_terminal_page_rows(&self) -> usize {
+        // Prefer live screen rows when available; fall back to classic 24-row page.
+        if let Some(session_id) = self.active_session_id.as_deref() {
+            if let Some(view) = self.terminal_views.get(session_id) {
+                let rows = view.screen.viewport_snapshot(0).lines.len();
+                if rows > 0 {
+                    return rows;
+                }
+            }
+        }
+        let rows = self.terminal_screen.viewport_snapshot(0).lines.len();
+        if rows > 0 { rows } else { 24 }
+    }
+
+    /// Shift+PageUp/PageDown/Home/End (and Ctrl+Shift+Up/Down) navigate local scrollback
+    /// without sending CSI sequences to the remote PTY — common terminal emulator UX.
+    pub(in crate::ui::view) fn handle_terminal_scroll_key(
+        &mut self,
+        event: &KeyDownEvent,
+        cx: &mut Context<Self>,
+    ) -> bool {
+        let keystroke = &event.keystroke;
+        let key = keystroke.key.as_str();
+        let shift = keystroke.modifiers.shift;
+        let control = keystroke.modifiers.control;
+        let alt = keystroke.modifiers.alt;
+        let platform = keystroke.modifiers.platform;
+        let function = keystroke.modifiers.function;
+        if alt || platform || function {
+            return false;
+        }
+
+        let page = self.active_terminal_page_rows().max(1) as i32;
+        if shift && !control {
+            match key {
+                "pageup" => {
+                    self.scroll_terminal_by(page, cx);
+                    return true;
+                }
+                "pagedown" => {
+                    self.scroll_terminal_by(-page, cx);
+                    return true;
+                }
+                "home" => {
+                    self.scroll_terminal_to_top(cx);
+                    return true;
+                }
+                "end" => {
+                    self.scroll_terminal_to_bottom(cx);
+                    return true;
+                }
+                _ => {}
+            }
+        }
+        if shift && control {
+            match key {
+                "up" => {
+                    self.scroll_terminal_by(1, cx);
+                    return true;
+                }
+                "down" => {
+                    self.scroll_terminal_by(-1, cx);
+                    return true;
+                }
+                _ => {}
+            }
+        }
+        false
     }
 
     pub(in crate::ui::view) fn sync_terminal_scrollback_limits(&mut self) {

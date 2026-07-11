@@ -34,6 +34,7 @@ pub(super) fn terminal_line_element(
     cursor_style: &str,
     // Half-open column range selected on this line, if any.
     selection_cols: Option<(usize, usize)>,
+    line_height: f32,
     palette: crate::ui::theme::ThemePalette,
 ) -> impl IntoElement {
     let mut spans = if let Some(ansi) = ansi_spans {
@@ -51,12 +52,13 @@ pub(super) fn terminal_line_element(
     if let Some(col) = cursor_col {
         spans = apply_cursor_style(spans, col, cursor_style, palette);
     }
+    let line_h = px(line_height.max(12.));
     let mut row = div()
         .flex()
         .flex_row()
         .items_center()
-        .min_h(px(18.))
-        .line_height(px(18.))
+        .min_h(line_h)
+        .line_height(line_h)
         .whitespace_nowrap();
     // Search match chrome: use terminal selection/find colors (Tauri TerminalColors).
     if active_search_match {
@@ -70,7 +72,7 @@ pub(super) fn terminal_line_element(
 
     for span in spans {
         let mut child = div()
-            .line_height(px(18.))
+            .line_height(line_h)
             .whitespace_nowrap()
             .child(if span.text.is_empty() {
                 " ".to_string()

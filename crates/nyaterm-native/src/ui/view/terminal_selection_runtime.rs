@@ -2,14 +2,20 @@ use super::*;
 use gpui::{Bounds, MouseDownEvent, MouseMoveEvent, MouseUpEvent, Pixels, Point};
 
 /// Approximate monospaced cell metrics used for hit-testing the painted terminal grid.
-const TERMINAL_LINE_HEIGHT_PX: f32 = 18.;
-const CELL_WIDTH_RATIO: f32 = 0.62;
+/// Keep in sync with `terminal_line_element` row height and surface font size.
+const CELL_WIDTH_RATIO: f32 = 0.6;
+const LINE_HEIGHT_RATIO: f32 = 1.25;
 
 impl NyaTermApp {
     pub(in crate::ui::view) fn terminal_cell_size(&self) -> (f32, f32) {
         let font_size = self.settings.terminal_font_size.max(8) as f32;
+        // Prefer painted fixed 18px when font is near default; scale with font otherwise.
+        let cell_h = if (font_size - 14.).abs() < 0.5 {
+            18.
+        } else {
+            (font_size * LINE_HEIGHT_RATIO).max(font_size + 2.)
+        };
         let cell_w = (font_size * CELL_WIDTH_RATIO).max(4.);
-        let cell_h = TERMINAL_LINE_HEIGHT_PX.max(font_size);
         (cell_w, cell_h)
     }
 

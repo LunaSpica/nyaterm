@@ -274,6 +274,7 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
         let palette = self.theme_palette();
+        let accent = rgb(palette.accent);
         let id = SharedString::from(format!("workspace-split-resize-{split_id}"));
         match direction {
             WorkspaceSplitDirection::Horizontal => div()
@@ -284,7 +285,7 @@ impl NyaTermApp {
                 .rounded_sm()
                 .bg(rgb(palette.border))
                 .cursor_row_resize()
-                .hover(|this| this.bg(rgb(0x58a6ff)))
+                .hover(move |this| this.bg(accent))
                 .on_mouse_down(
                     MouseButton::Left,
                     cx.listener(move |this, event: &gpui::MouseDownEvent, _, cx| {
@@ -300,7 +301,7 @@ impl NyaTermApp {
                 .rounded_sm()
                 .bg(rgb(palette.border))
                 .cursor_col_resize()
-                .hover(|this| this.bg(rgb(0x58a6ff)))
+                .hover(move |this| this.bg(accent))
                 .on_mouse_down(
                     MouseButton::Left,
                     cx.listener(move |this, event: &gpui::MouseDownEvent, _, cx| {
