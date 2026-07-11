@@ -424,6 +424,21 @@ impl NyaTermApp {
                                     })
                                 },
                             )
+                            .on_mouse_down(
+                                MouseButton::Middle,
+                                {
+                                    let session_id = output_session_id.clone();
+                                    cx.listener(move |this, _event: &gpui::MouseDownEvent, window, cx| {
+                                        // xterm/Linux middle-click paste convention.
+                                        this.activate_workspace_pane(session_id.clone(), cx);
+                                        window.focus(&this.terminal_focus);
+                                        this.close_terminal_context_menu(cx);
+                                        this.close_action_link_menu(cx);
+                                        this.paste_from_clipboard(window, cx);
+                                        cx.stop_propagation();
+                                    })
+                                },
+                            )
                             .on_click({
                                 let session_id = output_session_id.clone();
                                 cx.listener(move |this, event: &ClickEvent, window, cx| {

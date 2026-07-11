@@ -399,6 +399,9 @@ pub struct NyaTermApp {
     pub(in crate::ui::view) terminal_selection_dragging: bool,
     /// Last painted bounds of the active terminal text area (window coords).
     pub(in crate::ui::view) terminal_surface_bounds: Option<gpui::Bounds<gpui::Pixels>>,
+    /// Measured monospaced cell size (width, height) from the terminal font when available.
+    pub(in crate::ui::view) terminal_cell_metrics: Option<(f32, f32)>,
+
     pub(in crate::ui::view) last_viewport_size: (f32, f32),
     pub(in crate::ui::view) selected_nav: NavItem,
     pub(in crate::ui::view) main_mode: MainMode,
@@ -1057,6 +1060,7 @@ impl NyaTermApp {
             terminal_selection: None,
             terminal_selection_dragging: false,
             terminal_surface_bounds: None,
+            terminal_cell_metrics: None,
             last_viewport_size: (1280., 800.),
             selected_nav: NavItem::Workspace,
             main_mode: MainMode::Workspace,

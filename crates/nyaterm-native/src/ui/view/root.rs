@@ -9,6 +9,7 @@ impl Render for NyaTermApp {
         self.ensure_event_pump(window, cx);
         let vs = window.viewport_size();
         self.last_viewport_size = (f32::from(vs.width), f32::from(vs.height));
+        self.refresh_terminal_cell_metrics(cx);
         if self.ai_chat_focus_pending {
             window.focus(&self.ai_chat_focus);
             self.ai_chat_focus_pending = false;

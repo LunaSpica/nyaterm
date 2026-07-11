@@ -1004,3 +1004,13 @@ service boundary first:
 - Settings Search rows show a clickable icon chip (cycles icon keys); context-menu
   online-search items include a short icon prefix.
 - Terminal surface uses pointer cursor while an action-link hover tooltip is active.
+
+## 2026-07-11 Terminal glyph metrics + word separators + middle-click paste
+
+- Selection/action-link hit-testing prefers GPUI TextSystem `ch_advance` for the
+  configured terminal font (Tauri-style measured cell width), with fontSize*0.62
+  fallback and painted 18px row height at the default 14px font.
+- Double-click word selection uses `interaction.word_separators` (xterm
+  wordSeparator semantics) instead of a hard-coded alnum set; default separators
+  align closer to Tauri.
+- Middle-click on the terminal surface pastes from the clipboard (xterm/Linux).

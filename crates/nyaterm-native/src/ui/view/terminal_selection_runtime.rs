@@ -3,11 +3,18 @@ use gpui::{Bounds, ClickEvent, MouseDownEvent, MouseMoveEvent, MouseUpEvent, Pix
 
 /// Approximate monospaced cell metrics used for hit-testing the painted terminal grid.
 /// Keep in sync with `terminal_line_element` row height and surface font size.
-const CELL_WIDTH_RATIO: f32 = 0.6;
+const CELL_WIDTH_RATIO: f32 = 0.62;
 const LINE_HEIGHT_RATIO: f32 = 1.25;
 
 impl NyaTermApp {
     pub(in crate::ui::view) fn terminal_cell_size(&self) -> (f32, f32) {
+        if let Some(metrics) = self.terminal_cell_metrics {
+            return metrics;
+        }
+        self.fallback_terminal_cell_size()
+    }
+
+    fn fallback_terminal_cell_size(&self) -> (f32, f32) {
         let font_size = self.settings.terminal_font_size.max(8) as f32;
         // Prefer painted fixed 18px when font is near default; scale with font otherwise.
         let cell_h = if (font_size - 14.).abs() < 0.5 {
@@ -15,8 +22,43 @@ impl NyaTermApp {
         } else {
             (font_size * LINE_HEIGHT_RATIO).max(font_size + 2.)
         };
+        // Tauri gutter fallback uses fontSize * 0.62 when measured cell is unavailable.
         let cell_w = (font_size * CELL_WIDTH_RATIO).max(4.);
         (cell_w, cell_h)
+    }
+
+    /// Refresh monospaced cell metrics from GPUI TextSystem for the configured terminal font.
+    pub(in crate::ui::view) fn refresh_terminal_cell_metrics(&mut self, cx: &App) {
+        let font_size = self.settings.terminal_font_size.max(8) as f32;
+        let family = self.settings.terminal_font_family.trim();
+        let family = if family.is_empty() {
+            "JetBrains Mono"
+        } else {
+            family
+        };
+        let text_system = cx.text_system();
+        let font_id = text_system.resolve_font(&gpui::font(SharedString::from(family.to_string())));
+        let size = px(font_size);
+        let measured_w = text_system
+            .ch_advance(font_id, size)
+            .or_else(|_| text_system.em_advance(font_id, size))
+            .ok()
+            .map(|w| f32::from(w))
+            .filter(|w| w.is_finite() && *w > 1.0);
+        let ascent = f32::from(text_system.ascent(font_id, size));
+        let descent = f32::from(text_system.descent(font_id, size)).abs();
+        let font_line = (ascent + descent).max(font_size + 2.);
+        // Keep painter contract: default 14px font paints ~18px rows.
+        let cell_h = if (font_size - 14.).abs() < 0.5 {
+            18.
+        } else {
+            (font_size * LINE_HEIGHT_RATIO).max(font_line)
+        };
+        let cell_w = measured_w.unwrap_or_else(|| (font_size * CELL_WIDTH_RATIO).max(4.));
+        let next = (cell_w, cell_h);
+        if self.terminal_cell_metrics != Some(next) {
+            self.terminal_cell_metrics = Some(next);
+        }
     }
 
     pub(in crate::ui::view) fn terminal_content_padding_px(&self) -> f32 {
@@ -274,15 +316,18 @@ impl NyaTermApp {
             return (cell.col, cell.col.saturating_add(1));
         }
         let idx = cell.col.min(chars.len().saturating_sub(1));
-        if !is_word_char(chars[idx]) {
+        // xterm wordSeparator semantics: characters listed are separators, not word body.
+        let separators = self.settings.interaction_word_separators.as_str();
+        let is_word = |ch: char| !separators.contains(ch);
+        if !is_word(chars[idx]) {
             return (idx, idx.saturating_add(1));
         }
         let mut start = idx;
-        while start > 0 && is_word_char(chars[start - 1]) {
+        while start > 0 && is_word(chars[start - 1]) {
             start -= 1;
         }
         let mut end = idx + 1;
-        while end < chars.len() && is_word_char(chars[end]) {
+        while end < chars.len() && is_word(chars[end]) {
             end += 1;
         }
         (start, end)
@@ -539,10 +584,6 @@ impl NyaTermApp {
     pub(in crate::ui::view) fn remember_terminal_surface_bounds(&mut self, bounds: Bounds<Pixels>) {
         self.terminal_surface_bounds = Some(bounds);
     }
-}
-
-fn is_word_char(ch: char) -> bool {
-    ch.is_ascii_alphanumeric() || ch == '_' || ch == '-' || ch == '.' || ch == '/' || ch == ':'
 }
 
 /// Invisible canvas child that records the terminal output bounds for selection hit-testing.

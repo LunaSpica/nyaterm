@@ -799,7 +799,7 @@ impl Default for AppSettingsSummary {
             interaction_command_suggestions_enabled: true,
             interaction_command_suggestion_min_chars: 2,
             interaction_command_suggestion_max_chars: 64,
-            interaction_word_separators: " \t\r\n\"'`~!@#$%^&*()-=+[{]}\\|;:,<.>/?".to_string(),
+            interaction_word_separators: " \t\r\n()[]{}\"':=,;|&<>".to_string(),
             interaction_duplicate_session_command_delay_ms: 1000,
             interaction_alt_as_meta: false,
             interaction_mac_ime_compatibility: true,

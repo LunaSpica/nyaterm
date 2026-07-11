@@ -44,11 +44,13 @@ impl NyaTermApp {
         let next = (self.settings.terminal_font_size as i16 + delta)
             .clamp(TERMINAL_FONT_SIZE_MIN, TERMINAL_FONT_SIZE_MAX);
         self.settings.terminal_font_size = next as u16;
+        self.terminal_cell_metrics = None;
         self.save_appearance_settings(cx);
     }
 
     pub(in crate::ui::view) fn reset_terminal_font_size(&mut self, cx: &mut Context<Self>) {
         self.settings.terminal_font_size = AppSettingsSummary::default().terminal_font_size;
+        self.terminal_cell_metrics = None;
         self.save_appearance_settings(cx);
     }
 
