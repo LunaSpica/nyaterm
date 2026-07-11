@@ -1579,3 +1579,13 @@ service boundary first:
 
 - Serial connection editor adds Backspace mode cycle; details show BS.
 - Security Auth credentials list gains On/Off toggle that persists enablement.
+
+## 2026-07-12 Active Sessions + Password list densify
+
+- Active Sessions rows: full display name, uppercase type badge, full mono session id,
+  rename + more menu (Reconnect/Disconnect) matching Tauri overflow actions, busy-state
+  guards while reconnect/disconnect runs, disconnected dimming.
+- Password manager list: Show/Hide reveal (no auto-copy on show), Copy when revealed,
+  editor Show/Hide for password field.
+- Credential list Show/Hide toggle; secret only when revealed.
+- Command History: click runs command (Tauri double-click send parity).
