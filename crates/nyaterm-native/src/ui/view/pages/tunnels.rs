@@ -1,16 +1,16 @@
 use gpui::{
     App, ClickEvent, Context, FontWeight, Hsla, IntoElement, KeyDownEvent, Window, div, prelude::*,
-    px, rgb,
+    px, rgb, svg,
 };
 
 use std::collections::{HashMap, HashSet};
 
-use crate::ui::components::{empty_panel, section_header, small_button, status_pill};
+use crate::ui::components::{empty_panel, small_button, status_pill};
 
 use super::super::{
     NetworkDeleteConfirmState, NetworkGroupDeleteConfirmState, NetworkGroupEditorState,
     NetworkProxyEditorField, NetworkProxyEditorState, NetworkTab, NetworkTunnelEditorField,
-    NetworkTunnelEditorState, NyaTermApp, metric, transfer_input, tunnel_endpoint, tunnel_mode,
+    NetworkTunnelEditorState, NyaTermApp, transfer_input, tunnel_endpoint, tunnel_mode,
     tunnel_mode_label, tunnel_name,
 };
 use nyaterm_domain::{ProxyConfig, ProxyGroup, TunnelConfig, TunnelGroup, truncate_preview};
@@ -67,18 +67,7 @@ impl NyaTermApp {
                 })
             })
             .count();
-        let auto_open_count = self
-            .tunnels
-            .iter()
-            .filter(|tunnel| tunnel.auto_open)
-            .count();
-        let proxy_command_count = self
-            .proxies
-            .iter()
-            .filter(|proxy| proxy.protocol == "proxycommand")
-            .count();
-
-        let mut tunnel_list = div().flex().flex_col().gap_3();
+                let mut tunnel_list = div().flex().flex_col().gap_2();
         if self.tunnels.is_empty() {
             tunnel_list = tunnel_list.child(empty_panel(
                 "No saved tunnels were found in the native runtime directory yet.",
@@ -91,7 +80,7 @@ impl NyaTermApp {
             }
         }
 
-        let mut proxy_list = div().flex().flex_col().gap_3();
+        let mut proxy_list = div().flex().flex_col().gap_2();
         if self.proxies.is_empty() {
             proxy_list = proxy_list.child(empty_panel(
                 "No saved proxies were found in the native runtime directory yet.",
@@ -104,249 +93,287 @@ impl NyaTermApp {
             }
         }
 
-        // PanelHeader already shows "NETWORK"; body starts with tabs + actions.
+        // Tauri NetworkPanel body (PanelHeader is shared):
+        // scroll(p-3) > Tabs(grid-cols-2) > config row (label + New Group/New item) > grouped list.
+        // Inline editors/confirm banners stay above the list for native UX.
+        let config_label = match self.network_tab {
+            NetworkTab::Tunnels => "Tunnel Config",
+            NetworkTab::Proxies => "Proxy Config",
+        };
+
         div()
             .flex()
             .flex_col()
             .size_full()
             .overflow_hidden()
             .bg(rgb(0x161b22))
-            .child(
-                div()
-                    .h(px(34.))
-                    .px_2()
-                    .flex()
-                    .items_center()
-                    .gap_1()
-                    .border_b_1()
-                    .border_color(rgb(0x30363d))
-                    .bg(rgb(0x12171f))
-                    .child(network_tab_button(
-                        "network-tab-tunnels",
-                        "Tunnels",
-                        self.network_tab == NetworkTab::Tunnels,
-                        cx.listener(|this, _, _, cx| {
-                            this.set_network_tab(NetworkTab::Tunnels, cx);
-                        }),
-                    ))
-                    .child(network_tab_button(
-                        "network-tab-proxies",
-                        "Proxies",
-                        self.network_tab == NetworkTab::Proxies,
-                        cx.listener(|this, _, _, cx| {
-                            this.set_network_tab(NetworkTab::Proxies, cx);
-                        }),
-                    ))
-                    .child(small_button(
-                        "network-group-new",
-                        "New Group",
-                        cx.listener(|this, _, _, cx| {
-                            this.open_network_group_editor(this.network_tab, None, cx);
-                        }),
-                    ))
-                    .when(self.network_tab == NetworkTab::Tunnels, |this| {
-                        this.child(small_button(
-                            "network-tunnel-new",
-                            "New Tunnel",
-                            cx.listener(|this, _, window, cx| {
-                                this.open_network_tunnel_editor(None, window, cx);
-                            }),
-                        ))
-                    })
-                    .when(self.network_tab == NetworkTab::Proxies, |this| {
-                        this.child(small_button(
-                            "network-proxy-new",
-                            "New Proxy",
-                            cx.listener(|this, _, window, cx| {
-                                this.open_network_proxy_editor(None, window, cx);
-                            }),
-                        ))
-                    })
-            )
-            .child(
-                div()
-                    .h(px(28.))
-                    .px_2()
-                    .flex()
-                    .items_center()
-                    .gap_3()
-                    .border_b_1()
-                    .border_color(rgb(0x30363d))
-                    .bg(rgb(0x0d1117))
-                    .child(network_meta_chip(
-                        "Profiles",
-                        match self.network_tab {
-                            NetworkTab::Tunnels => self.tunnels.len(),
-                            NetworkTab::Proxies => self.proxies.len(),
-                        }
-                        .to_string(),
-                    ))
-                    .child(network_meta_chip(
-                        "Visible",
-                        match self.network_tab {
-                            NetworkTab::Tunnels => filtered_tunnels.len(),
-                            NetworkTab::Proxies => filtered_proxies.len(),
-                        }
-                        .to_string(),
-                    ))
-                    .child(network_meta_chip(
-                        "Groups",
-                        match self.network_tab {
-                            NetworkTab::Tunnels => self.tunnel_groups.len(),
-                            NetworkTab::Proxies => self.proxy_groups.len(),
-                        }
-                        .to_string(),
-                    ))
-                    .child(network_meta_chip(
-                        if self.network_tab == NetworkTab::Tunnels {
-                            "Open"
-                        } else {
-                            "SOCKS"
-                        },
-                        if self.network_tab == NetworkTab::Tunnels {
-                            open_tunnels.len().to_string()
-                        } else {
-                            self.proxies
-                                .iter()
-                                .filter(|proxy| proxy.protocol != "proxycommand")
-                                .count()
-                                .to_string()
-                        },
-                    ))
-                    .child(network_meta_chip(
-                        if self.network_tab == NetworkTab::Tunnels {
-                            "Auto"
-                        } else {
-                            "Cmd"
-                        },
-                        if self.network_tab == NetworkTab::Tunnels {
-                            auto_open_count.to_string()
-                        } else {
-                            proxy_command_count.to_string()
-                        },
-                    )),
-            )
             .when(
                 self.network_tab == NetworkTab::Tunnels && missing_connections > 0,
                 |this| {
+                    this.child(
+                        div()
+                            .mx_2()
+                            .mt_2()
+                            .rounded_md()
+                            .border_1()
+                            .border_color(rgb(0xfacc15))
+                            .bg(rgb(0x2f260f))
+                            .px_2()
+                            .py_1()
+                            .text_xs()
+                            .text_color(rgb(0xfef3c7))
+                            .child(format!(
+                                "{missing_connections} tunnel profile(s) reference missing SSH connections."
+                            )),
+                    )
+                },
+            )
+            .when_some(self.network_delete_confirm.clone(), |this, confirm| {
                 this.child(
                     div()
-                        .rounded_md()
-                        .border_1()
-                        .border_color(rgb(0xfacc15))
-                        .bg(rgb(0x2f260f))
-                        .p_3()
-                        .text_sm()
-                        .text_color(rgb(0xfef3c7))
-                        .child(format!(
-                            "{missing_connections} tunnel profile(s) reference missing SSH connections."
+                        .px_2()
+                        .pt_2()
+                        .child(network_delete_confirm_panel(confirm, cx)),
+                )
+            })
+            .when_some(self.network_group_editor.clone(), |this, editor| {
+                this.child(
+                    div()
+                        .px_2()
+                        .pt_2()
+                        .child(network_group_editor_panel(
+                            editor,
+                            &self.network_group_editor_focus,
+                            cx,
                         )),
                 )
             })
-            .when_some(self.network_delete_confirm.clone(), |this, confirm| {
-                this.child(network_delete_confirm_panel(confirm, cx))
-            })
-            .when_some(self.network_group_editor.clone(), |this, editor| {
-                this.child(network_group_editor_panel(
-                    editor,
-                    &self.network_group_editor_focus,
-                    cx,
-                ))
-            })
             .when_some(self.network_group_delete_confirm.clone(), |this, confirm| {
-                this.child(network_group_delete_confirm_panel(confirm, cx))
+                this.child(
+                    div()
+                        .px_2()
+                        .pt_2()
+                        .child(network_group_delete_confirm_panel(confirm, cx)),
+                )
             })
             .when_some(self.network_tunnel_editor.clone(), |this, editor| {
-                this.child(network_tunnel_editor_panel(
-                    editor,
-                    self,
-                    &self.network_tunnel_editor_focus,
-                    cx,
-                ))
+                this.child(
+                    div()
+                        .px_2()
+                        .pt_2()
+                        .child(network_tunnel_editor_panel(
+                            editor,
+                            self,
+                            &self.network_tunnel_editor_focus,
+                            cx,
+                        )),
+                )
             })
             .when_some(self.network_proxy_editor.clone(), |this, editor| {
-                this.child(network_proxy_editor_panel(
-                    editor,
-                    self,
-                    &self.network_proxy_editor_focus,
-                    cx,
-                ))
+                this.child(
+                    div()
+                        .px_2()
+                        .pt_2()
+                        .child(network_proxy_editor_panel(
+                            editor,
+                            self,
+                            &self.network_proxy_editor_focus,
+                            cx,
+                        )),
+                )
             })
             .child(
                 div()
-                    .h(px(34.))
-                    .px_2()
-                    .border_b_1()
-                    .border_color(rgb(0x30363d))
-                    .bg(rgb(0x12171f))
-                    .flex()
-                    .items_center()
-                    .gap_2()
-                    .child(
-                        transfer_input(
-                            if self.network_tab == NetworkTab::Tunnels {
-                                "tunnel-search-input"
-                            } else {
-                                "proxy-search-input"
-                            },
-                            "Search",
-                            if self.network_tab == NetworkTab::Tunnels {
-                                self.tunnel_search_draft.clone()
-                            } else {
-                                self.proxy_search_draft.clone()
-                            },
-                            true,
-                        )
-                        .flex_1()
-                        .track_focus(if self.network_tab == NetworkTab::Tunnels {
-                            &self.tunnel_search_focus
-                        } else {
-                            &self.proxy_search_focus
-                        })
-                        .on_click(cx.listener(|this, _, window, cx| {
-                            if this.network_tab == NetworkTab::Tunnels {
-                                window.focus(&this.tunnel_search_focus);
-                            } else {
-                                window.focus(&this.proxy_search_focus);
-                            }
-                            cx.notify();
-                        }))
-                        .on_key_down(cx.listener(|this, event: &KeyDownEvent, _, cx| {
-                            cx.stop_propagation();
-                            if this.network_tab == NetworkTab::Tunnels {
-                                this.handle_tunnel_search_key_down(event, cx);
-                            } else {
-                                this.handle_proxy_search_key_down(event, cx);
-                            }
-                        })),
-                    )
-                    .child(status_pill(
-                        if self.network_tab == NetworkTab::Tunnels {
-                            "Tunnel"
-                        } else {
-                            "Proxy"
-                        },
-                        rgb(0x93c5fd),
-                        rgb(0x17233a),
-                    ))
+                    .flex_1()
+                    .min_h_0()
+                    .overflow_hidden()
                     .child(
                         div()
-                            .font_family("JetBrains Mono")
-                            .text_xs()
-                            .text_color(rgb(0x98a3b8))
+                            .id("network-list-scroll")
+                            .size_full()
+                            .overflow_scroll()
+                            .scrollbar_width(px(6.))
+                            .p_3()
+                            .flex()
+                            .flex_col()
+                            .gap_3()
+                            // TabsList grid-cols-2 h-8
+                            .child(
+                                div()
+                                    .h(px(32.))
+                                    .w_full()
+                                    .flex()
+                                    .items_center()
+                                    .gap_1()
+                                    .rounded_md()
+                                    .border_1()
+                                    .border_color(rgb(0x30363d))
+                                    .bg(rgb(0x0d1117))
+                                    .p(px(2.))
+                                    .child(
+                                        network_tab_button(
+                                            "network-tab-tunnels",
+                                            "Tunnels",
+                                            self.network_tab == NetworkTab::Tunnels,
+                                            cx.listener(|this, _, _, cx| {
+                                                this.set_network_tab(NetworkTab::Tunnels, cx);
+                                            }),
+                                        ),
+                                    )
+                                    .child(
+                                        network_tab_button(
+                                            "network-tab-proxies",
+                                            "Proxies",
+                                            self.network_tab == NetworkTab::Proxies,
+                                            cx.listener(|this, _, _, cx| {
+                                                this.set_network_tab(NetworkTab::Proxies, cx);
+                                            }),
+                                        ),
+                                    ),
+                            )
+                            // Config row: label left, group + new right (Tauri)
+                            .child(
+                                div()
+                                    .flex()
+                                    .items_center()
+                                    .justify_between()
+                                    .gap_2()
+                                    .child(
+                                        div()
+                                            .text_sm()
+                                            .font_weight(FontWeight(600.))
+                                            .text_color(rgb(0xc9d1d9))
+                                            .child(config_label),
+                                    )
+                                    .child(
+                                        div()
+                                            .flex()
+                                            .items_center()
+                                            .gap_1()
+                                            .child(icon_network_action(
+                                                "network-group-new",
+                                                "📁+",
+                                                cx.listener(|this, _, _, cx| {
+                                                    this.open_network_group_editor(
+                                                        this.network_tab,
+                                                        None,
+                                                        cx,
+                                                    );
+                                                }),
+                                            ))
+                                            .when(self.network_tab == NetworkTab::Tunnels, |this| {
+                                                this.child(small_button(
+                                                    "network-tunnel-new",
+                                                    "+ Tunnel",
+                                                    cx.listener(|this, _, window, cx| {
+                                                        this.open_network_tunnel_editor(
+                                                            None, window, cx,
+                                                        );
+                                                    }),
+                                                ))
+                                            })
+                                            .when(self.network_tab == NetworkTab::Proxies, |this| {
+                                                this.child(small_button(
+                                                    "network-proxy-new",
+                                                    "+ Proxy",
+                                                    cx.listener(|this, _, window, cx| {
+                                                        this.open_network_proxy_editor(
+                                                            None, window, cx,
+                                                        );
+                                                    }),
+                                                ))
+                                            }),
+                                    ),
+                            )
+                            // Optional compact search (native convenience; denser than old strip)
+                            .child(
+                                div()
+                                    .h(px(28.))
+                                    .flex()
+                                    .items_center()
+                                    .gap_2()
+                                    .child(
+                                        transfer_input(
+                                            if self.network_tab == NetworkTab::Tunnels {
+                                                "tunnel-search-input"
+                                            } else {
+                                                "proxy-search-input"
+                                            },
+                                            "Search",
+                                            if self.network_tab == NetworkTab::Tunnels {
+                                                self.tunnel_search_draft.clone()
+                                            } else {
+                                                self.proxy_search_draft.clone()
+                                            },
+                                            true,
+                                        )
+                                        .flex_1()
+                                        .track_focus(if self.network_tab == NetworkTab::Tunnels {
+                                            &self.tunnel_search_focus
+                                        } else {
+                                            &self.proxy_search_focus
+                                        })
+                                        .on_click(cx.listener(|this, _, window, cx| {
+                                            if this.network_tab == NetworkTab::Tunnels {
+                                                window.focus(&this.tunnel_search_focus);
+                                            } else {
+                                                window.focus(&this.proxy_search_focus);
+                                            }
+                                            cx.notify();
+                                        }))
+                                        .on_key_down(cx.listener(|this, event: &KeyDownEvent, _, cx| {
+                                            cx.stop_propagation();
+                                            if this.network_tab == NetworkTab::Tunnels {
+                                                this.handle_tunnel_search_key_down(event, cx);
+                                            } else {
+                                                this.handle_proxy_search_key_down(event, cx);
+                                            }
+                                        })),
+                                    )
+                                    .child(
+                                        div()
+                                            .font_family("JetBrains Mono")
+                                            .text_size(px(10.))
+                                            .text_color(rgb(0x6e7681))
+                                            .child(match self.network_tab {
+                                                NetworkTab::Tunnels => format!(
+                                                    "{}/{}",
+                                                    filtered_tunnels.len(),
+                                                    self.tunnels.len()
+                                                ),
+                                                NetworkTab::Proxies => format!(
+                                                    "{}/{}",
+                                                    filtered_proxies.len(),
+                                                    self.proxies.len()
+                                                ),
+                                            }),
+                                    ),
+                            )
                             .child(match self.network_tab {
-                                NetworkTab::Tunnels => {
-                                    format!("{}/{}", filtered_tunnels.len(), self.tunnels.len())
-                                }
-                                NetworkTab::Proxies => {
-                                    format!("{}/{}", filtered_proxies.len(), self.proxies.len())
-                                }
+                                NetworkTab::Tunnels => tunnel_list.into_any_element(),
+                                NetworkTab::Proxies => proxy_list.into_any_element(),
                             }),
                     ),
             )
-            .child(match self.network_tab {
-                NetworkTab::Tunnels => tunnel_list.into_any_element(),
-                NetworkTab::Proxies => proxy_list.into_any_element(),
-            })
     }
+}
+
+fn icon_network_action(
+    id: impl Into<String>,
+    label: &'static str,
+    on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
+) -> impl IntoElement {
+    div()
+        .id(gpui::SharedString::from(id.into()))
+        .size(px(28.))
+        .flex()
+        .items_center()
+        .justify_center()
+        .rounded_md()
+        .text_size(px(12.))
+        .text_color(rgb(0x8b949e))
+        .cursor_pointer()
+        .hover(|this| this.bg(rgb(0x21262d)).text_color(rgb(0xc9d1d9)))
+        .child(label)
+        .on_click(on_click)
 }

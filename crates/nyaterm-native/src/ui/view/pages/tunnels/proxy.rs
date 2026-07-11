@@ -112,13 +112,26 @@ pub(super) fn proxy_section(
         .overflow_hidden()
         .child(
             div()
+                .id(gpui::SharedString::from(format!("proxy-section-header-{}", section.id)))
+                .h(px(30.))
                 .px_3()
-                .py_2()
                 .flex()
                 .items_center()
                 .justify_between()
-                .gap_3()
+                .gap_2()
                 .bg(rgb(0x10151e))
+                .cursor_pointer()
+                .hover(|this| this.bg(rgb(0x151b24)))
+                .on_click({
+                    let section_id_for_toggle = section_id_for_toggle.clone();
+                    cx.listener(move |this, _, _, cx| {
+                        this.toggle_network_section(
+                            NetworkTab::Proxies,
+                            section_id_for_toggle.clone(),
+                            cx,
+                        );
+                    })
+                })
                 .child(
                     div()
                         .min_w_0()
@@ -127,39 +140,40 @@ pub(super) fn proxy_section(
                         .gap_2()
                         .child(
                             div()
-                                .text_sm()
-                                .font_weight(FontWeight(800.))
+                                .text_size(px(12.))
+                                .text_color(rgb(0x8b949e))
+                                .child(if collapsed { "▸" } else { "▾" }),
+                        )
+                        .child(
+                            div()
+                                .text_xs()
+                                .font_weight(FontWeight(600.))
                                 .text_color(rgb(0xe5edf7))
                                 .child(truncate_preview(&section.label, 48)),
                         )
-                        .when(section.group.is_none(), |this| {
-                            this.child(status_pill("default", rgb(0x93c5fd), rgb(0x17233a)))
-                        }),
+                        .child(
+                            div()
+                                .rounded_full()
+                                .px_1()
+                                .text_size(px(10.))
+                                .text_color(rgb(0x8b949e))
+                                .bg(rgb(0x21262d))
+                                .child(item_count.to_string()),
+                        ),
                 )
                 .child(
                     div()
                         .flex()
                         .items_center()
-                        .gap_2()
-                        .child(status_pill("profiles", rgb(0xcbd5e1), rgb(0x202938)))
-                        .child(
-                            div()
-                                .font_family("JetBrains Mono")
-                                .text_xs()
-                                .text_color(rgb(0x98a3b8))
-                                .child(format!("{item_count} · command {command_count}")),
-                        )
-                        .child(small_button(
-                            format!("proxy-section-toggle-{}", section.id),
-                            if collapsed { "Open" } else { "Close" },
-                            cx.listener(move |this, _, _, cx| {
-                                this.toggle_network_section(
-                                    NetworkTab::Proxies,
-                                    section_id_for_toggle.clone(),
-                                    cx,
-                                );
-                            }),
-                        )),
+                        .gap_1()
+                        .when(command_count > 0, |this| {
+                            this.child(
+                                div()
+                                    .text_size(px(10.))
+                                    .text_color(rgb(0xa371f7))
+                                    .child(format!("{command_count} cmd")),
+                            )
+                        }),
                 )
                 .when_some(section.group.clone(), |this, group| {
                     let rename_id = group.id.clone();
@@ -218,99 +232,66 @@ pub(super) fn proxy_network_row(
     } else {
         format!("{}:{}", proxy.host, proxy.port)
     };
-    let secret_state = if proxy
-        .password
-        .as_deref()
-        .is_some_and(|value| !value.is_empty())
-        || proxy
-            .password_id
-            .as_deref()
-            .is_some_and(|value| !value.is_empty())
-    {
-        "secret"
-    } else {
-        "no secret"
-    };
-
     let proxy_id_for_move = proxy.id.clone();
     let proxy_id_for_edit = proxy.id.clone();
     let proxy_id_for_delete = proxy.id.clone();
     let proxy_label_for_delete = proxy.name.clone();
 
+    // Tauri ProxyRow: name, protocol, address; overflow actions on the right.
     div()
         .border_t_1()
-        .border_color(rgb(0x253044))
+        .border_color(rgb(0x21262d))
         .px_3()
-        .py_3()
+        .py_2()
         .flex()
         .items_center()
         .gap_3()
-        .hover(|this| this.bg(rgb(0x1c2230)))
+        .hover(|this| this.bg(rgb(0x1c2128)))
         .child(
             div()
                 .min_w_0()
                 .flex_1()
                 .flex()
                 .flex_col()
-                .gap_1()
                 .child(
                     div()
-                        .flex()
-                        .items_center()
-                        .gap_2()
-                        .child(
-                            div()
-                                .min_w_0()
-                                .text_sm()
-                                .font_weight(FontWeight(800.))
-                                .text_color(rgb(0xe5edf7))
-                                .child(truncate_preview(&proxy.name, 52)),
-                        )
-                        .child(status_pill(
-                            proxy_protocol_label(&proxy.protocol),
-                            rgb(0x93c5fd),
-                            rgb(0x17233a),
-                        )),
+                        .text_sm()
+                        .font_weight(FontWeight(600.))
+                        .text_color(rgb(0xe5edf7))
+                        .child(truncate_preview(&proxy.name, 52)),
                 )
                 .child(
                     div()
+                        .mt(px(2.))
+                        .text_size(px(12.))
+                        .text_color(rgb(0x8b949e))
+                        .child(proxy_protocol_label(&proxy.protocol)),
+                )
+                .child(
+                    div()
+                        .mt(px(2.))
                         .font_family("JetBrains Mono")
-                        .text_xs()
-                        .text_color(rgb(0x98a3b8))
+                        .text_size(px(11.))
+                        .text_color(rgb(0x6e7681))
                         .child(truncate_preview(&address, 92)),
-                )
-                .child(
-                    div()
-                        .text_xs()
-                        .text_color(rgb(0x64748b))
-                        .child(format!("id {}", truncate_preview(&proxy.id, 32))),
                 ),
         )
         .child(
             div()
                 .flex()
                 .items_center()
-                .gap_2()
-                .child(status_pill(
-                    if is_command { "command" } else { "host" },
-                    if is_command {
-                        rgb(0xc4b5fd)
-                    } else {
-                        rgb(0x6ee7b7)
-                    },
-                    if is_command {
-                        rgb(0x251f3f)
-                    } else {
-                        rgb(0x12342a)
-                    },
+                .gap_1()
+                .child(proxy_icon_action(
+                    format!("proxy-edit-{}", proxy.id),
+                    "icons/net/edit.svg",
+                    cx.listener(move |this, _, window, cx| {
+                        this.open_network_proxy_editor(Some(proxy_id_for_edit.clone()), window, cx);
+                    }),
                 ))
-                .child(status_pill(secret_state, rgb(0xcbd5e1), rgb(0x202938)))
-                .child(if app.proxy_groups.is_empty() {
-                    status_pill("ungrouped", rgb(0x98a3b8), rgb(0x202938)).into_any_element()
-                } else {
-                    small_button(
+                .when(!app.proxy_groups.is_empty(), |this| {
+                    this.child(proxy_icon_action(
                         format!("proxy-move-group-{}", proxy.id),
-                        "Move",
+                        "icons/net/move.svg",
                         cx.listener(move |this, _, _, cx| {
                             this.open_network_move_picker(
                                 NetworkTab::Proxies,
@@ -318,19 +299,11 @@ pub(super) fn proxy_network_row(
                                 cx,
                             );
                         }),
-                    )
-                    .into_any_element()
+                    ))
                 })
-                .child(small_button(
-                    format!("proxy-edit-{}", proxy.id),
-                    "Edit",
-                    cx.listener(move |this, _, window, cx| {
-                        this.open_network_proxy_editor(Some(proxy_id_for_edit.clone()), window, cx);
-                    }),
-                ))
-                .child(small_button(
+                .child(proxy_icon_action(
                     format!("proxy-delete-{}", proxy.id),
-                    "Delete",
+                    "icons/net/delete.svg",
                     cx.listener(move |this, _, _, cx| {
                         this.open_network_delete_confirm(
                             NetworkTab::Proxies,
@@ -341,6 +314,31 @@ pub(super) fn proxy_network_row(
                     }),
                 )),
         )
+}
+
+fn proxy_icon_action(
+    id: impl Into<String>,
+    label: &'static str,
+    on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
+) -> impl IntoElement {
+    div()
+        .id(gpui::SharedString::from(id.into()))
+        .size(px(24.))
+        .flex()
+        .items_center()
+        .justify_center()
+        .rounded_md()
+        .text_size(px(12.))
+        .text_color(rgb(0x8b949e))
+        .cursor_pointer()
+        .hover(|this| this.bg(rgb(0x21262d)).text_color(rgb(0xc9d1d9)))
+        .child(
+            svg()
+                .size(px(14.))
+                .flex_none()
+                .path(label),
+        )
+        .on_click(on_click)
 }
 
 fn proxy_move_picker(

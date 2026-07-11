@@ -126,16 +126,16 @@ impl NyaTermApp {
                             .flex()
                             .items_center()
                             .gap_0()
-                            .child(icon_button(
+                            .child(compact_remote_svg_button(
                                 "docker-refresh",
-                                "↻",
+                                "icons/fe/refresh.svg",
                                 cx.listener(|this, _, window, cx| {
                                     this.refresh_docker(window, cx);
                                 }),
                             ))
-                            .child(icon_button(
+                            .child(compact_remote_svg_button(
                                 "docker-prune",
-                                "🗑",
+                                "icons/fe/delete.svg",
                                 cx.listener(|this, _, _, cx| {
                                     this.prune_docker_system(cx);
                                 }),

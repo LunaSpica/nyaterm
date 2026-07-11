@@ -140,7 +140,8 @@ impl NyaTermApp {
             .relative()
             .child(
                 div()
-                    .h(px(32.))
+                    // Secondary action strip under shared PanelHeader (Tauri keeps actions in header).
+                    .h(px(30.))
                     .flex_none()
                     .px_2()
                     .border_b_1()
@@ -165,12 +166,12 @@ impl NyaTermApp {
                                 36,
                             )),
                     )
-                    .child(icon_button(
+                    .child(ai_svg_icon_button(
                         "ai-execution-mode-toggle",
                         match self.ai_settings.agent_command_execution_mode {
-                            AgentCommandExecutionMode::Auto => "⚠",
-                            AgentCommandExecutionMode::Smart => "◎",
-                            AgentCommandExecutionMode::ConfirmEach => "☰",
+                            AgentCommandExecutionMode::Auto => "icons/ai/exec-auto.svg",
+                            AgentCommandExecutionMode::Smart => "icons/ai/exec-smart.svg",
+                            AgentCommandExecutionMode::ConfirmEach => "icons/ai/exec-confirm.svg",
                         },
                         cx.listener(|this, _, _, cx| {
                             this.ai_history_open = false;
@@ -178,9 +179,9 @@ impl NyaTermApp {
                             cx.notify();
                         }),
                     ))
-                    .child(icon_button(
+                    .child(ai_svg_icon_button(
                         "ai-history-toggle",
-                        "⌛",
+                        "icons/ai/history.svg",
                         cx.listener(|this, _, window, cx| {
                             this.ai_execution_menu_open = false;
                             this.ai_history_open = !this.ai_history_open;
@@ -193,17 +194,17 @@ impl NyaTermApp {
                             cx.notify();
                         }),
                     ))
-                    .child(icon_button(
+                    .child(ai_svg_icon_button(
                         "ai-open-settings",
-                        "⚙",
+                        "icons/ai/settings.svg",
                         cx.listener(|this, _, _, cx| {
                             this.settings_active_tab = SettingsTab::AiGeneral;
                             this.open_page(NavItem::Settings, cx);
                         }),
                     ))
-                    .child(icon_button(
+                    .child(ai_svg_icon_button(
                         "ai-new-chat",
-                        "＋",
+                        "icons/ai/new.svg",
                         cx.listener(|this, _, _, cx| {
                             this.ai_prompt_draft.clear();
                             this.ai_response_preview = if this.ai_settings.default_mode
@@ -294,26 +295,37 @@ impl NyaTermApp {
                                     .flex_1()
                                     .flex()
                                     .items_center()
-                                    .gap_1()
-                                    .child(mode_button(
-                                        "ai-mode-ask",
-                                        "Ask",
-                                        !agent_mode,
-                                        cx.listener(|this, _, _, cx| {
-                                            this.set_ai_mode(AiMode::Ask, cx);
-                                        }),
-                                    ))
-                                    .child(mode_button(
-                                        "ai-mode-agent",
-                                        "Agent",
-                                        agent_mode,
-                                        cx.listener(|this, _, _, cx| {
-                                            this.set_ai_mode(AiMode::Agent, cx);
-                                        }),
-                                    ))
+                                    .gap_2()
                                     .child(
                                         div()
-                                            .ml_1()
+                                            .h(px(28.))
+                                            .flex()
+                                            .items_center()
+                                            .rounded_md()
+                                            .border_1()
+                                            .border_color(rgb(0x30363d))
+                                            .bg(rgb(0x0d1117))
+                                            .p(px(1.))
+                                            .gap_0()
+                                            .child(mode_button(
+                                                "ai-mode-ask",
+                                                "Ask",
+                                                !agent_mode,
+                                                cx.listener(|this, _, _, cx| {
+                                                    this.set_ai_mode(AiMode::Ask, cx);
+                                                }),
+                                            ))
+                                            .child(mode_button(
+                                                "ai-mode-agent",
+                                                "Agent",
+                                                agent_mode,
+                                                cx.listener(|this, _, _, cx| {
+                                                    this.set_ai_mode(AiMode::Agent, cx);
+                                                }),
+                                            )),
+                                    )
+                                    .child(
+                                        div()
                                             .min_w_0()
                                             .flex_1()
                                             .text_size(px(11.))
@@ -322,9 +334,13 @@ impl NyaTermApp {
                                             .child(truncate_preview(&model_label, 24)),
                                     ),
                             )
-                            .child(icon_button(
+                            .child(ai_svg_icon_button(
                                 "ai-ask-run",
-                                if ai_running { "■" } else { "➤" },
+                                if ai_running {
+                                    "icons/ai/stop.svg"
+                                } else {
+                                    "icons/ai/send.svg"
+                                },
                                 cx.listener(|this, _, _, cx| {
                                     if this.ai_chat_pending || this.ai_agent_loop.is_some() {
                                         this.cancel_ai_chat(cx);
@@ -846,10 +862,10 @@ impl NyaTermApp {
                 .gap_3()
                 .px_3()
                 .child(
-                    div()
-                        .text_size(px(28.))
-                        .text_color(rgb(0x8b949e))
-                        .child("✦"),
+                    svg()
+                        .size(px(36.))
+                        .path("icons/ai.svg")
+                        .text_color(rgb(0x8b949e)),
                 )
                 .child(
                     div()
@@ -944,10 +960,10 @@ impl NyaTermApp {
             .gap_2()
             .px_3()
             .child(
-                div()
-                    .text_size(px(28.))
-                    .text_color(rgb(0x8b949e))
-                    .child("✦"),
+                svg()
+                    .size(px(40.))
+                    .path("icons/ai.svg")
+                    .text_color(rgb(0x8b949e)),
             )
             .child(
                 div()
@@ -1394,7 +1410,7 @@ impl NyaTermApp {
                     .child(
                         div()
                             .id(SharedString::from("ai-history-search"))
-                            .h(px(32.))
+                            .h(px(28.))
                             .px_2()
                             .rounded_md()
                             .border_1()
@@ -1414,10 +1430,11 @@ impl NyaTermApp {
                                 this.handle_ai_history_search_key_down(event, cx);
                             }))
                             .child(
-                                div()
-                                    .text_size(px(11.))
-                                    .text_color(rgb(0x6e7681))
-                                    .child("⌕"),
+                                svg()
+                                    .size(px(14.))
+                                    .flex_none()
+                                    .path("icons/ai/search.svg")
+                                    .text_color(rgb(0x6e7681)),
                             )
                             .child(
                                 div()
@@ -1541,6 +1558,7 @@ impl NyaTermApp {
             visible
         };
 
+        // Tauri AssistantResponse/User: compact bubbles, softer borders.
         let mut bubble = div()
             .id(SharedString::from(format!("ai-msg-{}", message.id)))
             .rounded_md()
@@ -1553,13 +1571,13 @@ impl NyaTermApp {
             .bg(if is_user {
                 rgb(0x122033)
             } else {
-                rgb(0x161b22)
+                rgb(0x0d1117)
             })
-            .px_3()
+            .px_2()
             .py_2()
             .flex()
             .flex_col()
-            .gap_2()
+            .gap_1()
             .child(
                 div()
                     .text_size(px(10.))
@@ -1955,4 +1973,30 @@ pub(in crate::ui::view) fn disabled_inspector_panel(title: &'static str, detail:
                         .child("The page remains available, but background refresh and actions stay paused while disabled."),
                 ),
         )
+}
+
+
+fn ai_svg_icon_button(
+    id: impl Into<String>,
+    icon_path: &'static str,
+    on_click: impl Fn(&gpui::ClickEvent, &mut gpui::Window, &mut gpui::App) + 'static,
+) -> impl gpui::IntoElement {
+    use gpui::{SharedString, div, prelude::*, px, rgb, svg};
+    div()
+        .id(SharedString::from(id.into()))
+        .size(px(28.))
+        .flex()
+        .items_center()
+        .justify_center()
+        .rounded_md()
+        .text_color(rgb(0x8b949e))
+        .cursor_pointer()
+        .hover(|this| this.bg(rgb(0x21262d)).text_color(rgb(0xc9d1d9)))
+        .child(
+            svg()
+                .size(px(16.))
+                .flex_none()
+                .path(icon_path),
+        )
+        .on_click(on_click)
 }

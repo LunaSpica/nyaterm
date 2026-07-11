@@ -518,6 +518,44 @@ impl NyaTermApp {
                     SharedString::from(count.to_string())
                 }
             }
+            // Tauri NetworkPanel header shows active tab profile count.
+            NavItem::Tunnels => {
+                let count = match self.network_tab {
+                    NetworkTab::Tunnels => self.tunnels.len(),
+                    NetworkTab::Proxies => self.proxies.len(),
+                };
+                if count == 0 {
+                    SharedString::from("")
+                } else {
+                    SharedString::from(count.to_string())
+                }
+            }
+            NavItem::Transfers => {
+                if self.transfer_browser_entries.is_empty() {
+                    SharedString::from("")
+                } else {
+                    SharedString::from(self.transfer_browser_entries.len().to_string())
+                }
+            }
+            NavItem::Processes => {
+                if self.processes.is_empty() {
+                    SharedString::from("")
+                } else {
+                    SharedString::from(self.processes.len().to_string())
+                }
+            }
+            NavItem::Docker => {
+                let count = self
+                    .docker_overview
+                    .as_ref()
+                    .map(|o| o.containers.len())
+                    .unwrap_or(0);
+                if count == 0 {
+                    SharedString::from("")
+                } else {
+                    SharedString::from(count.to_string())
+                }
+            }
             _ => SharedString::from(""),
         }
     }

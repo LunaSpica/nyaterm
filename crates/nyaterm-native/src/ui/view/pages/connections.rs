@@ -1,6 +1,6 @@
 use gpui::{
     Context, FontWeight, IntoElement, KeyDownEvent, MouseButton, MouseDownEvent, SharedString, div,
-    prelude::*, px, rgb,
+    prelude::*, px, rgb, svg,
 };
 use nyaterm_domain::{Group, SavedConnection, truncate_preview};
 use std::collections::HashMap;
@@ -171,8 +171,9 @@ impl NyaTermApp {
         };
         let more_open = self.connections_more_menu_open;
 
+        // Tauri search strip: px-2 py-1.5, input h-7.
         div()
-            .h(px(34.))
+            .h(px(36.))
             .px_2()
             .flex()
             .items_center()
@@ -205,10 +206,11 @@ impl NyaTermApp {
                         this.handle_connection_search_key_down(event, cx);
                     }))
                     .child(
-                        div()
-                            .text_size(px(11.))
-                            .text_color(rgb(0x6e7681))
-                            .child("⌕"),
+                        svg()
+                            .size(px(14.))
+                            .flex_none()
+                            .path("icons/fe/search.svg")
+                            .text_color(rgb(0x6e7681)),
                     )
                     .child(
                         div()
@@ -254,21 +256,21 @@ impl NyaTermApp {
             ))
             .child(icon_action_button(
                 "connections-temp-ssh",
-                "⚡",
+                "icons/conn/flash.svg",
                 cx.listener(|this, _, window, cx| {
                     this.open_temporary_ssh_link_dialog(window, cx);
                 }),
             ))
             .child(icon_action_button(
                 "connections-new-group",
-                "📁+",
+                "icons/conn/folder.svg",
                 cx.listener(|this, _, window, cx| {
                     this.open_connection_group_editor(None, None, window, cx);
                 }),
             ))
             .child(icon_action_button(
                 "connections-new",
-                "+",
+                "icons/conn/add.svg",
                 cx.listener(|this, _, window, cx| {
                     this.open_connection_editor(None, None, false, window, cx);
                 }),
@@ -278,7 +280,7 @@ impl NyaTermApp {
                     .relative()
                     .child(icon_action_button(
                         "connections-more",
-                        "⋮",
+                        "icons/conn/more.svg",
                         cx.listener(|this, _, _, cx| {
                             this.connections_more_menu_open = !this.connections_more_menu_open;
                             cx.notify();
@@ -588,7 +590,7 @@ impl NyaTermApp {
                                         "connection-group-edit-{}",
                                         group_id_for_edit.clone().unwrap_or_default()
                                     ),
-                                    "✎",
+                                    "icons/net/edit.svg",
                                     cx.listener(move |this, _, window, cx| {
                                         cx.stop_propagation();
                                         this.open_connection_group_editor(
@@ -604,7 +606,7 @@ impl NyaTermApp {
                                         "connection-group-delete-{}",
                                         group_id_for_delete.clone().unwrap_or_default()
                                     ),
-                                    "🗑",
+                                    "icons/net/delete.svg",
                                     cx.listener(move |this, _, _, cx| {
                                         cx.stop_propagation();
                                         if let Some(group_id) = group_id_for_delete.clone() {
@@ -623,15 +625,16 @@ impl NyaTermApp {
         selected_count: usize,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
+        // Tauri multi-select strip under search bar.
         div()
-            .h(px(32.))
+            .h(px(30.))
             .px_2()
             .flex()
             .items_center()
-            .gap_2()
+            .gap_1()
             .border_b_1()
-            .border_color(rgb(0x1f6feb))
-            .bg(rgb(0x122033))
+            .border_color(rgb(0x388bfd))
+            .bg(rgb(0x0d2137))
             .child(
                 div()
                     .min_w_0()
@@ -742,10 +745,11 @@ impl NyaTermApp {
         let show_inside = drop_target.is_some_and(|t| t.position == ConnectionDropPosition::Inside);
         let row_id = connection.id.clone();
 
+        // Tauri ConnectionItem: py-1.5 single-line row (~34px) with hover actions.
         div()
             .id(SharedString::from(format!("connection-row-{}", connection.id)))
             .relative()
-            .h(px(44.))
+            .h(px(34.))
             .flex()
             .items_center()
             .gap_2()
@@ -904,14 +908,14 @@ impl NyaTermApp {
                     .opacity(if show_actions { 1. } else { 0. })
                     .child(icon_action_button(
                         format!("connection-connect-{}", connection.id),
-                        "↗",
+                        "icons/conn/connect.svg",
                         cx.listener(move |this, _, window, cx| {
                             this.start_saved_connection(connect_connection.clone(), window, cx);
                         }),
                     ))
                     .child(icon_action_button(
                         format!("connection-edit-{}", connection.id),
-                        "✎",
+                        "icons/net/edit.svg",
                         cx.listener(move |this, _, window, cx| {
                             this.open_connection_editor(
                                 Some(edit_id.clone()),
@@ -924,7 +928,7 @@ impl NyaTermApp {
                     ))
                     .child(icon_action_button(
                         format!("connection-delete-{}", connection.id),
-                        "🗑",
+                        "icons/net/delete.svg",
                         cx.listener(move |this, _, _, cx| {
                             this.open_connection_delete_confirm(delete_id.clone(), cx);
                         }),
@@ -1002,7 +1006,7 @@ impl NyaTermApp {
             )))
             .absolute()
             .left(px(8.))
-            .top(px(48.))
+            .top(px(38.))
                         .w(px(220.))
             .rounded_md()
             .border_1()
@@ -2133,6 +2137,8 @@ fn icon_action_button(
     label: &'static str,
     on_click: impl Fn(&gpui::ClickEvent, &mut gpui::Window, &mut gpui::App) + 'static,
 ) -> impl IntoElement {
+    // label may be a glyph fallback or an icons/*.svg path.
+    let is_svg = label.starts_with("icons/") && label.ends_with(".svg");
     div()
         .id(SharedString::from(id.into()))
         .size(px(24.))
@@ -2145,7 +2151,15 @@ fn icon_action_button(
         .cursor_pointer()
         .hover(|this| this.bg(rgb(0x21262d)).text_color(rgb(0xc9d1d9)))
         .on_click(on_click)
-        .child(label)
+        .when(is_svg, |this| {
+            this.child(
+                svg()
+                    .size(px(14.))
+                    .flex_none()
+                    .path(label),
+            )
+        })
+        .when(!is_svg, |this| this.child(label))
 }
 
 fn menu_separator() -> impl IntoElement {

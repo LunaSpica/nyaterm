@@ -1,6 +1,6 @@
 use gpui::{
     App, ClickEvent, Context, FontWeight, IntoElement, KeyDownEvent, Window, div, prelude::*, px,
-    rgb,
+    rgb, svg,
 };
 
 use crate::ui::components::{

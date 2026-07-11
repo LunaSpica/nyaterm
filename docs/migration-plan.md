@@ -511,3 +511,53 @@ service boundary first:
 - AI transcript: strip `<think>` tags, collapsible-like thought block, lightweight markdown (headings/lists/code/quotes).
 - Agent steps: left accent status bar + mono detail.
 - Process rows densified to ~34px; Docker container rows to ~52px.
+
+## 2026-07-11 Network panel densify + scroll
+- Fixed missing `network_meta_chip` (compact label/value meta strip under tabs).
+- Network body: tab strip (34px) + meta chips (28px) + search (34px) + flex scroll list.
+- Tunnel/Proxy group headers densified to ~30px with count badge; rows use py-2 denser layout.
+- Tunnel rows drop noisy auto/local/public chip clutter (auto badge only when enabled).
+- Proxy rows drop raw id line; show credentials/ProxyCommand summary instead.
+- Network tab buttons restyled closer to Tauri TabsTrigger segment control.
+
+## 2026-07-11 Files + Connections density pass
+- File Explorer path bar min-height ~26px (Tauri PathBar); search field densified to 26px.
+- Connection rows forced to single-line ~34px (was 44px) to match Tauri ConnectionItem py-1.5.
+- Tooltip anchor adjusted for denser connection rows.
+- Network group headers use chevrons + open/cmd counts (less chip noise).
+
+## 2026-07-11 Network Tauri layout pass
+- Network body restructured to Tauri order: scroll padding → segment Tabs → config label + New Group/New item → compact search → grouped list.
+- Tunnel rows: StatusBadge + switch toggle + icon actions (Edit/Move/Delete).
+- Proxy rows: 3-line stack + icon actions (Tauri ProxyRow).
+- PanelHeader meta shows tunnel/proxy count and Files entry count.
+- Files mid-action strip removed; Tauri-like footer with totals + cwd/send icons.
+- Shared `icon_button` matches ghost icon-sm (no permanent border).
+
+## 2026-07-11 Remote process density
+- Process summary cards compacted; sort buttons h-24; process rows ~38px (Tauri PROCESS_ROW_HEIGHT).
+- Connections search strip height aligned to Tauri h-9 area.
+
+## 2026-07-11 SVG toolbar / AI chrome pass
+- Bundled File Explorer toolbar icons under `assets/icons/fe/*` (new file/folder, upload/download, delete, nav, search, star, sync, paste).
+- File Explorer toolbar + footer use SVG ghost buttons (Tauri h-7 icon-sm style) with active state for search/auto-sync.
+- AI header actions (history/settings/new) and send/stop use `assets/icons/ai/*` SVG buttons.
+- AI history search uses search SVG; Connections header actions use flash/folder/add/more SVG icons.
+- Shared `svg` re-exported from view prelude for panel modules.
+- Network row Edit/Move/Delete use `assets/icons/net/*` SVG actions.
+
+## 2026-07-11 Remote + shell density pass
+- Process Manager: removed duplicate sort column; flat sortable header strip; SVG refresh/more; no double table header.
+- Docker toolbar: refresh/prune SVG icons.
+- PanelHeader meta: Processes count + Docker container count.
+- Empty workspace action: default text + hover primary (Tauri-like), max-width row.
+- AI composer: Ask/Agent mode segment control; denser mode_button styling.
+- File path bar favorite uses star SVG.
+
+## 2026-07-11 Connections/AI/Docker chrome pass
+- Connection hover actions + group actions use SVG (connect/edit/delete).
+- Multi-select strip densified (30px, blue accent).
+- Docker tabs: flat segment style like Network tabs.
+- Stats refresh SVG; AI empty states use `icons/ai.svg`.
+- Title bar height 36px; activity labels 8px; menu buttons denser.
+- AI message bubbles tighter padding.

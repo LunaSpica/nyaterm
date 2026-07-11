@@ -119,9 +119,9 @@ impl NyaTermApp {
                     .child(
                         div()
                             .when(!can_refresh, |this| this.opacity(0.45))
-                            .child(icon_button(
+                            .child(compact_remote_svg_button(
                                 "stats-refresh",
-                                "↻",
+                                "icons/fe/refresh.svg",
                                 cx.listener(|this, _, window, cx| {
                                     this.refresh_stats(window, cx);
                                 }),

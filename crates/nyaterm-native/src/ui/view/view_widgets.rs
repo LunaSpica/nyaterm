@@ -37,15 +37,15 @@ pub(in crate::ui::view) fn menu_bar_button(
 ) -> impl IntoElement {
     div()
         .id(SharedString::from(format!("menu-{label}")))
-        .h(px(28.))
+        .h(px(26.))
         .px_2()
         .flex()
         .items_center()
         .rounded_sm()
-        .text_xs()
+        .text_size(px(12.))
         .text_color(rgb(0x8b949e))
         .cursor_pointer()
-        .hover(|this| this.bg(rgb(0x1c2128)).text_color(rgb(0x58a6ff)))
+        .hover(|this| this.bg(rgb(0x1c2128)).text_color(rgb(0xc9d1d9)))
         .child(label)
         .on_click(on_click)
 }
@@ -417,20 +417,23 @@ pub(in crate::ui::view) fn empty_workspace_action(
         );
     }
 
+    // Tauri: grid-cols-[max-content_auto] gap-x-4 gap-y-3; label primary, kbd chips right.
     div()
         .id(SharedString::from(format!("empty-action-{label}")))
         .flex()
         .items_center()
+        .justify_between()
         .gap_4()
         .w_full()
+        .max_w(px(480.))
         .cursor_pointer()
         .child(
             div()
-                .min_w(px(168.))
+                .min_w(px(160.))
                 .text_sm()
                 .font_weight(FontWeight(500.))
-                .text_color(rgb(0x58a6ff))
-                .hover(|this| this.text_color(rgb(0x79b8ff)))
+                .text_color(rgb(0xc9d1d9))
+                .hover(|this| this.text_color(rgb(0x58a6ff)))
                 .child(label),
         )
         .child(keys)
@@ -982,6 +985,33 @@ pub(in crate::ui::view) fn activity_icon(
             .child(glyph)
             .into_any_element()
     }
+}
+
+
+/// Compact ghost icon button with bundled SVG (Tauri ToolbarIconButton h-7).
+pub(in crate::ui::view) fn toolbar_svg_button(
+    id: impl Into<SharedString>,
+    icon_path: &'static str,
+    on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
+) -> impl IntoElement {
+    div()
+        .id(id.into())
+        .size(px(28.))
+        .flex()
+        .items_center()
+        .justify_center()
+        .rounded_md()
+        .text_color(rgb(0x8b949e))
+        .cursor_pointer()
+        .hover(|this| this.bg(rgb(0x21262d)).text_color(rgb(0xc9d1d9)))
+        .child(
+            svg()
+                .size(px(16.))
+                .flex_none()
+                .path(icon_path)
+                .text_color(rgb(0x8b949e)),
+        )
+        .on_click(on_click)
 }
 
 /// Faded NyaTerm logo used by empty workspace (Tauri EmptyWorkspaceState).

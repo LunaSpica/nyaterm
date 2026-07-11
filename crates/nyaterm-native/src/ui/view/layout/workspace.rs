@@ -148,30 +148,36 @@ impl NyaTermApp {
                                     .bg(accent),
                             )
                         })
+                        // Tauri tab: top accent when active, icon + name + close.
+                        .when(is_active, |this| {
+                            this.child(
+                                div()
+                                    .absolute()
+                                    .top_0()
+                                    .left_0()
+                                    .right_0()
+                                    .h(px(2.))
+                                    .bg(accent),
+                            )
+                        })
                         .child(div().size(px(8.)).rounded_full().bg(accent))
                         .child(
                             div()
                                 .min_w_0()
                                 .flex_1()
-                                .flex()
-                                .flex_col()
-                                .gap_0()
+                                .text_size(px(12.))
+                                .font_weight(if is_active {
+                                    FontWeight(600.)
+                                } else {
+                                    FontWeight(500.)
+                                })
+                                .text_color(if is_active {
+                                    rgb(0xe6edf3)
+                                } else {
+                                    rgb(0x8b949e)
+                                })
                                 .overflow_hidden()
-                                .child(
-                                    div()
-                                        .text_xs()
-                                        .font_weight(FontWeight(700.))
-                                        .text_color(rgb(0xc9d1d9))
-                                        .overflow_hidden()
-                                        .child(truncate_preview(&display_name, 32)),
-                                )
-                                .child(div().text_size(px(10.)).text_color(rgb(0x8b949e)).child(
-                                    format!(
-                                        "{} · {}",
-                                        session_kind_label(session.kind),
-                                        short_id(&session.id)
-                                    ),
-                                )),
+                                .child(truncate_preview(&display_name, 28)),
                         )
                         .child(
                             div()
@@ -187,7 +193,11 @@ impl NyaTermApp {
                                 .font_weight(FontWeight(800.))
                                 .text_color(rgb(0x8b949e))
                                 .hover(|this| this.bg(rgb(0x30363d)).text_color(rgb(0x3fb950)))
-                                .child("...")
+                                .child(
+                                    svg()
+                                        .size(px(12.))
+                                        .path("icons/conn/more.svg"),
+                                )
                                 .on_click(cx.listener(move |this, _, window, cx| {
                                     cx.stop_propagation();
                                     this.open_tab_actions(actions_session_id.clone(), window, cx);
@@ -317,7 +327,7 @@ impl NyaTermApp {
         }
 
         div()
-            .h(px(32.))
+            .h(px(36.))  // Tauri TabBar: h-9
             .flex()
             .items_center()
             .border_b_1()

@@ -6,20 +6,22 @@ pub(super) fn network_tab_button(
     active: bool,
     on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
 ) -> impl IntoElement {
+    // Tauri TabsTrigger inside TabsList grid-cols-2 h-8.
     div()
         .id(gpui::SharedString::from(id.into()))
-        .h(px(30.))
+        .h_full()
+        .flex_1()
         .px_3()
         .flex()
         .items_center()
+        .justify_center()
         .rounded_sm()
-        .border_1()
-        .border_color(if active { rgb(0x38bdf8) } else { rgb(0x303848) })
-        .bg(if active { rgb(0x102a3d) } else { rgb(0x0d1320) })
-        .text_color(if active { rgb(0x7dd3fc) } else { rgb(0x98a3b8) })
-        .text_sm()
+        .bg(if active { rgb(0x21262d) } else { rgb(0x0d1117) })
+        .text_color(if active { rgb(0xc9d1d9) } else { rgb(0x8b949e) })
+        .text_size(px(12.))
+        .font_weight(if active { FontWeight(600.) } else { FontWeight(500.) })
         .cursor_pointer()
-        .hover(|this| this.bg(rgb(0x18202b)))
+        .hover(|this| this.bg(rgb(0x1c2128)).text_color(rgb(0xc9d1d9)))
         .child(label)
         .on_click(on_click)
 }

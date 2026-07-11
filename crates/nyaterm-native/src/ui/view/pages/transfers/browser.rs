@@ -19,16 +19,6 @@ impl NyaTermApp {
             .map(|state| state.column);
         let selected_entries = self.selected_transfer_entries();
         let selected_count = selected_entries.len();
-        let selected_single_file = selected_entries
-            .first()
-            .filter(|_| selected_count == 1)
-            .is_some_and(|entry| entry.file_type != SftpFileType::Directory);
-        let selected_ai_actions = selected_entries
-            .first()
-            .filter(|_| selected_count == 1)
-            .map(|entry| self.enabled_transfer_file_ai_actions_for_entry(entry))
-            .unwrap_or_default();
-        let visible_count = visible_entries.len();
         let total_count = self.transfer_browser_entries.len();
         let search_active = !self.transfer_browser_search.trim().is_empty();
         let search_expanded = self.transfer_browser_search_expanded || search_active;
@@ -166,14 +156,14 @@ impl NyaTermApp {
                         .gap(px(2.))
                         .child(compact_transfer_toolbar_button(
                             "transfer-browser-new-file",
-                            "＋F",
+                            "icons/fe/new-file.svg",
                             cx.listener(|this, _, window, cx| {
                                 this.open_transfer_new_file_dialog(window, cx);
                             }),
                         ))
                         .child(compact_transfer_toolbar_button(
                             "transfer-browser-new-folder",
-                            "＋D",
+                            "icons/fe/new-folder.svg",
                             cx.listener(|this, _, window, cx| {
                                 this.open_transfer_new_folder_dialog(window, cx);
                             }),
@@ -181,7 +171,7 @@ impl NyaTermApp {
                         .child(transfer_toolbar_divider())
                         .child(compact_transfer_toolbar_button(
                             "transfer-browser-upload-file",
-                            "⬆",
+                            "icons/fe/upload.svg",
                             cx.listener(|this, _, _, cx| {
                                 this.prompt_transfer_browser_upload_path(
                                     TransferPathPromptKind::UploadFile,
@@ -191,7 +181,7 @@ impl NyaTermApp {
                         ))
                         .child(compact_transfer_toolbar_button(
                             "transfer-browser-upload-folder",
-                            "⬆D",
+                            "icons/fe/upload.svg",
                             cx.listener(|this, _, _, cx| {
                                 this.prompt_transfer_browser_upload_path(
                                     TransferPathPromptKind::UploadDirectory,
@@ -204,7 +194,7 @@ impl NyaTermApp {
                                 .when(selected_count == 0, |this| this.opacity(0.45))
                                 .child(compact_transfer_toolbar_button(
                                     "transfer-browser-download-selected",
-                                    "⬇",
+                                    "icons/fe/download.svg",
                                     cx.listener(|this, _, window, cx| {
                                         this.start_selected_sftp_download_jobs(window, cx);
                                     }),
@@ -215,7 +205,7 @@ impl NyaTermApp {
                                 .when(selected_count == 0, |this| this.opacity(0.45))
                                 .child(compact_transfer_toolbar_button(
                                     "transfer-browser-delete-selected",
-                                    "🗑",
+                                    "icons/fe/delete.svg",
                                     cx.listener(|this, _, window, cx| {
                                         this.open_selected_transfer_delete_dialog(window, cx);
                                     }),
@@ -224,7 +214,7 @@ impl NyaTermApp {
                         .child(transfer_toolbar_divider())
                         .child(compact_transfer_toolbar_button(
                             "transfer-browser-go-up",
-                            "⤴",
+                            "icons/fe/up.svg",
                             cx.listener(|this, _, window, cx| {
                                 this.open_transfer_parent_directory(window, cx);
                             }),
@@ -234,7 +224,7 @@ impl NyaTermApp {
                                 .when(!can_go_back, |this| this.opacity(0.4))
                                 .child(compact_transfer_toolbar_button(
                                     "transfer-browser-back",
-                                    "◀",
+                                    "icons/fe/back.svg",
                                     cx.listener(|this, _, window, cx| {
                                         this.open_transfer_browser_history(1, window, cx);
                                     }),
@@ -245,7 +235,7 @@ impl NyaTermApp {
                                 .when(!can_go_forward, |this| this.opacity(0.4))
                                 .child(compact_transfer_toolbar_button(
                                     "transfer-browser-forward",
-                                    "▶",
+                                    "icons/fe/forward.svg",
                                     cx.listener(|this, _, window, cx| {
                                         this.open_transfer_browser_history(-1, window, cx);
                                     }),
@@ -253,7 +243,7 @@ impl NyaTermApp {
                         )
                         .child(compact_transfer_toolbar_button(
                             "transfer-browser-refresh",
-                            "↻",
+                            "icons/fe/refresh.svg",
                             cx.listener(|this, _, window, cx| {
                                 this.refresh_transfer_browser(window, cx);
                             }),
@@ -266,28 +256,34 @@ impl NyaTermApp {
                         ))
                         .child(compact_transfer_toolbar_button(
                             "transfer-browser-sync-cwd",
-                            "CWD",
+                            "icons/fe/sync.svg",
                             cx.listener(|this, _, window, cx| {
                                 this.start_transfer_sync_cwd_job(window, cx);
                             }),
                         ))
-                        .child(compact_transfer_toolbar_button(
+                        .child(compact_transfer_toolbar_button_active(
                             "transfer-browser-auto-sync-cwd",
-                            if auto_sync_cwd { "Auto*" } else { "Auto" },
+                            "icons/fe/sync.svg",
+                            auto_sync_cwd,
                             cx.listener(|this, _, window, cx| {
                                 this.toggle_transfer_browser_auto_sync_cwd(window, cx);
                             }),
                         ))
                         .child(compact_transfer_toolbar_button(
                             "transfer-browser-toggle-favorite",
-                            if is_current_favorite { "★" } else { "☆" },
+                            if is_current_favorite {
+                                "icons/fe/star.svg"
+                            } else {
+                                "icons/fe/star-outline.svg"
+                            },
                             cx.listener(|this, _, _, cx| {
                                 this.toggle_current_transfer_browser_favorite(cx);
                             }),
                         ))
-                        .child(compact_transfer_toolbar_button(
+                        .child(compact_transfer_toolbar_button_active(
                             "transfer-browser-expand-search",
-                            if search_active { "Find*" } else { "Find" },
+                            "icons/fe/search.svg",
+                            search_active,
                             cx.listener(|this, _, window, cx| {
                                 this.transfer_browser_search_expanded = true;
                                 this.transfer_browser_status = "file search focused".to_string();
@@ -369,21 +365,21 @@ impl NyaTermApp {
                         .child(
                             div()
                                 .id(SharedString::from("transfer-browser-search"))
-                                .h(px(34.))
+                                .h(px(26.))
                                 .flex_1()
                                 .min_w_0()
-                                .rounded_sm()
+                                .rounded_md()
                                 .border_1()
                                 .border_color(if search_active {
-                                    rgb(0x256d3f)
+                                    rgb(0x388bfd)
                                 } else {
-                                    rgb(0x303848)
+                                    rgb(0x30363d)
                                 })
-                                .bg(rgb(0x0d1320))
-                                .px_3()
+                                .bg(rgb(0x0d1117))
+                                .px_2()
                                 .flex()
                                 .items_center()
-                                .gap_2()
+                                .gap_1()
                                 .cursor_pointer()
                                 .track_focus(&self.transfer_browser_search_focus)
                                 .on_click(cx.listener(|this, _, window, cx| {
@@ -436,172 +432,6 @@ impl NyaTermApp {
                         )),
                 )
             })
-            .child(
-                div()
-                    .flex()
-                    .items_center()
-                    .justify_between()
-                    .gap_3()
-                    .rounded_sm()
-                    .bg(rgb(0x10151e))
-                    .px_3()
-                    .py_2()
-                    .child(
-                        div()
-                            .min_w_0()
-                            .text_xs()
-                            .text_color(rgb(0x98a3b8))
-                            .child(format!(
-                                "{} / {} item(s) · selected {} · marked {}",
-                                visible_count, total_count, selected, selected_count
-                            )),
-                    )
-                    .child(
-                        div()
-                            .text_xs()
-                            .text_color(rgb(0x8f98aa))
-                            .child(truncate_preview(&self.transfer_browser_status, 48)),
-                    )
-                    .child(
-                        div()
-                            .flex()
-                            .items_center()
-                            .gap_1()
-                            .when(self.transfer_selected_remote_path.is_none(), |this| {
-                                this.opacity(0.45)
-                            })
-                            .child(small_button(
-                                "transfer-copy-path",
-                                "Copy Path",
-                                cx.listener(|this, _, _, cx| {
-                                    this.copy_selected_transfer_path(TransferPathPart::Full, cx);
-                                }),
-                            ))
-                            .child(small_button(
-                                "transfer-copy-name",
-                                "Copy Name",
-                                cx.listener(|this, _, _, cx| {
-                                    this.copy_selected_transfer_path(TransferPathPart::Name, cx);
-                                }),
-                            ))
-                            .child(small_button(
-                                "transfer-copy-dir",
-                                "Copy Dir",
-                                cx.listener(|this, _, _, cx| {
-                                    this.copy_selected_transfer_path(
-                                        TransferPathPart::Directory,
-                                        cx,
-                                    );
-                                }),
-                            ))
-                            .child(small_button(
-                                "transfer-send-path",
-                                "Send Path",
-                                cx.listener(|this, _, _, cx| {
-                                    this.send_selected_transfer_path_to_terminal(
-                                        TransferPathPart::Full,
-                                        cx,
-                                    );
-                                }),
-                            ))
-                            .child(small_button(
-                                "transfer-send-name",
-                                "Send Name",
-                                cx.listener(|this, _, _, cx| {
-                                    this.send_selected_transfer_path_to_terminal(
-                                        TransferPathPart::Name,
-                                        cx,
-                                    );
-                                }),
-                            ))
-                            .child(small_button(
-                                "transfer-send-dir",
-                                "Send Dir",
-                                cx.listener(|this, _, _, cx| {
-                                    this.send_selected_transfer_path_to_terminal(
-                                        TransferPathPart::Directory,
-                                        cx,
-                                    );
-                                }),
-                            ))
-                            .child(small_button(
-                                "transfer-properties",
-                                "Properties",
-                                cx.listener(|this, _, window, cx| {
-                                    this.open_selected_transfer_properties(window, cx);
-                                }),
-                            ))
-                            .child(small_button(
-                                "transfer-open-editor",
-                                "Open",
-                                cx.listener(|this, _, window, cx| {
-                                    this.open_selected_transfer_default(window, cx);
-                                }),
-                            ))
-                            .when(selected_single_file, |this| {
-                                this.child(small_button(
-                                    "transfer-open-internal-editor",
-                                    "Edit",
-                                    cx.listener(|this, _, window, cx| {
-                                        this.open_selected_transfer_editor(window, cx);
-                                    }),
-                                ))
-                                .child(small_button(
-                                    "transfer-open-external-editor",
-                                    "Ext",
-                                    cx.listener(|this, _, window, cx| {
-                                        this.open_selected_transfer_external(window, cx);
-                                    }),
-                                ))
-                            })
-                            .when(!selected_ai_actions.is_empty(), |this| {
-                                let mut actions =
-                                    div().flex().items_center().gap_1().flex_wrap().child(
-                                        div()
-                                            .h(px(28.))
-                                            .px_2()
-                                            .flex()
-                                            .items_center()
-                                            .rounded_sm()
-                                            .bg(rgb(0x1b2433))
-                                            .text_color(rgb(0x93c5fd))
-                                            .text_size(px(10.))
-                                            .font_weight(FontWeight(800.))
-                                            .child("AI"),
-                                    );
-                                for action in selected_ai_actions.into_iter() {
-                                    let action_id = action.id.clone();
-                                    let label = truncate_preview(&action.name, 12);
-                                    actions = actions.child(transfer_dynamic_toolbar_button(
-                                        format!("transfer-selected-ai-file-{action_id}"),
-                                        label,
-                                        cx.listener(move |this, _, window, cx| {
-                                            let Some(entry) = this.selected_transfer_entry() else {
-                                                this.transfer_browser_status =
-                                                    "select a remote file first".to_string();
-                                                cx.notify();
-                                                return;
-                                            };
-                                            this.start_transfer_file_ai_action(
-                                                entry,
-                                                action.clone(),
-                                                window,
-                                                cx,
-                                            );
-                                        }),
-                                    ));
-                                }
-                                this.child(actions)
-                            })
-                            .child(small_button(
-                                "transfer-move",
-                                "Move",
-                                cx.listener(|this, _, window, cx| {
-                                    this.open_selected_transfer_move_dialog(window, cx);
-                                }),
-                            )),
-                    ),
-            )
             .child(
                 div()
                     .id(SharedString::from("transfer-browser-table-scroll"))
@@ -694,27 +524,138 @@ impl NyaTermApp {
                             .child(rows),
                     ),
             )
+            // Tauri FileExplorer footer: totals left, cwd sync / send icons right.
+            .child(
+                div()
+                    .h(px(30.))
+                    .flex_none()
+                    .px_2()
+                    .border_t_1()
+                    .border_color(rgb(0x30363d))
+                    .bg(rgb(0x161b22))
+                    .flex()
+                    .items_center()
+                    .justify_between()
+                    .gap_2()
+                    .child(
+                        div()
+                            .min_w_0()
+                            .flex()
+                            .items_center()
+                            .gap_3()
+                            .text_size(px(11.))
+                            .text_color(rgb(0x8b949e))
+                            .child(format!("{total_count} item(s)"))
+                            .when(selected_count > 0, |this| {
+                                this.child(format!("{selected_count} marked"))
+                            })
+                            .when(self.transfer_selected_remote_path.is_some(), |this| {
+                                this.child(format!("sel {selected}"))
+                            })
+                            .child(
+                                div()
+                                    .text_size(px(10.))
+                                    .text_color(rgb(0x6e7681))
+                                    .child(truncate_preview(&self.transfer_browser_status, 40)),
+                            ),
+                    )
+                    .child(
+                        div()
+                            .flex()
+                            .items_center()
+                            .gap_0()
+                            .child(compact_transfer_toolbar_button(
+                                "transfer-browser-footer-sync-cwd",
+                                "icons/fe/sync.svg",
+                                cx.listener(|this, _, window, cx| {
+                                    this.start_transfer_sync_cwd_job(window, cx);
+                                }),
+                            ))
+                            .child(compact_transfer_toolbar_button_active(
+                                "transfer-browser-footer-auto-sync",
+                                "icons/fe/sync.svg",
+                                auto_sync_cwd,
+                                cx.listener(|this, _, window, cx| {
+                                    this.toggle_transfer_browser_auto_sync_cwd(window, cx);
+                                }),
+                            ))
+                            .child(compact_transfer_toolbar_button(
+                                "transfer-browser-footer-send-path",
+                                "icons/fe/paste.svg",
+                                cx.listener(|this, _, _, cx| {
+                                    this.send_current_transfer_browser_path_to_terminal(cx);
+                                }),
+                            ))
+                            .when(self.transfer_selected_remote_path.is_some(), |this| {
+                                this.child(compact_transfer_toolbar_button(
+                                    "transfer-footer-copy-path",
+                                    "icons/fe/paste.svg",
+                                    cx.listener(|this, _, _, cx| {
+                                        this.copy_selected_transfer_path(TransferPathPart::Full, cx);
+                                    }),
+                                ))
+                                .child(compact_transfer_toolbar_button(
+                                    "transfer-footer-props",
+                                    "icons/fe/search.svg",
+                                    cx.listener(|this, _, window, cx| {
+                                        this.open_selected_transfer_properties(window, cx);
+                                    }),
+                                ))
+                            }),
+                    ),
+            )
     }
 }
 
 fn compact_transfer_toolbar_button(
     id: impl Into<String>,
-    label: &'static str,
+    icon_path: &'static str,
     on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
 ) -> impl IntoElement {
-    // Tauri FileExplorerToolbar: h-7 icon buttons, muted until hover.
+    // Tauri FileExplorerToolbar: h-7 ghost icon buttons, muted until hover.
     div()
         .id(SharedString::from(id.into()))
-        .size(px(26.))
+        .size(px(28.))
         .flex()
         .items_center()
         .justify_center()
         .rounded_md()
-        .text_size(px(12.))
         .text_color(rgb(0x8b949e))
         .cursor_pointer()
         .hover(|this| this.bg(rgb(0x21262d)).text_color(rgb(0xc9d1d9)))
-        .child(label)
+        .child(
+            svg()
+                .size(px(16.))
+                .flex_none()
+                .path(icon_path),
+        )
+        .on_click(on_click)
+}
+
+fn compact_transfer_toolbar_button_active(
+    id: impl Into<String>,
+    icon_path: &'static str,
+    active: bool,
+    on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
+) -> impl IntoElement {
+    let color = if active { rgb(0x58a6ff) } else { rgb(0x8b949e) };
+    div()
+        .id(SharedString::from(id.into()))
+        .size(px(28.))
+        .flex()
+        .items_center()
+        .justify_center()
+        .rounded_md()
+        .bg(if active { rgb(0x122033) } else { rgb(0x161b22) })
+        .text_color(color)
+        .cursor_pointer()
+        .hover(|this| this.bg(rgb(0x21262d)).text_color(if active { rgb(0x79b8ff) } else { rgb(0xc9d1d9) }))
+        .child(
+            svg()
+                .size(px(16.))
+                .flex_none()
+                .path(icon_path),
+        )
         .on_click(on_click)
 }
 

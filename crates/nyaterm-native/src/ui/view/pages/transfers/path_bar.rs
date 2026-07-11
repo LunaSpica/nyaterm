@@ -32,27 +32,30 @@ impl NyaTermApp {
             format!("{}|", self.transfer_browser_path_draft)
         };
 
+        // Tauri FileExplorerPathBar: minHeight ~26px, mono path, favorites on the right.
         div()
             .flex()
             .flex_col()
             .gap_0()
+            .min_h(px(26.))
             .border_b_1()
             .border_color(rgb(0x30363d))
             .bg(rgb(0x161b22))
             .px_2()
-            .py_1()
+            .py(px(2.))
+            .justify_center()
             .child(
                 div()
                     .flex()
                     .items_center()
-                    .gap_2()
+                    .gap_1()
                     .child(
                         div()
                             .flex_shrink_0()
                             .text_size(px(10.))
-                            .font_weight(FontWeight(700.))
+                            .font_weight(FontWeight(600.))
                             .text_color(rgb(0x6e7681))
-                            .child("Path"),
+                            .child("PATH"),
                     )
                     .when(self.transfer_browser_path_editing, |this| {
                         this.child(
@@ -150,7 +153,16 @@ impl NyaTermApp {
                                     this.open_transfer_browser_favorites_menu(event, cx);
                                 }),
                             )
-                            .child(if is_current_favorite { "*" } else { "+" }),
+                            .child(
+                                svg()
+                                    .size(px(14.))
+                                    .flex_none()
+                                    .path(if is_current_favorite {
+                                        "icons/fe/star.svg"
+                                    } else {
+                                        "icons/fe/star-outline.svg"
+                                    }),
+                            ),
                     )
                     .child(
                         div()

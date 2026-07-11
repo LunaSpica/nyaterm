@@ -82,26 +82,28 @@ pub(super) fn process_summary_card(
     ratio: f64,
 ) -> impl IntoElement {
     let ratio = ratio.clamp(0., 1.);
+    // Compact metric chip for Process Manager summary strip.
     div()
         .rounded_md()
         .border_1()
-        .border_color(rgb(0x2a3140))
-        .bg(rgb(0x151923))
-        .p_3()
+        .border_color(rgb(0x30363d))
+        .bg(rgb(0x0d1117))
+        .px_2()
+        .py_1()
         .flex()
         .flex_col()
-        .gap_2()
+        .gap_1()
         .child(
             div()
-                .text_xs()
-                .font_weight(FontWeight(800.))
-                .text_color(rgb(0x8f98aa))
+                .text_size(px(10.))
+                .font_weight(FontWeight(600.))
+                .text_color(rgb(0x8b949e))
                 .child(title),
         )
         .child(
             div()
-                .text_sm()
-                .font_weight(FontWeight(800.))
+                .text_size(px(12.))
+                .font_weight(FontWeight(700.))
                 .text_color(usage_color(ratio))
                 .child(value),
         )
@@ -115,20 +117,19 @@ pub(super) fn process_sort_button(
     direction: RemoteProcessSortDirection,
     on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
 ) -> impl IntoElement {
+    // Flat sortable header cell (Tauri table header).
     div()
         .id(gpui::SharedString::from(id.into()))
-        .h(px(28.))
-        .px_3()
+        .h(px(24.))
+        .px_2()
         .flex()
         .items_center()
         .rounded_sm()
-        .border_1()
-        .border_color(if active { rgb(0x38bdf8) } else { rgb(0x303848) })
-        .bg(if active { rgb(0x102a3d) } else { rgb(0x0d1320) })
-        .text_color(if active { rgb(0x7dd3fc) } else { rgb(0x98a3b8) })
-        .text_xs()
+        .text_size(px(10.))
+        .font_weight(if active { FontWeight(700.) } else { FontWeight(600.) })
+        .text_color(if active { rgb(0xc9d1d9) } else { rgb(0x6e7681) })
         .cursor_pointer()
-        .hover(|this| this.bg(rgb(0x18202b)))
+        .hover(|this| this.bg(rgb(0x21262d)).text_color(rgb(0xc9d1d9)))
         .child(if active {
             format!("{label} {}", direction.marker())
         } else {
@@ -194,7 +195,7 @@ pub(super) fn process_table_row(
                 )))
                 .grid_cols(6)
                 .gap_1()
-                .h(px(34.))
+                .h(px(38.))
                 .px_2()
                 .items_center()
                 .cursor_pointer()
@@ -241,9 +242,9 @@ pub(super) fn process_table_row(
                         .flex()
                         .items_center()
                         .justify_end()
-                        .child(icon_button(
+                        .child(compact_remote_svg_button(
                             format!("process-menu-{}", process.pid),
-                            "⋮",
+                            "icons/conn/more.svg",
                             on_menu,
                         ))
                         .when(menu_open, |this| {
@@ -316,7 +317,7 @@ fn process_menu_item(
 ) -> impl IntoElement {
     div()
         .id(gpui::SharedString::from(id.into()))
-        .h(px(28.))
+        .h(px(24.))
         .px_3()
         .flex()
         .items_center()
@@ -723,4 +724,29 @@ pub(super) fn usage_color(ratio: f64) -> gpui::Hsla {
 pub(super) fn load_ratio(load1: f64, cores: u32) -> f64 {
     let cores = cores.max(1) as f64;
     (load1 / cores).clamp(0., 1.)
+}
+
+
+pub(super) fn compact_remote_svg_button(
+    id: impl Into<String>,
+    icon_path: &'static str,
+    on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
+) -> impl IntoElement {
+    div()
+        .id(gpui::SharedString::from(id.into()))
+        .size(px(28.))
+        .flex()
+        .items_center()
+        .justify_center()
+        .rounded_md()
+        .text_color(rgb(0x8b949e))
+        .cursor_pointer()
+        .hover(|this| this.bg(rgb(0x21262d)).text_color(rgb(0xc9d1d9)))
+        .child(
+            svg()
+                .size(px(16.))
+                .flex_none()
+                .path(icon_path),
+        )
+        .on_click(on_click)
 }

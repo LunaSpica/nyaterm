@@ -5,13 +5,14 @@ pub(in crate::ui::view::pages::remote) fn docker_tab_bar(
     overview: &nyaterm_session::RemoteDockerOverview,
     cx: &mut Context<NyaTermApp>,
 ) -> impl IntoElement {
+    // Dense tab strip similar to Tauri Docker manager tabs.
     div()
-        .h(px(30.))
+        .h(px(32.))
         .flex_none()
-        .px_1()
+        .px_2()
         .border_b_1()
         .border_color(rgb(0x30363d))
-        .bg(rgb(0x0d1117))
+        .bg(rgb(0x12171f))
         .flex()
         .items_center()
         .gap_1()
@@ -91,13 +92,12 @@ fn docker_tab_button(
         .flex()
         .items_center()
         .rounded_sm()
-        .border_1()
-        .border_color(if active { rgb(0x6ee7b7) } else { rgb(0x303848) })
-        .bg(if active { rgb(0x14352b) } else { rgb(0x0d1320) })
-        .text_color(if active { rgb(0x6ee7b7) } else { rgb(0x98a3b8) })
-        .text_xs()
+        .bg(if active { rgb(0x21262d) } else { rgb(0x0d1117) })
+        .text_color(if active { rgb(0xc9d1d9) } else { rgb(0x8b949e) })
+        .text_size(px(11.))
+        .font_weight(if active { FontWeight(600.) } else { FontWeight(500.) })
         .cursor_pointer()
-        .hover(|this| this.bg(rgb(0x18202b)))
+        .hover(|this| this.bg(rgb(0x1c2128)).text_color(rgb(0xc9d1d9)))
         .child(label)
         .on_click(on_click)
 }

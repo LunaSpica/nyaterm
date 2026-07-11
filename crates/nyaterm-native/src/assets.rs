@@ -39,6 +39,37 @@ const ICON_FILES: &[&str] = &[
     "icons/conn/github.svg",
     "icons/conn/folder.svg",
     "icons/conn/file.svg",
+    "icons/conn/connect.svg",
+    "icons/net/move.svg",
+    "icons/net/delete.svg",
+    "icons/net/edit.svg",
+    "icons/conn/sort.svg",
+    "icons/conn/more.svg",
+    "icons/conn/flash.svg",
+    "icons/conn/add.svg",
+    "icons/fe/new-file.svg",
+    "icons/fe/new-folder.svg",
+    "icons/fe/upload.svg",
+    "icons/fe/download.svg",
+    "icons/fe/delete.svg",
+    "icons/fe/up.svg",
+    "icons/fe/refresh.svg",
+    "icons/fe/search.svg",
+    "icons/fe/back.svg",
+    "icons/fe/forward.svg",
+    "icons/fe/star.svg",
+    "icons/fe/star-outline.svg",
+    "icons/fe/sync.svg",
+    "icons/fe/paste.svg",
+    "icons/ai/history.svg",
+    "icons/ai/settings.svg",
+    "icons/ai/new.svg",
+    "icons/ai/send.svg",
+    "icons/ai/stop.svg",
+    "icons/ai/search.svg",
+    "icons/ai/exec-confirm.svg",
+    "icons/ai/exec-smart.svg",
+    "icons/ai/exec-auto.svg",
 ];
 
 fn icon_bytes(path: &str) -> Option<&'static [u8]> {
@@ -76,6 +107,37 @@ fn icon_bytes(path: &str) -> Option<&'static [u8]> {
         "icons/conn/github.svg" => Some(include_bytes!("../assets/icons/conn/github.svg")),
         "icons/conn/folder.svg" => Some(include_bytes!("../assets/icons/conn/folder.svg")),
         "icons/conn/file.svg" => Some(include_bytes!("../assets/icons/conn/file.svg")),
+        "icons/conn/connect.svg" => Some(include_bytes!("../assets/icons/conn/connect.svg")),
+        "icons/net/move.svg" => Some(include_bytes!("../assets/icons/net/move.svg")),
+        "icons/net/delete.svg" => Some(include_bytes!("../assets/icons/net/delete.svg")),
+        "icons/net/edit.svg" => Some(include_bytes!("../assets/icons/net/edit.svg")),
+        "icons/conn/sort.svg" => Some(include_bytes!("../assets/icons/conn/sort.svg")),
+        "icons/conn/more.svg" => Some(include_bytes!("../assets/icons/conn/more.svg")),
+        "icons/conn/flash.svg" => Some(include_bytes!("../assets/icons/conn/flash.svg")),
+        "icons/conn/add.svg" => Some(include_bytes!("../assets/icons/conn/add.svg")),
+        "icons/fe/new-file.svg" => Some(include_bytes!("../assets/icons/fe/new-file.svg")),
+        "icons/fe/new-folder.svg" => Some(include_bytes!("../assets/icons/fe/new-folder.svg")),
+        "icons/fe/upload.svg" => Some(include_bytes!("../assets/icons/fe/upload.svg")),
+        "icons/fe/download.svg" => Some(include_bytes!("../assets/icons/fe/download.svg")),
+        "icons/fe/delete.svg" => Some(include_bytes!("../assets/icons/fe/delete.svg")),
+        "icons/fe/up.svg" => Some(include_bytes!("../assets/icons/fe/up.svg")),
+        "icons/fe/refresh.svg" => Some(include_bytes!("../assets/icons/fe/refresh.svg")),
+        "icons/fe/search.svg" => Some(include_bytes!("../assets/icons/fe/search.svg")),
+        "icons/fe/back.svg" => Some(include_bytes!("../assets/icons/fe/back.svg")),
+        "icons/fe/forward.svg" => Some(include_bytes!("../assets/icons/fe/forward.svg")),
+        "icons/fe/star.svg" => Some(include_bytes!("../assets/icons/fe/star.svg")),
+        "icons/fe/star-outline.svg" => Some(include_bytes!("../assets/icons/fe/star-outline.svg")),
+        "icons/fe/sync.svg" => Some(include_bytes!("../assets/icons/fe/sync.svg")),
+        "icons/fe/paste.svg" => Some(include_bytes!("../assets/icons/fe/paste.svg")),
+        "icons/ai/history.svg" => Some(include_bytes!("../assets/icons/ai/history.svg")),
+        "icons/ai/settings.svg" => Some(include_bytes!("../assets/icons/ai/settings.svg")),
+        "icons/ai/new.svg" => Some(include_bytes!("../assets/icons/ai/new.svg")),
+        "icons/ai/send.svg" => Some(include_bytes!("../assets/icons/ai/send.svg")),
+        "icons/ai/stop.svg" => Some(include_bytes!("../assets/icons/ai/stop.svg")),
+        "icons/ai/search.svg" => Some(include_bytes!("../assets/icons/ai/search.svg")),
+        "icons/ai/exec-confirm.svg" => Some(include_bytes!("../assets/icons/ai/exec-confirm.svg")),
+        "icons/ai/exec-smart.svg" => Some(include_bytes!("../assets/icons/ai/exec-smart.svg")),
+        "icons/ai/exec-auto.svg" => Some(include_bytes!("../assets/icons/ai/exec-auto.svg")),
         _ => None,
     }
 }
@@ -88,7 +150,12 @@ impl AssetSource for NyaTermAssets {
 
     fn list(&self, path: &str) -> Result<Vec<SharedString>> {
         let normalized = path.trim_start_matches('/');
-        if normalized.is_empty() || normalized == "icons" || normalized == "icons/conn" {
+        if normalized.is_empty()
+            || normalized == "icons"
+            || normalized == "icons/conn"
+            || normalized == "icons/fe"
+            || normalized == "icons/ai"
+        {
             Ok(ICON_FILES.iter().map(|item| (*item).into()).collect())
         } else {
             Ok(Vec::new())

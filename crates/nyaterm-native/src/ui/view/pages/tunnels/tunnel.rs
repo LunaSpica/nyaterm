@@ -168,13 +168,26 @@ pub(super) fn tunnel_section(
         .overflow_hidden()
         .child(
             div()
+                .id(gpui::SharedString::from(format!("tunnel-section-header-{}", section.id)))
+                .h(px(30.))
                 .px_3()
-                .py_2()
                 .flex()
                 .items_center()
                 .justify_between()
-                .gap_3()
+                .gap_2()
                 .bg(rgb(0x10151e))
+                .cursor_pointer()
+                .hover(|this| this.bg(rgb(0x151b24)))
+                .on_click({
+                    let section_id_for_toggle = section_id_for_toggle.clone();
+                    cx.listener(move |this, _, _, cx| {
+                        this.toggle_network_section(
+                            NetworkTab::Tunnels,
+                            section_id_for_toggle.clone(),
+                            cx,
+                        );
+                    })
+                })
                 .child(
                     div()
                         .min_w_0()
@@ -183,39 +196,40 @@ pub(super) fn tunnel_section(
                         .gap_2()
                         .child(
                             div()
-                                .text_sm()
-                                .font_weight(FontWeight(800.))
+                                .text_size(px(12.))
+                                .text_color(rgb(0x8b949e))
+                                .child(if collapsed { "▸" } else { "▾" }),
+                        )
+                        .child(
+                            div()
+                                .text_xs()
+                                .font_weight(FontWeight(600.))
                                 .text_color(rgb(0xe5edf7))
                                 .child(truncate_preview(&section.label, 48)),
                         )
-                        .when(section.group.is_none(), |this| {
-                            this.child(status_pill("default", rgb(0x93c5fd), rgb(0x17233a)))
-                        }),
+                        .child(
+                            div()
+                                .rounded_full()
+                                .px_1()
+                                .text_size(px(10.))
+                                .text_color(rgb(0x8b949e))
+                                .bg(rgb(0x21262d))
+                                .child(item_count.to_string()),
+                        ),
                 )
                 .child(
                     div()
                         .flex()
                         .items_center()
-                        .gap_2()
-                        .child(status_pill("profiles", rgb(0xcbd5e1), rgb(0x202938)))
-                        .child(
-                            div()
-                                .font_family("JetBrains Mono")
-                                .text_xs()
-                                .text_color(rgb(0x98a3b8))
-                                .child(format!("{item_count} · open {open_count}")),
-                        )
-                        .child(small_button(
-                            format!("tunnel-section-toggle-{}", section.id),
-                            if collapsed { "Open" } else { "Close" },
-                            cx.listener(move |this, _, _, cx| {
-                                this.toggle_network_section(
-                                    NetworkTab::Tunnels,
-                                    section_id_for_toggle.clone(),
-                                    cx,
-                                );
-                            }),
-                        )),
+                        .gap_1()
+                        .when(open_count > 0, |this| {
+                            this.child(
+                                div()
+                                    .text_size(px(10.))
+                                    .text_color(rgb(0x3fb950))
+                                    .child(format!("{open_count} open")),
+                            )
+                        }),
                 )
                 .when_some(section.group.clone(), |this, group| {
                     let rename_id = group.id.clone();
@@ -361,19 +375,20 @@ pub(super) fn tunnel_network_row(
         .as_ref()
         .map(|info| format!("{}:{}", info.bind_host, info.listen_port))
         .unwrap_or_else(|| format!("{bind}:{}", tunnel.listen_port));
-    let action = if pending {
-        status_pill("pending", rgb(0xfacc15), rgb(0x3a2f14)).into_any_element()
+    // Tauri TunnelRow: 3-line left stack, StatusBadge, Switch, overflow actions.
+    let toggle = if pending {
+        status_pill("…", rgb(0xfacc15), rgb(0x3a2f14)).into_any_element()
     } else if is_open {
-        small_button(
+        network_switch_button(
             format!("network-tunnel-close-{}", tunnel.id),
-            "Close",
+            true,
             on_close,
         )
         .into_any_element()
     } else if supported {
-        small_button(
+        network_switch_button(
             format!("network-tunnel-open-{}", tunnel.id),
-            "Open",
+            false,
             on_open,
         )
         .into_any_element()
@@ -383,20 +398,20 @@ pub(super) fn tunnel_network_row(
 
     div()
         .border_t_1()
-        .border_color(rgb(0x253044))
+        .border_color(rgb(0x21262d))
         .px_3()
-        .py_3()
+        .py_2()
         .flex()
         .items_center()
         .gap_3()
-        .hover(|this| this.bg(rgb(0x1c2230)))
+        .hover(|this| this.bg(rgb(0x1c2128)))
         .child(
             div()
                 .min_w_0()
                 .flex_1()
                 .flex()
                 .flex_col()
-                .gap_1()
+                .gap_0()
                 .child(
                     div()
                         .flex()
@@ -406,22 +421,37 @@ pub(super) fn tunnel_network_row(
                             div()
                                 .min_w_0()
                                 .text_sm()
-                                .font_weight(FontWeight(800.))
+                                .font_weight(FontWeight(600.))
                                 .text_color(rgb(0xe5edf7))
                                 .child(truncate_preview(&tunnel_name(tunnel), 52)),
                         )
-                        .child(status_pill(status, status_color, status_bg)),
+                        .child(status_pill(status, status_color, status_bg))
+                        .when(tunnel.auto_open, |this| {
+                            this.child(
+                                div()
+                                    .text_size(px(10.))
+                                    .text_color(rgb(0x3fb950))
+                                    .child("auto"),
+                            )
+                        }),
                 )
-                .child(div().text_xs().text_color(rgb(0x98a3b8)).child(format!(
-                    "{} · {}",
-                    truncate_preview(&connection_label, 44),
-                    tunnel_mode_label(tunnel)
-                )))
                 .child(
                     div()
+                        .mt(px(2.))
+                        .text_size(px(12.))
+                        .text_color(rgb(0x8b949e))
+                        .child(format!(
+                            "{} · {}",
+                            truncate_preview(&connection_label, 44),
+                            tunnel_mode_label(tunnel)
+                        )),
+                )
+                .child(
+                    div()
+                        .mt(px(2.))
                         .font_family("JetBrains Mono")
-                        .text_xs()
-                        .text_color(rgb(0x64748b))
+                        .text_size(px(11.))
+                        .text_color(rgb(0x6e7681))
                         .child(truncate_preview(&tunnel_endpoint(tunnel, &listen), 88)),
                 ),
         )
@@ -429,47 +459,81 @@ pub(super) fn tunnel_network_row(
             div()
                 .flex()
                 .items_center()
-                .gap_2()
-                .child(status_pill(
-                    if tunnel.auto_open { "auto" } else { "manual" },
-                    if tunnel.auto_open {
-                        rgb(0x6ee7b7)
-                    } else {
-                        rgb(0x93c5fd)
-                    },
-                    rgb(0x17233a),
-                ))
-                .child(status_pill(
-                    if tunnel.bind_localhost {
-                        "local"
-                    } else {
-                        "public"
-                    },
-                    rgb(0xc4b5fd),
-                    rgb(0x251f3f),
-                ))
-                .child(if group_count == 0 {
-                    status_pill("ungrouped", rgb(0x98a3b8), rgb(0x202938)).into_any_element()
-                } else {
-                    small_button(
-                        format!("network-tunnel-move-{}", tunnel.id),
-                        "Move",
-                        on_move,
-                    )
-                    .into_any_element()
-                })
-                .child(small_button(
+                .gap_1()
+                .child(toggle)
+                .child(network_icon_action(
                     format!("network-tunnel-edit-{}", tunnel.id),
-                    "Edit",
+                    "icons/net/edit.svg",
                     on_edit,
                 ))
-                .child(small_button(
+                .when(group_count > 0, |this| {
+                    this.child(network_icon_action(
+                        format!("network-tunnel-move-{}", tunnel.id),
+                        "icons/net/move.svg",
+                        on_move,
+                    ))
+                })
+                .child(network_icon_action(
                     format!("network-tunnel-delete-{}", tunnel.id),
-                    "Delete",
+                    "icons/net/delete.svg",
                     on_delete,
-                ))
-                .child(action),
+                )),
         )
+}
+
+fn network_switch_button(
+    id: impl Into<String>,
+    on: bool,
+    on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
+) -> impl IntoElement {
+    // Compact switch stand-in for Tauri Switch next to tunnel rows.
+    div()
+        .id(gpui::SharedString::from(id.into()))
+        .w(px(34.))
+        .h(px(18.))
+        .rounded_full()
+        .border_1()
+        .border_color(if on { rgb(0x3fb950) } else { rgb(0x30363d) })
+        .bg(if on { rgb(0x238636) } else { rgb(0x21262d) })
+        .flex()
+        .items_center()
+        .px(px(2.))
+        .cursor_pointer()
+        .hover(|this| this.opacity(0.9))
+        .child(
+            div()
+                .size(px(12.))
+                .rounded_full()
+                .bg(rgb(0xffffff))
+                .when(on, |this| this.ml_auto())
+                .when(!on, |this| this.mr_auto()),
+        )
+        .on_click(on_click)
+}
+
+fn network_icon_action(
+    id: impl Into<String>,
+    label: &'static str,
+    on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
+) -> impl IntoElement {
+    div()
+        .id(gpui::SharedString::from(id.into()))
+        .size(px(24.))
+        .flex()
+        .items_center()
+        .justify_center()
+        .rounded_md()
+        .text_size(px(12.))
+        .text_color(rgb(0x8b949e))
+        .cursor_pointer()
+        .hover(|this| this.bg(rgb(0x21262d)).text_color(rgb(0xc9d1d9)))
+        .child(
+            svg()
+                .size(px(14.))
+                .flex_none()
+                .path(label),
+        )
+        .on_click(on_click)
 }
 
 pub(super) fn network_tunnel_editor_panel(

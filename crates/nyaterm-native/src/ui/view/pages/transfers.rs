@@ -1,7 +1,7 @@
 use gpui::{
     App, ClickEvent, ClipboardItem, Context, FontWeight, Hsla, IntoElement, KeyDownEvent,
     MouseButton, MouseDownEvent, MouseMoveEvent, MouseUpEvent, SharedString, Timer, Window, div,
-    prelude::*, px, rgb,
+    prelude::*, px, rgb, svg,
 };
 use nyaterm_session::{
     SftpAttributeUpdate, SftpDuplicatePolicy, SftpFileEntry, SftpFileType, SftpService,

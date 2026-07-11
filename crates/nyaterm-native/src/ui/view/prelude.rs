@@ -1,7 +1,7 @@
 pub(super) use gpui::{
     App, ClickEvent, ClipboardItem, Context, FocusHandle, FontWeight, IntoElement, KeyDownEvent,
     MouseButton, PathPromptOptions, Render, SharedString, Timer, Window, WindowControlArea, div,
-    prelude::*, px, rgb, rgba,
+    prelude::*, px, rgb, rgba, svg,
 };
 pub(super) use nyaterm_domain::{
     AgentApprovalDecision, AgentCapturedOutput, AgentCommandExecutionMode,

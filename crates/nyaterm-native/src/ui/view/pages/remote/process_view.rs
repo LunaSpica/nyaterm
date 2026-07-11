@@ -191,9 +191,9 @@ impl NyaTermApp {
                     .child(
                         div()
                             .when(!can_list, |this| this.opacity(0.45))
-                            .child(icon_button(
+                            .child(compact_remote_svg_button(
                                 "process-refresh",
-                                "↻",
+                                "icons/fe/refresh.svg",
                                 cx.listener(|this, _, window, cx| {
                                     this.refresh_processes(window, cx);
                                 }),
@@ -210,8 +210,9 @@ impl NyaTermApp {
                 this.child(process_signal_confirm_panel(confirm, cx))
             })
             .child(
+                // Column header / sort strip (Tauri table header is sortable).
                 div()
-                    .h(px(28.))
+                    .h(px(26.))
                     .flex_none()
                     .px_2()
                     .border_b_1()
@@ -266,15 +267,6 @@ impl NyaTermApp {
                             this.toggle_process_sort(RemoteProcessSortKey::User, cx);
                         }),
                     ))
-                    .child(process_sort_button(
-                        "process-sort-command",
-                        "Cmd",
-                        self.process_sort_key == RemoteProcessSortKey::Command,
-                        self.process_sort_direction,
-                        cx.listener(|this, _, _, cx| {
-                            this.toggle_process_sort(RemoteProcessSortKey::Command, cx);
-                        }),
-                    )),
             )
             .child(
                 div()
@@ -285,7 +277,6 @@ impl NyaTermApp {
                     .scrollbar_width(px(6.))
                     .flex()
                     .flex_col()
-                    .child(process_table_header())
                     .child(rows),
             )
     }
