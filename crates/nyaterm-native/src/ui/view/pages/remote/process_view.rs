@@ -287,7 +287,7 @@ impl NyaTermApp {
                 this.child(process_signal_confirm_panel(confirm, cx))
             })
             .child(
-                // Column header / sort strip (Tauri table header is sortable).
+                // Column header grid must match process_table_row (Command/PID/CPU/Mem/User/menu).
                 div()
                     .h(px(26.))
                     .flex_none()
@@ -295,17 +295,29 @@ impl NyaTermApp {
                     .border_b_1()
                     .border_color(rgb(0x30363d))
                     .bg(rgb(0x0d1117))
-                    .flex()
-                    .items_center()
+                    .grid()
+                    .grid_cols(6)
                     .gap_1()
+                    .items_center()
                     .overflow_hidden()
                     .child(process_sort_button(
                         "process-sort-command",
                         "Process",
                         self.process_sort_key == RemoteProcessSortKey::Command,
                         self.process_sort_direction,
+                        false,
                         cx.listener(|this, _, _, cx| {
                             this.toggle_process_sort(RemoteProcessSortKey::Command, cx);
+                        }),
+                    ))
+                    .child(process_sort_button(
+                        "process-sort-pid",
+                        "PID",
+                        self.process_sort_key == RemoteProcessSortKey::Pid,
+                        self.process_sort_direction,
+                        true,
+                        cx.listener(|this, _, _, cx| {
+                            this.toggle_process_sort(RemoteProcessSortKey::Pid, cx);
                         }),
                     ))
                     .child(process_sort_button(
@@ -313,6 +325,7 @@ impl NyaTermApp {
                         "CPU",
                         self.process_sort_key == RemoteProcessSortKey::Cpu,
                         self.process_sort_direction,
+                        true,
                         cx.listener(|this, _, _, cx| {
                             this.toggle_process_sort(RemoteProcessSortKey::Cpu, cx);
                         }),
@@ -322,17 +335,9 @@ impl NyaTermApp {
                         "Mem",
                         self.process_sort_key == RemoteProcessSortKey::Memory,
                         self.process_sort_direction,
+                        true,
                         cx.listener(|this, _, _, cx| {
                             this.toggle_process_sort(RemoteProcessSortKey::Memory, cx);
-                        }),
-                    ))
-                    .child(process_sort_button(
-                        "process-sort-pid",
-                        "PID",
-                        self.process_sort_key == RemoteProcessSortKey::Pid,
-                        self.process_sort_direction,
-                        cx.listener(|this, _, _, cx| {
-                            this.toggle_process_sort(RemoteProcessSortKey::Pid, cx);
                         }),
                     ))
                     .child(process_sort_button(
@@ -340,10 +345,12 @@ impl NyaTermApp {
                         "User",
                         self.process_sort_key == RemoteProcessSortKey::User,
                         self.process_sort_direction,
+                        false,
                         cx.listener(|this, _, _, cx| {
                             this.toggle_process_sort(RemoteProcessSortKey::User, cx);
                         }),
                     ))
+                    .child(div().w_full())
             )
             .child(
                 div()

@@ -160,7 +160,7 @@ impl NyaTermApp {
                     .flex()
                     .flex_col()
                     .items_start()
-                    .gap_3()
+                    .gap_2()
                     .text_xs()
                     .text_color(rgb(0x98a3b8))
                     .line_height(px(18.))
@@ -444,7 +444,7 @@ impl NyaTermApp {
                                 .flex()
                                 .items_center()
                                 .justify_between()
-                                .gap_3()
+                                .gap_2()
                                 .child(
                                     div()
                                         .id(SharedString::from(format!(
@@ -790,7 +790,7 @@ impl NyaTermApp {
                             .flex_1()
                             .flex()
                             .flex_col()
-                            .gap_3()
+                            .gap_2()
                             .when(visible_commands > 12, |this| {
                                 this.child(
                                     div()

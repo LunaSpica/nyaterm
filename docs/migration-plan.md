@@ -726,3 +726,8 @@ service boundary first:
 ## 2026-07-11 Security Auth + Network densify
 - Security Auth Keys/Passwords/Credentials/OTP: fixed-height dense rows with trailing actions (Tauri list density).
 - Network panel scroll body padding/gap tightened (p_2/gap_2).
+
+## 2026-07-11 Process table column alignment + accents
+- Sort header uses the same 6-col grid as rows (Process/PID/CPU/Mem/User/menu) with numeric right-align.
+- Process rows: left load/selection accent bar; mono numeric PID/CPU/Mem.
+- Quick Commands / Recording panels densified slightly.

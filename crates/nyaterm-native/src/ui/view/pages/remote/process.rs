@@ -115,15 +115,18 @@ pub(super) fn process_sort_button(
     label: &'static str,
     active: bool,
     direction: RemoteProcessSortDirection,
+    numeric: bool,
     on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
 ) -> impl IntoElement {
     // Flat sortable header cell (Tauri table header).
     div()
         .id(gpui::SharedString::from(id.into()))
-        .h(px(24.))
-        .px_2()
+        .h_full()
+        .min_w_0()
+        .px_1()
         .flex()
         .items_center()
+        .when(numeric, |this| this.justify_end())
         .rounded_sm()
         .text_size(px(10.))
         .font_weight(if active { FontWeight(700.) } else { FontWeight(600.) })
@@ -139,6 +142,7 @@ pub(super) fn process_sort_button(
 }
 
 pub(super) fn process_table_header() -> impl IntoElement {
+    // Static fallback header; live header uses process_sort_button grid in process_view.
     div()
         .grid()
         .grid_cols(6)
@@ -153,10 +157,10 @@ pub(super) fn process_table_header() -> impl IntoElement {
         .text_size(px(10.))
         .font_weight(FontWeight(700.))
         .text_color(rgb(0x6e7681))
-        .child("Command")
-        .child("PID")
-        .child("CPU")
-        .child("Mem")
+        .child("Process")
+        .child(div().text_right().child("PID"))
+        .child(div().text_right().child("CPU"))
+        .child(div().text_right().child("Mem"))
         .child("User")
         .child("")
 }
@@ -176,6 +180,16 @@ pub(super) fn process_table_row(
     on_kill: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
 ) -> gpui::Div {
     // Tauri ProcessManager: denser mono table + ⋮ overflow actions.
+    // Tauri: left accent based on load / selection.
+    let accent = if process.cpu_percent >= 80.0 {
+        rgb(0xf85149)
+    } else if process.memory_percent >= 80.0 {
+        rgb(0xd29922)
+    } else if selected {
+        rgb(0x1f6feb)
+    } else {
+        rgb(0x30363d)
+    };
     div()
         .relative()
         .border_b_1()
@@ -188,6 +202,15 @@ pub(super) fn process_table_row(
         .hover(|this| this.bg(rgb(0x1c2128)))
         .child(
             div()
+                .absolute()
+                .left_0()
+                .top_0()
+                .bottom_0()
+                .w(px(2.))
+                .bg(accent),
+        )
+        .child(
+            div()
                 .grid()
                 .id(gpui::SharedString::from(format!(
                     "process-row-{}",
@@ -197,6 +220,7 @@ pub(super) fn process_table_row(
                 .gap_1()
                 .h(px(38.))
                 .px_2()
+                .pl(px(10.))
                 .items_center()
                 .cursor_pointer()
                 .on_click(on_select)
@@ -223,18 +247,21 @@ pub(super) fn process_table_row(
                                 .child(truncate_preview(&process.command_line, 52)),
                         ),
                 )
-                .child(process_table_cell(process.pid.to_string(), None))
+                .child(process_table_cell(process.pid.to_string(), None, true))
                 .child(process_table_cell(
                     format!("{:.1}%", process.cpu_percent),
                     Some(usage_color(process.cpu_percent / 100.)),
+                    true,
                 ))
                 .child(process_table_cell(
                     format!("{:.1}%", process.memory_percent),
                     Some(usage_color(process.memory_percent / 100.)),
+                    true,
                 ))
                 .child(process_table_cell(
                     truncate_preview(&process.user, 12),
                     None,
+                    false,
                 ))
                 .child(
                     div()
@@ -333,12 +360,19 @@ fn process_menu_sep() -> impl IntoElement {
     div().h(px(1.)).mx_2().my_1().bg(rgb(0x30363d))
 }
 
-pub(super) fn process_table_cell(value: String, color: Option<gpui::Hsla>) -> impl IntoElement {
+pub(super) fn process_table_cell(
+    value: String,
+    color: Option<gpui::Hsla>,
+    numeric: bool,
+) -> impl IntoElement {
+    // Tauri ProcessManager numeric columns are mono + right-aligned.
     div()
         .min_w_0()
         .font_family("JetBrains Mono")
         .text_xs()
+        .when(numeric, |this| this.text_right())
         .text_color(color.unwrap_or_else(|| rgb(0xcbd5e1).into()))
+        .overflow_hidden()
         .child(value)
 }
 

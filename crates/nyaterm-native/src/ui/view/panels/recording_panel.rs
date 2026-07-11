@@ -57,9 +57,9 @@ impl NyaTermApp {
                         .id(SharedString::from(format!(
                             "recording-session-row-{session_id}"
                         )))
+                        .h(px(40.))
                         .rounded_md()
                         .px_2()
-                        .py_1()
                         .bg(if is_current {
                             rgb(0x122033)
                         } else {
