@@ -54,30 +54,37 @@ impl NyaTermApp {
             .get(&session_id)
             .map(|view| view.screen.viewport_absolute_range(scroll_offset))
             .unwrap_or_else(|| self.terminal_screen.viewport_absolute_range(scroll_offset));
-        let active_match_line = search_matches
+        let active_match_abs = search_matches
             .get(
                 self.terminal_search_active_index
                     .min(search_matches.len().saturating_sub(1)),
             )
-            .map(|search_match| search_match.line_index)
-            .and_then(|abs| {
-                if abs >= abs_start && abs < abs_end {
-                    Some(abs - abs_start)
-                } else {
-                    None
-                }
-            });
-        let matched_lines = search_matches
-            .iter()
-            .filter_map(|search_match| {
-                let abs = search_match.line_index;
-                if abs >= abs_start && abs < abs_end {
-                    Some(abs - abs_start)
-                } else {
-                    None
-                }
-            })
-            .collect::<HashSet<_>>();
+            .map(|search_match| search_match.line_index);
+        let mut search_ranges_by_line: HashMap<usize, Vec<(usize, usize)>> = HashMap::new();
+        let mut active_search_ranges_by_line: HashMap<usize, Vec<(usize, usize)>> = HashMap::new();
+        for (match_index, search_match) in search_matches.iter().enumerate() {
+            let abs = search_match.line_index;
+            if abs < abs_start || abs >= abs_end {
+                continue;
+            }
+            let view_row = abs - abs_start;
+            let range = (search_match.start_col, search_match.end_col);
+            search_ranges_by_line
+                .entry(view_row)
+                .or_default()
+                .push(range);
+            if Some(abs) == active_match_abs
+                && match_index
+                    == self
+                        .terminal_search_active_index
+                        .min(search_matches.len().saturating_sub(1))
+            {
+                active_search_ranges_by_line
+                    .entry(view_row)
+                    .or_default()
+                    .push(range);
+            }
+        }
         for (line_index, line) in lines.into_iter().enumerate() {
             let line = if line.is_empty() {
                 " ".to_string()
@@ -109,12 +116,21 @@ impl NyaTermApp {
             } else {
                 Vec::new()
             };
+            let empty_ranges: [(usize, usize); 0] = [];
+            let line_search_ranges = search_ranges_by_line
+                .get(&line_index)
+                .map(|ranges| ranges.as_slice())
+                .unwrap_or(&empty_ranges);
+            let line_active_search_ranges = active_search_ranges_by_line
+                .get(&line_index)
+                .map(|ranges| ranges.as_slice())
+                .unwrap_or(&empty_ranges);
             let content = terminal_line_element(
                 &line,
                 ansi,
                 &self.keyword_highlights,
-                matched_lines.contains(&line_index),
-                active_match_line == Some(line_index),
+                line_search_ranges,
+                line_active_search_ranges,
                 if show_cursor && line_index == cursor_row {
                     Some(cursor_col)
                 } else {
@@ -650,7 +666,7 @@ impl NyaTermApp {
         } else {
             self.terminal_search_query.clone()
         };
-        let mut history_rows = div().flex().flex_col().gap_1();
+        let mut history_rows = div().id(SharedString::from("terminal-search-history-results")).mt_1().max_h(px(260.)).overflow_y_scroll().flex().flex_col().gap_1();
         if self.terminal_search_mode == TerminalSearchMode::History
             && !self.terminal_search_query.trim().is_empty()
         {
@@ -666,7 +682,31 @@ impl NyaTermApp {
                     );
                 }
                 Ok(response) => {
-                    for result in response.results.into_iter().take(5) {
+                    history_rows = history_rows.child(
+                        div()
+                            .px_1()
+                            .pb_1()
+                            .text_xs()
+                            .text_color(rgb(palette.text_dimmed))
+                            .child(format!(
+                                "{} match(es) · {} ms{}",
+                                response.total,
+                                response.elapsed_ms,
+                                if response.truncated { " · truncated" } else { "" }
+                            )),
+                    );
+                    for result in response.results.into_iter().take(8) {
+                        let before = result.before.join("\n");
+                        let after = result.after.join("\n");
+                        let mut context_parts = Vec::new();
+                        if !before.trim().is_empty() {
+                            context_parts.push(truncate_preview(&before, 120));
+                        }
+                        context_parts.push(format!("> {}", truncate_preview(&result.preview, 120)));
+                        if !after.trim().is_empty() {
+                            context_parts.push(truncate_preview(&after, 120));
+                        }
+                        let context = context_parts.join("\n");
                         history_rows = history_rows.child(
                             div()
                                 .rounded_sm()
@@ -677,8 +717,8 @@ impl NyaTermApp {
                                 .child(
                                     div()
                                         .text_xs()
-                                        .font_weight(FontWeight(800.))
-                                        .text_color(rgb(palette.text))
+                                        .font_weight(FontWeight(700.))
+                                        .text_color(rgb(palette.text_muted))
                                         .child(format!("line {}", result.line_number)),
                                 )
                                 .child(
@@ -686,10 +726,21 @@ impl NyaTermApp {
                                         .mt_1()
                                         .font_family("JetBrains Mono")
                                         .text_xs()
-                                        .text_color(rgb(palette.text_muted))
-                                        .line_height(px(18.))
+                                        .text_color(rgb(palette.text))
+                                        .line_height(px(16.))
                                         .child(truncate_preview(&result.preview, 96)),
-                                ),
+                                )
+                                .when(!result.before.is_empty() || !result.after.is_empty(), |this| {
+                                    this.child(
+                                        div()
+                                            .mt_1()
+                                            .font_family("JetBrains Mono")
+                                            .text_size(px(10.))
+                                            .text_color(rgb(palette.text_dimmed))
+                                            .line_height(px(14.))
+                                            .child(context),
+                                    )
+                                }),
                         );
                     }
                 }

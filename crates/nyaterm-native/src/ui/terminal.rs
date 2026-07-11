@@ -7,6 +7,9 @@ use super::view::INITIAL_TERMINAL_BANNER;
 #[derive(Debug, Clone)]
 pub(super) struct TerminalBufferMatch {
     pub(super) line_index: usize,
+    /// Half-open character column range on the matched line.
+    pub(super) start_col: usize,
+    pub(super) end_col: usize,
 }
 
 #[derive(Debug, Clone)]
@@ -28,8 +31,8 @@ pub(super) fn terminal_line_element(
     line: &str,
     ansi_spans: Option<&[nyaterm_terminal::StyledSpan]>,
     config: &KeywordHighlightConfig,
-    search_match: bool,
-    active_search_match: bool,
+    search_ranges: &[(usize, usize)],
+    active_search_ranges: &[(usize, usize)],
     cursor_col: Option<usize>,
     cursor_style: &str,
     // Half-open column range selected on this line, if any.
@@ -58,6 +61,13 @@ pub(super) fn terminal_line_element(
         spans = apply_cursor_style(spans, col, cursor_style, palette);
     }
     let line_h = px(line_height.max(12.));
+    if !search_ranges.is_empty() {
+        spans = apply_search_ranges(spans, search_ranges, false, palette);
+    }
+    if !active_search_ranges.is_empty() {
+        spans = apply_search_ranges(spans, active_search_ranges, true, palette);
+    }
+
     let mut row = div()
         .flex()
         .flex_row()
@@ -65,14 +75,9 @@ pub(super) fn terminal_line_element(
         .min_h(line_h)
         .line_height(line_h)
         .whitespace_nowrap();
-    // Search match chrome: use terminal selection/find colors (Tauri TerminalColors).
-    if active_search_match {
-        row = row
-            .bg(rgb(palette.terminal_selection))
-            .border_l_2()
-            .border_color(rgb(palette.warning));
-    } else if search_match {
-        row = row.bg(rgb(palette.terminal_selection));
+    // Active find row gets a subtle left marker (xterm active decoration cue).
+    if !active_search_ranges.is_empty() {
+        row = row.border_l_2().border_color(rgb(palette.warning));
     }
 
     for span in spans {
@@ -165,6 +170,58 @@ fn apply_selection_range(
         if let Some(cell) = flat.get_mut(idx) {
             cell.2 = Some(palette.terminal_selection);
             cell.3 = false;
+        }
+    }
+    compress_flat_cells(flat)
+}
+
+fn apply_search_ranges(
+    spans: Vec<TerminalHighlightSpan>,
+    ranges: &[(usize, usize)],
+    active: bool,
+    palette: crate::ui::theme::ThemePalette,
+) -> Vec<TerminalHighlightSpan> {
+    if ranges.is_empty() {
+        return spans;
+    }
+    let mut flat: Vec<(char, Option<u32>, Option<u32>, bool, bool)> = Vec::new();
+    for span in spans {
+        if span.text.is_empty() {
+            continue;
+        }
+        for ch in span.text.chars() {
+            flat.push((ch, span.color, span.bg, span.keyword, span.underline));
+        }
+    }
+    let max_end = ranges.iter().map(|(_, end)| *end).max().unwrap_or(0);
+    while flat.len() < max_end {
+        flat.push((' ', None, None, false, false));
+    }
+    // Tauri xterm find decorations: inactive selection-ish, active stronger accent.
+    let bg = if active {
+        // Mix selection with warning accent by using warning-ish selection.
+        palette.warning
+    } else {
+        palette.terminal_selection
+    };
+    let fg = if active {
+        Some(palette.terminal_bg)
+    } else {
+        None
+    };
+    for &(start, end) in ranges {
+        if start >= end {
+            continue;
+        }
+        let end = end.min(flat.len());
+        for idx in start..end {
+            if let Some(cell) = flat.get_mut(idx) {
+                cell.2 = Some(bg);
+                if let Some(fg) = fg {
+                    cell.1 = Some(fg);
+                }
+                cell.3 = false;
+            }
         }
     }
     compress_flat_cells(flat)
@@ -425,12 +482,19 @@ pub(super) fn terminal_buffer_matches(
         };
         let regex = regex::Regex::new(&pattern).map_err(|error| error.to_string())?;
         for (line_index, line) in output.lines().enumerate() {
-            if regex.find_iter(line).any(|found| {
-                !flags.whole_word || is_whole_word_match(line, found.start(), found.end())
-            }) {
-                matches.push(TerminalBufferMatch { line_index });
+            for found in regex.find_iter(line) {
+                if flags.whole_word && !is_whole_word_match(line, found.start(), found.end()) {
+                    continue;
+                }
+                let start_col = line[..found.start()].chars().count();
+                let end_col = line[..found.end()].chars().count();
+                matches.push(TerminalBufferMatch {
+                    line_index,
+                    start_col,
+                    end_col,
+                });
                 if matches.len() >= limit {
-                    break;
+                    return Ok(matches);
                 }
             }
         }
@@ -449,7 +513,6 @@ pub(super) fn terminal_buffer_matches(
             line.to_ascii_lowercase()
         };
         let mut cursor = 0;
-        let mut matched = false;
         while cursor <= haystack.len() {
             let Some(relative_start) = haystack[cursor..].find(&needle) else {
                 break;
@@ -457,16 +520,18 @@ pub(super) fn terminal_buffer_matches(
             let start = cursor + relative_start;
             let end = start + needle.len();
             if !flags.whole_word || is_whole_word_match(line, start, end) {
-                matched = true;
-                break;
+                let start_col = line[..start.min(line.len())].chars().count();
+                let end_col = line[..end.min(line.len())].chars().count();
+                matches.push(TerminalBufferMatch {
+                    line_index,
+                    start_col,
+                    end_col,
+                });
+                if matches.len() >= limit {
+                    return Ok(matches);
+                }
             }
             cursor = end.max(cursor + 1);
-        }
-        if matched {
-            matches.push(TerminalBufferMatch { line_index });
-            if matches.len() >= limit {
-                break;
-            }
         }
     }
     Ok(matches)
@@ -565,4 +630,32 @@ pub(super) fn terminal_screen_from_output(output: &str) -> TerminalScreen {
     let mut screen = TerminalScreen::default();
     screen.advance(output.as_bytes());
     screen
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn buffer_matches_report_column_ranges() {
+        let output = "hello world\nfoo hello bar";
+        let matches = terminal_buffer_matches(
+            output,
+            "hello",
+            &TerminalSearchFlags {
+                case_sensitive: false,
+                regex: false,
+                whole_word: false,
+            },
+            10,
+        )
+        .expect("matches");
+        assert_eq!(matches.len(), 2);
+        assert_eq!(matches[0].line_index, 0);
+        assert_eq!(matches[0].start_col, 0);
+        assert_eq!(matches[0].end_col, 5);
+        assert_eq!(matches[1].line_index, 1);
+        assert_eq!(matches[1].start_col, 4);
+        assert_eq!(matches[1].end_col, 9);
+    }
 }

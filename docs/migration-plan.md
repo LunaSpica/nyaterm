@@ -1085,3 +1085,11 @@ service boundary first:
   (Tauri TabContextMenu-like placement) instead of only a centered modal.
 - Terminal buffer search rejoins lines with real newlines (broken join fixed).
 
+## 2026-07-11 Character-level terminal find highlights
+
+- Buffer search matches now include char column ranges and paint find decorations
+  on the matched tokens (inactive selection bg, active warning/inverted span)
+  instead of only tinting whole rows.
+- Deep history search results show total/elapsed summary plus before/match/after
+  context lines under each hit (Tauri TerminalSearchBar history densification).
+
