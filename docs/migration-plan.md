@@ -925,3 +925,9 @@ service boundary first:
 - `interaction_copy_on_select` copies on mouse-up when enabled.
 - Copy / Select All / Paste Selected shortcuts prefer the live selection.
 - Hit-testing uses approximate monospaced cell metrics (`font_size * 0.62` × 18px line height) and the painted terminal output bounds.
+
+## Terminal SGR truecolor / underline
+
+- `CellStyle` stores `fg_rgb` / `bg_rgb` (CSI 38/48;2) and `underline` (CSI 4/24).
+- 256-color indices beyond 15 are approximated to the 16-color ANSI set.
+- GPUI paints underline via `.underline()` on span elements; reverse video swaps truecolor/index pairs.

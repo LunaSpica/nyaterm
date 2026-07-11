@@ -1051,6 +1051,47 @@ impl NyaTermApp {
                 items = items
                     .child(title_menu_item(
                         palette,
+                        "title-term-copy",
+                        "Copy",
+                        Some(shortcut("terminal.copy", "Ctrl+Shift+C")),
+                        cx.listener(|this, _, _, cx| {
+                            this.close_title_menu(cx);
+                            this.copy_terminal_selection_or_visible(cx);
+                        }),
+                    ))
+                    .child(title_menu_item(
+                        palette,
+                        "title-term-paste",
+                        "Paste",
+                        Some(shortcut("terminal.paste", "Ctrl+Shift+V")),
+                        cx.listener(|this, _, window, cx| {
+                            this.close_title_menu(cx);
+                            this.paste_from_clipboard(window, cx);
+                        }),
+                    ))
+                    .child(title_menu_item(
+                        palette,
+                        "title-term-select-all",
+                        "Select All",
+                        Some(shortcut("terminal.selectAll", "Ctrl+Shift+A")),
+                        cx.listener(|this, _, _, cx| {
+                            this.close_title_menu(cx);
+                            this.select_all_terminal_visible(cx);
+                        }),
+                    ))
+                    .child(title_menu_item(
+                        palette,
+                        "title-term-find",
+                        "Find",
+                        Some(shortcut("terminal.find", "Ctrl+Shift+F")),
+                        cx.listener(|this, _, window, cx| {
+                            this.close_title_menu(cx);
+                            this.open_terminal_search(window, cx);
+                        }),
+                    ))
+                    .child(title_menu_separator(palette))
+                    .child(title_menu_item(
+                        palette,
                         "title-term-quick-switch",
                         "Command Palette",
                         Some(shortcut("tab.quickSwitch", "Ctrl+Shift+S")),

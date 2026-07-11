@@ -3,15 +3,20 @@ use vte::{Params, Parser, Perform};
 const DEFAULT_COLS: u16 = 80;
 const DEFAULT_ROWS: u16 = 24;
 
-/// Cell style carried from SGR (16-color ANSI indices + intensity flags).
+/// Cell style carried from SGR (ANSI / bright / truecolor + intensity flags).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct CellStyle {
-    /// Foreground ANSI index 0..=15, or default when None.
+    /// Foreground ANSI index 0..=15 when not using truecolor.
     pub fg: Option<u8>,
-    /// Background ANSI index 0..=15, or default when None.
+    /// Background ANSI index 0..=15 when not using truecolor.
     pub bg: Option<u8>,
+    /// Truecolor foreground as 0xRRGGBB (CSI 38;2;r;g;b).
+    pub fg_rgb: Option<u32>,
+    /// Truecolor background as 0xRRGGBB (CSI 48;2;r;g;b).
+    pub bg_rgb: Option<u32>,
     pub bold: bool,
     pub reverse: bool,
+    pub underline: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -244,15 +249,35 @@ impl TerminalScreen {
                 0 => self.pen = CellStyle::default(),
                 1 => self.pen.bold = true,
                 2 => self.pen.bold = false, // dim ignored as intensity down
+                4 => self.pen.underline = true,
                 7 => self.pen.reverse = true,
                 22 => self.pen.bold = false,
+                24 => self.pen.underline = false,
                 27 => self.pen.reverse = false,
-                30..=37 => self.pen.fg = Some((code - 30) as u8),
-                39 => self.pen.fg = None,
-                40..=47 => self.pen.bg = Some((code - 40) as u8),
-                49 => self.pen.bg = None,
-                90..=97 => self.pen.fg = Some((code - 90 + 8) as u8),
-                100..=107 => self.pen.bg = Some((code - 100 + 8) as u8),
+                30..=37 => {
+                    self.pen.fg = Some((code - 30) as u8);
+                    self.pen.fg_rgb = None;
+                }
+                39 => {
+                    self.pen.fg = None;
+                    self.pen.fg_rgb = None;
+                }
+                40..=47 => {
+                    self.pen.bg = Some((code - 40) as u8);
+                    self.pen.bg_rgb = None;
+                }
+                49 => {
+                    self.pen.bg = None;
+                    self.pen.bg_rgb = None;
+                }
+                90..=97 => {
+                    self.pen.fg = Some((code - 90 + 8) as u8);
+                    self.pen.fg_rgb = None;
+                }
+                100..=107 => {
+                    self.pen.bg = Some((code - 100 + 8) as u8);
+                    self.pen.bg_rgb = None;
+                }
                 38 | 48 => {
                     let is_fg = code == 38;
                     if i + 1 < values.len() {
@@ -262,17 +287,30 @@ impl TerminalScreen {
                                 let mapped = if idx < 16 {
                                     Some(idx as u8)
                                 } else {
-                                    None
+                                    // Approximate 256-color cube/grayscale to nearest ANSI-ish gray/default.
+                                    Some(map_256_to_ansi16(idx))
                                 };
                                 if is_fg {
                                     self.pen.fg = mapped;
+                                    self.pen.fg_rgb = None;
                                 } else {
                                     self.pen.bg = mapped;
+                                    self.pen.bg_rgb = None;
                                 }
                                 i += 2;
                             }
                             2 if i + 4 < values.len() => {
-                                // Truecolor ignored for now; keep previous color.
+                                let r = values[i + 2].min(255) as u32;
+                                let g = values[i + 3].min(255) as u32;
+                                let b = values[i + 4].min(255) as u32;
+                                let rgb = (r << 16) | (g << 8) | b;
+                                if is_fg {
+                                    self.pen.fg_rgb = Some(rgb);
+                                    self.pen.fg = None;
+                                } else {
+                                    self.pen.bg_rgb = Some(rgb);
+                                    self.pen.bg = None;
+                                }
                                 i += 4;
                             }
                             _ => {}
@@ -282,6 +320,44 @@ impl TerminalScreen {
                 _ => {}
             }
             i += 1;
+        }
+    }
+}
+
+fn map_256_to_ansi16(idx: u16) -> u8 {
+    match idx {
+        0..=15 => idx as u8,
+        232..=255 => {
+            // Grayscale ramp -> dark/light grays.
+            let level = idx - 232;
+            if level < 12 { 8 } else { 7 }
+        }
+        _ => {
+            // 16..231 color cube: pick dominant channel.
+            let n = idx - 16;
+            let r = n / 36;
+            let g = (n % 36) / 6;
+            let b = n % 6;
+            let max = r.max(g).max(b);
+            if max == 0 {
+                0
+            } else if r == max && g == max && b == max {
+                if max >= 4 { 15 } else { 8 }
+            } else if r == max && r > g && r > b {
+                if r >= 4 { 9 } else { 1 }
+            } else if g == max && g > r && g > b {
+                if g >= 4 { 10 } else { 2 }
+            } else if b == max && b > r && b > g {
+                if b >= 4 { 12 } else { 4 }
+            } else if r == max && g == max {
+                if r >= 4 { 11 } else { 3 }
+            } else if r == max && b == max {
+                if r >= 4 { 13 } else { 5 }
+            } else if g == max && b == max {
+                if g >= 4 { 14 } else { 6 }
+            } else {
+                7
+            }
         }
     }
 }
@@ -425,5 +501,16 @@ mod tests {
         let styled = screen.styled_lines();
         assert_eq!(styled[0][0].style.fg, Some(10));
         assert!(styled[0][0].style.bold);
+    }
+
+    #[test]
+    fn sgr_truecolor_and_underline() {
+        let mut screen = TerminalScreen::new(20, 2);
+        screen.advance(b"\x1b[4;38;2;255;128;0mhi\x1b[0m");
+        let styled = screen.styled_lines();
+        assert_eq!(styled[0][0].text, "hi");
+        assert!(styled[0][0].style.underline);
+        assert_eq!(styled[0][0].style.fg_rgb, Some(0xff8000));
+        assert_eq!(styled[0][0].style.fg, None);
     }
 }

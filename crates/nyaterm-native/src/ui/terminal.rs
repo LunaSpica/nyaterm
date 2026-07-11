@@ -21,6 +21,7 @@ struct TerminalHighlightSpan {
     color: Option<u32>,
     bg: Option<u32>,
     keyword: bool,
+    underline: bool,
 }
 
 pub(super) fn terminal_line_element(
@@ -84,6 +85,9 @@ pub(super) fn terminal_line_element(
         } else if span.keyword {
             child = child.bg(rgb(palette.surface));
         }
+        if span.underline {
+            child = child.underline();
+        }
         row = row.child(child);
     }
 
@@ -100,17 +104,17 @@ fn apply_selection_range(
     if start >= end {
         return spans;
     }
-    let mut flat: Vec<(char, Option<u32>, Option<u32>, bool)> = Vec::new();
+    let mut flat: Vec<(char, Option<u32>, Option<u32>, bool, bool)> = Vec::new();
     for span in spans {
         if span.text.is_empty() {
             continue;
         }
         for ch in span.text.chars() {
-            flat.push((ch, span.color, span.bg, span.keyword));
+            flat.push((ch, span.color, span.bg, span.keyword, span.underline));
         }
     }
     while flat.len() < end {
-        flat.push((' ', None, None, false));
+        flat.push((' ', None, None, false, false));
     }
     let end = end.min(flat.len());
     for idx in start..end {
@@ -123,18 +127,18 @@ fn apply_selection_range(
 }
 
 fn compress_flat_cells(
-    flat: Vec<(char, Option<u32>, Option<u32>, bool)>,
+    flat: Vec<(char, Option<u32>, Option<u32>, bool, bool)>,
 ) -> Vec<TerminalHighlightSpan> {
     let mut out = Vec::new();
     let mut i = 0;
     while i < flat.len() {
-        let (ch, color, bg, keyword) = flat[i];
+        let (ch, color, bg, keyword, underline) = flat[i];
         let mut text = String::new();
         text.push(ch);
         let mut j = i + 1;
         while j < flat.len() {
-            let (ch2, c2, b2, k2) = flat[j];
-            if c2 == color && b2 == bg && k2 == keyword {
+            let (ch2, c2, b2, k2, u2) = flat[j];
+            if c2 == color && b2 == bg && k2 == keyword && u2 == underline {
                 text.push(ch2);
                 j += 1;
             } else {
@@ -146,6 +150,7 @@ fn compress_flat_cells(
             color,
             bg,
             keyword,
+            underline,
         });
         i = j;
     }
@@ -159,21 +164,22 @@ fn apply_cursor_style(
     cursor_style: &str,
     palette: crate::ui::theme::ThemePalette,
 ) -> Vec<TerminalHighlightSpan> {
-    let mut flat: Vec<(char, Option<u32>, Option<u32>, bool)> = Vec::new();
+    let mut flat: Vec<(char, Option<u32>, Option<u32>, bool, bool)> = Vec::new();
     for span in spans {
         let color = span.color;
         let bg = span.bg;
         let keyword = span.keyword;
+        let underline = span.underline;
         if span.text.is_empty() {
             continue;
         }
         for ch in span.text.chars() {
-            flat.push((ch, color, bg, keyword));
+            flat.push((ch, color, bg, keyword, underline));
         }
     }
     // Ensure the cursor column exists even on a short/empty line.
     while flat.len() <= cursor_col {
-        flat.push((' ', None, None, false));
+        flat.push((' ', None, None, false, false));
     }
     if let Some(cell) = flat.get_mut(cursor_col) {
         match cursor_style {
@@ -222,6 +228,7 @@ fn ansi_to_highlight_spans(
                 color: Some(palette.resolve_cell_fg(s.style)),
                 bg: palette.resolve_cell_bg(s.style),
                 keyword: false,
+                underline: s.style.underline,
             })
             .collect();
     }
@@ -259,6 +266,7 @@ fn ansi_to_highlight_spans(
             color: Some(color),
             bg,
             keyword,
+            underline: s.style.underline,
         });
     }
     if out.is_empty() {
@@ -267,6 +275,7 @@ fn ansi_to_highlight_spans(
             color: None,
             bg: None,
             keyword: false,
+            underline: false,
         });
     }
     out
@@ -282,6 +291,7 @@ fn keyword_highlight_spans(
             color: None,
             bg: None,
             keyword: false,
+            underline: false,
         }];
     }
 
@@ -318,6 +328,7 @@ fn keyword_highlight_spans(
                 color: None,
                 bg: None,
                 keyword: false,
+                underline: false,
             });
             break;
         };
@@ -327,6 +338,7 @@ fn keyword_highlight_spans(
                 color: None,
                 bg: None,
                 keyword: false,
+                underline: false,
             });
         }
         spans.push(TerminalHighlightSpan {
@@ -334,6 +346,7 @@ fn keyword_highlight_spans(
             color: Some(color),
             bg: None,
             keyword: true,
+            underline: false,
         });
         cursor = end;
     }
@@ -344,6 +357,7 @@ fn keyword_highlight_spans(
             color: None,
             bg: None,
             keyword: false,
+            underline: false,
         });
     }
     spans
