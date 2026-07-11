@@ -1501,3 +1501,14 @@ service boundary first:
 - Keyword highlights nest wrap + rule preview under Enabled.
 - Online search engines show dashed empty state when catalog is empty.
 
+## 2026-07-12 Keyword highlights full editor + keybindings densify
+
+- Keyword highlights settings now mirror Tauri TerminalTab depth: built-in rule
+  toggles, custom rule expand/edit (name, patterns, dark/light colors + swatches),
+  Add/Delete/Import, empty dashed state.
+- Domain persists `terminal.keyword_highlight_builtin_rules` and ships built-in
+  regex presets (`keyword_highlight_presets`). Terminal paint merges user rules
+  (higher priority) then enabled built-ins with theme-aware colors and regex
+  matching (case-insensitive, invalid patterns skipped).
+- Keybindings settings gain search filter, conflict detection (blocks save), and
+  `tab.switchTo` recording hint; saving a default chord clears the override.

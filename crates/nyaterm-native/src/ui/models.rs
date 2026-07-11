@@ -201,6 +201,26 @@ pub(super) enum SearchEngineEditorField {
     Url,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) enum KeywordHighlightEditorField {
+    Name,
+    Patterns,
+    ColorDark,
+    ColorLight,
+}
+
+impl KeywordHighlightEditorField {
+    pub(super) fn next(self) -> Self {
+        match self {
+            Self::Name => Self::Patterns,
+            Self::Patterns => Self::ColorDark,
+            Self::ColorDark => Self::ColorLight,
+            Self::ColorLight => Self::Name,
+        }
+    }
+}
+
+
 impl SearchEngineEditorField {
     pub(super) fn next(self) -> Self {
         match self {

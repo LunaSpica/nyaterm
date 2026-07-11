@@ -1387,7 +1387,7 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
         let palette = self.theme_palette();
-        // Tauri KeyboardShortcutsTab: section per category + dense shortcut rows.
+        // Tauri KeyboardShortcutsTab: search + section per category + dense shortcut rows.
         let supported = SHORTCUT_REGISTRY
             .iter()
             .filter(|shortcut| shortcut.native_status == ShortcutNativeStatus::Supported)
@@ -1397,9 +1397,15 @@ impl NyaTermApp {
             .filter(|shortcut| shortcut.native_status == ShortcutNativeStatus::Pending)
             .count();
         let overrides = self.settings.keybindings.len();
+        let search = self.keybinding_search_draft.clone();
+        let search_display = if search.is_empty() {
+            "Search shortcuts…".to_string()
+        } else {
+            search.clone()
+        };
         let mut groups = div().flex().flex_col().gap_3();
         for category in SHORTCUT_CATEGORIES {
-            groups = groups.child(self.shortcut_category_group(category, cx));
+            groups = groups.child(self.shortcut_category_group(category, &search, cx));
         }
 
         div()
@@ -1445,6 +1451,40 @@ impl NyaTermApp {
                                 .into_any_element()
                         },
                     ))
+                    .child(settings_form_row(
+                        palette,
+                        "Search",
+                        Some(SharedString::from(
+                            "Filter by action label, shortcut id, or key chords.",
+                        )),
+                        div()
+                            .id("settings-keybindings-search")
+                            .min_w(px(220.))
+                            .h(px(28.))
+                            .px_2()
+                            .rounded_md()
+                            .border_1()
+                            .border_color(rgb(palette.border))
+                            .bg(rgb(palette.input))
+                            .flex()
+                            .items_center()
+                            .text_size(px(12.))
+                            .text_color(if search.is_empty() {
+                                rgb(palette.text_dimmed)
+                            } else {
+                                rgb(palette.text)
+                            })
+                            .track_focus(&self.keybinding_search_focus)
+                            .cursor_pointer()
+                            .child(search_display)
+                            .on_click(cx.listener(|this, _, window, cx| {
+                                window.focus(&this.keybinding_search_focus);
+                                cx.notify();
+                            }))
+                            .on_key_down(cx.listener(|this, event: &KeyDownEvent, _, cx| {
+                                this.handle_keybinding_search_key_down(event, cx);
+                            })),
+                    ))
                     .child(
                         div()
                             .rounded_md()
@@ -1457,7 +1497,7 @@ impl NyaTermApp {
                             .line_height(px(16.))
                             .text_color(rgb(palette.text_muted))
                             .child(
-                                "Press Record, type a shortcut, then Save or Enter. Esc cancels recording.",
+                                "Press Record, type a shortcut, then Save or Enter. Esc cancels recording. Conflicts block save.",
                             ),
                     ),
             ))
@@ -1467,18 +1507,33 @@ impl NyaTermApp {
     fn shortcut_category_group(
         &mut self,
         category: ShortcutCategory,
+        search: &str,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
         let palette = self.theme_palette();
-        let count = SHORTCUT_REGISTRY
+        let needle = search.trim().to_ascii_lowercase();
+        let shortcuts = SHORTCUT_REGISTRY
             .iter()
             .filter(|shortcut| shortcut.category == category)
-            .count();
+            .filter(|shortcut| {
+                if needle.is_empty() {
+                    return true;
+                }
+                let keys = shortcut_keys_for(shortcut.id, &self.settings.keybindings)
+                    .unwrap_or_else(|| shortcut.default_keys.to_string());
+                let display = format_hotkey_for_display(&keys).to_ascii_lowercase();
+                shortcut.label.to_ascii_lowercase().contains(&needle)
+                    || shortcut.id.to_ascii_lowercase().contains(&needle)
+                    || display.contains(&needle)
+                    || keys.to_ascii_lowercase().contains(&needle)
+            })
+            .collect::<Vec<_>>();
+        let count = shortcuts.len();
+        if !needle.is_empty() && count == 0 {
+            return div().into_any_element();
+        }
         let mut rows = div().flex().flex_col().gap_1();
-        for shortcut in SHORTCUT_REGISTRY
-            .iter()
-            .filter(|shortcut| shortcut.category == category)
-        {
+        for shortcut in shortcuts {
             rows = rows.child(self.shortcut_registry_row(shortcut, cx));
         }
 
@@ -1499,6 +1554,7 @@ impl NyaTermApp {
                 ))
                 .child(rows),
         )
+        .into_any_element()
     }
 
     fn shortcut_registry_row(
@@ -1517,6 +1573,13 @@ impl NyaTermApp {
         let is_recording = self.keybinding_recording_id.as_deref() == Some(shortcut.id);
         let effective_keys = shortcut_keys_for(shortcut.id, &self.settings.keybindings)
             .unwrap_or_else(|| shortcut.default_keys.to_string());
+        let conflict = if is_recording {
+            self.keybinding_pending_keys
+                .as_deref()
+                .and_then(|keys| self.keybinding_conflict_label(keys, shortcut.id))
+        } else {
+            None
+        };
         let key_display = if is_recording {
             self.keybinding_pending_keys
                 .as_deref()
@@ -1527,6 +1590,7 @@ impl NyaTermApp {
         };
         let shortcut_id = shortcut.id.to_string();
         let reset_shortcut_id = shortcut.id.to_string();
+        let is_switch_to = shortcut.id == "tab.switchTo";
 
         div()
             .rounded_md()
@@ -1544,6 +1608,7 @@ impl NyaTermApp {
                 rgb(palette.bg)
             })
             .flex()
+            .flex_wrap()
             .items_center()
             .gap_2()
             .child(
@@ -1586,28 +1651,46 @@ impl NyaTermApp {
             .child(
                 div()
                     .flex_none()
-                    .rounded_md()
-                    .border_1()
-                    .border_color(if is_recording {
-                        rgb(0x388bfd)
-                    } else {
-                        rgb(palette.border)
-                    })
-                    .bg(rgb(palette.surface))
-                    .px_2()
-                    .py_0()
-                    .h(px(24.))
                     .flex()
                     .items_center()
-                    .font_family("JetBrains Mono")
-                    .text_size(px(10.))
-                    .font_weight(FontWeight(700.))
-                    .text_color(if is_recording {
-                        rgb(palette.accent)
-                    } else {
-                        rgb(palette.text)
-                    })
-                    .child(key_display),
+                    .gap_1()
+                    .child(
+                        div()
+                            .rounded_md()
+                            .border_1()
+                            .border_color(if conflict.is_some() {
+                                rgb(palette.danger)
+                            } else if is_recording {
+                                rgb(0x388bfd)
+                            } else {
+                                rgb(palette.border)
+                            })
+                            .bg(rgb(palette.surface))
+                            .px_2()
+                            .py_0()
+                            .h(px(24.))
+                            .flex()
+                            .items_center()
+                            .font_family("JetBrains Mono")
+                            .text_size(px(10.))
+                            .font_weight(FontWeight(700.))
+                            .text_color(if conflict.is_some() {
+                                rgb(palette.danger)
+                            } else if is_recording {
+                                rgb(palette.accent)
+                            } else {
+                                rgb(palette.text)
+                            })
+                            .child(key_display),
+                    )
+                    .when_some(conflict.clone(), |this, name| {
+                        this.child(
+                            div()
+                                .text_size(px(10.))
+                                .text_color(rgb(palette.danger))
+                                .child(format!("conflicts: {name}")),
+                        )
+                    }),
             )
             .child(status_pill(
                 shortcut.native_status.label(),
@@ -1654,5 +1737,16 @@ impl NyaTermApp {
                         ))
                     }),
             )
+            .when(is_recording && is_switch_to, |this| {
+                this.child(
+                    div()
+                        .w_full()
+                        .text_size(px(10.))
+                        .text_color(rgb(palette.text_muted))
+                        .child(
+                            "Tab switch template must end with number 1 (e.g. ctrl+1). Other digits fill 2–9.",
+                        ),
+                )
+            })
     }
 }

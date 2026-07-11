@@ -53,8 +53,23 @@ impl NyaTermApp {
             return;
         };
 
+        if let Some(conflict) = self.keybinding_conflict_label(&keys, &shortcut_id) {
+            self.keybinding_recording_id = Some(shortcut_id);
+            self.keybinding_pending_keys = Some(keys);
+            self.terminal_status = format!("shortcut conflicts with {conflict}");
+            cx.notify();
+            return;
+        }
         let mut keybindings = self.settings.keybindings.clone();
-        keybindings.insert(shortcut_id.clone(), keys);
+        let is_default = crate::ui::shortcuts::SHORTCUT_REGISTRY
+            .iter()
+            .find(|s| s.id == shortcut_id)
+            .is_some_and(|def| keys == def.default_keys);
+        if is_default {
+            keybindings.remove(&shortcut_id);
+        } else {
+            keybindings.insert(shortcut_id.clone(), keys);
+        }
         self.save_keybindings(keybindings, format!("shortcut {shortcut_id} saved"), cx);
     }
 
@@ -268,4 +283,365 @@ impl NyaTermApp {
             }
         }
     }
+
+    pub(in crate::ui::view) fn toggle_keyword_highlight_builtin(
+        &mut self,
+        rule_id: String,
+        cx: &mut Context<Self>,
+    ) {
+        let enabled = self
+            .keyword_highlights
+            .builtin_rules
+            .get(&rule_id)
+            .copied()
+            .unwrap_or(true);
+        self.keyword_highlights
+            .builtin_rules
+            .insert(rule_id, !enabled);
+        self.save_keyword_highlights(cx);
+    }
+
+    pub(in crate::ui::view) fn toggle_keyword_highlight_rule(
+        &mut self,
+        rule_id: String,
+        cx: &mut Context<Self>,
+    ) {
+        if let Some(rule) = self
+            .keyword_highlights
+            .rules
+            .iter_mut()
+            .find(|rule| rule.id == rule_id)
+        {
+            rule.enabled = !rule.enabled;
+            self.save_keyword_highlights(cx);
+        }
+    }
+
+    pub(in crate::ui::view) fn expand_keyword_highlight_rule(
+        &mut self,
+        rule_id: String,
+        cx: &mut Context<Self>,
+    ) {
+        if self.keyword_highlight_expanded_id.as_deref() == Some(rule_id.as_str()) {
+            self.keyword_highlight_expanded_id = None;
+            self.keyword_highlight_edit_id = None;
+        } else {
+            self.keyword_highlight_expanded_id = Some(rule_id);
+        }
+        cx.notify();
+    }
+
+    pub(in crate::ui::view) fn add_keyword_highlight_rule(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let id = format!(
+            "kh-{}",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|d| d.as_millis())
+                .unwrap_or(0)
+        );
+        self.keyword_highlights.rules.push(KeywordHighlightRule {
+            id: id.clone(),
+            name: "New rule".to_string(),
+            patterns: Vec::new(),
+            color_dark: "#79c0ff".to_string(),
+            color_light: "#0969da".to_string(),
+            enabled: true,
+        });
+        self.keyword_highlight_expanded_id = Some(id.clone());
+        self.keyword_highlight_edit_id = Some(id);
+        self.keyword_highlight_edit_field = KeywordHighlightEditorField::Name;
+        window.focus(&self.keyword_highlight_focus);
+        self.save_keyword_highlights(cx);
+    }
+
+    pub(in crate::ui::view) fn remove_keyword_highlight_rule(
+        &mut self,
+        rule_id: String,
+        cx: &mut Context<Self>,
+    ) {
+        self.keyword_highlights
+            .rules
+            .retain(|rule| rule.id != rule_id);
+        if self.keyword_highlight_expanded_id.as_deref() == Some(rule_id.as_str()) {
+            self.keyword_highlight_expanded_id = None;
+        }
+        if self.keyword_highlight_edit_id.as_deref() == Some(rule_id.as_str()) {
+            self.keyword_highlight_edit_id = None;
+        }
+        self.save_keyword_highlights(cx);
+    }
+
+    pub(in crate::ui::view) fn set_keyword_highlight_rule_color(
+        &mut self,
+        rule_id: String,
+        dark: bool,
+        color: &str,
+        cx: &mut Context<Self>,
+    ) {
+        let color = color.trim();
+        if !(color.starts_with('#') && (color.len() == 4 || color.len() == 7))
+            && !color.is_empty()
+            && color != "#"
+        {
+            // allow progressive hex entry only when matching /^#[0-9a-fA-F]{0,6}$/
+        }
+        if !color.is_empty() && !color.chars().enumerate().all(|(i, ch)| {
+            if i == 0 {
+                ch == '#'
+            } else {
+                ch.is_ascii_hexdigit()
+            }
+        }) {
+            return;
+        }
+        if color.len() > 7 {
+            return;
+        }
+        if let Some(rule) = self
+            .keyword_highlights
+            .rules
+            .iter_mut()
+            .find(|rule| rule.id == rule_id)
+        {
+            if dark {
+                rule.color_dark = if color.is_empty() {
+                    "#79c0ff".into()
+                } else {
+                    color.to_string()
+                };
+            } else {
+                rule.color_light = if color.is_empty() {
+                    "#0969da".into()
+                } else {
+                    color.to_string()
+                };
+            }
+            self.save_keyword_highlights(cx);
+        }
+    }
+
+    pub(in crate::ui::view) fn focus_keyword_highlight_field(
+        &mut self,
+        rule_id: String,
+        field: KeywordHighlightEditorField,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.keyword_highlight_expanded_id = Some(rule_id.clone());
+        self.keyword_highlight_edit_id = Some(rule_id);
+        self.keyword_highlight_edit_field = field;
+        window.focus(&self.keyword_highlight_focus);
+        cx.notify();
+    }
+
+    pub(in crate::ui::view) fn handle_keyword_highlight_key_down(
+        &mut self,
+        event: &KeyDownEvent,
+        cx: &mut Context<Self>,
+    ) {
+        cx.stop_propagation();
+        let Some(rule_id) = self.keyword_highlight_edit_id.clone() else {
+            return;
+        };
+        let field = self.keyword_highlight_edit_field;
+        match event.keystroke.key.as_str() {
+            "escape" => {
+                self.keyword_highlight_edit_id = None;
+                self.terminal_status = "keyword rule edit cancelled".to_string();
+                cx.notify();
+                return;
+            }
+            "tab" => {
+                self.keyword_highlight_edit_field = field.next();
+                cx.notify();
+                return;
+            }
+            "enter" if field == KeywordHighlightEditorField::Patterns => {
+                if let Some(rule) = self
+                    .keyword_highlights
+                    .rules
+                    .iter_mut()
+                    .find(|rule| rule.id == rule_id)
+                {
+                    rule.patterns.push(String::new());
+                    self.save_keyword_highlights(cx);
+                }
+                return;
+            }
+            "enter" => {
+                self.keyword_highlight_edit_id = None;
+                self.save_keyword_highlights(cx);
+                return;
+            }
+            "backspace" => {
+                if let Some(rule) = self
+                    .keyword_highlights
+                    .rules
+                    .iter_mut()
+                    .find(|rule| rule.id == rule_id)
+                {
+                    match field {
+                        KeywordHighlightEditorField::Name => {
+                            rule.name.pop();
+                        }
+                        KeywordHighlightEditorField::Patterns => {
+                            if let Some(last) = rule.patterns.last_mut() {
+                                if last.is_empty() {
+                                    rule.patterns.pop();
+                                } else {
+                                    last.pop();
+                                }
+                            }
+                        }
+                        KeywordHighlightEditorField::ColorDark => {
+                            if rule.color_dark.len() > 1 {
+                                rule.color_dark.pop();
+                            }
+                        }
+                        KeywordHighlightEditorField::ColorLight => {
+                            if rule.color_light.len() > 1 {
+                                rule.color_light.pop();
+                            }
+                        }
+                    }
+                    self.save_keyword_highlights(cx);
+                }
+                return;
+            }
+            _ => {}
+        }
+
+        let Some(input) = event.keystroke.key_char.as_deref() else {
+            return;
+        };
+        if input.is_empty() {
+            return;
+        }
+        if let Some(rule) = self
+            .keyword_highlights
+            .rules
+            .iter_mut()
+            .find(|rule| rule.id == rule_id)
+        {
+            match field {
+                KeywordHighlightEditorField::Name => {
+                    rule.name.push_str(input);
+                }
+                KeywordHighlightEditorField::Patterns => {
+                    if input == "\n" || event.keystroke.key.as_str() == "enter" {
+                        rule.patterns.push(String::new());
+                    } else {
+                        if rule.patterns.is_empty() {
+                            rule.patterns.push(String::new());
+                        }
+                        if let Some(last) = rule.patterns.last_mut() {
+                            last.push_str(input);
+                        }
+                    }
+                }
+                KeywordHighlightEditorField::ColorDark => {
+                    for ch in input.chars() {
+                        if rule.color_dark.len() >= 7 {
+                            break;
+                        }
+                        if rule.color_dark.is_empty() {
+                            rule.color_dark.push('#');
+                        }
+                        if ch == '#' && rule.color_dark == "#" {
+                            continue;
+                        }
+                        if ch.is_ascii_hexdigit() {
+                            rule.color_dark.push(ch.to_ascii_lowercase());
+                        }
+                    }
+                }
+                KeywordHighlightEditorField::ColorLight => {
+                    for ch in input.chars() {
+                        if rule.color_light.len() >= 7 {
+                            break;
+                        }
+                        if rule.color_light.is_empty() {
+                            rule.color_light.push('#');
+                        }
+                        if ch == '#' && rule.color_light == "#" {
+                            continue;
+                        }
+                        if ch.is_ascii_hexdigit() {
+                            rule.color_light.push(ch.to_ascii_lowercase());
+                        }
+                    }
+                }
+            }
+            self.save_keyword_highlights(cx);
+        }
+    }
+
+    pub(in crate::ui::view) fn keybinding_conflict_label(
+        &self,
+        pending_keys: &str,
+        exclude_id: &str,
+    ) -> Option<String> {
+        let normalized_new = pending_keys
+            .split(',')
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+            .map(|s| s.to_ascii_lowercase())
+            .collect::<Vec<_>>();
+        if normalized_new.is_empty() {
+            return None;
+        }
+        for shortcut in crate::ui::shortcuts::SHORTCUT_REGISTRY.iter() {
+            if shortcut.id == exclude_id {
+                continue;
+            }
+            let existing = crate::ui::shortcuts::shortcut_keys_for(
+                shortcut.id,
+                &self.settings.keybindings,
+            )
+            .unwrap_or_else(|| shortcut.default_keys.to_string());
+            let normalized_existing = existing
+                .split(',')
+                .map(str::trim)
+                .filter(|s| !s.is_empty())
+                .map(|s| s.to_ascii_lowercase())
+                .collect::<Vec<_>>();
+            if normalized_new
+                .iter()
+                .any(|n| normalized_existing.iter().any(|e| e == n))
+            {
+                return Some(shortcut.label.to_string());
+            }
+        }
+        None
+    }
+
+    pub(in crate::ui::view) fn handle_keybinding_search_key_down(
+        &mut self,
+        event: &KeyDownEvent,
+        cx: &mut Context<Self>,
+    ) {
+        cx.stop_propagation();
+        match event.keystroke.key.as_str() {
+            "escape" => {
+                self.keybinding_search_draft.clear();
+                cx.notify();
+                return;
+            }
+            "backspace" => {
+                self.keybinding_search_draft.pop();
+                cx.notify();
+                return;
+            }
+            _ => {}
+        }
+        if let Some(input) = event.keystroke.key_char.as_deref() {
+            self.keybinding_search_draft.push_str(input);
+            cx.notify();
+        }
+    }
+
 }

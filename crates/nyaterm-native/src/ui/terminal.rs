@@ -1,5 +1,5 @@
 use gpui::{FontWeight, IntoElement, KeyDownEvent, div, prelude::*, px, rgb};
-use nyaterm_domain::KeywordHighlightConfig;
+use nyaterm_domain::ResolvedKeywordHighlightRule;
 use nyaterm_terminal::TerminalScreen;
 
 use super::view::INITIAL_TERMINAL_BANNER;
@@ -31,7 +31,7 @@ struct TerminalHighlightSpan {
 pub(super) fn terminal_line_element(
     line: &str,
     ansi_spans: Option<&[nyaterm_terminal::StyledSpan]>,
-    config: &KeywordHighlightConfig,
+    keyword_rules: &[ResolvedKeywordHighlightRule],
     search_ranges: &[(usize, usize)],
     active_search_ranges: &[(usize, usize)],
     cursor_col: Option<usize>,
@@ -46,12 +46,12 @@ pub(super) fn terminal_line_element(
 ) -> impl IntoElement {
     let mut spans = if let Some(ansi) = ansi_spans {
         if ansi.is_empty() || (ansi.len() == 1 && ansi[0].text.is_empty()) {
-            keyword_highlight_spans(line, config)
+            keyword_highlight_spans(line, keyword_rules)
         } else {
-            ansi_to_highlight_spans(ansi, palette, config)
+            ansi_to_highlight_spans(ansi, palette, keyword_rules)
         }
     } else {
-        keyword_highlight_spans(line, config)
+        keyword_highlight_spans(line, keyword_rules)
     };
     if !link_ranges.is_empty() {
         spans = apply_action_link_ranges(spans, link_ranges, palette);
@@ -321,13 +321,12 @@ fn apply_cursor_style(
 fn ansi_to_highlight_spans(
     ansi: &[nyaterm_terminal::StyledSpan],
     palette: crate::ui::theme::ThemePalette,
-    config: &KeywordHighlightConfig,
+    keyword_rules: &[ResolvedKeywordHighlightRule],
 ) -> Vec<TerminalHighlightSpan> {
-    // Build plain line for keyword overlay.
+    // Build plain line for keyword overlay, then prefer keyword fg over default ANSI fg.
     let line: String = ansi.iter().map(|s| s.text.as_str()).collect();
-    let keyword = keyword_highlight_spans(&line, config);
-    // If no keyword colors, map ANSI styles directly.
-    if keyword.iter().all(|s| s.color.is_none()) {
+    let keyword = keyword_highlight_spans(&line, keyword_rules);
+    if keyword.iter().all(|s| !s.keyword) {
         return ansi
             .iter()
             .filter(|s| !s.text.is_empty())
@@ -341,11 +340,22 @@ fn ansi_to_highlight_spans(
             })
             .collect();
     }
-    // Merge: walk ANSI with resolved colors, then apply keyword fg where spans overlap keywords.
-    // Simpler approach: render ANSI colors; keyword rules only apply when no ANSI fg set.
+
+    // Flatten keyword color map by byte offset, then re-slice per ANSI span.
+    let mut keyword_color_at = vec![None; line.len()];
+    let mut offset = 0usize;
+    for span in &keyword {
+        let end = offset + span.text.len();
+        if span.keyword {
+            for idx in offset..end.min(keyword_color_at.len()) {
+                keyword_color_at[idx] = span.color;
+            }
+        }
+        offset = end;
+    }
+
     let mut out = Vec::new();
     let mut cursor = 0usize;
-    let lowered = line.to_ascii_lowercase();
     for s in ansi {
         if s.text.is_empty() {
             continue;
@@ -353,28 +363,20 @@ fn ansi_to_highlight_spans(
         let start = cursor;
         let end = cursor + s.text.len();
         cursor = end;
-        let mut color = palette.resolve_cell_fg(s.style);
         let bg = palette.resolve_cell_bg(s.style);
-        let mut keyword = false;
-        if s.style.fg.is_none() && config.enabled {
-            // If any keyword rule covers this whole span substring, use keyword color.
-            for rule in config.rules.iter().filter(|r| r.enabled) {
-                let rule_color = parse_hex_rgb(&rule.color_dark).unwrap_or(0x79c0ff);
-                for pattern in rule.patterns.iter().map(|p| p.trim()) {
-                    if pattern.is_empty() { continue; }
-                    let needle = pattern.to_ascii_lowercase();
-                    if lowered[start..end].contains(&needle) {
-                        color = rule_color;
-                        keyword = true;
-                    }
-                }
+        let mut color = palette.resolve_cell_fg(s.style);
+        let mut keyword_hit = false;
+        if s.style.fg.is_none() {
+            if let Some(kc) = keyword_color_at.get(start).copied().flatten() {
+                color = kc;
+                keyword_hit = true;
             }
         }
         out.push(TerminalHighlightSpan {
             text: s.text.clone(),
             color: Some(color),
             bg,
-            keyword,
+            keyword: keyword_hit,
             underline: s.style.underline,
             bold: s.style.bold,
         });
@@ -394,9 +396,9 @@ fn ansi_to_highlight_spans(
 
 fn keyword_highlight_spans(
     line: &str,
-    config: &KeywordHighlightConfig,
+    rules: &[ResolvedKeywordHighlightRule],
 ) -> Vec<TerminalHighlightSpan> {
-    if !config.enabled || config.rules.is_empty() || line.is_empty() {
+    if rules.is_empty() || line.is_empty() {
         return vec![TerminalHighlightSpan {
             text: line.to_string(),
             color: None,
@@ -407,29 +409,36 @@ fn keyword_highlight_spans(
         }];
     }
 
-    let lowered = line.to_ascii_lowercase();
+    let compiled = compile_keyword_rules(rules);
+    if compiled.is_empty() {
+        return vec![TerminalHighlightSpan {
+            text: line.to_string(),
+            color: None,
+            bg: None,
+            keyword: false,
+            underline: false,
+            bold: false,
+        }];
+    }
+
     let mut spans = Vec::new();
     let mut cursor = 0;
     while cursor < line.len() {
         let mut best: Option<(usize, usize, u32)> = None;
-        for rule in config.rules.iter().filter(|rule| rule.enabled) {
-            let color = parse_hex_rgb(&rule.color_dark).unwrap_or(0x79c0ff);
-            for pattern in rule.patterns.iter().map(|pattern| pattern.trim()) {
-                if pattern.is_empty() {
+        for (regex, color) in &compiled {
+            if let Some(found) = regex.find_at(line, cursor) {
+                let start = found.start();
+                let end = found.end();
+                if end <= start {
                     continue;
                 }
-                let needle = pattern.to_ascii_lowercase();
-                if let Some(relative_start) = lowered[cursor..].find(&needle) {
-                    let start = cursor + relative_start;
-                    let end = start + needle.len();
-                    let replace = best
-                        .map(|(best_start, best_end, _)| {
-                            start < best_start || (start == best_start && end > best_end)
-                        })
-                        .unwrap_or(true);
-                    if replace {
-                        best = Some((start, end, color));
-                    }
+                let replace = best
+                    .map(|(best_start, best_end, _)| {
+                        start < best_start || (start == best_start && end > best_end)
+                    })
+                    .unwrap_or(true);
+                if replace {
+                    best = Some((start, end, *color));
                 }
             }
         }
@@ -478,6 +487,58 @@ fn keyword_highlight_spans(
     }
     spans
 }
+
+fn compile_keyword_rules(
+    rules: &[ResolvedKeywordHighlightRule],
+) -> Vec<(regex::Regex, u32)> {
+    let mut compiled = Vec::new();
+    for rule in rules.iter().filter(|rule| rule.enabled) {
+        let color = parse_hex_rgb(&rule.color).unwrap_or(0x79c0ff);
+        let mut alts = Vec::new();
+        for pattern in rule.patterns.iter().map(|p| p.trim()).filter(|p| !p.is_empty()) {
+            // Validate each alternative; skip invalid regex like Tauri.
+            if regex::Regex::new(&format!("(?i)(?:{pattern})")).is_ok()
+                || regex::Regex::new(pattern).is_ok()
+            {
+                alts.push(pattern.to_string());
+            }
+        }
+        if alts.is_empty() {
+            continue;
+        }
+        let combined = if alts.len() == 1 {
+            alts[0].clone()
+        } else {
+            alts.iter()
+                .map(|p| format!("(?:{p})"))
+                .collect::<Vec<_>>()
+                .join("|")
+        };
+        let pattern = if combined.contains("(?i)") || combined.contains("(?-i)") {
+            combined
+        } else {
+            format!("(?i){combined}")
+        };
+        match regex::Regex::new(&pattern) {
+            Ok(regex) => compiled.push((regex, color)),
+            Err(_) => {
+                for alt in alts {
+                    let pat = if alt.contains("(?i)") {
+                        alt
+                    } else {
+                        format!("(?i){alt}")
+                    };
+                    if let Ok(regex) = regex::Regex::new(&pat) {
+                        compiled.push((regex, color));
+                    }
+                }
+            }
+        }
+    }
+    compiled
+}
+
+
 
 pub(super) fn terminal_buffer_matches(
     output: &str,

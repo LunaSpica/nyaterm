@@ -13,6 +13,7 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
         let palette = self.terminal_theme_palette();
+        let keyword_rules = self.resolved_keyword_highlight_rules();
         let is_active = self.active_session_id.as_deref() == Some(session_id.as_str());
         let is_disconnected = !session_id.is_empty() && self.is_session_disconnected(&session_id);
         let mut output = div().flex().flex_col();
@@ -141,7 +142,7 @@ impl NyaTermApp {
             let content = terminal_line_element(
                 &line,
                 ansi,
-                &self.keyword_highlights,
+                &keyword_rules,
                 line_search_ranges,
                 line_active_search_ranges,
                 if show_cursor && line_index == cursor_row {

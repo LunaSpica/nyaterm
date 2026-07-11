@@ -12,6 +12,28 @@ impl NyaTermApp {
         theme_palette(&self.settings.theme)
     }
 
+    pub(in crate::ui::view) fn terminal_theme_is_dark(&self) -> bool {
+        let palette = self.terminal_theme_palette();
+        let r = ((palette.terminal_bg >> 16) & 0xff) as f32;
+        let g = ((palette.terminal_bg >> 8) & 0xff) as f32;
+        let b = (palette.terminal_bg & 0xff) as f32;
+        let lum = (0.299 * r + 0.587 * g + 0.114 * b) / 255.0;
+        lum < 0.5
+    }
+
+    pub(in crate::ui::view) fn resolved_keyword_highlight_rules(
+        &self,
+    ) -> Vec<nyaterm_domain::ResolvedKeywordHighlightRule> {
+        if !self.keyword_highlights.enabled {
+            return Vec::new();
+        }
+        nyaterm_domain::merge_keyword_highlight_rules_for_paint(
+            &self.keyword_highlights.rules,
+            &self.keyword_highlights.builtin_rules,
+            self.terminal_theme_is_dark(),
+        )
+    }
+
     /// Terminal surface palette: follows optional `terminal_theme`, else UI theme.
     pub(in crate::ui::view) fn terminal_theme_palette(&self) -> ThemePalette {
         let id = self

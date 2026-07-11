@@ -1047,6 +1047,9 @@ pub struct KeywordHighlightConfig {
     pub enabled: bool,
     #[serde(default)]
     pub across_wrapped_lines: bool,
+    /// Per built-in rule enable map (Tauri `keyword_highlight_builtin_rules`).
+    #[serde(default)]
+    pub builtin_rules: std::collections::HashMap<String, bool>,
     #[serde(default)]
     pub rules: Vec<KeywordHighlightRule>,
 }

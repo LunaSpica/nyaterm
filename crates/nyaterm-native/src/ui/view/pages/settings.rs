@@ -12,7 +12,7 @@ use crate::ui::components::{section_header, small_button, status_pill};
 use crate::ui::theme::ThemePalette;
 use crate::ui::models::{
     AiInputField, CloudSyncConflictState, CloudSyncInputField, ConfigPathPromptKind,
-    DiagnosticsPathPromptKind, KeywordHighlightPathPromptKind, SettingsTab,
+    DiagnosticsPathPromptKind, KeywordHighlightEditorField, KeywordHighlightPathPromptKind, SettingsTab,
     SearchEngineEditorField, SnapshotPasswordPromptKind, SnapshotPasswordPromptState, TerminalSearchMode, TransferJobStatus,
     TransferPathPromptKind, TranslateInputField,
 };

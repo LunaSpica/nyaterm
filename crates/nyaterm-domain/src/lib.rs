@@ -8,6 +8,7 @@ pub mod terminal_input_tracker;
 pub mod terminal_file_drop;
 pub mod credentials_crypto;
 pub mod diagnostics;
+pub mod keyword_highlight_presets;
 pub mod models;
 pub mod portable_snapshot;
 pub mod runtime;
@@ -91,6 +92,11 @@ pub use terminal_input_tracker::{
 pub use diagnostics::{
     DiagnosticsError, DiagnosticsExportInfo, DiagnosticsExportOptions, DiagnosticsRuntimeSnapshot,
     LOG_FILE_PREFIX, LOG_FILE_SUFFIX, export_diagnostics_archive,
+};
+pub use keyword_highlight_presets::{
+    ResolvedKeywordHighlightRule, builtin_keyword_rule_ids, builtin_keyword_rule_label,
+    builtin_keyword_rule_swatch, get_builtin_keyword_rules, keyword_highlight_color_palette,
+    merge_keyword_highlight_rules_for_paint,
 };
 pub use models::*;
 pub use portable_snapshot::{

@@ -2394,6 +2394,11 @@ impl ConnectionStore {
             .into_iter()
             .filter_map(normalize_keyword_highlight_rule)
             .collect();
+        let builtin_rules = json_path(&value, &["terminal", "keyword_highlight_builtin_rules"])
+            .cloned()
+            .map(serde_json::from_value::<std::collections::HashMap<String, bool>>)
+            .transpose()?
+            .unwrap_or_default();
         Ok(KeywordHighlightConfig {
             enabled: json_bool(&value, &["terminal", "keyword_highlights_enabled"], false),
             across_wrapped_lines: json_bool(
@@ -2401,6 +2406,7 @@ impl ConnectionStore {
                 &["terminal", "keyword_highlights_across_wrapped_lines"],
                 false,
             ),
+            builtin_rules,
             rules,
         })
     }
@@ -2419,6 +2425,11 @@ impl ConnectionStore {
             &mut value,
             &["terminal", "keyword_highlights_across_wrapped_lines"],
             serde_json::Value::Bool(config.across_wrapped_lines),
+        );
+        set_nested_json_value(
+            &mut value,
+            &["terminal", "keyword_highlight_builtin_rules"],
+            serde_json::to_value(&config.builtin_rules)?,
         );
         let rules = config
             .rules
@@ -4611,14 +4622,19 @@ fn normalize_keyword_highlight_rule(
 ) -> Option<KeywordHighlightRule> {
     rule.id = rule.id.trim().to_string();
     rule.name = rule.name.trim().to_string();
+    // Keep blank pattern lines for editor drafts (Tauri joins patterns with newlines).
+    // Drop completely empty pattern lists only when name is also empty.
     rule.patterns = rule
         .patterns
         .into_iter()
-        .map(|pattern| pattern.trim().to_string())
-        .filter(|pattern| !pattern.is_empty())
+        .map(|pattern| pattern.trim_end().to_string())
         .collect();
-    if rule.name.is_empty() || rule.patterns.is_empty() {
+    let has_pattern = rule.patterns.iter().any(|p| !p.trim().is_empty());
+    if rule.name.is_empty() && !has_pattern {
         return None;
+    }
+    if rule.name.is_empty() {
+        rule.name = "Untitled rule".to_string();
     }
     if rule.color_dark.trim().is_empty() {
         rule.color_dark = "#79c0ff".to_string();
@@ -6641,9 +6657,12 @@ mod tests {
         let loaded = store.load_keyword_highlights().expect("load highlights");
         assert!(loaded.enabled);
         assert!(loaded.across_wrapped_lines);
-        assert_eq!(loaded.rules.len(), 1);
+        // Blank-name + patterns becomes "Untitled rule"; blank-pattern named draft is kept.
+        assert_eq!(loaded.rules.len(), 3);
         assert_eq!(loaded.rules[0].id, "panic");
         assert_eq!(loaded.rules[0].patterns, vec!["panic", "ERROR"]);
+        assert_eq!(loaded.rules[1].id, "invalid-empty-pattern");
+        assert_eq!(loaded.rules[2].name, "Untitled rule");
 
         let object_import = r##"{
             "keyword_highlights": [
@@ -6666,7 +6685,7 @@ mod tests {
             .expect("object import");
         assert_eq!(result.imported_rules, 1);
         assert_eq!(result.updated_rules, 1);
-        assert_eq!(result.total_rules, 2);
+        assert_eq!(result.total_rules, 4);
         assert!(saved.enabled);
         assert!(saved.across_wrapped_lines);
 
@@ -6702,7 +6721,7 @@ mod tests {
             .expect("array import");
         assert_eq!(result.imported_rules, 0);
         assert_eq!(result.updated_rules, 1);
-        assert_eq!(result.total_rules, 2);
+        assert_eq!(result.total_rules, 4);
         assert_eq!(
             saved
                 .rules
