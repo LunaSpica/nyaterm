@@ -81,13 +81,14 @@ pub(super) fn process_summary_card(
     value: String,
     ratio: f64,
 ) -> impl IntoElement {
+    let palette = crate::ui::theme::theme_palette("github-dark");
     let ratio = ratio.clamp(0., 1.);
     // Compact metric chip for Process Manager summary strip.
     div()
         .rounded_md()
         .border_1()
-        .border_color(rgb(0x30363d))
-        .bg(rgb(0x0d1117))
+        .border_color(rgb(palette.border))
+        .bg(rgb(palette.bg))
         .px_2()
         .py_1()
         .flex()
@@ -97,7 +98,7 @@ pub(super) fn process_summary_card(
             div()
                 .text_size(px(10.))
                 .font_weight(FontWeight(600.))
-                .text_color(rgb(0x8b949e))
+                .text_color(rgb(palette.text_muted))
                 .child(title),
         )
         .child(
@@ -156,6 +157,7 @@ pub(super) fn process_sort_button(
     numeric: bool,
     on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
 ) -> impl IntoElement {
+    let palette = crate::ui::theme::theme_palette("github-dark");
     // Flat sortable header cell (Tauri table header).
     div()
         .id(gpui::SharedString::from(id.into()))
@@ -168,9 +170,9 @@ pub(super) fn process_sort_button(
         .rounded_sm()
         .text_size(px(10.))
         .font_weight(if active { FontWeight(700.) } else { FontWeight(600.) })
-        .text_color(if active { rgb(0xc9d1d9) } else { rgb(0x6e7681) })
+        .text_color(if active { rgb(palette.text) } else { rgb(palette.text_dimmed) })
         .cursor_pointer()
-        .hover(|this| this.bg(rgb(0x21262d)).text_color(rgb(0xc9d1d9)))
+        .hover(|this| this.bg(rgb(palette.surface_elevated)).text_color(rgb(palette.text)))
         .child(if active {
             format!("{label} {}", direction.marker())
         } else {
@@ -180,6 +182,7 @@ pub(super) fn process_sort_button(
 }
 
 pub(super) fn process_table_header() -> impl IntoElement {
+    let palette = crate::ui::theme::theme_palette("github-dark");
     // Static fallback header; live header uses process_sort_button grid in process_view.
     div()
         .grid()
@@ -188,13 +191,13 @@ pub(super) fn process_table_header() -> impl IntoElement {
         .h(px(26.))
         .flex_none()
         .border_b_1()
-        .border_color(rgb(0x30363d))
-        .bg(rgb(0x0d1117))
+        .border_color(rgb(palette.border))
+        .bg(rgb(palette.bg))
         .px_2()
         .items_center()
         .text_size(px(10.))
         .font_weight(FontWeight(700.))
-        .text_color(rgb(0x6e7681))
+        .text_color(rgb(palette.text_dimmed))
         .child("Process")
         .child(div().text_right().child("PID"))
         .child(div().text_right().child("CPU"))
@@ -218,15 +221,16 @@ pub(super) fn process_table_row(
     on_cont: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
     on_kill: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
 ) -> gpui::Div {
+    let palette = crate::ui::theme::theme_palette("github-dark");
     // Tauri ProcessManager: left accent + mode-aware columns (compact/narrow/medium/wide).
     let accent = if process.cpu_percent >= 80.0 {
-        rgb(0xf85149)
+        rgb(palette.danger)
     } else if process.memory_percent >= 80.0 {
-        rgb(0xd29922)
+        rgb(palette.warning)
     } else if selected {
         rgb(0x1f6feb)
     } else {
-        rgb(0x30363d)
+        rgb(palette.border)
     };
     let show_memory = !matches!(mode, ProcessDisplayMode::Narrow | ProcessDisplayMode::Compact);
     let show_user = matches!(mode, ProcessDisplayMode::Wide);
@@ -261,8 +265,8 @@ pub(super) fn process_table_row(
                     .w(px(148.))
                     .rounded_md()
                     .border_1()
-                    .border_color(rgb(0x30363d))
-                    .bg(rgb(0x161b22))
+                    .border_color(rgb(palette.border))
+                    .bg(rgb(palette.surface))
                     .shadow_lg()
                     .py_1()
                     .flex()
@@ -333,7 +337,7 @@ pub(super) fn process_table_row(
                         div()
                             .text_size(px(12.))
                             .font_weight(FontWeight(600.))
-                            .text_color(rgb(0xe5edf7))
+                            .text_color(rgb(palette.text))
                             .overflow_hidden()
                             .child(truncate_preview(&process.command, 36)),
                     )
@@ -341,7 +345,7 @@ pub(super) fn process_table_row(
                         div()
                             .font_family("JetBrains Mono")
                             .text_size(px(10.))
-                            .text_color(rgb(0x6e7681))
+                            .text_color(rgb(palette.text_dimmed))
                             .overflow_hidden()
                             .child(format!(
                                 "PID {} · {:.1}%",
@@ -375,7 +379,7 @@ pub(super) fn process_table_row(
                         div()
                             .text_size(px(12.))
                             .font_weight(FontWeight(600.))
-                            .text_color(rgb(0xe5edf7))
+                            .text_color(rgb(palette.text))
                             .overflow_hidden()
                             .child(truncate_preview(&process.command, 40)),
                     )
@@ -383,7 +387,7 @@ pub(super) fn process_table_row(
                         div()
                             .font_family("JetBrains Mono")
                             .text_size(px(10.))
-                            .text_color(rgb(0x6e7681))
+                            .text_color(rgb(palette.text_dimmed))
                             .overflow_hidden()
                             .child(truncate_preview(&process.command_line, 52)),
                     ),
@@ -414,13 +418,13 @@ pub(super) fn process_table_row(
     div()
         .relative()
         .border_b_1()
-        .border_color(rgb(0x21262d))
+        .border_color(rgb(palette.surface_elevated))
         .bg(if selected {
-            rgb(0x122033)
+            rgb(palette.hover)
         } else {
-            rgb(0x161b22)
+            rgb(palette.surface)
         })
-        .hover(|this| this.bg(rgb(0x1c2128)))
+        .hover(|this| this.bg(rgb(palette.hover)))
         .child(
             div()
                 .absolute()
@@ -440,6 +444,7 @@ fn process_menu_item(
     label: &'static str,
     on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
 ) -> impl IntoElement {
+    let palette = crate::ui::theme::theme_palette("github-dark");
     div()
         .id(gpui::SharedString::from(id.into()))
         .h(px(24.))
@@ -447,15 +452,16 @@ fn process_menu_item(
         .flex()
         .items_center()
         .text_size(px(12.))
-        .text_color(rgb(0xc9d1d9))
+        .text_color(rgb(palette.text))
         .cursor_pointer()
-        .hover(|this| this.bg(rgb(0x21262d)))
+        .hover(|this| this.bg(rgb(palette.surface_elevated)))
         .on_click(on_click)
         .child(label)
 }
 
 fn process_menu_sep() -> impl IntoElement {
-    div().h(px(1.)).mx_2().my_1().bg(rgb(0x30363d))
+    let palette = crate::ui::theme::theme_palette("github-dark");
+    div().h(px(1.)).mx_2().my_1().bg(rgb(palette.border))
 }
 
 pub(super) fn process_table_cell(
@@ -479,6 +485,7 @@ pub(super) fn icon_action_button(
     label: &'static str,
     on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
 ) -> impl IntoElement {
+    let palette = crate::ui::theme::theme_palette("github-dark");
     div()
         .id(gpui::SharedString::from(id.into()))
         .h(px(24.))
@@ -488,7 +495,7 @@ pub(super) fn icon_action_button(
         .rounded_sm()
         .border_1()
         .border_color(rgb(0x303848))
-        .bg(rgb(0x0d1320))
+        .bg(rgb(palette.input))
         .text_color(rgb(0xdbeafe))
         .text_xs()
         .cursor_pointer()
@@ -504,6 +511,7 @@ pub(super) fn process_details(
     nice_focus: &gpui::FocusHandle,
     cx: &mut Context<NyaTermApp>,
 ) -> gpui::AnyElement {
+    let palette = crate::ui::theme::theme_palette("github-dark");
     // Tauri expanded process details: compact mono command + meta chips + dense actions.
     let command = if process.command_line.trim().is_empty() {
         process.command.clone()
@@ -519,8 +527,8 @@ pub(super) fn process_details(
         .overflow_hidden()
         .rounded_md()
         .border_1()
-        .border_color(rgb(0x30363d))
-        .bg(rgb(0x0d1117))
+        .border_color(rgb(palette.border))
+        .bg(rgb(palette.bg))
         .px_2()
         .py_2()
         .flex()
@@ -531,7 +539,7 @@ pub(super) fn process_details(
                 .font_family("JetBrains Mono")
                 .text_size(px(11.))
                 .line_height(px(15.))
-                .text_color(rgb(0xc9d1d9))
+                .text_color(rgb(palette.text))
                 .child(truncate_preview(&command, 180)),
         )
         .child(
@@ -604,7 +612,7 @@ pub(super) fn process_details(
                         .mx_1()
                         .text_size(px(10.))
                         .font_weight(FontWeight(700.))
-                        .text_color(rgb(0x6e7681))
+                        .text_color(rgb(palette.text_dimmed))
                         .child("SIG"),
                 )
                 .child(small_button(crate::ui::theme::theme_palette("github-dark"), 
@@ -647,11 +655,12 @@ pub(super) fn process_details(
 }
 
 pub(super) fn process_detail_chip(label: &'static str, value: String) -> impl IntoElement {
+    let palette = crate::ui::theme::theme_palette("github-dark");
     div()
         .rounded_md()
         .border_1()
-        .border_color(rgb(0x21262d))
-        .bg(rgb(0x161b22))
+        .border_color(rgb(palette.surface_elevated))
+        .bg(rgb(palette.surface))
         .px_2()
         .py_0()
         .h(px(28.))
@@ -662,14 +671,14 @@ pub(super) fn process_detail_chip(label: &'static str, value: String) -> impl In
             div()
                 .text_size(px(10.))
                 .font_weight(FontWeight(700.))
-                .text_color(rgb(0x6e7681))
+                .text_color(rgb(palette.text_dimmed))
                 .child(label),
         )
         .child(
             div()
                 .font_family("JetBrains Mono")
                 .text_size(px(11.))
-                .text_color(rgb(0xc9d1d9))
+                .text_color(rgb(palette.text))
                 .child(truncate_preview(&value, 24)),
         )
 }
@@ -775,13 +784,14 @@ pub(super) fn resource_gauge_card(
     detail: String,
     ratio: f64,
 ) -> impl IntoElement {
+    let palette = crate::ui::theme::theme_palette("github-dark");
     // Tauri ResourceMonitor ring-ish card: compact height, dense mono value.
     let ratio = ratio.clamp(0., 1.);
     div()
         .rounded_md()
         .border_1()
-        .border_color(rgb(0x30363d))
-        .bg(rgb(0x0d1117))
+        .border_color(rgb(palette.border))
+        .bg(rgb(palette.bg))
         .px_2()
         .py_2()
         .flex()
@@ -793,7 +803,7 @@ pub(super) fn resource_gauge_card(
                 .rounded_full()
                 .border_1()
                 .border_color(usage_color(ratio))
-                .bg(rgb(0x161b22))
+                .bg(rgb(palette.surface))
                 .flex()
                 .items_center()
                 .justify_center()
@@ -817,14 +827,14 @@ pub(super) fn resource_gauge_card(
                     div()
                         .text_size(px(11.))
                         .font_weight(FontWeight(600.))
-                        .text_color(rgb(0xc9d1d9))
+                        .text_color(rgb(palette.text))
                         .child(title),
                 )
                 .child(
                     div()
                         .text_size(px(10.))
                         .line_height(px(13.))
-                        .text_color(rgb(0x6e7681))
+                        .text_color(rgb(palette.text_dimmed))
                         .child(truncate_preview(&detail, 48)),
                 )
                 .child(stats_progress_bar(ratio)),
@@ -837,12 +847,13 @@ pub(super) fn resource_summary_card(
     detail: String,
     ratio: f64,
 ) -> impl IntoElement {
+    let palette = crate::ui::theme::theme_palette("github-dark");
     let ratio = ratio.clamp(0., 1.);
     div()
         .rounded_md()
         .border_1()
-        .border_color(rgb(0x30363d))
-        .bg(rgb(0x0d1117))
+        .border_color(rgb(palette.border))
+        .bg(rgb(palette.bg))
         .px_2()
         .py_2()
         .flex()
@@ -852,7 +863,7 @@ pub(super) fn resource_summary_card(
             div()
                 .text_size(px(10.))
                 .font_weight(FontWeight(700.))
-                .text_color(rgb(0x6e7681))
+                .text_color(rgb(palette.text_dimmed))
                 .child(title),
         )
         .child(
@@ -867,7 +878,7 @@ pub(super) fn resource_summary_card(
             div()
                 .text_size(px(10.))
                 .line_height(px(13.))
-                .text_color(rgb(0x8b949e))
+                .text_color(rgb(palette.text_muted))
                 .child(truncate_preview(&detail, 56)),
         )
         .child(stats_progress_bar(ratio))
@@ -894,6 +905,7 @@ pub(super) fn compact_remote_svg_button(
     icon_path: &'static str,
     on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
 ) -> impl IntoElement {
+    let palette = crate::ui::theme::theme_palette("github-dark");
     div()
         .id(gpui::SharedString::from(id.into()))
         .size(px(28.))
@@ -901,9 +913,9 @@ pub(super) fn compact_remote_svg_button(
         .items_center()
         .justify_center()
         .rounded_md()
-        .text_color(rgb(0x8b949e))
+        .text_color(rgb(palette.text_muted))
         .cursor_pointer()
-        .hover(|this| this.bg(rgb(0x21262d)).text_color(rgb(0xc9d1d9)))
+        .hover(|this| this.bg(rgb(palette.surface_elevated)).text_color(rgb(palette.text)))
         .child(
             svg()
                 .size(px(16.))

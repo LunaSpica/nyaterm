@@ -6,12 +6,13 @@ pub(in crate::ui::view::pages::remote) fn docker_details_panel(
     container: Option<DockerContainer>,
     cx: &mut Context<NyaTermApp>,
 ) -> impl IntoElement {
+    let palette = crate::ui::theme::theme_palette("github-dark");
     let Some(details) = details else {
         return div()
             .rounded_md()
             .border_1()
-            .border_color(rgb(0x30363d))
-            .bg(rgb(0x0d1117))
+            .border_color(rgb(palette.border))
+            .bg(rgb(palette.bg))
             .p_2()
             .flex()
             .flex_col()
@@ -20,13 +21,13 @@ pub(in crate::ui::view::pages::remote) fn docker_details_panel(
                 div()
                     .text_xs()
                     .font_weight(FontWeight(700.))
-                    .text_color(rgb(0xc9d1d9))
+                    .text_color(rgb(palette.text))
                     .child("Container Details"),
             )
             .child(
                 div()
                     .text_size(px(11.))
-                    .text_color(rgb(0x6e7681))
+                    .text_color(rgb(palette.text_dimmed))
                     .child("Select Details on a container to load inspect data, stats, mounts, and networks."),
             );
     };
@@ -40,8 +41,8 @@ pub(in crate::ui::view::pages::remote) fn docker_details_panel(
                 div()
                     .rounded_sm()
                     .border_1()
-                    .border_color(rgb(0x30363d))
-                    .bg(rgb(0x12171f))
+                    .border_color(rgb(palette.border))
+                    .bg(rgb(palette.section_header))
                     .px_2()
                     .py_1()
                     .flex()
@@ -51,7 +52,7 @@ pub(in crate::ui::view::pages::remote) fn docker_details_panel(
                         div()
                             .font_family("JetBrains Mono")
                             .text_size(px(11.))
-                            .text_color(rgb(0xc9d1d9))
+                            .text_color(rgb(palette.text))
                             .overflow_hidden()
                             .child(format!(
                                 "{} -> {}",
@@ -62,7 +63,7 @@ pub(in crate::ui::view::pages::remote) fn docker_details_panel(
                     .child(
                         div()
                             .text_size(px(10.))
-                            .text_color(rgb(0x6e7681))
+                            .text_color(rgb(palette.text_dimmed))
                             .child(format!(
                                 "{} · {} · {}",
                                 mount.kind,
@@ -96,7 +97,7 @@ pub(in crate::ui::view::pages::remote) fn docker_details_panel(
                             .min_w_0()
                             .flex_1()
                             .text_size(px(11.))
-                            .text_color(rgb(0xc9d1d9))
+                            .text_color(rgb(palette.text))
                             .overflow_hidden()
                             .child(truncate_preview(&network.name, 36)),
                     )
@@ -104,7 +105,7 @@ pub(in crate::ui::view::pages::remote) fn docker_details_panel(
                         div()
                             .font_family("JetBrains Mono")
                             .text_size(px(10.))
-                            .text_color(rgb(0x6e7681))
+                            .text_color(rgb(palette.text_dimmed))
                             .child(ip_address),
                     ),
             );
@@ -159,8 +160,8 @@ pub(in crate::ui::view::pages::remote) fn docker_details_panel(
     div()
         .rounded_md()
         .border_1()
-        .border_color(rgb(0x30363d))
-        .bg(rgb(0x0d1117))
+        .border_color(rgb(palette.border))
+        .bg(rgb(palette.bg))
         .p_4()
         .flex()
         .flex_col()
@@ -182,7 +183,7 @@ pub(in crate::ui::view::pages::remote) fn docker_details_panel(
                                 .min_w_0()
                                 .text_sm()
                                 .font_weight(FontWeight(700.))
-                                .text_color(rgb(0xe5edf7))
+                                .text_color(rgb(palette.text))
                                 .child(details_title),
                         )
                         .when_some(details_state, |this, state| {
@@ -246,14 +247,14 @@ pub(in crate::ui::view::pages::remote) fn docker_details_panel(
                 div()
                     .rounded_sm()
                     .border_1()
-                    .border_color(rgb(0x30363d))
-                    .bg(rgb(0x12171f))
+                    .border_color(rgb(palette.border))
+                    .bg(rgb(palette.section_header))
                     .p_2()
                     .child(
                         div()
                             .text_sm()
                             .font_weight(FontWeight(700.))
-                            .text_color(rgb(0xe5edf7))
+                            .text_color(rgb(palette.text))
                             .child("Identity"),
                     )
                     .child(docker_detail_line(
@@ -343,8 +344,8 @@ pub(in crate::ui::view::pages::remote) fn docker_details_panel(
                     div()
                         .rounded_sm()
                         .border_1()
-                        .border_color(rgb(0x30363d))
-                        .bg(rgb(0x12171f))
+                        .border_color(rgb(palette.border))
+                        .bg(rgb(palette.section_header))
                         .p_2()
                         .child(docker_detail_line(
                             "Started",
@@ -386,14 +387,14 @@ pub(in crate::ui::view::pages::remote) fn docker_details_panel(
                     div()
                         .rounded_sm()
                         .border_1()
-                        .border_color(rgb(0x30363d))
-                        .bg(rgb(0x12171f))
+                        .border_color(rgb(palette.border))
+                        .bg(rgb(palette.section_header))
                         .p_2()
                         .child(
                             div()
                                 .text_sm()
                                 .font_weight(FontWeight(700.))
-                                .text_color(rgb(0xe5edf7))
+                                .text_color(rgb(palette.text))
                                 .child("Networks"),
                         )
                         .child(docker_detail_line(
@@ -410,14 +411,14 @@ pub(in crate::ui::view::pages::remote) fn docker_details_panel(
             div()
                 .rounded_sm()
                 .border_1()
-                .border_color(rgb(0x30363d))
-                .bg(rgb(0x12171f))
+                .border_color(rgb(palette.border))
+                .bg(rgb(palette.section_header))
                 .p_2()
                 .child(
                     div()
                         .text_xs()
                         .font_weight(FontWeight(700.))
-                        .text_color(rgb(0x8b949e))
+                        .text_color(rgb(palette.text_muted))
                         .child("Mounts"),
                 )
                 .child(docker_detail_line(
@@ -438,6 +439,7 @@ fn docker_detail_line(
     copyable: bool,
     cx: &mut Context<NyaTermApp>,
 ) -> gpui::Div {
+    let palette = crate::ui::theme::theme_palette("github-dark");
     let copy_value = value.clone();
     div()
         .mt_1()
@@ -450,7 +452,7 @@ fn docker_detail_line(
                 .w(px(72.))
                 .flex_none()
                 .text_size(px(10.))
-                .text_color(rgb(0x6e7681))
+                .text_color(rgb(palette.text_dimmed))
                 .child(label),
         )
         .child(
@@ -460,7 +462,7 @@ fn docker_detail_line(
                 .font_family("JetBrains Mono")
                 .text_size(px(11.))
                 .line_height(px(15.))
-                .text_color(rgb(0xc9d1d9))
+                .text_color(rgb(palette.text))
                 .child(display_value),
         )
         .when(copyable && value.trim() != "-", |this| {

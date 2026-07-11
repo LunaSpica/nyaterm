@@ -110,7 +110,7 @@ impl NyaTermApp {
                             .min_w_0()
                             .flex_1()
                             .text_size(px(11.))
-                            .text_color(rgb(0x8b949e))
+                            .text_color(rgb(palette.text_muted))
                             .overflow_hidden()
                             .child(format!(
                                 "{host_label} · CPU {:.0}% · MEM {:.0}% · {}",
@@ -201,14 +201,14 @@ impl NyaTermApp {
                         div()
                             .rounded_md()
                             .border_1()
-                            .border_color(rgb(0x30363d))
-                            .bg(rgb(0x0d1117))
+                            .border_color(rgb(palette.border))
+                            .bg(rgb(palette.bg))
                             .p_2()
                             .child(
                                 div()
                                     .text_xs()
                                     .font_weight(FontWeight(700.))
-                                    .text_color(rgb(0x8b949e))
+                                    .text_color(rgb(palette.text_muted))
                                     .child("System"),
                             )
                             .child(dense_capability_line(palette, "OS",
@@ -227,8 +227,8 @@ impl NyaTermApp {
                         div()
                             .rounded_md()
                             .border_1()
-                            .border_color(rgb(0x30363d))
-                            .bg(rgb(0x0d1117))
+                            .border_color(rgb(palette.border))
+                            .bg(rgb(palette.bg))
                             .p_2()
                             .child(div().text_sm().font_weight(FontWeight(700.)).child("Load"))
                             .child(dense_capability_line(palette, "1 min", format!("{:.2}", stats.load.load1)))
@@ -248,8 +248,8 @@ impl NyaTermApp {
                         div()
                             .rounded_md()
                             .border_1()
-                            .border_color(rgb(0x30363d))
-                            .bg(rgb(0x0d1117))
+                            .border_color(rgb(palette.border))
+                            .bg(rgb(palette.bg))
                             .p_2()
                             .child(
                                 div()
@@ -281,14 +281,14 @@ impl NyaTermApp {
                         div()
                             .rounded_md()
                             .border_1()
-                            .border_color(rgb(0x30363d))
-                            .bg(rgb(0x0d1117))
+                            .border_color(rgb(palette.border))
+                            .bg(rgb(palette.bg))
                             .p_2()
                             .child(
                                 div()
                                     .text_xs()
                                     .font_weight(FontWeight(700.))
-                                    .text_color(rgb(0x8b949e))
+                                    .text_color(rgb(palette.text_muted))
                                     .child("Network"),
                             )
                             .child(networks),
@@ -297,8 +297,8 @@ impl NyaTermApp {
                         div()
                             .rounded_md()
                             .border_1()
-                            .border_color(rgb(0x30363d))
-                            .bg(rgb(0x0d1117))
+                            .border_color(rgb(palette.border))
+                            .bg(rgb(palette.bg))
                             .p_2()
                             .child(div().text_sm().font_weight(FontWeight(700.)).child("Disks"))
                             .when(busiest_disk.is_some(), |this| {
@@ -309,13 +309,13 @@ impl NyaTermApp {
                                         .rounded_sm()
                                         .border_1()
                                         .border_color(usage_color(disk.use_percent as f64 / 100.))
-                                        .bg(rgb(0x10151e))
+                                        .bg(rgb(palette.input))
                                         .p_2()
                                         .child(
                                             div()
                                                 .text_xs()
                                                 .font_weight(FontWeight(700.))
-                                                .text_color(rgb(0xe5edf7))
+                                                .text_color(rgb(palette.text))
                                                 .child(format!(
                                                     "Busiest mount: {} ({}%)",
                                                     disk.mount, disk.use_percent
@@ -378,12 +378,13 @@ fn cpu_core_summary(per_core: &[f64], expanded: bool, cx: &mut Context<NyaTermAp
 }
 
 fn cpu_core_row(index: usize, usage: f64) -> gpui::Div {
+    let palette = crate::ui::theme::theme_palette("github-dark");
     let ratio = (usage / 100.).clamp(0., 1.);
     div()
         .rounded_sm()
         .border_1()
         .border_color(rgb(0x303848))
-        .bg(rgb(0x10151e))
+        .bg(rgb(palette.input))
         .p_2()
         .flex()
         .flex_col()
