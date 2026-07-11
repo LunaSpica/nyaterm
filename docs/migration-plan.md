@@ -1402,3 +1402,14 @@ service boundary first:
 - Split leaves show a compact title strip (status pip + name) and accent border
   when focused, closer to Tauri PaneWorkspace leaf chrome.
 - Multi-leaf mini-tabs also annotate split tab-roots with pane count.
+
+
+## 2026-07-12 Multi open_tabs pane layout restore
+
+- Startup collects **every** `open_tabs[].root` split into
+  `startup_pending_pane_layouts` (not only the first tab).
+- After reconnect, each layout is installed as a separate
+  `session_pane_roots` tree so multiple split tabs restore correctly.
+- Restorable leaf ids use runtime session ids for `active_pane_id` round-trip;
+  restore focuses the expanded-order index of the saved active pane.
+- Single open_tabs collapse only when exactly one split tree covers all sessions.

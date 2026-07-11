@@ -74,7 +74,10 @@ impl NyaTermApp {
     /// When every session is present in a global workspace split, emit one open_tabs
     /// entry whose `root` is a Tauri RestorablePaneNode tree (for interop).
     fn serialize_open_tabs_as_single_pane_tab(&self) -> Option<Vec<RestorableOpenTab>> {
-        // Single-tab workspace with an in-tab pane tree covering every live session.
+        // Only collapse to one open_tabs entry when exactly one split tree covers every session.
+        if self.session_pane_roots.len() > 1 {
+            return None;
+        }
         let root = self
             .session_pane_roots
             .values()
@@ -108,7 +111,7 @@ impl NyaTermApp {
         let mut tab = self.serialize_open_tab_for_session(first);
         // Title/type from first leaf; root carries the full tree.
         tab.root = Some(pane_root);
-        tab.active_pane_id = None;
+        tab.active_pane_id = self.active_session_id.clone();
         Some(vec![tab])
     }
 
@@ -123,14 +126,13 @@ impl NyaTermApp {
                     .into_iter()
                     .find(|session| &session.id == session_id)?;
                 let tab = self.serialize_open_tab_for_session(&session);
-                let leaf = tab.root.unwrap_or_else(|| {
-                    RestorablePaneNode::leaf_session(
-                        tab.title,
-                        tab.session_type,
-                        tab.connection_id,
-                    )
-                });
-                Some(leaf)
+                // Use runtime session id as RestorablePane leaf id so active_pane_id roundtrips.
+                Some(RestorablePaneNode::Leaf {
+                    id: session_id.clone(),
+                    title: tab.title,
+                    session_type: tab.session_type,
+                    connection_id: tab.connection_id,
+                })
             }
             WorkspacePaneNode::Split {
                 id,
@@ -197,14 +199,25 @@ impl NyaTermApp {
             return;
         }
         // Expand Tauri per-tab pane trees into a flat restore queue of sessions.
-        // Remember optional workspace pane layouts derived from multi-leaf roots.
-        self.startup_pending_pane_layout = None;
+        // Remember every multi-pane root so we can reinstall per-tab trees after connect.
+        self.startup_pending_pane_layouts.clear();
+        self.startup_pending_active_pane_indexes.clear();
         let mut expanded = Vec::new();
         let mut base_index = 0usize;
         for tab in &tabs {
-            if self.startup_pending_pane_layout.is_none() {
-                if let Some(layout) = tab.workspace_pane_layout_from_root(base_index) {
-                    self.startup_pending_pane_layout = Some(layout);
+            if let Some(layout) = tab.workspace_pane_layout_from_root(base_index) {
+                self.startup_pending_pane_layouts.push(layout);
+            }
+            if let (Some(root), Some(active_pane_id)) =
+                (tab.root.as_ref(), tab.active_pane_id.as_ref())
+            {
+                if let Some(leaf_offset) = root
+                    .collect_leaves()
+                    .iter()
+                    .position(|leaf| &leaf.id == active_pane_id)
+                {
+                    self.startup_pending_active_pane_indexes
+                        .push(base_index + leaf_offset);
                 }
             }
             let sessions = tab.expanded_sessions();
@@ -266,18 +279,35 @@ impl NyaTermApp {
         self.terminal_windows_restored = false;
         self.workspace_pane_layout_restored = false;
         self.try_restore_terminal_window_layout();
-        // Prefer stored ui.workspace_pane_layout; fall back to layout embedded in open_tabs roots.
-        self.try_restore_workspace_pane_layout();
-        if self.workspace_split.is_none() {
-            if let Some(layout) = self.startup_pending_pane_layout.take() {
+        // Prefer stored ui.workspace_pane_layout only when no open_tabs per-tab roots exist.
+        // open_tabs[].root maps to per-tab session_pane_roots (Tauri Tab.root).
+        let pending_layouts = std::mem::take(&mut self.startup_pending_pane_layouts);
+        let pending_active = std::mem::take(&mut self.startup_pending_active_pane_indexes);
+        if pending_layouts.is_empty() {
+            self.try_restore_workspace_pane_layout();
+        } else {
+            self.workspace_pane_layout_restored = true;
+            for layout in pending_layouts {
                 self.apply_restorable_workspace_pane_layout(layout);
             }
-        } else {
-            self.startup_pending_pane_layout = None;
+            // Focus last requested active pane leaf if still present.
+            if let Some(index) = pending_active.last().copied() {
+                let ordered = self
+                    .ordered_sessions()
+                    .into_iter()
+                    .map(|session| session.id)
+                    .collect::<Vec<_>>();
+                if let Some(session_id) = ordered.get(index) {
+                    self.activate_session_id(session_id);
+                    self.sync_workspace_split_from_active_tab();
+                }
+            }
         }
         if self.terminal_windows_is_multi_leaf() {
             self.terminal_status = "restored workspace tabs and window layout".to_string();
-        } else if self.workspace_split.as_ref().is_some_and(|root| root.is_split()) {
+        } else if !self.session_pane_roots.is_empty()
+            || self.workspace_split.as_ref().is_some_and(|root| root.is_split())
+        {
             self.terminal_status = "restored workspace tabs and pane layout".to_string();
         } else if !self.ordered_sessions().is_empty() {
             self.terminal_status = "restored workspace tabs".to_string();
@@ -397,20 +427,22 @@ impl NyaTermApp {
         if !restored.is_split() {
             return;
         }
-        if let Some(active) = self.active_session_id.clone() {
-            if !restored.contains_session(&active) {
-                if let Some(first) = restored.session_ids().into_iter().next() {
-                    self.active_session_id = Some(first);
-                }
+        // Key the tree by its first leaf so secondary leaves leave the strip.
+        let Some(first) = restored.session_ids().into_iter().next() else {
+            return;
+        };
+        // Avoid clobbering an existing distinct per-tab tree for the same root.
+        if let Some(existing) = self.session_pane_roots.get(&first) {
+            if existing != &restored {
+                // Prefer the newly restored tree from open_tabs for this root.
             }
-        } else if let Some(first) = restored.session_ids().into_iter().next() {
+        }
+        self.session_pane_roots.insert(first.clone(), restored);
+        self.rebuild_session_tab_owners();
+        if self.active_session_id.is_none() {
             self.active_session_id = Some(first);
         }
-        if let Some(first) = restored.session_ids().into_iter().next() {
-            self.session_pane_roots.insert(first, restored);
-            self.rebuild_session_tab_owners();
-            self.sync_workspace_split_from_active_tab();
-        }
+        self.sync_workspace_split_from_active_tab();
         self.workspace_pane_layout_restored = true;
         self.selected_nav = NavItem::Workspace;
         self.main_mode = MainMode::Workspace;
