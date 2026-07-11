@@ -92,6 +92,23 @@ impl NyaTermApp {
             } else {
                 None
             };
+            let link_ranges: Vec<(usize, usize)> = if self.settings.terminal_action_links_enabled {
+                find_action_links(
+                    &line,
+                    &self.settings.terminal_action_links_matchers,
+                    true,
+                )
+                .into_iter()
+                .map(|item| {
+                    // Convert byte offsets from regex to char indices for painting.
+                    let start_chars = line[..item.start.min(line.len())].chars().count();
+                    let end_chars = line[..item.end.min(line.len())].chars().count();
+                    (start_chars, end_chars)
+                })
+                .collect()
+            } else {
+                Vec::new()
+            };
             let content = terminal_line_element(
                 &line,
                 ansi,
@@ -105,6 +122,7 @@ impl NyaTermApp {
                 },
                 cursor_style,
                 selection_cols,
+                &link_ranges,
                 self.terminal_cell_size().1,
                 palette,
             );
@@ -373,7 +391,13 @@ impl NyaTermApp {
                                         this.activate_workspace_pane(session_id.clone(), cx);
                                         window.focus(&this.terminal_focus);
                                         this.close_terminal_context_menu(cx);
-                                        this.start_terminal_selection(event, cx);
+                                        this.close_action_link_menu(cx);
+                                        let mods = event.modifiers;
+                                        let skip_selection = this.settings.terminal_action_links_enabled
+                                            && (mods.alt || mods.control || mods.platform);
+                                        if !skip_selection {
+                                            this.start_terminal_selection(event, cx);
+                                        }
                                         cx.stop_propagation();
                                     })
                                 },
@@ -405,12 +429,17 @@ impl NyaTermApp {
                                 }
                                 window.focus(&this.terminal_focus);
                                 let modifiers = event.modifiers();
-                                if this.settings.terminal_action_links_enabled
-                                    && (modifiers.control || modifiers.platform)
-                                {
-                                    if this.try_activate_action_link_at_click(event, cx) {
-                                        cx.stop_propagation();
-                                        return;
+                                if this.settings.terminal_action_links_enabled {
+                                    if modifiers.alt {
+                                        if this.try_open_action_link_menu_at_click(event, cx) {
+                                            cx.stop_propagation();
+                                            return;
+                                        }
+                                    } else if modifiers.control || modifiers.platform {
+                                        if this.try_activate_action_link_at_click(event, cx) {
+                                            cx.stop_propagation();
+                                            return;
+                                        }
                                     }
                                 }
                                 if this.terminal_selection.is_none() {

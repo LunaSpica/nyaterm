@@ -34,6 +34,8 @@ pub(super) fn terminal_line_element(
     cursor_style: &str,
     // Half-open column range selected on this line, if any.
     selection_cols: Option<(usize, usize)>,
+    // Half-open character ranges for action-link underlines.
+    link_ranges: &[(usize, usize)],
     line_height: f32,
     palette: crate::ui::theme::ThemePalette,
 ) -> impl IntoElement {
@@ -46,6 +48,9 @@ pub(super) fn terminal_line_element(
     } else {
         keyword_highlight_spans(line, config)
     };
+    if !link_ranges.is_empty() {
+        spans = apply_action_link_ranges(spans, link_ranges, palette);
+    }
     if let Some((start, end)) = selection_cols {
         spans = apply_selection_range(spans, start, end, palette);
     }
@@ -94,6 +99,43 @@ pub(super) fn terminal_line_element(
     }
 
     row
+}
+
+
+/// Underline action-link ranges with the accent color (Tauri decoration look).
+fn apply_action_link_ranges(
+    spans: Vec<TerminalHighlightSpan>,
+    ranges: &[(usize, usize)],
+    palette: crate::ui::theme::ThemePalette,
+) -> Vec<TerminalHighlightSpan> {
+    if ranges.is_empty() {
+        return spans;
+    }
+    let mut flat: Vec<(char, Option<u32>, Option<u32>, bool, bool)> = Vec::new();
+    for span in spans {
+        if span.text.is_empty() {
+            continue;
+        }
+        for ch in span.text.chars() {
+            flat.push((ch, span.color, span.bg, span.keyword, span.underline));
+        }
+    }
+    for &(start, end) in ranges {
+        if start >= end {
+            continue;
+        }
+        let end = end.min(flat.len());
+        let start = start.min(end);
+        for idx in start..end {
+            if let Some(cell) = flat.get_mut(idx) {
+                cell.4 = true; // underline
+                if cell.1.is_none() {
+                    cell.1 = Some(palette.accent);
+                }
+            }
+        }
+    }
+    compress_flat_cells(flat)
 }
 
 /// Highlight a half-open [start, end) column range with the theme selection background.

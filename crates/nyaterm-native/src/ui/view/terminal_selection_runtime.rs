@@ -289,14 +289,53 @@ impl NyaTermApp {
     }
 
 
-    pub(in crate::ui::view) fn try_activate_action_link_at_click(
+
+    pub(in crate::ui::view) fn close_action_link_menu(&mut self, cx: &mut Context<Self>) {
+        if self.action_link_menu.take().is_some() {
+            self.terminal_status = "action link menu closed".to_string();
+            cx.notify();
+        }
+    }
+
+    pub(in crate::ui::view) fn try_open_action_link_menu_at_click(
         &mut self,
         event: &ClickEvent,
         cx: &mut Context<Self>,
     ) -> bool {
-        let Some(cell) = self.point_to_terminal_cell(event.position()) else {
+        let Some((item, actions)) = self.action_link_at_click(event) else {
             return false;
         };
+        if actions.is_empty() {
+            return false;
+        }
+        let menu_actions = actions
+            .into_iter()
+            .map(|action| ActionLinkMenuAction {
+                id: action.id,
+                label: action.label,
+                command: action.command,
+                open_url: action.open_url,
+                is_default: action.is_default,
+            })
+            .collect::<Vec<_>>();
+        self.action_link_menu = Some(ActionLinkMenuState {
+            x: event.position().x,
+            y: event.position().y,
+            kind_label: item.kind.label().to_string(),
+            value: item.value,
+            actions: menu_actions,
+        });
+        self.terminal_context_menu = None;
+        self.terminal_status = format!("action link menu: {}", item.kind.label());
+        cx.notify();
+        true
+    }
+
+    fn action_link_at_click(
+        &self,
+        event: &ClickEvent,
+    ) -> Option<(ActionLinkMatch, Vec<ActionLinkAction>)> {
+        let cell = self.point_to_terminal_cell(event.position())?;
         let offset = self.active_terminal_scroll_offset();
         let snapshot = self
             .active_session_id
@@ -304,20 +343,27 @@ impl NyaTermApp {
             .and_then(|session_id| self.terminal_views.get(session_id))
             .map(|view| view.screen.viewport_snapshot(offset))
             .unwrap_or_else(|| self.terminal_screen.viewport_snapshot(offset));
-        let Some(line) = snapshot.lines.get(cell.row) else {
-            return false;
-        };
+        let line = snapshot.lines.get(cell.row)?;
         let chars: Vec<char> = line.chars().collect();
         if chars.is_empty() {
-            return false;
+            return None;
         }
         let char_offset = cell.col.min(chars.len().saturating_sub(1));
         let byte_offset: usize = chars.iter().take(char_offset).map(|ch| ch.len_utf8()).sum();
         let matchers = &self.settings.terminal_action_links_matchers;
-        let Some(item) = match_at_offset(line, byte_offset, matchers) else {
+        let item = match_at_offset(line, byte_offset, matchers)?;
+        let actions = actions_for_match(&item);
+        Some((item, actions))
+    }
+
+    pub(in crate::ui::view) fn try_activate_action_link_at_click(
+        &mut self,
+        event: &ClickEvent,
+        cx: &mut Context<Self>,
+    ) -> bool {
+        let Some((item, actions)) = self.action_link_at_click(event) else {
             return false;
         };
-        let actions = actions_for_match(&item);
         let Some(default) = actions
             .iter()
             .find(|action| action.is_default)

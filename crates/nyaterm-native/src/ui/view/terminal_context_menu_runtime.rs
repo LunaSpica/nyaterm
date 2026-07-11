@@ -8,6 +8,7 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         let selected_text = self.selected_terminal_text().unwrap_or_default();
+        self.action_link_menu = None;
         self.terminal_context_menu = Some(TerminalContextMenuState {
             x: event.position.x,
             y: event.position.y,
@@ -408,6 +409,108 @@ impl NyaTermApp {
             .child(items)
             .into_any_element()
     }
+
+    pub(in crate::ui::view) fn action_link_menu_overlay(
+        &mut self,
+        cx: &mut Context<Self>,
+    ) -> impl IntoElement {
+        let palette = self.theme_palette();
+        let Some(menu) = self.action_link_menu.clone() else {
+            return div().into_any_element();
+        };
+        let mut items = div()
+            .id(SharedString::from("action-link-menu"))
+            .absolute()
+            .top(menu.y)
+            .left(menu.x)
+            .w(px(260.))
+            .max_h(px(360.))
+            .overflow_y_scroll()
+            .rounded_md()
+            .border_1()
+            .border_color(rgb(palette.border))
+            .bg(rgb(palette.surface))
+            .shadow_lg()
+            .py_1()
+            .flex()
+            .flex_col()
+            .on_mouse_down(MouseButton::Left, |_, _, _| {})
+            .on_click(|_, _, cx| cx.stop_propagation())
+            .child(
+                div()
+                    .px_3()
+                    .py_2()
+                    .border_b_1()
+                    .border_color(rgb(palette.border))
+                    .child(
+                        div()
+                            .text_size(px(10.))
+                            .text_color(rgb(palette.text_muted))
+                            .child(menu.kind_label.clone()),
+                    )
+                    .child(
+                        div()
+                            .mt_1()
+                            .font_family("JetBrains Mono")
+                            .text_size(px(11.))
+                            .text_color(rgb(palette.text))
+                            .child(truncate_preview(&menu.value, 42)),
+                    ),
+            );
+        for action in menu.actions {
+            let command = action.command.clone();
+            let open_url = action.open_url.clone();
+            let label = if action.is_default {
+                format!("{} (default)", action.label)
+            } else {
+                action.label.clone()
+            };
+            items = items.child(terminal_ctx_item(
+                palette,
+                format!("action-link-menu-{}", action.id),
+                label,
+                None,
+                cx.listener(move |this, _, _, cx| {
+                    this.close_action_link_menu(cx);
+                    if let Some(url) = open_url.clone() {
+                        match open_external_url(&url) {
+                            Ok(()) => this.terminal_status = format!("opened link: {url}"),
+                            Err(error) => {
+                                this.terminal_status = format!("open link failed: {error}")
+                            }
+                        }
+                        cx.notify();
+                        return;
+                    }
+                    if let Some(command) = command.clone() {
+                        this.execute_action_link_command(command, cx);
+                    }
+                }),
+            ));
+        }
+        div()
+            .id(SharedString::from("action-link-menu-overlay"))
+            .absolute()
+            .top_0()
+            .bottom_0()
+            .left_0()
+            .right_0()
+            .on_mouse_down(
+                MouseButton::Left,
+                cx.listener(|this, _, _, cx| {
+                    this.close_action_link_menu(cx);
+                }),
+            )
+            .on_mouse_down(
+                MouseButton::Right,
+                cx.listener(|this, _, _, cx| {
+                    this.close_action_link_menu(cx);
+                }),
+            )
+            .child(items)
+            .into_any_element()
+    }
+
 }
 
 fn terminal_ctx_item(

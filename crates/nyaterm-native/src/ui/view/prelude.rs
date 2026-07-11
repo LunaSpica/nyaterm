@@ -86,7 +86,7 @@ pub(super) use super::super::models::{
     SecurityPasswordEditorState, SessionLaunchConfig, SessionRuntimeMetadata,
     SearchEngineEditorField, SettingsTab, SnapshotPasswordPromptKind, SnapshotPasswordPromptState, StartupCommandAction,
     StartupCommandRequest, StoreStatus,
-    SyncInputGroup, TerminalCellPos, TerminalContextMenuState, TerminalSearchMode, TerminalSelection, TerminalViewState, TransferBrowserColumnResizeState,
+    SyncInputGroup, ActionLinkMenuAction, ActionLinkMenuState, TerminalCellPos, TerminalContextMenuState, TerminalSearchMode, TerminalSelection, TerminalViewState, TransferBrowserColumnResizeState,
     TransferBrowserColumnWidths, TransferBrowserContextMenuState,
     TransferBrowserDragSelectionState, TransferBrowserFavoritesMenuState,
     TransferBrowserUploadMenuState,

@@ -976,3 +976,6 @@ service boundary first:
 - Action links: domain settings `terminal.action_links_*`, matcher module for
   URL/IPv4/host:port/archive, context-menu actions, Ctrl/Cmd-click default action,
   and Settings → Terminal toggles.
+
+- Action link decorations: underline + accent color on matched viewport tokens.
+- Alt-click opens multi-action menu; Ctrl/Cmd-click runs default action.

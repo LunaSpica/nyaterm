@@ -1075,6 +1075,25 @@ pub(super) struct ConnectionContextMenuState {
     pub(super) y: Pixels,
 }
 
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(super) struct ActionLinkMenuAction {
+    pub(super) id: String,
+    pub(super) label: String,
+    pub(super) command: Option<String>,
+    pub(super) open_url: Option<String>,
+    pub(super) is_default: bool,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub(super) struct ActionLinkMenuState {
+    pub(super) x: Pixels,
+    pub(super) y: Pixels,
+    pub(super) kind_label: String,
+    pub(super) value: String,
+    pub(super) actions: Vec<ActionLinkMenuAction>,
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub(super) struct TerminalContextMenuState {
     pub(super) x: Pixels,
