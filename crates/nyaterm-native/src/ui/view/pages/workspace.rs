@@ -615,6 +615,32 @@ impl NyaTermApp {
                                         })
                                         .overflow_hidden()
                                         .child(truncate_preview(&title, 36)),
+                                )
+                                .child(
+                                    div()
+                                        .id(SharedString::from(format!(
+                                            "workspace-leaf-close-{session_id}"
+                                        )))
+                                        .size(px(16.))
+                                        .flex()
+                                        .items_center()
+                                        .justify_center()
+                                        .rounded_sm()
+                                        .text_size(px(10.))
+                                        .text_color(rgb(palette.text_muted))
+                                        .hover(|this| {
+                                            this.bg(rgb(palette.border))
+                                                .text_color(rgb(palette.danger))
+                                        })
+                                        .child("x")
+                                        .on_click(cx.listener({
+                                            let close_id = session_id.clone();
+                                            move |this, _, _, cx| {
+                                                cx.stop_propagation();
+                                                // Close only this leaf (secondary panes collapse tree).
+                                                this.close_session(close_id.clone(), cx);
+                                            }
+                                        })),
                                 ),
                         );
                 }

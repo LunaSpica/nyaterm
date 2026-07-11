@@ -1413,3 +1413,9 @@ service boundary first:
 - Restorable leaf ids use runtime session ids for `active_pane_id` round-trip;
   restore focuses the expanded-order index of the saved active pane.
 - Single open_tabs collapse only when exactly one split tree covers all sessions.
+
+
+## 2026-07-12 Pane leaf close control
+
+- In-tab split leaf chrome includes an `x` control that closes only that leaf
+  session (secondary leaves collapse the parent split via prune).
