@@ -675,7 +675,8 @@ impl NyaTermApp {
                                                 self.send_command_draft.clone()
                                             },
                                             true,
-                                        )
+                    self.theme_palette(),
+                )
                                         .flex_1()
                                         .min_h(px(72.))
                                         .when(

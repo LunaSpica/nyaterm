@@ -211,7 +211,8 @@ impl NyaTermApp {
                                 "Default editor command",
                                 default_editor_value,
                                 false,
-                            )
+            self.theme_palette(),
+        )
                             .track_focus(&self.transfer_default_editor_focus)
                             .on_click(cx.listener(|this, _, window, cx| {
                                 window.focus(&this.transfer_default_editor_focus);

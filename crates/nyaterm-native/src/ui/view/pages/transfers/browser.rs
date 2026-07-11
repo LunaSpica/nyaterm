@@ -6,6 +6,7 @@ impl NyaTermApp {
         can_transfer: bool,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
+        let palette = self.theme_palette();
         let _selected = self
             .transfer_selected_remote_path
             .as_deref()
@@ -63,7 +64,7 @@ impl NyaTermApp {
                     .child(
                         div()
                             .text_size(px(12.))
-                            .text_color(rgb(0x8b949e))
+                            .text_color(rgb(palette.text_muted))
                             .child(if self.active_session_id.is_some() {
                                 "Unsupported session"
                             } else {
@@ -73,7 +74,7 @@ impl NyaTermApp {
                     .child(
                         div()
                             .text_size(px(11.))
-                            .text_color(rgb(0x6e7681))
+                            .text_color(rgb(palette.text_dimmed))
                             .child(if self.active_session_id.is_some() {
                                 "File Explorer requires an active SSH session."
                             } else {
@@ -94,13 +95,13 @@ impl NyaTermApp {
                     .child(
                         div()
                             .text_size(px(12.))
-                            .text_color(rgb(0x8b949e))
+                            .text_color(rgb(palette.text_muted))
                             .child("No remote entries loaded"),
                     )
                     .child(
                         div()
                             .text_size(px(11.))
-                            .text_color(rgb(0x6e7681))
+                            .text_color(rgb(palette.text_dimmed))
                             .child(truncate_preview(&self.transfer_browser_status, 64)),
                     ),
             );
@@ -113,7 +114,7 @@ impl NyaTermApp {
                     .px_4()
                     .py_8()
                     .text_size(px(11.))
-                    .text_color(rgb(0x6e7681))
+                    .text_color(rgb(palette.text_dimmed))
                     .child("No remote entries match the current search."),
             );
         } else {
@@ -164,7 +165,7 @@ impl NyaTermApp {
             .flex()
             .flex_col()
             .overflow_hidden()
-            .bg(rgb(0x161b22))
+            .bg(rgb(palette.surface))
             .track_focus(&self.transfer_browser_focus)
             .on_key_down(cx.listener(|this, event: &KeyDownEvent, window, cx| {
                 this.handle_transfer_browser_key_down(event, window, cx);
@@ -176,8 +177,8 @@ impl NyaTermApp {
                         .h(px(30.))
                         .px_1()
                         .border_b_1()
-                        .border_color(rgb(0x30363d))
-                        .bg(rgb(0x12171f))
+                        .border_color(rgb(palette.border))
+                        .bg(rgb(palette.section_header))
                         .flex()
                         .items_center()
                         .gap(px(2.))

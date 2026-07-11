@@ -115,7 +115,8 @@ impl NyaTermApp {
                                     "Search sessions",
                                     self.active_sessions_search_draft.clone(),
                                     true,
-                                )
+                    self.theme_palette(),
+                )
                                 .h(px(28.))
                                 .track_focus(&self.active_sessions_search_focus)
                                 .on_click(cx.listener(|this, _, window, cx| {
@@ -256,7 +257,8 @@ impl NyaTermApp {
                             "Search sessions",
                             self.active_sessions_search_draft.clone(),
                             true,
-                        )
+                    self.theme_palette(),
+                )
                         .mt_3()
                         .track_focus(&self.active_sessions_search_focus)
                         .on_click(cx.listener(|this, _, window, cx| {
@@ -2662,7 +2664,7 @@ fn security_editor_field(
     active: bool,
     on_click: impl Fn(&gpui::ClickEvent, &mut gpui::Window, &mut gpui::App) + 'static,
 ) -> impl IntoElement {
-    transfer_input(id, label, value, active)
+    transfer_input(id, label, value, active, crate::ui::theme::theme_palette("github-dark"))
         .h(px(42.))
         .on_click(on_click)
 }

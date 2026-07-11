@@ -809,3 +809,7 @@ service boundary first:
 - Extract `ThemePalette` to `crates/nyaterm-native/src/ui/theme.rs` for shared use.
 - Shared components: `empty_panel`, `mode_button`, `icon_button`, `section_header` take live palette.
 - Shell theming: Settings page, Docker/Process/Stats toolbars, Transfers root + path bar + queue, Quick Commands sidebar, Network/Tunnels surface.
+
+## 2026-07-11 transfer_input + panel interior palette pass
+- `transfer_input` takes live `ThemePalette` (border/input/text) across AI, Network, Process, Docker, Settings, Quick Commands, Transfers.
+- Process/Docker/File Explorer/Tunnels toolbars deepen palette application; network tab chips themed.

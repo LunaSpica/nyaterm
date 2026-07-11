@@ -652,7 +652,7 @@ pub(super) fn proxy_editor_input(
     focus: &gpui::FocusHandle,
     cx: &mut Context<NyaTermApp>,
 ) -> impl IntoElement {
-    transfer_input(id, label, value, active)
+    transfer_input(id, label, value, active, crate::ui::theme::theme_palette(&cx.entity().read(cx).settings.theme))
         .track_focus(focus)
         .on_click(cx.listener(move |this, _, window, cx| {
             this.focus_network_proxy_editor_field(field, window, cx);

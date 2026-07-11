@@ -134,7 +134,8 @@ impl NyaTermApp {
                             "Category Name",
                             rename.draft,
                             true,
-                        )
+                    self.theme_palette(),
+                )
                         .mt_3()
                         .track_focus(&self.quick_command_category_rename_focus)
                         .on_click(cx.listener(|this, _, window, cx| {

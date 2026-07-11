@@ -203,15 +203,14 @@ impl NyaTermApp {
                                     .gap_1()
                                     .rounded_md()
                                     .border_1()
-                                    .border_color(rgb(0x30363d))
-                                    .bg(rgb(0x0d1117))
+                                    .border_color(rgb(self.theme_palette().border))
+                                    .bg(rgb(self.theme_palette().input))
                                     .p(px(2.))
                                     .child(
                                         network_tab_button(
                                             "network-tab-tunnels",
                                             "Tunnels",
-                                            self.network_tab == NetworkTab::Tunnels,
-                                            cx.listener(|this, _, _, cx| {
+                                            self.network_tab == NetworkTab::Tunnels, self.theme_palette(), cx.listener(|this, _, _, cx| {
                                                 this.set_network_tab(NetworkTab::Tunnels, cx);
                                             }),
                                         ),
@@ -220,8 +219,7 @@ impl NyaTermApp {
                                         network_tab_button(
                                             "network-tab-proxies",
                                             "Proxies",
-                                            self.network_tab == NetworkTab::Proxies,
-                                            cx.listener(|this, _, _, cx| {
+                                            self.network_tab == NetworkTab::Proxies, self.theme_palette(), cx.listener(|this, _, _, cx| {
                                                 this.set_network_tab(NetworkTab::Proxies, cx);
                                             }),
                                         ),
@@ -302,7 +300,8 @@ impl NyaTermApp {
                                                 self.proxy_search_draft.clone()
                                             },
                                             true,
-                                        )
+                    self.theme_palette(),
+                )
                                         .flex_1()
                                         .track_focus(if self.network_tab == NetworkTab::Tunnels {
                                             &self.tunnel_search_focus
@@ -330,7 +329,7 @@ impl NyaTermApp {
                                         div()
                                             .font_family("JetBrains Mono")
                                             .text_size(px(10.))
-                                            .text_color(rgb(0x6e7681))
+                                            .text_color(rgb(self.theme_palette().text_dimmed))
                                             .child(match self.network_tab {
                                                 NetworkTab::Tunnels => format!(
                                                     "{}/{}",
@@ -397,7 +396,7 @@ fn icon_network_action(
         .justify_center()
         .rounded_md()
         .text_size(px(12.))
-        .text_color(rgb(0x8b949e))
+        .text_color(rgb(crate::ui::theme::theme_palette("github-dark").text_muted))
         .cursor_pointer()
         .hover(|this| this.bg(rgb(0x21262d)).text_color(rgb(0xc9d1d9)))
         .child(label)

@@ -1,3 +1,4 @@
+use crate::ui::theme::ThemePalette;
 use gpui::{FontWeight, IntoElement, SharedString, div, prelude::*, px, rgb};
 use nyaterm_domain::truncate_preview;
 use nyaterm_session::{
@@ -70,6 +71,7 @@ pub(in crate::ui::view) fn transfer_input(
     label: &'static str,
     value: String,
     active: bool,
+    palette: ThemePalette,
 ) -> gpui::Stateful<gpui::Div> {
     div()
         .id(SharedString::from(id.into()))
@@ -81,15 +83,19 @@ pub(in crate::ui::view) fn transfer_input(
         .gap_0()
         .rounded_sm()
         .border_1()
-        .border_color(if active { rgb(0x4b6f97) } else { rgb(0x303848) })
-        .bg(rgb(0x0d1320))
+        .border_color(if active {
+            rgb(palette.accent)
+        } else {
+            rgb(palette.border)
+        })
+        .bg(rgb(palette.input))
         .cursor_pointer()
-        .child(div().text_xs().text_color(rgb(0x8f98aa)).child(label))
+        .child(div().text_xs().text_color(rgb(palette.text_muted)).child(label))
         .child(
             div()
                 .font_family("JetBrains Mono")
                 .text_xs()
-                .text_color(rgb(0xe5edf7))
+                .text_color(rgb(palette.text))
                 .child(value),
         )
 }

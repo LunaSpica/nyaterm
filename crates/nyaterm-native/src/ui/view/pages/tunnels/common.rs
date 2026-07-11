@@ -4,6 +4,7 @@ pub(super) fn network_tab_button(
     id: impl Into<String>,
     label: &'static str,
     active: bool,
+    palette: crate::ui::theme::ThemePalette,
     on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
 ) -> impl IntoElement {
     // Tauri TabsTrigger inside TabsList grid-cols-2 h-8.
@@ -16,12 +17,20 @@ pub(super) fn network_tab_button(
         .items_center()
         .justify_center()
         .rounded_sm()
-        .bg(if active { rgb(0x21262d) } else { rgb(0x0d1117) })
-        .text_color(if active { rgb(0xc9d1d9) } else { rgb(0x8b949e) })
+        .bg(if active {
+            rgb(palette.surface_elevated)
+        } else {
+            rgb(palette.input)
+        })
+        .text_color(if active {
+            rgb(palette.text)
+        } else {
+            rgb(palette.text_muted)
+        })
         .text_size(px(12.))
         .font_weight(if active { FontWeight(600.) } else { FontWeight(500.) })
         .cursor_pointer()
-        .hover(|this| this.bg(rgb(0x1c2128)).text_color(rgb(0xc9d1d9)))
+        .hover(move |this| this.bg(rgb(palette.hover)).text_color(rgb(palette.text)))
         .child(label)
         .on_click(on_click)
 }
@@ -105,7 +114,8 @@ pub(super) fn network_group_editor_panel(
                 "Group name",
                 editor.name.clone(),
                 true,
-            )
+                    crate::ui::theme::theme_palette(&cx.entity().read(cx).settings.theme),
+                )
             .track_focus(focus)
             .on_click(cx.listener(|this, _, window, cx| {
                 window.focus(&this.network_group_editor_focus);

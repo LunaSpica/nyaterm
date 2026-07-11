@@ -72,7 +72,8 @@ impl NyaTermApp {
                                             "Value",
                                             variable.value.clone(),
                                             focused,
-                                        )
+                    self.theme_palette(),
+                )
                                         .track_focus(&self.quick_command_variable_focus)
                                         .into_any_element()
                                     } else {

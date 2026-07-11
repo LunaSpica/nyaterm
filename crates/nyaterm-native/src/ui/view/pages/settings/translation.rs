@@ -18,6 +18,7 @@ impl NyaTermApp {
                 value
             },
             self.translate_focused_field == field,
+            self.theme_palette(),
         )
         .track_focus(&self.translate_focus)
         .on_click(cx.listener(move |this, _, window, cx| {

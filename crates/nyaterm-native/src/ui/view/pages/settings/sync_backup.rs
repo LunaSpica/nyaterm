@@ -236,6 +236,7 @@ impl NyaTermApp {
                 value
             },
             self.cloud_sync_focused_field == field,
+            self.theme_palette(),
         )
         .track_focus(&self.cloud_sync_focus)
         .on_click(cx.listener(move |this, _, window, cx| {

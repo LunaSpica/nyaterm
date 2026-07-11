@@ -556,7 +556,7 @@ pub(super) fn process_details(
                 .gap_1()
                 .flex_wrap()
                 .child(
-                    transfer_input("process-nice-input", "Nice", nice_draft, true)
+                    transfer_input("process-nice-input", "Nice", nice_draft, true, crate::ui::theme::theme_palette(&cx.entity().read(cx).settings.theme))
                         .w(px(88.))
                         .h(px(26.))
                         .track_focus(nice_focus)

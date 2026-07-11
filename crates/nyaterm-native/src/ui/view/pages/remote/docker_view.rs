@@ -147,7 +147,8 @@ impl NyaTermApp {
                                     "Search containers…",
                                     self.docker_search_draft.clone(),
                                     true,
-                                )
+                    self.theme_palette(),
+                )
                                 .h(px(28.))
                                 .track_focus(&self.docker_search_focus)
                                 .on_click(cx.listener(|this, _, window, cx| {
@@ -185,7 +186,7 @@ impl NyaTermApp {
                         div()
                             .ml_1()
                             .text_size(px(10.))
-                            .text_color(rgb(0x6e7681))
+                            .text_color(rgb(palette.text_dimmed))
                             .child(status_short),
                     ),
             )
@@ -220,8 +221,8 @@ impl NyaTermApp {
                         .flex_none()
                         .max_h(px(140.))
                         .border_t_1()
-                        .border_color(rgb(0x30363d))
-                        .bg(rgb(0x0d1117))
+                        .border_color(rgb(palette.border))
+                        .bg(rgb(palette.input))
                         .px_2()
                         .py_1()
                         .flex()
@@ -231,7 +232,7 @@ impl NyaTermApp {
                             div()
                                 .text_size(px(10.))
                                 .font_weight(FontWeight(700.))
-                                .text_color(rgb(0x8b949e))
+                                .text_color(rgb(palette.text_muted))
                                 .child(logs_title),
                         )
                         .child(

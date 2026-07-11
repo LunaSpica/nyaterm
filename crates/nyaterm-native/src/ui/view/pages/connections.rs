@@ -2241,7 +2241,7 @@ fn editor_field(
     active: bool,
     on_click: impl Fn(&gpui::ClickEvent, &mut gpui::Window, &mut gpui::App) + 'static,
 ) -> impl IntoElement {
-    transfer_input(id, label, value, active).on_click(on_click)
+    transfer_input(id, label, value, active, crate::ui::theme::theme_palette("github-dark")).on_click(on_click)
 }
 
 fn icon_action_button(

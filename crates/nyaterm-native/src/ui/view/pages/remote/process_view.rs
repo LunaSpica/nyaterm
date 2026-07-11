@@ -250,7 +250,8 @@ impl NyaTermApp {
                                     "Search processes…",
                                     self.process_search_draft.clone(),
                                     true,
-                                )
+                    self.theme_palette(),
+                )
                                 .h(px(28.))
                                 .track_focus(&self.process_search_focus)
                                 .on_click(cx.listener(|this, _, window, cx| {
@@ -284,7 +285,7 @@ impl NyaTermApp {
                             .child(
                                 div()
                                     .text_size(px(11.))
-                                    .text_color(rgb(0x8b949e))
+                                    .text_color(rgb(palette.text_muted))
                                     .child(count_label),
                             )
                             .child(
@@ -292,7 +293,7 @@ impl NyaTermApp {
                                     .max_w(px(220.))
                                     .font_family("JetBrains Mono")
                                     .text_size(px(10.))
-                                    .text_color(rgb(0x6e7681))
+                                    .text_color(rgb(palette.text_dimmed))
                                     .overflow_hidden()
                                     .child(top_label),
                             ),
@@ -314,8 +315,8 @@ impl NyaTermApp {
                             .flex_none()
                             .px_2()
                             .border_b_1()
-                            .border_color(rgb(0x30363d))
-                            .bg(rgb(0x0d1117))
+                            .border_color(rgb(palette.border))
+                            .bg(rgb(palette.input))
                             .grid()
                             .grid_cols(cols)
                             .gap_1()

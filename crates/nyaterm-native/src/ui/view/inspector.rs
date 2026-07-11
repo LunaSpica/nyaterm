@@ -206,7 +206,8 @@ impl NyaTermApp {
                             },
                             self.ai_prompt_draft.clone(),
                             true,
-                        )
+                    self.theme_palette(),
+                )
                         .h(px(64.))
                         .track_focus(&self.ai_chat_focus)
                         .on_click(cx.listener(|this, _, window, cx| {
@@ -591,6 +592,7 @@ impl NyaTermApp {
                     "Search",
                     self.command_search_draft.clone(),
                     true,
+                    self.theme_palette(),
                 )
                 .mt_3()
                 .track_focus(&self.command_search_focus)
