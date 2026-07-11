@@ -292,9 +292,36 @@ impl NyaTermApp {
 
 
     pub(in crate::ui::view) fn clear_action_link_tooltip(&mut self, cx: &mut Context<Self>) {
+        let mut changed = false;
         if self.action_link_tooltip.take().is_some() {
+            changed = true;
+        }
+        if self.action_link_hover_pending.take().is_some() {
+            changed = true;
+        }
+        if changed {
             cx.notify();
         }
+    }
+
+    pub(in crate::ui::view) fn poll_action_link_tooltip_delay(&mut self, cx: &mut Context<Self>) {
+        let Some((key, started, tip)) = self.action_link_hover_pending.clone() else {
+            return;
+        };
+        if started.elapsed() < Duration::from_millis(250) {
+            return;
+        }
+        self.action_link_hover_pending = None;
+        // Only show if still matching the pending key (not superseded).
+        if self
+            .action_link_tooltip
+            .as_ref()
+            .is_some_and(|current| current.match_key == key)
+        {
+            return;
+        }
+        self.action_link_tooltip = Some(tip);
+        cx.notify();
     }
 
     pub(in crate::ui::view) fn update_action_link_hover(
@@ -310,6 +337,7 @@ impl NyaTermApp {
         if self.action_link_menu.is_some()
             || self.terminal_context_menu.is_some()
             || self.terminal_selection_dragging
+            || self.translation_dialog.is_some()
         {
             self.clear_action_link_tooltip(cx);
             return;
@@ -353,9 +381,9 @@ impl NyaTermApp {
             has_more_actions: actions.len() > 1,
             match_key: match_key.clone(),
         };
+        // Already visible for this link: track position.
         if let Some(current) = self.action_link_tooltip.as_ref() {
             if current.match_key == match_key {
-                // Keep identity stable; still track cursor for positioning.
                 if current.x != next.x || current.y != next.y {
                     self.action_link_tooltip = Some(next);
                     cx.notify();
@@ -363,7 +391,20 @@ impl NyaTermApp {
                 return;
             }
         }
-        self.action_link_tooltip = Some(next);
+        // Pending same link: update position only.
+        if let Some((key, started, _)) = self.action_link_hover_pending.clone() {
+            if key == match_key {
+                let ready = started.elapsed() >= Duration::from_millis(250);
+                self.action_link_hover_pending = Some((match_key, started, next));
+                if ready {
+                    self.poll_action_link_tooltip_delay(cx);
+                }
+                return;
+            }
+        }
+        // New link under cursor: start 250ms delay (Tauri ActionLinkTooltip).
+        self.action_link_tooltip = None;
+        self.action_link_hover_pending = Some((match_key, Instant::now(), next));
         cx.notify();
     }
 

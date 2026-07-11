@@ -361,7 +361,9 @@ impl NyaTermApp {
                             .flex_1()
                             .min_h_0()
                             .when(
-                                is_active && self.action_link_tooltip.is_some(),
+                                is_active
+                                    && (self.action_link_tooltip.is_some()
+                                        || self.action_link_hover_pending.is_some()),
                                 |this| this.cursor_pointer(),
                             )
                             .p(if self.settings.terminal_show_workspace_padding {

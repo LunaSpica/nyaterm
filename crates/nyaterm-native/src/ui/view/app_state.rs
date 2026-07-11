@@ -101,6 +101,9 @@ pub struct NyaTermApp {
     pub(in crate::ui::view) terminal_context_menu: Option<TerminalContextMenuState>,
     pub(in crate::ui::view) action_link_menu: Option<ActionLinkMenuState>,
     pub(in crate::ui::view) action_link_tooltip: Option<ActionLinkTooltipState>,
+    /// Pending action-link hover (Tauri 250ms delay before showing tooltip).
+    pub(in crate::ui::view) action_link_hover_pending: Option<(String, Instant, ActionLinkTooltipState)>,
+
     pub(in crate::ui::view) translation_dialog: Option<TranslationDialogState>,
     pub(in crate::ui::view) bottom_panel: BottomPanelMode,
     pub(in crate::ui::view) send_command_draft: String,
@@ -768,6 +771,7 @@ impl NyaTermApp {
             terminal_context_menu: None,
             action_link_menu: None,
             action_link_tooltip: None,
+            action_link_hover_pending: None,
             translation_dialog: None,
             bottom_panel: BottomPanelMode::QuickCommands,
             send_command_draft: String::new(),

@@ -144,6 +144,7 @@ impl NyaTermApp {
                             };
                             view.update(cx, |this, cx| {
                                 this.drain_session_events(cx);
+                                this.poll_action_link_tooltip_delay(cx);
                                 this.drive_remote_auto_refresh(window, cx);
                                 if this.drive_idle_lock() {
                                     cx.notify();

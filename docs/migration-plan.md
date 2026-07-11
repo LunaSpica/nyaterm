@@ -986,6 +986,8 @@ service boundary first:
   value, Ctrl/Cmd+click default action preview, and Alt+click more-actions hint.
 - Tooltip tracks cursor position, clears on leave/menu/selection drag, and stays
   hidden while context/action menus are open.
+- 250ms show delay matches Tauri ActionLinkTooltip; pointer cursor appears while
+  hovering a matched link (pending or visible).
 
 ## 2026-07-11 Translation dialog + menu clamp
 
