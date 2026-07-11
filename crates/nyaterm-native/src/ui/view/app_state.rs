@@ -18,6 +18,7 @@ pub struct NyaTermApp {
     pub(in crate::ui::view) ai_execution_menu_open: bool,
     pub(in crate::ui::view) hovered_connection_group_id: Option<String>,
     pub(in crate::ui::view) expanded_connection_groups: HashSet<String>,
+    pub(in crate::ui::view) connection_list_offset: usize,
     pub(in crate::ui::view) connection_editor: Option<ConnectionEditorState>,
     pub(in crate::ui::view) connection_editor_focus: FocusHandle,
     pub(in crate::ui::view) connection_group_editor: Option<ConnectionGroupEditorState>,
@@ -658,6 +659,7 @@ impl NyaTermApp {
                 .iter()
                 .map(|group| group.id.clone())
                 .collect(),
+            connection_list_offset: 0,
             connection_groups,
             connection_editor: None,
             connection_editor_focus: cx.focus_handle(),

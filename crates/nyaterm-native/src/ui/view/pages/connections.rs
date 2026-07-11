@@ -1,6 +1,6 @@
 use gpui::{
-    Context, FontWeight, IntoElement, KeyDownEvent, MouseButton, MouseDownEvent, SharedString, div,
-    prelude::*, px, rgb, svg,
+    Context, FontWeight, IntoElement, KeyDownEvent, MouseButton, MouseDownEvent, ScrollDelta,
+    ScrollWheelEvent, SharedString, div, prelude::*, px, rgb, svg,
 };
 use nyaterm_domain::{Group, SavedConnection, truncate_preview};
 use std::collections::HashMap;
@@ -37,16 +37,42 @@ impl NyaTermApp {
             .sum::<usize>();
         let selected_count = self.selected_connections().len();
 
+        // Flatten expanded tree for virtual window (group header 28px, connection 34px).
+        let flat_rows = flatten_connection_rows(&sections, &self.expanded_connection_groups);
+        const CONN_VIEWPORT_ROWS: usize = 36;
+        const CONN_OVERSCAN: usize = 8;
+        let total_rows = flat_rows.len();
+        let window_capacity = CONN_VIEWPORT_ROWS + CONN_OVERSCAN * 2;
+        let max_offset = total_rows.saturating_sub(CONN_VIEWPORT_ROWS.min(total_rows));
+        if self.connection_list_offset > max_offset {
+            self.connection_list_offset = max_offset;
+        }
+        let scroll_row = self.connection_list_offset.min(max_offset);
+        let window_start = scroll_row.saturating_sub(CONN_OVERSCAN);
+        let window_end = (window_start + window_capacity).min(total_rows);
+        let pad_top: f32 = flat_rows
+            .iter()
+            .take(window_start)
+            .map(ConnectionListRow::height_px)
+            .sum();
+        let pad_bottom: f32 = flat_rows
+            .iter()
+            .skip(window_end)
+            .map(ConnectionListRow::height_px)
+            .sum();
+        let visible_rows = flat_rows
+            .get(window_start..window_end)
+            .unwrap_or(&[])
+            .to_vec();
+
         let mut list = div()
             .id(SharedString::from("connections-list-scroll"))
             .flex_1()
             .min_h_0()
-            .overflow_scroll()
-            .scrollbar_width(px(6.))
+            .overflow_hidden()
             .p_1()
             .flex()
             .flex_col()
-            .gap(px(2.))
             .on_mouse_down(
                 MouseButton::Left,
                 cx.listener(|this, _, _, cx| {
@@ -65,6 +91,24 @@ impl NyaTermApp {
                     ConnectionDragKind::Group => {
                         this.move_group_into_group(payload.id.clone(), None, cx);
                     }
+                }
+            }))
+            .on_scroll_wheel(cx.listener(move |this, event: &ScrollWheelEvent, _, cx| {
+                let max_offset = total_rows.saturating_sub(CONN_VIEWPORT_ROWS.min(total_rows));
+                if max_offset == 0 {
+                    return;
+                }
+                let delta_rows = match event.delta {
+                    ScrollDelta::Lines(delta) => delta.y,
+                    ScrollDelta::Pixels(delta) => f32::from(delta.y) / 34.,
+                };
+                let next = (this.connection_list_offset as f32 - delta_rows)
+                    .round()
+                    .clamp(0., max_offset as f32) as usize;
+                if next != this.connection_list_offset {
+                    this.connection_list_offset = next;
+                    cx.stop_propagation();
+                    cx.notify();
                 }
             }));
         if self.connections.is_empty() {
@@ -100,19 +144,45 @@ impl NyaTermApp {
                     .child("No connections match the current search."),
             );
         } else {
-            let has_groups = sections.iter().any(|section| !section.is_root);
-            for section in sections {
-                if section.is_root && has_groups && !section.connections.is_empty() {
-                    list = list.child(
-                        div()
-                            .mx_2()
-                            .my_1()
-                            .h(px(1.))
-                            .bg(rgb(0x30363d)),
-                    );
-                }
-                list = list.child(self.connection_section(section, cx));
+            let mut rows = div().flex().flex_col();
+            if pad_top > 0. {
+                rows = rows.child(div().h(px(pad_top)).w_full().flex_none());
             }
+            for row in visible_rows {
+                match row {
+                    ConnectionListRow::Separator => {
+                        rows = rows.child(
+                            div()
+                                .mx_2()
+                                .my_1()
+                                .h(px(1.))
+                                .bg(rgb(0x30363d)),
+                        );
+                    }
+                    ConnectionListRow::GroupHeader(section) => {
+                        rows = rows.child(self.connection_section(section, true, cx));
+                    }
+                    ConnectionListRow::EmptyGroup => {
+                        rows = rows.child(
+                            div()
+                                .px_2()
+                                .py_1()
+                                .pl(px(28.))
+                                .h(px(28.))
+                                .text_size(px(11.))
+                                .text_color(rgb(0x6e7681))
+                                .child("Empty group"),
+                        );
+                    }
+                    ConnectionListRow::Connection { connection, indented } => {
+                        rows = rows.child(self.saved_connection_row(connection, indented, cx));
+                    }
+                }
+            }
+            if pad_bottom > 0. {
+                rows = rows.child(div().h(px(pad_bottom)).w_full().flex_none());
+            }
+            list = list.child(rows);
         }
 
         // Tauri: PanelHeader (shared stack) + search/action strip + flat tree list.
@@ -240,6 +310,7 @@ impl NyaTermApp {
                                 .hover(|this| this.bg(rgb(0x21262d)).text_color(rgb(0xc9d1d9)))
                                 .on_click(cx.listener(|this, _, window, cx| {
                                     this.connection_search_draft.clear();
+                                    this.connection_list_offset = 0;
                                     window.focus(&this.connection_search_focus);
                                     cx.notify();
                                 }))
@@ -343,6 +414,7 @@ impl NyaTermApp {
     fn connection_section(
         &mut self,
         section: ConnectionSection,
+        header_only: bool,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
         let expanded = section
@@ -357,7 +429,7 @@ impl NyaTermApp {
         let count = section.connections.len();
         let mut body = div().flex().flex_col();
 
-        if expanded {
+        if expanded && !header_only {
             if section.connections.is_empty() && !section.is_root {
                 body = body.child(
                     div()
@@ -1932,6 +2004,70 @@ impl NyaTermApp {
             )
     }
 
+}
+
+#[derive(Clone)]
+enum ConnectionListRow {
+    Separator,
+    GroupHeader(ConnectionSection),
+    EmptyGroup,
+    Connection {
+        connection: SavedConnection,
+        indented: bool,
+    },
+}
+
+impl ConnectionListRow {
+    fn height_px(&self) -> f32 {
+        match self {
+            Self::Separator => 10.,
+            Self::GroupHeader(_) | Self::EmptyGroup => 28.,
+            Self::Connection { .. } => 34.,
+        }
+    }
+}
+
+fn flatten_connection_rows(
+    sections: &[ConnectionSection],
+    expanded_groups: &std::collections::HashSet<String>,
+) -> Vec<ConnectionListRow> {
+    let has_groups = sections.iter().any(|section| !section.is_root);
+    let mut rows = Vec::new();
+    for section in sections {
+        if section.is_root {
+            if has_groups && !section.connections.is_empty() {
+                rows.push(ConnectionListRow::Separator);
+            }
+            for connection in &section.connections {
+                rows.push(ConnectionListRow::Connection {
+                    connection: connection.clone(),
+                    indented: false,
+                });
+            }
+            continue;
+        }
+
+        rows.push(ConnectionListRow::GroupHeader(section.clone()));
+        let expanded = section
+            .group_id
+            .as_ref()
+            .map(|id| expanded_groups.contains(id))
+            .unwrap_or(true);
+        if !expanded {
+            continue;
+        }
+        if section.connections.is_empty() {
+            rows.push(ConnectionListRow::EmptyGroup);
+            continue;
+        }
+        for connection in &section.connections {
+            rows.push(ConnectionListRow::Connection {
+                connection: connection.clone(),
+                indented: true,
+            });
+        }
+    }
+    rows
 }
 
 #[derive(Clone)]

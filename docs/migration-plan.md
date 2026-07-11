@@ -772,3 +772,8 @@ service boundary first:
 - Assistant message bubbles render full `AICommandCardView`-like cards (title, risk, mono command, explanation/effect/rollback, Insert/Copy/Save/Run).
 - Card actions resolve by card id across live `ai_command_cards` and historical message cards.
 - Thought/reasoning content uses the shared markdown renderer; card chrome densified (`p_2`, taller command body).
+
+## 2026-07-11 Connections tree virtual list
+- Flatten expanded group tree into fixed-height rows (group header 28px, connection 34px, separator 10px).
+- Spacer + wheel virtual window via `connection_list_offset` (viewport 36 + overscan 8).
+- Search/sort/group expand reset offset; group headers use header-only section chrome so nested rows stay virtualized.

@@ -624,11 +624,13 @@ impl NyaTermApp {
         } else {
             self.expanded_connection_groups.insert(group_id);
         }
+        self.connection_list_offset = 0;
         cx.notify();
     }
 
     pub(in crate::ui::view) fn cycle_connection_sort_mode(&mut self, cx: &mut Context<Self>) {
         self.connection_sort_mode = self.connection_sort_mode.next();
+        self.connection_list_offset = 0;
         self.terminal_status = format!("connections sorted by {}", self.connection_sort_mode.label());
         cx.notify();
     }
@@ -646,11 +648,13 @@ impl NyaTermApp {
         match keystroke.key.as_str() {
             "escape" => {
                 self.connection_search_draft.clear();
+                self.connection_list_offset = 0;
                 self.terminal_status = "connection search cleared".to_string();
                 cx.notify();
             }
             "backspace" if !keystroke.modifiers.platform && !keystroke.modifiers.control => {
                 self.connection_search_draft.pop();
+                self.connection_list_offset = 0;
                 cx.notify();
             }
             _ if !keystroke.modifiers.platform && !keystroke.modifiers.control => {
@@ -660,6 +664,7 @@ impl NyaTermApp {
                     .filter(|input| !input.is_empty())
                 {
                     self.connection_search_draft.push_str(input);
+                    self.connection_list_offset = 0;
                     cx.notify();
                 }
             }
