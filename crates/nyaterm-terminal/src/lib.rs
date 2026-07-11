@@ -99,6 +99,12 @@ pub struct TerminalScreen {
     saved_main_cursor: Option<(usize, usize)>,
     /// DECSC/DECRC style saved cursor (CSI s / CSI u / DECSET 1048).
     saved_cursor: Option<(usize, usize)>,
+    /// DECSTBM scroll region top row (0-based inclusive).
+    scroll_top: usize,
+    /// DECSTBM scroll region bottom row (0-based inclusive).
+    scroll_bottom: usize,
+    /// DECSET 6 origin mode: CUP is relative to scroll region.
+    origin_mode: bool,
     /// Set when BEL (0x07) is received; UI should flash and clear.
     pending_visual_bell: bool,
     /// Latest OSC 0/2 window title (consumed by the UI layer).
@@ -153,6 +159,9 @@ impl TerminalScreen {
             saved_main_timestamps_ms: None,
             saved_main_cursor: None,
             saved_cursor: None,
+            scroll_top: 0,
+            scroll_bottom: rows.saturating_sub(1),
+            origin_mode: false,
             pending_visual_bell: false,
             pending_window_title: None,
             window_title: None,
@@ -185,6 +194,10 @@ impl TerminalScreen {
         }
         self.cols = cols;
         self.rows = rows;
+        if self.scroll_bottom >= self.rows || self.scroll_top > self.scroll_bottom {
+            self.scroll_top = 0;
+            self.scroll_bottom = self.rows.saturating_sub(1);
+        }
         self.cursor_row = self.cursor_row.min(self.rows - 1);
         self.cursor_col = self.cursor_col.min(self.cols - 1);
     }
@@ -216,6 +229,14 @@ impl TerminalScreen {
 
     pub fn alternate_screen(&self) -> bool {
         self.alternate_screen
+    }
+
+    pub fn scroll_region(&self) -> (usize, usize) {
+        (self.scroll_top, self.scroll_bottom)
+    }
+
+    pub fn origin_mode(&self) -> bool {
+        self.origin_mode
     }
 
     /// Consume a pending visual bell flag (BEL / 0x07).
@@ -284,6 +305,9 @@ impl TerminalScreen {
         self.saved_main_timestamps_ms = None;
         self.saved_main_cursor = None;
         self.saved_cursor = None;
+        self.scroll_top = 0;
+        self.scroll_bottom = self.rows.saturating_sub(1);
+        self.origin_mode = false;
         self.pending_visual_bell = false;
         self.pending_window_title = None;
         self.window_title = None;
@@ -462,10 +486,18 @@ impl TerminalScreen {
     }
 
     fn newline(&mut self) {
-        if self.cursor_row + 1 >= self.rows {
-            self.scroll_up(1);
-        } else {
+        if self.cursor_row == self.scroll_bottom {
+            self.scroll_region_up(1);
+        } else if self.cursor_row + 1 < self.rows {
             self.cursor_row += 1;
+        }
+    }
+
+    fn reverse_index(&mut self) {
+        if self.cursor_row == self.scroll_top {
+            self.scroll_region_down(1);
+        } else if self.cursor_row > 0 {
+            self.cursor_row -= 1;
         }
     }
 
@@ -479,6 +511,7 @@ impl TerminalScreen {
     }
 
     fn scroll_up(&mut self, count: usize) {
+        // Full-screen scroll (history-capable). Used when the scroll region is full.
         let count = count.min(self.rows);
         for _ in 0..count {
             let row = self.cells.remove(0);
@@ -501,6 +534,85 @@ impl TerminalScreen {
         self.trim_scrollback();
     }
 
+    fn scroll_region_up(&mut self, count: usize) {
+        if self.scroll_top == 0 && self.scroll_bottom + 1 >= self.rows {
+            self.scroll_up(count);
+            return;
+        }
+        let top = self.scroll_top.min(self.rows.saturating_sub(1));
+        let bottom = self.scroll_bottom.min(self.rows.saturating_sub(1)).max(top);
+        let height = bottom - top + 1;
+        let count = count.min(height);
+        for _ in 0..count {
+            // Drop the top of the region (no scrollback for partial regions).
+            for row in top..bottom {
+                self.cells[row] = std::mem::take(&mut self.cells[row + 1]);
+                self.live_timestamps_ms[row] = self.live_timestamps_ms[row + 1];
+            }
+            self.cells[bottom] = vec![Cell::default(); self.cols];
+            self.live_timestamps_ms[bottom] = None;
+        }
+    }
+
+    fn scroll_region_down(&mut self, count: usize) {
+        let top = self.scroll_top.min(self.rows.saturating_sub(1));
+        let bottom = self.scroll_bottom.min(self.rows.saturating_sub(1)).max(top);
+        let height = bottom - top + 1;
+        let count = count.min(height);
+        for _ in 0..count {
+            for row in (top + 1..=bottom).rev() {
+                self.cells[row] = std::mem::take(&mut self.cells[row - 1]);
+                self.live_timestamps_ms[row] = self.live_timestamps_ms[row - 1];
+            }
+            self.cells[top] = vec![Cell::default(); self.cols];
+            self.live_timestamps_ms[top] = None;
+        }
+    }
+
+    fn set_scroll_region(&mut self, top: u16, bottom: u16) {
+        let mut top = usize::from(top.saturating_sub(1));
+        let mut bottom = if bottom == 0 {
+            self.rows.saturating_sub(1)
+        } else {
+            usize::from(bottom.saturating_sub(1))
+        };
+        if top >= self.rows {
+            top = 0;
+        }
+        if bottom >= self.rows {
+            bottom = self.rows.saturating_sub(1);
+        }
+        if top > bottom {
+            top = 0;
+            bottom = self.rows.saturating_sub(1);
+        }
+        self.scroll_top = top;
+        self.scroll_bottom = bottom;
+        // xterm: setting margins moves the cursor to the home position.
+        self.home_cursor();
+    }
+
+    fn home_cursor(&mut self) {
+        if self.origin_mode {
+            self.cursor_row = self.scroll_top;
+        } else {
+            self.cursor_row = 0;
+        }
+        self.cursor_col = 0;
+    }
+
+    fn move_cursor_clamped(&mut self, row: usize, col: usize) {
+        let (min_row, max_row) = if self.origin_mode {
+            (self.scroll_top, self.scroll_bottom.min(self.rows.saturating_sub(1)))
+        } else {
+            (0, self.rows.saturating_sub(1))
+        };
+        let row = row.clamp(min_row, max_row);
+        let col = col.min(self.cols.saturating_sub(1));
+        self.cursor_row = row;
+        self.cursor_col = col;
+    }
+
     fn enter_alternate_screen(&mut self, clear: bool) {
         if self.alternate_screen {
             if clear {
@@ -517,6 +629,8 @@ impl TerminalScreen {
         self.saved_main_timestamps_ms = Some(self.live_timestamps_ms.clone());
         self.saved_main_cursor = Some((self.cursor_row, self.cursor_col));
         self.alternate_screen = true;
+        self.scroll_top = 0;
+        self.scroll_bottom = self.rows.saturating_sub(1);
         if clear {
             for row in &mut self.cells {
                 row.fill(Cell::default());
@@ -548,6 +662,8 @@ impl TerminalScreen {
             self.cursor_col = col.min(self.cols.saturating_sub(1));
         }
         self.alternate_screen = false;
+        self.scroll_top = 0;
+        self.scroll_bottom = self.rows.saturating_sub(1);
         // Ensure dimensions still match after restore.
         self.cells.resize_with(self.rows, || vec![Cell::default(); self.cols]);
         for row in &mut self.cells {
@@ -556,9 +672,47 @@ impl TerminalScreen {
         self.live_timestamps_ms.resize(self.rows, None);
     }
 
+    fn insert_lines(&mut self, count: usize) {
+        let top = self.cursor_row.max(self.scroll_top);
+        let bottom = self.scroll_bottom.min(self.rows.saturating_sub(1));
+        if top > bottom {
+            return;
+        }
+        let count = count.min(bottom - top + 1);
+        for _ in 0..count {
+            for row in (top + 1..=bottom).rev() {
+                self.cells[row] = std::mem::take(&mut self.cells[row - 1]);
+                self.live_timestamps_ms[row] = self.live_timestamps_ms[row - 1];
+            }
+            self.cells[top] = vec![Cell::default(); self.cols];
+            self.live_timestamps_ms[top] = None;
+        }
+    }
+
+    fn delete_lines(&mut self, count: usize) {
+        let top = self.cursor_row.max(self.scroll_top);
+        let bottom = self.scroll_bottom.min(self.rows.saturating_sub(1));
+        if top > bottom {
+            return;
+        }
+        let count = count.min(bottom - top + 1);
+        for _ in 0..count {
+            for row in top..bottom {
+                self.cells[row] = std::mem::take(&mut self.cells[row + 1]);
+                self.live_timestamps_ms[row] = self.live_timestamps_ms[row + 1];
+            }
+            self.cells[bottom] = vec![Cell::default(); self.cols];
+            self.live_timestamps_ms[bottom] = None;
+        }
+    }
+
     fn apply_private_mode(&mut self, mode: u16, enable: bool) {
         match mode {
             2004 => self.bracketed_paste = enable,
+            6 => {
+                self.origin_mode = enable;
+                self.home_cursor();
+            }
             1000 | 1002 | 1003 => {
                 // Any of the classic mouse modes enables reporting; disable clears all.
                 if enable {
@@ -654,8 +808,9 @@ impl TerminalScreen {
     }
 
     fn move_cursor(&mut self, row: usize, col: usize) {
-        self.cursor_row = row.min(self.rows - 1);
-        self.cursor_col = col.min(self.cols - 1);
+        // Absolute 0-based coordinates from CUP / HVP (origin mode adjusts base).
+        let base_row = if self.origin_mode { self.scroll_top } else { 0 };
+        self.move_cursor_clamped(base_row.saturating_add(row), col);
     }
 
     fn csi_param(params: &Params, index: usize, default: u16) -> u16 {
@@ -927,6 +1082,47 @@ impl Perform for TerminalScreen {
                 // BEL — visual bell for the UI layer.
                 self.pending_visual_bell = true;
             }
+            // IND / NEL / RI (C1 or after ESC conversion).
+            0x84 => {
+                self.newline();
+            }
+            0x85 => {
+                self.newline();
+                self.carriage_return();
+            }
+            0x8d => {
+                self.reverse_index();
+            }
+            _ => {}
+        }
+    }
+
+    fn esc_dispatch(&mut self, intermediates: &[u8], ignore: bool, byte: u8) {
+        if ignore || !intermediates.is_empty() {
+            return;
+        }
+        match byte {
+            // ESC D Index, ESC E Next Line, ESC M Reverse Index.
+            b'D' => self.newline(),
+            b'E' => {
+                self.newline();
+                self.carriage_return();
+            }
+            b'M' => self.reverse_index(),
+            // ESC 7 / 8 save/restore cursor (DECSC/DECRC).
+            b'7' => {
+                self.saved_cursor = Some((self.cursor_row, self.cursor_col));
+            }
+            b'8' => {
+                if let Some((row, col)) = self.saved_cursor {
+                    self.cursor_row = row.min(self.rows.saturating_sub(1));
+                    self.cursor_col = col.min(self.cols.saturating_sub(1));
+                }
+            }
+            // ESC c RIS hard reset of modes we track.
+            b'c' => {
+                self.clear();
+            }
             _ => {}
         }
     }
@@ -948,11 +1144,17 @@ impl Perform for TerminalScreen {
         match action {
             'A' => {
                 let count = Self::csi_param(params, 0, 1) as usize;
-                self.cursor_row = self.cursor_row.saturating_sub(count);
+                let min_row = if self.origin_mode { self.scroll_top } else { 0 };
+                self.cursor_row = self.cursor_row.saturating_sub(count).max(min_row);
             }
             'B' => {
                 let count = Self::csi_param(params, 0, 1) as usize;
-                self.cursor_row = (self.cursor_row + count).min(self.rows - 1);
+                let max_row = if self.origin_mode {
+                    self.scroll_bottom.min(self.rows.saturating_sub(1))
+                } else {
+                    self.rows.saturating_sub(1)
+                };
+                self.cursor_row = (self.cursor_row + count).min(max_row);
             }
             'C' => {
                 let count = Self::csi_param(params, 0, 1) as usize;
@@ -969,6 +1171,30 @@ impl Perform for TerminalScreen {
             }
             'J' => self.erase_display(Self::csi_param(params, 0, 0)),
             'K' => self.erase_line(Self::csi_param(params, 0, 0)),
+            // CSI S / T: scroll up/down inside the current region.
+            'S' => {
+                let count = Self::csi_param(params, 0, 1) as usize;
+                self.scroll_region_up(count.max(1));
+            }
+            'T' => {
+                let count = Self::csi_param(params, 0, 1) as usize;
+                self.scroll_region_down(count.max(1));
+            }
+            // DECSTBM: CSI top ; bottom r
+            'r' => {
+                let top = Self::csi_param(params, 0, 1);
+                let bottom = Self::csi_param(params, 1, 0);
+                self.set_scroll_region(top, bottom);
+            }
+            // Insert / delete lines within the scroll region (vim-heavy).
+            'L' => {
+                let count = Self::csi_param(params, 0, 1) as usize;
+                self.insert_lines(count.max(1));
+            }
+            'M' => {
+                let count = Self::csi_param(params, 0, 1) as usize;
+                self.delete_lines(count.max(1));
+            }
             'G' => {
                 let col = Self::csi_param(params, 0, 1).saturating_sub(1) as usize;
                 self.cursor_col = col.min(self.cols - 1);
@@ -1298,6 +1524,64 @@ mod tests {
         let release = encode_mouse_report(&screen, 0, 1, 2, false);
         assert_eq!(release, b"\x1b[<0;2;3m".to_vec());
     }
+
+    #[test]
+    fn decstbm_scroll_region_keeps_status_line() {
+        let mut screen = TerminalScreen::new(8, 4);
+        // Fill rows 0..3 with markers.
+        screen.advance(b"AAAAAAA\r\nBBBBBBB\r\nCCCCCCC\r\nDDDDDDD");
+        // Scroll region rows 1-3 (1-based 2;4).
+        screen.advance(b"\x1b[2;4r");
+        assert_eq!(screen.scroll_region(), (1, 3));
+        // Cursor home after DECSTBM.
+        assert_eq!(screen.snapshot().cursor_row, 0);
+        // Move to bottom of region and force scroll.
+        screen.advance(b"\x1b[4;1H");
+        screen.advance(b"\nEEEEEEE");
+        let lines = screen.snapshot().lines;
+        // Top status-like row outside region remains.
+        assert!(lines[0].starts_with('A'), "expected preserved top row, got {:?}", lines[0]);
+        // Bottom row received new content after region scroll.
+        assert!(
+            lines[3].contains('E'),
+            "expected scrolled content on last row, got {:?}",
+            lines[3]
+        );
+    }
+
+    #[test]
+    fn origin_mode_homes_into_scroll_region() {
+        let mut screen = TerminalScreen::new(10, 5);
+        screen.advance(b"\x1b[2;4r");
+        screen.advance(b"\x1b[?6h");
+        assert!(screen.origin_mode());
+        let snap = screen.snapshot();
+        assert_eq!(snap.cursor_row, 1);
+        assert_eq!(snap.cursor_col, 0);
+        // CUP 1;1 is relative to region top.
+        screen.advance(b"\x1b[1;1H");
+        let snap = screen.snapshot();
+        assert_eq!(snap.cursor_row, 1);
+        screen.advance(b"\x1b[?6l");
+        assert!(!screen.origin_mode());
+    }
+
+    #[test]
+    fn reverse_index_scrolls_region_down() {
+        let mut screen = TerminalScreen::new(6, 3);
+        screen.advance(b"111111\r\n222222\r\n333333");
+        screen.advance(b"\x1b[1;3r");
+        screen.advance(b"\x1b[1;1H");
+        screen.advance(b"\x1bM"); // reverse index at top -> scroll down
+        let lines = screen.snapshot().lines;
+        assert!(
+            lines[0].trim().is_empty() || lines[0].chars().all(|c| c == ' '),
+            "top should be blank after reverse index scroll, got {:?}",
+            lines[0]
+        );
+        assert!(lines[1].contains('1'), "row1 should hold previous top, got {:?}", lines[1]);
+    }
+
 
 
 

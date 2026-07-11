@@ -1222,3 +1222,11 @@ service boundary first:
 - Native ZMODEM uploads now probe the remote CWD via SFTP before sending `rz`,
   applying the transfer duplicate policy (ask/skip/overwrite/rename) like Tauri
   `probeAndResolveRemoteConflicts`. Probe failures skip detection and proceed.
+
+## 2026-07-11 DECSTBM scroll region + origin mode + line ops
+
+- `TerminalScreen` tracks DECSTBM (`CSI top;bottom r`) scroll margins and DECSET 6
+  origin mode; partial-region scrolls no longer push rows into primary scrollback.
+- CSI `S`/`T` scroll the region; CSI `L`/`M` insert/delete lines within the region.
+- ESC `D`/`E`/`M` and C1 IND/NEL/RI drive index/reverse-index; ESC `7`/`8`/`c`
+  cover DECSC/DECRC and RIS for tracked state.
