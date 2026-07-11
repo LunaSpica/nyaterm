@@ -834,20 +834,47 @@ impl NyaTermApp {
 
     fn render_new_session_menu(&mut self, cx: &mut Context<Self>) -> impl IntoElement {
         let palette = self.theme_palette();
-        // Prefer a few recent / ungrouped connections for quick access.
-        let recent: Vec<_> = self
+        // Tauri TabBar new-session: shell sessions + recent by last_used.
+        let mut shell: Vec<_> = self
             .connections
             .iter()
+            .filter(|connection| matches!(connection.config, ConnectionType::LocalTerminal { .. }))
             .cloned()
-            .take(8)
             .collect();
+        shell.sort_by_key(|connection| connection.sort_order);
+        let mut recent: Vec<_> = self
+            .connections
+            .iter()
+            .filter(|connection| connection.last_used_at_ms.unwrap_or(0) > 0)
+            .cloned()
+            .collect();
+        recent.sort_by(|left, right| {
+            right
+                .last_used_at_ms
+                .unwrap_or(0)
+                .cmp(&left.last_used_at_ms.unwrap_or(0))
+        });
+        recent.truncate(10);
+        if recent.is_empty() {
+            // Fallback when no usage timestamps yet: first non-shell connections.
+            recent = self
+                .connections
+                .iter()
+                .filter(|connection| {
+                    !matches!(connection.config, ConnectionType::LocalTerminal { .. })
+                })
+                .cloned()
+                .take(8)
+                .collect();
+        }
+
         let mut menu = div()
             .id("workspace-new-session-dropdown")
             .absolute()
             .top(px(36.))
             .right_0()
-            .w(px(280.))
-            .max_h(px(420.))
+            .w(px(300.))
+            .max_h(px(460.))
             .overflow_y_scroll()
             .rounded_md()
             .border_1()
@@ -857,7 +884,7 @@ impl NyaTermApp {
             .py_1()
             .flex()
             .flex_col()
-                        .child(
+            .child(
                 div()
                     .id("new-session-local")
                     .h(px(32.))
@@ -927,6 +954,12 @@ impl NyaTermApp {
                         cx.notify();
                     }))
                     .child(
+                        svg()
+                            .size(px(12.))
+                            .path("icons/connections.svg")
+                            .text_color(rgb(palette.text_muted)),
+                    )
+                    .child(
                         div()
                             .text_size(px(12.))
                             .text_color(rgb(palette.text))
@@ -934,86 +967,147 @@ impl NyaTermApp {
                     ),
             );
 
-        if !recent.is_empty() {
-            menu = menu
-                .child(
-                    div()
-                        .mx_2()
-                        .my_1()
-                        .h(px(1.))
-                        .bg(rgb(palette.border)),
-                )
-                .child(
-                    div()
-                        .px_3()
-                        .py_1()
-                        .text_size(px(10.))
-                        .font_weight(FontWeight(700.))
-                        .text_color(rgb(palette.text_dimmed))
-                        .child("Saved Connections"),
-                );
+        menu = menu.child(
+            div()
+                .mx_2()
+                .my_1()
+                .h(px(1.))
+                .bg(rgb(palette.border)),
+        )
+        .child(
+            div()
+                .px_3()
+                .py_1()
+                .text_size(px(10.))
+                .font_weight(FontWeight(700.))
+                .text_color(rgb(palette.text_dimmed))
+                .child("Shell Sessions"),
+        );
+        if shell.is_empty() {
+            menu = menu.child(
+                div()
+                    .px_3()
+                    .py_1()
+                    .text_size(px(11.))
+                    .text_color(rgb(palette.text_dimmed))
+                    .child("No shell sessions"),
+            );
+        } else {
+            for connection in shell {
+                menu = menu.child(self.new_session_connection_row(palette, connection, cx));
+            }
+        }
+
+        menu = menu
+            .child(
+                div()
+                    .mx_2()
+                    .my_1()
+                    .h(px(1.))
+                    .bg(rgb(palette.border)),
+            )
+            .child(
+                div()
+                    .px_3()
+                    .py_1()
+                    .text_size(px(10.))
+                    .font_weight(FontWeight(700.))
+                    .text_color(rgb(palette.text_dimmed))
+                    .child("Recent Sessions"),
+            );
+        if recent.is_empty() {
+            menu = menu.child(
+                div()
+                    .px_3()
+                    .py_1()
+                    .text_size(px(11.))
+                    .text_color(rgb(palette.text_dimmed))
+                    .child("No recent sessions"),
+            );
+        } else {
             for connection in recent {
-                let connection_id = connection.id.clone();
-                let name = connection.name.clone();
-                let kind = match &connection.config {
-                    ConnectionType::Ssh { .. } => "SSH",
-                    ConnectionType::Telnet { .. } => "Telnet",
-                    ConnectionType::Serial { .. } => "Serial",
-                    ConnectionType::LocalTerminal { .. } => "Local",
-                    _ => "Conn",
-                };
-                let icon = match &connection.config {
-                    ConnectionType::Ssh { .. } => "icons/conn/server.svg",
-                    ConnectionType::Telnet { .. } => "icons/conn/telnet.svg",
-                    ConnectionType::Serial { .. } => "icons/conn/serial.svg",
-                    _ => "icons/conn/terminal.svg",
-                };
-                menu = menu.child(
-                    div()
-                        .id(SharedString::from(format!("new-session-conn-{connection_id}")))
-                        .h(px(32.))
-                        .px_3()
-                        .flex()
-                        .items_center()
-                        .gap_2()
-                        .cursor_pointer()
-                        .hover(|this| this.bg(rgb(palette.hover)))
-                        .on_click(cx.listener(move |this, _, window, cx| {
-                            this.close_new_session_menu(cx);
-                            if let Some(connection) = this
-                                .connections
-                                .iter()
-                                .find(|item| item.id == connection_id)
-                                .cloned()
-                            {
-                                this.start_saved_connection(connection, window, cx);
-                            }
-                        }))
-                        .child(
-                            svg()
-                                .size(px(12.))
-                                .path(icon)
-                                .text_color(rgb(palette.text_muted)),
-                        )
-                        .child(
-                            div()
-                                .min_w_0()
-                                .flex_1()
-                                .text_size(px(12.))
-                                .text_color(rgb(palette.text))
-                                .overflow_hidden()
-                                .child(truncate_preview(&name, 26)),
-                        )
-                        .child(
-                            div()
-                                .text_size(px(10.))
-                                .text_color(rgb(palette.text_dimmed))
-                                .child(kind),
-                        ),
-                );
+                menu = menu.child(self.new_session_connection_row(palette, connection, cx));
             }
         }
         menu
+    }
+
+    fn new_session_connection_row(
+        &mut self,
+        palette: ThemePalette,
+        connection: SavedConnection,
+        cx: &mut Context<Self>,
+    ) -> impl IntoElement {
+        let connection_id = connection.id.clone();
+        let name = connection.name.clone();
+        let kind = connection.kind_label();
+        let icon = match &connection.config {
+            ConnectionType::Ssh { .. } => "icons/conn/server.svg",
+            ConnectionType::Telnet { .. } => "icons/conn/telnet.svg",
+            ConnectionType::Serial { .. } => "icons/conn/serial.svg",
+            ConnectionType::LocalTerminal { .. } => "icons/conn/terminal.svg",
+        };
+        let endpoint = connection.endpoint();
+        let label = if endpoint.is_empty() {
+            name.clone()
+        } else {
+            format!("{name}")
+        };
+        div()
+            .id(SharedString::from(format!("new-session-conn-{connection_id}")))
+            .h(px(32.))
+            .px_3()
+            .flex()
+            .items_center()
+            .gap_2()
+            .cursor_pointer()
+            .hover(|this| this.bg(rgb(palette.hover)))
+            .on_click(cx.listener(move |this, _, window, cx| {
+                this.close_new_session_menu(cx);
+                if let Some(connection) = this
+                    .connections
+                    .iter()
+                    .find(|item| item.id == connection_id)
+                    .cloned()
+                {
+                    this.start_saved_connection(connection, window, cx);
+                }
+            }))
+            .child(
+                svg()
+                    .size(px(12.))
+                    .path(icon)
+                    .text_color(rgb(palette.text_muted)),
+            )
+            .child(
+                div()
+                    .min_w_0()
+                    .flex_1()
+                    .flex()
+                    .flex_col()
+                    .child(
+                        div()
+                            .text_size(px(12.))
+                            .text_color(rgb(palette.text))
+                            .overflow_hidden()
+                            .child(truncate_preview(&label, 28)),
+                    )
+                    .when(!endpoint.is_empty() && endpoint != name, |this| {
+                        this.child(
+                            div()
+                                .text_size(px(10.))
+                                .text_color(rgb(palette.text_dimmed))
+                                .overflow_hidden()
+                                .child(truncate_preview(&endpoint, 32)),
+                        )
+                    }),
+            )
+            .child(
+                div()
+                    .text_size(px(10.))
+                    .text_color(rgb(palette.text_dimmed))
+                    .child(kind),
+            )
     }
 
     pub(in crate::ui::view) fn empty_workspace_state(

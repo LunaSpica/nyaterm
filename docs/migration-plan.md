@@ -1363,3 +1363,10 @@ service boundary first:
   host/ssh copy rows).
 - Connecting placeholder tab densified to name + "Connecting…" subtitle.
 - Open Tabs overflow menu also appears when the strip reports horizontal overflow.
+
+
+## 2026-07-11 New-session menu shell + recent densify
+
+- Tab strip **+** menu mirrors Tauri sections: New Local / Temporary SSH / All
+  Connections, then **Shell Sessions** (local_terminal) and **Recent Sessions**
+  sorted by `last_used_at_ms` (fallback to non-shell list).
