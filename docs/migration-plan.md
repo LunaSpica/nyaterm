@@ -620,3 +620,7 @@ service boundary first:
 ## 2026-07-11 Terminal + Transfer settings form density
 - Terminal General rewritten to SettingSection/Row switches + scrollback/keepalive steppers (no feature cards).
 - Transfer top section: download path actions, ask-save switch, duplicate policy chips, queue snapshot row.
+
+## 2026-07-11 Security + Search settings form density
+- Security: master password status, screen lock switch/idle steppers, host-key policy chips.
+- Search: buffer/history mode chips + case/regex/word switches; command-search catalog summary.

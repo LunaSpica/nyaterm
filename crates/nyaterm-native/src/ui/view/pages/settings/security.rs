@@ -6,366 +6,165 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
         let master_password_status = if self.settings.has_master_password {
-            "configured"
+            "Configured"
         } else if self.cloud_sync_settings.enabled {
-            "required"
+            "Required for cloud sync"
         } else {
-            "not set"
+            "Not set"
+        };
+        let idle_label = if self.settings.idle_lock_minutes == 0 {
+            "Manual only".to_string()
+        } else {
+            format!("{} min", self.settings.idle_lock_minutes)
         };
 
         div()
             .flex()
             .flex_col()
-            .gap_4()
-            .child(
+            .gap_3()
+            .child(settings_form_section(
+                Some("Master password"),
+                Some("Protects encrypted snapshots and the native lock screen."),
                 div()
-                    .rounded_md()
-                    .border_1()
-                    .border_color(rgb(0x2a3140))
-                    .bg(rgb(0x151923))
-                    .p_4()
-                    .child(
+                    .flex()
+                    .flex_col()
+                    .gap_3()
+                    .child(settings_form_row(
+                        "Status",
+                        Some(SharedString::from(master_password_status)),
+                        div()
+                            .text_size(px(11.))
+                            .font_weight(FontWeight(600.))
+                            .text_color(if self.settings.has_master_password {
+                                rgb(0x3fb950)
+                            } else {
+                                rgb(0xd29922)
+                            })
+                            .child(if self.settings.has_master_password {
+                                "Ready"
+                            } else {
+                                "Pending"
+                            }),
+                    ))
+                    .child(settings_form_row(
+                        "Cloud sync dependency",
+                        Some(SharedString::from(
+                            "Push/pull may request this password before encrypted snapshot work.",
+                        )),
+                        div()
+                            .text_size(px(11.))
+                            .text_color(rgb(0x8b949e))
+                            .child(if self.cloud_sync_settings.enabled {
+                                "Enabled"
+                            } else {
+                                "Disabled"
+                            }),
+                    )),
+            ))
+            .child(settings_form_section(
+                Some("Screen lock"),
+                Some("Lock the window after idle time or on demand."),
+                div()
+                    .flex()
+                    .flex_col()
+                    .gap_3()
+                    .child(settings_form_row(
+                        "Enable screen lock",
+                        Some(SharedString::from(
+                            "Require the master password to unlock the main window.",
+                        )),
+                        settings_switch(
+                            "settings-screen-lock-enabled",
+                            self.settings.enable_screen_lock,
+                            cx.listener(|this, _, _, cx| {
+                                this.toggle_screen_lock_enabled(cx);
+                            }),
+                        ),
+                    ))
+                    .child(settings_form_row(
+                        "Idle lock",
+                        Some(SharedString::from(
+                            "Automatically lock after this many minutes of inactivity (0 = manual).",
+                        )),
                         div()
                             .flex()
                             .items_center()
-                            .justify_between()
-                            .gap_3()
+                            .gap_1()
                             .child(
                                 div()
-                                    .text_sm()
-                                    .font_weight(FontWeight(700.))
-                                    .child("Master Password"),
+                                    .min_w(px(72.))
+                                    .font_family("JetBrains Mono")
+                                    .text_size(px(12.))
+                                    .font_weight(FontWeight(600.))
+                                    .text_color(rgb(0xc9d1d9))
+                                    .child(idle_label),
                             )
-                            .child(status_pill(
-                                master_password_status,
-                                if self.settings.has_master_password {
-                                    rgb(0x6ee7b7)
-                                } else {
-                                    rgb(0xfacc15)
-                                },
-                                if self.settings.has_master_password {
-                                    rgb(0x12342a)
-                                } else {
-                                    rgb(0x32280f)
-                                },
-                            )),
-                    )
-                    .child(
-                        div()
-                            .mt_3()
-                            .grid()
-                            .grid_cols(4)
-                            .gap_3()
-                            .child(metric(
-                                "Stored Secret",
-                                if self.settings.has_master_password {
-                                    "present".to_string()
-                                } else {
-                                    "missing".to_string()
-                                },
-                            ))
-                            .child(metric(
-                                "Cloud Sync",
-                                if self.cloud_sync_settings.enabled {
-                                    "enabled".to_string()
-                                } else {
-                                    "disabled".to_string()
-                                },
-                            ))
-                            .child(metric(
-                                "Unlock",
-                                if self.settings.has_master_password {
-                                    "password".to_string()
-                                } else {
-                                    "manual".to_string()
-                                },
-                            ))
-                            .child(metric(
-                                "Snapshots",
-                                if self.settings.has_master_password {
-                                    "encryptable".to_string()
-                                } else {
-                                    "prompted".to_string()
-                                },
-                            )),
-                    )
-                    .child(
-                        div()
-                            .mt_3()
-                            .grid()
-                            .grid_cols(3)
-                            .gap_2()
-                            .child(security_hint(
-                                "Verification",
-                                "Existing encrypted master passwords are verified by the native lock screen.",
-                            ))
-                            .child(security_hint(
-                                "Cloud Sync",
-                                "Push and pull flows request a password before encrypted snapshot work.",
-                            ))
-                            .child(security_hint(
-                                "Migration Gap",
-                                "Setting or changing the master password still needs a native save flow.",
-                            )),
-                    ),
-            )
-            .child(
-                div()
-                    .rounded_md()
-                    .border_1()
-                    .border_color(rgb(0x2a3140))
-                    .bg(rgb(0x151923))
-                    .p_4()
-                    .child(
-                        div()
-                            .flex()
-                            .items_center()
-                            .justify_between()
-                            .gap_3()
-                            .child(
-                                div()
-                                    .text_sm()
-                                    .font_weight(FontWeight(700.))
-                                    .child("Session Security"),
-                            )
-                            .child(status_pill(
-                                if self.settings.enable_screen_lock {
-                                    "lock on"
-                                } else {
-                                    "lock off"
-                                },
-                                if self.settings.enable_screen_lock {
-                                    rgb(0x6ee7b7)
-                                } else {
-                                    rgb(0x98a3b8)
-                                },
-                                if self.settings.enable_screen_lock {
-                                    rgb(0x12342a)
-                                } else {
-                                    rgb(0x202633)
-                                },
-                            )),
-                    )
-                    .child(
-                        div()
-                            .mt_3()
-                            .grid()
-                            .grid_cols(4)
-                            .gap_3()
-                            .child(metric(
-                                "Screen Lock",
-                                if self.settings.enable_screen_lock {
-                                    "enabled".to_string()
-                                } else {
-                                    "disabled".to_string()
-                                },
-                            ))
-                            .child(metric(
-                                "Idle Lock",
-                                if self.settings.idle_lock_minutes == 0 {
-                                    "manual only".to_string()
-                                } else {
-                                    format!("{} min", self.settings.idle_lock_minutes)
-                                },
-                            ))
-                            .child(metric(
-                                "Window",
-                                if self.is_locked {
-                                    "locked".to_string()
-                                } else {
-                                    "unlocked".to_string()
-                                },
-                            ))
-                            .child(metric(
-                                "Idle Timer",
-                                format!("{}s ago", self.last_user_activity_at.elapsed().as_secs()),
-                            )),
-                    )
-                    .child(
-                        div()
-                            .mt_3()
-                            .flex()
-                            .items_center()
-                            .gap_2()
-                            .child(small_button(
-                                "settings-screen-lock-enabled",
-                                if self.settings.enable_screen_lock {
-                                    "Lock On"
-                                } else {
-                                    "Lock Off"
-                                },
-                                cx.listener(|this, _, _, cx| {
-                                    this.toggle_screen_lock_enabled(cx);
-                                }),
-                            ))
                             .child(small_button(
                                 "settings-idle-lock-minus",
-                                "-1 Min",
+                                "−5",
                                 cx.listener(|this, _, _, cx| {
-                                    this.adjust_idle_lock_minutes(-1, cx);
+                                    this.adjust_idle_lock_minutes(-5, cx);
                                 }),
                             ))
                             .child(small_button(
                                 "settings-idle-lock-plus",
-                                "+1 Min",
+                                "+5",
                                 cx.listener(|this, _, _, cx| {
-                                    this.adjust_idle_lock_minutes(1, cx);
+                                    this.adjust_idle_lock_minutes(5, cx);
                                 }),
-                            ))
-                            .child(small_button(
-                                "settings-lock-now",
-                                "Lock Now",
-                                cx.listener(|this, _, window, cx| {
-                                    this.lock_app(window, cx);
-                                }),
-                            ))
-                            .child(
-                                div()
-                                    .text_xs()
-                                    .text_color(rgb(0x98a3b8))
-                                    .child("0 min keeps automatic locking disabled."),
-                            ),
-                    )
-                    .child(
-                        div()
-                            .mt_3()
-                            .grid()
-                            .grid_cols(3)
-                            .gap_2()
-                            .child(security_hint(
-                                "Master Password",
-                                if self.settings.has_master_password {
-                                    "Configured for unlocking and encrypted snapshots."
-                                } else {
-                                    "Not configured; manual unlock does not require a password."
-                                },
-                            ))
-                            .child(security_hint(
-                                "Idle Lock",
-                                "Set minutes to 0 for manual lock only.",
-                            ))
-                            .child(security_hint(
-                                "Lock Now",
-                                "Immediately hides the workspace behind the lock screen.",
                             )),
-                    )
-            )
-            .child(
+                    ))
+                    .child(settings_form_row(
+                        "Window state",
+                        Some(SharedString::from(format!(
+                            "Last activity {}s ago",
+                            self.last_user_activity_at.elapsed().as_secs()
+                        ))),
+                        div()
+                            .text_size(px(11.))
+                            .font_weight(FontWeight(600.))
+                            .text_color(if self.is_locked {
+                                rgb(0xff7b72)
+                            } else {
+                                rgb(0x3fb950)
+                            })
+                            .child(if self.is_locked { "Locked" } else { "Unlocked" }),
+                    )),
+            ))
+            .child(settings_form_section(
+                Some("Host key policy"),
+                Some("How SSH host key changes are handled."),
                 div()
-                    .rounded_md()
-                    .border_1()
-                    .border_color(rgb(0x2a3140))
-                    .bg(rgb(0x151923))
-                    .p_4()
-                    .child(
-                        div()
-                            .flex()
-                            .items_center()
-                            .justify_between()
-                            .gap_3()
-                            .child(
-                                div()
-                                    .text_sm()
-                                    .font_weight(FontWeight(700.))
-                                    .child("SSH Host Keys"),
-                            )
-                            .child(status_pill(
-                                host_key_policy_label(&self.settings.host_key_policy),
-                                rgb(0x93c5fd),
-                                rgb(0x17253b),
-                            )),
-                    )
-                    .child(
-                        div()
-                            .mt_3()
-                            .flex()
-                            .items_center()
-                            .gap_2()
-                            .child(policy_button(
-                                "settings-host-key-prompt",
-                                "Prompt",
-                                self.settings.host_key_policy == "prompt",
-                                cx.listener(|this, _, _, cx| {
-                                    this.update_host_key_policy("prompt", cx);
-                                }),
-                            ))
-                            .child(policy_button(
-                                "settings-host-key-strict",
-                                "Strict",
-                                self.settings.host_key_policy == "strict",
-                                cx.listener(|this, _, _, cx| {
-                                    this.update_host_key_policy("strict", cx);
-                                }),
-                            ))
-                            .child(policy_button(
-                                "settings-host-key-accept",
-                                "Accept",
-                                self.settings.host_key_policy == "accept",
-                                cx.listener(|this, _, _, cx| {
-                                    this.update_host_key_policy("accept", cx);
-                                }),
-                            )),
-                    )
-                    .child(
-                        div()
-                            .mt_3()
-                            .grid()
-                            .grid_cols(3)
-                            .gap_2()
-                            .child(security_hint(
-                                "Strict",
-                                "Reject unknown or changed host keys.",
-                            ))
-                            .child(security_hint(
-                                "Prompt",
-                                "Ask before trusting new or changed keys.",
-                            ))
-                            .child(security_hint(
-                                "Accept",
-                                "Automatically record new or changed keys.",
-                            )),
-                    ),
-            )
-            .child(
-                div()
-                    .rounded_md()
-                    .border_1()
-                    .border_color(rgb(0x2a3140))
-                    .bg(rgb(0x151923))
-                    .p_4()
-                    .child(
-                        div()
-                            .text_sm()
-                            .font_weight(FontWeight(700.))
-                            .child("Security Coverage"),
-                    )
-                    .child(
-                        div()
-                            .mt_3()
-                            .grid()
-                            .grid_cols(3)
-                            .gap_2()
-                            .child(security_hint(
-                                "Host Prompt",
-                                "Unknown and changed host keys surface as native accept/reject banners.",
-                            ))
-                            .child(security_hint(
-                                "Credential Data",
-                                "Encrypted credential and key material remains in the domain store.",
-                            ))
-                            .child(security_hint(
-                                "Parity Target",
-                                "Next step is a native master-password editor backed by encrypted storage.",
-                            )),
-                    )
-                    .child(
-                        div()
-                            .mt_3()
-                            .text_xs()
-                            .text_color(rgb(0x98a3b8))
-                            .child(host_key_policy_detail(&self.settings.host_key_policy)),
-                    ),
-            )
+                    .flex()
+                    .flex_wrap()
+                    .gap_1()
+                    .child(settings_choice_chip(
+                        "security-host-ask",
+                        "Ask",
+                        self.settings.host_key_policy == "ask"
+                            || self.settings.host_key_policy == "prompt",
+                        cx.listener(|this, _, _, cx| {
+                            this.update_host_key_policy("ask", cx);
+                        }),
+                    ))
+                    .child(settings_choice_chip(
+                        "security-host-accept",
+                        "Accept new",
+                        self.settings.host_key_policy == "accept_new",
+                        cx.listener(|this, _, _, cx| {
+                            this.update_host_key_policy("accept_new", cx);
+                        }),
+                    ))
+                    .child(settings_choice_chip(
+                        "security-host-strict",
+                        "Strict",
+                        self.settings.host_key_policy == "strict"
+                            || self.settings.host_key_policy == "reject",
+                        cx.listener(|this, _, _, cx| {
+                            this.update_host_key_policy("strict", cx);
+                        }),
+                    )),
+            ))
     }
 }
 

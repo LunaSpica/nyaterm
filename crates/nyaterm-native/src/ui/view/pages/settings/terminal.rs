@@ -239,68 +239,21 @@ impl NyaTermApp {
         div()
             .flex()
             .flex_col()
-            .gap_4()
-            .child(
+            .gap_3()
+            .child(settings_form_section(
+                Some("Terminal search"),
+                Some("Default flags for in-buffer find."),
                 div()
-                    .rounded_md()
-                    .border_1()
-                    .border_color(rgb(0x2a3140))
-                    .bg(rgb(0x151923))
-                    .p_4()
-                    .child(
+                    .flex()
+                    .flex_col()
+                    .gap_3()
+                    .child(settings_form_row(
+                        "Search mode",
+                        Some(SharedString::from("Buffer searches the live terminal; History searches session logs.")),
                         div()
-                            .text_sm()
-                            .font_weight(FontWeight(700.))
-                            .child("Terminal Search"),
-                    )
-                    .child(
-                        div()
-                            .mt_3()
-                            .grid()
-                            .grid_cols(5)
-                            .gap_3()
-                            .child(metric("Mode", self.terminal_search_mode.label().to_string()))
-                            .child(metric(
-                                "Case",
-                                if self.terminal_search_case_sensitive {
-                                    "sensitive".to_string()
-                                } else {
-                                    "ignore".to_string()
-                                },
-                            ))
-                            .child(metric(
-                                "Regex",
-                                if self.terminal_search_regex {
-                                    "enabled".to_string()
-                                } else {
-                                    "disabled".to_string()
-                                },
-                            ))
-                            .child(metric(
-                                "Whole Word",
-                                if self.terminal_search_whole_word {
-                                    "enabled".to_string()
-                                } else {
-                                    "disabled".to_string()
-                                },
-                            ))
-                            .child(metric(
-                                "Query",
-                                if self.terminal_search_query.trim().is_empty() {
-                                    "empty".to_string()
-                                } else {
-                                    truncate_preview(&self.terminal_search_query, 24)
-                                },
-                            )),
-                    )
-                    .child(
-                        div()
-                            .mt_3()
                             .flex()
-                            .items_center()
-                            .gap_2()
-                            .flex_wrap()
-                            .child(policy_button(
+                            .gap_1()
+                            .child(settings_choice_chip(
                                 "settings-search-mode-buffer",
                                 "Buffer",
                                 self.terminal_search_mode == TerminalSearchMode::Buffer,
@@ -310,7 +263,7 @@ impl NyaTermApp {
                                     cx.notify();
                                 }),
                             ))
-                            .child(policy_button(
+                            .child(settings_choice_chip(
                                 "settings-search-mode-history",
                                 "History",
                                 self.terminal_search_mode == TerminalSearchMode::History,
@@ -319,113 +272,76 @@ impl NyaTermApp {
                                     this.terminal_search_active_index = 0;
                                     cx.notify();
                                 }),
-                            ))
-                            .child(small_button(
-                                "settings-search-case",
-                                if self.terminal_search_case_sensitive {
-                                    "Case On"
-                                } else {
-                                    "Case Off"
-                                },
-                                cx.listener(|this, _, _, cx| {
-                                    this.terminal_search_case_sensitive =
-                                        !this.terminal_search_case_sensitive;
-                                    this.terminal_search_active_index = 0;
-                                    cx.notify();
-                                }),
-                            ))
-                            .child(small_button(
-                                "settings-search-regex",
-                                if self.terminal_search_regex {
-                                    "Regex On"
-                                } else {
-                                    "Regex Off"
-                                },
-                                cx.listener(|this, _, _, cx| {
-                                    this.terminal_search_regex = !this.terminal_search_regex;
-                                    this.terminal_search_active_index = 0;
-                                    cx.notify();
-                                }),
-                            ))
-                            .child(small_button(
-                                "settings-search-word",
-                                if self.terminal_search_whole_word {
-                                    "Word On"
-                                } else {
-                                    "Word Off"
-                                },
-                                cx.listener(|this, _, _, cx| {
-                                    this.terminal_search_whole_word =
-                                        !this.terminal_search_whole_word;
-                                    this.terminal_search_active_index = 0;
-                                    cx.notify();
-                                }),
-                            ))
-                            .child(small_button(
-                                "settings-search-open",
-                                "Open Search",
-                                cx.listener(|this, _, window, cx| {
-                                    this.open_terminal_search(window, cx);
-                                }),
                             )),
-                    ),
-            )
-            .child(
-                div()
-                    .rounded_md()
-                    .border_1()
-                    .border_color(rgb(0x2a3140))
-                    .bg(rgb(0x151923))
-                    .p_4()
-                    .child(
-                        div()
-                            .text_sm()
-                            .font_weight(FontWeight(700.))
-                            .child("Command Search"),
-                    )
-                    .child(
-                        div()
-                            .mt_3()
-                            .grid()
-                            .grid_cols(3)
-                            .gap_3()
-                            .child(metric(
-                                "History",
-                                self.command_history.len().to_string(),
-                            ))
-                            .child(metric(
-                                "Quick Commands",
-                                self.quick_commands.len().to_string(),
-                            ))
-                            .child(metric(
-                                "Draft",
-                                if self.command_search_draft.trim().is_empty() {
-                                    "empty".to_string()
-                                } else {
-                                    truncate_preview(&self.command_search_draft, 24)
-                                },
-                            )),
-                    )
-                    .child(
-                        div()
-                            .mt_3()
-                            .grid()
-                            .grid_cols(3)
-                            .gap_2()
-                            .child(search_engine_hint(
-                                "Command History",
-                                "Fuzzy search over persisted command history.",
-                            ))
-                            .child(search_engine_hint(
-                                "Quick Commands",
-                                "Fuzzy search over saved quick commands.",
-                            ))
-                            .child(search_engine_hint(
-                                "Terminal History",
-                                "Buffer and recording history search share the same native matcher flags.",
-                            )),
-                    ),
-            )
+                    ))
+                    .child(settings_form_row(
+                        "Case sensitive",
+                        None,
+                        settings_switch(
+                            "settings-search-case",
+                            self.terminal_search_case_sensitive,
+                            cx.listener(|this, _, _, cx| {
+                                this.terminal_search_case_sensitive =
+                                    !this.terminal_search_case_sensitive;
+                                this.terminal_search_active_index = 0;
+                                cx.notify();
+                            }),
+                        ),
+                    ))
+                    .child(settings_form_row(
+                        "Regular expression",
+                        None,
+                        settings_switch(
+                            "settings-search-regex",
+                            self.terminal_search_regex,
+                            cx.listener(|this, _, _, cx| {
+                                this.terminal_search_regex = !this.terminal_search_regex;
+                                this.terminal_search_active_index = 0;
+                                cx.notify();
+                            }),
+                        ),
+                    ))
+                    .child(settings_form_row(
+                        "Whole word",
+                        None,
+                        settings_switch(
+                            "settings-search-word",
+                            self.terminal_search_whole_word,
+                            cx.listener(|this, _, _, cx| {
+                                this.terminal_search_whole_word = !this.terminal_search_whole_word;
+                                this.terminal_search_active_index = 0;
+                                cx.notify();
+                            }),
+                        ),
+                    ))
+                    .child(settings_form_row(
+                        "Open search",
+                        Some(SharedString::from("Focus the terminal search bar in the workspace.")),
+                        small_button(
+                            "settings-search-open",
+                            "Open",
+                            cx.listener(|this, _, window, cx| {
+                                this.open_terminal_search(window, cx);
+                            }),
+                        ),
+                    )),
+            ))
+            .child(settings_form_section(
+                Some("Command search"),
+                Some("Shared matcher sources for history and quick commands."),
+                settings_form_row(
+                    "Catalog",
+                    Some(SharedString::from(format!(
+                        "{} history · {} quick commands",
+                        self.command_history.len(),
+                        self.quick_commands.len()
+                    ))),
+                    div()
+                        .text_size(px(11.))
+                        .text_color(rgb(0x8b949e))
+                        .child("Native fuzzy"),
+                ),
+            ))
             .child(self.keyword_highlights_settings_section(cx))
     }
 
