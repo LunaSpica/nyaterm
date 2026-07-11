@@ -1020,3 +1020,9 @@ service boundary first:
 - Shift+left-click extends the existing terminal selection from its anchor and
   continues drag-extend (xterm-style).
 - Sending terminal input (typing/paste/commands) clears the active selection.
+
+## 2026-07-11 Dynamic terminal gutter widths
+
+- Timestamp/line-number gutter column widths scale from measured cell metrics
+  (0.85x gutter font) with the previous fixed 96/72/40 floors as minimums so
+  hit-testing and paint stay aligned.

@@ -149,6 +149,8 @@ impl NyaTermApp {
                     String::new()
                 };
                 let (_, cell_h) = self.terminal_cell_size();
+                let ts_w = self.terminal_timestamp_gutter_width_px();
+                let ln_w = self.terminal_line_number_gutter_width_px();
                 output = output.child(
                     div()
                         .flex()
@@ -169,7 +171,7 @@ impl NyaTermApp {
                                 .when(show_timestamps, |this| {
                                     this.child(
                                         div()
-                                            .w(px(if show_timestamp_ms { 96. } else { 72. }))
+                                            .w(px(ts_w))
                                             .flex_none()
                                             .child(ts_label),
                                     )
@@ -177,7 +179,7 @@ impl NyaTermApp {
                                 .when(show_line_numbers, |this| {
                                     this.child(
                                         div()
-                                            .w(px(40.))
+                                            .w(px(ln_w))
                                             .flex_none()
                                             .child(line_label),
                                     )

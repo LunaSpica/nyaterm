@@ -71,16 +71,28 @@ impl NyaTermApp {
 
     pub(in crate::ui::view) fn terminal_gutter_width_px(&self) -> f32 {
         // Keep in sync with terminal_surface gutter column widths.
+        let (cell_w, _) = self.terminal_cell_size();
+        let gutter_font = (self.settings.terminal_font_size.max(8) as f32 * 0.85).max(8.);
+        // Gutter text uses 0.85x terminal font; approximate char width proportionally.
+        let gutter_cell_w = (cell_w * (gutter_font / self.settings.terminal_font_size.max(8) as f32))
+            .max(4.);
         let mut width = 0.;
         if self.settings.terminal_show_timestamps {
-            width += if self.settings.terminal_show_timestamp_milliseconds {
+            // HH:MM:SS = 8 chars, HH:MM:SS.mmm = 12 chars (+ small pad like Tauri).
+            let cols = if self.settings.terminal_show_timestamp_milliseconds {
+                12.
+            } else {
+                8.
+            };
+            width += (gutter_cell_w * cols + 2.).max(if self.settings.terminal_show_timestamp_milliseconds {
                 96.
             } else {
                 72.
-            };
+            });
         }
         if self.settings.terminal_show_line_numbers {
-            width += 40.;
+            // 5-digit absolute line numbers + pad.
+            width += (gutter_cell_w * 5. + 2.).max(40.);
         }
         if self.settings.terminal_show_timestamps && self.settings.terminal_show_line_numbers {
             width += 4.; // gap_1
@@ -89,6 +101,31 @@ impl NyaTermApp {
             width += 4.; // pr_1 trailing gutter padding
         }
         width
+    }
+
+    pub(in crate::ui::view) fn terminal_timestamp_gutter_width_px(&self) -> f32 {
+        let (cell_w, _) = self.terminal_cell_size();
+        let gutter_font = (self.settings.terminal_font_size.max(8) as f32 * 0.85).max(8.);
+        let gutter_cell_w = (cell_w * (gutter_font / self.settings.terminal_font_size.max(8) as f32))
+            .max(4.);
+        let cols = if self.settings.terminal_show_timestamp_milliseconds {
+            12.
+        } else {
+            8.
+        };
+        (gutter_cell_w * cols + 2.).max(if self.settings.terminal_show_timestamp_milliseconds {
+            96.
+        } else {
+            72.
+        })
+    }
+
+    pub(in crate::ui::view) fn terminal_line_number_gutter_width_px(&self) -> f32 {
+        let (cell_w, _) = self.terminal_cell_size();
+        let gutter_font = (self.settings.terminal_font_size.max(8) as f32 * 0.85).max(8.);
+        let gutter_cell_w = (cell_w * (gutter_font / self.settings.terminal_font_size.max(8) as f32))
+            .max(4.);
+        (gutter_cell_w * 5. + 2.).max(40.)
     }
 
     pub(in crate::ui::view) fn active_terminal_grid_size(&self) -> (usize, usize) {
