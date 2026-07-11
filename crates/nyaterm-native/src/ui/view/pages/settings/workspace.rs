@@ -51,7 +51,7 @@ impl NyaTermApp {
                         .child(
                             div()
                                 .text_size(px(10.))
-                                .text_color(rgb(0x6e7681))
+                                .text_color(rgb(palette.text_dimmed))
                                 .child(language_label.to_string()),
                         ),
                 ),
@@ -100,9 +100,9 @@ impl NyaTermApp {
                             .text_size(px(11.))
                             .font_weight(FontWeight(600.))
                             .text_color(if self.store_status.ready {
-                                rgb(0x3fb950)
+                                rgb(palette.success)
                             } else {
-                                rgb(0xff7b72)
+                                rgb(palette.danger)
                             })
                             .child(if self.store_status.ready {
                                 "Ready"
@@ -115,7 +115,7 @@ impl NyaTermApp {
                         Some(SharedString::from("Current appearance snapshot.")),
                         div()
                             .text_size(px(11.))
-                            .text_color(rgb(0x8b949e))
+                            .text_color(rgb(palette.text_muted))
                             .child(format!(
                                 "{} · {} {}",
                                 self.settings.theme,
@@ -222,7 +222,7 @@ impl NyaTermApp {
                                     .font_family("JetBrains Mono")
                                     .text_size(px(12.))
                                     .font_weight(FontWeight(600.))
-                                    .text_color(rgb(0xc9d1d9))
+                                    .text_color(rgb(palette.text))
                                     .child(font_size_label),
                             )
                             .child(small_button(palette, 
@@ -395,7 +395,7 @@ impl NyaTermApp {
                                 div()
                                     .font_family("JetBrains Mono")
                                     .text_size(px(11.))
-                                    .text_color(rgb(0xc9d1d9))
+                                    .text_color(rgb(palette.text))
                                     .child(format!(
                                         "{}–{}",
                                         self.settings.interaction_command_suggestion_min_chars,
@@ -465,7 +465,7 @@ impl NyaTermApp {
                                 div()
                                     .font_family("JetBrains Mono")
                                     .text_size(px(10.))
-                                    .text_color(rgb(0x8b949e))
+                                    .text_color(rgb(palette.text_muted))
                                     .child(truncate_preview(&word_sep, 24)),
                             )
                             .child(settings_choice_chip(palette, 
@@ -499,7 +499,7 @@ impl NyaTermApp {
                                 div()
                                     .font_family("JetBrains Mono")
                                     .text_size(px(11.))
-                                    .text_color(rgb(0xc9d1d9))
+                                    .text_color(rgb(palette.text))
                                     .child(format!("{delay_ms} ms")),
                             )
                             .child(small_button(palette, 
@@ -619,7 +619,7 @@ impl NyaTermApp {
                         } else {
                             div()
                                 .text_size(px(11.))
-                                .text_color(rgb(0x8b949e))
+                                .text_color(rgb(palette.text_muted))
                                 .child("Defaults")
                                 .into_any_element()
                         },
@@ -628,13 +628,13 @@ impl NyaTermApp {
                         div()
                             .rounded_md()
                             .border_1()
-                            .border_color(rgb(0x21262d))
-                            .bg(rgb(0x0d1117))
+                            .border_color(rgb(palette.surface_elevated))
+                            .bg(rgb(palette.bg))
                             .px_3()
                             .py_2()
                             .text_size(px(11.))
                             .line_height(px(16.))
-                            .text_color(rgb(0x8b949e))
+                            .text_color(rgb(palette.text_muted))
                             .child(
                                 "Press Record, type a shortcut, then Save or Enter. Esc cancels recording.",
                             ),
@@ -673,7 +673,7 @@ impl NyaTermApp {
                     Some(SharedString::from(format!("{count} in category"))),
                     div()
                         .text_size(px(11.))
-                        .text_color(rgb(0x8b949e))
+                        .text_color(rgb(palette.text_muted))
                         .child("Native"),
                 ))
                 .child(rows),
@@ -687,10 +687,10 @@ impl NyaTermApp {
     ) -> impl IntoElement {
         let palette = self.theme_palette();
         let (badge_fg, badge_bg) = match shortcut.native_status {
-            ShortcutNativeStatus::Supported => (rgb(0x3fb950), rgb(0x12261c)),
-            ShortcutNativeStatus::Partial => (rgb(0x58a6ff), rgb(0x122033)),
-            ShortcutNativeStatus::Pending => (rgb(0xf85149), rgb(0x2d1215)),
-            ShortcutNativeStatus::Contextual => (rgb(0xd29922), rgb(0x2a2111)),
+            ShortcutNativeStatus::Supported => (rgb(palette.success), rgb(0x12261c)),
+            ShortcutNativeStatus::Partial => (rgb(palette.accent), rgb(palette.hover)),
+            ShortcutNativeStatus::Pending => (rgb(palette.danger), rgb(0x2d1215)),
+            ShortcutNativeStatus::Contextual => (rgb(palette.warning), rgb(0x2a2111)),
         };
         let is_custom = self.settings.keybindings.contains_key(shortcut.id);
         let is_recording = self.keybinding_recording_id.as_deref() == Some(shortcut.id);
@@ -715,12 +715,12 @@ impl NyaTermApp {
             .border_color(if is_recording {
                 rgb(0x1f6feb)
             } else {
-                rgb(0x21262d)
+                rgb(palette.surface_elevated)
             })
             .bg(if is_recording {
-                rgb(0x122033)
+                rgb(palette.hover)
             } else {
-                rgb(0x0d1117)
+                rgb(palette.bg)
             })
             .flex()
             .items_center()
@@ -740,7 +740,7 @@ impl NyaTermApp {
                                 div()
                                     .text_size(px(12.))
                                     .font_weight(FontWeight(600.))
-                                    .text_color(rgb(0xc9d1d9))
+                                    .text_color(rgb(palette.text))
                                     .overflow_hidden()
                                     .child(shortcut.label),
                             )
@@ -757,7 +757,7 @@ impl NyaTermApp {
                     .child(
                         div()
                             .text_size(px(10.))
-                            .text_color(rgb(0x6e7681))
+                            .text_color(rgb(palette.text_dimmed))
                             .overflow_hidden()
                             .child(format!("{} · {}", shortcut.id, shortcut.note)),
                     ),
@@ -770,9 +770,9 @@ impl NyaTermApp {
                     .border_color(if is_recording {
                         rgb(0x388bfd)
                     } else {
-                        rgb(0x30363d)
+                        rgb(palette.border)
                     })
-                    .bg(rgb(0x161b22))
+                    .bg(rgb(palette.surface))
                     .px_2()
                     .py_0()
                     .h(px(24.))
@@ -782,9 +782,9 @@ impl NyaTermApp {
                     .text_size(px(10.))
                     .font_weight(FontWeight(700.))
                     .text_color(if is_recording {
-                        rgb(0x58a6ff)
+                        rgb(palette.accent)
                     } else {
-                        rgb(0xc9d1d9)
+                        rgb(palette.text)
                     })
                     .child(key_display),
             )

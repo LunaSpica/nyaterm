@@ -140,7 +140,7 @@ impl NyaTermApp {
                         ))),
                         div()
                             .text_size(px(11.))
-                            .text_color(rgb(0x8b949e))
+                            .text_color(rgb(palette.text_muted))
                             .child("Live"),
                     )),
             ))
@@ -510,12 +510,12 @@ impl NyaTermApp {
                             .border_color(if default {
                                 rgb(0x1f6feb)
                             } else {
-                                rgb(0x21262d)
+                                rgb(palette.surface_elevated)
                             })
                             .bg(if default {
-                                rgb(0x122033)
+                                rgb(palette.hover)
                             } else {
-                                rgb(0x0d1117)
+                                rgb(palette.bg)
                             })
                             .flex()
                             .items_center()
@@ -526,9 +526,9 @@ impl NyaTermApp {
                                     .rounded_full()
                                     .flex_none()
                                     .bg(if model.enabled {
-                                        rgb(0x3fb950)
+                                        rgb(palette.success)
                                     } else {
-                                        rgb(0x484f58)
+                                        rgb(palette.border)
                                     }),
                             )
                             .child(
@@ -541,14 +541,14 @@ impl NyaTermApp {
                                         div()
                                             .text_size(px(12.))
                                             .font_weight(FontWeight(600.))
-                                            .text_color(rgb(0xc9d1d9))
+                                            .text_color(rgb(palette.text))
                                             .overflow_hidden()
                                             .child(truncate_preview(&model.name, 42)),
                                     )
                                     .child(
                                         div()
                                             .text_size(px(10.))
-                                            .text_color(rgb(0x6e7681))
+                                            .text_color(rgb(palette.text_dimmed))
                                             .child(format!(
                                                 "{provider} · {}",
                                                 ai_model_source_label(&model.source)
@@ -560,7 +560,7 @@ impl NyaTermApp {
                                     div()
                                         .text_size(px(10.))
                                         .font_weight(FontWeight(600.))
-                                        .text_color(rgb(0x58a6ff))
+                                        .text_color(rgb(palette.accent))
                                         .child("default"),
                                 )
                             })
@@ -598,8 +598,8 @@ impl NyaTermApp {
                         .px_2()
                         .py_1()
                         .border_1()
-                        .border_color(rgb(0x21262d))
-                        .bg(rgb(0x0d1117))
+                        .border_color(rgb(palette.surface_elevated))
+                        .bg(rgb(palette.bg))
                         .flex()
                         .items_center()
                         .gap_2()
@@ -609,9 +609,9 @@ impl NyaTermApp {
                                 .rounded_full()
                                 .flex_none()
                                 .bg(if credential.enabled {
-                                    rgb(0x3fb950)
+                                    rgb(palette.success)
                                 } else {
-                                    rgb(0x484f58)
+                                    rgb(palette.border)
                                 }),
                         )
                         .child(
@@ -624,14 +624,14 @@ impl NyaTermApp {
                                     div()
                                         .text_size(px(12.))
                                         .font_weight(FontWeight(600.))
-                                        .text_color(rgb(0xc9d1d9))
+                                        .text_color(rgb(palette.text))
                                         .overflow_hidden()
                                         .child(truncate_preview(&credential.name, 36)),
                                 )
                                 .child(
                                     div()
                                         .text_size(px(10.))
-                                        .text_color(rgb(0x6e7681))
+                                        .text_color(rgb(palette.text_dimmed))
                                         .child(format!(
                                             "{} · {}",
                                             ai_provider_kind_label(&credential.provider_kind),
@@ -687,7 +687,7 @@ impl NyaTermApp {
                         Some(SharedString::from(credentials_summary)),
                         div()
                             .text_size(px(11.))
-                            .text_color(rgb(0x8b949e))
+                            .text_color(rgb(palette.text_muted))
                             .child("Stored"),
                     ))
                     .child(
@@ -840,7 +840,7 @@ impl NyaTermApp {
                                     .font_family("JetBrains Mono")
                                     .text_size(px(12.))
                                     .font_weight(FontWeight(700.))
-                                    .text_color(rgb(0xc9d1d9))
+                                    .text_color(rgb(palette.text))
                                     .child(format!("{file_size_mb}")),
                             )
                             .child(small_button(palette, 
@@ -872,7 +872,7 @@ impl NyaTermApp {
                                     .font_family("JetBrains Mono")
                                     .text_size(px(12.))
                                     .font_weight(FontWeight(700.))
-                                    .text_color(rgb(0xc9d1d9))
+                                    .text_color(rgb(palette.text))
                                     .child(format!("{step_timeout_s}s")),
                             )
                             .child(small_button(palette, 
@@ -978,37 +978,39 @@ impl NyaTermApp {
 
 
 fn ai_setting_hint(title: &'static str, detail: &'static str) -> impl IntoElement {
+    let palette = crate::ui::theme::theme_palette("github-dark");
     div()
         .rounded_sm()
         .border_1()
-        .border_color(rgb(0x263142))
-        .bg(rgb(0x0d1320))
+        .border_color(rgb(palette.border))
+        .bg(rgb(palette.input))
         .p_3()
         .child(
             div()
                 .text_xs()
                 .font_weight(FontWeight(800.))
-                .text_color(rgb(0xe5edf7))
+                .text_color(rgb(palette.text))
                 .child(title),
         )
         .child(
             div()
                 .mt_1()
                 .text_size(px(10.))
-                .text_color(rgb(0x8f98aa))
+                .text_color(rgb(palette.text_muted))
                 .line_height(px(14.))
                 .child(detail),
         )
 }
 
 fn ai_boolean_state(label: &'static str, enabled: bool) -> impl IntoElement {
+    let palette = crate::ui::theme::theme_palette("github-dark");
     div()
         .rounded_md()
         .border_1()
-        .border_color(rgb(0x2a3140))
-        .bg(rgb(0x111722))
+        .border_color(rgb(palette.border))
+        .bg(rgb(palette.input))
         .p_3()
-        .child(div().text_xs().text_color(rgb(0x98a3b8)).child(label))
+        .child(div().text_xs().text_color(rgb(palette.text_muted)).child(label))
         .child(
             div()
                 .mt_1()
@@ -1017,7 +1019,7 @@ fn ai_boolean_state(label: &'static str, enabled: bool) -> impl IntoElement {
                 .text_color(if enabled {
                     rgb(0x86efac)
                 } else {
-                    rgb(0x98a3b8)
+                    rgb(palette.text_muted)
                 })
                 .child(if enabled { "enabled" } else { "disabled" }),
         )

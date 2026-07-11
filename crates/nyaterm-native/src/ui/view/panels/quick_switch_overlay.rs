@@ -26,7 +26,7 @@ impl NyaTermApp {
                     .items_center()
                     .justify_center()
                     .text_xs()
-                    .text_color(rgb(0x8f98aa))
+                    .text_color(rgb(palette.text_muted))
                     .child(if self.quick_switch_items().is_empty() {
                         "No sessions or saved connections."
                     } else {
@@ -87,14 +87,14 @@ impl NyaTermApp {
                                     div()
                                         .text_sm()
                                         .font_weight(FontWeight(800.))
-                                        .text_color(rgb(0xe5edf7))
+                                        .text_color(rgb(palette.text))
                                         .overflow_hidden()
                                         .child(truncate_preview(item.title(), 54)),
                                 )
                                 .child(
                                     div()
                                         .text_xs()
-                                        .text_color(rgb(0x98a3b8))
+                                        .text_color(rgb(palette.text_muted))
                                         .overflow_hidden()
                                         .child(truncate_preview(item.subtitle(), 78)),
                                 ),
@@ -170,9 +170,9 @@ impl NyaTermApp {
                                     .flex_1()
                                     .text_sm()
                                     .text_color(if self.quick_switch_query.is_empty() {
-                                        rgb(0x64748b)
+                                        rgb(palette.text_muted)
                                     } else {
-                                        rgb(0xe5edf7)
+                                        rgb(palette.text)
                                     })
                                     .child(query_display),
                             ),
@@ -192,7 +192,7 @@ impl NyaTermApp {
                             .child(
                                 div()
                                     .text_xs()
-                                    .text_color(rgb(0x8f98aa))
+                                    .text_color(rgb(palette.text_muted))
                                     .child("Enter open / Esc close / Up Down navigate"),
                             )
                             .child(

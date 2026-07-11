@@ -848,3 +848,7 @@ service boundary first:
 - Interactive accent uses Tauri `link`/`focusRing` (github-light blue, not green brand accent).
 - Settings Appearance lists every theme via `APPEARANCE_THEME_IDS` chips; legacy `catppuccin` normalizes to `catppuccin-mocha`.
 - Densify Network tunnel/proxy rows/editors, title/status bar extras, terminal search/canvas chrome, session overlays, translation chips, and quick-command helper fields.
+
+## 2026-07-11 Overlay/Docker/workspace residual palette densify
+- Quick command editor/sync groups/recording/quick-switch overlays, session tab strip chips, host-key/credential prompts.
+- Docker containers/compose menus & rows; Settings AI/workspace residual hardcodes; sidebar residual chrome.

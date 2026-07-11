@@ -201,7 +201,7 @@ impl NyaTermApp {
                         div()
                             .text_xs()
                             .font_weight(FontWeight(700.))
-                            .text_color(rgb(0x8f98aa))
+                            .text_color(rgb(palette.text_muted))
                             .child("WORKSPACE"),
                     )
                     .child(capability_line(palette, 
@@ -235,7 +235,7 @@ impl NyaTermApp {
                                 div()
                                     .text_xs()
                                     .font_weight(FontWeight(800.))
-                                    .text_color(rgb(0x8f98aa))
+                                    .text_color(rgb(palette.text_muted))
                                     .child("ACTIVE SESSIONS"),
                             )
                             .child(
@@ -291,7 +291,7 @@ impl NyaTermApp {
                                 div()
                                     .text_xs()
                                     .font_weight(FontWeight(700.))
-                                    .text_color(rgb(0x8f98aa))
+                                    .text_color(rgb(palette.text_muted))
                                     .child("START"),
                             )
                             .child(status_pill(
@@ -328,7 +328,7 @@ impl NyaTermApp {
                     .border_color(rgb(0x2d3442))
                     .bg(rgb(0x10131a))
                     .p_3()
-                    .child(div().text_xs().text_color(rgb(0x8f98aa)).child("Runtime"))
+                    .child(div().text_xs().text_color(rgb(palette.text_muted)).child("Runtime"))
                     .child(div().mt_1().text_sm().child(match self.runtime.mode() {
                         RuntimeMode::Portable => "Portable",
                         RuntimeMode::Installed => "Installed",
@@ -337,7 +337,7 @@ impl NyaTermApp {
                         div()
                             .mt_2()
                             .text_xs()
-                            .text_color(rgb(0x8f98aa))
+                            .text_color(rgb(palette.text_muted))
                             .child(self.runtime.config_dir().display().to_string()),
                     ),
             )
@@ -355,7 +355,7 @@ impl NyaTermApp {
                     .child(
                         div()
                             .text_xs()
-                            .text_color(rgb(0x8f98aa))
+                            .text_color(rgb(palette.text_muted))
                             .child("Config Store"),
                     )
                     .child(
@@ -373,7 +373,7 @@ impl NyaTermApp {
                         div()
                             .mt_2()
                             .text_xs()
-                            .text_color(rgb(0x8f98aa))
+                            .text_color(rgb(palette.text_muted))
                             .child(self.store_status.path.clone()),
                     ),
             )
@@ -403,7 +403,7 @@ impl NyaTermApp {
         } else if has_unread {
             rgb(0xfacc15)
         } else {
-            rgb(0x64748b)
+            rgb(palette.text_muted)
         };
         let row_bg = if let Some(custom_color) = custom_color {
             rgba((custom_color << 8) | if is_active { 0x22 } else { 0x12 })
@@ -562,7 +562,7 @@ impl NyaTermApp {
                                 div()
                                     .text_xs()
                                     .font_weight(FontWeight(800.))
-                                    .text_color(rgb(0x8f98aa))
+                                    .text_color(rgb(palette.text_muted))
                                     .child("SAVED CONNECTIONS"),
                             )
                             .child(status_pill(
@@ -641,7 +641,7 @@ impl NyaTermApp {
                         div()
                             .text_xs()
                             .font_weight(FontWeight(800.))
-                            .text_color(rgb(0x8f98aa))
+                            .text_color(rgb(palette.text_muted))
                             .child("NETWORK"),
                     )
                     .child(capability_line(palette, 
@@ -690,7 +690,7 @@ impl NyaTermApp {
                         div()
                             .text_xs()
                             .font_weight(FontWeight(800.))
-                            .text_color(rgb(0x8f98aa))
+                            .text_color(rgb(palette.text_muted))
                             .child("SFTP"),
                     )
                     .child(capability_line(palette, 
@@ -750,7 +750,7 @@ impl NyaTermApp {
                         div()
                             .text_xs()
                             .font_weight(FontWeight(800.))
-                            .text_color(rgb(0x8f98aa))
+                            .text_color(rgb(palette.text_muted))
                             .child("SETTINGS"),
                     )
                     .child(capability_line(palette, "Theme", self.settings.theme.clone()))
@@ -789,7 +789,7 @@ impl NyaTermApp {
                         div()
                             .text_xs()
                             .font_weight(FontWeight(800.))
-                            .text_color(rgb(0x8f98aa))
+                            .text_color(rgb(palette.text_muted))
                             .child("CONFIG STORE"),
                     )
                     .child(
@@ -857,7 +857,7 @@ impl NyaTermApp {
                     .text_color(if selected {
                         rgb(0x93c5fd)
                     } else {
-                        rgb(0x64748b)
+                        rgb(palette.text_muted)
                     })
                     .child(badge),
             )
@@ -1597,7 +1597,7 @@ impl NyaTermApp {
                             .rounded_sm()
                             .border_1()
                             .border_color(rgb(0x4b6f97))
-                            .bg(rgb(0x0d1320))
+                            .bg(rgb(palette.input))
                             .font_family("JetBrains Mono")
                             .text_xs()
                             .text_color(rgb(palette.text))
@@ -1776,7 +1776,7 @@ impl NyaTermApp {
                                     } else {
                                         rgb(0x303848)
                                     })
-                                    .bg(rgb(0x0d1320))
+                                    .bg(rgb(palette.input))
                                     .text_size(px(10.))
                                     .text_color(rgb(palette.text))
                                     .cursor_pointer()
@@ -1832,7 +1832,7 @@ impl NyaTermApp {
                                     } else {
                                         rgb(0x303848)
                                     })
-                                    .bg(rgb(0x0d1320))
+                                    .bg(rgb(palette.input))
                                     .text_size(px(10.))
                                     .text_color(rgb(palette.text))
                                     .cursor_pointer()
@@ -2201,7 +2201,7 @@ impl NyaTermApp {
                             .child(
                                 div()
                                     .text_size(px(11.))
-                                    .text_color(rgb(0x484f58))
+                                    .text_color(rgb(palette.border))
                                     .child("·"),
                             )
                             .child(

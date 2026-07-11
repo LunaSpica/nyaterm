@@ -157,7 +157,7 @@ impl NyaTermApp {
                                 div()
                                     .text_sm()
                                     .font_weight(FontWeight(800.))
-                                    .text_color(rgb(0xe5edf7))
+                                    .text_color(rgb(palette.text))
                                     .child(title),
                             )
                             .child(status_pill(
@@ -217,14 +217,14 @@ impl NyaTermApp {
                                         if editor.focused_field == QuickCommandEditorField::Category {
                                             rgb(0x4ade80)
                                         } else {
-                                            rgb(0x263142)
+                                            rgb(palette.border)
                                         },
                                     )
                                     .bg(
                                         if editor.focused_field == QuickCommandEditorField::Category {
                                             rgb(0x0f1f18)
                                         } else {
-                                            rgb(0x0d1320)
+                                            rgb(palette.input)
                                         },
                                     )
                                     .p_2()
@@ -239,7 +239,7 @@ impl NyaTermApp {
                                     .child(
                                         div()
                                             .text_size(px(10.))
-                                            .text_color(rgb(0x64748b))
+                                            .text_color(rgb(palette.text_muted))
                                             .child("Category"),
                                     )
                                     .child(
@@ -253,13 +253,13 @@ impl NyaTermApp {
                                                 div()
                                                     .min_w_0()
                                                     .text_xs()
-                                                    .text_color(rgb(0xe5edf7))
+                                                    .text_color(rgb(palette.text))
                                                     .child(truncate_preview(&category_display, 26)),
                                             )
                                             .child(
                                                 div()
                                                     .text_size(px(10.))
-                                                    .text_color(rgb(0x98a3b8))
+                                                    .text_color(rgb(palette.text_muted))
                                                     .child("Type to search/create"),
                                             ),
                                     )
@@ -285,8 +285,8 @@ impl NyaTermApp {
                             .mt_3()
                             .rounded_sm()
                             .border_1()
-                            .border_color(rgb(0x263142))
-                            .bg(rgb(0x0d1320))
+                            .border_color(rgb(palette.border))
+                            .bg(rgb(palette.input))
                             .p_2()
                             .flex()
                             .items_start()
@@ -304,7 +304,7 @@ impl NyaTermApp {
                                             .child(
                                                 div()
                                                     .text_size(px(10.))
-                                                    .text_color(rgb(0x64748b))
+                                                    .text_color(rgb(palette.text_muted))
                                                     .child("Color Tag"),
                                             )
                                             .child(
@@ -319,7 +319,7 @@ impl NyaTermApp {
                                                     .child(
                                                         div()
                                                             .text_size(px(10.))
-                                                            .text_color(rgb(0x98a3b8))
+                                                            .text_color(rgb(palette.text_muted))
                                                             .child(format!(
                                                                 "{} / {}",
                                                                 color_label, icon_label
@@ -334,7 +334,7 @@ impl NyaTermApp {
                                 div()
                                     .pl_4()
                                     .border_l_1()
-                                    .border_color(rgb(0x263142))
+                                    .border_color(rgb(palette.border))
                                     .flex()
                                     .flex_col()
                                     .items_end()
@@ -342,7 +342,7 @@ impl NyaTermApp {
                                     .child(
                                         div()
                                             .text_size(px(10.))
-                                            .text_color(rgb(0x64748b))
+                                            .text_color(rgb(palette.text_muted))
                                             .child("Pin"),
                                     )
                                     .child(mode_button(
@@ -360,7 +360,7 @@ impl NyaTermApp {
                             .child(
                                 div()
                                     .text_size(px(10.))
-                                    .text_color(rgb(0x64748b))
+                                    .text_color(rgb(palette.text_muted))
                                     .child("Execution Mode"),
                             )
                             .child(
@@ -392,7 +392,7 @@ impl NyaTermApp {
                                 div()
                                     .mt_1()
                                     .text_size(px(10.))
-                                    .text_color(rgb(0x98a3b8))
+                                    .text_color(rgb(palette.text_muted))
                                     .child(if editor.execution_mode == "append" {
                                         "Insert the command into the terminal input without running it."
                                     } else {
@@ -424,7 +424,7 @@ impl NyaTermApp {
                             .child(
                                 div()
                                     .text_size(px(10.))
-                                    .text_color(rgb(0x64748b))
+                                    .text_color(rgb(palette.text_muted))
                                     .child("Tab switches fields. Enter saves outside Command. Cmd/Ctrl+S saves."),
                             )
                             .child(
@@ -462,6 +462,7 @@ fn quick_command_category_choice(
     selected: bool,
     on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
 ) -> impl IntoElement {
+    let palette = crate::ui::theme::theme_palette("github-dark");
     div()
         .id(SharedString::from(id))
         .h(px(24.))
@@ -472,7 +473,7 @@ fn quick_command_category_choice(
         .border_color(if selected {
             rgb(0x4ade80)
         } else {
-            rgb(0x263142)
+            rgb(palette.border)
         })
         .bg(if selected {
             rgb(0x10251a)
@@ -498,6 +499,7 @@ fn quick_command_color_swatch(
     selected: bool,
     on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
 ) -> impl IntoElement {
+    let palette = crate::ui::theme::theme_palette("github-dark");
     let id = format!(
         "quick-command-color-swatch-{}",
         color_tag.unwrap_or("default")
@@ -508,9 +510,9 @@ fn quick_command_color_swatch(
         .rounded_full()
         .border_2()
         .border_color(if selected {
-            rgb(0xe5edf7)
+            rgb(palette.text)
         } else {
-            rgb(0x263142)
+            rgb(palette.border)
         })
         .bg(quick_command_color(color_tag))
         .cursor_pointer()
@@ -524,6 +526,7 @@ fn quick_command_icon_option(
     selected: bool,
     on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
 ) -> impl IntoElement {
+    let palette = crate::ui::theme::theme_palette("github-dark");
     div()
         .id(SharedString::from(format!(
             "quick-command-icon-option-{icon_tag}"
@@ -532,9 +535,9 @@ fn quick_command_icon_option(
         .rounded_sm()
         .border_1()
         .border_color(if selected {
-            rgb(0xe5edf7)
+            rgb(palette.text)
         } else {
-            rgb(0x263142)
+            rgb(palette.border)
         })
         .bg(if selected {
             rgb(0x17233a)

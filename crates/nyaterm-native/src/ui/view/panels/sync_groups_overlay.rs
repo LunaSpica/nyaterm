@@ -15,10 +15,10 @@ impl NyaTermApp {
                     .rounded_sm()
                     .border_1()
                     .border_color(rgb(0x303848))
-                    .bg(rgb(0x0d1320))
+                    .bg(rgb(palette.input))
                     .p_3()
                     .text_xs()
-                    .text_color(rgb(0x98a3b8))
+                    .text_color(rgb(palette.text_muted))
                     .child("No sync groups."),
             );
         }
@@ -38,7 +38,7 @@ impl NyaTermApp {
                     .bg(if selected {
                         rgb(0x101b2d)
                     } else {
-                        rgb(0x0d1320)
+                        rgb(palette.input)
                     })
                     .p_3()
                     .cursor_pointer()
@@ -61,7 +61,7 @@ impl NyaTermApp {
                                             .min_w_0()
                                             .text_sm()
                                             .font_weight(FontWeight(800.))
-                                            .text_color(rgb(0xe5edf7))
+                                            .text_color(rgb(palette.text))
                                             .child(truncate_preview(&group.name, 26)),
                                     ),
                             )
@@ -70,7 +70,7 @@ impl NyaTermApp {
                                 if group.enabled {
                                     rgb(0x6ee7b7)
                                 } else {
-                                    rgb(0x98a3b8)
+                                    rgb(palette.text_muted)
                                 },
                                 if group.enabled {
                                     rgb(0x12342a)
@@ -83,7 +83,7 @@ impl NyaTermApp {
                         div()
                             .mt_1()
                             .text_xs()
-                            .text_color(rgb(0x8f98aa))
+                            .text_color(rgb(palette.text_muted))
                             .child(format!("{session_count} session(s)")),
                     )
                     .on_click(cx.listener(move |this, _, _, cx| {
@@ -114,10 +114,10 @@ impl NyaTermApp {
                     .rounded_sm()
                     .border_1()
                     .border_color(rgb(0x303848))
-                    .bg(rgb(0x0d1320))
+                    .bg(rgb(palette.input))
                     .p_3()
                     .text_xs()
-                    .text_color(rgb(0x98a3b8))
+                    .text_color(rgb(palette.text_muted))
                     .child("Start sessions before building a sync group."),
             );
         }
@@ -140,7 +140,7 @@ impl NyaTermApp {
                     .bg(if in_group {
                         rgb(0x111827)
                     } else {
-                        rgb(0x0d1320)
+                        rgb(palette.input)
                     })
                     .p_3()
                     .child(
@@ -160,16 +160,16 @@ impl NyaTermApp {
                                             .text_sm()
                                             .font_weight(FontWeight(800.))
                                             .text_color(if paused {
-                                                rgb(0x98a3b8)
+                                                rgb(palette.text_muted)
                                             } else {
-                                                rgb(0xe5edf7)
+                                                rgb(palette.text)
                                             })
                                             .child(truncate_preview(&title, 42)),
                                     )
                                     .child(
                                         div()
                                             .text_xs()
-                                            .text_color(rgb(0x64748b))
+                                            .text_color(rgb(palette.text_muted))
                                             .child(format!(
                                                 "{}{}",
                                                 session_kind_label(session.kind),
@@ -195,7 +195,7 @@ impl NyaTermApp {
                                         } else if in_group {
                                             rgb(0x6ee7b7)
                                         } else {
-                                            rgb(0x98a3b8)
+                                            rgb(palette.text_muted)
                                         },
                                         if paused {
                                             rgb(0x3a2f14)
@@ -291,13 +291,13 @@ impl NyaTermApp {
                                         div()
                                             .text_sm()
                                             .font_weight(FontWeight(800.))
-                                            .text_color(rgb(0xe5edf7))
+                                            .text_color(rgb(palette.text))
                                             .child("Sync Input Groups"),
                                     )
                                     .child(
                                         div()
                                             .text_xs()
-                                            .text_color(rgb(0x98a3b8))
+                                            .text_color(rgb(palette.text_muted))
                                             .child("Keyboard input and sent commands broadcast to active peers."),
                                     ),
                             )
@@ -337,7 +337,7 @@ impl NyaTermApp {
                                         div()
                                             .text_xs()
                                             .font_weight(FontWeight(800.))
-                                            .text_color(rgb(0x98a3b8))
+                                            .text_color(rgb(palette.text_muted))
                                             .child("Groups"),
                                     )
                                     .child(group_list),
@@ -358,7 +358,7 @@ impl NyaTermApp {
                                                 div()
                                                     .text_xs()
                                                     .font_weight(FontWeight(800.))
-                                                    .text_color(rgb(0x98a3b8))
+                                                    .text_color(rgb(palette.text_muted))
                                                     .child("Sessions"),
                                             )
                                             .child(

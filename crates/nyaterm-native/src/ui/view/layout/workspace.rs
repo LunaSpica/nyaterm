@@ -47,7 +47,7 @@ impl NyaTermApp {
                             .min_w_0()
                             .text_xs()
                             .font_weight(FontWeight(700.))
-                            .text_color(rgb(0xc9d1d9))
+                            .text_color(rgb(palette.text))
                             .overflow_hidden()
                             .child(format!("Connecting {pending_name}")),
                     ),
@@ -63,8 +63,8 @@ impl NyaTermApp {
                     .items_center()
                     .gap_2()
                     .text_xs()
-                    .text_color(rgb(0x8b949e))
-                    .child(div().size(px(8.)).rounded_full().bg(rgb(0x6e7681)))
+                    .text_color(rgb(palette.text_muted))
+                    .child(div().size(px(8.)).rounded_full().bg(rgb(palette.text_dimmed)))
                     .child("No sessions"),
             );
         } else {
@@ -88,11 +88,11 @@ impl NyaTermApp {
                 let accent = if let Some(custom_color) = custom_color {
                     rgb(custom_color)
                 } else if is_active {
-                    rgb(0x3fb950)
+                    rgb(palette.success)
                 } else if has_unread {
-                    rgb(0xd29922)
+                    rgb(palette.warning)
                 } else {
-                    rgb(0x6e7681)
+                    rgb(palette.text_dimmed)
                 };
                 let bg = if let Some(custom_color) = custom_color {
                     rgba((custom_color << 8) | if is_active { 0x24 } else { 0x14 })
@@ -174,9 +174,9 @@ impl NyaTermApp {
                                     FontWeight(500.)
                                 })
                                 .text_color(if is_active {
-                                    rgb(0xe6edf3)
+                                    rgb(palette.text)
                                 } else {
-                                    rgb(0x8b949e)
+                                    rgb(palette.text_muted)
                                 })
                                 .overflow_hidden()
                                 .child(truncate_preview(&display_name, 28)),
@@ -193,8 +193,8 @@ impl NyaTermApp {
                                 .rounded_sm()
                                 .text_xs()
                                 .font_weight(FontWeight(800.))
-                                .text_color(rgb(0x8b949e))
-                                .hover(|this| this.bg(rgb(0x30363d)).text_color(rgb(0x3fb950)))
+                                .text_color(rgb(palette.text_muted))
+                                .hover(|this| this.bg(rgb(palette.border)).text_color(rgb(palette.success)))
                                 .child(
                                     svg()
                                         .size(px(12.))
@@ -216,8 +216,8 @@ impl NyaTermApp {
                                 .justify_center()
                                 .rounded_sm()
                                 .text_xs()
-                                .text_color(rgb(0x8b949e))
-                                .hover(|this| this.bg(rgb(0x30363d)).text_color(rgb(0xff7b72)))
+                                .text_color(rgb(palette.text_muted))
+                                .hover(|this| this.bg(rgb(palette.border)).text_color(rgb(palette.danger)))
                                 .child("x")
                                 .on_click(cx.listener(move |this, _, _, cx| {
                                     cx.stop_propagation();
@@ -239,7 +239,7 @@ impl NyaTermApp {
                     .min_w(px(28.))
                     .flex_none()
                     .border_l_1()
-                    .border_color(rgb(0x30363d))
+                    .border_color(rgb(palette.border))
                     .hover(|this| this.bg(rgb(0x12261a)))
                     .on_drop(cx.listener(|this, payload: &SessionTabDragPayload, _, cx| {
                         this.reorder_session_to_end(payload.session_id.clone(), cx);
@@ -254,7 +254,7 @@ impl NyaTermApp {
             .gap_1()
             .px_2()
             .border_l_1()
-            .border_color(rgb(0x30363d))
+            .border_color(rgb(palette.border))
             .child(small_button(palette, 
                 "workspace-new-local-session",
                 "+",
@@ -434,6 +434,8 @@ div()
     }
 
     fn bottom_quick_commands_bar(&mut self, cx: &mut Context<Self>) -> impl IntoElement {
+        let palette = self.theme_palette();
+
         let commands = sorted_quick_commands(&self.quick_commands);
         let mut command_row = div()
             .flex()
@@ -445,7 +447,7 @@ div()
             command_row = command_row.child(
                 div()
                     .text_xs()
-                    .text_color(rgb(0x6e7681))
+                    .text_color(rgb(palette.text_dimmed))
                     .child("No quick commands saved."),
             );
         } else {
@@ -453,9 +455,7 @@ div()
                 command_row = command_row.child(self.bottom_quick_command_chip(index, command, cx));
             }
         }
-
-        let palette = self.theme_palette();
-        div()
+div()
             .h(px(112.))
             .flex_none()
             .border_t_1()
@@ -563,7 +563,7 @@ div()
                 div()
                     .mt_1()
                     .text_xs()
-                    .text_color(rgb(0x98a3b8))
+                    .text_color(rgb(palette.text_muted))
                     .child(format!("{category} / {preview}")),
             )
             .on_click(cx.listener(move |this, _, _, cx| {

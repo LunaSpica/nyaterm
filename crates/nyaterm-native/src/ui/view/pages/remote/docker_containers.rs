@@ -11,6 +11,7 @@ pub(in crate::ui::view::pages::remote) fn docker_containers_panel(
     list_offset: usize,
     cx: &mut Context<NyaTermApp>,
 ) -> impl IntoElement {
+        let palette = cx.entity().read(cx).theme_palette();
     // Tauri Docker containers tab: dense ~66px rows, left accent, ⋮ action menu.
     if !has_snapshot {
         return div()
@@ -91,10 +92,10 @@ pub(in crate::ui::view::pages::remote) fn docker_containers_panel(
                 .py_1()
                 .rounded_md()
                 .border_1()
-                .border_color(rgb(0x21262d))
-                .bg(rgb(0x0d1117))
+                .border_color(rgb(palette.surface_elevated))
+                .bg(rgb(palette.bg))
                 .text_size(px(10.))
-                .text_color(rgb(0x6e7681))
+                .text_color(rgb(palette.text_dimmed))
                 .child(format!(
                     "Rows {window_start}-{window_end}/{total} · scroll or refine search"
                 )),
@@ -134,6 +135,7 @@ fn docker_container_row(
     menu_open: bool,
     cx: &mut Context<NyaTermApp>,
 ) -> impl IntoElement {
+        let palette = cx.entity().read(cx).theme_palette();
     let container_id = container.id.clone();
     let details_id = container.id.clone();
     let menu_id = container.id.clone();
@@ -148,9 +150,9 @@ fn docker_container_row(
         .h(px(66.))
         .rounded_md()
         .border_1()
-        .border_color(rgb(0x30363d))
+        .border_color(rgb(palette.border))
         // Left accent bar painted as absolute child.
-        .bg(rgb(0x12171f))
+        .bg(rgb(palette.section_header))
         .hover(|this| this.bg(rgb(0x18202b)))
         .cursor_pointer()
         .overflow_hidden()
@@ -186,7 +188,7 @@ fn docker_container_row(
                                 .flex_1()
                                 .text_size(px(12.))
                                 .font_weight(FontWeight(600.))
-                                .text_color(rgb(0xc9d1d9))
+                                .text_color(rgb(palette.text))
                                 .overflow_hidden()
                                 .child(truncate_preview(&container.name, 40)),
                         )
@@ -203,7 +205,7 @@ fn docker_container_row(
                         .gap_2()
                         .font_family("JetBrains Mono")
                         .text_size(px(10.))
-                        .text_color(rgb(0x6e7681))
+                        .text_color(rgb(palette.text_dimmed))
                         .child(
                             div()
                                 .min_w_0()
@@ -220,7 +222,7 @@ fn docker_container_row(
                         .gap_2()
                         .font_family("JetBrains Mono")
                         .text_size(px(10.))
-                        .text_color(rgb(0x484f58))
+                        .text_color(rgb(palette.border))
                         .child(
                             div()
                                 .min_w_0()
@@ -287,6 +289,7 @@ fn docker_container_action_menu(
     running: bool,
     cx: &mut Context<NyaTermApp>,
 ) -> impl IntoElement {
+        let palette = cx.entity().read(cx).theme_palette();
     let short = compact_id(&container_id);
     let logs_id = container_id.clone();
     let enter_id = container_id.clone();
@@ -306,8 +309,8 @@ fn docker_container_action_menu(
         .w(px(148.))
         .rounded_md()
         .border_1()
-        .border_color(rgb(0x30363d))
-        .bg(rgb(0x161b22))
+        .border_color(rgb(palette.border))
+        .bg(rgb(palette.surface))
         .shadow_lg()
         .py_1()
         .flex()
@@ -416,6 +419,7 @@ fn docker_menu_item(
     disabled: bool,
     on_click: impl Fn(&gpui::ClickEvent, &mut gpui::Window, &mut gpui::App) + 'static,
 ) -> impl IntoElement {
+    let palette = crate::ui::theme::theme_palette("github-dark");
     div()
         .id(SharedString::from(id.into()))
         .h(px(28.))
@@ -424,13 +428,13 @@ fn docker_menu_item(
         .items_center()
         .text_size(px(12.))
         .text_color(if disabled {
-            rgb(0x484f58)
+            rgb(palette.border)
         } else {
-            rgb(0xc9d1d9)
+            rgb(palette.text)
         })
         .when(!disabled, |this| {
             this.cursor_pointer()
-                .hover(|s| s.bg(rgb(0x21262d)))
+                .hover(|s| s.bg(rgb(palette.surface_elevated)))
                 .on_click(on_click)
         })
         .when(disabled, |this| this.opacity(0.5))
@@ -438,15 +442,17 @@ fn docker_menu_item(
 }
 
 fn docker_menu_separator() -> impl IntoElement {
-    div().h(px(1.)).mx_2().my_1().bg(rgb(0x30363d))
+    let palette = crate::ui::theme::theme_palette("github-dark");
+    div().h(px(1.)).mx_2().my_1().bg(rgb(palette.border))
 }
 
 fn docker_state_border_color(state: &str) -> gpui::Hsla {
+    let palette = crate::ui::theme::theme_palette("github-dark");
     match state.trim().to_ascii_lowercase().as_str() {
         "running" => rgb(0x22c55e).into(),
         "restarting" | "paused" => rgb(0xf59e0b).into(),
         "exited" | "dead" => rgb(0xef4444).into(),
         "created" => rgb(0x3b82f6).into(),
-        _ => rgb(0x6e7681).into(),
+        _ => rgb(palette.text_dimmed).into(),
     }
 }

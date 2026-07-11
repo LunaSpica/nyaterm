@@ -53,7 +53,7 @@ impl NyaTermApp {
                             .child(
                                 div()
                                     .text_xs()
-                                    .text_color(rgb(0x98a3b8))
+                                    .text_color(rgb(palette.text_muted))
                                     .child(format!("Source: {}", prompt.request.source_path)),
                             ),
                     )
@@ -148,11 +148,11 @@ impl NyaTermApp {
                                     .text_color(rgb(0xcbd5e1))
                                     .child(prompt.host_key.host_identifier.clone()),
                             )
-                            .child(div().text_xs().text_color(rgb(0x98a3b8)).child(format!(
+                            .child(div().text_xs().text_color(rgb(palette.text_muted)).child(format!(
                                 "{} {}",
                                 prompt.host_key.key_type, prompt.host_key.fingerprint
                             )))
-                            .child(div().text_xs().text_color(rgb(0x98a3b8)).child(action)),
+                            .child(div().text_xs().text_color(rgb(palette.text_muted)).child(action)),
                     )
                     .child(
                         div()
@@ -224,7 +224,7 @@ impl NyaTermApp {
                     .text_color(rgb(0xcbd5e1))
                     .child(credential_prompt_target(&prompt.prompt)),
             )
-            .child(div().text_xs().text_color(rgb(0x98a3b8)).child(reason));
+            .child(div().text_xs().text_color(rgb(palette.text_muted)).child(reason));
         if let Some(prompt_text) = prompt
             .prompt
             .prompt_text
@@ -350,7 +350,7 @@ impl NyaTermApp {
                             .flex_col()
                             .gap_1()
                             .child(div().text_sm().font_weight(FontWeight(700.)).child(title))
-                            .child(div().text_xs().text_color(rgb(0x98a3b8)).child(
+                            .child(div().text_xs().text_color(rgb(palette.text_muted)).child(
                                 match prompt.kind {
                                     SnapshotPasswordPromptKind::CloudPush
                                     | SnapshotPasswordPromptKind::CloudPull

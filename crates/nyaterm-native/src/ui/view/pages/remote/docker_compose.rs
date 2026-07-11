@@ -52,6 +52,7 @@ fn docker_compose_project_row(
     open_menu_id: Option<&str>,
     cx: &mut Context<NyaTermApp>,
 ) -> impl IntoElement {
+        let palette = cx.entity().read(cx).theme_palette();
     let project_name = project.name.clone();
     let config_files = Some(project.config_files.clone()).filter(|value| {
         !value.trim().is_empty() && value.trim().to_ascii_lowercase() != "n/a"
@@ -65,8 +66,8 @@ fn docker_compose_project_row(
         .id(SharedString::from(format!("docker-compose-project-{project_key}")))
         .rounded_md()
         .border_1()
-        .border_color(rgb(0x30363d))
-        .bg(rgb(0x12171f))
+        .border_color(rgb(palette.border))
+        .bg(rgb(palette.section_header))
         .hover(|this| this.bg(rgb(0x18202b)))
         .overflow_hidden()
         .flex()
@@ -93,9 +94,9 @@ fn docker_compose_project_row(
                         .justify_center()
                         .rounded_md()
                         .text_size(px(12.))
-                        .text_color(rgb(0x8b949e))
+                        .text_color(rgb(palette.text_muted))
                         .cursor_pointer()
-                        .hover(|this| this.bg(rgb(0x21262d)).text_color(rgb(0xe5edf7)))
+                        .hover(|this| this.bg(rgb(palette.surface_elevated)).text_color(rgb(palette.text)))
                         .child(chevron)
                         .on_click(cx.listener({
                             let project_name = project_name.clone();
@@ -148,7 +149,7 @@ fn docker_compose_project_row(
                                         .flex_1()
                                         .text_size(px(12.))
                                         .font_weight(FontWeight(700.))
-                                        .text_color(rgb(0xe5edf7))
+                                        .text_color(rgb(palette.text))
                                         .overflow_hidden()
                                         .child(truncate_preview(&project.name, 42)),
                                 )
@@ -158,7 +159,7 @@ fn docker_compose_project_row(
                             div()
                                 .font_family("JetBrains Mono")
                                 .text_size(px(10.))
-                                .text_color(rgb(0x6e7681))
+                                .text_color(rgb(palette.text_dimmed))
                                 .overflow_hidden()
                                 .child(truncate_preview(&project.config_files, 64)),
                         ),
@@ -221,9 +222,10 @@ pub(in crate::ui::view::pages::remote) fn docker_compose_services_panel(
     open_menu_id: Option<&str>,
     cx: &mut Context<NyaTermApp>,
 ) -> impl IntoElement {
+        let palette = cx.entity().read(cx).theme_palette();
     let mut rows = div()
         .border_t_1()
-        .border_color(rgb(0x30363d))
+        .border_color(rgb(palette.border))
         .px_2()
         .pb_2()
         .pt_1()
@@ -275,7 +277,7 @@ pub(in crate::ui::view::pages::remote) fn docker_compose_services_panel(
                     .items_center()
                     .justify_center()
                     .text_size(px(12.))
-                    .text_color(rgb(0x6e7681))
+                    .text_color(rgb(palette.text_dimmed))
                     .child("No compose services reported."),
             );
         } else {
@@ -301,7 +303,7 @@ pub(in crate::ui::view::pages::remote) fn docker_compose_services_panel(
                 .items_center()
                 .justify_center()
                 .text_size(px(11.))
-                .text_color(rgb(0x8b949e))
+                .text_color(rgb(palette.text_muted))
                 .child("Loading compose services…"),
         );
     }
@@ -316,6 +318,7 @@ pub(in crate::ui::view::pages::remote) fn docker_compose_service_row(
     menu_id: String,
     cx: &mut Context<NyaTermApp>,
 ) -> impl IntoElement {
+        let palette = cx.entity().read(cx).theme_palette();
     let container_summary = if service.containers.is_empty() {
         "no containers".to_string()
     } else {
@@ -351,7 +354,7 @@ pub(in crate::ui::view::pages::remote) fn docker_compose_service_row(
         .relative()
         .h(px(48.))
         .rounded_md()
-        .bg(rgb(0x0d1117))
+        .bg(rgb(palette.bg))
         .hover(|this| this.bg(rgb(0x151b24)))
         .px_2()
         .pr(px(36.))
@@ -375,7 +378,7 @@ pub(in crate::ui::view::pages::remote) fn docker_compose_service_row(
                                 .flex_1()
                                 .text_size(px(12.))
                                 .font_weight(FontWeight(600.))
-                                .text_color(rgb(0xe5edf7))
+                                .text_color(rgb(palette.text))
                                 .overflow_hidden()
                                 .child(truncate_preview(&service.name, 42)),
                         )
@@ -389,7 +392,7 @@ pub(in crate::ui::view::pages::remote) fn docker_compose_service_row(
                     div()
                         .font_family("JetBrains Mono")
                         .text_size(px(10.))
-                        .text_color(rgb(0x6e7681))
+                        .text_color(rgb(palette.text_dimmed))
                         .overflow_hidden()
                         .child(truncate_preview(&container_summary, 72)),
                 ),
@@ -439,6 +442,7 @@ fn docker_compose_project_action_menu(
     project_key: &str,
     cx: &mut Context<NyaTermApp>,
 ) -> impl IntoElement {
+        let palette = cx.entity().read(cx).theme_palette();
     let short = project_key.replace(['/', ':', ' '], "-");
     div()
         .id(SharedString::from(format!("docker-compose-project-menu-{short}")))
@@ -448,8 +452,8 @@ fn docker_compose_project_action_menu(
         .w(px(140.))
         .rounded_md()
         .border_1()
-        .border_color(rgb(0x30363d))
-        .bg(rgb(0x161b22))
+        .border_color(rgb(palette.border))
+        .bg(rgb(palette.surface))
         .shadow_lg()
         .py_1()
         .flex()
@@ -524,6 +528,7 @@ fn docker_compose_service_action_menu(
     can_enter: bool,
     cx: &mut Context<NyaTermApp>,
 ) -> impl IntoElement {
+        let palette = cx.entity().read(cx).theme_palette();
     let short = format!("{project_name}-{service_name}")
         .replace(['/', ':', ' '], "-");
     div()
@@ -534,8 +539,8 @@ fn docker_compose_service_action_menu(
         .w(px(140.))
         .rounded_md()
         .border_1()
-        .border_color(rgb(0x30363d))
-        .bg(rgb(0x161b22))
+        .border_color(rgb(palette.border))
+        .bg(rgb(palette.surface))
         .shadow_lg()
         .py_1()
         .flex()
@@ -643,6 +648,7 @@ fn compose_menu_item(
     disabled: bool,
     on_click: impl Fn(&gpui::ClickEvent, &mut gpui::Window, &mut gpui::App) + 'static,
 ) -> impl IntoElement {
+    let palette = crate::ui::theme::theme_palette("github-dark");
     div()
         .id(SharedString::from(id.into()))
         .h(px(28.))
@@ -651,13 +657,13 @@ fn compose_menu_item(
         .items_center()
         .text_size(px(12.))
         .text_color(if disabled {
-            rgb(0x484f58)
+            rgb(palette.border)
         } else {
-            rgb(0xc9d1d9)
+            rgb(palette.text)
         })
         .when(!disabled, |this| {
             this.cursor_pointer()
-                .hover(|s| s.bg(rgb(0x21262d)))
+                .hover(|s| s.bg(rgb(palette.surface_elevated)))
                 .on_click(on_click)
         })
         .when(disabled, |this| this.opacity(0.5))
@@ -665,7 +671,8 @@ fn compose_menu_item(
 }
 
 fn compose_menu_separator() -> impl IntoElement {
-    div().h(px(1.)).mx_2().my_1().bg(rgb(0x30363d))
+    let palette = crate::ui::theme::theme_palette("github-dark");
+    div().h(px(1.)).mx_2().my_1().bg(rgb(palette.border))
 }
 
 fn compose_status_label(status: &str) -> &'static str {
@@ -688,11 +695,12 @@ fn compose_status_label(status: &str) -> &'static str {
 }
 
 fn compose_status_color(status: &str) -> gpui::Hsla {
+    let palette = crate::ui::theme::theme_palette("github-dark");
     match status {
         "running" => rgb(0x6ee7b7).into(),
         "stopped" => rgb(0xfca5a5).into(),
         "created" | "paused" => rgb(0xfbbf24).into(),
-        "not created" => rgb(0x98a3b8).into(),
-        _ => rgb(0x98a3b8).into(),
+        "not created" => rgb(palette.text_muted).into(),
+        _ => rgb(palette.text_muted).into(),
     }
 }

@@ -5,6 +5,7 @@ impl NyaTermApp {
         &mut self,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
+        let palette = self.theme_palette();
         let active_session_id = self.active_session_id.clone();
         let sessions = self.ordered_sessions();
         let session_count = sessions.len();
@@ -22,7 +23,7 @@ impl NyaTermApp {
                     .py_4()
                     .text_center()
                     .text_size(px(11.))
-                    .text_color(rgb(0x6e7681))
+                    .text_color(rgb(palette.text_dimmed))
                     .child("No active sessions"),
             );
         } else {
@@ -61,21 +62,21 @@ impl NyaTermApp {
                         .rounded_md()
                         .px_2()
                         .bg(if is_current {
-                            rgb(0x122033)
+                            rgb(palette.hover)
                         } else {
-                            rgb(0x161b22)
+                            rgb(palette.surface)
                         })
                         .border_1()
                         .border_color(if is_current {
                             rgb(0x1f6feb)
                         } else {
-                            rgb(0x161b22)
+                            rgb(palette.surface)
                         })
                         .flex()
                         .items_center()
                         .gap_2()
                         .cursor_pointer()
-                        .hover(|this| this.bg(rgb(0x1c2128)))
+                        .hover(|this| this.bg(rgb(palette.hover)))
                         .on_click(cx.listener(move |this, _, _, cx| {
                             this.select_session(select_session_id.clone(), cx);
                         }))
@@ -107,7 +108,7 @@ impl NyaTermApp {
                                                 .flex_1()
                                                 .text_xs()
                                                 .font_weight(FontWeight(600.))
-                                                .text_color(rgb(0xc9d1d9))
+                                                .text_color(rgb(palette.text))
                                                 .overflow_hidden()
                                                 .child(truncate_preview(&session_name, 34)),
                                         )
@@ -115,10 +116,10 @@ impl NyaTermApp {
                                             div()
                                                 .px_1()
                                                 .rounded_sm()
-                                                .bg(rgb(0x21262d))
+                                                .bg(rgb(palette.surface_elevated))
                                                 .text_size(px(10.))
                                                 .font_weight(FontWeight(700.))
-                                                .text_color(rgb(0x8b949e))
+                                                .text_color(rgb(palette.text_muted))
                                                 .child(kind),
                                         ),
                                 )
@@ -131,7 +132,7 @@ impl NyaTermApp {
                                             div()
                                                 .font_family("JetBrains Mono")
                                                 .text_size(px(10.))
-                                                .text_color(rgb(0x6e7681))
+                                                .text_color(rgb(palette.text_dimmed))
                                                 .child(short),
                                         )
                                         .when(session_is_recording, |this| {
@@ -141,7 +142,7 @@ impl NyaTermApp {
                                                     .rounded_sm()
                                                     .bg(rgb(0x3d1418))
                                                     .text_size(px(10.))
-                                                    .text_color(rgb(0xf85149))
+                                                    .text_color(rgb(palette.danger))
                                                     .child("● REC"),
                                             )
                                         }),
@@ -160,9 +161,9 @@ impl NyaTermApp {
                                         "icons/session/record.svg"
                                     },
                                     if session_is_recording {
-                                        rgb(0xf85149)
+                                        rgb(palette.danger)
                                     } else {
-                                        rgb(0x8b949e)
+                                        rgb(palette.text_muted)
                                     },
                                     cx.listener(move |this, _, _, cx| {
                                         cx.stop_propagation();
@@ -181,7 +182,7 @@ impl NyaTermApp {
                                 .child(recording_action_svg_button(
                                     format!("recording-session-save-{session_id}"),
                                     "icons/session/save.svg",
-                                    rgb(0x8b949e),
+                                    rgb(palette.text_muted),
                                     cx.listener(move |this, _, _, cx| {
                                         cx.stop_propagation();
                                         this.prompt_recording_path_for_session(
@@ -201,7 +202,7 @@ impl NyaTermApp {
                         .py_4()
                         .text_center()
                         .text_size(px(11.))
-                        .text_color(rgb(0x6e7681))
+                        .text_color(rgb(palette.text_dimmed))
                         .child("No matching sessions"),
                 );
             }
@@ -221,15 +222,15 @@ impl NyaTermApp {
             .flex()
             .flex_col()
             .overflow_hidden()
-            .bg(rgb(0x161b22))
+            .bg(rgb(palette.surface))
             .child(
                 div()
                     .h(px(36.))
                     .flex_none()
                     .px_2()
                     .border_b_1()
-                    .border_color(rgb(0x30363d))
-                    .bg(rgb(0x161b22))
+                    .border_color(rgb(palette.border))
+                    .bg(rgb(palette.surface))
                     .flex()
                     .items_center()
                     .gap_2()
@@ -243,7 +244,7 @@ impl NyaTermApp {
                                     .id(SharedString::from("recording-session-search"))
                                     .h(px(28.))
                                     .rounded_md()
-                                    .bg(rgb(0x21262d))
+                                    .bg(rgb(palette.surface_elevated))
                                     .px_2()
                                     .flex()
                                     .items_center()
@@ -263,7 +264,7 @@ impl NyaTermApp {
                                             .size(px(14.))
                                             .flex_none()
                                             .path("icons/fe/search.svg")
-                                            .text_color(rgb(0x8b949e)),
+                                            .text_color(rgb(palette.text_muted)),
                                     )
                                     .child(
                                         div()
@@ -271,9 +272,9 @@ impl NyaTermApp {
                                             .flex_1()
                                             .text_size(px(12.))
                                             .text_color(if self.recording_search_draft.is_empty() {
-                                                rgb(0x6e7681)
+                                                rgb(palette.text_dimmed)
                                             } else {
-                                                rgb(0xc9d1d9)
+                                                rgb(palette.text)
                                             })
                                             .child(if self.recording_search_draft.is_empty() {
                                                 "Search sessions".to_string()
@@ -286,7 +287,7 @@ impl NyaTermApp {
                     .child(
                         div()
                             .text_size(px(11.))
-                            .text_color(rgb(0x6e7681))
+                            .text_color(rgb(palette.text_dimmed))
                             .child(count_label),
                     ),
             )
@@ -312,6 +313,7 @@ fn recording_action_svg_button(
     color: impl Into<gpui::Hsla>,
     on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
 ) -> impl IntoElement {
+    let palette = crate::ui::theme::theme_palette("github-dark");
     let color = color.into();
     div()
         .id(SharedString::from(id.into()))
@@ -322,7 +324,7 @@ fn recording_action_svg_button(
         .rounded_md()
         .text_color(color)
         .cursor_pointer()
-        .hover(|this| this.bg(rgb(0x21262d)).text_color(rgb(0xc9d1d9)))
+        .hover(|this| this.bg(rgb(palette.surface_elevated)).text_color(rgb(palette.text)))
         .child(
             svg()
                 .size(px(16.))
