@@ -45,6 +45,23 @@ impl NyaTermApp {
         let selected_for_paste = selected.clone();
         let selected_for_translate = selected.clone();
         let selected_for_ai = selected.clone();
+        let search_engines: Vec<(String, String)> = self
+            .settings
+            .search_custom_engines
+            .iter()
+            .filter(|engine| engine.show_in_menu && !engine.name.trim().is_empty() && !engine.url_template.trim().is_empty())
+            .map(|engine| (engine.name.clone(), engine.url_template.clone()))
+            .collect();
+        let terminal_ai_actions: Vec<(String, String, String)> = if self.ai_settings.enabled {
+            self.ai_settings
+                .terminal_ai_actions
+                .iter()
+                .filter(|action| action.enabled && !action.name.trim().is_empty())
+                .map(|action| (action.id.clone(), action.name.clone(), action.prompt.clone()))
+                .collect()
+        } else {
+            Vec::new()
+        };
 
         let mut items = div()
             .id(SharedString::from("terminal-context-menu"))
@@ -88,6 +105,55 @@ impl NyaTermApp {
                         this.open_terminal_search(window, cx);
                     }),
                 ))
+                .children(search_engines.into_iter().map(|(name, template)| {
+                    let query = selected.clone();
+                    terminal_ctx_item(
+                        palette,
+                        format!("term-ctx-search-{name}"),
+                        format!("Search Online · {name}"),
+                        None,
+                        cx.listener(move |this, _, _, cx| {
+                            this.close_terminal_context_menu(cx);
+                            let url = search_engine_url(&template, &query);
+                            match open_external_url(&url) {
+                                Ok(()) => {
+                                    this.terminal_status =
+                                        format!("opened online search: {name}");
+                                }
+                                Err(error) => {
+                                    this.terminal_status =
+                                        format!("online search failed: {error}");
+                                }
+                            }
+                            cx.notify();
+                        }),
+                    )
+                }))
+                .children(terminal_ai_actions.into_iter().map(|(id, name, prompt)| {
+                    let query = selected.clone();
+                    terminal_ctx_item(
+                        palette,
+                        format!("term-ctx-ai-action-{id}"),
+                        format!("AI · {name}"),
+                        None,
+                        cx.listener(move |this, _, window, cx| {
+                            this.close_terminal_context_menu(cx);
+                            this.ensure_panel_open(NavItem::AiAssistant);
+                            let body = if query.chars().count() > 2_800 {
+                                let clipped: String = query.chars().take(2_800).collect();
+                                format!("{clipped}…")
+                            } else {
+                                query.clone()
+                            };
+                            this.ai_prompt_draft = format!("{prompt}
+
+{body}");
+                            this.ai_status = format!("AI action loaded: {name}");
+                            window.focus(&this.ai_chat_focus);
+                            cx.notify();
+                        }),
+                    )
+                }))
                 .child(terminal_ctx_item(
                     palette,
                     "term-ctx-translate",
@@ -274,4 +340,60 @@ fn terminal_ctx_separator(palette: crate::ui::theme::ThemePalette) -> impl IntoE
         .my_1()
         .mx_2()
         .bg(rgb(palette.border))
+}
+
+
+fn open_external_url(url: &str) -> Result<(), String> {
+    let url = url.trim();
+    if url.is_empty() {
+        return Err("empty url".to_string());
+    }
+    #[cfg(target_os = "macos")]
+    {
+        std::process::Command::new("open")
+            .arg(url)
+            .spawn()
+            .map(|_| ())
+            .map_err(|error| format!("failed to open url: {error}"))
+    }
+    #[cfg(target_os = "windows")]
+    {
+        std::process::Command::new("cmd")
+            .args(["/C", "start", ""])
+            .arg(url)
+            .spawn()
+            .map(|_| ())
+            .map_err(|error| format!("failed to open url: {error}"))
+    }
+    #[cfg(all(unix, not(target_os = "macos")))]
+    {
+        std::process::Command::new("xdg-open")
+            .arg(url)
+            .spawn()
+            .map(|_| ())
+            .map_err(|error| format!("failed to open url: {error}"))
+    }
+}
+
+fn search_engine_url(template: &str, query: &str) -> String {
+    let encoded = urlencoding_minimal(query);
+    if template.contains("%s") {
+        template.replace("%s", &encoded)
+    } else {
+        format!("{template}{encoded}")
+    }
+}
+
+fn urlencoding_minimal(input: &str) -> String {
+    let mut out = String::with_capacity(input.len() * 3);
+    for b in input.as_bytes() {
+        match *b {
+            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' => {
+                out.push(*b as char);
+            }
+            b' ' => out.push_str("%20"),
+            _ => out.push_str(&format!("%{b:02X}")),
+        }
+    }
+    out
 }

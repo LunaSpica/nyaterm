@@ -507,6 +507,38 @@ pub struct SessionsConfig {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct SearchEngineConfig {
+    pub name: String,
+    pub url_template: String,
+    #[serde(default = "default_true_search_menu")]
+    pub show_in_menu: bool,
+}
+
+fn default_true_search_menu() -> bool {
+    true
+}
+
+pub fn default_search_engines() -> Vec<SearchEngineConfig> {
+    vec![
+        SearchEngineConfig {
+            name: "Google".to_string(),
+            url_template: "https://www.google.com/search?q=%s".to_string(),
+            show_in_menu: true,
+        },
+        SearchEngineConfig {
+            name: "Bing".to_string(),
+            url_template: "https://www.bing.com/search?q=%s".to_string(),
+            show_in_menu: true,
+        },
+        SearchEngineConfig {
+            name: "GitHub".to_string(),
+            url_template: "https://github.com/search?q=%s".to_string(),
+            show_in_menu: true,
+        },
+    ]
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct AppSettingsSummary {
     pub theme: String,
     #[serde(default)]
@@ -538,6 +570,9 @@ pub struct AppSettingsSummary {
     pub terminal_show_timestamp_milliseconds: bool,
     pub terminal_show_multi_line_paste_dialog: bool,
     pub terminal_paste_image_as_path: bool,
+    /// Online search engines for terminal selection context menu (Tauri search.custom_engines).
+    #[serde(default = "default_search_engines")]
+    pub search_custom_engines: Vec<SearchEngineConfig>,
     pub ui_show_remote_stats: bool,
     pub ui_remote_stats_interval: u32,
     pub ui_show_process_manager: bool,
@@ -694,6 +729,7 @@ impl Default for AppSettingsSummary {
             terminal_show_timestamp_milliseconds: false,
             terminal_show_multi_line_paste_dialog: true,
             terminal_paste_image_as_path: true,
+            search_custom_engines: default_search_engines(),
             ui_show_remote_stats: true,
             ui_remote_stats_interval: 3,
             ui_show_process_manager: true,

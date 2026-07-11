@@ -18,6 +18,7 @@ use crate::{
     KeywordHighlightConfig, KeywordHighlightImportResult, KeywordHighlightRule,
     OAuthDriveSyncSettings, OtpEntry, PortableSnapshotError, PortableSnapshotKind, ProxyConfig,
     ProxyGroup, ProxyGroupsConfig, QuickCommand, QuickCommandCategory, QuickCommandsConfig,
+    SearchEngineConfig, default_search_engines,
     RawPortableSnapshot, SavedConnection, SavedCredential, SavedPassword, SessionsConfig, SshKey,
     TranslationSettings, TunnelConfig, TunnelGroup, TunnelGroupsConfig,
     ai_settings_has_secret, merge_masked_ai_settings, merge_masked_cloud_sync_settings,
@@ -1266,6 +1267,7 @@ impl ConnectionStore {
                 &["terminal", "paste_image_as_path"],
                 true,
             ),
+            search_custom_engines: load_search_engines(&value),
             ui_show_remote_stats: json_bool(&value, &["ui", "show_remote_stats"], true),
             ui_remote_stats_interval: json_u32(&value, &["ui", "remote_stats_interval"], 3)
                 .clamp(1, 60),
@@ -1894,6 +1896,11 @@ impl ConnectionStore {
             &mut value,
             &["terminal", "paste_image_as_path"],
             serde_json::Value::Bool(settings.terminal_paste_image_as_path),
+        );
+        set_nested_json_value(
+            &mut value,
+            &["search", "custom_engines"],
+            search_engines_to_json(&settings.search_custom_engines),
         );
         set_nested_json_value(
             &mut value,
@@ -4399,6 +4406,60 @@ fn json_path<'a>(value: &'a serde_json::Value, path: &[&str]) -> Option<&'a serd
 
 fn set_nested_json_string(value: &mut serde_json::Value, path: &[&str], new_value: String) {
     set_nested_json_value(value, path, serde_json::Value::String(new_value));
+}
+
+
+fn load_search_engines(value: &serde_json::Value) -> Vec<SearchEngineConfig> {
+    let Some(arr) = json_path(value, &["search", "custom_engines"]).and_then(|v| v.as_array()) else {
+        return default_search_engines();
+    };
+    let mut engines = Vec::new();
+    for item in arr {
+        let name = item
+            .get("name")
+            .and_then(|v| v.as_str())
+            .unwrap_or("")
+            .trim()
+            .to_string();
+        let url_template = item
+            .get("url_template")
+            .and_then(|v| v.as_str())
+            .unwrap_or("")
+            .trim()
+            .to_string();
+        if name.is_empty() || url_template.is_empty() {
+            continue;
+        }
+        let show_in_menu = item
+            .get("show_in_menu")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(true);
+        engines.push(SearchEngineConfig {
+            name,
+            url_template,
+            show_in_menu,
+        });
+    }
+    if engines.is_empty() {
+        default_search_engines()
+    } else {
+        engines
+    }
+}
+
+fn search_engines_to_json(engines: &[SearchEngineConfig]) -> serde_json::Value {
+    serde_json::Value::Array(
+        engines
+            .iter()
+            .map(|engine| {
+                serde_json::json!({
+                    "name": engine.name,
+                    "url_template": engine.url_template,
+                    "show_in_menu": engine.show_in_menu,
+                })
+            })
+            .collect(),
+    )
 }
 
 fn set_nested_json_value(
