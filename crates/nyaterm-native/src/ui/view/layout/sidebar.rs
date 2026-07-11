@@ -3,14 +3,15 @@ use super::*;
 impl NyaTermApp {
     pub(in crate::ui::view) fn sidebar(&mut self, cx: &mut Context<Self>) -> impl IntoElement {
         let width = self.left_panel_width.clamp(160., 720.);
+        let palette = self.theme_palette();
         div()
             .w(px(width))
             .flex_none()
             .flex()
             .flex_col()
             .border_r_1()
-            .border_color(rgb(0x30363d))
-            .bg(rgb(0x161b22))
+            .border_color(rgb(palette.border))
+            .bg(rgb(palette.surface))
             .child(self.side_panel_stack(PanelSide::Left, cx))
     }
 

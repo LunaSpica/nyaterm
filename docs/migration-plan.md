@@ -786,3 +786,8 @@ service boundary first:
 ## 2026-07-11 Appearance theme palette application
 - `ThemePalette` for github-dark / github-light / catppuccin.
 - Root shell + title bar apply palette bg/surface/border/text; font family follows appearance.font_family.
+
+## 2026-07-11 Theme shell chrome expansion
+- Panel headers take live `ThemePalette` (surface/border/text_muted).
+- Status bar, activity bar, left/right side panels, and main surface use palette bg/surface/border.
+- Terminal canvas font family/size follow appearance settings (`terminal_font_family` / `terminal_font_size`).

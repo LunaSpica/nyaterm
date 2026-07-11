@@ -13,7 +13,7 @@ use crate::ui::components::{mode_button, small_button, status_pill};
 use crate::ui::models::WorkspaceSplitDirection;
 
 use super::{
-    InlineMdStyle, MarkdownBlock, cloud_sync_history_summary, cloud_sync_kind_text_color,
+    InlineMdStyle, MarkdownBlock, ThemePalette, cloud_sync_history_summary, cloud_sync_kind_text_color,
     cloud_sync_status_dot_color, cloud_sync_status_text_color, compact_id, docker_state_color,
     docker_state_label, format_cloud_provider, format_duration_ms, format_history_timestamp_ms,
     format_rate, parse_inline_markdown, parse_markdown_blocks, tunnel_endpoint, tunnel_mode_label,
@@ -141,6 +141,7 @@ pub(in crate::ui::view) fn window_control_button(
 pub(in crate::ui::view) fn panel_header(
     title: impl Into<SharedString>,
     meta: impl Into<SharedString>,
+    palette: ThemePalette,
 ) -> impl IntoElement {
     // Tauri PanelHeader: min-h-9, uppercase tracked title + dimmed meta/actions.
     let title = title.into();
@@ -155,8 +156,8 @@ pub(in crate::ui::view) fn panel_header(
         .gap_3()
         .px_3()
         .border_b_1()
-        .border_color(rgb(0x30363d))
-        .bg(rgb(0x12171f))
+        .border_color(rgb(palette.border))
+        .bg(rgb(palette.surface))
         .child(
             div()
                 .min_w_0()
@@ -168,7 +169,7 @@ pub(in crate::ui::view) fn panel_header(
                     div()
                         .text_size(px(11.))
                         .font_weight(FontWeight(700.))
-                        .text_color(rgb(0x8b949e))
+                        .text_color(rgb(palette.text_muted))
                         .child(title.to_uppercase()),
                 )
                 .when(show_meta, |this| {
@@ -176,7 +177,8 @@ pub(in crate::ui::view) fn panel_header(
                         div()
                             .min_w_0()
                             .text_size(px(11.))
-                            .text_color(rgb(0x6e7681))
+                            .text_color(rgb(palette.text_muted))
+                            .opacity(0.85)
                             .overflow_hidden()
                             .child(meta),
                     )

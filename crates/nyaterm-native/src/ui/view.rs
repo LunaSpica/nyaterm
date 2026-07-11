@@ -100,6 +100,7 @@ pub(in crate::ui::view) use transfer_widgets::{
     format_file_size, format_transfer_progress, transfer_input, transfer_job_title,
     transfer_progress_bar, transfer_status_label,
 };
+pub(in crate::ui::view) use appearance::{ThemePalette, theme_palette};
 pub(in crate::ui::view) use view_widgets::*;
 
 const LEGACY_ROOT: &str = "nyaterm-tauri";

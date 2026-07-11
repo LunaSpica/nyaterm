@@ -105,6 +105,7 @@ impl NyaTermApp {
             "manual".to_string()
         };
 
+        let palette = self.theme_palette();
         div()
             .h(px(22.))
             .flex_none()
@@ -114,8 +115,8 @@ impl NyaTermApp {
             .gap_1()
             .px_2()
             .border_t_1()
-            .border_color(rgb(0x30363d))
-            .bg(rgb(0x0d1117))
+            .border_color(rgb(palette.border))
+            .bg(rgb(palette.bg))
             .text_size(px(10.))
             .child(
                 div()
@@ -499,6 +500,7 @@ impl NyaTermApp {
         let top_len = top_entries.len();
         let bottom_len = bottom_entries.len();
         let show_labels = self.activity_bar_layout.show_labels;
+        let palette = self.theme_palette();
 
         // Tauri DropZone: gap-0.5 pt-1
         let mut top = div().flex().flex_col().items_center().gap(px(2.)).pt_1();
@@ -526,10 +528,10 @@ impl NyaTermApp {
             .flex_none()
             .flex()
             .flex_col()
-            .border_color(rgb(0x30363d))
+            .border_color(rgb(palette.border))
             .when(side == ActivitySide::Left, |this| this.border_r_1())
             .when(side == ActivitySide::Right, |this| this.border_l_1())
-            .bg(rgb(0x0d1117))
+            .bg(rgb(palette.bg))
             .child(top)
             .child(bottom)
     }

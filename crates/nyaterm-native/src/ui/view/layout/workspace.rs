@@ -4,12 +4,13 @@ impl NyaTermApp {
     pub(in crate::ui::view) fn main_surface(&mut self, cx: &mut Context<Self>) -> impl IntoElement {
         // The main surface always hosts the terminal workspace. Side panels are
         // rendered by the shell around this surface to match the Tauri layout.
+        let palette = self.theme_palette();
         div()
             .flex_1()
             .min_w_0()
             .flex()
             .flex_col()
-            .bg(rgb(0x0d1117))
+            .bg(rgb(palette.bg))
             .child(self.workspace_view(cx))
     }
 

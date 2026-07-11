@@ -60,12 +60,14 @@ impl NyaTermApp {
             .unwrap_or_else(|| short_id(&session_id).to_string());
         let sync_group_label = self.active_sync_group_label(&session_id);
         let output_session_id = session_id.clone();
+        let terminal_font_family = self.settings.terminal_font_family.clone();
+        let terminal_font_size = self.settings.terminal_font_size as f32;
 
         div()
             .flex_1()
             .min_h_0()
-            .font_family("JetBrains Mono")
-            .text_sm()
+            .font_family(terminal_font_family)
+            .text_size(px(terminal_font_size))
             .text_color(rgb(0xc8d3f5))
             .child(
                 div()

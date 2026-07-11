@@ -434,6 +434,7 @@ impl NyaTermApp {
             let panel = NavItem::from_persistence_id(panel_id).unwrap_or(NavItem::Transfers);
             let basis = weights[index] / total;
             let meta = self.side_panel_meta(side, panel);
+            let palette = self.theme_palette();
             let body = match side {
                 PanelSide::Left => self.left_panel_body(panel, cx),
                 PanelSide::Right => self.right_panel_body(panel, cx),
@@ -446,7 +447,7 @@ impl NyaTermApp {
                     .flex()
                     .flex_col()
                     .overflow_hidden()
-                    .child(panel_header(panel.panel_title(), meta))
+                    .child(panel_header(panel.panel_title(), meta, palette))
                     .child(div().flex_1().min_h_0().overflow_hidden().child(body)),
             );
             if index + 1 < count {
@@ -465,6 +466,7 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) -> gpui::Div {
         let meta = self.side_panel_meta(side, panel);
+        let palette = self.theme_palette();
         let body = match side {
             PanelSide::Left => self.left_panel_body(panel, cx),
             PanelSide::Right => self.right_panel_body(panel, cx),
@@ -473,7 +475,7 @@ impl NyaTermApp {
             .size_full()
             .flex()
             .flex_col()
-            .child(panel_header(panel.panel_title(), meta))
+            .child(panel_header(panel.panel_title(), meta, palette))
             .child(div().flex_1().min_h_0().overflow_hidden().child(body))
     }
 
