@@ -17,8 +17,8 @@ impl NyaTermApp {
                     .gap_4()
                     .rounded_md()
                     .border_1()
-                    .border_color(rgb(0x30363d))
-                    .bg(rgb(0x151923))
+                    .border_color(rgb(palette.border))
+                    .bg(rgb(palette.surface))
                     .p_3()
                     .child(
                         div()
@@ -34,7 +34,7 @@ impl NyaTermApp {
                             .child(
                                 div()
                                     .text_xs()
-                                    .text_color(rgb(0x98a3b8))
+                                    .text_color(rgb(palette.text_muted))
                                     .child(capability.note),
                             ),
                     )

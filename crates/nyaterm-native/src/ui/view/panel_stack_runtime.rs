@@ -603,6 +603,7 @@ impl NyaTermApp {
         below_id: String,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
+        let palette = self.theme_palette();
         let above = above_id.clone();
         let below = below_id.clone();
         div()
@@ -618,7 +619,7 @@ impl NyaTermApp {
             .h(px(3.))
             .flex_none()
             .w_full()
-            .bg(rgb(0x30363d))
+            .bg(rgb(palette.border))
             .cursor_row_resize()
             .hover(|this| this.bg(rgb(0x58a6ff)))
             .on_mouse_down(

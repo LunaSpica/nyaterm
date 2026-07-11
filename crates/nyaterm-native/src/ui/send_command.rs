@@ -1,3 +1,4 @@
+use crate::ui::theme::ThemePalette;
 use gpui::{FontWeight, IntoElement, div, prelude::*, px, rgb};
 use nyaterm_session::SessionKind;
 
@@ -153,7 +154,11 @@ pub(super) fn build_send_command_units_for(
     }
 }
 
-pub(super) fn bottom_send_field(label: &'static str, value: impl Into<String>) -> impl IntoElement {
+pub(super) fn bottom_send_field(
+    palette: ThemePalette,
+    label: &'static str,
+    value: impl Into<String>,
+) -> impl IntoElement {
     let value = value.into();
     div()
         .h(px(32.))
@@ -164,14 +169,14 @@ pub(super) fn bottom_send_field(label: &'static str, value: impl Into<String>) -
         .overflow_hidden()
         .rounded_sm()
         .border_1()
-        .border_color(rgb(0x303848))
-        .bg(rgb(0x0d1320))
+        .border_color(rgb(palette.border))
+        .bg(rgb(palette.input))
         .child(
             div()
                 .flex_none()
                 .px_2()
                 .text_xs()
-                .text_color(rgb(0x8f98aa))
+                .text_color(rgb(palette.text_muted))
                 .child(label),
         )
         .child(
@@ -179,11 +184,11 @@ pub(super) fn bottom_send_field(label: &'static str, value: impl Into<String>) -
                 .min_w_0()
                 .flex_1()
                 .border_l_1()
-                .border_color(rgb(0x202633))
+                .border_color(rgb(palette.border))
                 .px_2()
                 .text_xs()
                 .font_weight(FontWeight(700.))
-                .text_color(rgb(0xdbeafe))
+                .text_color(rgb(palette.text))
                 .overflow_hidden()
                 .child(value),
         )

@@ -141,6 +141,7 @@ impl NyaTermApp {
         side: PanelResizeSide,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
+        let palette = self.theme_palette();
         div()
             .id(SharedString::from(format!(
                 "panel-resize-{}",
@@ -152,7 +153,7 @@ impl NyaTermApp {
             .w(px(3.))
             .flex_none()
             .h_full()
-            .bg(rgb(0x30363d))
+            .bg(rgb(palette.border))
             .cursor_col_resize()
             .hover(|this| this.bg(rgb(0x58a6ff)))
             .on_mouse_down(
@@ -223,12 +224,13 @@ impl NyaTermApp {
         &self,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
+        let palette = self.theme_palette();
         div()
             .id(SharedString::from("transfer-height-resize"))
             .h(px(3.))
             .w_full()
             .flex_none()
-            .bg(rgb(0x30363d))
+            .bg(rgb(palette.border))
             .cursor_row_resize()
             .hover(|this| this.bg(rgb(0x58a6ff)))
             .on_mouse_down(

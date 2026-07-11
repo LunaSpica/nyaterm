@@ -8,13 +8,14 @@ impl NyaTermApp {
         &mut self,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
+        let palette = self.theme_palette();
         // Match the Tauri shell: tab strip sits directly above the terminal surface.
         let mut workspace = div()
             .flex_1()
             .min_w_0()
             .flex()
             .flex_col()
-            .bg(rgb(0x0d1117))
+            .bg(rgb(palette.bg))
             .child(self.session_tab_strip(cx));
 
         if let Some(prompt) = self.active_host_key_prompt.clone() {
@@ -30,6 +31,7 @@ impl NyaTermApp {
     }
 
     fn workspace_terminal_area(&mut self, cx: &mut Context<Self>) -> gpui::AnyElement {
+        let palette = self.theme_palette();
         self.prune_workspace_split();
         if self.active_session_id.is_none() {
             return self.empty_workspace_state(cx).into_any_element();
@@ -43,7 +45,7 @@ impl NyaTermApp {
             .min_h_0()
             .min_w_0()
             .p_1()
-            .bg(rgb(0x07090d))
+            .bg(rgb(palette.bg))
             .child(self.render_workspace_pane_node(root, true, cx))
             .into_any_element()
     }
@@ -54,6 +56,7 @@ impl NyaTermApp {
         show_chrome: bool,
         cx: &mut Context<Self>,
     ) -> gpui::AnyElement {
+        let palette = self.theme_palette();
         match node {
             WorkspacePaneNode::Leaf { session_id } => {
                 let is_active = self.active_session_id.as_deref() == Some(session_id.as_str());
@@ -77,9 +80,9 @@ impl NyaTermApp {
                         .rounded_sm()
                         .border_1()
                         .border_color(if is_active {
-                            rgb(0x388bfd)
+                            rgb(palette.accent)
                         } else {
-                            rgb(0x30363d)
+                            rgb(palette.border)
                         });
                 }
                 pane.child(canvas).into_any_element()

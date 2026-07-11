@@ -61,7 +61,7 @@ impl NyaTermApp {
                     .mx_4()
                     .rounded_md()
                     .border_1()
-                    .border_color(rgb(0x303848))
+                    .border_color(rgb(palette.border))
                     .bg(rgb(0x0b0f16))
                     .shadow_lg()
                     .p_4()
@@ -88,7 +88,7 @@ impl NyaTermApp {
                                     .child(
                                         div()
                                             .text_xs()
-                                            .text_color(rgb(0x98a3b8))
+                                            .text_color(rgb(palette.text_muted))
                                             .child(format!(
                                                 "{visible_lines} visible line(s) · {buffer_chars} buffered character(s)"
                                             )),

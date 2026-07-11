@@ -238,7 +238,7 @@ impl NyaTermApp {
                                         div()
                                             .text_size(px(12.))
                                             .font_weight(FontWeight(600.))
-                                            .text_color(rgb(0xc9d1d9))
+                                            .text_color(rgb(palette.text))
                                             .child(config_label),
                                     )
                                     .child(
@@ -401,7 +401,7 @@ fn icon_network_action(palette: crate::ui::theme::ThemePalette,
         .text_size(px(12.))
         .text_color(rgb(palette.text_muted))
         .cursor_pointer()
-        .hover(|this| this.bg(rgb(0x21262d)).text_color(rgb(0xc9d1d9)))
+        .hover(|this| this.bg(rgb(palette.surface_elevated)).text_color(rgb(palette.text)))
         .child(label)
         .on_click(on_click)
 }

@@ -891,3 +891,6 @@ service boundary first:
 - Connections editor chips/fields, Network icon actions, Settings AI/security/transfer/terminal free helpers themed.
 - Sidebar security/session free helpers, quick-command icon/editor helpers and editor overlay choices themed.
 - Zero remaining `theme_palette("github-dark")` hard fallbacks in `nyaterm-native` UI sources (brand/status hardcodes may remain intentionally).
+
+## 2026-07-11 Residual chrome hardcode cleanup
+- Map remaining github-dark shell tokens (border/bg/muted) in migration, process/workspace views, panel resize handles, terminal actions, tunnels residual hover, and bottom send field to live ThemePalette.

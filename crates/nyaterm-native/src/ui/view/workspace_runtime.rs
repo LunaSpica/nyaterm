@@ -273,6 +273,7 @@ impl NyaTermApp {
         direction: WorkspaceSplitDirection,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
+        let palette = self.theme_palette();
         let id = SharedString::from(format!("workspace-split-resize-{split_id}"));
         match direction {
             WorkspaceSplitDirection::Horizontal => div()
@@ -281,7 +282,7 @@ impl NyaTermApp {
                 .flex_none()
                 .w_full()
                 .rounded_sm()
-                .bg(rgb(0x30363d))
+                .bg(rgb(palette.border))
                 .cursor_row_resize()
                 .hover(|this| this.bg(rgb(0x58a6ff)))
                 .on_mouse_down(
@@ -297,7 +298,7 @@ impl NyaTermApp {
                 .flex_none()
                 .h_full()
                 .rounded_sm()
-                .bg(rgb(0x30363d))
+                .bg(rgb(palette.border))
                 .cursor_col_resize()
                 .hover(|this| this.bg(rgb(0x58a6ff)))
                 .on_mouse_down(

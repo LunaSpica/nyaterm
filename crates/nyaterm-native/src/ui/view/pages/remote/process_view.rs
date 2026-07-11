@@ -401,8 +401,8 @@ impl NyaTermApp {
                             .flex_none()
                             .px_2()
                             .border_b_1()
-                            .border_color(rgb(0x30363d))
-                            .bg(rgb(0x0d1117))
+                            .border_color(rgb(palette.border))
+                            .bg(rgb(palette.bg))
                             .flex()
                             .items_center()
                             .child(
