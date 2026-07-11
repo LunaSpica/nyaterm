@@ -182,6 +182,7 @@ impl NyaTermApp {
         id: &'static str,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
+        let palette = self.theme_palette();
         let selected = self.settings_active_tab == tab;
 
         // Tauri settings nav item: soft primary fill, no permanent green border.
@@ -201,14 +202,14 @@ impl NyaTermApp {
                 rgb(0x00000000)
             })
             .bg(if selected {
-                rgb(0x122033)
+                rgb(palette.hover)
             } else {
                 rgb(0x00000000)
             })
             .text_color(if selected {
-                rgb(0xc9d1d9)
+                rgb(palette.text)
             } else {
-                rgb(0x8b949e)
+                rgb(palette.text_muted)
             })
             .text_size(px(12.))
             .font_weight(if selected {
@@ -217,16 +218,16 @@ impl NyaTermApp {
                 FontWeight(500.)
             })
             .cursor_pointer()
-            .hover(|this| this.bg(rgb(0x1c2128)).text_color(rgb(0xc9d1d9)))
+            .hover(move |this| this.bg(rgb(palette.hover)).text_color(rgb(palette.text)))
             .child(
                 div()
                     .size(px(6.))
                     .rounded_full()
                     .flex_none()
                     .bg(if selected {
-                        rgb(0x58a6ff)
+                        rgb(palette.accent)
                     } else {
-                        rgb(0x30363d)
+                        rgb(palette.border)
                     }),
             )
             .child(
@@ -247,6 +248,7 @@ impl NyaTermApp {
         backup_snapshot_prompt: Option<SnapshotPasswordPromptState>,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
+        let palette = self.theme_palette();
         let active_tab = self.settings_active_tab;
         let content = self.settings_tab_content(active_tab, backup_snapshot_prompt, cx);
 
@@ -263,7 +265,7 @@ impl NyaTermApp {
                     .px_4()
                     .py_3()
                     .border_b_1()
-                    .border_color(rgb(0x21262d))
+                    .border_color(rgb(palette.border))
                     .flex()
                     .items_end()
                     .justify_between()
@@ -278,14 +280,14 @@ impl NyaTermApp {
                                 div()
                                     .text_size(px(10.))
                                     .font_weight(FontWeight(600.))
-                                    .text_color(rgb(0x6e7681))
+                                    .text_color(rgb(palette.text_dimmed))
                                     .child(active_tab.group_label()),
                             )
                             .child(
                                 div()
                                     .text_size(px(16.))
                                     .font_weight(FontWeight(700.))
-                                    .text_color(rgb(0xc9d1d9))
+                                    .text_color(rgb(palette.text))
                                     .child(active_tab.label()),
                             ),
                     ),
