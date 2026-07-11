@@ -582,6 +582,14 @@ impl NyaTermApp {
                     SharedString::from(count.to_string())
                 }
             }
+            NavItem::SyncBackupHistory => {
+                let count = self.cloud_sync_history.len();
+                if count == 0 {
+                    SharedString::from("")
+                } else {
+                    SharedString::from(count.to_string())
+                }
+            }
             _ => SharedString::from(""),
         }
     }

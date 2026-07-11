@@ -590,3 +590,13 @@ service boundary first:
 ## 2026-07-11 History + status bar density
 - Command History rows match Tauri mono list more closely (no play glyph; right-click runs, click inserts).
 - Status bar densified to ~22px with 10px chips.
+
+## 2026-07-11 Recording + Command Send densify
+- Bottom Command Send: ~220px compact header strip, denser control/editor/footer chrome (Tauri SendCommandPanel shape).
+- Recording: session search filter + dense session rows with SVG record/stop/save actions; header meta = session count.
+
+## 2026-07-11 Sync / Backup History panel parity
+- Side Sync/Backup panel drops page-like cards; Tauri-like status strip (dot + state + provider + refresh).
+- Conflict card + Push/Pull/Settings strip; full scroll history list.
+- History rows densified: status dot, kind/status colors, summary, trigger/provider/duration meta, expandable details.
+- PanelHeader meta shows history count.

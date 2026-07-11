@@ -691,12 +691,25 @@ impl NyaTermApp {
         }
     }
 
-    fn refresh_cloud_sync_history(&mut self) {
+    pub(in crate::ui::view) fn refresh_cloud_sync_history(&mut self) {
         self.cloud_sync_history = read_cloud_sync_history(
             self.runtime.log_dir(),
             self.settings.diagnostics_retention_days,
             CLOUD_SYNC_HISTORY_LIMIT,
         )
         .unwrap_or_default();
+    }
+
+    pub(in crate::ui::view) fn toggle_cloud_sync_history_details(
+        &mut self,
+        entry_id: &str,
+        cx: &mut Context<Self>,
+    ) {
+        if self.cloud_sync_history_expanded.contains(entry_id) {
+            self.cloud_sync_history_expanded.remove(entry_id);
+        } else {
+            self.cloud_sync_history_expanded.insert(entry_id.to_string());
+        }
+        cx.notify();
     }
 }

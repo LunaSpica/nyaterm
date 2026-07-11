@@ -1,6 +1,7 @@
 use gpui::rgb;
 use nyaterm_domain::{
-    AppSettingsSummary, CloudSyncError, CloudSyncSettings, RiskLevel, TunnelConfig,
+    AppSettingsSummary, CloudSyncError, CloudSyncHistoryEntry, CloudSyncSettings, RiskLevel,
+    TunnelConfig,
 };
 use nyaterm_session::{
     SessionKind, SshSessionConfig, SshTunnelMode, TelnetEnterMode, safe_recording_name,
@@ -199,6 +200,102 @@ pub(in crate::ui::view) fn compact_id(value: &str) -> String {
             .collect();
         format!("{prefix}..{suffix}")
     }
+}
+
+
+pub(in crate::ui::view) fn format_cloud_provider(provider: &str) -> String {
+    match provider.trim() {
+        "" => "Unknown".to_string(),
+        "local_directory" => "Local directory".to_string(),
+        "webdav" => "WebDAV".to_string(),
+        "s3" => "S3".to_string(),
+        "gitee_snippet" => "Gitee snippet".to_string(),
+        "github_gist" => "GitHub gist".to_string(),
+        "aliyun_drive" => "Aliyun Drive".to_string(),
+        "google_drive" => "Google Drive".to_string(),
+        "onedrive" => "OneDrive".to_string(),
+        other => other.to_string(),
+    }
+}
+
+pub(in crate::ui::view) fn format_history_timestamp_ms(timestamp_ms: u64) -> String {
+    if timestamp_ms == 0 {
+        return "never".to_string();
+    }
+    let secs = (timestamp_ms / 1000) as i64;
+    let hours = ((secs % 86_400) / 3_600).rem_euclid(24);
+    let minutes = ((secs % 3_600) / 60).rem_euclid(60);
+    let seconds = (secs % 60).rem_euclid(60);
+    // Compact wall-clock style without pulling chrono; good enough for panel density.
+    format!("{hours:02}:{minutes:02}:{seconds:02}")
+}
+
+pub(in crate::ui::view) fn format_duration_ms(duration_ms: Option<u64>) -> Option<String> {
+    let value = duration_ms?;
+    if value < 1000 {
+        Some(format!("{value} ms"))
+    } else if value < 60_000 {
+        Some(format!("{:.1} s", value as f64 / 1000.0))
+    } else {
+        let minutes = value / 60_000;
+        let seconds = (value % 60_000) as f64 / 1000.0;
+        Some(format!("{minutes}m {seconds:.0}s"))
+    }
+}
+
+pub(in crate::ui::view) fn cloud_sync_status_dot_color(status: &str) -> gpui::Rgba {
+    match status {
+        "running" => rgb(0x3b82f6),
+        "success" => rgb(0x22c55e),
+        "failed" => rgb(0xef4444),
+        "conflict" => rgb(0xf59e0b),
+        "disabled" => rgb(0x6e7681),
+        _ => rgb(0x8b949e),
+    }
+}
+
+pub(in crate::ui::view) fn cloud_sync_status_text_color(status: &str) -> gpui::Rgba {
+    match status {
+        "running" => rgb(0x58a6ff),
+        "success" => rgb(0x3fb950),
+        "failed" => rgb(0xff7b72),
+        "conflict" => rgb(0xd29922),
+        "disabled" => rgb(0x6e7681),
+        _ => rgb(0x8b949e),
+    }
+}
+
+pub(in crate::ui::view) fn cloud_sync_kind_text_color(kind: &str) -> gpui::Rgba {
+    match kind {
+        "sync" => rgb(0x58a6ff),
+        "backup" => rgb(0xa371f7),
+        _ => rgb(0x8b949e),
+    }
+}
+
+pub(in crate::ui::view) fn cloud_sync_history_summary(entry: &CloudSyncHistoryEntry) -> String {
+    let normalized = entry.message.split_whitespace().collect::<Vec<_>>().join(" ");
+    if normalized.is_empty() {
+        return format!("{} · {}", entry.kind, entry.status);
+    }
+    if !normalized.contains('\n') && normalized.chars().count() <= 110 {
+        return normalized;
+    }
+    // Prefer first sentence when short enough.
+    let first = normalized
+        .split(|ch| ch == '.' || ch == '!' || ch == '?')
+        .next()
+        .unwrap_or("")
+        .trim();
+    if !first.is_empty() && first.chars().count() <= 110 {
+        let end = first.chars().count();
+        let punct = normalized.chars().nth(end).unwrap_or('.');
+        if matches!(punct, '.' | '!' | '?') {
+            return format!("{first}{punct}");
+        }
+        return first.to_string();
+    }
+    format!("{} · {}", entry.kind, entry.status)
 }
 
 pub(in crate::ui::view) fn normalize_startup_command(value: &str) -> String {

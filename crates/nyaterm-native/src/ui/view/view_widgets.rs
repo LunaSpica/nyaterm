@@ -12,8 +12,10 @@ use crate::ui::components::{mode_button, small_button, status_pill};
 use crate::ui::models::WorkspaceSplitDirection;
 
 use super::{
-    MarkdownBlock, compact_id, docker_state_color, docker_state_label, format_rate,
-    parse_markdown_blocks, tunnel_endpoint, tunnel_mode_label, tunnel_name,
+    MarkdownBlock, cloud_sync_history_summary, cloud_sync_kind_text_color,
+    cloud_sync_status_dot_color, cloud_sync_status_text_color, compact_id, docker_state_color,
+    docker_state_label, format_cloud_provider, format_duration_ms, format_history_timestamp_ms,
+    format_rate, parse_markdown_blocks, tunnel_endpoint, tunnel_mode_label, tunnel_name,
 };
 
 pub(in crate::ui::view) fn logo_mark() -> impl IntoElement {
@@ -691,58 +693,195 @@ pub(in crate::ui::view) fn compact_setting_state(
 
 pub(in crate::ui::view) fn cloud_sync_history_row(
     entry: CloudSyncHistoryEntry,
+    expanded: bool,
+    on_toggle: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
 ) -> impl IntoElement {
-    let status_color = match entry.status.as_str() {
-        "success" => rgb(0x86efac),
-        "conflict" => rgb(0xfacc15),
-        "failed" => rgb(0xfca5a5),
-        _ => rgb(0xcbd5e1),
-    };
+    let summary = cloud_sync_history_summary(&entry);
+    let normalized = entry.message.split_whitespace().collect::<Vec<_>>().join(" ");
+    let is_problem = matches!(entry.status.as_str(), "failed" | "conflict");
+    let has_message_details = !normalized.is_empty()
+        && (is_problem || normalized != summary.split_whitespace().collect::<Vec<_>>().join(" "));
+    let has_expandable = has_message_details || entry.revision.as_ref().is_some_and(|r| !r.trim().is_empty());
+    let kind_color = cloud_sync_kind_text_color(&entry.kind);
+    let status_color = cloud_sync_status_text_color(&entry.status);
+    let dot_color = cloud_sync_status_dot_color(&entry.status);
+    let timestamp = format_history_timestamp_ms(entry.timestamp_ms);
     let provider = entry
         .provider
         .as_deref()
         .filter(|value| !value.trim().is_empty())
-        .unwrap_or("unknown");
+        .map(format_cloud_provider)
+        .unwrap_or_else(|| "—".to_string());
+    let duration = format_duration_ms(entry.duration_ms).unwrap_or_else(|| "—".to_string());
+    let kind_label = match entry.kind.as_str() {
+        "sync" => "Sync",
+        "backup" => "Backup",
+        other => other,
+    };
+    let status_label = match entry.status.as_str() {
+        "success" => "Success",
+        "failed" => "Failed",
+        "conflict" => "Conflict",
+        "running" => "Running",
+        other => other,
+    };
     let revision = entry
         .revision
         .as_deref()
-        .map(compact_id)
-        .unwrap_or_else(|| "no revision".to_string());
-    let duration = entry
-        .duration_ms
-        .map(|value| format!(" / {value} ms"))
-        .unwrap_or_default();
-    let meta = format!("{} / {provider} / {revision}{duration}", entry.trigger);
+        .filter(|value| !value.trim().is_empty())
+        .map(compact_id);
+    let message = entry.message.clone();
 
     div()
-        .rounded_sm()
-        .border_1()
-        .border_color(rgb(0x273244))
-        .bg(rgb(0x111722))
-        .p_3()
+        .px_3()
+        .py_2()
+        .border_b_1()
+        .border_color(rgb(0x21262d))
         .child(
             div()
                 .flex()
-                .items_center()
-                .justify_between()
-                .gap_3()
+                .items_start()
+                .gap_2()
                 .child(
                     div()
-                        .text_xs()
-                        .font_weight(FontWeight(700.))
-                        .text_color(status_color)
-                        .child(entry.status),
+                        .mt(px(6.))
+                        .size(px(6.))
+                        .rounded_full()
+                        .flex_none()
+                        .bg(dot_color),
                 )
-                .child(div().text_xs().text_color(rgb(0x98a3b8)).child(entry.kind)),
+                .child(
+                    div()
+                        .min_w_0()
+                        .flex_1()
+                        .flex()
+                        .flex_col()
+                        .gap_1()
+                        .child(
+                            div()
+                                .flex()
+                                .items_center()
+                                .gap_2()
+                                .child(
+                                    div()
+                                        .text_size(px(11.))
+                                        .font_weight(FontWeight(600.))
+                                        .text_color(kind_color)
+                                        .child(kind_label.to_string()),
+                                )
+                                .child(
+                                    div()
+                                        .text_size(px(11.))
+                                        .text_color(status_color)
+                                        .child(status_label.to_string()),
+                                )
+                                .child(
+                                    div()
+                                        .ml_auto()
+                                        .flex_none()
+                                        .text_size(px(10.))
+                                        .text_color(rgb(0x6e7681))
+                                        .child(timestamp),
+                                ),
+                        )
+                        .child(
+                            div()
+                                .text_size(px(12.))
+                                .font_weight(FontWeight(600.))
+                                .text_color(rgb(0xc9d1d9))
+                                .overflow_hidden()
+                                .child(truncate_preview(&summary, 96)),
+                        )
+                        .child(
+                            div()
+                                .flex()
+                                .flex_wrap()
+                                .gap_x_3()
+                                .gap_y_1()
+                                .text_size(px(10.))
+                                .text_color(rgb(0x6e7681))
+                                .child(format!("Trigger {}", entry.trigger))
+                                .child(format!("Provider {provider}"))
+                                .child(format!("Duration {duration}")),
+                        )
+                        .when(has_expandable, |this| {
+                            this.child(
+                                div()
+                                    .mt_1()
+                                    .flex()
+                                    .items_center()
+                                    .gap_3()
+                                    .child(
+                                        div()
+                                            .id(SharedString::from(format!(
+                                                "sync-history-toggle-{}",
+                                                entry.id
+                                            )))
+                                            .h(px(22.))
+                                            .flex()
+                                            .items_center()
+                                            .text_size(px(10.))
+                                            .text_color(rgb(0x8b949e))
+                                            .cursor_pointer()
+                                            .hover(|style| style.text_color(rgb(0xc9d1d9)))
+                                            .child(if expanded {
+                                                "Hide details"
+                                            } else {
+                                                "View details"
+                                            })
+                                            .on_click(on_toggle),
+                                    ),
+                            )
+                        })
+                        .when(expanded && has_message_details, |this| {
+                            this.child(
+                                div()
+                                    .mt_1()
+                                    .rounded_md()
+                                    .p_2()
+                                    .bg(if is_problem {
+                                        rgb(0x2a1215)
+                                    } else {
+                                        rgb(0x161b22)
+                                    })
+                                    .font_family("JetBrains Mono")
+                                    .text_size(px(10.))
+                                    .text_color(if is_problem {
+                                        rgb(0xffa198)
+                                    } else {
+                                        rgb(0x8b949e)
+                                    })
+                                    .child(message),
+                            )
+                        })
+                        .when(expanded && revision.is_some(), |this| {
+                            this.child(
+                                div()
+                                    .mt_1()
+                                    .rounded_md()
+                                    .border_1()
+                                    .border_color(rgb(0x30363d))
+                                    .bg(rgb(0x0d1117))
+                                    .px_2()
+                                    .py_1()
+                                    .child(
+                                        div()
+                                            .text_size(px(10.))
+                                            .text_color(rgb(0x6e7681))
+                                            .child("Revision"),
+                                    )
+                                    .child(
+                                        div()
+                                            .mt_0()
+                                            .font_family("JetBrains Mono")
+                                            .text_size(px(11.))
+                                            .text_color(rgb(0xc9d1d9))
+                                            .child(revision.unwrap_or_default()),
+                                    ),
+                            )
+                        }),
+                ),
         )
-        .child(
-            div()
-                .mt_1()
-                .text_sm()
-                .font_weight(FontWeight(700.))
-                .child(entry.message),
-        )
-        .child(div().mt_1().text_xs().text_color(rgb(0x98a3b8)).child(meta))
 }
 
 pub(in crate::ui::view) fn policy_button(

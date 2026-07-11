@@ -407,6 +407,18 @@ impl NyaTermApp {
         let cloud_history_0 = self.cloud_sync_history.first().cloned();
         let cloud_history_1 = self.cloud_sync_history.get(1).cloned();
         let cloud_history_2 = self.cloud_sync_history.get(2).cloned();
+        let cloud_history_0_expanded = cloud_history_0
+            .as_ref()
+            .map(|entry| self.cloud_sync_history_expanded.contains(&entry.id))
+            .unwrap_or(false);
+        let cloud_history_1_expanded = cloud_history_1
+            .as_ref()
+            .map(|entry| self.cloud_sync_history_expanded.contains(&entry.id))
+            .unwrap_or(false);
+        let cloud_history_2_expanded = cloud_history_2
+            .as_ref()
+            .map(|entry| self.cloud_sync_history_expanded.contains(&entry.id))
+            .unwrap_or(false);
         let cloud_conflict = self.cloud_sync_conflict.clone();
         let active_cloud_provider = configured_cloud_sync_provider(&self.cloud_sync_settings);
         let webdav_password_value = cloud_secret_display(
@@ -1041,13 +1053,34 @@ impl NyaTermApp {
                         )
                     })
                     .when_some(cloud_history_0, |this, entry| {
-                        this.child(cloud_sync_history_row(entry))
+                        let entry_id = entry.id.clone();
+                        this.child(cloud_sync_history_row(
+                            entry,
+                            cloud_history_0_expanded,
+                            cx.listener(move |this, _, _, cx| {
+                                this.toggle_cloud_sync_history_details(&entry_id, cx);
+                            }),
+                        ))
                     })
                     .when_some(cloud_history_1, |this, entry| {
-                        this.child(cloud_sync_history_row(entry))
+                        let entry_id = entry.id.clone();
+                        this.child(cloud_sync_history_row(
+                            entry,
+                            cloud_history_1_expanded,
+                            cx.listener(move |this, _, _, cx| {
+                                this.toggle_cloud_sync_history_details(&entry_id, cx);
+                            }),
+                        ))
                     })
                     .when_some(cloud_history_2, |this, entry| {
-                        this.child(cloud_sync_history_row(entry))
+                        let entry_id = entry.id.clone();
+                        this.child(cloud_sync_history_row(
+                            entry,
+                            cloud_history_2_expanded,
+                            cx.listener(move |this, _, _, cx| {
+                                this.toggle_cloud_sync_history_details(&entry_id, cx);
+                            }),
+                        ))
                     }),
             )
     }
