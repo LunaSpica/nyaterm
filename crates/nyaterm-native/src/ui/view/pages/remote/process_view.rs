@@ -20,6 +20,20 @@ impl NyaTermApp {
             self.process_sort_direction,
         );
 
+        // Lightweight virtual window (Tauri useVirtualList): render ~80 rows at a time.
+        const PROCESS_WINDOW: usize = 80;
+        let total_filtered = filtered_processes.len();
+        let max_offset = total_filtered.saturating_sub(PROCESS_WINDOW);
+        if self.process_list_offset > max_offset {
+            self.process_list_offset = max_offset;
+        }
+        let window_start = self.process_list_offset.min(max_offset);
+        let window_end = (window_start + PROCESS_WINDOW).min(total_filtered);
+        let visible_processes = filtered_processes
+            .get(window_start..window_end)
+            .unwrap_or(&[])
+            .to_vec();
+
         let top_cpu = self
             .processes
             .iter()
@@ -61,7 +75,44 @@ impl NyaTermApp {
         } else if filtered_processes.is_empty() {
             rows = rows.child(empty_panel("No processes match the current search."));
         } else {
-            for process in filtered_processes.iter() {
+            if window_start > 0 {
+                rows = rows.child(
+                    div()
+                        .h(px(26.))
+                        .px_2()
+                        .flex()
+                        .items_center()
+                        .justify_between()
+                        .border_b_1()
+                        .border_color(rgb(0x21262d))
+                        .child(
+                            div()
+                                .text_size(px(10.))
+                                .text_color(rgb(0x6e7681))
+                                .child(format!("↑ {window_start} hidden above")),
+                        )
+                        .child(
+                            div()
+                                .id(SharedString::from("process-page-up"))
+                                .px_2()
+                                .h(px(22.))
+                                .flex()
+                                .items_center()
+                                .rounded_md()
+                                .text_size(px(10.))
+                                .text_color(rgb(0x58a6ff))
+                                .cursor_pointer()
+                                .hover(|this| this.bg(rgb(0x21262d)))
+                                .child("Page up")
+                                .on_click(cx.listener(|this, _, _, cx| {
+                                    this.process_list_offset =
+                                        this.process_list_offset.saturating_sub(PROCESS_WINDOW);
+                                    cx.notify();
+                                })),
+                        ),
+                );
+            }
+            for process in visible_processes.iter() {
                 let pid = process.pid;
                 let selected = self.process_selected_pid == Some(pid);
                 rows = rows.child(
@@ -137,15 +188,62 @@ impl NyaTermApp {
                     ),
                 );
             }
+            if window_end < total_filtered {
+                let remaining = total_filtered - window_end;
+                rows = rows.child(
+                    div()
+                        .h(px(26.))
+                        .px_2()
+                        .flex()
+                        .items_center()
+                        .justify_between()
+                        .border_t_1()
+                        .border_color(rgb(0x21262d))
+                        .child(
+                            div()
+                                .text_size(px(10.))
+                                .text_color(rgb(0x6e7681))
+                                .child(format!("↓ {remaining} more below")),
+                        )
+                        .child(
+                            div()
+                                .id(SharedString::from("process-page-down"))
+                                .px_2()
+                                .h(px(22.))
+                                .flex()
+                                .items_center()
+                                .rounded_md()
+                                .text_size(px(10.))
+                                .text_color(rgb(0x58a6ff))
+                                .cursor_pointer()
+                                .hover(|this| this.bg(rgb(0x21262d)))
+                                .child("Page down")
+                                .on_click(cx.listener(move |this, _, _, cx| {
+                                    this.process_list_offset = (this.process_list_offset
+                                        + PROCESS_WINDOW)
+                                        .min(total_filtered.saturating_sub(PROCESS_WINDOW));
+                                    cx.notify();
+                                })),
+                        ),
+                );
+            }
         }
 
         // Tauri ProcessManager shell: dense search toolbar + sort strip + scrollable table.
-        let count_label = format!(
-            "{}/{} · {} users",
-            filtered_processes.len(),
-            self.processes.len(),
-            user_count
-        );
+        let count_label = if total_filtered > PROCESS_WINDOW {
+            format!(
+                "{window_start}-{window_end}/{total_filtered} · {} total · {} users",
+                self.processes.len(),
+                user_count
+            )
+        } else {
+            format!(
+                "{}/{} · {} users",
+                filtered_processes.len(),
+                self.processes.len(),
+                user_count
+            )
+        };
         let top_label = format!("CPU {} · MEM {}", truncate_preview(&top_cpu, 28), truncate_preview(&top_memory, 28));
         div()
             .flex()

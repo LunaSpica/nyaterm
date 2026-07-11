@@ -56,6 +56,16 @@ pub(in crate::ui::view::pages::remote) fn docker_containers_panel(
             .then(left.name.cmp(&right.name))
     });
 
+    // Lightweight virtual window for large host inventories.
+    const DOCKER_WINDOW: usize = 60;
+    let total = containers.len();
+    let visible = if total > DOCKER_WINDOW {
+        containers.into_iter().take(DOCKER_WINDOW).collect::<Vec<_>>()
+    } else {
+        containers
+    };
+    let truncated = total > DOCKER_WINDOW;
+
     let mut rows = div()
         .id(SharedString::from("docker-containers-scroll"))
         .size_full()
@@ -65,9 +75,26 @@ pub(in crate::ui::view::pages::remote) fn docker_containers_panel(
         .flex()
         .flex_col()
         .gap_1();
-    for container in containers {
+    for container in visible {
         let menu_open = open_menu_id == Some(container.id.as_str());
         rows = rows.child(docker_container_row(container, menu_open, cx));
+    }
+    if truncated {
+        rows = rows.child(
+            div()
+                .mt_1()
+                .px_2()
+                .py_1()
+                .rounded_md()
+                .border_1()
+                .border_color(rgb(0x21262d))
+                .bg(rgb(0x0d1117))
+                .text_size(px(10.))
+                .text_color(rgb(0x6e7681))
+                .child(format!(
+                    "Showing first {DOCKER_WINDOW} of {total} containers · refine search to narrow"
+                )),
+        );
     }
     rows.into_any_element()
 }

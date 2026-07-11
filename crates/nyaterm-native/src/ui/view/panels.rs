@@ -105,7 +105,9 @@ impl NyaTermApp {
                         "{} unit(s) · {} byte(s) · count {} · interval {:.2}s",
                         units.len(),
                         bytes,
-                        self.send_command_count,
+                        self.send_command_count
+                            .map(|n| n.to_string())
+                            .unwrap_or_else(|| "∞".to_string()),
                         self.send_command_interval_seconds
                     ),
                     false,
@@ -125,7 +127,10 @@ impl NyaTermApp {
         } else {
             "Type command or payload…"
         };
-        let count_label = self.send_command_count.to_string();
+        let count_label = self
+            .send_command_count
+            .map(|n| n.to_string())
+            .unwrap_or_else(|| "∞".to_string());
         let interval_label = format!("{:.2}", self.send_command_interval_seconds);
         let line_ending_label = match self.send_command_line_ending {
             SendCommandLineEnding::None => "None",
@@ -135,17 +140,35 @@ impl NyaTermApp {
         };
         let _ = (unit_count, byte_count);
         let is_sending = self.send_command_sending;
+                let infinite_progress = is_sending && self.send_command_progress_rounds == 0;
         let progress_total = self.send_command_progress_total.max(1);
-        let progress_completed = self.send_command_progress_completed.min(progress_total);
-        let progress_ratio = progress_completed as f32 / progress_total as f32;
+        let progress_completed = if infinite_progress {
+            self.send_command_progress_completed
+        } else {
+            self.send_command_progress_completed.min(progress_total)
+        };
+        let progress_ratio = if infinite_progress {
+            // Indeterminate-ish pulse from completed units.
+            (((progress_completed % 20) as f32) / 20.0).clamp(0.08, 0.95)
+        } else {
+            progress_completed as f32 / progress_total as f32
+        };
         let progress_label = if is_sending {
-            format!(
-                "Sending {}/{} · round {}/{}",
-                progress_completed,
-                self.send_command_progress_total,
-                self.send_command_progress_round.max(1),
-                self.send_command_progress_rounds.max(1)
-            )
+            if infinite_progress {
+                format!(
+                    "Sending ∞ · round {} · {} unit(s)",
+                    self.send_command_progress_round.max(1),
+                    progress_completed
+                )
+            } else {
+                format!(
+                    "Sending {}/{} · round {}/{}",
+                    progress_completed,
+                    self.send_command_progress_total,
+                    self.send_command_progress_round.max(1),
+                    self.send_command_progress_rounds.max(1)
+                )
+            }
         } else {
             validation_text.clone()
         };
@@ -490,28 +513,73 @@ impl NyaTermApp {
                             .flex()
                             .gap_1()
                             .child(
-                                transfer_input(
-                                    "bottom-command-send-input",
-                                    input_hint,
-                                    if self.send_command_data_type == SendCommandDataType::Hex {
-                                        format_send_command_hex_display(&self.send_command_draft)
-                                    } else {
-                                        self.send_command_draft.clone()
-                                    },
-                                    true,
-                                )
-                                .flex_1()
-                                .min_h(px(72.))
-                                .font_family("JetBrains Mono")
-                                .track_focus(&self.send_command_focus)
-                                .on_click(cx.listener(|this, _, window, cx| {
-                                    window.focus(&this.send_command_focus);
-                                    cx.notify();
-                                }))
-                                .on_key_down(cx.listener(|this, event: &KeyDownEvent, _, cx| {
-                                    cx.stop_propagation();
-                                    this.handle_send_command_key_down(event, cx);
-                                })),
+                                div()
+                                    .relative()
+                                    .flex_1()
+                                    .min_h(px(72.))
+                                    .when(
+                                        self.send_command_data_type == SendCommandDataType::Hex,
+                                        |this| {
+                                            let guide_marks =
+                                                send_command_hex_guide_marks(&self.send_command_draft);
+                                            this.child(
+                                                div()
+                                                    .absolute()
+                                                    .inset_0()
+                                                    .px_2()
+                                                    .py_1()
+                                                    .overflow_hidden()
+                                                    .child(
+                                                        div()
+                                                            .h(px(14.))
+                                                            .relative()
+                                                            .w_full()
+                                                            .children(guide_marks.into_iter().map(
+                                                                |mark| {
+                                                                    div()
+                                                                        .absolute()
+                                                                        .top_0()
+                                                                        .left(px(mark as f32 * 7.2))
+                                                                        .h(px(12.))
+                                                                        .w(px(1.))
+                                                                        .bg(rgb(0x1f6feb))
+                                                                        .opacity(0.55)
+                                                                },
+                                                            )),
+                                                    ),
+                                            )
+                                        },
+                                    )
+                                    .child(
+                                        transfer_input(
+                                            "bottom-command-send-input",
+                                            input_hint,
+                                            if self.send_command_data_type
+                                                == SendCommandDataType::Hex
+                                            {
+                                                format_send_command_hex_display(
+                                                    &self.send_command_draft,
+                                                )
+                                            } else {
+                                                self.send_command_draft.clone()
+                                            },
+                                            true,
+                                        )
+                                        .flex_1()
+                                        .min_h(px(72.))
+                                        .font_family("JetBrains Mono")
+                                        .track_focus(&self.send_command_focus)
+                                        .on_click(cx.listener(|this, _, window, cx| {
+                                            window.focus(&this.send_command_focus);
+                                            cx.notify();
+                                        }))
+                                        .on_key_down(cx.listener(
+                                            |this, event: &KeyDownEvent, _, cx| {
+                                                cx.stop_propagation();
+                                                this.handle_send_command_key_down(event, cx);
+                                            },
+                                        )),
+                                    ),
                             )
                             .when(
                                 self.send_command_data_type == SendCommandDataType::Hex,

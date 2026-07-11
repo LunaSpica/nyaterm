@@ -78,24 +78,43 @@ impl NyaTermApp {
             return;
         }
 
-        let rounds = self.send_command_count.max(1);
+        // None => infinite rounds (Tauri SendCommandCount null / ∞).
+        let infinite = self.send_command_count.is_none();
+        let rounds = self.send_command_count.unwrap_or(1).max(1);
         let interval = self.send_command_interval_seconds.max(0.0);
         let units_per_round = units.len() as u32;
-        let total_units = units_per_round.saturating_mul(rounds);
+        let total_units = if infinite {
+            0
+        } else {
+            units_per_round.saturating_mul(rounds)
+        };
         let cancel = Arc::new(AtomicBool::new(false));
         self.send_command_cancel = Some(cancel.clone());
         self.send_command_sending = true;
         self.send_command_progress_completed = 0;
         self.send_command_progress_total = total_units;
         self.send_command_progress_round = 0;
-        self.send_command_progress_rounds = rounds;
-        self.terminal_status = format!("sending {units_per_round} unit(s) × {rounds}");
+        self.send_command_progress_rounds = if infinite { 0 } else { rounds };
+        self.terminal_status = if infinite {
+            format!("sending {units_per_round} unit(s) × ∞")
+        } else {
+            format!("sending {units_per_round} unit(s) × {rounds}")
+        };
         cx.notify();
 
         cx.spawn(async move |this, cx| {
             let mut first = true;
             let mut aborted = false;
-            'outer: for round in 1..=rounds {
+            let mut round = 0u32;
+            'outer: loop {
+                if !infinite && round >= rounds {
+                    break;
+                }
+                if cancel.load(Ordering::SeqCst) {
+                    aborted = true;
+                    break;
+                }
+                round = round.saturating_add(1);
                 let _ = this.update(cx, |this, cx| {
                     this.send_command_progress_round = round;
                     cx.notify();
@@ -133,9 +152,23 @@ impl NyaTermApp {
                 this.send_command_sending = false;
                 this.send_command_cancel = None;
                 if aborted {
+                    this.terminal_status = if infinite {
+                        format!(
+                            "command send stopped at {} unit(s) · round {}",
+                            this.send_command_progress_completed,
+                            this.send_command_progress_round
+                        )
+                    } else {
+                        format!(
+                            "command send stopped at {}/{}",
+                            this.send_command_progress_completed,
+                            this.send_command_progress_total
+                        )
+                    };
+                } else if infinite {
                     this.terminal_status = format!(
-                        "command send stopped at {}/{}",
-                        this.send_command_progress_completed, this.send_command_progress_total
+                        "command send completed: {} unit(s)",
+                        this.send_command_progress_completed
                     );
                 } else {
                     this.terminal_status =
@@ -304,8 +337,13 @@ impl NyaTermApp {
         delta: i32,
         cx: &mut Context<Self>,
     ) {
-        let next = (self.send_command_count as i32 + delta).clamp(1, 999);
-        self.send_command_count = next as u32;
+        // Tauri: decrement from 1 -> ∞ (None); increment from ∞ -> 1.
+        self.send_command_count = match (self.send_command_count, delta) {
+            (None, d) if d < 0 => None,
+            (None, _) => Some(1),
+            (Some(1), d) if d < 0 => None,
+            (Some(n), d) => Some((n as i32 + d).clamp(1, 9999) as u32),
+        };
         cx.notify();
     }
 

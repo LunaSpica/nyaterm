@@ -70,12 +70,14 @@ impl NyaTermApp {
             "escape" => {
                 self.process_search_draft.clear();
                 self.process_selected_pid = None;
+                self.process_list_offset = 0;
                 self.process_status = "process search cleared".to_string();
                 cx.notify();
             }
             "backspace" if !keystroke.modifiers.platform && !keystroke.modifiers.control => {
                 self.process_search_draft.pop();
                 self.process_selected_pid = None;
+                self.process_list_offset = 0;
                 cx.notify();
             }
             _ if !keystroke.modifiers.platform && !keystroke.modifiers.control => {
@@ -86,6 +88,7 @@ impl NyaTermApp {
                 {
                     self.process_search_draft.push_str(input);
                     self.process_selected_pid = None;
+                    self.process_list_offset = 0;
                     cx.notify();
                 }
             }

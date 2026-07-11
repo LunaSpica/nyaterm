@@ -676,3 +676,12 @@ service boundary first:
 ## 2026-07-11 Resource Monitor densify
 - Gauge/summary cards compact: 44px ring value, dense mono, thinner padding.
 - Stats body grids gap_2; system/load cards use compact dark chrome.
+
+## 2026-07-11 Command Send infinite count + hex guide marks
+- `send_command_count: Option<u32>` with ∞ (None); stepper 1→∞ and ∞→1.
+- Infinite send loop until Stop; indeterminate progress pulse + round/unit labels.
+- Hex editor overlay marks 4-byte group boundaries from formatted display.
+
+## 2026-07-11 Process/Docker virtual windows
+- Process list renders 80-row windows with Page up/down and hidden counts (Tauri virtual-list step).
+- Search resets list offset; Docker containers cap first 60 with refine-search hint.
