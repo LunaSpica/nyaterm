@@ -157,14 +157,109 @@ impl NyaTermApp {
     }
 
     pub(in crate::ui::view) fn active_sync_group_label(&self, session_id: &str) -> Option<String> {
-        self.sync_groups
-            .iter()
-            .find(|group| {
-                group.enabled
-                    && group.session_ids.iter().any(|id| id == session_id)
-                    && !group.paused_session_ids.iter().any(|id| id == session_id)
-            })
+        self.active_sync_group_for_session(session_id)
+            .filter(|group| !group.paused_session_ids.iter().any(|id| id == session_id))
             .map(|group| group.name.clone())
+    }
+
+    /// First enabled group that includes this session (paused still counts for chrome).
+    /// Matches Tauri `getActiveGroupForSession`.
+    pub(in crate::ui::view) fn active_sync_group_for_session(
+        &self,
+        session_id: &str,
+    ) -> Option<&SyncInputGroup> {
+        self.sync_groups.iter().find(|group| {
+            group.enabled && group.session_ids.iter().any(|id| id == session_id)
+        })
+    }
+
+    pub(in crate::ui::view) fn is_session_paused_in_active_sync_group(
+        &self,
+        session_id: &str,
+    ) -> bool {
+        self.active_sync_group_for_session(session_id)
+            .is_some_and(|group| group.paused_session_ids.iter().any(|id| id == session_id))
+    }
+
+    /// Pause/resume the current session inside its active enabled sync group.
+    pub(in crate::ui::view) fn toggle_session_paused_in_active_sync_group(
+        &mut self,
+        session_id: String,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(group_id) = self
+            .active_sync_group_for_session(&session_id)
+            .map(|group| group.id.clone())
+        else {
+            self.terminal_status = "session is not in an active sync group".to_string();
+            cx.notify();
+            return;
+        };
+        let Some(group) = self.sync_groups.iter_mut().find(|group| group.id == group_id) else {
+            self.terminal_status = "sync group not found".to_string();
+            cx.notify();
+            return;
+        };
+        if group.paused_session_ids.iter().any(|id| id == &session_id) {
+            group.paused_session_ids.retain(|id| id != &session_id);
+            self.terminal_status = "session sync resumed".to_string();
+        } else {
+            group.paused_session_ids.push(session_id);
+            self.terminal_status = "session sync paused".to_string();
+        }
+        cx.notify();
+    }
+
+    /// Remove session from its active enabled sync group (Tauri Leave).
+    pub(in crate::ui::view) fn leave_active_sync_group(
+        &mut self,
+        session_id: String,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(group_id) = self
+            .active_sync_group_for_session(&session_id)
+            .map(|group| group.id.clone())
+        else {
+            self.terminal_status = "session is not in an active sync group".to_string();
+            cx.notify();
+            return;
+        };
+        if let Some(group) = self.sync_groups.iter_mut().find(|group| group.id == group_id) {
+            group.session_ids.retain(|id| id != &session_id);
+            group.paused_session_ids.retain(|id| id != &session_id);
+        }
+        self.sync_groups
+            .retain(|group| !group.session_ids.is_empty());
+        if self
+            .sync_groups_selected_id
+            .as_deref()
+            .is_some_and(|id| !self.sync_groups.iter().any(|group| group.id == id))
+        {
+            self.sync_groups_selected_id = self.sync_groups.first().map(|group| group.id.clone());
+        }
+        self.terminal_status = "left sync group".to_string();
+        cx.notify();
+    }
+
+    /// Disable the active enabled sync group without deleting it (Tauri Close Group).
+    pub(in crate::ui::view) fn close_active_sync_group_for_session(
+        &mut self,
+        session_id: String,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(group_id) = self
+            .active_sync_group_for_session(&session_id)
+            .map(|group| group.id.clone())
+        else {
+            self.terminal_status = "session is not in an active sync group".to_string();
+            cx.notify();
+            return;
+        };
+        if let Some(group) = self.sync_groups.iter_mut().find(|group| group.id == group_id) {
+            group.enabled = false;
+        }
+        self.terminal_status = "sync group closed".to_string();
+        cx.notify();
     }
 
     pub(in crate::ui::view) fn purge_session_from_sync_groups(&mut self, session_id: &str) {

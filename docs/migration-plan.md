@@ -1200,3 +1200,11 @@ service boundary first:
 - GPUI stores per-session paths in `session_cwds`, shows them in session info,
   and when transfer-browser auto-sync-cwd is enabled, updates the browser path
   from OSC 7 without waiting for SFTP `pwd`.
+
+## 2026-07-11 Native parity: sync action overlay + large-output protection
+
+- Terminal panes now show a Tauri-style sync action chrome when the session is in an
+  enabled sync group: Pause/Resume, Leave, Close Group (color-matched border).
+- Large-output protection tracks per-session burst size, trims oversized chunks to the
+  Tauri visible backlog cap, shows Overloaded/Recovered banners with skipped character
+  counts, and recovers after a calm event-pump window (~3s).

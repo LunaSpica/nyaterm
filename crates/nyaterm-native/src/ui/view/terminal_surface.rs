@@ -224,6 +224,11 @@ impl NyaTermApp {
             .session_display_name(&session_id)
             .unwrap_or_else(|| short_id(&session_id).to_string());
         let sync_group_label = self.active_sync_group_label(&session_id);
+        let active_sync_group = self.active_sync_group_for_session(&session_id);
+        let show_sync_action_overlay = active_sync_group.is_some() && !session_id.is_empty();
+        let sync_is_paused = self.is_session_paused_in_active_sync_group(&session_id);
+        let sync_group_color = active_sync_group.map(|group| group.color).unwrap_or(palette.accent);
+        let sync_status_label = if sync_is_paused { "Paused" } else { "Syncing" };
         let output_session_id = session_id.clone();
         let terminal_font_family = self.settings.terminal_font_family.clone();
         let terminal_font_size = self.settings.terminal_font_size as f32;
@@ -231,6 +236,15 @@ impl NyaTermApp {
             .terminal_views
             .get(&session_id)
             .is_some_and(|view| view.has_new_while_scrolled);
+        let performance_overlay = self
+            .terminal_views
+            .get(&session_id)
+            .and_then(|view| view.performance_overlay);
+        let skipped_output_chars = self
+            .terminal_views
+            .get(&session_id)
+            .map(|view| view.skipped_output_chars)
+            .unwrap_or(0);
         let show_scroll_to_bottom = is_active && scroll_offset > 0;
         let show_visual_bell = is_active && self.visual_bell_ticks > 0;
         let file_drop_hover = self
@@ -689,6 +703,166 @@ impl NyaTermApp {
                                         ),
                                 )
                             })
+                            .when(show_sync_action_overlay, |this| {
+                                let pause_session_id = output_session_id.clone();
+                                let leave_session_id = output_session_id.clone();
+                                let close_session_id = output_session_id.clone();
+                                this.child(
+                                    div()
+                                        .id(SharedString::from(format!(
+                                            "terminal-sync-overlay-{output_session_id}"
+                                        )))
+                                        .absolute()
+                                        .right(px(8.))
+                                        .top(px(4.))
+                                        .flex()
+                                        .items_center()
+                                        .gap_1()
+                                        .rounded_md()
+                                        .px_1()
+                                        .py(px(2.))
+                                        .border_1()
+                                        .border_color(rgba((sync_group_color << 8) | 0x4d))
+                                        .bg(rgba((palette.surface << 8) | 0xeb))
+                                        .shadow_sm()
+                                        .child(
+                                            div()
+                                                .text_xs()
+                                                .font_weight(FontWeight(700.))
+                                                .text_color(rgb(sync_group_color))
+                                                .mr(px(4.))
+                                                .child(sync_status_label),
+                                        )
+                                        .child(
+                                            div()
+                                                .id(SharedString::from(format!(
+                                                    "terminal-sync-pause-{output_session_id}"
+                                                )))
+                                                .rounded_sm()
+                                                .px_1()
+                                                .py(px(2.))
+                                                .cursor_pointer()
+                                                .hover(|style| style.bg(rgb(palette.hover)))
+                                                .on_click(cx.listener(move |this, _, _, cx| {
+                                                    this.toggle_session_paused_in_active_sync_group(
+                                                        pause_session_id.clone(),
+                                                        cx,
+                                                    );
+                                                }))
+                                                .child(
+                                                    div()
+                                                        .text_xs()
+                                                        .text_color(rgb(sync_group_color))
+                                                        .child(if sync_is_paused {
+                                                            "Resume"
+                                                        } else {
+                                                            "Pause"
+                                                        }),
+                                                ),
+                                        )
+                                        .child(
+                                            div()
+                                                .id(SharedString::from(format!(
+                                                    "terminal-sync-leave-{output_session_id}"
+                                                )))
+                                                .rounded_sm()
+                                                .px_1()
+                                                .py(px(2.))
+                                                .cursor_pointer()
+                                                .hover(|style| style.bg(rgb(palette.hover)))
+                                                .on_click(cx.listener(move |this, _, _, cx| {
+                                                    this.leave_active_sync_group(
+                                                        leave_session_id.clone(),
+                                                        cx,
+                                                    );
+                                                }))
+                                                .child(
+                                                    div()
+                                                        .text_xs()
+                                                        .text_color(rgb(sync_group_color))
+                                                        .child("Leave"),
+                                                ),
+                                        )
+                                        .child(
+                                            div()
+                                                .id(SharedString::from(format!(
+                                                    "terminal-sync-close-{output_session_id}"
+                                                )))
+                                                .rounded_sm()
+                                                .px_1()
+                                                .py(px(2.))
+                                                .cursor_pointer()
+                                                .hover(|style| style.bg(rgba(0xef44441a)))
+                                                .on_click(cx.listener(move |this, _, _, cx| {
+                                                    this.close_active_sync_group_for_session(
+                                                        close_session_id.clone(),
+                                                        cx,
+                                                    );
+                                                }))
+                                                .child(
+                                                    div()
+                                                        .text_xs()
+                                                        .text_color(rgb(palette.danger))
+                                                        .child("Close Group"),
+                                                ),
+                                        ),
+                                )
+                            })
+                            .when_some(performance_overlay, |this, overlay| {
+                                let (title, detail) = match overlay {
+                                    TerminalPerformanceOverlay::Overloaded => (
+                                        "Large-output protection active",
+                                        format!(
+                                            "Rendering is prioritizing responsiveness. Skipped {} queued characters.",
+                                            format_skipped_count(skipped_output_chars)
+                                        ),
+                                    ),
+                                    TerminalPerformanceOverlay::Recovered => (
+                                        "Large-output protection recovered",
+                                        format!(
+                                            "The terminal is responsive again. Skipped {} queued characters during overload.",
+                                            format_skipped_count(skipped_output_chars)
+                                        ),
+                                    ),
+                                };
+                                this.child(
+                                    div()
+                                        .id(SharedString::from(format!(
+                                            "terminal-perf-overlay-{output_session_id}"
+                                        )))
+                                        .absolute()
+                                        .left(px(12.))
+                                        .right(px(12.))
+                                        .top(px(12.))
+                                        .flex()
+                                        .justify_end()
+                                        .child(
+                                            div()
+                                                .max_w(px(360.))
+                                                .rounded_md()
+                                                .border_1()
+                                                .border_color(rgb(palette.border))
+                                                .bg(rgb(palette.surface))
+                                                .px_3()
+                                                .py_2()
+                                                .shadow_lg()
+                                                .child(
+                                                    div()
+                                                        .text_xs()
+                                                        .font_weight(FontWeight(700.))
+                                                        .text_color(rgb(palette.text))
+                                                        .child(title),
+                                                )
+                                                .child(
+                                                    div()
+                                                        .mt_1()
+                                                        .text_xs()
+                                                        .text_color(rgb(palette.text_dimmed))
+                                                        .child(detail),
+                                                ),
+                                        ),
+                                )
+                            })
                             .when(show_scroll_to_bottom, |this| {
                                 this.child(
                                     div()
@@ -1126,4 +1300,18 @@ impl NyaTermApp {
             )
             .child(history_rows)
     }
+}
+
+
+fn format_skipped_count(value: u64) -> String {
+    // Lightweight thousands separators for the performance overlay.
+    let raw = value.to_string();
+    let mut out = String::new();
+    for (i, ch) in raw.chars().rev().enumerate() {
+        if i > 0 && i % 3 == 0 {
+            out.push(',');
+        }
+        out.push(ch);
+    }
+    out.chars().rev().collect()
 }

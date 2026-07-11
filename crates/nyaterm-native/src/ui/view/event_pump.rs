@@ -163,6 +163,10 @@ impl NyaTermApp {
                                 if this.visual_bell_ticks > 0 {
                                     this.visual_bell_ticks = this.visual_bell_ticks.saturating_sub(1);
                                 }
+                                // Large-output protection recovery accounting.
+                                for view in this.terminal_views.values_mut() {
+                                    view.tick_performance_overlay();
+                                }
                                 // Drop overlay only while a platform drag is active.
                                 if this.terminal_file_drop_hover.is_some() && !cx.has_active_drag() {
                                     this.terminal_file_drop_hover = None;

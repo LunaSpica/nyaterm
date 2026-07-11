@@ -1023,7 +1023,8 @@ impl NyaTermApp {
                 .terminal_views
                 .entry(session_id.to_string())
                 .or_insert_with(TerminalViewState::new);
-            view.append_text(text);
+            let feed = view.protect_output_burst(text.as_bytes());
+            view.append_bytes_unprotected(feed);
             if mark_unread && !is_active {
                 view.has_unread = true;
             }
@@ -1043,8 +1044,9 @@ impl NyaTermApp {
                 pending_cwd = Some(cwd);
             }
             if is_active {
-                self.terminal_output.push_str(text);
-                self.terminal_screen.advance(text.as_bytes());
+                let feed_text = String::from_utf8_lossy(feed);
+                self.terminal_output.push_str(&feed_text);
+                self.terminal_screen.advance(feed);
                 let max_bytes = self.terminal_scrollback_max_bytes();
                 trim_terminal_output_to(&mut self.terminal_output, max_bytes);
                 if self.terminal_screen.take_visual_bell() {
@@ -1104,7 +1106,8 @@ impl NyaTermApp {
                 .terminal_views
                 .entry(session_id.to_string())
                 .or_insert_with(TerminalViewState::new);
-            view.append_bytes(data);
+            let feed = view.protect_output_burst(data);
+            view.append_bytes_unprotected(feed);
             if mark_unread && !is_active {
                 view.has_unread = true;
             }
@@ -1124,9 +1127,10 @@ impl NyaTermApp {
                 pending_cwd = Some(cwd);
             }
             if is_active {
-                self.terminal_screen.advance(data);
+                // Mirror the same protected feed into the active surface.
+                self.terminal_screen.advance(feed);
                 self.terminal_output
-                    .push_str(&String::from_utf8_lossy(data));
+                    .push_str(&String::from_utf8_lossy(feed));
                 let max_bytes = self.terminal_scrollback_max_bytes();
                 trim_terminal_output_to(&mut self.terminal_output, max_bytes);
                 if self.terminal_screen.take_visual_bell() {

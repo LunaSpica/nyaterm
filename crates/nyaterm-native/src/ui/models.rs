@@ -14,6 +14,28 @@ use std::path::PathBuf;
 
 use super::terminal::{terminal_screen_from_output, trim_terminal_output};
 
+/// Large-output protection modes (Tauri XTerminal performanceMode).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub(super) enum TerminalPerformanceMode {
+    #[default]
+    Normal,
+    Overloaded,
+}
+
+/// In-pane large-output protection banner (Tauri PerformanceOverlayState).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) enum TerminalPerformanceOverlay {
+    Overloaded,
+    Recovered,
+}
+
+/// Match Tauri `XTERM_PERFORMANCE_CONFIG.output` thresholds (bytes).
+pub(super) const TERMINAL_OUTPUT_WRITE_CHUNK: usize = 32 * 1024;
+pub(super) const TERMINAL_OUTPUT_VISIBLE_BACKLOG_CAP: usize = 1_000_000;
+pub(super) const TERMINAL_OUTPUT_VISIBLE_BURST_OVERLOAD: usize = 256 * 1024;
+/// ~3s recovery notice at the 50ms event-pump cadence.
+pub(super) const TERMINAL_PERFORMANCE_RECOVERY_TICKS: u8 = 60;
+
 pub(super) struct TerminalViewState {
     pub(super) output: String,
     pub(super) screen: TerminalScreen,
@@ -22,6 +44,14 @@ pub(super) struct TerminalViewState {
     pub(super) scroll_offset: usize,
     /// True when output arrived while scrolled into history (FAB "New" affordance).
     pub(super) has_new_while_scrolled: bool,
+    pub(super) performance_mode: TerminalPerformanceMode,
+    pub(super) performance_overlay: Option<TerminalPerformanceOverlay>,
+    /// Remaining pump ticks for recovered banner auto-dismiss (0 = none).
+    pub(super) performance_overlay_ticks: u8,
+    /// Characters dropped while protecting responsiveness (Tauri skippedOutputChars).
+    pub(super) skipped_output_chars: u64,
+    /// Bytes accepted in the current calm window (reset each event-pump tick).
+    pub(super) output_burst_bytes: usize,
 }
 
 impl TerminalViewState {
@@ -32,6 +62,11 @@ impl TerminalViewState {
             has_unread: false,
             scroll_offset: 0,
             has_new_while_scrolled: false,
+            performance_mode: TerminalPerformanceMode::Normal,
+            performance_overlay: None,
+            performance_overlay_ticks: 0,
+            skipped_output_chars: 0,
+            output_burst_bytes: 0,
         }
     }
 
@@ -43,20 +78,30 @@ impl TerminalViewState {
             has_unread: false,
             scroll_offset: 0,
             has_new_while_scrolled: false,
+            performance_mode: TerminalPerformanceMode::Normal,
+            performance_overlay: None,
+            performance_overlay_ticks: 0,
+            skipped_output_chars: 0,
+            output_burst_bytes: 0,
         }
     }
 
     pub(super) fn append_text(&mut self, text: &str) {
-        self.output.push_str(text);
-        self.screen.advance(text.as_bytes());
-        trim_terminal_output(&mut self.output);
-        if self.scroll_offset > 0 {
-            self.has_new_while_scrolled = true;
-        }
-        self.clamp_scroll_offset();
+        let feed = self.protect_output_burst(text.as_bytes());
+        self.append_bytes_unprotected(feed);
     }
 
     pub(super) fn append_bytes(&mut self, data: &[u8]) {
+        let feed = self.protect_output_burst(data);
+        self.append_bytes_unprotected(feed);
+    }
+
+    /// Feed already-protected bytes into the view (used when the caller applies
+    /// the same feed to the mirrored active screen).
+    pub(super) fn append_bytes_unprotected(&mut self, data: &[u8]) {
+        if data.is_empty() {
+            return;
+        }
         self.screen.advance(data);
         self.output.push_str(&String::from_utf8_lossy(data));
         trim_terminal_output(&mut self.output);
@@ -66,12 +111,79 @@ impl TerminalViewState {
         self.clamp_scroll_offset();
     }
 
+    /// Drop the oldest part of an oversized burst so the latest screen state wins
+    /// (Tauri backlog trim + large-output protection).
+    pub(super) fn protect_output_burst<'a>(&mut self, data: &'a [u8]) -> &'a [u8] {
+        if data.is_empty() {
+            return data;
+        }
+        let mut feed = data;
+        if feed.len() > TERMINAL_OUTPUT_VISIBLE_BACKLOG_CAP {
+            let skip = feed.len() - TERMINAL_OUTPUT_VISIBLE_BACKLOG_CAP;
+            self.note_skipped_output(skip);
+            feed = &feed[skip..];
+        }
+        self.output_burst_bytes = self.output_burst_bytes.saturating_add(feed.len());
+        if self.output_burst_bytes > TERMINAL_OUTPUT_VISIBLE_BURST_OVERLOAD
+            || feed.len() > TERMINAL_OUTPUT_WRITE_CHUNK
+        {
+            self.enter_overloaded_mode();
+        }
+        feed
+    }
+
+    pub(super) fn note_skipped_output(&mut self, count: usize) {
+        if count == 0 {
+            return;
+        }
+        self.skipped_output_chars = self.skipped_output_chars.saturating_add(count as u64);
+        self.enter_overloaded_mode();
+    }
+
+    pub(super) fn enter_overloaded_mode(&mut self) {
+        self.performance_mode = TerminalPerformanceMode::Overloaded;
+        self.performance_overlay = Some(TerminalPerformanceOverlay::Overloaded);
+        self.performance_overlay_ticks = 0;
+    }
+
+    pub(super) fn maybe_exit_overloaded_mode(&mut self) {
+        if self.performance_mode != TerminalPerformanceMode::Overloaded {
+            return;
+        }
+        // Calm window: no large burst this tick.
+        if self.output_burst_bytes > TERMINAL_OUTPUT_VISIBLE_BURST_OVERLOAD / 4 {
+            return;
+        }
+        self.performance_mode = TerminalPerformanceMode::Normal;
+        self.performance_overlay = Some(TerminalPerformanceOverlay::Recovered);
+        self.performance_overlay_ticks = TERMINAL_PERFORMANCE_RECOVERY_TICKS;
+    }
+
+    pub(super) fn tick_performance_overlay(&mut self) {
+        // End-of-tick calm accounting for recovery.
+        self.maybe_exit_overloaded_mode();
+        self.output_burst_bytes = 0;
+        if self.performance_overlay_ticks > 0 {
+            self.performance_overlay_ticks = self.performance_overlay_ticks.saturating_sub(1);
+            if self.performance_overlay_ticks == 0
+                && self.performance_overlay == Some(TerminalPerformanceOverlay::Recovered)
+            {
+                self.performance_overlay = None;
+            }
+        }
+    }
+
     pub(super) fn clear(&mut self) {
         self.output.clear();
         self.screen.clear();
         self.has_unread = false;
         self.scroll_offset = 0;
         self.has_new_while_scrolled = false;
+        self.performance_mode = TerminalPerformanceMode::Normal;
+        self.performance_overlay = None;
+        self.performance_overlay_ticks = 0;
+        self.skipped_output_chars = 0;
+        self.output_burst_bytes = 0;
     }
 
     pub(super) fn clamp_scroll_offset(&mut self) {
