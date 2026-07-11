@@ -637,6 +637,55 @@ impl NyaTermApp {
         cx.notify();
     }
 
+    pub(in crate::ui::view) fn delete_command_suggestion_history(
+        &mut self,
+        command: String,
+        cx: &mut Context<Self>,
+    ) {
+        let command = command.trim().to_string();
+        if command.is_empty() {
+            return;
+        }
+        match ConnectionStore::open_with_portable_key_path(
+            self.runtime.config_dir(),
+            self.runtime.portable_key_path().map(ToOwned::to_owned),
+        ) {
+            Ok(store) => {
+                if let Err(error) = store.delete_command_history(&command) {
+                    self.terminal_status = format!("failed to delete history: {error}");
+                    cx.notify();
+                    return;
+                }
+                self.command_history = store.list_command_history(64).unwrap_or_default();
+                for history in self.session_command_history.values_mut() {
+                    history.retain(|entry| entry != &command);
+                }
+            }
+            Err(error) => {
+                self.terminal_status = format!("failed to open store: {error}");
+                cx.notify();
+                return;
+            }
+        }
+
+        if let Some(state) = self.command_suggestions.as_mut() {
+            state.items.retain(|item| {
+                !(item.source == "history" && item.command == command)
+            });
+            if state.items.is_empty() {
+                self.command_suggestions = None;
+            } else {
+                state.selected_index = state
+                    .selected_index
+                    .min(state.items.len().saturating_sub(1));
+            }
+        } else {
+            self.refresh_command_suggestions(cx);
+        }
+        self.terminal_status = format!("deleted history command '{command}'");
+        cx.notify();
+    }
+
     pub(in crate::ui::view) fn command_suggestions_overlay(
         &self,
         cx: &mut Context<Self>,
@@ -690,46 +739,72 @@ impl NyaTermApp {
             } else {
                 item.display.clone()
             };
-            list = list.child(
-                div()
-                    .id(SharedString::from(format!("command-suggestion-{index}")))
-                    .h(px(28.))
-                    .px_2()
-                    .flex()
-                    .items_center()
-                    .gap_2()
-                    .border_l_2()
-                    .border_color(rgb(if selected { palette.accent } else { palette.surface }))
-                    .bg(rgb(if selected { palette.hover } else { palette.surface }))
-                    .text_size(px(12.))
-                    .text_color(rgb(palette.text))
-                    .cursor_pointer()
-                    .on_click(cx.listener(move |this, _, _, cx| {
-                        if let Some(state) = this.command_suggestions.as_mut() {
-                            state.selected_index = index;
-                        }
-                        this.apply_selected_command_suggestion(true, cx);
-                    }))
-                    .child(
-                        div()
-                            .w(px(16.))
-                            .flex_none()
-                            .text_size(px(10.))
-                            .text_color(rgb(if selected {
-                                palette.accent
-                            } else {
-                                palette.text_dimmed
-                            }))
-                            .child(source_label.to_string()),
-                    )
-                    .child(
-                        div()
-                            .min_w_0()
-                            .flex_1()
-                            .font_family("JetBrains Mono")
-                            .child(truncate_preview(&label, 48)),
-                    ),
-            );
+            let is_history = item.source == "history";
+            let delete_command = item.command.clone();
+            let mut row = div()
+                .id(SharedString::from(format!("command-suggestion-{index}")))
+                .h(px(28.))
+                .px_2()
+                .flex()
+                .items_center()
+                .gap_2()
+                .border_l_2()
+                .border_color(rgb(if selected { palette.accent } else { palette.surface }))
+                .bg(rgb(if selected { palette.hover } else { palette.surface }))
+                .text_size(px(12.))
+                .text_color(rgb(palette.text))
+                .cursor_pointer()
+                .on_click(cx.listener(move |this, _, _, cx| {
+                    if let Some(state) = this.command_suggestions.as_mut() {
+                        state.selected_index = index;
+                    }
+                    this.apply_selected_command_suggestion(true, cx);
+                }))
+                .child(
+                    div()
+                        .w(px(16.))
+                        .flex_none()
+                        .text_size(px(10.))
+                        .text_color(rgb(if selected {
+                            palette.accent
+                        } else {
+                            palette.text_dimmed
+                        }))
+                        .child(source_label.to_string()),
+                )
+                .child(
+                    div()
+                        .min_w_0()
+                        .flex_1()
+                        .font_family("JetBrains Mono")
+                        .child(truncate_preview(&label, 48)),
+                );
+            if is_history {
+                row = row.child(
+                    div()
+                        .id(SharedString::from(format!("command-suggestion-del-{index}")))
+                        .flex_none()
+                        .w(px(20.))
+                        .h(px(20.))
+                        .rounded_sm()
+                        .flex()
+                        .items_center()
+                        .justify_center()
+                        .text_size(px(11.))
+                        .text_color(rgb(palette.text_dimmed))
+                        .hover(|this| {
+                            this.bg(rgb(palette.surface_elevated))
+                                .text_color(rgb(palette.danger))
+                        })
+                        .cursor_pointer()
+                        .on_click(cx.listener(move |this, _, _, cx| {
+                            cx.stop_propagation();
+                            this.delete_command_suggestion_history(delete_command.clone(), cx);
+                        }))
+                        .child("×"),
+                );
+            }
+            list = list.child(row);
         }
 
         div()

@@ -1045,3 +1045,9 @@ service boundary first:
 - Detection runs on active session output; session switch resets state; open
   panel / prompt mode suppresses inline command suggestions.
 
+## 2026-07-11 Command suggestion history delete
+
+- History-sourced command suggestion rows expose a delete control that removes
+  the entry from redb command history and refreshes the live suggestion list
+  (Tauri CommandSuggestions deleteHistory parity).
+
