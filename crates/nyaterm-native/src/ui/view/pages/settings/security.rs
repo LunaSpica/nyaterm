@@ -5,6 +5,7 @@ impl NyaTermApp {
         &mut self,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
+        let palette = self.theme_palette();
         let master_password_status = if self.settings.has_master_password {
             "Configured"
         } else if self.cloud_sync_settings.enabled {
@@ -22,14 +23,14 @@ impl NyaTermApp {
             .flex()
             .flex_col()
             .gap_3()
-            .child(settings_form_section(
+            .child(settings_form_section(palette, 
                 Some("Master password"),
                 Some("Protects encrypted snapshots and the native lock screen."),
                 div()
                     .flex()
                     .flex_col()
                     .gap_3()
-                    .child(settings_form_row(
+                    .child(settings_form_row(palette, 
                         "Status",
                         Some(SharedString::from(master_password_status)),
                         div()
@@ -46,7 +47,7 @@ impl NyaTermApp {
                                 "Pending"
                             }),
                     ))
-                    .child(settings_form_row(
+                    .child(settings_form_row(palette, 
                         "Cloud sync dependency",
                         Some(SharedString::from(
                             "Push/pull may request this password before encrypted snapshot work.",
@@ -61,19 +62,19 @@ impl NyaTermApp {
                             }),
                     )),
             ))
-            .child(settings_form_section(
+            .child(settings_form_section(palette, 
                 Some("Screen lock"),
                 Some("Lock the window after idle time or on demand."),
                 div()
                     .flex()
                     .flex_col()
                     .gap_3()
-                    .child(settings_form_row(
+                    .child(settings_form_row(palette, 
                         "Enable screen lock",
                         Some(SharedString::from(
                             "Require the master password to unlock the main window.",
                         )),
-                        settings_switch(
+                        settings_switch(palette, 
                             "settings-screen-lock-enabled",
                             self.settings.enable_screen_lock,
                             cx.listener(|this, _, _, cx| {
@@ -81,7 +82,7 @@ impl NyaTermApp {
                             }),
                         ),
                     ))
-                    .child(settings_form_row(
+                    .child(settings_form_row(palette, 
                         "Idle lock",
                         Some(SharedString::from(
                             "Automatically lock after this many minutes of inactivity (0 = manual).",
@@ -114,7 +115,7 @@ impl NyaTermApp {
                                 }),
                             )),
                     ))
-                    .child(settings_form_row(
+                    .child(settings_form_row(palette, 
                         "Window state",
                         Some(SharedString::from(format!(
                             "Last activity {}s ago",
@@ -131,14 +132,14 @@ impl NyaTermApp {
                             .child(if self.is_locked { "Locked" } else { "Unlocked" }),
                     )),
             ))
-            .child(settings_form_section(
+            .child(settings_form_section(palette, 
                 Some("Host key policy"),
                 Some("How SSH host key changes are handled."),
                 div()
                     .flex()
                     .flex_wrap()
                     .gap_1()
-                    .child(settings_choice_chip(
+                    .child(settings_choice_chip(palette, 
                         "security-host-ask",
                         "Ask",
                         self.settings.host_key_policy == "ask"
@@ -147,7 +148,7 @@ impl NyaTermApp {
                             this.update_host_key_policy("ask", cx);
                         }),
                     ))
-                    .child(settings_choice_chip(
+                    .child(settings_choice_chip(palette, 
                         "security-host-accept",
                         "Accept new",
                         self.settings.host_key_policy == "accept_new",
@@ -155,7 +156,7 @@ impl NyaTermApp {
                             this.update_host_key_policy("accept_new", cx);
                         }),
                     ))
-                    .child(settings_choice_chip(
+                    .child(settings_choice_chip(palette, 
                         "security-host-strict",
                         "Strict",
                         self.settings.host_key_policy == "strict"

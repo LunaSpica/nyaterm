@@ -6,6 +6,7 @@ use crate::ui::shortcuts::{
 
 impl NyaTermApp {
     pub(super) fn general_settings_section(&mut self, cx: &mut Context<Self>) -> impl IntoElement {
+        let palette = self.theme_palette();
         // Tauri GeneralTab: SettingSection + SettingRow switches (no metric cards).
         let language = self.settings.language.clone();
         let language_label = match language.as_str() {
@@ -20,17 +21,17 @@ impl NyaTermApp {
             .flex()
             .flex_col()
             .gap_3()
-            .child(settings_form_section(
+            .child(settings_form_section(palette, 
                 None,
                 None,
-                settings_form_row(
+                settings_form_row(palette, 
                     "Language",
                     Some(SharedString::from("UI language preference for labels and dialogs.")),
                     div()
                         .flex()
                         .items_center()
                         .gap_1()
-                        .child(settings_choice_chip(
+                        .child(settings_choice_chip(palette, 
                             "general-lang-en",
                             "English",
                             matches!(language.as_str(), "en" | "en-US"),
@@ -38,7 +39,7 @@ impl NyaTermApp {
                                 this.update_ui_language("en", cx);
                             }),
                         ))
-                        .child(settings_choice_chip(
+                        .child(settings_choice_chip(palette, 
                             "general-lang-zh",
                             "中文",
                             matches!(language.as_str(), "zh-CN" | "zh"),
@@ -54,17 +55,17 @@ impl NyaTermApp {
                         ),
                 ),
             ))
-            .child(settings_form_section(
+            .child(settings_form_section(palette, 
                 Some("Startup & window"),
                 Some("Restore sessions and confirm before closing the app."),
                 div()
                     .flex()
                     .flex_col()
                     .gap_3()
-                    .child(settings_form_row(
+                    .child(settings_form_row(palette, 
                         "Restore sessions on startup",
                         Some(SharedString::from("Reopen the previous workspace tabs when NyaTerm starts.")),
-                        settings_switch(
+                        settings_switch(palette, 
                             "general-startup-restore",
                             self.settings.startup_restore,
                             cx.listener(|this, _, _, cx| {
@@ -72,10 +73,10 @@ impl NyaTermApp {
                             }),
                         ),
                     ))
-                    .child(settings_form_row(
+                    .child(settings_form_row(palette, 
                         "Confirm on close",
                         Some(SharedString::from("Ask before quitting when sessions are still open.")),
-                        settings_switch(
+                        settings_switch(palette, 
                             "general-confirm-close",
                             self.settings.confirm_on_close,
                             cx.listener(|this, _, _, cx| {
@@ -84,14 +85,14 @@ impl NyaTermApp {
                         ),
                     )),
             ))
-            .child(settings_form_section(
+            .child(settings_form_section(palette, 
                 Some("Status"),
                 None,
                 div()
                     .flex()
                     .flex_col()
                     .gap_2()
-                    .child(settings_form_row(
+                    .child(settings_form_row(palette, 
                         "Connection store",
                         Some(SharedString::from("Native redb store readiness.")),
                         div()
@@ -108,7 +109,7 @@ impl NyaTermApp {
                                 "Offline"
                             }),
                     ))
-                    .child(settings_form_row(
+                    .child(settings_form_row(palette, 
                         "Theme / font",
                         Some(SharedString::from("Current appearance snapshot.")),
                         div()
@@ -128,19 +129,20 @@ impl NyaTermApp {
         &mut self,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
+        let palette = self.theme_palette();
         let font_size_label = format!("{} px", self.settings.terminal_font_size);
         div()
             .flex()
             .flex_col()
             .gap_3()
-            .child(settings_form_section(
+            .child(settings_form_section(palette, 
                 Some("Theme"),
                 Some("Color scheme used by the native shell chrome."),
                 div()
                     .flex()
                     .flex_wrap()
                     .gap_1()
-                    .child(settings_choice_chip(
+                    .child(settings_choice_chip(palette, 
                         "appearance-theme-dark",
                         "GitHub Dark",
                         self.settings.theme == "github-dark",
@@ -148,7 +150,7 @@ impl NyaTermApp {
                             this.update_appearance_theme("github-dark", cx);
                         }),
                     ))
-                    .child(settings_choice_chip(
+                    .child(settings_choice_chip(palette, 
                         "appearance-theme-light",
                         "GitHub Light",
                         self.settings.theme == "github-light",
@@ -156,7 +158,7 @@ impl NyaTermApp {
                             this.update_appearance_theme("github-light", cx);
                         }),
                     ))
-                    .child(settings_choice_chip(
+                    .child(settings_choice_chip(palette, 
                         "appearance-theme-catppuccin",
                         "Catppuccin",
                         self.settings.theme == "catppuccin",
@@ -165,21 +167,21 @@ impl NyaTermApp {
                         }),
                     )),
             ))
-            .child(settings_form_section(
+            .child(settings_form_section(palette, 
                 Some("Terminal font"),
                 None,
                 div()
                     .flex()
                     .flex_col()
                     .gap_3()
-                    .child(settings_form_row(
+                    .child(settings_form_row(palette, 
                         "Font family",
                         Some(SharedString::from("Monospace face used by the GPUI terminal surface.")),
                         div()
                             .flex()
                             .flex_wrap()
                             .gap_1()
-                            .child(settings_choice_chip(
+                            .child(settings_choice_chip(palette, 
                                 "appearance-font-jetbrains",
                                 "JetBrains Mono",
                                 self.settings.terminal_font_family == "JetBrains Mono",
@@ -187,7 +189,7 @@ impl NyaTermApp {
                                     this.update_terminal_font_family("JetBrains Mono", cx);
                                 }),
                             ))
-                            .child(settings_choice_chip(
+                            .child(settings_choice_chip(palette, 
                                 "appearance-font-iosevka",
                                 "Iosevka",
                                 self.settings.terminal_font_family == "Iosevka",
@@ -195,7 +197,7 @@ impl NyaTermApp {
                                     this.update_terminal_font_family("Iosevka", cx);
                                 }),
                             ))
-                            .child(settings_choice_chip(
+                            .child(settings_choice_chip(palette, 
                                 "appearance-font-monospace",
                                 "monospace",
                                 self.settings.terminal_font_family == "monospace",
@@ -204,7 +206,7 @@ impl NyaTermApp {
                                 }),
                             )),
                     ))
-                    .child(settings_form_row(
+                    .child(settings_form_row(palette, 
                         "Font size",
                         Some(SharedString::from("Zoom the terminal text without leaving Settings.")),
                         div()
@@ -244,17 +246,17 @@ impl NyaTermApp {
                             )),
                     )),
             ))
-            .child(settings_form_section(
+            .child(settings_form_section(palette, 
                 Some("X11 display"),
                 Some("Used when launching remote X11-forwarded tools."),
-                settings_form_row(
+                settings_form_row(palette, 
                     "Display",
                     Some(SharedString::from("Forwarded X11 DISPLAY preference.")),
                     div()
                         .flex()
                         .flex_wrap()
                         .gap_1()
-                        .child(settings_choice_chip(
+                        .child(settings_choice_chip(palette, 
                             "appearance-x11-auto",
                             "Auto",
                             self.settings.x11_display.trim().is_empty(),
@@ -262,7 +264,7 @@ impl NyaTermApp {
                                 this.update_x11_display("", cx);
                             }),
                         ))
-                        .child(settings_choice_chip(
+                        .child(settings_choice_chip(palette, 
                             "appearance-x11-localhost0",
                             "localhost:0",
                             self.settings.x11_display == "localhost:0",
@@ -270,7 +272,7 @@ impl NyaTermApp {
                                 this.update_x11_display("localhost:0", cx);
                             }),
                         ))
-                        .child(settings_choice_chip(
+                        .child(settings_choice_chip(palette, 
                             "appearance-x11-localhost1",
                             "localhost:1",
                             self.settings.x11_display == "localhost:1",
@@ -286,6 +288,7 @@ impl NyaTermApp {
         &mut self,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
+        let palette = self.theme_palette();
         // Tauri InteractionTab density: section cards + switch/choice rows.
         let encoding = self.settings.interaction_default_encoding.clone();
         let word_sep = self.settings.interaction_word_separators.clone();
@@ -301,13 +304,13 @@ impl NyaTermApp {
             .flex()
             .flex_col()
             .gap_3()
-            .child(settings_form_section(
+            .child(settings_form_section(palette, 
                 Some("Side panels"),
                 Some("Allow multiple side panels stacked on each edge."),
-                settings_form_row(
+                settings_form_row(palette, 
                     "Multi-open panels",
                     Some(SharedString::from("Stack several left/right panels instead of replacing the active one.")),
-                    settings_switch(
+                    settings_switch(palette, 
                         "settings-panel-multi-open",
                         self.panel_multi_open,
                         cx.listener(|this, _, _, cx| {
@@ -316,17 +319,17 @@ impl NyaTermApp {
                     ),
                 ),
             ))
-            .child(settings_form_section(
+            .child(settings_form_section(palette, 
                 Some("Clipboard and mouse"),
                 None,
                 div()
                     .flex()
                     .flex_col()
                     .gap_3()
-                    .child(settings_form_row(
+                    .child(settings_form_row(palette, 
                         "Copy on select",
                         Some(SharedString::from("Copy selected terminal text to the clipboard automatically.")),
-                        settings_switch(
+                        settings_switch(palette, 
                             "interaction-copy-select",
                             self.settings.interaction_copy_on_select,
                             cx.listener(|this, _, _, cx| {
@@ -334,10 +337,10 @@ impl NyaTermApp {
                             }),
                         ),
                     ))
-                    .child(settings_form_row(
+                    .child(settings_form_row(palette, 
                         "Right-click paste",
                         Some(SharedString::from("Paste from clipboard on right-click instead of opening a menu.")),
-                        settings_switch(
+                        settings_switch(palette, 
                             "interaction-right-paste",
                             self.settings.interaction_right_click_paste,
                             cx.listener(|this, _, _, cx| {
@@ -345,10 +348,10 @@ impl NyaTermApp {
                             }),
                         ),
                     ))
-                    .child(settings_form_row(
+                    .child(settings_form_row(palette, 
                         "Alt as Meta",
                         Some(SharedString::from("Treat Alt as Meta for terminal key bindings.")),
-                        settings_switch(
+                        settings_switch(palette, 
                             "interaction-alt-meta",
                             self.settings.interaction_alt_as_meta,
                             cx.listener(|this, _, _, cx| {
@@ -356,10 +359,10 @@ impl NyaTermApp {
                             }),
                         ),
                     ))
-                    .child(settings_form_row(
+                    .child(settings_form_row(palette, 
                         "Mac IME compatibility",
                         Some(SharedString::from("Improve input method editor handling on macOS.")),
-                        settings_switch(
+                        settings_switch(palette, 
                             "interaction-mac-ime",
                             self.settings.interaction_mac_ime_compatibility,
                             cx.listener(|this, _, _, cx| {
@@ -368,17 +371,17 @@ impl NyaTermApp {
                         ),
                     )),
             ))
-            .child(settings_form_section(
+            .child(settings_form_section(palette, 
                 Some("Command input"),
                 None,
                 div()
                     .flex()
                     .flex_col()
                     .gap_3()
-                    .child(settings_form_row(
+                    .child(settings_form_row(palette, 
                         "Command suggestions",
                         Some(SharedString::from("Offer history-based suggestions while typing commands.")),
-                        settings_switch(
+                        settings_switch(palette, 
                             "interaction-cmd-suggestions",
                             self.settings.interaction_command_suggestions_enabled,
                             cx.listener(|this, _, _, cx| {
@@ -386,7 +389,7 @@ impl NyaTermApp {
                             }),
                         ),
                     ))
-                    .child(settings_form_row(
+                    .child(settings_form_row(palette, 
                         "Suggestion length",
                         Some(SharedString::from("Minimum and maximum characters before suggestions appear.")),
                         div()
@@ -433,13 +436,13 @@ impl NyaTermApp {
                                 }),
                             )),
                     ))
-                    .child(settings_form_row(
+                    .child(settings_form_row(palette, 
                         "Default encoding",
                         Some(SharedString::from("Fallback character encoding for session I/O.")),
                         div()
                             .flex()
                             .gap_1()
-                            .child(settings_choice_chip(
+                            .child(settings_choice_chip(palette, 
                                 "interaction-encoding-utf8",
                                 "UTF-8",
                                 encoding == "UTF-8",
@@ -447,7 +450,7 @@ impl NyaTermApp {
                                     this.set_interaction_encoding("UTF-8", cx);
                                 }),
                             ))
-                            .child(settings_choice_chip(
+                            .child(settings_choice_chip(palette, 
                                 "interaction-encoding-gbk",
                                 "GBK",
                                 encoding == "GBK",
@@ -456,7 +459,7 @@ impl NyaTermApp {
                                 }),
                             )),
                     ))
-                    .child(settings_form_row(
+                    .child(settings_form_row(palette, 
                         "Word separators",
                         Some(SharedString::from("Characters that split double-click word selection.")),
                         div()
@@ -470,7 +473,7 @@ impl NyaTermApp {
                                     .text_color(rgb(0x8b949e))
                                     .child(truncate_preview(&word_sep, 24)),
                             )
-                            .child(settings_choice_chip(
+                            .child(settings_choice_chip(palette, 
                                 "interaction-word-sep-shell",
                                 "Shell",
                                 word_sep.contains('/') && word_sep.contains(':'),
@@ -481,7 +484,7 @@ impl NyaTermApp {
                                     );
                                 }),
                             ))
-                            .child(settings_choice_chip(
+                            .child(settings_choice_chip(palette, 
                                 "interaction-word-sep-basic",
                                 "Basic",
                                 word_sep == " \t\r\n",
@@ -490,7 +493,7 @@ impl NyaTermApp {
                                 }),
                             )),
                     ))
-                    .child(settings_form_row(
+                    .child(settings_form_row(palette, 
                         "Duplicate session delay",
                         Some(SharedString::from("Delay before replaying the startup command on a duplicated tab.")),
                         div()
@@ -520,14 +523,14 @@ impl NyaTermApp {
                             )),
                     )),
             ))
-            .child(settings_form_section(
+            .child(settings_form_section(palette, 
                 Some("Tab mouse actions"),
                 Some("What happens when clicking session tabs."),
                 div()
                     .flex()
                     .flex_col()
                     .gap_3()
-                    .child(settings_form_row(
+                    .child(settings_form_row(palette, 
                         "Double-click",
                         Some(SharedString::from(double_action)),
                         small_button(
@@ -538,7 +541,7 @@ impl NyaTermApp {
                             }),
                         ),
                     ))
-                    .child(settings_form_row(
+                    .child(settings_form_row(palette, 
                         "Middle-click",
                         Some(SharedString::from(middle_action)),
                         small_button(
@@ -549,7 +552,7 @@ impl NyaTermApp {
                             }),
                         ),
                     ))
-                    .child(settings_form_row(
+                    .child(settings_form_row(palette, 
                         "Right-click",
                         Some(SharedString::from(right_action)),
                         small_button(
@@ -567,6 +570,7 @@ impl NyaTermApp {
         &mut self,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
+        let palette = self.theme_palette();
         // Tauri KeyboardShortcutsTab: section per category + dense shortcut rows.
         let supported = SHORTCUT_REGISTRY
             .iter()
@@ -595,14 +599,14 @@ impl NyaTermApp {
             .on_key_down(cx.listener(|this, event: &KeyDownEvent, _, cx| {
                 this.handle_keybinding_key_down(event, cx);
             }))
-            .child(settings_form_section(
+            .child(settings_form_section(palette, 
                 Some("Keyboard shortcuts"),
                 Some("Record overrides stored in the same keybindings map as the Tauri app."),
                 div()
                     .flex()
                     .flex_col()
                     .gap_3()
-                    .child(settings_form_row(
+                    .child(settings_form_row(palette, 
                         "Registry",
                         Some(SharedString::from(format!(
                             "{} total · {supported} native · {pending} pending · {overrides} overrides",
@@ -649,6 +653,7 @@ impl NyaTermApp {
         category: ShortcutCategory,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
+        let palette = self.theme_palette();
         let count = SHORTCUT_REGISTRY
             .iter()
             .filter(|shortcut| shortcut.category == category)
@@ -661,14 +666,14 @@ impl NyaTermApp {
             rows = rows.child(self.shortcut_registry_row(shortcut, cx));
         }
 
-        settings_form_section(
+        settings_form_section(palette, 
             Some(category.label()),
             None,
             div()
                 .flex()
                 .flex_col()
                 .gap_2()
-                .child(settings_form_row(
+                .child(settings_form_row(palette, 
                     "Shortcuts",
                     Some(SharedString::from(format!("{count} in category"))),
                     div()

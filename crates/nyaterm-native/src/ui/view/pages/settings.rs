@@ -9,6 +9,7 @@ use nyaterm_domain::{
 use nyaterm_session::SftpDuplicatePolicy;
 
 use crate::ui::components::{section_header, small_button, status_pill};
+use crate::ui::theme::ThemePalette;
 use crate::ui::models::{
     AiInputField, CloudSyncConflictState, CloudSyncInputField, ConfigPathPromptKind,
     DiagnosticsPathPromptKind, KeywordHighlightPathPromptKind, SettingsTab,
@@ -131,7 +132,7 @@ impl NyaTermApp {
             .px_2()
             .py_2()
             .overflow_scroll()
-            .child(settings_category_header("Workspace", "WS", rgb(0x58a6ff)))
+            .child(settings_category_header(palette, "Workspace", "WS", rgb(0x58a6ff)))
             .child(self.settings_tab_button(SettingsTab::General, "settings-tab-general", cx))
             .child(self.settings_tab_button(SettingsTab::Appearance, "settings-tab-appearance", cx))
             .child(self.settings_tab_button(
@@ -144,7 +145,7 @@ impl NyaTermApp {
                 "settings-tab-keybindings",
                 cx,
             ))
-            .child(settings_category_header(
+            .child(settings_category_header(palette, 
                 "Terminal Session",
                 "TM",
                 rgb(0x3fb950),
@@ -160,15 +161,15 @@ impl NyaTermApp {
                 "settings-tab-translation",
                 cx,
             ))
-            .child(settings_category_header("AI", "AI", rgb(0xbc8cff)))
+            .child(settings_category_header(palette, "AI", "AI", rgb(0xbc8cff)))
             .child(self.settings_tab_button(SettingsTab::AiGeneral, "settings-tab-ai-general", cx))
             .child(self.settings_tab_button(SettingsTab::AiModels, "settings-tab-ai-models", cx))
             .child(self.settings_tab_button(SettingsTab::AiRules, "settings-tab-ai-rules", cx))
-            .child(settings_category_header("Transfer", "TF", rgb(0x58a6ff)))
+            .child(settings_category_header(palette, "Transfer", "TF", rgb(0x58a6ff)))
             .child(self.settings_tab_button(SettingsTab::Transfer, "settings-tab-transfer", cx))
-            .child(settings_category_header("Security", "SC", rgb(0xd29922)))
+            .child(settings_category_header(palette, "Security", "SC", rgb(0xd29922)))
             .child(self.settings_tab_button(SettingsTab::Security, "settings-tab-security", cx))
-            .child(settings_category_header("Sync Backup", "BK", rgb(0x3fb950)))
+            .child(settings_category_header(palette, "Sync Backup", "BK", rgb(0x3fb950)))
             .child(self.settings_tab_button(
                 SettingsTab::SyncBackup,
                 "settings-tab-sync-backup",
@@ -340,6 +341,7 @@ impl NyaTermApp {
 
 /// Tauri SettingSection: rounded card with optional title/desc and body.
 pub(super) fn settings_form_section(
+    palette: ThemePalette,
     title: Option<&'static str>,
     desc: Option<&'static str>,
     content: impl IntoElement,
@@ -347,8 +349,8 @@ pub(super) fn settings_form_section(
     div()
         .rounded_lg()
         .border_1()
-        .border_color(rgb(0x30363d))
-        .bg(rgb(0x161b22))
+        .border_color(rgb(palette.border))
+        .bg(rgb(palette.surface))
         .overflow_hidden()
         .when(title.is_some() || desc.is_some(), |this| {
             this.child(
@@ -356,7 +358,7 @@ pub(super) fn settings_form_section(
                     .px_4()
                     .py_3()
                     .border_b_1()
-                    .border_color(rgb(0x21262d))
+                    .border_color(rgb(palette.surface_elevated))
                     .flex()
                     .flex_col()
                     .gap_1()
@@ -365,7 +367,7 @@ pub(super) fn settings_form_section(
                             div()
                                 .text_size(px(13.))
                                 .font_weight(FontWeight(600.))
-                                .text_color(rgb(0xc9d1d9))
+                                .text_color(rgb(palette.text))
                                 .child(title),
                         )
                     })
@@ -373,7 +375,7 @@ pub(super) fn settings_form_section(
                         this.child(
                             div()
                                 .text_size(px(11.))
-                                .text_color(rgb(0x6e7681))
+                                .text_color(rgb(palette.text_dimmed))
                                 .child(desc),
                         )
                     }),
@@ -384,6 +386,7 @@ pub(super) fn settings_form_section(
 
 /// Tauri SettingRow: label/desc left, control right.
 pub(super) fn settings_form_row(
+    palette: ThemePalette,
     label: impl Into<SharedString>,
     desc: Option<SharedString>,
     control: impl IntoElement,
@@ -405,14 +408,14 @@ pub(super) fn settings_form_row(
                     div()
                         .text_size(px(13.))
                         .font_weight(FontWeight(500.))
-                        .text_color(rgb(0xc9d1d9))
+                        .text_color(rgb(palette.text))
                         .child(label),
                 )
                 .when_some(desc, |this, desc| {
                     this.child(
                         div()
                             .text_size(px(11.))
-                            .text_color(rgb(0x6e7681))
+                            .text_color(rgb(palette.text_dimmed))
                             .child(desc),
                     )
                 }),
@@ -430,10 +433,22 @@ pub(super) fn settings_form_row(
 
 /// Compact on/off switch control (Tauri SettingSwitch look).
 pub(super) fn settings_switch(
+    palette: ThemePalette,
     id: impl Into<String>,
     checked: bool,
     on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
 ) -> impl IntoElement {
+    let on_bg = palette.accent;
+    let off_bg = palette.border;
+    let on_hover = if palette.accent == 0x58a6ff {
+        0x388bfd
+    } else if palette.accent == 0x0969da {
+        0x218bff
+    } else {
+        // lighten-ish fallback for catppuccin accent
+        0xd4b8fa
+    };
+    let off_hover = palette.hover;
     div()
         .id(SharedString::from(id.into()))
         .h(px(22.))
@@ -443,16 +458,16 @@ pub(super) fn settings_switch(
         .rounded_full()
         .px(px(2.))
         .bg(if checked {
-            rgb(0x1f6feb)
+            rgb(on_bg)
         } else {
-            rgb(0x30363d)
+            rgb(off_bg)
         })
         .cursor_pointer()
-        .hover(|this| {
+        .hover(move |this| {
             this.bg(if checked {
-                rgb(0x388bfd)
+                rgb(on_hover)
             } else {
-                rgb(0x484f58)
+                rgb(off_hover)
             })
         })
         .child(
@@ -467,11 +482,27 @@ pub(super) fn settings_switch(
 
 /// Compact choice chips for enum-like settings.
 pub(super) fn settings_choice_chip(
+    palette: ThemePalette,
     id: impl Into<String>,
     label: &'static str,
     selected: bool,
     on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
 ) -> impl IntoElement {
+    let selected_border = palette.accent;
+    let idle_border = palette.border;
+    // Selected chip bg: accent-tinted surface approximation.
+    let selected_bg = if palette.bg == 0xffffff {
+        0xdff0ff
+    } else if palette.accent == 0xcba6f7 {
+        0x2b2035
+    } else {
+        0x122033
+    };
+    let idle_bg = palette.input;
+    let selected_text = palette.accent;
+    let idle_text = palette.text_muted;
+    let hover_bg = palette.surface_elevated;
+    let hover_text = palette.text;
     div()
         .id(SharedString::from(id.into()))
         .h(px(28.))
@@ -481,14 +512,14 @@ pub(super) fn settings_choice_chip(
         .rounded_md()
         .border_1()
         .border_color(if selected {
-            rgb(0x1f6feb)
+            rgb(selected_border)
         } else {
-            rgb(0x30363d)
+            rgb(idle_border)
         })
         .bg(if selected {
-            rgb(0x122033)
+            rgb(selected_bg)
         } else {
-            rgb(0x0d1117)
+            rgb(idle_bg)
         })
         .text_size(px(11.))
         .font_weight(if selected {
@@ -497,17 +528,18 @@ pub(super) fn settings_choice_chip(
             FontWeight(500.)
         })
         .text_color(if selected {
-            rgb(0x58a6ff)
+            rgb(selected_text)
         } else {
-            rgb(0x8b949e)
+            rgb(idle_text)
         })
         .cursor_pointer()
-        .hover(|this| this.bg(rgb(0x21262d)).text_color(rgb(0xc9d1d9)))
+        .hover(move |this| this.bg(rgb(hover_bg)).text_color(rgb(hover_text)))
         .child(label)
         .on_click(on_click)
 }
 
 fn settings_category_header(
+    palette: ThemePalette,
     title: &'static str,
     _badge: &'static str,
     _accent: impl Into<gpui::Hsla>,
@@ -521,6 +553,6 @@ fn settings_category_header(
         .items_center()
         .text_size(px(10.))
         .font_weight(FontWeight(700.))
-        .text_color(rgb(0x6e7681))
+        .text_color(rgb(palette.text_dimmed))
         .child(title.to_uppercase())
 }

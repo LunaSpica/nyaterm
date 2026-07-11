@@ -6,6 +6,7 @@ impl NyaTermApp {
         backup_snapshot_prompt: Option<SnapshotPasswordPromptState>,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
+        let palette = self.theme_palette();
         let prompt_label = match self.config_path_prompt {
             Some(ConfigPathPromptKind::Export) => "selecting export path",
             Some(ConfigPathPromptKind::Import) => "selecting import path",
@@ -24,14 +25,14 @@ impl NyaTermApp {
             .flex()
             .flex_col()
             .gap_3()
-            .child(settings_form_section(
+            .child(settings_form_section(palette, 
                 Some("Config backup"),
                 Some("Export or import the native redb configuration store."),
                 div()
                     .flex()
                     .flex_col()
                     .gap_3()
-                    .child(settings_form_row(
+                    .child(settings_form_row(palette, 
                         "Store path",
                         Some(SharedString::from(truncate_preview(
                             &self.store_status.path,
@@ -42,7 +43,7 @@ impl NyaTermApp {
                             .text_color(rgb(0x8b949e))
                             .child(prompt_label),
                     ))
-                    .child(settings_form_row(
+                    .child(settings_form_row(palette, 
                         "JSON backup",
                         Some(SharedString::from(
                             "Portable JSON export/import of connections and settings.",
@@ -65,7 +66,7 @@ impl NyaTermApp {
                                 }),
                             )),
                     ))
-                    .child(settings_form_row(
+                    .child(settings_form_row(palette, 
                         "Portable .nya",
                         Some(SharedString::from(
                             "Legacy portable snapshot package used by NyaTerm migration.",
@@ -88,7 +89,7 @@ impl NyaTermApp {
                                 }),
                             )),
                     ))
-                    .child(settings_form_row(
+                    .child(settings_form_row(palette, 
                         "Encrypted .nya",
                         Some(SharedString::from(
                             "AES-GCM package sealed with the master password.",
@@ -121,6 +122,7 @@ impl NyaTermApp {
         &mut self,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
+        let palette = self.theme_palette();
         let log_dir = self.runtime.log_dir().display().to_string();
         let prompt_label = match self.diagnostics_path_prompt {
             Some(DiagnosticsPathPromptKind::Export) => "selecting export path",
@@ -131,14 +133,14 @@ impl NyaTermApp {
             .flex()
             .flex_col()
             .gap_3()
-            .child(settings_form_section(
+            .child(settings_form_section(palette, 
                 Some("Diagnostics"),
                 Some("Export support bundles and open the native log directory."),
                 div()
                     .flex()
                     .flex_col()
                     .gap_3()
-                    .child(settings_form_row(
+                    .child(settings_form_row(palette, 
                         "Support bundle",
                         Some(SharedString::from(prompt_label)),
                         div()
@@ -159,7 +161,7 @@ impl NyaTermApp {
                                 }),
                             )),
                     ))
-                    .child(settings_form_row(
+                    .child(settings_form_row(palette, 
                         "Log directory",
                         Some(SharedString::from(truncate_preview(&log_dir, 64))),
                         div()
@@ -168,14 +170,14 @@ impl NyaTermApp {
                             .child("On disk"),
                     )),
             ))
-            .child(settings_form_section(
+            .child(settings_form_section(palette, 
                 Some("Updates"),
                 Some("Check for native application updates."),
                 div()
                     .flex()
                     .flex_col()
                     .gap_3()
-                    .child(settings_form_row(
+                    .child(settings_form_row(palette, 
                         "Native update",
                         Some(SharedString::from(truncate_preview(&self.update_status, 96))),
                         small_button(
@@ -195,7 +197,7 @@ impl NyaTermApp {
                             "https://github.com/nyakang/nyaterm/releases".to_string()
                         });
                         let notes = info.release_notes.unwrap_or_default();
-                        this.child(settings_form_row(
+                        this.child(settings_form_row(palette, 
                             "Latest release",
                             Some(SharedString::from(format!(
                                 "{}{} · {}",
@@ -340,6 +342,7 @@ impl NyaTermApp {
         &mut self,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
+        let palette = self.theme_palette();
         let cloud_snapshot_prompt = self
             .active_snapshot_password_prompt
             .clone()
@@ -460,17 +463,17 @@ impl NyaTermApp {
             .flex()
             .flex_col()
             .gap_3()
-            .child(settings_form_section(
+            .child(settings_form_section(palette, 
                 Some("Cloud sync"),
                 Some("Mirror encrypted configuration snapshots to a remote provider."),
                 div()
                     .flex()
                     .flex_col()
                     .gap_3()
-                    .child(settings_form_row(
+                    .child(settings_form_row(palette, 
                         "Enable cloud sync",
                         Some(SharedString::from(self.cloud_sync_status.clone())),
-                        settings_switch(
+                        settings_switch(palette, 
                             "cloud-sync-enabled",
                             self.cloud_sync_settings.enabled,
                             cx.listener(|this, _, _, cx| {
@@ -478,7 +481,7 @@ impl NyaTermApp {
                             }),
                         ),
                     ))
-                    .child(settings_form_row(
+                    .child(settings_form_row(palette, 
                         "Snapshot state",
                         Some(SharedString::from(format!(
                             "provider {cloud_provider_label} · rev {cloud_last_revision} · hash {cloud_last_hash}"
@@ -491,7 +494,7 @@ impl NyaTermApp {
                             }),
                         ),
                     ))
-                    .child(settings_form_row(
+                    .child(settings_form_row(palette, 
                         "Provider",
                         Some(SharedString::from(
                             "Local mirror, WebDAV/S3, cloud drives, or snippet backends.",
@@ -500,7 +503,7 @@ impl NyaTermApp {
                             .flex()
                             .flex_wrap()
                             .gap_1()
-                            .child(settings_choice_chip(
+                            .child(settings_choice_chip(palette, 
                                 "cloud-provider-local",
                                 "Local",
                                 active_cloud_provider == "local_directory",
@@ -508,7 +511,7 @@ impl NyaTermApp {
                                     this.update_cloud_sync_provider("local_directory", cx);
                                 }),
                             ))
-                            .child(settings_choice_chip(
+                            .child(settings_choice_chip(palette, 
                                 "cloud-provider-webdav",
                                 "WebDAV",
                                 active_cloud_provider == "webdav",
@@ -516,7 +519,7 @@ impl NyaTermApp {
                                     this.update_cloud_sync_provider("webdav", cx);
                                 }),
                             ))
-                            .child(settings_choice_chip(
+                            .child(settings_choice_chip(palette, 
                                 "cloud-provider-s3",
                                 "S3",
                                 active_cloud_provider == "s3",
@@ -524,7 +527,7 @@ impl NyaTermApp {
                                     this.update_cloud_sync_provider("s3", cx);
                                 }),
                             ))
-                            .child(settings_choice_chip(
+                            .child(settings_choice_chip(palette, 
                                 "cloud-provider-google-drive",
                                 "Drive",
                                 active_cloud_provider == "google_drive",
@@ -532,7 +535,7 @@ impl NyaTermApp {
                                     this.update_cloud_sync_provider("google_drive", cx);
                                 }),
                             ))
-                            .child(settings_choice_chip(
+                            .child(settings_choice_chip(palette, 
                                 "cloud-provider-onedrive",
                                 "OneDrive",
                                 active_cloud_provider == "onedrive",
@@ -540,7 +543,7 @@ impl NyaTermApp {
                                     this.update_cloud_sync_provider("onedrive", cx);
                                 }),
                             ))
-                            .child(settings_choice_chip(
+                            .child(settings_choice_chip(palette, 
                                 "cloud-provider-aliyun-drive",
                                 "Aliyun",
                                 active_cloud_provider == "aliyun_drive",
@@ -548,7 +551,7 @@ impl NyaTermApp {
                                     this.update_cloud_sync_provider("aliyun_drive", cx);
                                 }),
                             ))
-                            .child(settings_choice_chip(
+                            .child(settings_choice_chip(palette, 
                                 "cloud-provider-gitee",
                                 "Gitee",
                                 active_cloud_provider == "gitee_snippet",
@@ -556,7 +559,7 @@ impl NyaTermApp {
                                     this.update_cloud_sync_provider("gitee_snippet", cx);
                                 }),
                             ))
-                            .child(settings_choice_chip(
+                            .child(settings_choice_chip(palette, 
                                 "cloud-provider-github",
                                 "GitHub",
                                 active_cloud_provider == "github_gist",
@@ -565,7 +568,7 @@ impl NyaTermApp {
                                 }),
                             )),
                     ))
-                    .child(settings_form_row(
+                    .child(settings_form_row(palette, 
                         "Remote root",
                         Some(SharedString::from(truncate_preview(&cloud_remote_path, 48))),
                         self.cloud_sync_input(
@@ -578,7 +581,7 @@ impl NyaTermApp {
                     )),
             ))
             .when(active_cloud_provider == "webdav", |this| {
-                this.child(settings_form_section(
+                this.child(settings_form_section(palette, 
                     Some("WebDAV"),
                     Some("Endpoint and credentials for the selected WebDAV target."),
                     div()
@@ -622,7 +625,7 @@ impl NyaTermApp {
                 ))
             })
             .when(active_cloud_provider == "s3", |this| {
-                this.child(settings_form_section(
+                this.child(settings_form_section(palette, 
                     Some("S3 Compatible"),
                     Some("Bucket, region, and access keys for S3-compatible storage."),
                     div()
@@ -684,12 +687,12 @@ impl NyaTermApp {
                                     cx,
                                 )),
                         )
-                        .child(settings_form_row(
+                        .child(settings_form_row(palette, 
                             "Virtual host style",
                             Some(SharedString::from(
                                 "Use virtual-hosted-style URLs instead of path style.",
                             )),
-                            settings_switch(
+                            settings_switch(palette, 
                                 "cloud-s3-url-style",
                                 self.cloud_sync_settings.s3.virtual_host_style,
                                 cx.listener(|this, _, _, cx| {
@@ -700,7 +703,7 @@ impl NyaTermApp {
                 ))
             })
             .when(active_cloud_provider == "google_drive", |this| {
-                this.child(settings_form_section(
+                this.child(settings_form_section(palette, 
                     Some("Google Drive"),
                     Some("OAuth client credentials and tokens for Drive sync."),
                     div()
@@ -749,7 +752,7 @@ impl NyaTermApp {
                 ))
             })
             .when(active_cloud_provider == "onedrive", |this| {
-                this.child(settings_form_section(
+                this.child(settings_form_section(palette, 
                     Some("OneDrive"),
                     Some("Microsoft Graph credentials for OneDrive sync."),
                     div()
@@ -798,7 +801,7 @@ impl NyaTermApp {
                 ))
             })
             .when(active_cloud_provider == "aliyun_drive", |this| {
-                this.child(settings_form_section(
+                this.child(settings_form_section(palette, 
                     Some("Aliyun Drive"),
                     Some("AliyunDrive OAuth credentials and tokens."),
                     div()
@@ -847,7 +850,7 @@ impl NyaTermApp {
                 ))
             })
             .when(active_cloud_provider == "gitee_snippet", |this| {
-                this.child(settings_form_section(
+                this.child(settings_form_section(palette, 
                     Some("Gitee Snippet"),
                     Some("API endpoint, snippet id, and personal access token."),
                     div()
@@ -878,7 +881,7 @@ impl NyaTermApp {
                 ))
             })
             .when(active_cloud_provider == "github_gist", |this| {
-                this.child(settings_form_section(
+                this.child(settings_form_section(palette, 
                     Some("GitHub Gist"),
                     Some("Gist id and token for encrypted snapshot sync."),
                     div()
@@ -901,14 +904,14 @@ impl NyaTermApp {
                         )),
                 ))
             })
-            .child(settings_form_section(
+            .child(settings_form_section(palette, 
                 Some("Sync actions"),
                 Some("Push or pull encrypted snapshots locally or via the selected provider."),
                 div()
                     .flex()
                     .flex_col()
                     .gap_3()
-                    .child(settings_form_row(
+                    .child(settings_form_row(palette, 
                         "Local mirror",
                         Some(SharedString::from(format!(
                             "device {} · revision {} · hash {}",
@@ -934,7 +937,7 @@ impl NyaTermApp {
                                 }),
                             )),
                     ))
-                    .child(settings_form_row(
+                    .child(settings_form_row(palette, 
                         "Provider",
                         Some(SharedString::from(format!(
                             "{} · {}",
@@ -966,7 +969,7 @@ impl NyaTermApp {
             .when_some(cloud_snapshot_prompt, |this, prompt| {
                 this.child(self.snapshot_password_prompt_banner(prompt, cx))
             })
-            .child(settings_form_section(
+            .child(settings_form_section(palette, 
                 Some("Recent history"),
                 None,
                 div()

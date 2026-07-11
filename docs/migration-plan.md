@@ -813,3 +813,9 @@ service boundary first:
 ## 2026-07-11 transfer_input + panel interior palette pass
 - `transfer_input` takes live `ThemePalette` (border/input/text) across AI, Network, Process, Docker, Settings, Quick Commands, Transfers.
 - Process/Docker/File Explorer/Tunnels toolbars deepen palette application; network tab chips themed.
+
+## 2026-07-11 Settings form helpers ThemePalette
+- `settings_form_section` / `settings_form_row` / `settings_switch` / `settings_choice_chip` / `settings_category_header` take live `ThemePalette`.
+- All Settings tabs (workspace/AI/terminal/transfer/security/sync/translation) inject `let palette = self.theme_palette()` and pass it through.
+- Free helper `ai_action_list` takes palette and themes action catalog rows (border/input/text/success).
+- Choice-chip selected fill uses theme-aware accent tint (dark / light / catppuccin); switch on/off uses accent/border + hover tokens.

@@ -36,6 +36,7 @@ impl NyaTermApp {
         &mut self,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
+        let palette = self.theme_palette();
         // Tauri TranslationTab density: provider chips + credential fields in sections.
         let translation_target_value = self.translation_settings.target_language.clone();
         let deepl_key_value = cloud_secret_display(
@@ -76,14 +77,14 @@ impl NyaTermApp {
             .flex()
             .flex_col()
             .gap_3()
-            .child(settings_form_section(
+            .child(settings_form_section(palette, 
                 Some("Provider"),
                 Some("Choose the online translation backend."),
                 div()
                     .flex()
                     .flex_col()
                     .gap_3()
-                    .child(settings_form_row(
+                    .child(settings_form_row(palette, 
                         "Status",
                         Some(SharedString::from(format!(
                             "{} · {} secrets · {}",
@@ -101,7 +102,7 @@ impl NyaTermApp {
                             .flex()
                             .flex_wrap()
                             .gap_1()
-                            .child(settings_choice_chip(
+                            .child(settings_choice_chip(palette, 
                                 "translation-provider-google-settings",
                                 "Google",
                                 self.translate_provider == "google",
@@ -109,7 +110,7 @@ impl NyaTermApp {
                                     this.set_translate_provider("google", cx);
                                 }),
                             ))
-                            .child(settings_choice_chip(
+                            .child(settings_choice_chip(palette, 
                                 "translation-provider-microsoft-settings",
                                 "Microsoft",
                                 self.translate_provider == "microsoft",
@@ -117,7 +118,7 @@ impl NyaTermApp {
                                     this.set_translate_provider("microsoft", cx);
                                 }),
                             ))
-                            .child(settings_choice_chip(
+                            .child(settings_choice_chip(palette, 
                                 "translation-provider-deepl-settings",
                                 "DeepL",
                                 self.translate_provider == "deepl",
@@ -125,7 +126,7 @@ impl NyaTermApp {
                                     this.set_translate_provider("deepl", cx);
                                 }),
                             ))
-                            .child(settings_choice_chip(
+                            .child(settings_choice_chip(palette, 
                                 "translation-provider-baidu-settings",
                                 "Baidu",
                                 self.translate_provider == "baidu",
@@ -133,7 +134,7 @@ impl NyaTermApp {
                                     this.set_translate_provider("baidu", cx);
                                 }),
                             ))
-                            .child(settings_choice_chip(
+                            .child(settings_choice_chip(palette, 
                                 "translation-provider-ali-settings",
                                 "Ali",
                                 self.translate_provider == "ali",
@@ -141,7 +142,7 @@ impl NyaTermApp {
                                     this.set_translate_provider("ali", cx);
                                 }),
                             ))
-                            .child(settings_choice_chip(
+                            .child(settings_choice_chip(palette, 
                                 "translation-provider-youdao-settings",
                                 "Youdao",
                                 self.translate_provider == "youdao",
@@ -150,7 +151,7 @@ impl NyaTermApp {
                                 }),
                             )),
                     )
-                    .child(settings_form_row(
+                    .child(settings_form_row(palette, 
                         "Target language",
                         Some(SharedString::from(
                             "Default destination language for panel translations.",
@@ -163,7 +164,7 @@ impl NyaTermApp {
                             cx,
                         ),
                     ))
-                    .child(settings_form_row(
+                    .child(settings_form_row(palette, 
                         "Actions",
                         None,
                         small_button(
@@ -175,7 +176,7 @@ impl NyaTermApp {
                         ),
                     )),
             ))
-            .child(settings_form_section(
+            .child(settings_form_section(palette, 
                 Some("DeepL"),
                 None,
                 div()
@@ -199,7 +200,7 @@ impl NyaTermApp {
                         )),
                     ),
             ))
-            .child(settings_form_section(
+            .child(settings_form_section(palette, 
                 Some("Baidu"),
                 None,
                 div()
@@ -234,7 +235,7 @@ impl NyaTermApp {
                         }),
                     )),
             ))
-            .child(settings_form_section(
+            .child(settings_form_section(palette, 
                 Some("Ali"),
                 None,
                 div()
@@ -269,7 +270,7 @@ impl NyaTermApp {
                         }),
                     )),
             ))
-            .child(settings_form_section(
+            .child(settings_form_section(palette, 
                 Some("Youdao"),
                 None,
                 div()

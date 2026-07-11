@@ -5,6 +5,7 @@ impl NyaTermApp {
         &mut self,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
+        let palette = self.theme_palette();
         // Tauri TransferTab top: path/duplicate switches + queue summary (dense rows).
         let running = self
             .transfer_jobs
@@ -39,14 +40,14 @@ impl NyaTermApp {
             .flex()
             .flex_col()
             .gap_3()
-            .child(settings_form_section(
+            .child(settings_form_section(palette, 
                 Some("Paths"),
                 Some("Default download location and save prompts."),
                 div()
                     .flex()
                     .flex_col()
                     .gap_3()
-                    .child(settings_form_row(
+                    .child(settings_form_row(palette, 
                         "Download path",
                         Some(SharedString::from(download_path)),
                         div()
@@ -77,12 +78,12 @@ impl NyaTermApp {
                                 }),
                             )),
                     ))
-                    .child(settings_form_row(
+                    .child(settings_form_row(palette, 
                         "Ask save location",
                         Some(SharedString::from(
                             "Prompt for a folder before each download when enabled.",
                         )),
-                        settings_switch(
+                        settings_switch(palette, 
                             "transfer-ask-save",
                             self.settings.transfer_ask_save_location,
                             cx.listener(|this, _, _, cx| {
@@ -91,14 +92,14 @@ impl NyaTermApp {
                         ),
                     )),
             ))
-            .child(settings_form_section(
+            .child(settings_form_section(palette, 
                 Some("Duplicate files"),
                 Some("What to do when a remote or local file already exists."),
                 div()
                     .flex()
                     .flex_wrap()
                     .gap_1()
-                    .child(settings_choice_chip(
+                    .child(settings_choice_chip(palette, 
                         "transfer-dup-ask",
                         "Ask",
                         policy == SftpDuplicatePolicy::Ask,
@@ -106,7 +107,7 @@ impl NyaTermApp {
                             this.update_transfer_duplicate_policy(SftpDuplicatePolicy::Ask, cx);
                         }),
                     ))
-                    .child(settings_choice_chip(
+                    .child(settings_choice_chip(palette, 
                         "transfer-dup-overwrite",
                         "Overwrite",
                         policy == SftpDuplicatePolicy::Overwrite,
@@ -117,7 +118,7 @@ impl NyaTermApp {
                             );
                         }),
                     ))
-                    .child(settings_choice_chip(
+                    .child(settings_choice_chip(palette, 
                         "transfer-dup-skip",
                         "Skip",
                         policy == SftpDuplicatePolicy::Skip,
@@ -125,7 +126,7 @@ impl NyaTermApp {
                             this.update_transfer_duplicate_policy(SftpDuplicatePolicy::Skip, cx);
                         }),
                     ))
-                    .child(settings_choice_chip(
+                    .child(settings_choice_chip(palette, 
                         "transfer-dup-rename",
                         "Rename",
                         policy == SftpDuplicatePolicy::Rename,
@@ -134,10 +135,10 @@ impl NyaTermApp {
                         }),
                     )),
             ))
-            .child(settings_form_section(
+            .child(settings_form_section(palette, 
                 Some("Queue snapshot"),
                 None,
-                settings_form_row(
+                settings_form_row(palette, 
                     "Jobs",
                     Some(SharedString::from(format!(
                         "{running} running · {completed} done · {failed} failed · {} total",
@@ -155,6 +156,7 @@ impl NyaTermApp {
     }
 
     fn transfer_editor_settings_section(&mut self, cx: &mut Context<Self>) -> impl IntoElement {
+        let palette = self.theme_palette();
         let editor_type = self.settings.transfer_editor_type.clone();
         let default_editor_value = if self.settings.transfer_default_editor.is_empty() {
             " ".to_string()
@@ -171,21 +173,21 @@ impl NyaTermApp {
             .flex()
             .flex_col()
             .gap_3()
-            .child(settings_form_section(
+            .child(settings_form_section(palette, 
                 Some("Editor"),
                 Some("How remote files open from the transfer browser."),
                 div()
                     .flex()
                     .flex_col()
                     .gap_3()
-                    .child(settings_form_row(
+                    .child(settings_form_row(palette, 
                         "Default open",
                         Some(SharedString::from(transfer_editor_type_status(&editor_type))),
                         div()
                             .flex()
                             .flex_wrap()
                             .gap_1()
-                            .child(settings_choice_chip(
+                            .child(settings_choice_chip(palette, 
                                 "settings-transfer-editor-external",
                                 "External",
                                 editor_type == "external",
@@ -193,7 +195,7 @@ impl NyaTermApp {
                                     this.update_transfer_editor_type("external", cx);
                                 }),
                             ))
-                            .child(settings_choice_chip(
+                            .child(settings_choice_chip(palette, 
                                 "settings-transfer-editor-internal",
                                 "Internal",
                                 editor_type == "internal",
@@ -203,7 +205,7 @@ impl NyaTermApp {
                             )),
                     ))
                     .when(editor_type == "external", |this| {
-                        this.child(settings_form_row(
+                        this.child(settings_form_row(palette, 
                             "External command",
                             Some(SharedString::from(external_cmd)),
                             transfer_input(
@@ -226,7 +228,7 @@ impl NyaTermApp {
                             )),
                         ))
                     })
-                    .child(settings_form_row(
+                    .child(settings_form_row(palette, 
                         "Actions",
                         None,
                         small_button(
@@ -244,20 +246,21 @@ impl NyaTermApp {
     }
 
     fn transfer_advanced_settings_section(&mut self, cx: &mut Context<Self>) -> impl IntoElement {
+        let palette = self.theme_palette();
         let permissions = self.settings.transfer_default_file_permissions.clone();
 
         div()
             .flex()
             .flex_col()
             .gap_3()
-            .child(settings_form_section(
+            .child(settings_form_section(palette, 
                 Some("Advanced transfer"),
                 Some("Concurrency, buffer size, timestamps, and default permissions."),
                 div()
                     .flex()
                     .flex_col()
                     .gap_3()
-                    .child(settings_form_row(
+                    .child(settings_form_row(palette, 
                         "Download threads",
                         Some(SharedString::from(format!(
                             "{} parallel downloads",
@@ -292,7 +295,7 @@ impl NyaTermApp {
                                 }),
                             )),
                     ))
-                    .child(settings_form_row(
+                    .child(settings_form_row(palette, 
                         "Upload threads",
                         Some(SharedString::from(format!(
                             "{} parallel uploads",
@@ -327,7 +330,7 @@ impl NyaTermApp {
                                 }),
                             )),
                     ))
-                    .child(settings_form_row(
+                    .child(settings_form_row(palette, 
                         "Max retries",
                         Some(SharedString::from(format!(
                             "{} retries",
@@ -362,7 +365,7 @@ impl NyaTermApp {
                                 }),
                             )),
                     ))
-                    .child(settings_form_row(
+                    .child(settings_form_row(palette, 
                         "Buffer size",
                         Some(SharedString::from(format!(
                             "{} KiB",
@@ -397,12 +400,12 @@ impl NyaTermApp {
                                 }),
                             )),
                     ))
-                    .child(settings_form_row(
+                    .child(settings_form_row(palette, 
                         "Preserve timestamps",
                         Some(SharedString::from(
                             "Keep source mtime when downloading when possible.",
                         )),
-                        settings_switch(
+                        settings_switch(palette, 
                             "settings-transfer-preserve-timestamps",
                             self.settings.transfer_preserve_timestamps,
                             cx.listener(|this, _, _, cx| {
@@ -410,12 +413,12 @@ impl NyaTermApp {
                             }),
                         ),
                     ))
-                    .child(settings_form_row(
+                    .child(settings_form_row(palette, 
                         "Resume broken",
                         Some(SharedString::from(
                             "Attempt to resume interrupted downloads.",
                         )),
-                        settings_switch(
+                        settings_switch(palette, 
                             "settings-transfer-resume-broken",
                             self.settings.transfer_resume_broken_transfer,
                             cx.listener(|this, _, _, cx| {
@@ -423,14 +426,14 @@ impl NyaTermApp {
                             }),
                         ),
                     ))
-                    .child(settings_form_row(
+                    .child(settings_form_row(palette, 
                         "Default permissions",
                         Some(SharedString::from(format!("chmod {permissions}"))),
                         div()
                             .flex()
                             .flex_wrap()
                             .gap_1()
-                            .child(settings_choice_chip(
+                            .child(settings_choice_chip(palette, 
                                 "settings-transfer-perm-600",
                                 "600",
                                 permissions == "600",
@@ -438,7 +441,7 @@ impl NyaTermApp {
                                     this.update_transfer_file_permissions("600", cx);
                                 }),
                             ))
-                            .child(settings_choice_chip(
+                            .child(settings_choice_chip(palette, 
                                 "settings-transfer-perm-644",
                                 "644",
                                 permissions == "644",
@@ -446,7 +449,7 @@ impl NyaTermApp {
                                     this.update_transfer_file_permissions("644", cx);
                                 }),
                             ))
-                            .child(settings_choice_chip(
+                            .child(settings_choice_chip(palette, 
                                 "settings-transfer-perm-664",
                                 "664",
                                 permissions == "664",
@@ -454,7 +457,7 @@ impl NyaTermApp {
                                     this.update_transfer_file_permissions("664", cx);
                                 }),
                             ))
-                            .child(settings_choice_chip(
+                            .child(settings_choice_chip(palette, 
                                 "settings-transfer-perm-755",
                                 "755",
                                 permissions == "755",
@@ -470,6 +473,7 @@ impl NyaTermApp {
         &mut self,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
+        let palette = self.theme_palette();
         let path = if self.settings.recording_path.trim().is_empty() {
             self.runtime
                 .config_dir()
@@ -485,14 +489,14 @@ impl NyaTermApp {
             .flex()
             .flex_col()
             .gap_3()
-            .child(settings_form_section(
+            .child(settings_form_section(palette, 
                 Some("Recording"),
                 Some("Session capture path, memory cap, and stream annotations."),
                 div()
                     .flex()
                     .flex_col()
                     .gap_3()
-                    .child(settings_form_row(
+                    .child(settings_form_row(palette, 
                         "Path",
                         Some(SharedString::from(truncate_preview(&path, 56))),
                         div()
@@ -500,7 +504,7 @@ impl NyaTermApp {
                             .text_color(rgb(0x8b949e))
                             .child("On disk"),
                     ))
-                    .child(settings_form_row(
+                    .child(settings_form_row(palette, 
                         "Memory limit",
                         Some(SharedString::from(format!("{memory_mib} MiB buffer"))),
                         div()
@@ -532,12 +536,12 @@ impl NyaTermApp {
                                 }),
                             )),
                     ))
-                    .child(settings_form_row(
+                    .child(settings_form_row(palette, 
                         "Auto start",
                         Some(SharedString::from(
                             "Begin recording when a session connects.",
                         )),
-                        settings_switch(
+                        settings_switch(palette, 
                             "settings-recording-auto",
                             self.settings.recording_auto_start,
                             cx.listener(|this, _, _, cx| {
@@ -545,12 +549,12 @@ impl NyaTermApp {
                             }),
                         ),
                     ))
-                    .child(settings_form_row(
+                    .child(settings_form_row(palette, 
                         "IO labels",
                         Some(SharedString::from(
                             "Annotate recorded streams with in/out labels.",
                         )),
-                        settings_switch(
+                        settings_switch(palette, 
                             "settings-recording-labels",
                             self.settings.recording_include_io_labels,
                             cx.listener(|this, _, _, cx| {
@@ -558,12 +562,12 @@ impl NyaTermApp {
                             }),
                         ),
                     ))
-                    .child(settings_form_row(
+                    .child(settings_form_row(palette, 
                         "Timestamps",
                         Some(SharedString::from(
                             "Prefix recorded chunks with wall-clock timestamps.",
                         )),
-                        settings_switch(
+                        settings_switch(palette, 
                             "settings-recording-timestamps",
                             self.settings.recording_include_timestamps,
                             cx.listener(|this, _, _, cx| {

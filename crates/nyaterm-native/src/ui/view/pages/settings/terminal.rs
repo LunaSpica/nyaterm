@@ -6,6 +6,7 @@ impl NyaTermApp {
         &mut self,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
+        let palette = self.theme_palette();
         // Tauri TerminalTab general: number rows + feature switches (no metric cards).
         let scrollback = self.settings.terminal_scrollback_lines.to_string();
         let keep_alive = self.settings.terminal_keep_alive_interval.to_string();
@@ -17,14 +18,14 @@ impl NyaTermApp {
             .flex()
             .flex_col()
             .gap_3()
-            .child(settings_form_section(
+            .child(settings_form_section(palette, 
                 Some("Session"),
                 Some("Scrollback depth and SSH keep-alive cadence."),
                 div()
                     .flex()
                     .flex_col()
                     .gap_3()
-                    .child(settings_form_row(
+                    .child(settings_form_row(palette, 
                         "Scrollback lines",
                         Some(SharedString::from("How many terminal lines to retain for scrollback.")),
                         div()
@@ -55,7 +56,7 @@ impl NyaTermApp {
                                 }),
                             )),
                     ))
-                    .child(settings_form_row(
+                    .child(settings_form_row(palette, 
                         "Keep-alive interval",
                         Some(SharedString::from("Seconds between keep-alive packets (0 disables).")),
                         div()
@@ -87,17 +88,17 @@ impl NyaTermApp {
                             )),
                     )),
             ))
-            .child(settings_form_section(
+            .child(settings_form_section(palette, 
                 Some("Display"),
                 None,
                 div()
                     .flex()
                     .flex_col()
                     .gap_3()
-                    .child(settings_form_row(
+                    .child(settings_form_row(palette, 
                         "Line numbers",
                         Some(SharedString::from("Prefix rendered terminal rows with line numbers.")),
-                        settings_switch(
+                        settings_switch(palette, 
                             "terminal-line-numbers",
                             self.settings.terminal_show_line_numbers,
                             cx.listener(|this, _, _, cx| {
@@ -105,10 +106,10 @@ impl NyaTermApp {
                             }),
                         ),
                     ))
-                    .child(settings_form_row(
+                    .child(settings_form_row(palette, 
                         "Timestamps",
                         Some(SharedString::from("Show per-line timestamps when metadata is available.")),
-                        settings_switch(
+                        settings_switch(palette, 
                             "terminal-timestamps",
                             self.settings.terminal_show_timestamps,
                             cx.listener(|this, _, _, cx| {
@@ -116,10 +117,10 @@ impl NyaTermApp {
                             }),
                         ),
                     ))
-                    .child(settings_form_row(
+                    .child(settings_form_row(palette, 
                         "Timestamp milliseconds",
                         Some(SharedString::from("Include millisecond precision on timestamps.")),
-                        settings_switch(
+                        settings_switch(palette, 
                             "terminal-timestamp-ms",
                             self.settings.terminal_show_timestamp_milliseconds,
                             cx.listener(|this, _, _, cx| {
@@ -127,10 +128,10 @@ impl NyaTermApp {
                             }),
                         ),
                     ))
-                    .child(settings_form_row(
+                    .child(settings_form_row(palette, 
                         "Workspace padding",
                         Some(SharedString::from("Add breathing room around the terminal surface.")),
-                        settings_switch(
+                        settings_switch(palette, 
                             "terminal-workspace-padding",
                             self.settings.terminal_show_workspace_padding,
                             cx.listener(|this, _, _, cx| {
@@ -138,10 +139,10 @@ impl NyaTermApp {
                             }),
                         ),
                     ))
-                    .child(settings_form_row(
+                    .child(settings_form_row(palette, 
                         "Hardware acceleration",
                         Some(SharedString::from("Prefer GPU-accelerated terminal rendering when available.")),
-                        settings_switch(
+                        settings_switch(palette, 
                             "terminal-hw-accel",
                             self.settings.terminal_hardware_acceleration,
                             cx.listener(|this, _, _, cx| {
@@ -150,17 +151,17 @@ impl NyaTermApp {
                         ),
                     )),
             ))
-            .child(settings_form_section(
+            .child(settings_form_section(palette, 
                 Some("Paste & input"),
                 None,
                 div()
                     .flex()
                     .flex_col()
                     .gap_3()
-                    .child(settings_form_row(
+                    .child(settings_form_row(palette, 
                         "Multi-line paste dialog",
                         Some(SharedString::from("Confirm multi-line pastes before sending them to the session.")),
-                        settings_switch(
+                        settings_switch(palette, 
                             "terminal-multi-line-paste",
                             self.settings.terminal_show_multi_line_paste_dialog,
                             cx.listener(|this, _, _, cx| {
@@ -168,10 +169,10 @@ impl NyaTermApp {
                             }),
                         ),
                     ))
-                    .child(settings_form_row(
+                    .child(settings_form_row(palette, 
                         "Paste image as path",
                         Some(SharedString::from("When pasting an image, insert a temp file path instead of binary data.")),
-                        settings_switch(
+                        settings_switch(palette, 
                             "terminal-paste-image-path",
                             self.settings.terminal_paste_image_as_path,
                             cx.listener(|this, _, _, cx| {
@@ -180,20 +181,20 @@ impl NyaTermApp {
                         ),
                     )),
             ))
-            .child(settings_form_section(
+            .child(settings_form_section(palette, 
                 Some("Remote tooling"),
                 Some("SSH-backed inspectors shown in the activity bar."),
                 div()
                     .flex()
                     .flex_col()
                     .gap_3()
-                    .child(settings_form_row(
+                    .child(settings_form_row(palette, 
                         "Remote stats",
                         Some(SharedString::from(format!(
                             "Refresh every {}s when enabled.",
                             remote_stats_interval
                         ))),
-                        settings_switch(
+                        settings_switch(palette, 
                             "terminal-remote-stats",
                             self.settings.ui_show_remote_stats,
                             cx.listener(|this, _, _, cx| {
@@ -201,13 +202,13 @@ impl NyaTermApp {
                             }),
                         ),
                     ))
-                    .child(settings_form_row(
+                    .child(settings_form_row(palette, 
                         "Process manager",
                         Some(SharedString::from(format!(
                             "Refresh every {}s when enabled.",
                             process_interval
                         ))),
-                        settings_switch(
+                        settings_switch(palette, 
                             "terminal-process-manager",
                             self.settings.ui_show_process_manager,
                             cx.listener(|this, _, _, cx| {
@@ -215,13 +216,13 @@ impl NyaTermApp {
                             }),
                         ),
                     ))
-                    .child(settings_form_row(
+                    .child(settings_form_row(palette, 
                         "Docker manager",
                         Some(SharedString::from(format!(
                             "Refresh every {}s when enabled.",
                             docker_interval
                         ))),
-                        settings_switch(
+                        settings_switch(palette, 
                             "terminal-docker-manager",
                             self.settings.ui_show_docker_manager,
                             cx.listener(|this, _, _, cx| {
@@ -236,24 +237,25 @@ impl NyaTermApp {
         &mut self,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
+        let palette = self.theme_palette();
         div()
             .flex()
             .flex_col()
             .gap_3()
-            .child(settings_form_section(
+            .child(settings_form_section(palette, 
                 Some("Terminal search"),
                 Some("Default flags for in-buffer find."),
                 div()
                     .flex()
                     .flex_col()
                     .gap_3()
-                    .child(settings_form_row(
+                    .child(settings_form_row(palette, 
                         "Search mode",
                         Some(SharedString::from("Buffer searches the live terminal; History searches session logs.")),
                         div()
                             .flex()
                             .gap_1()
-                            .child(settings_choice_chip(
+                            .child(settings_choice_chip(palette, 
                                 "settings-search-mode-buffer",
                                 "Buffer",
                                 self.terminal_search_mode == TerminalSearchMode::Buffer,
@@ -263,7 +265,7 @@ impl NyaTermApp {
                                     cx.notify();
                                 }),
                             ))
-                            .child(settings_choice_chip(
+                            .child(settings_choice_chip(palette, 
                                 "settings-search-mode-history",
                                 "History",
                                 self.terminal_search_mode == TerminalSearchMode::History,
@@ -274,10 +276,10 @@ impl NyaTermApp {
                                 }),
                             )),
                     ))
-                    .child(settings_form_row(
+                    .child(settings_form_row(palette, 
                         "Case sensitive",
                         None,
-                        settings_switch(
+                        settings_switch(palette, 
                             "settings-search-case",
                             self.terminal_search_case_sensitive,
                             cx.listener(|this, _, _, cx| {
@@ -288,10 +290,10 @@ impl NyaTermApp {
                             }),
                         ),
                     ))
-                    .child(settings_form_row(
+                    .child(settings_form_row(palette, 
                         "Regular expression",
                         None,
-                        settings_switch(
+                        settings_switch(palette, 
                             "settings-search-regex",
                             self.terminal_search_regex,
                             cx.listener(|this, _, _, cx| {
@@ -301,10 +303,10 @@ impl NyaTermApp {
                             }),
                         ),
                     ))
-                    .child(settings_form_row(
+                    .child(settings_form_row(palette, 
                         "Whole word",
                         None,
-                        settings_switch(
+                        settings_switch(palette, 
                             "settings-search-word",
                             self.terminal_search_whole_word,
                             cx.listener(|this, _, _, cx| {
@@ -314,7 +316,7 @@ impl NyaTermApp {
                             }),
                         ),
                     ))
-                    .child(settings_form_row(
+                    .child(settings_form_row(palette, 
                         "Open search",
                         Some(SharedString::from("Focus the terminal search bar in the workspace.")),
                         small_button(
@@ -326,10 +328,10 @@ impl NyaTermApp {
                         ),
                     )),
             ))
-            .child(settings_form_section(
+            .child(settings_form_section(palette, 
                 Some("Command search"),
                 Some("Shared matcher sources for history and quick commands."),
-                settings_form_row(
+                settings_form_row(palette, 
                     "Catalog",
                     Some(SharedString::from(format!(
                         "{} history · {} quick commands",
@@ -346,6 +348,7 @@ impl NyaTermApp {
     }
 
     fn keyword_highlights_settings_section(&mut self, cx: &mut Context<Self>) -> impl IntoElement {
+        let palette = self.theme_palette();
         let rules = self.keyword_highlights.rules.len();
         let active = self
             .keyword_highlights
@@ -358,19 +361,19 @@ impl NyaTermApp {
             None => "legacy JSON import",
         };
 
-        settings_form_section(
+        settings_form_section(palette, 
             Some("Keyword highlights"),
             Some("Match terminal output keywords with colored highlights."),
             div()
                 .flex()
                 .flex_col()
                 .gap_3()
-                .child(settings_form_row(
+                .child(settings_form_row(palette, 
                     "Enabled",
                     Some(SharedString::from(format!(
                         "{active}/{rules} rules active · {prompt}"
                     ))),
-                    settings_switch(
+                    settings_switch(palette, 
                         "settings-keyword-highlights-enabled",
                         self.keyword_highlights.enabled,
                         cx.listener(|this, _, _, cx| {
@@ -378,12 +381,12 @@ impl NyaTermApp {
                         }),
                     ),
                 ))
-                .child(settings_form_row(
+                .child(settings_form_row(palette, 
                     "Across wrapped lines",
                     Some(SharedString::from(
                         "Continue matches across soft-wrapped terminal lines.",
                     )),
-                    settings_switch(
+                    settings_switch(palette, 
                         "settings-keyword-highlights-wrap",
                         self.keyword_highlights.across_wrapped_lines,
                         cx.listener(|this, _, _, cx| {
@@ -391,7 +394,7 @@ impl NyaTermApp {
                         }),
                     ),
                 ))
-                .child(settings_form_row(
+                .child(settings_form_row(palette, 
                     "Import rules",
                     Some(SharedString::from(prompt)),
                     small_button(
