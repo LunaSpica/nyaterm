@@ -562,6 +562,48 @@ impl NyaTermApp {
         };
     }
 
+
+    pub(in crate::ui::view) fn handle_window_minimize(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        // Tauri minimize_to_tray: hide window instead of taskbar minimize when enabled.
+        // GPUI lacks a portable tray today; minimize still uses the platform minimize path,
+        // and the flag is honored as a documented no-op tray intent with status feedback.
+        if self.settings.minimize_to_tray {
+            window.minimize_window();
+            self.terminal_status =
+                "minimized (tray mode preferred; OS tray polish pending)".to_string();
+            cx.notify();
+            return;
+        }
+        window.minimize_window();
+    }
+
+    pub(in crate::ui::view) fn handle_window_close_request(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let open_sessions = self.ordered_sessions().len();
+        if self.settings.confirm_on_close && open_sessions > 0 {
+            // Reuse close-all confirmation as quit-with-sessions gate (Tauri confirm_on_close).
+            self.pending_quit_after_close_all = true;
+            self.open_close_all_sessions_confirm(window, cx);
+            self.terminal_status = format!(
+                "confirm close: {open_sessions} session(s) still open"
+            );
+            cx.notify();
+            return;
+        }
+        // Persist workspace before exit when startup restore is enabled.
+        if self.settings.startup_restore {
+            self.persist_open_tabs();
+        }
+        window.remove_window();
+    }
+
     pub(in crate::ui::view) fn open_close_all_sessions_confirm(
         &mut self,
         window: &mut Window,
@@ -585,13 +627,31 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         self.close_all_sessions_confirm_open = false;
+        self.pending_quit_after_close_all = false;
+        self.pending_window_quit = false;
         self.terminal_status = "close all sessions cancelled".to_string();
         cx.notify();
     }
 
-    pub(in crate::ui::view) fn confirm_close_all_sessions(&mut self, cx: &mut Context<Self>) {
+    pub(in crate::ui::view) fn confirm_close_all_sessions(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
         self.close_all_sessions_confirm_open = false;
+        let quit_after = self.pending_quit_after_close_all;
+        self.pending_quit_after_close_all = false;
+        self.pending_window_quit = false;
         self.close_all_sessions(cx);
+        if quit_after {
+            if self.settings.startup_restore {
+                self.persist_open_tabs();
+            }
+            self.terminal_status = "sessions closed; closing window".to_string();
+            window.remove_window();
+            return;
+        }
+        cx.notify();
     }
 
     pub(in crate::ui::view) fn close_all_sessions(&mut self, cx: &mut Context<Self>) {

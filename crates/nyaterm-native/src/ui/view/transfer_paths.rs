@@ -1,6 +1,43 @@
 use super::*;
 
 impl NyaTermApp {
+
+    pub(in crate::ui::view) fn prompt_transfer_download_path_setting(
+        &mut self,
+        cx: &mut Context<Self>,
+    ) {
+        if self.transfer_path_prompt.is_some() {
+            self.terminal_status = "native path picker is already open".to_string();
+            cx.notify();
+            return;
+        }
+        let options = PathPromptOptions {
+            files: false,
+            directories: true,
+            multiple: false,
+            prompt: Some(SharedString::from("Select default download directory")),
+        };
+        let receiver = cx.prompt_for_paths(options);
+        self.terminal_status = "selecting default download directory".to_string();
+        cx.spawn(async move |this, cx| {
+            let path = match receiver.await {
+                Ok(Ok(Some(paths))) => paths.into_iter().next(),
+                _ => None,
+            };
+            let _ = this.update(cx, |this, cx| {
+                if let Some(path) = path {
+                    this.settings.transfer_download_path = path.display().to_string();
+                    this.save_transfer_settings("transfer download path saved", cx);
+                } else {
+                    this.terminal_status = "download path selection cancelled".to_string();
+                    cx.notify();
+                }
+            });
+        })
+        .detach();
+        cx.notify();
+    }
+
     pub(in crate::ui::view) fn resolved_transfer_download_dir(&self) -> Option<PathBuf> {
         let configured = self.settings.transfer_download_path.trim();
         if configured.is_empty() {

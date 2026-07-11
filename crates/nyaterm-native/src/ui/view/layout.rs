@@ -506,7 +506,9 @@ impl NyaTermApp {
                         "window-min",
                         "–",
                         WindowControlArea::Min,
-                        |_, window, _| window.minimize_window(),
+                        cx.listener(|this, _, window, cx| {
+                            this.handle_window_minimize(window, cx);
+                        }),
                     ))
                     .child(window_control_button(
                         palette,
@@ -520,7 +522,9 @@ impl NyaTermApp {
                         "window-close",
                         "×",
                         WindowControlArea::Close,
-                        |_, window, _| window.remove_window(),
+                        cx.listener(|this, _, window, cx| {
+                            this.handle_window_close_request(window, cx);
+                        }),
                     )),
             )
     }

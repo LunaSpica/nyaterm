@@ -65,11 +65,11 @@ impl NyaTermApp {
                 window.focus(&this.close_all_sessions_confirm_focus);
                 cx.notify();
             }))
-            .on_key_down(cx.listener(|this, event: &KeyDownEvent, _, cx| {
+            .on_key_down(cx.listener(|this, event: &KeyDownEvent, window, cx| {
                 cx.stop_propagation();
                 match event.keystroke.key.as_str() {
                     "escape" => this.cancel_close_all_sessions_confirm(cx),
-                    "enter" => this.confirm_close_all_sessions(cx),
+                    "enter" => this.confirm_close_all_sessions(window, cx),
                     _ => {}
                 }
             }))
@@ -96,7 +96,11 @@ impl NyaTermApp {
                                     .text_sm()
                                     .font_weight(FontWeight(800.))
                                     .text_color(rgb(0xfca5a5))
-                                    .child("Close All Sessions"),
+                                    .child(if self.pending_quit_after_close_all {
+                                        "Quit NyaTerm"
+                                    } else {
+                                        "Close All Sessions"
+                                    }),
                             )
                             .child(div().text_xs().text_color(rgb(palette.text_muted)).child(format!(
                                 "This will close {session_count} active session(s)."
@@ -132,9 +136,13 @@ impl NyaTermApp {
                                     .text_color(rgb(0xfee2e2))
                                     .cursor_pointer()
                                     .hover(|this| this.bg(rgb(0x991b1b)))
-                                    .child("Close All")
-                                    .on_click(cx.listener(|this, _, _, cx| {
-                                        this.confirm_close_all_sessions(cx);
+                                    .child(if self.pending_quit_after_close_all {
+                                        "Quit"
+                                    } else {
+                                        "Close All"
+                                    })
+                                    .on_click(cx.listener(|this, _, window, cx| {
+                                        this.confirm_close_all_sessions(window, cx);
                                     })),
                             ),
                     ),

@@ -1481,3 +1481,11 @@ service boundary first:
 - Terminal surface uses `terminal_theme_palette()` with contrast boost and
   configured regular/bold font weights.
 
+## 2026-07-12 Window close confirm + Transfer browse
+
+- Title-bar close honors `confirm_on_close` by reusing the close-all
+  confirmation dialog before quitting when sessions are open.
+- Minimize honors `minimize_to_tray` preference (platform minimize; tray polish
+  still pending).
+- Transfer settings download path supports Browse directory picker.
+

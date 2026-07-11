@@ -55,6 +55,13 @@ impl NyaTermApp {
                             .items_center()
                             .gap_1()
                             .child(small_button(palette, 
+                                "transfer-browse-download",
+                                "Browse",
+                                cx.listener(|this, _, _, cx| {
+                                    this.prompt_transfer_download_path_setting(cx);
+                                }),
+                            ))
+                            .child(small_button(palette, 
                                 "transfer-use-local-draft",
                                 "Use Draft",
                                 cx.listener(|this, _, _, cx| {
