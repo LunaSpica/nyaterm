@@ -954,7 +954,9 @@ impl NyaTermApp {
             .absolute()
             .top(px(30.))
             .left_0()
-                        .w(px(240.))
+                        .w(px(260.))
+            .max_h(px(480.))
+            .overflow_y_scroll()
             .rounded_md()
             .border_1()
             .border_color(rgb(palette.border))
@@ -1001,6 +1003,316 @@ impl NyaTermApp {
             }
             TitleMenu::View => {
                 items = items
+                    .child(title_menu_item(
+                        palette,
+                        "title-view-theme-github-dark",
+                        {
+                            let current = self.settings.theme.as_str();
+                            let selected = current == "github-dark"
+                                || (current == "catppuccin" && "github-dark" == "catppuccin-mocha");
+                            let label = crate::ui::theme::appearance_theme_label("github-dark");
+                            if selected {
+                                format!("✓ {label}")
+                            } else {
+                                label.to_string()
+                            }
+                        },
+                        None,
+                        cx.listener(|this, _, _, cx| {
+                            this.close_title_menu(cx);
+                            this.update_appearance_theme("github-dark", cx);
+                        }),
+                    ))
+                    .child(title_menu_item(
+                        palette,
+                        "title-view-theme-dracula",
+                        {
+                            let current = self.settings.theme.as_str();
+                            let selected = current == "dracula"
+                                || (current == "catppuccin" && "dracula" == "catppuccin-mocha");
+                            let label = crate::ui::theme::appearance_theme_label("dracula");
+                            if selected {
+                                format!("✓ {label}")
+                            } else {
+                                label.to_string()
+                            }
+                        },
+                        None,
+                        cx.listener(|this, _, _, cx| {
+                            this.close_title_menu(cx);
+                            this.update_appearance_theme("dracula", cx);
+                        }),
+                    ))
+                    .child(title_menu_item(
+                        palette,
+                        "title-view-theme-nord",
+                        {
+                            let current = self.settings.theme.as_str();
+                            let selected = current == "nord"
+                                || (current == "catppuccin" && "nord" == "catppuccin-mocha");
+                            let label = crate::ui::theme::appearance_theme_label("nord");
+                            if selected {
+                                format!("✓ {label}")
+                            } else {
+                                label.to_string()
+                            }
+                        },
+                        None,
+                        cx.listener(|this, _, _, cx| {
+                            this.close_title_menu(cx);
+                            this.update_appearance_theme("nord", cx);
+                        }),
+                    ))
+                    .child(title_menu_item(
+                        palette,
+                        "title-view-theme-monokai-pro",
+                        {
+                            let current = self.settings.theme.as_str();
+                            let selected = current == "monokai-pro"
+                                || (current == "catppuccin" && "monokai-pro" == "catppuccin-mocha");
+                            let label = crate::ui::theme::appearance_theme_label("monokai-pro");
+                            if selected {
+                                format!("✓ {label}")
+                            } else {
+                                label.to_string()
+                            }
+                        },
+                        None,
+                        cx.listener(|this, _, _, cx| {
+                            this.close_title_menu(cx);
+                            this.update_appearance_theme("monokai-pro", cx);
+                        }),
+                    ))
+                    .child(title_menu_item(
+                        palette,
+                        "title-view-theme-solarized-light",
+                        {
+                            let current = self.settings.theme.as_str();
+                            let selected = current == "solarized-light"
+                                || (current == "catppuccin" && "solarized-light" == "catppuccin-mocha");
+                            let label = crate::ui::theme::appearance_theme_label("solarized-light");
+                            if selected {
+                                format!("✓ {label}")
+                            } else {
+                                label.to_string()
+                            }
+                        },
+                        None,
+                        cx.listener(|this, _, _, cx| {
+                            this.close_title_menu(cx);
+                            this.update_appearance_theme("solarized-light", cx);
+                        }),
+                    ))
+                    .child(title_menu_item(
+                        palette,
+                        "title-view-theme-catppuccin-mocha",
+                        {
+                            let current = self.settings.theme.as_str();
+                            let selected = current == "catppuccin-mocha"
+                                || (current == "catppuccin" && "catppuccin-mocha" == "catppuccin-mocha");
+                            let label = crate::ui::theme::appearance_theme_label("catppuccin-mocha");
+                            if selected {
+                                format!("✓ {label}")
+                            } else {
+                                label.to_string()
+                            }
+                        },
+                        None,
+                        cx.listener(|this, _, _, cx| {
+                            this.close_title_menu(cx);
+                            this.update_appearance_theme("catppuccin-mocha", cx);
+                        }),
+                    ))
+                    .child(title_menu_item(
+                        palette,
+                        "title-view-theme-tokyo-night",
+                        {
+                            let current = self.settings.theme.as_str();
+                            let selected = current == "tokyo-night"
+                                || (current == "catppuccin" && "tokyo-night" == "catppuccin-mocha");
+                            let label = crate::ui::theme::appearance_theme_label("tokyo-night");
+                            if selected {
+                                format!("✓ {label}")
+                            } else {
+                                label.to_string()
+                            }
+                        },
+                        None,
+                        cx.listener(|this, _, _, cx| {
+                            this.close_title_menu(cx);
+                            this.update_appearance_theme("tokyo-night", cx);
+                        }),
+                    ))
+                    .child(title_menu_item(
+                        palette,
+                        "title-view-theme-one-dark-pro",
+                        {
+                            let current = self.settings.theme.as_str();
+                            let selected = current == "one-dark-pro"
+                                || (current == "catppuccin" && "one-dark-pro" == "catppuccin-mocha");
+                            let label = crate::ui::theme::appearance_theme_label("one-dark-pro");
+                            if selected {
+                                format!("✓ {label}")
+                            } else {
+                                label.to_string()
+                            }
+                        },
+                        None,
+                        cx.listener(|this, _, _, cx| {
+                            this.close_title_menu(cx);
+                            this.update_appearance_theme("one-dark-pro", cx);
+                        }),
+                    ))
+                    .child(title_menu_item(
+                        palette,
+                        "title-view-theme-rose-pine",
+                        {
+                            let current = self.settings.theme.as_str();
+                            let selected = current == "rose-pine"
+                                || (current == "catppuccin" && "rose-pine" == "catppuccin-mocha");
+                            let label = crate::ui::theme::appearance_theme_label("rose-pine");
+                            if selected {
+                                format!("✓ {label}")
+                            } else {
+                                label.to_string()
+                            }
+                        },
+                        None,
+                        cx.listener(|this, _, _, cx| {
+                            this.close_title_menu(cx);
+                            this.update_appearance_theme("rose-pine", cx);
+                        }),
+                    ))
+                    .child(title_menu_item(
+                        palette,
+                        "title-view-theme-gruvbox-dark",
+                        {
+                            let current = self.settings.theme.as_str();
+                            let selected = current == "gruvbox-dark"
+                                || (current == "catppuccin" && "gruvbox-dark" == "catppuccin-mocha");
+                            let label = crate::ui::theme::appearance_theme_label("gruvbox-dark");
+                            if selected {
+                                format!("✓ {label}")
+                            } else {
+                                label.to_string()
+                            }
+                        },
+                        None,
+                        cx.listener(|this, _, _, cx| {
+                            this.close_title_menu(cx);
+                            this.update_appearance_theme("gruvbox-dark", cx);
+                        }),
+                    ))
+                    .child(title_menu_item(
+                        palette,
+                        "title-view-theme-github-light",
+                        {
+                            let current = self.settings.theme.as_str();
+                            let selected = current == "github-light"
+                                || (current == "catppuccin" && "github-light" == "catppuccin-mocha");
+                            let label = crate::ui::theme::appearance_theme_label("github-light");
+                            if selected {
+                                format!("✓ {label}")
+                            } else {
+                                label.to_string()
+                            }
+                        },
+                        None,
+                        cx.listener(|this, _, _, cx| {
+                            this.close_title_menu(cx);
+                            this.update_appearance_theme("github-light", cx);
+                        }),
+                    ))
+                    .child(title_menu_item(
+                        palette,
+                        "title-view-theme-catppuccin-latte",
+                        {
+                            let current = self.settings.theme.as_str();
+                            let selected = current == "catppuccin-latte"
+                                || (current == "catppuccin" && "catppuccin-latte" == "catppuccin-mocha");
+                            let label = crate::ui::theme::appearance_theme_label("catppuccin-latte");
+                            if selected {
+                                format!("✓ {label}")
+                            } else {
+                                label.to_string()
+                            }
+                        },
+                        None,
+                        cx.listener(|this, _, _, cx| {
+                            this.close_title_menu(cx);
+                            this.update_appearance_theme("catppuccin-latte", cx);
+                        }),
+                    ))
+                    .child(title_menu_item(
+                        palette,
+                        "title-view-theme-one-light",
+                        {
+                            let current = self.settings.theme.as_str();
+                            let selected = current == "one-light"
+                                || (current == "catppuccin" && "one-light" == "catppuccin-mocha");
+                            let label = crate::ui::theme::appearance_theme_label("one-light");
+                            if selected {
+                                format!("✓ {label}")
+                            } else {
+                                label.to_string()
+                            }
+                        },
+                        None,
+                        cx.listener(|this, _, _, cx| {
+                            this.close_title_menu(cx);
+                            this.update_appearance_theme("one-light", cx);
+                        }),
+                    ))
+                    .child(title_menu_item(
+                        palette,
+                        "title-view-theme-nya-high-contrast",
+                        {
+                            let current = self.settings.theme.as_str();
+                            let selected = current == "nya-high-contrast"
+                                || (current == "catppuccin" && "nya-high-contrast" == "catppuccin-mocha");
+                            let label = crate::ui::theme::appearance_theme_label("nya-high-contrast");
+                            if selected {
+                                format!("✓ {label}")
+                            } else {
+                                label.to_string()
+                            }
+                        },
+                        None,
+                        cx.listener(|this, _, _, cx| {
+                            this.close_title_menu(cx);
+                            this.update_appearance_theme("nya-high-contrast", cx);
+                        }),
+                    ))
+                    .child(title_menu_separator(palette))
+                    .child(title_menu_item(
+                        palette,
+                        "title-view-lang-en",
+                        if matches!(self.settings.language.as_str(), "en" | "en-US") {
+                            "Language: English ✓"
+                        } else {
+                            "Language: English"
+                        },
+                        None,
+                        cx.listener(|this, _, _, cx| {
+                            this.close_title_menu(cx);
+                            this.update_ui_language("en", cx);
+                        }),
+                    ))
+                    .child(title_menu_item(
+                        palette,
+                        "title-view-lang-zh",
+                        if matches!(self.settings.language.as_str(), "zh-CN" | "zh") {
+                            "Language: 中文 ✓"
+                        } else {
+                            "Language: 中文"
+                        },
+                        None,
+                        cx.listener(|this, _, _, cx| {
+                            this.close_title_menu(cx);
+                            this.update_ui_language("zh-CN", cx);
+                        }),
+                    ))
+                    .child(title_menu_separator(palette))
                     .child(title_menu_item(
                         palette,
                         "title-view-zoom-in",

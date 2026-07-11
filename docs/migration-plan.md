@@ -1300,3 +1300,8 @@ service boundary first:
 - Tauri `broadcastToAll` toggle: when enabled, terminal input fans out to every
   live session in addition to sync-group peers.
 - Exposed via Terminal menu; status line reports enable/disable.
+
+## 2026-07-11 View menu theme + language quick picks
+
+- View menu lists appearance themes with checkmarks and English/中文 language
+  toggles (Tauri Header theme/language submenus), plus existing zoom/sidebar/tile.
