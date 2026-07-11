@@ -906,3 +906,8 @@ service boundary first:
 - Search match rows use `terminal_selection` instead of surface/hover chrome.
 - Remove non-Tauri debug toolbar (Start Local/Probe/Dup/etc) from active session terminal surface; keep empty-session bootstrap actions.
 - Drop bottom timestamps/gpu debug pills; tighter line stacking (no inter-line gap); search bar docks at top-right.
+
+## 2026-07-11 Session tab strip densify
+- Active tab top accent bar (Tauri-like 2px indicator).
+- Tab active/idle backgrounds map to ThemePalette hover/bg instead of hardcoded dark blues.
+- Residual bottom quick-command chrome tokens themed.

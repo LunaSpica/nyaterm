@@ -97,9 +97,9 @@ impl NyaTermApp {
                 let bg = if let Some(custom_color) = custom_color {
                     rgba((custom_color << 8) | if is_active { 0x24 } else { 0x14 })
                 } else if is_active {
-                    rgb(0x151b24)
+                    rgb(palette.hover)
                 } else {
-                    rgb(0x0f131a)
+                    rgb(palette.bg)
                 };
                 let hover_bg = if let Some(custom_color) = custom_color {
                     rgba((custom_color << 8) | if is_active { 0x32 } else { 0x22 })
@@ -117,6 +117,17 @@ impl NyaTermApp {
                         .items_center()
                         .gap_2()
                         .relative()
+                        .when(is_active, |this| {
+                            this.child(
+                                div()
+                                    .absolute()
+                                    .top_0()
+                                    .left_0()
+                                    .h(px(2.))
+                                    .w_full()
+                                    .bg(accent),
+                            )
+                        })
                         .border_r_1()
                         .border_color(if is_active {
                             custom_color.map(rgb).unwrap_or_else(|| rgb(palette.border))
@@ -240,7 +251,7 @@ impl NyaTermApp {
                     .flex_none()
                     .border_l_1()
                     .border_color(rgb(palette.border))
-                    .hover(|this| this.bg(rgb(0x12261a)))
+                    .hover(|this| this.bg(rgb(palette.hover)))
                     .on_drop(cx.listener(|this, payload: &SessionTabDragPayload, _, cx| {
                         this.reorder_session_to_end(payload.session_id.clone(), cx);
                     })),
@@ -327,8 +338,9 @@ impl NyaTermApp {
                 }),
             ));
         }
-div()
-            .h(px(36.))  // Tauri TabBar: h-9
+
+        div()
+            .h(px(36.)) // Tauri TabBar: h-9
             .flex()
             .items_center()
             .border_b_1()
@@ -459,7 +471,8 @@ div()
                 command_row = command_row.child(self.bottom_quick_command_chip(index, command, cx));
             }
         }
-div()
+
+        div()
             .h(px(112.))
             .flex_none()
             .border_t_1()
@@ -481,10 +494,10 @@ div()
                                 div()
                                     .text_xs()
                                     .font_weight(FontWeight(800.))
-                                    .text_color(rgb(0x9ca3af))
+                                    .text_color(rgb(palette.text_muted))
                                     .child("Quick Commands"),
                             )
-                            .child(status_pill("bottom panel", rgb(0x93c5fd), rgb(palette.hover))),
+                            .child(status_pill("bottom panel", rgb(palette.accent), rgb(palette.hover))),
                     )
                     .child(
                         div()
