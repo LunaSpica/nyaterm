@@ -108,8 +108,15 @@ impl NyaTermApp {
                     .border_b_1()
                     .border_color(rgb(palette.border))
                     .bg(rgb(palette.surface));
+                let global_index: std::collections::HashMap<String, usize> = self
+                    .ordered_sessions()
+                    .into_iter()
+                    .enumerate()
+                    .map(|(index, session)| (session.id, index + 1))
+                    .collect();
                 for tab_id in &tab_ids {
                     let is_active_tab = active.as_str() == tab_id.as_str();
+                    let tab_number = global_index.get(tab_id).copied().unwrap_or(0);
                     let title = self
                         .session_display_name(tab_id)
                         .unwrap_or_else(|| short_id(tab_id).to_string());
@@ -235,6 +242,16 @@ impl NyaTermApp {
                                 },
                             ))
                             .child(div().size(px(7.)).rounded_full().bg(accent))
+                            .when(tab_number > 0, |this| {
+                                this.child(
+                                    div()
+                                        .min_w(px(10.))
+                                        .text_size(px(10.))
+                                        .font_weight(FontWeight(700.))
+                                        .text_color(rgb(palette.text_dimmed))
+                                        .child(format!("{tab_number}")),
+                                )
+                            })
                             .child(
                                 div()
                                     .min_w_0()

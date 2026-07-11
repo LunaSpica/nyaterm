@@ -68,11 +68,12 @@ impl NyaTermApp {
                     .child("No sessions"),
             );
         } else {
-            for session in sessions {
+            for (tab_index, session) in sessions.into_iter().enumerate() {
                 let display_name = self.session_display_name_by_info(&session);
                 let session_id = session.id.clone();
                 let actions_session_id = session.id.clone();
                 let close_session_id = session.id.clone();
+                let tab_number = tab_index + 1;
                 let drag_payload = SessionTabDragPayload {
                     session_id: session.id.clone(),
                     display_name: display_name.clone(),
@@ -189,6 +190,14 @@ impl NyaTermApp {
                             )
                         })
                         .child(div().size(px(8.)).rounded_full().bg(accent))
+                        .child(
+                            div()
+                                .min_w(px(12.))
+                                .text_size(px(11.))
+                                .font_weight(FontWeight(700.))
+                                .text_color(rgb(palette.text_dimmed))
+                                .child(format!("{tab_number}")),
+                        )
                         .child(
                             div()
                                 .min_w_0()

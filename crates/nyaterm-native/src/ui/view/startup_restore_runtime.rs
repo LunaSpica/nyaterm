@@ -1,5 +1,5 @@
 use super::*;
-use nyaterm_domain::RestorableOpenTab;
+use nyaterm_domain::{RestorableOpenTab, RestorablePaneNode, RestorableWorkspacePaneNode};
 
 impl NyaTermApp {
     pub(in crate::ui::view) fn persist_open_tabs(&mut self) {
@@ -23,33 +23,129 @@ impl NyaTermApp {
     }
 
     pub(in crate::ui::view) fn serialize_open_tabs(&self) -> Vec<RestorableOpenTab> {
+        // Prefer a single Tauri-style open_tabs entry when the workspace is one global
+        // pane split covering every open session (maps to open_tabs[0].root).
+        if let Some(tabs) = self.serialize_open_tabs_as_single_pane_tab() {
+            return tabs;
+        }
+
         self.ordered_sessions()
             .into_iter()
-            .map(|session| {
-                let metadata = self.session_metadata.get(&session.id);
-                let connection_id = metadata.and_then(|meta| meta.source_connection_id.clone());
-                let session_type = match metadata.map(|meta| &meta.launch_config) {
-                    Some(SessionLaunchConfig::Ssh(_)) => "SSH",
-                    Some(SessionLaunchConfig::Telnet(_)) => "Telnet",
-                    Some(SessionLaunchConfig::Serial(_)) => "Serial",
-                    Some(SessionLaunchConfig::Local(_)) | None => "Local",
-                }
-                .to_string();
-                let custom_name = self.session_custom_names.get(&session.id).cloned();
-                let tab_color = self
-                    .session_tab_colors
-                    .get(&session.id)
-                    .map(|color| format!("#{color:06x}"));
-                let title = self.session_display_name_by_info(&session);
-                RestorableOpenTab {
-                    title,
-                    session_type,
-                    connection_id,
-                    custom_name,
-                    tab_color,
-                }
-            })
+            .map(|session| self.serialize_open_tab_for_session(&session))
             .collect()
+    }
+
+    fn serialize_open_tab_for_session(&self, session: &SessionInfo) -> RestorableOpenTab {
+        let metadata = self.session_metadata.get(&session.id);
+        let connection_id = metadata.and_then(|meta| meta.source_connection_id.clone());
+        let session_type = match metadata.map(|meta| &meta.launch_config) {
+            Some(SessionLaunchConfig::Ssh(_)) => "SSH",
+            Some(SessionLaunchConfig::Telnet(_)) => "Telnet",
+            Some(SessionLaunchConfig::Serial(_)) => "Serial",
+            Some(SessionLaunchConfig::Local(_)) | None => "Local",
+        }
+        .to_string();
+        let custom_name = self.session_custom_names.get(&session.id).cloned();
+        let tab_color = self
+            .session_tab_colors
+            .get(&session.id)
+            .map(|color| format!("#{color:06x}"));
+        let title = self.session_display_name_by_info(session);
+        RestorableOpenTab::with_leaf_root(
+            title,
+            session_type,
+            connection_id,
+            custom_name,
+            tab_color,
+        )
+    }
+
+    /// When every session is present in a global workspace split, emit one open_tabs
+    /// entry whose `root` is a Tauri RestorablePaneNode tree (for interop).
+    fn serialize_open_tabs_as_single_pane_tab(&self) -> Option<Vec<RestorableOpenTab>> {
+        let root = self.workspace_split.as_ref()?;
+        if !root.is_split() {
+            return None;
+        }
+        let ordered = self.ordered_sessions();
+        if ordered.len() < 2 {
+            return None;
+        }
+        let split_ids = root.session_ids();
+        if split_ids.len() != ordered.len() {
+            return None;
+        }
+        // Require the pane tree to cover exactly the ordered session set.
+        let ordered_set = ordered
+            .iter()
+            .map(|session| session.id.as_str())
+            .collect::<std::collections::HashSet<_>>();
+        if split_ids
+            .iter()
+            .any(|id| !ordered_set.contains(id.as_str()))
+        {
+            return None;
+        }
+
+        let pane_root = self.workspace_pane_to_restorable_pane(root)?;
+        let first = ordered.first()?;
+        let mut tab = self.serialize_open_tab_for_session(first);
+        // Title/type from first leaf; root carries the full tree.
+        tab.root = Some(pane_root);
+        tab.active_pane_id = None;
+        Some(vec![tab])
+    }
+
+    fn workspace_pane_to_restorable_pane(
+        &self,
+        node: &WorkspacePaneNode,
+    ) -> Option<RestorablePaneNode> {
+        match node {
+            WorkspacePaneNode::Leaf { session_id } => {
+                let session = self
+                    .ordered_sessions()
+                    .into_iter()
+                    .find(|session| &session.id == session_id)?;
+                let tab = self.serialize_open_tab_for_session(&session);
+                let leaf = tab.root.unwrap_or_else(|| {
+                    RestorablePaneNode::leaf_session(
+                        tab.title,
+                        tab.session_type,
+                        tab.connection_id,
+                    )
+                });
+                Some(leaf)
+            }
+            WorkspacePaneNode::Split {
+                id,
+                direction,
+                ratio_percent,
+                first,
+                second,
+            } => {
+                let first = self.workspace_pane_to_restorable_pane(first);
+                let second = self.workspace_pane_to_restorable_pane(second);
+                match (first, second) {
+                    (None, None) => None,
+                    (Some(only), None) | (None, Some(only)) => Some(only),
+                    (Some(first), Some(second)) => {
+                        let ratio =
+                            (WorkspacePaneNode::clamped_ratio_percent(*ratio_percent) as f64)
+                                / 100.0;
+                        Some(RestorablePaneNode::Split {
+                            id: id.clone(),
+                            direction: match direction {
+                                WorkspaceSplitDirection::Horizontal => "horizontal".to_string(),
+                                WorkspaceSplitDirection::Vertical => "vertical".to_string(),
+                            },
+                            ratio: ratio.clamp(0.2, 0.8),
+                            first: Box::new(first),
+                            second: Box::new(second),
+                        })
+                    }
+                }
+            }
+        }
     }
 
     pub(in crate::ui::view) fn try_restore_open_tabs(
@@ -84,7 +180,36 @@ impl NyaTermApp {
             self.startup_restore_complete = true;
             return;
         }
-        self.startup_restore_queue = tabs;
+        // Expand Tauri per-tab pane trees into a flat restore queue of sessions.
+        // Remember optional workspace pane layouts derived from multi-leaf roots.
+        self.startup_pending_pane_layout = None;
+        let mut expanded = Vec::new();
+        let mut base_index = 0usize;
+        for tab in &tabs {
+            if self.startup_pending_pane_layout.is_none() {
+                if let Some(layout) = tab.workspace_pane_layout_from_root(base_index) {
+                    self.startup_pending_pane_layout = Some(layout);
+                }
+            }
+            let sessions = tab.expanded_sessions();
+            base_index += sessions.len();
+            for session in sessions {
+                expanded.push(RestorableOpenTab {
+                    title: session.title,
+                    session_type: session.session_type,
+                    connection_id: session.connection_id,
+                    custom_name: session.custom_name,
+                    tab_color: session.tab_color,
+                    active_pane_id: None,
+                    root: None,
+                });
+            }
+        }
+        if expanded.is_empty() {
+            self.startup_restore_complete = true;
+            return;
+        }
+        self.startup_restore_queue = expanded;
         self.terminal_status = format!(
             "restoring {} workspace tab(s)...",
             self.startup_restore_queue.len()
@@ -125,7 +250,15 @@ impl NyaTermApp {
         self.terminal_windows_restored = false;
         self.workspace_pane_layout_restored = false;
         self.try_restore_terminal_window_layout();
+        // Prefer stored ui.workspace_pane_layout; fall back to layout embedded in open_tabs roots.
         self.try_restore_workspace_pane_layout();
+        if self.workspace_split.is_none() {
+            if let Some(layout) = self.startup_pending_pane_layout.take() {
+                self.apply_restorable_workspace_pane_layout(layout);
+            }
+        } else {
+            self.startup_pending_pane_layout = None;
+        }
         if self.terminal_windows_is_multi_leaf() {
             self.terminal_status = "restored workspace tabs and window layout".to_string();
         } else if self.workspace_split.as_ref().is_some_and(|root| root.is_split()) {
@@ -225,6 +358,43 @@ impl NyaTermApp {
             tab.title, tab.session_type
         );
         false
+    }
+
+    fn apply_restorable_workspace_pane_layout(
+        &mut self,
+        layout: RestorableWorkspacePaneNode,
+    ) {
+        if self.terminal_windows_is_multi_leaf() {
+            return;
+        }
+        let ordered = self
+            .ordered_sessions()
+            .into_iter()
+            .map(|session| session.id)
+            .collect::<Vec<_>>();
+        if ordered.len() < 2 {
+            return;
+        }
+        let Some(restored) = WorkspacePaneNode::restore_layout(&layout, &ordered) else {
+            return;
+        };
+        if !restored.is_split() {
+            return;
+        }
+        if let Some(active) = self.active_session_id.clone() {
+            if !restored.contains_session(&active) {
+                if let Some(first) = restored.session_ids().into_iter().next() {
+                    self.active_session_id = Some(first);
+                }
+            }
+        } else if let Some(first) = restored.session_ids().into_iter().next() {
+            self.active_session_id = Some(first);
+        }
+        self.workspace_split = Some(restored);
+        self.workspace_pane_layout_restored = true;
+        self.selected_nav = NavItem::Workspace;
+        self.main_mode = MainMode::Workspace;
+        self.terminal_status = "restored pane layout from open_tabs root".to_string();
     }
 }
 

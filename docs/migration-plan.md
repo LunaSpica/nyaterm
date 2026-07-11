@@ -1316,3 +1316,13 @@ service boundary first:
 
 - File menu: Temporary SSH Link (Ctrl+Alt+N).
 - Workspace tab action strip: **Tile** applies smart-split multi-leaf layout.
+
+## 2026-07-11 open_tabs RestorablePaneNode interop + tab numbers
+
+- Domain `RestorableOpenTab` now accepts Tauri `active_pane_id` / `root`
+  (`RestorablePaneNode` leaf/split). Split roots expand into multiple native
+  sessions on restore; optional pane layout is mapped into
+  `workspace_pane_layout` when no multi-leaf layout wins.
+- Native serialization writes leaf `root` on each tab, and when a global pane
+  split covers every session, emits a single open_tabs entry with the full tree.
+- Global and multi-leaf tab strips show 1-based tab ordinals like Tauri TabBar.

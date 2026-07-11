@@ -6213,23 +6213,92 @@ mod tests {
     }
 
     #[test]
+    fn open_tab_pane_root_expands_and_maps_layout() {
+        let tab = crate::models::RestorableOpenTab {
+            title: "split".to_string(),
+            session_type: "SSH".to_string(),
+            connection_id: Some("c1".to_string()),
+            custom_name: Some("g".to_string()),
+            tab_color: Some("#ff0000".to_string()),
+            active_pane_id: None,
+            root: Some(crate::models::RestorablePaneNode::Split {
+                id: "s".to_string(),
+                direction: "horizontal".to_string(),
+                ratio: 0.4,
+                first: Box::new(crate::models::RestorablePaneNode::leaf_session(
+                    "a",
+                    "SSH",
+                    Some("c1".to_string()),
+                )),
+                second: Box::new(crate::models::RestorablePaneNode::leaf_session(
+                    "b",
+                    "Local",
+                    None,
+                )),
+            }),
+        };
+        let sessions = tab.expanded_sessions();
+        assert_eq!(sessions.len(), 2);
+        assert_eq!(sessions[0].title, "a");
+        assert_eq!(sessions[1].session_type, "Local");
+        let layout = tab.workspace_pane_layout_from_root(3).expect("layout");
+        match layout {
+            crate::models::RestorableWorkspacePaneNode::Split {
+                direction,
+                ratio,
+                first,
+                second,
+                ..
+            } => {
+                assert_eq!(direction, "horizontal");
+                assert!((ratio - 0.4).abs() < f64::EPSILON);
+                assert_eq!(
+                    *first,
+                    crate::models::RestorableWorkspacePaneNode::Leaf { tab_index: 3 }
+                );
+                assert_eq!(
+                    *second,
+                    crate::models::RestorableWorkspacePaneNode::Leaf { tab_index: 4 }
+                );
+            }
+            _ => panic!("expected split"),
+        }
+    }
+
+    #[test]
     fn open_tabs_roundtrip() {
         let dir = unique_temp_dir("open-tabs");
         let store = ConnectionStore::open(&dir).expect("store");
         let tabs = vec![
-            crate::models::RestorableOpenTab {
-                title: "Local".to_string(),
-                session_type: "Local".to_string(),
-                connection_id: None,
-                custom_name: Some("dev".to_string()),
-                tab_color: Some("#22c55e".to_string()),
-            },
+            crate::models::RestorableOpenTab::with_leaf_root(
+                "Local",
+                "Local",
+                None,
+                Some("dev".to_string()),
+                Some("#22c55e".to_string()),
+            ),
             crate::models::RestorableOpenTab {
                 title: "prod".to_string(),
                 session_type: "SSH".to_string(),
                 connection_id: Some("conn-1".to_string()),
                 custom_name: None,
                 tab_color: None,
+                active_pane_id: None,
+                root: Some(crate::models::RestorablePaneNode::Split {
+                    id: "split-1".to_string(),
+                    direction: "vertical".to_string(),
+                    ratio: 0.5,
+                    first: Box::new(crate::models::RestorablePaneNode::leaf_session(
+                        "prod-a",
+                        "SSH",
+                        Some("conn-1".to_string()),
+                    )),
+                    second: Box::new(crate::models::RestorablePaneNode::leaf_session(
+                        "prod-b",
+                        "SSH",
+                        Some("conn-1".to_string()),
+                    )),
+                }),
             },
         ];
         store.save_open_tabs(&tabs).expect("save");

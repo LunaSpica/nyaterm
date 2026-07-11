@@ -491,6 +491,9 @@ pub struct NyaTermApp {
     pub(in crate::ui::view) open_tabs_restored: bool,
     pub(in crate::ui::view) startup_restore_complete: bool,
     pub(in crate::ui::view) startup_restore_queue: Vec<nyaterm_domain::RestorableOpenTab>,
+    /// Pane layout extracted from open_tabs[].root when restoring Tauri multi-pane tabs.
+    pub(in crate::ui::view) startup_pending_pane_layout:
+        Option<nyaterm_domain::RestorableWorkspacePaneNode>,
     pub(in crate::ui::view) is_locked: bool,
     pub(in crate::ui::view) last_user_activity_at: Instant,
 }
@@ -1178,6 +1181,7 @@ impl NyaTermApp {
             open_tabs_restored: false,
             startup_restore_complete: false,
             startup_restore_queue: Vec::new(),
+            startup_pending_pane_layout: None,
             is_locked: false,
             last_user_activity_at: Instant::now(),
         }
