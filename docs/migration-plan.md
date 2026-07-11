@@ -713,3 +713,7 @@ service boundary first:
 ## 2026-07-11 Docker container row Tauri height + meta
 - Container rows restored to 66px with ports/status + created_at third line (Tauri density).
 - Virtual list row slot 68px matches.
+
+## 2026-07-11 Command Send default intervals
+- Data/mode switches apply Tauri default intervals: Text/Line=1.00s, Char/Byte=0.02s, Hex/Packet=0.
+- App default interval starts at 1.00s for Text/Line.

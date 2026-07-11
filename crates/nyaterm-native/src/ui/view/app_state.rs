@@ -738,7 +738,7 @@ impl NyaTermApp {
             send_command_data_type: SendCommandDataType::Text,
             send_command_mode: SendCommandMode::Line,
             send_command_count: Some(1),
-            send_command_interval_seconds: 0.0,
+            send_command_interval_seconds: 1.0,
             send_command_line_ending: SendCommandLineEnding::Crlf,
             send_command_target: SendCommandTarget::Current,
             send_command_sending: false,

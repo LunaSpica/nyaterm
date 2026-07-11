@@ -256,16 +256,10 @@ impl NyaTermApp {
                                         "Text",
                                         self.send_command_data_type == SendCommandDataType::Text,
                                         cx.listener(|this, _, _, cx| {
-                                            this.send_command_data_type = SendCommandDataType::Text;
-                                            if matches!(
-                                                this.send_command_mode,
-                                                SendCommandMode::Packet | SendCommandMode::Byte
-                                            ) {
-                                                this.send_command_mode = SendCommandMode::Line;
-                                            }
-                                            this.terminal_status =
-                                                "command send data: Text".to_string();
-                                            cx.notify();
+                                            this.set_send_command_data_type(
+                                                SendCommandDataType::Text,
+                                                cx,
+                                            );
                                         }),
                                     ))
                                     .child(send_command_chip(
@@ -273,16 +267,10 @@ impl NyaTermApp {
                                         "Hex",
                                         self.send_command_data_type == SendCommandDataType::Hex,
                                         cx.listener(|this, _, _, cx| {
-                                            this.send_command_data_type = SendCommandDataType::Hex;
-                                            if matches!(
-                                                this.send_command_mode,
-                                                SendCommandMode::Line | SendCommandMode::Character
-                                            ) {
-                                                this.send_command_mode = SendCommandMode::Byte;
-                                            }
-                                            this.terminal_status =
-                                                "command send data: Hex".to_string();
-                                            cx.notify();
+                                            this.set_send_command_data_type(
+                                                SendCommandDataType::Hex,
+                                                cx,
+                                            );
                                         }),
                                     )),
                             ))
@@ -367,14 +355,14 @@ impl NyaTermApp {
                                             SendCommandMode::Line | SendCommandMode::Byte
                                         ),
                                         cx.listener(|this, _, _, cx| {
-                                            this.send_command_mode = if this.send_command_data_type
+                                            let mode = if this.send_command_data_type
                                                 == SendCommandDataType::Hex
                                             {
                                                 SendCommandMode::Byte
                                             } else {
                                                 SendCommandMode::Line
                                             };
-                                            cx.notify();
+                                            this.set_send_command_mode(mode, cx);
                                         }),
                                     ))
                                     .child(send_command_chip(
@@ -389,14 +377,14 @@ impl NyaTermApp {
                                             SendCommandMode::Character | SendCommandMode::Packet
                                         ),
                                         cx.listener(|this, _, _, cx| {
-                                            this.send_command_mode = if this.send_command_data_type
+                                            let mode = if this.send_command_data_type
                                                 == SendCommandDataType::Hex
                                             {
                                                 SendCommandMode::Packet
                                             } else {
                                                 SendCommandMode::Character
                                             };
-                                            cx.notify();
+                                            this.set_send_command_mode(mode, cx);
                                         }),
                                     )),
                             ))

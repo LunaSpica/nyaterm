@@ -382,4 +382,60 @@ impl NyaTermApp {
             (self.send_command_interval_seconds + delta).clamp(0.0, 60.0);
         cx.notify();
     }
+
+    /// Tauri defaults: line=1.00s, char/byte=0.02s, packet=0.
+    pub(in crate::ui::view) fn apply_send_command_default_interval(&mut self) {
+        self.send_command_interval_seconds = match (self.send_command_data_type, self.send_command_mode)
+        {
+            (SendCommandDataType::Hex, SendCommandMode::Byte) => 0.02,
+            (SendCommandDataType::Hex, _) => 0.0,
+            (SendCommandDataType::Text, SendCommandMode::Line) => 1.0,
+            (SendCommandDataType::Text, _) => 0.02,
+        };
+    }
+
+    pub(in crate::ui::view) fn set_send_command_data_type(
+        &mut self,
+        data_type: SendCommandDataType,
+        cx: &mut Context<Self>,
+    ) {
+        self.send_command_data_type = data_type;
+        match data_type {
+            SendCommandDataType::Hex => {
+                if matches!(
+                    self.send_command_mode,
+                    SendCommandMode::Line | SendCommandMode::Character
+                ) {
+                    self.send_command_mode = SendCommandMode::Byte;
+                }
+            }
+            SendCommandDataType::Text => {
+                if matches!(
+                    self.send_command_mode,
+                    SendCommandMode::Packet | SendCommandMode::Byte
+                ) {
+                    self.send_command_mode = SendCommandMode::Line;
+                }
+            }
+        }
+        self.apply_send_command_default_interval();
+        self.terminal_status = format!(
+            "command send data: {}",
+            match data_type {
+                SendCommandDataType::Text => "Text",
+                SendCommandDataType::Hex => "Hex",
+            }
+        );
+        cx.notify();
+    }
+
+    pub(in crate::ui::view) fn set_send_command_mode(
+        &mut self,
+        mode: SendCommandMode,
+        cx: &mut Context<Self>,
+    ) {
+        self.send_command_mode = mode;
+        self.apply_send_command_default_interval();
+        cx.notify();
+    }
 }
