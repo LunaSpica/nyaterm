@@ -1340,3 +1340,4 @@ service boundary first:
 - Trailing **+** opens a new-session menu: local session, temporary SSH, connections
   panel, and quick-pick of recent saved connections.
 - Connecting placeholder tab uses connect icon + warning top accent (Tauri connecting chrome).
+- Global session tab strip uses horizontal overflow scroll (Tauri tab-strip-scroll).

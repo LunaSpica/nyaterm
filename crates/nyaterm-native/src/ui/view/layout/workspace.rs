@@ -22,12 +22,15 @@ impl NyaTermApp {
         let sessions = self.ordered_sessions();
         let session_count = sessions.len();
         let mut tabs = div()
+            .id("session-tab-strip-scroll")
             .h_full()
             .min_w_0()
             .flex_1()
             .flex()
             .items_center()
-            .overflow_hidden();
+            // Tauri tab-strip-scroll: horizontal overflow instead of clipping tabs.
+            .overflow_x_scroll()
+            .overflow_y_hidden();
 
         if let Some(pending_name) = self.pending_session_name.clone() {
             tabs = tabs.child(
