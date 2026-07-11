@@ -66,7 +66,10 @@ pub(in crate::ui::view::pages::remote) fn docker_volumes_panel(
     if volumes.is_empty() {
         rows = rows.child(empty_panel("No volumes loaded."));
     } else {
-        for volume in volumes {
+        const WINDOW: usize = 80;
+        let total = volumes.len();
+        let slice = if total > WINDOW { &volumes[..WINDOW] } else { volumes };
+        for volume in slice {
             let volume_name = volume.name.clone();
             rows = rows.child(
                 docker_resource_row(volume.name.clone(), format!("driver {}", volume.driver))
@@ -89,6 +92,16 @@ pub(in crate::ui::view::pages::remote) fn docker_volumes_panel(
                     )),
             );
         }
+        if total > WINDOW {
+            rows = rows.child(
+                div()
+                    .px_2()
+                    .py_1()
+                    .text_size(px(10.))
+                    .text_color(rgb(0x6e7681))
+                    .child(format!("Showing first {WINDOW} of {total} volumes · refine search")),
+            );
+        }
     }
 
     docker_resource_panel("Volumes", volumes.len(), rows)
@@ -102,7 +115,10 @@ pub(in crate::ui::view::pages::remote) fn docker_networks_panel(
     if networks.is_empty() {
         rows = rows.child(empty_panel("No networks loaded."));
     } else {
-        for network in networks {
+        const WINDOW: usize = 80;
+        let total = networks.len();
+        let slice = if total > WINDOW { &networks[..WINDOW] } else { networks };
+        for network in slice {
             let network_id = network.id.clone();
             let name = network.name.clone();
             rows = rows.child(
@@ -131,6 +147,16 @@ pub(in crate::ui::view::pages::remote) fn docker_networks_panel(
                         );
                     }),
                 )),
+            );
+        }
+        if total > WINDOW {
+            rows = rows.child(
+                div()
+                    .px_2()
+                    .py_1()
+                    .text_size(px(10.))
+                    .text_color(rgb(0x6e7681))
+                    .child(format!("Showing first {WINDOW} of {total} networks · refine search")),
             );
         }
     }

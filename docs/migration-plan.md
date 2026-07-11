@@ -703,3 +703,6 @@ service boundary first:
 ## 2026-07-11 Hex editor chrome + Docker image window
 - Hex editor: Tauri-like "HEX Editor" header strip + invalid flag; guide marks use `(group*13-1)` ch positions.
 - Docker Images: first-80 window with refine-search footer; resource rows densified to 52px.
+
+## 2026-07-11 Docker volumes/networks list windows
+- Volumes and Networks tabs cap first 80 rows with refine-search footer (same pattern as Images).
