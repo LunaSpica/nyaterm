@@ -2030,6 +2030,11 @@ pub(super) enum TransferJobKind {
         session_id: String,
         file_name: String,
     },
+    /// Pre-upload SFTP name conflict probe before remote `rz` (Tauri parity).
+    ZmodemConflictProbe {
+        session_id: String,
+        remote_dir: String,
+    },
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -2149,6 +2154,12 @@ pub(super) enum TransferJobOutput {
         action_name: String,
         prompt: String,
         file: SftpRemoteTextFile,
+    },
+
+    ZmodemProbeReady {
+        session_id: String,
+        files: Vec<PathBuf>,
+        probe_skipped: bool,
     },
 }
 

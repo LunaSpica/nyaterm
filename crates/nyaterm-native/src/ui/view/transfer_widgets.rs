@@ -152,6 +152,10 @@ pub(in crate::ui::view) fn transfer_job_title(kind: &TransferJobKind) -> String 
             file_name,
             session_id,
         } => format!("ZMODEM ↓ {file_name} ({session_id})"),
+        TransferJobKind::ZmodemConflictProbe {
+            session_id,
+            remote_dir,
+        } => format!("ZMODEM probe {remote_dir} ({session_id})"),
     }
 }
 

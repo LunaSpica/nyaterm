@@ -1,7 +1,7 @@
 use super::*;
 
 impl NyaTermApp {
-    pub(super) fn drain_transfer_events(&mut self) {
+    pub(super) fn drain_transfer_events(&mut self, cx: &mut Context<Self>) {
         while let Ok(event) = self.transfer_rx.try_recv() {
             let Some(job) = self
                 .transfer_jobs
@@ -11,6 +11,7 @@ impl NyaTermApp {
                 continue;
             };
             let mut external_sync_to_start: Option<(String, String, PathBuf)> = None;
+            let mut zmodem_upload_after_probe: Option<(String, Vec<PathBuf>)> = None;
             match event.event {
                 TransferJobEvent::Started { detail } => {
                     job.status = TransferJobStatus::Running;
@@ -507,6 +508,32 @@ impl NyaTermApp {
                     self.terminal_status =
                         format!("SFTP upload completed in {parent_path}: {}", job.detail);
                 }
+                TransferJobEvent::Finished(Ok(TransferJobOutput::ZmodemProbeReady {
+                    session_id,
+                    files,
+                    probe_skipped,
+                })) => {
+                    job.status = TransferJobStatus::Completed;
+                    job.detail = if probe_skipped {
+                        format!(
+                            "ZMODEM probe skipped; uploading {} file(s)",
+                            files.len()
+                        )
+                    } else {
+                        format!("ZMODEM probe ready; uploading {} file(s)", files.len())
+                    };
+                    job.entries.clear();
+                    job.summary = None;
+                    job.progress = None;
+                    job.control = None;
+                    self.terminal_status = job.detail.clone();
+                    if files.is_empty() {
+                        self.terminal_status =
+                            "ZMODEM upload cancelled — all conflicting files skipped".to_string();
+                    } else {
+                        zmodem_upload_after_probe = Some((session_id, files));
+                    }
+                }
                 TransferJobEvent::Finished(Err(error)) => {
                     let property_remote_path = match &job.kind {
                         TransferJobKind::LoadProperties { remote_path }
@@ -550,6 +577,9 @@ impl NyaTermApp {
             }
             if let Some((job_id, remote_path, local_path)) = external_sync_to_start {
                 self.spawn_external_editor_sync_upload(job_id, remote_path, local_path);
+            }
+            if let Some((session_id, files)) = zmodem_upload_after_probe {
+                self.begin_zmodem_upload_after_probe(session_id, files, cx);
             }
         }
     }

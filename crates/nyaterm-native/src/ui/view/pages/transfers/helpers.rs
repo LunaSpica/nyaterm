@@ -874,6 +874,7 @@ pub(super) fn transfer_direction_label(kind: &TransferJobKind) -> &'static str  
         TransferJobKind::AiFileAction { .. } => "AI",
         TransferJobKind::ZmodemUpload { .. } => "Z↑",
         TransferJobKind::ZmodemDownload { .. } => "Z↓",
+        TransferJobKind::ZmodemConflictProbe { .. } => "Z?",
     }
 }
 

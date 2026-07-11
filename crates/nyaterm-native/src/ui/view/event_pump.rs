@@ -81,7 +81,7 @@ impl NyaTermApp {
         self.drain_translate_events();
         self.drain_update_events();
         self.drain_docker_events();
-        self.drain_transfer_events();
+        self.drain_transfer_events(cx);
         self.drain_ai_discovery_events();
         self.drain_ai_chat_events(cx);
         self.drive_ai_agent_loop(cx);

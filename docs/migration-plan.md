@@ -1216,3 +1216,9 @@ service boundary first:
   save/restore cursor.
 - Native UI sends SGR/legacy mouse reports for click/wheel when reporting is active,
   matching xterm apps (vim/less/tmux) instead of local selection/scroll.
+
+## 2026-07-11 ZMODEM SFTP conflict probe before rz
+
+- Native ZMODEM uploads now probe the remote CWD via SFTP before sending `rz`,
+  applying the transfer duplicate policy (ask/skip/overwrite/rename) like Tauri
+  `probeAndResolveRemoteConflicts`. Probe failures skip detection and proceed.
