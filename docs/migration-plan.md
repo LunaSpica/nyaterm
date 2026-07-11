@@ -1116,4 +1116,6 @@ service boundary first:
 - Smart input click: mouse-up on the tracked command line repositions the shell
   cursor with CSI left/right moves; finishing a selection fully inside the input
   collapses the caret and clears the selection (Tauri mouse smart-cursor path).
+- Paste into a smart input selection replaces the range (Tauri pasteText path).
+- Terminal Enter now sends CR (`\r`) like xterm/Tauri instead of LF.
 

@@ -566,7 +566,7 @@ pub(super) fn terminal_key_bytes(event: &KeyDownEvent) -> Option<Vec<u8>> {
     }
 
     match keystroke.key.as_str() {
-        "enter" => return Some(b"\n".to_vec()),
+        "enter" => return Some(b"\r".to_vec()),
         "backspace" => return Some(vec![0x7f]),
         "tab" => return Some(b"\t".to_vec()),
         "escape" => return Some(vec![0x1b]),

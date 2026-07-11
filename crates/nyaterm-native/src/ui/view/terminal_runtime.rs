@@ -210,6 +210,12 @@ impl NyaTermApp {
             return;
         }
         let payload = normalize_paste_newlines(&text);
+        // Tauri pasteText: replace smart input selection when present.
+        if let Some(selected) = self.smart_cursor_selected_input_range() {
+            if self.replace_smart_input_selection(selected, &payload, cx) {
+                return;
+            }
+        }
         self.send_terminal_input(self.wrap_terminal_paste_bytes(&payload), cx);
     }
 
