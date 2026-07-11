@@ -14,7 +14,7 @@ impl NyaTermApp {
         );
         let total_commands = self.quick_commands.len();
         let visible_commands = filtered_commands.len();
-        let pinned_commands = self
+        let _pinned_commands = self
             .quick_commands
             .iter()
             .filter(|command| command.pinned.unwrap_or_default())
@@ -29,7 +29,7 @@ impl NyaTermApp {
             > 1;
 
         let mut category_sidebar = div()
-            .w(px(176.))
+            .w(px(140.))
             .flex_shrink_0()
             .pr_2()
             .border_r_1()
@@ -623,199 +623,167 @@ impl NyaTermApp {
             }
         }
 
+        // Tauri QuickCommands: PanelHeader-like strip with search + compact actions,
+        // then category sidebar + command list (no page metrics cards).
         div()
             .size_full()
+            .flex()
+            .flex_col()
             .overflow_hidden()
             .bg(rgb(0x161b22))
-            .p_3()
             .child(
                 div()
+                    .h(px(36.))
+                    .flex_none()
+                    .px_2()
+                    .border_b_1()
+                    .border_color(rgb(0x30363d))
+                    .bg(rgb(0x12171f))
                     .flex()
                     .items_center()
-                    .justify_between()
                     .gap_2()
                     .child(
                         div()
-                            .text_sm()
+                            .text_size(px(11.))
                             .font_weight(FontWeight(700.))
-                            .child("Quick Commands"),
+                            .text_color(rgb(0x8b949e))
+                            .child("QUICK COMMANDS"),
                     )
                     .child(
                         div()
-                            .flex()
-                            .items_center()
-                            .gap_2()
-                            .child(status_pill(
-                                if self.quick_command_search_draft.trim().is_empty()
-                                    && self.quick_command_selected_category == "all"
-                                {
-                                    "all"
-                                } else {
-                                    "filtered"
-                                },
-                                rgb(0x58a6ff),
-                                rgb(0x12171f),
-                            ))
-                            .child(small_button(
-                                "quick-command-add",
-                                "Add",
-                                cx.listener(|this, _, window, cx| {
-                                    this.open_new_quick_command_editor(window, cx);
-                                }),
-                            ))
-                            .child(small_button(
-                                "quick-command-import",
-                                if self.quick_command_import_path_prompt.is_some() {
-                                    "Importing"
-                                } else {
-                                    "Import"
-                                },
-                                cx.listener(|this, _, window, cx| {
-                                    this.open_quick_command_import_dialog(window, cx);
-                                }),
-                            ))
-                            .child(small_button(
-                                "quick-command-refresh",
-                                "Refresh",
-                                cx.listener(|this, _, _, cx| {
-                                    this.refresh_quick_commands();
-                                    this.terminal_status = "quick commands refreshed".to_string();
-                                    cx.notify();
-                                }),
-                            )),
-                    ),
-            )
-            .child(
-                div()
-                    .mt_3()
-                    .grid()
-                    .grid_cols(3)
-                    .gap_2()
-                    .child(metric("Total", total_commands.to_string()))
-                    .child(metric("Visible", visible_commands.to_string()))
-                    .child(metric("Pinned", pinned_commands.to_string())),
-            )
-            .child(
-                transfer_input(
-                    "quick-command-search-input",
-                    "Search Quick Commands",
-                    self.quick_command_search_draft.clone(),
-                    true,
-                )
-                .mt_3()
-                .track_focus(&self.quick_command_search_focus)
-                .on_click(cx.listener(|this, _, window, cx| {
-                    window.focus(&this.quick_command_search_focus);
-                    cx.notify();
-                }))
-                .on_key_down(cx.listener(|this, event: &KeyDownEvent, _, cx| {
-                    cx.stop_propagation();
-                    this.handle_quick_command_search_key_down(event, cx);
-                })),
-            )
-            .child(
-                div()
-                    .mt_3()
-                    .flex()
-                    .items_center()
-                    .justify_between()
-                    .gap_3()
-                    .flex_wrap()
-                    .child(
-                        div()
-                            .flex()
-                            .items_center()
-                            .gap_2()
-                            .child(
-                                div()
-                                    .text_size(px(10.))
-                                    .text_color(rgb(0x6e7681))
-                                    .child("View"),
-                            )
-                            .child(mode_button(
-                                "quick-command-view-list",
-                                "List",
-                                self.quick_command_view_mode == QuickCommandViewMode::List,
-                                cx.listener(|this, _, _, cx| {
-                                    this.set_quick_command_view_mode(
-                                        QuickCommandViewMode::List,
-                                        cx,
-                                    );
-                                }),
-                            ))
-                            .child(mode_button(
-                                "quick-command-view-compact",
-                                "Compact",
-                                self.quick_command_view_mode == QuickCommandViewMode::Compact,
-                                cx.listener(|this, _, _, cx| {
-                                    this.set_quick_command_view_mode(
-                                        QuickCommandViewMode::Compact,
-                                        cx,
-                                    );
-                                }),
-                            ))
-                            .child(mode_button(
-                                "quick-command-view-tile",
-                                "Tile",
-                                self.quick_command_view_mode == QuickCommandViewMode::Tile,
-                                cx.listener(|this, _, _, cx| {
-                                    this.set_quick_command_view_mode(
-                                        QuickCommandViewMode::Tile,
-                                        cx,
-                                    );
-                                }),
-                            )),
+                            .text_size(px(11.))
+                            .text_color(rgb(0x6e7681))
+                            .child(if visible_commands == total_commands {
+                                total_commands.to_string()
+                            } else {
+                                format!("{visible_commands}/{total_commands}")
+                            }),
                     )
+                    .child(div().flex_1())
                     .child(
                         div()
+                            .id(SharedString::from("quick-command-search-input"))
+                            .h(px(26.))
+                            .w(px(144.))
+                            .rounded_md()
+                            .border_1()
+                            .border_color(rgb(0x30363d))
+                            .bg(rgb(0x0d1117))
+                            .px_2()
                             .flex()
                             .items_center()
-                            .gap_2()
+                            .gap_1()
+                            .cursor_text()
+                            .track_focus(&self.quick_command_search_focus)
+                            .on_click(cx.listener(|this, _, window, cx| {
+                                window.focus(&this.quick_command_search_focus);
+                                cx.notify();
+                            }))
+                            .on_key_down(cx.listener(|this, event: &KeyDownEvent, _, cx| {
+                                cx.stop_propagation();
+                                this.handle_quick_command_search_key_down(event, cx);
+                            }))
+                            .child(
+                                svg()
+                                    .size(px(14.))
+                                    .flex_none()
+                                    .path("icons/fe/search.svg")
+                                    .text_color(rgb(0x8b949e)),
+                            )
                             .child(
                                 div()
-                                    .text_size(px(10.))
-                                    .text_color(rgb(0x6e7681))
-                                    .child("Sort"),
-                            )
-                            .child(mode_button(
-                                "quick-command-sort-created",
-                                "Created",
-                                self.quick_command_sort_mode == QuickCommandSortMode::Created,
-                                cx.listener(|this, _, _, cx| {
-                                    this.set_quick_command_sort_mode(
-                                        QuickCommandSortMode::Created,
-                                        cx,
-                                    );
-                                }),
-                            ))
-                            .child(mode_button(
-                                "quick-command-sort-name",
-                                "Name",
-                                self.quick_command_sort_mode == QuickCommandSortMode::Name,
-                                cx.listener(|this, _, _, cx| {
-                                    this.set_quick_command_sort_mode(QuickCommandSortMode::Name, cx);
-                                }),
-                            ))
-                            .child(mode_button(
-                                "quick-command-sort-usage",
-                                "Usage",
-                                self.quick_command_sort_mode == QuickCommandSortMode::Usage,
-                                cx.listener(|this, _, _, cx| {
-                                    this.set_quick_command_sort_mode(
-                                        QuickCommandSortMode::Usage,
-                                        cx,
-                                    );
-                                }),
-                            )),
-                    ),
+                                    .min_w_0()
+                                    .flex_1()
+                                    .text_size(px(11.))
+                                    .text_color(if self.quick_command_search_draft.is_empty() {
+                                        rgb(0x6e7681)
+                                    } else {
+                                        rgb(0xc9d1d9)
+                                    })
+                                    .child(if self.quick_command_search_draft.is_empty() {
+                                        "Search".to_string()
+                                    } else {
+                                        truncate_preview(&self.quick_command_search_draft, 18)
+                                    }),
+                            ),
+                    )
+                    .child(mode_button(
+                        "quick-command-view-list",
+                        "List",
+                        self.quick_command_view_mode == QuickCommandViewMode::List,
+                        cx.listener(|this, _, _, cx| {
+                            this.set_quick_command_view_mode(QuickCommandViewMode::List, cx);
+                        }),
+                    ))
+                    .child(mode_button(
+                        "quick-command-view-compact",
+                        "Cmp",
+                        self.quick_command_view_mode == QuickCommandViewMode::Compact,
+                        cx.listener(|this, _, _, cx| {
+                            this.set_quick_command_view_mode(QuickCommandViewMode::Compact, cx);
+                        }),
+                    ))
+                    .child(mode_button(
+                        "quick-command-view-tile",
+                        "Tile",
+                        self.quick_command_view_mode == QuickCommandViewMode::Tile,
+                        cx.listener(|this, _, _, cx| {
+                            this.set_quick_command_view_mode(QuickCommandViewMode::Tile, cx);
+                        }),
+                    ))
+                    .child(mode_button(
+                        "quick-command-sort-created",
+                        "New",
+                        self.quick_command_sort_mode == QuickCommandSortMode::Created,
+                        cx.listener(|this, _, _, cx| {
+                            this.set_quick_command_sort_mode(QuickCommandSortMode::Created, cx);
+                        }),
+                    ))
+                    .child(mode_button(
+                        "quick-command-sort-name",
+                        "Name",
+                        self.quick_command_sort_mode == QuickCommandSortMode::Name,
+                        cx.listener(|this, _, _, cx| {
+                            this.set_quick_command_sort_mode(QuickCommandSortMode::Name, cx);
+                        }),
+                    ))
+                    .child(mode_button(
+                        "quick-command-sort-usage",
+                        "Use",
+                        self.quick_command_sort_mode == QuickCommandSortMode::Usage,
+                        cx.listener(|this, _, _, cx| {
+                            this.set_quick_command_sort_mode(QuickCommandSortMode::Usage, cx);
+                        }),
+                    ))
+                    .child(small_button(
+                        "quick-command-add",
+                        "Add",
+                        cx.listener(|this, _, window, cx| {
+                            this.open_new_quick_command_editor(window, cx);
+                        }),
+                    ))
+                    .child(small_button(
+                        "quick-command-import",
+                        if self.quick_command_import_path_prompt.is_some() {
+                            "..."
+                        } else {
+                            "Import"
+                        },
+                        cx.listener(|this, _, window, cx| {
+                            this.open_quick_command_import_dialog(window, cx);
+                        }),
+                    )),
             )
             .child(
                 div()
-                    .mt_4()
+                    .flex_1()
+                    .min_h_0()
+                    .p_2()
                     .flex()
                     .items_start()
-                    .gap_3()
+                    .gap_2()
                     .child(category_sidebar)
+
                     .child(
                         div()
                             .min_w_0()
@@ -838,7 +806,15 @@ impl NyaTermApp {
                                         )),
                                 )
                             })
-                            .child(rows),
+                            .child(
+                                div()
+                                    .id(SharedString::from("quick-command-rows-scroll"))
+                                    .flex_1()
+                                    .min_h_0()
+                                    .overflow_scroll()
+                                    .scrollbar_width(px(6.))
+                                    .child(rows),
+                            ),
                     ),
             )
     }
