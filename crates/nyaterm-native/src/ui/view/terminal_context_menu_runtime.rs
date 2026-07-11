@@ -90,11 +90,21 @@ impl NyaTermApp {
             };
         let _ = selection_link_kind;
 
+        let (viewport_w, viewport_h) = self.last_viewport_size;
+        // Approximate height from max-h for clamp (scrollable menus can be shorter).
+        let (menu_x, menu_y) = clamp_menu_position(
+            f32::from(menu.x),
+            f32::from(menu.y),
+            248.,
+            420.,
+            viewport_w,
+            viewport_h,
+        );
         let mut items = div()
             .id(SharedString::from("terminal-context-menu"))
             .absolute()
-            .top(menu.y)
-            .left(menu.x)
+            .top(px(menu_y))
+            .left(px(menu_x))
             .w(px(248.))
             .max_h(px(420.))
             .overflow_y_scroll()
@@ -242,13 +252,15 @@ impl NyaTermApp {
                             "term-ctx-translate",
                             "Translate Selection",
                             None,
-                            cx.listener(move |this, _, _, cx| {
+                            cx.listener(move |this, _, window, cx| {
                                 this.close_terminal_context_menu(cx);
-                                this.translate_input = selected.clone();
-                                this.translate_result = None;
-                                this.translate_status =
-                                    "selection loaded for translation".to_string();
-                                this.select(NavItem::Translation, cx);
+                                this.open_translation_dialog(
+                                    selected.clone(),
+                                    this.translate_provider.clone(),
+                                    "Default".to_string(),
+                                    window,
+                                    cx,
+                                );
                             }),
                         )
                         .into_any_element()]
@@ -262,15 +274,15 @@ impl NyaTermApp {
                                     format!("term-ctx-translate-{id}"),
                                     format!("Translate · {label}"),
                                     None,
-                                    cx.listener(move |this, _, _, cx| {
+                                    cx.listener(move |this, _, window, cx| {
                                         this.close_terminal_context_menu(cx);
-                                        this.translate_provider = id.clone();
-                                        this.translate_input = selected.clone();
-                                        this.translate_result = None;
-                                        this.translate_status = format!(
-                                            "selection loaded for {label} translation"
+                                        this.open_translation_dialog(
+                                            selected.clone(),
+                                            id.clone(),
+                                            label.clone(),
+                                            window,
+                                            cx,
                                         );
-                                        this.select(NavItem::Translation, cx);
                                     }),
                                 )
                                 .into_any_element()
@@ -419,11 +431,20 @@ impl NyaTermApp {
         let Some(menu) = self.action_link_menu.clone() else {
             return div().into_any_element();
         };
+        let (viewport_w, viewport_h) = self.last_viewport_size;
+        let (menu_x, menu_y) = clamp_menu_position(
+            f32::from(menu.x),
+            f32::from(menu.y),
+            260.,
+            360.,
+            viewport_w,
+            viewport_h,
+        );
         let mut items = div()
             .id(SharedString::from("action-link-menu"))
             .absolute()
-            .top(menu.y)
-            .left(menu.x)
+            .top(px(menu_y))
+            .left(px(menu_x))
             .w(px(260.))
             .max_h(px(360.))
             .overflow_y_scroll()
@@ -648,6 +669,14 @@ impl NyaTermApp {
             .into_any_element()
     }
 
+}
+
+
+fn clamp_menu_position(x: f32, y: f32, menu_w: f32, menu_h: f32, viewport_w: f32, viewport_h: f32) -> (f32, f32) {
+    let margin = 8.0;
+    let max_x = (viewport_w - menu_w - margin).max(margin);
+    let max_y = (viewport_h - menu_h - margin).max(margin);
+    (x.clamp(margin, max_x), y.clamp(margin, max_y))
 }
 
 fn terminal_ctx_item(

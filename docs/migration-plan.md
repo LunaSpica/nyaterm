@@ -986,3 +986,11 @@ service boundary first:
   value, Ctrl/Cmd+click default action preview, and Alt+click more-actions hint.
 - Tooltip tracks cursor position, clears on leave/menu/selection drag, and stays
   hidden while context/action menus are open.
+
+## 2026-07-11 Translation dialog + menu clamp
+
+- Terminal context-menu Translate items open a modal Translation dialog (source,
+  provider badge, loading/error/result, copy/close) instead of navigating away
+  from the terminal workspace to the Translation settings page.
+- Context menu and action-link multi-action menu positions clamp to the last
+  known window viewport size so they stay on-screen near edges.

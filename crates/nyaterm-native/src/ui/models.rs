@@ -1107,6 +1107,13 @@ pub(super) struct ActionLinkTooltipState {
     pub(super) match_key: String,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(super) struct TranslationDialogState {
+    pub(super) source_text: String,
+    pub(super) provider: String,
+    pub(super) provider_label: String,
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub(super) struct TerminalContextMenuState {
     pub(super) x: Pixels,

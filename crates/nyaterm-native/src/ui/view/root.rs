@@ -7,6 +7,8 @@ use gpui::{
 impl Render for NyaTermApp {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         self.ensure_event_pump(window, cx);
+        let vs = window.viewport_size();
+        self.last_viewport_size = (f32::from(vs.width), f32::from(vs.height));
         if self.ai_chat_focus_pending {
             window.focus(&self.ai_chat_focus);
             self.ai_chat_focus_pending = false;
@@ -219,9 +221,13 @@ impl Render for NyaTermApp {
             .when(
                 self.action_link_tooltip.is_some()
                     && self.action_link_menu.is_none()
-                    && self.terminal_context_menu.is_none(),
+                    && self.terminal_context_menu.is_none()
+                    && self.translation_dialog.is_none(),
                 |this| this.child(self.action_link_tooltip_overlay(cx)),
             )
+            .when(self.translation_dialog.is_some(), |this| {
+                this.child(self.translation_dialog_overlay(cx))
+            })
             .when(self.sync_groups_open, |this| {
                 this.child(self.sync_groups_overlay(cx))
             })
