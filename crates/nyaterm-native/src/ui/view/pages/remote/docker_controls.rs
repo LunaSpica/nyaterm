@@ -6,9 +6,16 @@ pub(in crate::ui::view::pages::remote) fn docker_tab_bar(
     cx: &mut Context<NyaTermApp>,
 ) -> impl IntoElement {
     div()
+        .h(px(30.))
+        .flex_none()
+        .px_1()
+        .border_b_1()
+        .border_color(rgb(0x30363d))
+        .bg(rgb(0x0d1117))
         .flex()
         .items_center()
-        .gap_2()
+        .gap_1()
+        .overflow_hidden()
         .child(docker_tab_button(
             "docker-tab-containers",
             format!(

@@ -100,8 +100,8 @@ impl NyaTermApp {
             .flex()
             .flex_col()
             .border_t_1()
-            .border_color(rgb(0x202633))
-            .bg(rgb(0x11151c))
+            .border_color(rgb(0x30363d))
+            .bg(rgb(0x161b22))
             .p_3()
             .child(
                 div()
@@ -118,20 +118,20 @@ impl NyaTermApp {
                                 div()
                                     .text_xs()
                                     .font_weight(FontWeight(800.))
-                                    .text_color(rgb(0x9ca3af))
+                                    .text_color(rgb(0x8b949e))
                                     .child("Command Send"),
                             )
                             .child(status_pill(
                                 target_status,
                                 if self.active_session_id.is_some() {
-                                    rgb(0x6ee7b7)
+                                    rgb(0x3fb950)
                                 } else {
-                                    rgb(0xfca5a5)
+                                    rgb(0xff7b72)
                                 },
                                 if self.active_session_id.is_some() {
-                                    rgb(0x143126)
+                                    rgb(0x12261a)
                                 } else {
-                                    rgb(0x3a1717)
+                                    rgb(0x3d1418)
                                 },
                             )),
                     )
@@ -399,7 +399,7 @@ impl NyaTermApp {
                                 div()
                                     .text_xs()
                                     .text_color(if validation_error {
-                                        rgb(0xfca5a5)
+                                        rgb(0xff7b72)
                                     } else {
                                         rgb(0x98a3b8)
                                     })

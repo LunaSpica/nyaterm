@@ -166,50 +166,52 @@ impl NyaTermApp {
             return;
         }
 
-        match self.selected_nav {
-            NavItem::Stats
-                if self.settings.ui_show_remote_stats
-                    && !self.stats_pending
-                    && remote_refresh_due(
-                        self.stats_last_refresh_at,
-                        self.settings.ui_remote_stats_interval.max(1),
-                    ) =>
+        let left_panel = self.current_left_panel();
+        let right_panel = self.current_right_panel();
+
+        if right_panel == Some(NavItem::Stats)
+            && self.settings.ui_show_remote_stats
+            && !self.stats_pending
+            && remote_refresh_due(
+                self.stats_last_refresh_at,
+                self.settings.ui_remote_stats_interval.max(1),
+            )
+        {
+            self.refresh_stats(window, cx);
+        } else if right_panel == Some(NavItem::Processes)
+            && self.settings.ui_show_process_manager
+            && !self.process_pending
+            && remote_refresh_due(
+                self.process_last_refresh_at,
+                self.settings.ui_process_manager_interval.max(3),
+            )
+        {
+            self.refresh_processes(window, cx);
+        } else if right_panel == Some(NavItem::Docker)
+            && self.settings.ui_show_docker_manager
+            && !self.docker_pending
+        {
+            let interval = self.settings.ui_docker_manager_interval.max(3);
+            if remote_refresh_due(self.docker_last_refresh_at, interval) {
+                self.refresh_docker(window, cx);
+            } else if self.docker_details.is_some()
+                && remote_refresh_due(self.docker_details_last_refresh_at, interval)
+                && let Some(container_id) = self.docker_details_container_id.clone()
             {
-                self.refresh_stats(window, cx);
+                self.load_docker_details(container_id, window, cx);
             }
-            NavItem::Processes
-                if self.settings.ui_show_process_manager
-                    && !self.process_pending
-                    && remote_refresh_due(
-                        self.process_last_refresh_at,
-                        self.settings.ui_process_manager_interval.max(3),
-                    ) =>
-            {
-                self.refresh_processes(window, cx);
-            }
-            NavItem::Docker if self.settings.ui_show_docker_manager && !self.docker_pending => {
-                let interval = self.settings.ui_docker_manager_interval.max(3);
-                if remote_refresh_due(self.docker_last_refresh_at, interval) {
-                    self.refresh_docker(window, cx);
-                } else if self.docker_details.is_some()
-                    && remote_refresh_due(self.docker_details_last_refresh_at, interval)
-                    && let Some(container_id) = self.docker_details_container_id.clone()
-                {
-                    self.load_docker_details(container_id, window, cx);
-                }
-            }
-            NavItem::Transfers
-                if self.transfer_browser_auto_sync_cwd_enabled()
-                    && !self.transfer_sync_cwd_job_running()
-                    && remote_refresh_due(
-                        self.transfer_auto_sync_cwd_last_at,
-                        TRANSFER_AUTO_SYNC_CWD_INTERVAL_SECONDS,
-                    ) =>
-            {
-                self.transfer_auto_sync_cwd_last_at = Some(Instant::now());
-                self.start_transfer_sync_cwd_job(window, cx);
-            }
-            _ => {}
+        }
+
+        if left_panel == Some(NavItem::Transfers)
+            && self.transfer_browser_auto_sync_cwd_enabled()
+            && !self.transfer_sync_cwd_job_running()
+            && remote_refresh_due(
+                self.transfer_auto_sync_cwd_last_at,
+                TRANSFER_AUTO_SYNC_CWD_INTERVAL_SECONDS,
+            )
+        {
+            self.transfer_auto_sync_cwd_last_at = Some(Instant::now());
+            self.start_transfer_sync_cwd_job(window, cx);
         }
     }
 }

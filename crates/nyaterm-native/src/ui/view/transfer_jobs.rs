@@ -17,7 +17,7 @@ impl NyaTermApp {
     ) {
         let Some(config) = self.active_ssh_config.clone() else {
             self.terminal_status = "start an SSH session first".to_string();
-            self.selected_nav = NavItem::Transfers;
+            self.ensure_panel_open(NavItem::Transfers);
             cx.notify();
             return;
         };
@@ -68,7 +68,7 @@ impl NyaTermApp {
         }
         let Some(config) = self.active_ssh_config.clone() else {
             self.terminal_status = "start an SSH session first".to_string();
-            self.selected_nav = NavItem::Transfers;
+            self.ensure_panel_open(NavItem::Transfers);
             cx.notify();
             return;
         };
@@ -220,7 +220,7 @@ impl NyaTermApp {
     ) {
         let Some(config) = self.active_ssh_config.clone() else {
             self.terminal_status = "start an SSH session first".to_string();
-            self.selected_nav = NavItem::Transfers;
+            self.ensure_panel_open(NavItem::Transfers);
             cx.notify();
             return;
         };
@@ -314,7 +314,7 @@ impl NyaTermApp {
     ) {
         let Some(config) = self.active_ssh_config.clone() else {
             self.terminal_status = "start an SSH session first".to_string();
-            self.selected_nav = NavItem::Transfers;
+            self.ensure_panel_open(NavItem::Transfers);
             cx.notify();
             return;
         };
@@ -490,7 +490,7 @@ impl NyaTermApp {
     ) {
         let Some(config) = self.active_ssh_config.clone() else {
             self.terminal_status = "start an SSH session first".to_string();
-            self.selected_nav = NavItem::Transfers;
+            self.ensure_panel_open(NavItem::Transfers);
             cx.notify();
             return;
         };

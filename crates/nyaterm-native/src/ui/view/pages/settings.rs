@@ -57,33 +57,61 @@ impl NyaTermApp {
             .flex()
             .flex_col()
             .size_full()
-            .p_5()
-            .gap_4()
-            .child(section_header(
-                "Settings",
-                "Native settings backed by the legacy-compatible redb document.",
-            ))
+            .bg(rgb(0x0d1117))
+            .child(
+                div()
+                    .h(px(44.))
+                    .flex()
+                    .items_center()
+                    .justify_between()
+                    .px_4()
+                    .border_b_1()
+                    .border_color(rgb(0x30363d))
+                    .bg(rgb(0x161b22))
+                    .child(
+                        div()
+                            .text_sm()
+                            .font_weight(FontWeight(800.))
+                            .text_color(rgb(0xc9d1d9))
+                            .child("Settings"),
+                    )
+                    .child(small_button(
+                        "settings-close",
+                        "Back",
+                        cx.listener(|this, _, _, cx| {
+                            this.close_settings(cx);
+                        }),
+                    )),
+            )
             .child(
                 div()
                     .flex()
+                    .flex_1()
                     .min_h(px(0.))
                     .size_full()
-                    .gap_4()
                     .child(self.settings_sidebar(cx))
-                    .child(self.settings_active_panel(backup_snapshot_prompt, cx)),
+                    .child(
+                        div()
+                            .flex_1()
+                            .min_w_0()
+                            .min_h_0()
+                            .overflow_hidden()
+                            .p_4()
+                            .bg(rgb(0x0d1117))
+                            .child(self.settings_active_panel(backup_snapshot_prompt, cx)),
+                    ),
             )
     }
 
     fn settings_sidebar(&mut self, cx: &mut Context<Self>) -> impl IntoElement {
         div()
-            .w(px(248.))
+            .w(px(240.))
             .flex_none()
-            .rounded_md()
-            .border_1()
-            .border_color(rgb(0x2a3140))
-            .bg(rgb(0x10151e))
+            .border_r_1()
+            .border_color(rgb(0x30363d))
+            .bg(rgb(0x161b22))
             .p_3()
-            .child(settings_category_header("Workspace", "WS", rgb(0x93c5fd)))
+            .child(settings_category_header("Workspace", "WS", rgb(0x58a6ff)))
             .child(self.settings_tab_button(SettingsTab::General, "settings-tab-general", cx))
             .child(self.settings_tab_button(SettingsTab::Appearance, "settings-tab-appearance", cx))
             .child(self.settings_tab_button(
@@ -99,7 +127,7 @@ impl NyaTermApp {
             .child(settings_category_header(
                 "Terminal Session",
                 "TM",
-                rgb(0x6ee7b7),
+                rgb(0x3fb950),
             ))
             .child(self.settings_tab_button(
                 SettingsTab::TerminalGeneral,
@@ -112,15 +140,15 @@ impl NyaTermApp {
                 "settings-tab-translation",
                 cx,
             ))
-            .child(settings_category_header("AI", "AI", rgb(0xc4b5fd)))
+            .child(settings_category_header("AI", "AI", rgb(0xbc8cff)))
             .child(self.settings_tab_button(SettingsTab::AiGeneral, "settings-tab-ai-general", cx))
             .child(self.settings_tab_button(SettingsTab::AiModels, "settings-tab-ai-models", cx))
             .child(self.settings_tab_button(SettingsTab::AiRules, "settings-tab-ai-rules", cx))
-            .child(settings_category_header("Transfer", "TF", rgb(0x93c5fd)))
+            .child(settings_category_header("Transfer", "TF", rgb(0x58a6ff)))
             .child(self.settings_tab_button(SettingsTab::Transfer, "settings-tab-transfer", cx))
-            .child(settings_category_header("Security", "SC", rgb(0xfacc15)))
+            .child(settings_category_header("Security", "SC", rgb(0xd29922)))
             .child(self.settings_tab_button(SettingsTab::Security, "settings-tab-security", cx))
-            .child(settings_category_header("Sync Backup", "BK", rgb(0x6ee7b7)))
+            .child(settings_category_header("Sync Backup", "BK", rgb(0x3fb950)))
             .child(self.settings_tab_button(
                 SettingsTab::SyncBackup,
                 "settings-tab-sync-backup",
@@ -154,7 +182,7 @@ impl NyaTermApp {
             .bg(if selected {
                 rgb(0x173823)
             } else {
-                rgb(0x10151e)
+                rgb(0x0d1117)
             })
             .text_color(if selected {
                 rgb(0xbbf7d0)
@@ -171,7 +199,7 @@ impl NyaTermApp {
             .hover(|this| this.bg(rgb(0x1a2230)))
             .child(tab.label())
             .when(selected, |this| {
-                this.child(div().size(px(6.)).rounded_full().bg(rgb(0x6ee7b7)))
+                this.child(div().size(px(6.)).rounded_full().bg(rgb(0x3fb950)))
             })
             .on_click(cx.listener(move |this, _, _, cx| {
                 this.settings_active_tab = tab;
@@ -192,7 +220,7 @@ impl NyaTermApp {
             .flex_1()
             .rounded_md()
             .border_1()
-            .border_color(rgb(0x2a3140))
+            .border_color(rgb(0x30363d))
             .bg(rgb(0x0f141d))
             .p_4()
             .child(
@@ -220,7 +248,7 @@ impl NyaTermApp {
                                     .child(active_tab.group_label()),
                             ),
                     )
-                    .child(status_pill("native", rgb(0x93c5fd), rgb(0x17253b))),
+                    .child(status_pill("native", rgb(0x58a6ff), rgb(0x17253b))),
             )
             .child(div().mt_4().flex().flex_col().gap_4().child(content))
     }

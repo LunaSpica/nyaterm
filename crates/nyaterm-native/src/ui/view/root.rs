@@ -19,8 +19,8 @@ impl Render for NyaTermApp {
             .id(SharedString::from("nyaterm-root"))
             .size_full()
             .relative()
-            .bg(rgb(0x0f1117))
-            .text_color(rgb(0xe5e7eb))
+            .bg(rgb(0x0d1117))
+            .text_color(rgb(0xc9d1d9))
             .font_family("JetBrains Mono")
             .on_click(cx.listener(|this, _, _, _| {
                 this.mark_user_activity();
@@ -32,17 +32,25 @@ impl Render for NyaTermApp {
             }))
             .on_mouse_move(cx.listener(|this, event: &MouseMoveEvent, _, cx| {
                 this.update_transfer_browser_column_resize(event, cx);
+                this.update_panel_resize(event, cx);
+                this.update_transfer_height_resize(event, cx);
+                this.update_panel_stack_resize(event, cx);
+                this.update_workspace_split_resize(event, cx);
             }))
             .on_mouse_up(
                 MouseButton::Left,
                 cx.listener(|this, event: &MouseUpEvent, _, cx| {
                     this.finish_transfer_browser_column_resize(event, cx);
+                    this.finish_panel_resize(event, cx);
+                    this.finish_transfer_height_resize(event, cx);
+                    this.finish_panel_stack_resize(event, cx);
+                    this.finish_workspace_split_resize(event, cx);
                 }),
             )
             .on_mouse_up(
                 MouseButton::Navigate(NavigationDirection::Back),
                 cx.listener(|this, _event: &MouseUpEvent, window, cx| {
-                    if this.selected_nav == NavItem::Transfers {
+                    if this.current_left_panel() == Some(NavItem::Transfers) {
                         cx.stop_propagation();
                         this.open_transfer_browser_history(1, window, cx);
                     }
@@ -51,7 +59,7 @@ impl Render for NyaTermApp {
             .on_mouse_up(
                 MouseButton::Navigate(NavigationDirection::Forward),
                 cx.listener(|this, _event: &MouseUpEvent, window, cx| {
-                    if this.selected_nav == NavItem::Transfers {
+                    if this.current_left_panel() == Some(NavItem::Transfers) {
                         cx.stop_propagation();
                         this.open_transfer_browser_history(-1, window, cx);
                     }
@@ -64,17 +72,35 @@ impl Render for NyaTermApp {
                     .size_full()
                     .child(self.title_bar(cx))
                     .child(
-                        div()
-                            .flex()
-                            .flex_1()
-                            .min_h_0()
-                            .bg(rgb(0x0b0e14))
-                            .child(self.activity_bar(ActivitySide::Left, cx))
-                            .when(!self.left_sidebar_collapsed, |this| {
-                                this.child(self.sidebar(cx))
-                            })
-                            .child(self.main_surface(cx))
-                            .child(self.activity_bar(ActivitySide::Right, cx)),
+                        if self.main_mode == MainMode::Page
+                            && self.selected_nav == NavItem::Settings
+                        {
+                            div()
+                                .flex()
+                                .flex_1()
+                                .min_h_0()
+                                .bg(rgb(0x0d1117))
+                                .child(self.settings_view(cx))
+                                .into_any_element()
+                        } else {
+                            div()
+                                .flex()
+                                .flex_1()
+                                .min_h_0()
+                                .bg(rgb(0x0d1117))
+                                .child(self.activity_bar(ActivitySide::Left, cx))
+                                .when(self.left_side_open(), |this| {
+                                    this.child(self.sidebar(cx))
+                                        .child(self.panel_resize_handle(PanelResizeSide::Left, cx))
+                                })
+                                .child(self.main_surface(cx))
+                                .when(self.right_side_open(), |this| {
+                                    this.child(self.panel_resize_handle(PanelResizeSide::Right, cx))
+                                        .child(self.right_panel(cx))
+                                })
+                                .child(self.activity_bar(ActivitySide::Right, cx))
+                                .into_any_element()
+                        },
                     )
                     .child(self.status_bar(cx)),
             );
@@ -168,6 +194,9 @@ impl Render for NyaTermApp {
             })
             .when(self.quick_switch_open, |this| {
                 this.child(self.quick_switch_overlay(cx))
+            })
+            .when(self.activity_bar_context_menu.is_some(), |this| {
+                this.child(self.activity_bar_context_menu_overlay(cx))
             })
             .when(self.is_locked, |this| {
                 this.child(self.lock_screen_overlay(cx))

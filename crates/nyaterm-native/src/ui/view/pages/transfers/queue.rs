@@ -21,113 +21,33 @@ impl NyaTermApp {
             .iter()
             .any(|job| job.status == TransferJobStatus::Completed);
         let has_stopped = self.transfer_jobs.iter().any(|job| {
-            matches!(
+            !matches!(
                 job.status,
-                TransferJobStatus::Completed
-                    | TransferJobStatus::Failed
-                    | TransferJobStatus::Cancelled
+                TransferJobStatus::Running | TransferJobStatus::Paused | TransferJobStatus::Cancelling
             )
         });
+        let download_path = if self.transfer_local_path.trim().is_empty() {
+            "download path unset".to_string()
+        } else {
+            truncate_preview(&self.transfer_local_path, 48)
+        };
 
-        let mut jobs = div()
-            .id(SharedString::from("transfer-queue-list"))
-            .mt_3()
-            .flex()
-            .flex_col()
-            .gap_2()
-            .child(
+        let mut list = div().flex().flex_col();
+        if self.transfer_jobs.is_empty() {
+            list = list.child(
                 div()
                     .flex()
                     .items_center()
-                    .justify_between()
-                    .gap_3()
-                    .child(
-                        div()
-                            .text_xs()
-                            .font_weight(FontWeight(800.))
-                            .text_color(rgb(0x98a3b8))
-                            .child("Transfer Queue"),
-                    )
-                    .child(
-                        div()
-                            .flex()
-                            .items_center()
-                            .gap_1()
-                            .flex_wrap()
-                            .child(queue_action_button(
-                                "transfer-open-downloads",
-                                "Open Downloads",
-                                true,
-                                cx.listener(|this, _, _, cx| {
-                                    this.reveal_transfer_download_dir(cx);
-                                }),
-                            ))
-                            .child(queue_action_button(
-                                "transfer-pause-all",
-                                "Pause All",
-                                has_running,
-                                cx.listener(|this, _, _, cx| {
-                                    this.pause_all_transfer_jobs(cx);
-                                }),
-                            ))
-                            .child(queue_action_button(
-                                "transfer-resume-all",
-                                "Resume All",
-                                has_paused,
-                                cx.listener(|this, _, _, cx| {
-                                    this.resume_all_transfer_jobs(cx);
-                                }),
-                            ))
-                            .child(queue_action_button(
-                                "transfer-cancel-all",
-                                "Cancel All",
-                                has_active,
-                                cx.listener(|this, _, _, cx| {
-                                    this.cancel_all_transfer_jobs(cx);
-                                }),
-                            ))
-                            .child(queue_action_button(
-                                "transfer-clear-completed",
-                                "Clear Completed",
-                                has_completed,
-                                cx.listener(|this, _, _, cx| {
-                                    this.clear_completed_transfer_jobs(cx);
-                                }),
-                            ))
-                            .child(queue_action_button(
-                                "transfer-clear-stopped",
-                                "Clear All",
-                                has_stopped,
-                                cx.listener(|this, _, _, cx| {
-                                    this.clear_stopped_transfer_jobs(cx);
-                                }),
-                            )),
-                    ),
-            );
-        jobs = jobs
-            .track_focus(&self.transfer_queue_focus)
-            .on_click(cx.listener(|this, _, window, cx| {
-                window.focus(&this.transfer_queue_focus);
-                cx.notify();
-            }))
-            .on_key_down(cx.listener(|this, event: &KeyDownEvent, _, cx| {
-                this.handle_transfer_queue_key_down(event, cx);
-            }));
-        if self.transfer_jobs.is_empty() {
-            jobs = jobs.child(
-                div()
-                    .rounded_md()
-                    .border_1()
-                    .border_color(rgb(0x2a3140))
-                    .bg(rgb(0x10151e))
-                    .p_4()
-                    .text_sm()
-                    .text_color(rgb(0xaeb7c8))
-                    .child("Queue is empty."),
+                    .justify_center()
+                    .px_3()
+                    .py_6()
+                    .text_size(px(11.))
+                    .text_color(rgb(0x6e7681))
+                    .child("No transfers"),
             );
         } else {
             for job in ordered_transfer_jobs(&self.transfer_jobs) {
-                jobs = jobs.child(transfer_job_row(
+                list = list.child(transfer_job_row(
                     job,
                     self.transfer_selected_remote_path.clone(),
                     self.transfer_selected_job_id.clone(),
@@ -135,7 +55,122 @@ impl NyaTermApp {
                 ));
             }
         }
-        jobs
+
+        div()
+            .id(SharedString::from("transfer-queue-panel"))
+            .size_full()
+            .flex()
+            .flex_col()
+            .overflow_hidden()
+            .bg(rgb(0x161b22))
+            .track_focus(&self.transfer_queue_focus)
+            .on_click(cx.listener(|this, _, window, cx| {
+                window.focus(&this.transfer_queue_focus);
+                cx.notify();
+            }))
+            .on_key_down(cx.listener(|this, event: &KeyDownEvent, _, cx| {
+                this.handle_transfer_queue_key_down(event, cx);
+            }))
+            .child(
+                div()
+                    .h(px(32.))
+                    .px_2()
+                    .border_b_1()
+                    .border_color(rgb(0x30363d))
+                    .bg(rgb(0x12171f))
+                    .flex()
+                    .items_center()
+                    .gap_1()
+                    .child(
+                        div()
+                            .text_size(px(10.))
+                            .font_weight(FontWeight(800.))
+                            .text_color(rgb(0x8b949e))
+                            .child("FILE TRANSFER"),
+                    )
+                    .child(div().flex_1())
+                    .child(queue_action_button(
+                        "transfer-pause-all",
+                        "❚❚",
+                        has_running,
+                        cx.listener(|this, _, _, cx| {
+                            this.pause_all_transfer_jobs(cx);
+                        }),
+                    ))
+                    .child(queue_action_button(
+                        "transfer-resume-all",
+                        "▶",
+                        has_paused,
+                        cx.listener(|this, _, _, cx| {
+                            this.resume_all_transfer_jobs(cx);
+                        }),
+                    ))
+                    .child(queue_action_button(
+                        "transfer-cancel-all",
+                        "■",
+                        has_active,
+                        cx.listener(|this, _, _, cx| {
+                            this.cancel_all_transfer_jobs(cx);
+                        }),
+                    ))
+                    .child(queue_action_button(
+                        "transfer-clear-completed",
+                        "✓",
+                        has_completed,
+                        cx.listener(|this, _, _, cx| {
+                            this.clear_completed_transfer_jobs(cx);
+                        }),
+                    ))
+                    .child(queue_action_button(
+                        "transfer-clear-stopped",
+                        "CLR",
+                        has_stopped,
+                        cx.listener(|this, _, _, cx| {
+                            this.clear_stopped_transfer_jobs(cx);
+                        }),
+                    )),
+            )
+            .child(
+                div()
+                    .id(SharedString::from("transfer-queue-scroll"))
+                    .flex_1()
+                    .min_h_0()
+                    .overflow_scroll()
+                    .scrollbar_width(px(6.))
+                    .child(list),
+            )
+            .child(
+                div()
+                    .h(px(24.))
+                    .px_2()
+                    .border_t_1()
+                    .border_color(rgb(0x30363d))
+                    .bg(rgb(0x12171f))
+                    .flex()
+                    .items_center()
+                    .gap_2()
+                    .child(
+                        div()
+                            .text_size(px(10.))
+                            .text_color(rgb(0x6e7681))
+                            .child("↓"),
+                    )
+                    .child(
+                        div()
+                            .id(SharedString::from("transfer-download-path-footer"))
+                            .min_w_0()
+                            .flex_1()
+                            .font_family("JetBrains Mono")
+                            .text_size(px(10.))
+                            .text_color(rgb(0x8b949e))
+                            .cursor_pointer()
+                            .hover(|this| this.text_color(rgb(0xc9d1d9)))
+                            .child(download_path)
+                            .on_click(cx.listener(|this, _, _, cx| {
+                                this.reveal_transfer_download_dir(cx);
+                            })),
+                    ),
+            )
     }
 }
 
@@ -152,8 +187,8 @@ fn ordered_transfer_jobs(jobs: &[TransferJobState]) -> Vec<TransferJobState> {
 fn transfer_job_display_rank(status: TransferJobStatus) -> u8 {
     match status {
         TransferJobStatus::Running | TransferJobStatus::Cancelling => 0,
-        TransferJobStatus::Paused
-        | TransferJobStatus::Cancelled
+        TransferJobStatus::Paused => 1,
+        TransferJobStatus::Cancelled
         | TransferJobStatus::Completed
         | TransferJobStatus::Failed => 2,
     }

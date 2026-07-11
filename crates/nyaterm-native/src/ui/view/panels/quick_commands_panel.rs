@@ -33,7 +33,7 @@ impl NyaTermApp {
             .flex_shrink_0()
             .pr_2()
             .border_r_1()
-            .border_color(rgb(0x263142))
+            .border_color(rgb(0x30363d))
             .flex()
             .flex_col()
             .gap_1();
@@ -57,22 +57,22 @@ impl NyaTermApp {
                         .gap_2()
                         .rounded_sm()
                         .bg(if selected {
-                            rgb(0x17233a)
+                            rgb(0x12171f)
                         } else {
                             rgba(0x00000000)
                         })
                         .text_xs()
                         .text_color(if selected {
-                            rgb(0x93c5fd)
+                            rgb(0x58a6ff)
                         } else {
-                            rgb(0xcbd5e1)
+                            rgb(0xc9d1d9)
                         })
                         .cursor_pointer()
-                        .hover(|this| this.bg(rgb(0x1a2230)))
+                        .hover(|this| this.bg(rgb(0x1c2128)))
                         .child(div().size(px(6.)).rounded_full().bg(if selected {
-                            rgb(0x93c5fd)
+                            rgb(0x58a6ff)
                         } else {
-                            rgb(0x64748b)
+                            rgb(0x6e7681)
                         }))
                         .child(
                             div()
@@ -154,7 +154,7 @@ impl NyaTermApp {
                 div()
                     .rounded_sm()
                     .border_1()
-                    .border_color(rgb(0x263142))
+                    .border_color(rgb(0x30363d))
                     .bg(rgb(0x0d1320))
                     .p_3()
                     .flex()
@@ -215,7 +215,7 @@ impl NyaTermApp {
                         .h(px(34.))
                         .rounded_sm()
                         .border_1()
-                        .border_color(rgb(0x263142))
+                        .border_color(rgb(0x30363d))
                         .bg(rgb(0x0d1320))
                         .px_2()
                         .flex()
@@ -310,7 +310,7 @@ impl NyaTermApp {
                         .min_h(px(38.))
                         .rounded_sm()
                         .border_1()
-                        .border_color(rgb(0x263142))
+                        .border_color(rgb(0x30363d))
                         .bg(rgb(0x0d1320))
                         .px_2()
                         .py_1()
@@ -433,7 +433,7 @@ impl NyaTermApp {
                         )))
                         .rounded_sm()
                         .border_1()
-                        .border_color(rgb(0x263142))
+                        .border_color(rgb(0x30363d))
                         .bg(rgb(0x0d1320))
                         .p_3()
                         .flex()
@@ -543,7 +543,7 @@ impl NyaTermApp {
                                     div()
                                         .min_w_0()
                                         .text_xs()
-                                        .text_color(rgb(0x64748b))
+                                        .text_color(rgb(0x6e7681))
                                         .child(meta),
                                 )
                                 .child(
@@ -624,11 +624,10 @@ impl NyaTermApp {
         }
 
         div()
-            .rounded_md()
-            .border_1()
-            .border_color(rgb(0x2a3140))
-            .bg(rgb(0x151923))
-            .p_4()
+            .size_full()
+            .overflow_hidden()
+            .bg(rgb(0x161b22))
+            .p_3()
             .child(
                 div()
                     .flex()
@@ -654,8 +653,8 @@ impl NyaTermApp {
                                 } else {
                                     "filtered"
                                 },
-                                rgb(0x93c5fd),
-                                rgb(0x17233a),
+                                rgb(0x58a6ff),
+                                rgb(0x12171f),
                             ))
                             .child(small_button(
                                 "quick-command-add",
@@ -730,7 +729,7 @@ impl NyaTermApp {
                             .child(
                                 div()
                                     .text_size(px(10.))
-                                    .text_color(rgb(0x64748b))
+                                    .text_color(rgb(0x6e7681))
                                     .child("View"),
                             )
                             .child(mode_button(
@@ -775,7 +774,7 @@ impl NyaTermApp {
                             .child(
                                 div()
                                     .text_size(px(10.))
-                                    .text_color(rgb(0x64748b))
+                                    .text_color(rgb(0x6e7681))
                                     .child("Sort"),
                             )
                             .child(mode_button(
@@ -829,7 +828,7 @@ impl NyaTermApp {
                                     div()
                                         .rounded_sm()
                                         .border_1()
-                                        .border_color(rgb(0x263142))
+                                        .border_color(rgb(0x30363d))
                                         .bg(rgb(0x0d1320))
                                         .p_2()
                                         .text_xs()

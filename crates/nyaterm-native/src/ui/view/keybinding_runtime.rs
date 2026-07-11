@@ -1,6 +1,25 @@
 use super::*;
 
 impl NyaTermApp {
+
+    /// First display chord for empty-workspace / UI labels (Tauri-style chips).
+    pub(in crate::ui::view) fn display_shortcut_for(
+        &self,
+        id: &str,
+        fallback: &str,
+    ) -> String {
+        use crate::ui::shortcuts::{format_hotkey_for_display, shortcut_keys_for};
+        let raw = shortcut_keys_for(id, &self.settings.keybindings)
+            .unwrap_or_else(|| fallback.to_string());
+        let display = format_hotkey_for_display(&raw);
+        display
+            .split(" / ")
+            .next()
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+            .unwrap_or(fallback)
+            .to_string()
+    }
     pub(in crate::ui::view) fn start_keybinding_recording(
         &mut self,
         shortcut_id: String,

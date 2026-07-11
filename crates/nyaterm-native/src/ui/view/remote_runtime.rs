@@ -2,6 +2,8 @@ use super::*;
 
 impl NyaTermApp {
     pub(in crate::ui::view) fn set_docker_tab(&mut self, tab: DockerTab, cx: &mut Context<Self>) {
+        self.docker_container_menu_id = None;
+        self.docker_compose_menu_id = None;
         if tab == DockerTab::Compose
             && self
                 .docker_overview
@@ -122,6 +124,7 @@ impl NyaTermApp {
         pid: u32,
         cx: &mut Context<Self>,
     ) {
+        self.process_menu_pid = None;
         self.process_selected_pid = if self.process_selected_pid == Some(pid) {
             self.process_nice_draft = "0".to_string();
             None
@@ -305,6 +308,7 @@ impl NyaTermApp {
         }
 
         self.process_pending = true;
+        self.process_menu_pid = None;
         self.process_last_refresh_at = Some(Instant::now());
         self.process_status = "listing remote processes".to_string();
         self.ensure_event_pump(window, cx);

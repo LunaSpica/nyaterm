@@ -4,7 +4,7 @@ pub(in crate::ui::view::pages::remote) fn docker_images_panel(
     images: &[DockerImage],
     cx: &mut Context<NyaTermApp>,
 ) -> impl IntoElement {
-    let mut rows = div().mt_3().flex().flex_col().gap_2();
+    let mut rows = div().flex().flex_col().gap_1();
     if images.is_empty() {
         rows = rows.child(empty_panel("No images loaded."));
     } else {
@@ -21,9 +21,9 @@ pub(in crate::ui::view::pages::remote) fn docker_images_panel(
                         image.size
                     ),
                 )
-                .child(small_button(
+                .child(icon_button(
                     format!("docker-image-remove-{}", compact_id(&image_id)),
-                    "Remove",
+                    "×",
                     cx.listener(move |this, _, _, cx| {
                         this.request_docker_confirm(
                             DockerConfirmState {
@@ -49,7 +49,7 @@ pub(in crate::ui::view::pages::remote) fn docker_volumes_panel(
     volumes: &[DockerVolume],
     cx: &mut Context<NyaTermApp>,
 ) -> impl IntoElement {
-    let mut rows = div().mt_3().flex().flex_col().gap_2();
+    let mut rows = div().flex().flex_col().gap_1();
     if volumes.is_empty() {
         rows = rows.child(empty_panel("No volumes loaded."));
     } else {
@@ -57,9 +57,9 @@ pub(in crate::ui::view::pages::remote) fn docker_volumes_panel(
             let volume_name = volume.name.clone();
             rows = rows.child(
                 docker_resource_row(volume.name.clone(), format!("driver {}", volume.driver))
-                    .child(small_button(
+                    .child(icon_button(
                         format!("docker-volume-remove-{volume_name}"),
-                        "Remove",
+                        "×",
                         cx.listener(move |this, _, _, cx| {
                             this.request_docker_confirm(
                                 DockerConfirmState {
@@ -85,7 +85,7 @@ pub(in crate::ui::view::pages::remote) fn docker_networks_panel(
     networks: &[DockerNetwork],
     cx: &mut Context<NyaTermApp>,
 ) -> impl IntoElement {
-    let mut rows = div().mt_3().flex().flex_col().gap_2();
+    let mut rows = div().flex().flex_col().gap_1();
     if networks.is_empty() {
         rows = rows.child(empty_panel("No networks loaded."));
     } else {
@@ -102,9 +102,9 @@ pub(in crate::ui::view::pages::remote) fn docker_networks_panel(
                         network.scope
                     ),
                 )
-                .child(small_button(
+                .child(icon_button(
                     format!("docker-network-remove-{}", compact_id(&network_id)),
-                    "Remove",
+                    "×",
                     cx.listener(move |this, _, _, cx| {
                         this.request_docker_confirm(
                             DockerConfirmState {
@@ -130,25 +130,34 @@ pub(in crate::ui::view::pages::remote) fn docker_resource_panel(
     count: usize,
     rows: impl IntoElement,
 ) -> impl IntoElement {
+    // Tauri resource tabs: full-height list, no nested section card header.
+    let _ = title;
     div()
-        .rounded_md()
-        .border_1()
-        .border_color(rgb(0x2a3140))
-        .bg(rgb(0x151923))
-        .p_4()
+        .id(gpui::SharedString::from(format!(
+            "docker-resource-{}",
+            title.to_ascii_lowercase()
+        )))
+        .size_full()
+        .overflow_scroll()
+        .scrollbar_width(px(6.))
+        .p_2()
+        .flex()
+        .flex_col()
+        .gap_1()
         .child(
             div()
+                .h(px(22.))
+                .flex_none()
+                .px_1()
                 .flex()
                 .items_center()
                 .justify_between()
-                .gap_3()
-                .child(div().text_sm().font_weight(FontWeight(700.)).child(title))
                 .child(
                     div()
-                        .font_family("JetBrains Mono")
-                        .text_xs()
-                        .text_color(rgb(0x98a3b8))
-                        .child(count.to_string()),
+                        .text_size(px(10.))
+                        .font_weight(FontWeight(700.))
+                        .text_color(rgb(0x6e7681))
+                        .child(format!("{title} · {count}")),
                 ),
         )
         .child(rows)
@@ -158,33 +167,40 @@ pub(in crate::ui::view::pages::remote) fn docker_resource_row(
     title: String,
     detail: String,
 ) -> gpui::Div {
+    // ~64px Tauri SIMPLE_ROW_HEIGHT-ish dense resource row.
     div()
-        .rounded_sm()
+        .h(px(56.))
+        .rounded_md()
         .border_1()
-        .border_color(rgb(0x303848))
-        .bg(rgb(0x0d1320))
-        .p_2()
+        .border_color(rgb(0x30363d))
+        .bg(rgb(0x12171f))
+        .px_3()
         .flex()
         .items_center()
         .justify_between()
         .gap_2()
+        .hover(|this| this.bg(rgb(0x18202b)))
         .child(
             div()
                 .min_w_0()
+                .flex_1()
                 .flex()
                 .flex_col()
                 .gap_1()
                 .child(
                     div()
-                        .font_family("JetBrains Mono")
-                        .text_xs()
+                        .text_size(px(12.))
+                        .font_weight(FontWeight(700.))
                         .text_color(rgb(0xe5edf7))
+                        .overflow_hidden()
                         .child(truncate_preview(&title, 48)),
                 )
                 .child(
                     div()
-                        .text_xs()
-                        .text_color(rgb(0x98a3b8))
+                        .font_family("JetBrains Mono")
+                        .text_size(px(10.))
+                        .text_color(rgb(0x6e7681))
+                        .overflow_hidden()
                         .child(truncate_preview(&detail, 72)),
                 ),
         )

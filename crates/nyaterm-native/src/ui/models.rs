@@ -1,7 +1,7 @@
 use gpui::{Pixels, px};
 use nyaterm_domain::{
-    AiAction, AiContext, AiExecutionProfile, ConfigBackupInfo, DiagnosticsExportInfo, QuickCommand,
-    SavedConnection,
+    AiAction, AiContext, AiExecutionProfile, ConfigBackupInfo, ConnectionType, DiagnosticsExportInfo,
+    QuickCommand, SavedConnection,
 };
 use nyaterm_session::{
     LocalSessionConfig, SerialSessionConfig, SftpFileEntry, SftpFileProperties, SftpRemoteTextFile,
@@ -271,23 +271,341 @@ pub(super) enum NavItem {
     Transfers,
     Settings,
     Migration,
+    AiAssistant,
+    ActiveSessions,
+    CommandHistory,
+    SecurityAuth,
+    SyncBackupHistory,
+    Recording,
 }
 
 impl NavItem {
     pub(super) fn label(self) -> &'static str {
         match self {
             NavItem::Workspace => "Workspace",
-            NavItem::Connections => "Connections",
-            NavItem::Tunnels => "Tunnels",
-            NavItem::Stats => "Stats",
-            NavItem::Processes => "Processes",
+            NavItem::Connections => "Saved Connections",
+            NavItem::Tunnels => "Network",
+            NavItem::Stats => "Resource Monitor",
+            NavItem::Processes => "Process Manager",
             NavItem::Docker => "Docker",
             NavItem::Translation => "Translation",
-            NavItem::Transfers => "Transfers",
+            NavItem::Transfers => "File Explorer",
             NavItem::Settings => "Settings",
             NavItem::Migration => "Migration",
+            NavItem::AiAssistant => "AI Assistant",
+            NavItem::ActiveSessions => "Active Sessions",
+            NavItem::CommandHistory => "Command History",
+            NavItem::SecurityAuth => "Security / Auth",
+            NavItem::SyncBackupHistory => "Sync / Backup",
+            NavItem::Recording => "Recording",
         }
     }
+
+    pub(super) fn short_label(self) -> &'static str {
+        match self {
+            NavItem::Workspace => "WS",
+            NavItem::Connections => "CN",
+            NavItem::Tunnels => "NW",
+            NavItem::Stats => "RS",
+            NavItem::Processes => "PS",
+            NavItem::Docker => "DK",
+            NavItem::Translation => "TR",
+            NavItem::Transfers => "FE",
+            NavItem::Settings => "ST",
+            NavItem::Migration => "MG",
+            NavItem::AiAssistant => "AI",
+            NavItem::ActiveSessions => "AS",
+            NavItem::CommandHistory => "CH",
+            NavItem::SecurityAuth => "SA",
+            NavItem::SyncBackupHistory => "SB",
+            NavItem::Recording => "RC",
+        }
+    }
+
+    /// Compact monochrome glyph used by the activity bar (closer to Tauri icon density).
+    pub(super) fn glyph(self) -> &'static str {
+        match self {
+            NavItem::Workspace => "▣",
+            NavItem::Connections => "⌂",
+            NavItem::Tunnels => "⇄",
+            NavItem::Stats => "◔",
+            NavItem::Processes => "☰",
+            NavItem::Docker => "🐋",
+            NavItem::Translation => "文",
+            NavItem::Transfers => "📁",
+            NavItem::Settings => "⚙",
+            NavItem::Migration => "⇪",
+            NavItem::AiAssistant => "✦",
+            NavItem::ActiveSessions => "◉",
+            NavItem::CommandHistory => "⌛",
+            NavItem::SecurityAuth => "⛨",
+            NavItem::SyncBackupHistory => "☁",
+            NavItem::Recording => "●",
+        }
+    }
+
+    pub(super) fn is_left_panel(self) -> bool {
+        matches!(
+            self,
+            NavItem::Transfers
+                | NavItem::Tunnels
+                | NavItem::SecurityAuth
+                | NavItem::SyncBackupHistory
+                | NavItem::Migration
+        )
+    }
+
+    pub(super) fn is_right_panel(self) -> bool {
+        matches!(
+            self,
+            NavItem::Connections
+                | NavItem::AiAssistant
+                | NavItem::ActiveSessions
+                | NavItem::CommandHistory
+                | NavItem::Stats
+                | NavItem::Processes
+                | NavItem::Docker
+                | NavItem::Translation
+                | NavItem::Recording
+                | NavItem::Workspace
+        )
+    }
+
+    pub(super) fn opens_settings(self) -> bool {
+        matches!(self, NavItem::Settings)
+    }
+
+    /// Stable id compatible with Tauri `UiConfig` panel ids.
+    pub(super) fn persistence_id(self) -> &'static str {
+        match self {
+            NavItem::Workspace => "workspace",
+            NavItem::Connections => "savedConnections",
+            NavItem::Tunnels => "network",
+            NavItem::Stats => "resourceMonitor",
+            NavItem::Processes => "processManager",
+            NavItem::Docker => "dockerManager",
+            NavItem::Translation => "translation",
+            NavItem::Transfers => "fileExplorer",
+            NavItem::Settings => "settings",
+            NavItem::Migration => "migration",
+            NavItem::AiAssistant => "aiAssistant",
+            NavItem::ActiveSessions => "activeSessions",
+            NavItem::CommandHistory => "commandHistory",
+            NavItem::SecurityAuth => "securityAuth",
+            NavItem::SyncBackupHistory => "syncBackupHistory",
+            NavItem::Recording => "recording",
+        }
+    }
+
+    pub(super) fn from_persistence_id(id: &str) -> Option<Self> {
+        match id.trim() {
+            "workspace" => Some(NavItem::Workspace),
+            "connections" | "savedConnections" => Some(NavItem::Connections),
+            "network" | "tunnels" => Some(NavItem::Tunnels),
+            "stats" | "resourceMonitor" => Some(NavItem::Stats),
+            "processes" | "processManager" => Some(NavItem::Processes),
+            "docker" | "dockerManager" => Some(NavItem::Docker),
+            "translation" => Some(NavItem::Translation),
+            "fileExplorer" | "fileTransfer" | "transfers" => Some(NavItem::Transfers),
+            "settings" => Some(NavItem::Settings),
+            "migration" => Some(NavItem::Migration),
+            "aiAssistant" | "ai" => Some(NavItem::AiAssistant),
+            "activeSessions" => Some(NavItem::ActiveSessions),
+            "commandHistory" => Some(NavItem::CommandHistory),
+            "securityAuth" | "security" => Some(NavItem::SecurityAuth),
+            "syncBackupHistory" | "syncBackup" => Some(NavItem::SyncBackupHistory),
+            "recording" => Some(NavItem::Recording),
+            _ => None,
+        }
+    }
+}
+
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum ActivityBarZone {
+    LeftTop,
+    LeftBottom,
+    RightTop,
+    RightBottom,
+}
+
+impl ActivityBarZone {
+    pub(super) fn persistence_key(self) -> &'static str {
+        match self {
+            Self::LeftTop => "left_top",
+            Self::LeftBottom => "left_bottom",
+            Self::RightTop => "right_top",
+            Self::RightBottom => "right_bottom",
+        }
+    }
+
+    pub(super) fn label(self) -> &'static str {
+        match self {
+            Self::LeftTop => "Left Top",
+            Self::LeftBottom => "Left Bottom",
+            Self::RightTop => "Right Top",
+            Self::RightBottom => "Right Bottom",
+        }
+    }
+
+    pub(super) fn all() -> [Self; 4] {
+        [Self::LeftTop, Self::LeftBottom, Self::RightTop, Self::RightBottom]
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum ActivityBarEntry {
+    Panel(NavItem),
+    QuickCommands,
+    CommandSend,
+    Recording,
+    Lock,
+}
+
+impl ActivityBarEntry {
+    pub(super) fn persistence_id(self) -> &'static str {
+        match self {
+            Self::Panel(item) => item.persistence_id(),
+            Self::QuickCommands => "quickCmdBar",
+            Self::CommandSend => "serialSend",
+            Self::Recording => "recording",
+            Self::Lock => "lock",
+        }
+    }
+
+    pub(super) fn from_persistence_id(id: &str) -> Option<Self> {
+        match id.trim() {
+            "quickCmdBar" => Some(Self::QuickCommands),
+            "serialSend" => Some(Self::CommandSend),
+            "recording" => Some(Self::Recording),
+            "lock" => Some(Self::Lock),
+            other => NavItem::from_persistence_id(other).map(Self::Panel),
+        }
+    }
+
+    pub(super) fn label(self) -> &'static str {
+        match self {
+            Self::Panel(item) => item.label(),
+            Self::QuickCommands => "Quick Commands",
+            Self::CommandSend => "Command Send",
+            Self::Recording => "Recording",
+            Self::Lock => "Lock",
+        }
+    }
+
+    pub(super) fn glyph(self) -> &'static str {
+        match self {
+            Self::Panel(item) => item.glyph(),
+            Self::QuickCommands => "⚡",
+            Self::CommandSend => "⏎",
+            Self::Recording => "●",
+            Self::Lock => "🔒",
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(super) struct ActivityBarLayoutState {
+    pub(super) left_top: Vec<String>,
+    pub(super) left_bottom: Vec<String>,
+    pub(super) right_top: Vec<String>,
+    pub(super) right_bottom: Vec<String>,
+    pub(super) show_labels: bool,
+}
+
+impl Default for ActivityBarLayoutState {
+    fn default() -> Self {
+        Self {
+            left_top: vec![
+                "fileExplorer".to_string(),
+                "network".to_string(),
+                "securityAuth".to_string(),
+            ],
+            left_bottom: vec!["syncBackupHistory".to_string(), "settings".to_string()],
+            right_top: vec![
+                "savedConnections".to_string(),
+                "aiAssistant".to_string(),
+                "activeSessions".to_string(),
+                "commandHistory".to_string(),
+                "resourceMonitor".to_string(),
+                "processManager".to_string(),
+                "dockerManager".to_string(),
+            ],
+            right_bottom: vec![
+                "quickCmdBar".to_string(),
+                "serialSend".to_string(),
+                "recording".to_string(),
+                "lock".to_string(),
+            ],
+            show_labels: false,
+        }
+    }
+}
+
+impl ActivityBarLayoutState {
+    pub(super) fn zone_mut(&mut self, zone: ActivityBarZone) -> &mut Vec<String> {
+        match zone {
+            ActivityBarZone::LeftTop => &mut self.left_top,
+            ActivityBarZone::LeftBottom => &mut self.left_bottom,
+            ActivityBarZone::RightTop => &mut self.right_top,
+            ActivityBarZone::RightBottom => &mut self.right_bottom,
+        }
+    }
+
+    pub(super) fn zone(&self, zone: ActivityBarZone) -> &[String] {
+        match zone {
+            ActivityBarZone::LeftTop => &self.left_top,
+            ActivityBarZone::LeftBottom => &self.left_bottom,
+            ActivityBarZone::RightTop => &self.right_top,
+            ActivityBarZone::RightBottom => &self.right_bottom,
+        }
+    }
+
+    pub(super) fn find_entry(&self, entry_id: &str) -> Option<(ActivityBarZone, usize)> {
+        for zone in ActivityBarZone::all() {
+            if let Some(index) = self.zone(zone).iter().position(|id| id == entry_id) {
+                return Some((zone, index));
+            }
+        }
+        None
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(super) struct ActivityBarContextMenuState {
+    pub(super) entry_id: String,
+    pub(super) zone: ActivityBarZone,
+    pub(super) index: usize,
+}
+
+/// Top menubar dropdown (Tauri Header File/View/Terminal/Help).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum TitleMenu {
+    File,
+    View,
+    Terminal,
+    Help,
+}
+
+impl TitleMenu {
+    pub(super) fn label(self) -> &'static str {
+        match self {
+            Self::File => "File",
+            Self::View => "View",
+            Self::Terminal => "Terminal",
+            Self::Help => "Help",
+        }
+    }
+
+    pub(super) fn all() -> [Self; 4] {
+        [Self::File, Self::View, Self::Terminal, Self::Help]
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum PanelSide {
+    Left,
+    Right,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -428,6 +746,212 @@ pub(super) struct NetworkProxyEditorState {
 impl NetworkProxyEditorState {
     pub(super) fn is_proxy_command(&self) -> bool {
         self.protocol == "proxycommand"
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum ConnectionKindTab {
+    Ssh,
+    Local,
+    Telnet,
+    Serial,
+}
+
+impl ConnectionKindTab {
+    pub(super) fn label(self) -> &'static str {
+        match self {
+            Self::Ssh => "SSH",
+            Self::Local => "Local",
+            Self::Telnet => "Telnet",
+            Self::Serial => "Serial",
+        }
+    }
+
+    pub(super) fn next(self) -> Self {
+        match self {
+            Self::Ssh => Self::Local,
+            Self::Local => Self::Telnet,
+            Self::Telnet => Self::Serial,
+            Self::Serial => Self::Ssh,
+        }
+    }
+
+    pub(super) fn from_connection_type(config: &nyaterm_domain::ConnectionType) -> Self {
+        match config {
+            nyaterm_domain::ConnectionType::Ssh { .. } => Self::Ssh,
+            nyaterm_domain::ConnectionType::LocalTerminal { .. } => Self::Local,
+            nyaterm_domain::ConnectionType::Telnet { .. } => Self::Telnet,
+            nyaterm_domain::ConnectionType::Serial { .. } => Self::Serial,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum ConnectionEditorField {
+    Name,
+    Description,
+    Host,
+    Port,
+    Username,
+    Password,
+    ShellPath,
+    ShellArgs,
+    WorkingDir,
+    SerialPort,
+    BaudRate,
+    PostLoginCommand,
+    PostLoginDelay,
+}
+
+impl ConnectionEditorField {
+    pub(super) fn next(self, kind: ConnectionKindTab, auth_mode: &str) -> Self {
+        match kind {
+            ConnectionKindTab::Ssh => match self {
+                Self::Name => Self::Description,
+                Self::Description => Self::Host,
+                Self::Host => Self::Port,
+                Self::Port => Self::Username,
+                Self::Username if auth_mode == "password" => Self::Password,
+                Self::Username => Self::PostLoginCommand,
+                Self::Password => Self::PostLoginCommand,
+                Self::PostLoginCommand => Self::PostLoginDelay,
+                Self::PostLoginDelay => Self::Name,
+                other => other.next_fallback(kind),
+            },
+            ConnectionKindTab::Local => match self {
+                Self::Name => Self::Description,
+                Self::Description => Self::ShellPath,
+                Self::ShellPath => Self::ShellArgs,
+                Self::ShellArgs => Self::WorkingDir,
+                Self::WorkingDir => Self::Name,
+                other => other.next_fallback(kind),
+            },
+            ConnectionKindTab::Telnet => match self {
+                Self::Name => Self::Description,
+                Self::Description => Self::Host,
+                Self::Host => Self::Port,
+                Self::Port => Self::Name,
+                other => other.next_fallback(kind),
+            },
+            ConnectionKindTab::Serial => match self {
+                Self::Name => Self::Description,
+                Self::Description => Self::SerialPort,
+                Self::SerialPort => Self::BaudRate,
+                Self::BaudRate => Self::Name,
+                other => other.next_fallback(kind),
+            },
+        }
+    }
+
+    fn next_fallback(self, kind: ConnectionKindTab) -> Self {
+        match kind {
+            ConnectionKindTab::Ssh => Self::Name,
+            ConnectionKindTab::Local => Self::Name,
+            ConnectionKindTab::Telnet => Self::Name,
+            ConnectionKindTab::Serial => Self::Name,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(super) struct ConnectionEditorState {
+    pub(super) id: Option<String>,
+    pub(super) kind: ConnectionKindTab,
+    pub(super) name: String,
+    pub(super) description: String,
+    pub(super) group_id: Option<String>,
+    pub(super) host: String,
+    pub(super) port: String,
+    pub(super) username: String,
+    pub(super) auth_mode: String,
+    pub(super) password: String,
+    pub(super) existing_password: Option<String>,
+    pub(super) key_id: Option<String>,
+    pub(super) otp_id: Option<String>,
+    pub(super) auto_fill_otp: bool,
+    pub(super) proxy_id: Option<String>,
+    pub(super) proxy_jump_id: Option<String>,
+    pub(super) x11_forwarding: bool,
+    pub(super) backspace_mode: String,
+    pub(super) shell_path: String,
+    pub(super) shell_args: String,
+    pub(super) working_dir: String,
+    pub(super) serial_port: String,
+    pub(super) baud_rate: String,
+    pub(super) data_bits: String,
+    pub(super) parity: String,
+    pub(super) stop_bits: String,
+    pub(super) raw_tcp_cli: bool,
+    pub(super) local_echo: bool,
+    pub(super) post_login_enabled: bool,
+    pub(super) post_login_command: String,
+    pub(super) post_login_delay_ms: String,
+    pub(super) connect_after_save: bool,
+    pub(super) focused_field: ConnectionEditorField,
+    pub(super) error: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(super) struct ConnectionGroupEditorState {
+    pub(super) id: Option<String>,
+    pub(super) name: String,
+    pub(super) parent_id: Option<String>,
+    pub(super) error: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(super) struct ConnectionDeleteConfirmState {
+    pub(super) connection_id: String,
+    pub(super) label: String,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub(super) struct ConnectionContextMenuState {
+    pub(super) connection_id: String,
+    pub(super) x: Pixels,
+    pub(super) y: Pixels,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub(super) struct ConnectionGroupContextMenuState {
+    pub(super) group_id: String,
+    pub(super) x: Pixels,
+    pub(super) y: Pixels,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(super) struct ConnectionGroupDeleteConfirmState {
+    pub(super) group_id: String,
+    pub(super) label: String,
+    pub(super) connection_count: usize,
+    pub(super) child_group_count: usize,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum ConnectionSortMode {
+    Default,
+    NameAsc,
+    NameDesc,
+    Recent,
+}
+
+impl ConnectionSortMode {
+    pub(super) fn label(self) -> &'static str {
+        match self {
+            Self::Default => "Default",
+            Self::NameAsc => "Name A-Z",
+            Self::NameDesc => "Name Z-A",
+            Self::Recent => "Recent",
+        }
+    }
+
+    pub(super) fn next(self) -> Self {
+        match self {
+            Self::Default => Self::NameAsc,
+            Self::NameAsc => Self::NameDesc,
+            Self::NameDesc => Self::Recent,
+            Self::Recent => Self::Default,
+        }
     }
 }
 
@@ -605,38 +1129,321 @@ impl WorkspaceSplitDirection {
     }
 }
 
+/// Recursive workspace pane tree (Tauri PaneNode / SplitPane).
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub(super) struct WorkspaceSplitState {
-    pub(super) direction: WorkspaceSplitDirection,
-    pub(super) primary_session_id: String,
-    pub(super) secondary_session_id: String,
-    pub(super) ratio_percent: u8,
+pub(super) enum WorkspacePaneNode {
+    Leaf {
+        session_id: String,
+    },
+    Split {
+        id: String,
+        direction: WorkspaceSplitDirection,
+        ratio_percent: u8,
+        first: Box<WorkspacePaneNode>,
+        second: Box<WorkspacePaneNode>,
+    },
 }
 
-impl WorkspaceSplitState {
+impl WorkspacePaneNode {
     pub(super) const DEFAULT_RATIO_PERCENT: u8 = 50;
     pub(super) const MIN_RATIO_PERCENT: u8 = 20;
     pub(super) const MAX_RATIO_PERCENT: u8 = 80;
+
+    pub(super) fn leaf(session_id: impl Into<String>) -> Self {
+        Self::Leaf {
+            session_id: session_id.into(),
+        }
+    }
 
     pub(super) fn clamped_ratio_percent(value: u8) -> u8 {
         value.clamp(Self::MIN_RATIO_PERCENT, Self::MAX_RATIO_PERCENT)
     }
 
-    pub(super) fn primary_weight(&self) -> f32 {
-        Self::clamped_ratio_percent(self.ratio_percent) as f32
+    pub(super) fn primary_weight(ratio_percent: u8) -> f32 {
+        Self::clamped_ratio_percent(ratio_percent) as f32
     }
 
-    pub(super) fn secondary_weight(&self) -> f32 {
-        (100 - Self::clamped_ratio_percent(self.ratio_percent)) as f32
+    pub(super) fn secondary_weight(ratio_percent: u8) -> f32 {
+        (100 - Self::clamped_ratio_percent(ratio_percent)) as f32
     }
 
-    pub(super) fn adjust_ratio(&mut self, delta: i8) {
-        let next = (self.ratio_percent as i16 + delta as i16).clamp(
-            Self::MIN_RATIO_PERCENT as i16,
-            Self::MAX_RATIO_PERCENT as i16,
-        );
-        self.ratio_percent = next as u8;
+    pub(super) fn contains_session(&self, session_id: &str) -> bool {
+        match self {
+            Self::Leaf { session_id: id } => id == session_id,
+            Self::Split { first, second, .. } => {
+                first.contains_session(session_id) || second.contains_session(session_id)
+            }
+        }
     }
+
+    pub(super) fn session_ids(&self) -> Vec<String> {
+        let mut ids = Vec::new();
+        self.collect_session_ids(&mut ids);
+        ids
+    }
+
+    fn collect_session_ids(&self, out: &mut Vec<String>) {
+        match self {
+            Self::Leaf { session_id } => out.push(session_id.clone()),
+            Self::Split { first, second, .. } => {
+                first.collect_session_ids(out);
+                second.collect_session_ids(out);
+            }
+        }
+    }
+
+    pub(super) fn is_split(&self) -> bool {
+        matches!(self, Self::Split { .. })
+    }
+
+    pub(super) fn split_count(&self) -> usize {
+        match self {
+            Self::Leaf { .. } => 0,
+            Self::Split { first, second, .. } => 1 + first.split_count() + second.split_count(),
+        }
+    }
+
+    pub(super) fn focused_split_id(&self, active_session_id: Option<&str>) -> Option<String> {
+        if let Some(session_id) = active_session_id {
+            if let Some(id) = self.split_id_containing(session_id) {
+                return Some(id);
+            }
+        }
+        self.first_split_id()
+    }
+
+    fn first_split_id(&self) -> Option<String> {
+        match self {
+            Self::Leaf { .. } => None,
+            Self::Split { id, .. } => Some(id.clone()),
+        }
+    }
+
+    fn split_id_containing(&self, session_id: &str) -> Option<String> {
+        match self {
+            Self::Leaf { .. } => None,
+            Self::Split {
+                id,
+                first,
+                second,
+                ..
+            } => {
+                if first.contains_session(session_id) || second.contains_session(session_id) {
+                    if matches!(**first, Self::Leaf { .. }) || matches!(**second, Self::Leaf { .. })
+                    {
+                        // Prefer the deepest split that still directly owns the leaf when possible.
+                    }
+                    if let Some(nested) = first
+                        .split_id_containing(session_id)
+                        .or_else(|| second.split_id_containing(session_id))
+                    {
+                        return Some(nested);
+                    }
+                    Some(id.clone())
+                } else {
+                    None
+                }
+            }
+        }
+    }
+
+    pub(super) fn adjust_ratio_for_split(&mut self, split_id: &str, delta: i8) -> bool {
+        match self {
+            Self::Leaf { .. } => false,
+            Self::Split {
+                id,
+                ratio_percent,
+                first,
+                second,
+                ..
+            } => {
+                if id == split_id {
+                    let next = (*ratio_percent as i16 + delta as i16).clamp(
+                        Self::MIN_RATIO_PERCENT as i16,
+                        Self::MAX_RATIO_PERCENT as i16,
+                    );
+                    *ratio_percent = next as u8;
+                    true
+                } else {
+                    first.adjust_ratio_for_split(split_id, delta)
+                        || second.adjust_ratio_for_split(split_id, delta)
+                }
+            }
+        }
+    }
+
+    pub(super) fn set_ratio_for_split(&mut self, split_id: &str, value: u8) -> bool {
+        match self {
+            Self::Leaf { .. } => false,
+            Self::Split {
+                id,
+                ratio_percent,
+                first,
+                second,
+                ..
+            } => {
+                if id == split_id {
+                    *ratio_percent = Self::clamped_ratio_percent(value);
+                    true
+                } else {
+                    first.set_ratio_for_split(split_id, value)
+                        || second.set_ratio_for_split(split_id, value)
+                }
+            }
+        }
+    }
+
+    pub(super) fn direction_for_split(&self, split_id: &str) -> Option<WorkspaceSplitDirection> {
+        match self {
+            Self::Leaf { .. } => None,
+            Self::Split {
+                id,
+                direction,
+                first,
+                second,
+                ..
+            } => {
+                if id == split_id {
+                    Some(*direction)
+                } else {
+                    first
+                        .direction_for_split(split_id)
+                        .or_else(|| second.direction_for_split(split_id))
+                }
+            }
+        }
+    }
+
+    pub(super) fn ratio_for_split(&self, split_id: &str) -> Option<u8> {
+        match self {
+            Self::Leaf { .. } => None,
+            Self::Split {
+                id,
+                ratio_percent,
+                first,
+                second,
+                ..
+            } => {
+                if id == split_id {
+                    Some(*ratio_percent)
+                } else {
+                    first
+                        .ratio_for_split(split_id)
+                        .or_else(|| second.ratio_for_split(split_id))
+                }
+            }
+        }
+    }
+
+    /// Split the leaf holding `target_session_id` by replacing it with
+    /// Split(leaf(target), leaf(new_session_id)).
+    pub(super) fn split_leaf(
+        &mut self,
+        target_session_id: &str,
+        new_session_id: String,
+        direction: WorkspaceSplitDirection,
+        split_id: String,
+    ) -> bool {
+        match self {
+            Self::Leaf { session_id } if session_id == target_session_id => {
+                let first = Box::new(Self::leaf(session_id.clone()));
+                let second = Box::new(Self::leaf(new_session_id));
+                *self = Self::Split {
+                    id: split_id,
+                    direction,
+                    ratio_percent: Self::DEFAULT_RATIO_PERCENT,
+                    first,
+                    second,
+                };
+                true
+            }
+            Self::Leaf { .. } => false,
+            Self::Split { first, second, .. } => {
+                first.split_leaf(target_session_id, new_session_id.clone(), direction, split_id.clone())
+                    || second.split_leaf(target_session_id, new_session_id, direction, split_id)
+            }
+        }
+    }
+
+    /// Remove a leaf session and collapse its parent split into the sibling.
+    pub(super) fn remove_leaf(self, target_session_id: &str) -> Option<Self> {
+        match self {
+            Self::Leaf { session_id } => {
+                if session_id == target_session_id {
+                    None
+                } else {
+                    Some(Self::Leaf { session_id })
+                }
+            }
+            Self::Split {
+                id,
+                direction,
+                ratio_percent,
+                first,
+                second,
+            } => {
+                let first = first.remove_leaf(target_session_id);
+                let second = second.remove_leaf(target_session_id);
+                match (first, second) {
+                    (Some(first), Some(second)) => Some(Self::Split {
+                        id,
+                        direction,
+                        ratio_percent,
+                        first: Box::new(first),
+                        second: Box::new(second),
+                    }),
+                    (Some(only), None) | (None, Some(only)) => Some(only),
+                    (None, None) => None,
+                }
+            }
+        }
+    }
+
+    /// Remove dead sessions and collapse unnecessary nodes.
+    pub(super) fn prune(self, live_ids: &HashSet<String>) -> Option<Self> {
+        match self {
+            Self::Leaf { session_id } => {
+                if live_ids.contains(&session_id) {
+                    Some(Self::Leaf { session_id })
+                } else {
+                    None
+                }
+            }
+            Self::Split {
+                id,
+                direction,
+                ratio_percent,
+                first,
+                second,
+            } => {
+                let first = first.prune(live_ids);
+                let second = second.prune(live_ids);
+                match (first, second) {
+                    (Some(first), Some(second)) => Some(Self::Split {
+                        id,
+                        direction,
+                        ratio_percent: Self::clamped_ratio_percent(ratio_percent),
+                        first: Box::new(first),
+                        second: Box::new(second),
+                    }),
+                    (Some(only), None) | (None, Some(only)) => Some(only),
+                    (None, None) => None,
+                }
+            }
+        }
+    }
+}
+
+/// Compatibility alias used by older dual-pane helpers.
+pub(super) type WorkspaceSplitState = WorkspacePaneNode;
+
+#[derive(Debug, Clone)]
+pub(super) struct WorkspaceSplitResizeState {
+    pub(super) split_id: String,
+    pub(super) direction: WorkspaceSplitDirection,
+    pub(super) start_pos: Pixels,
+    pub(super) start_ratio: u8,
+    pub(super) container_size: f32,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -1103,7 +1910,149 @@ impl TransferBrowserColumnWidths {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum SecurityAuthTab {
+    Keys,
+    Passwords,
+    Credentials,
+    Otp,
+}
+
+impl SecurityAuthTab {
+    pub(super) fn label(self) -> &'static str {
+        match self {
+            Self::Keys => "Keys",
+            Self::Passwords => "Pwd",
+            Self::Credentials => "Cred",
+            Self::Otp => "OTP",
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum SecurityKeyEditorField {
+    Name,
+    KeyPath,
+    CertPath,
+    Passphrase,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(super) struct SecurityKeyEditorState {
+    pub(super) id: Option<String>,
+    pub(super) name: String,
+    pub(super) key_file_path: String,
+    pub(super) cert_file_path: String,
+    pub(super) passphrase: String,
+    pub(super) has_key_data: bool,
+    pub(super) has_cert_data: bool,
+    pub(super) focused_field: SecurityKeyEditorField,
+    pub(super) error: Option<String>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum SecurityOtpEditorField {
+    Issuer,
+    Username,
+    Secret,
+    Digits,
+    Period,
+    Counter,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(super) struct SecurityOtpEditorState {
+    pub(super) id: Option<String>,
+    pub(super) otp_type: String,
+    pub(super) issuer: String,
+    pub(super) username: String,
+    pub(super) secret: String,
+    pub(super) algorithm: String,
+    pub(super) digits: String,
+    pub(super) period: String,
+    pub(super) counter: String,
+    pub(super) has_secret: bool,
+    pub(super) focused_field: SecurityOtpEditorField,
+    pub(super) error: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(super) struct SecurityDeleteConfirmState {
+    pub(super) kind: SecurityAuthTab,
+    pub(super) id: String,
+    pub(super) label: String,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum SecurityPasswordEditorField {
+    Name,
+    Password,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(super) struct SecurityPasswordEditorState {
+    pub(super) id: Option<String>,
+    pub(super) name: String,
+    pub(super) password: String,
+    pub(super) has_password: bool,
+    pub(super) focused_field: SecurityPasswordEditorField,
+    pub(super) error: Option<String>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum SecurityCredentialEditorField {
+    Name,
+    Username,
+    Password,
+    UsernameRegex,
+    PasswordRegex,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(super) struct SecurityCredentialEditorState {
+    pub(super) id: Option<String>,
+    pub(super) name: String,
+    pub(super) username: String,
+    pub(super) password: String,
+    pub(super) username_prompt_regex: String,
+    pub(super) password_prompt_regex: String,
+    pub(super) enabled: bool,
+    pub(super) has_password: bool,
+    pub(super) focused_field: SecurityCredentialEditorField,
+    pub(super) error: Option<String>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum PanelResizeSide {
+    Left,
+    Right,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub(super) struct PanelResizeState {
+    pub(super) side: PanelResizeSide,
+    pub(super) start_x: Pixels,
+    pub(super) start_width: Pixels,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub(super) struct TransferHeightResizeState {
+    pub(super) start_y: Pixels,
+    pub(super) start_height: Pixels,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub(super) struct PanelStackResizeState {
+    pub(super) side: PanelSide,
+    pub(super) above_id: String,
+    pub(super) below_id: String,
+    pub(super) start_y: Pixels,
+    pub(super) above_weight: f32,
+    pub(super) below_weight: f32,
+    pub(super) container_height: f32,
+}
+
+#[derive(Debug, Clone, Copy)]
 pub(super) struct TransferBrowserColumnResizeState {
     pub(super) column: TransferBrowserSortColumn,
     pub(super) start_x: Pixels,

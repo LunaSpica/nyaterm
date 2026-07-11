@@ -1,4 +1,5 @@
 use super::*;
+use gpui::{SharedString, prelude::*};
 
 pub(in crate::ui::view::pages::remote) fn docker_containers_panel(
     has_snapshot: bool,
@@ -6,11 +7,16 @@ pub(in crate::ui::view::pages::remote) fn docker_containers_panel(
     docker_available: bool,
     filtered_containers: &[DockerContainer],
     query_empty: bool,
+    open_menu_id: Option<&str>,
     cx: &mut Context<NyaTermApp>,
 ) -> impl IntoElement {
-    let mut rows = div().mt_3().flex().flex_col().gap_2();
+    // Tauri Docker containers tab: dense ~66px rows, left accent, ⋮ action menu.
     if !has_snapshot {
-        return rows
+        return div()
+            .size_full()
+            .flex()
+            .items_center()
+            .justify_center()
             .child(empty_panel(if has_session {
                 "No Docker snapshot loaded."
             } else {
@@ -19,14 +25,22 @@ pub(in crate::ui::view::pages::remote) fn docker_containers_panel(
             .into_any_element();
     }
     if !docker_available {
-        return rows
+        return div()
+            .size_full()
+            .flex()
+            .items_center()
+            .justify_center()
             .child(empty_panel(
                 "Docker is not installed or the daemon is not reachable.",
             ))
             .into_any_element();
     }
     if filtered_containers.is_empty() {
-        return rows
+        return div()
+            .size_full()
+            .flex()
+            .items_center()
+            .justify_center()
             .child(empty_panel(if query_empty {
                 "No containers found."
             } else {
@@ -41,170 +55,312 @@ pub(in crate::ui::view::pages::remote) fn docker_containers_panel(
             .cmp(&docker_state_rank(&right.state))
             .then(left.name.cmp(&right.name))
     });
+
+    let mut rows = div()
+        .id(SharedString::from("docker-containers-scroll"))
+        .size_full()
+        .overflow_scroll()
+        .scrollbar_width(px(6.))
+        .p_2()
+        .flex()
+        .flex_col()
+        .gap_1();
     for container in containers {
-        rows = rows.child(docker_container_row(container, cx));
+        let menu_open = open_menu_id == Some(container.id.as_str());
+        rows = rows.child(docker_container_row(container, menu_open, cx));
     }
     rows.into_any_element()
 }
 
 fn docker_container_row(
     container: DockerContainer,
+    menu_open: bool,
     cx: &mut Context<NyaTermApp>,
 ) -> impl IntoElement {
     let container_id = container.id.clone();
+    let details_id = container.id.clone();
+    let menu_id = container.id.clone();
+    let state = container.state.clone();
+    let running = state.trim().eq_ignore_ascii_case("running");
+    let accent = docker_state_border_color(&state);
+    let short = compact_id(&container.id);
+
     div()
+        .id(SharedString::from(format!("docker-container-{short}")))
+        .relative()
+        .h(px(66.))
         .rounded_md()
         .border_1()
-        .border_color(rgb(0x2a3140))
-        .bg(rgb(0x151923))
-        .p_3()
-        .flex()
-        .flex_col()
-        .gap_2()
+        .border_color(rgb(0x30363d))
+        // Left accent bar painted as absolute child.
+        .bg(rgb(0x12171f))
+        .hover(|this| this.bg(rgb(0x18202b)))
+        .cursor_pointer()
+        .overflow_hidden()
+        .child(
+            // Left state accent
+            div()
+                .absolute()
+                .left_0()
+                .top_0()
+                .bottom_0()
+                .w(px(3.))
+                .bg(accent),
+        )
         .child(
             div()
+                .size_full()
+                .px_3()
+                .py_2()
+                .pl(px(12.))
+                .pr(px(36.))
                 .flex()
-                .items_center()
-                .justify_between()
-                .gap_3()
+                .flex_col()
+                .justify_center()
+                .gap_1()
                 .child(
                     div()
-                        .min_w_0()
                         .flex()
-                        .flex_col()
-                        .gap_1()
+                        .items_center()
+                        .gap_2()
                         .child(
                             div()
-                                .text_sm()
+                                .min_w_0()
+                                .flex_1()
+                                .text_size(px(13.))
                                 .font_weight(FontWeight(700.))
                                 .text_color(rgb(0xe5edf7))
-                                .child(truncate_preview(&container.name, 48)),
+                                .overflow_hidden()
+                                .child(truncate_preview(&container.name, 40)),
                         )
+                        .child(status_pill(
+                            docker_state_label(&container.state),
+                            docker_state_color(&container.state),
+                            rgb(0x17233a),
+                        )),
+                )
+                .child(
+                    div()
+                        .flex()
+                        .items_center()
+                        .gap_2()
+                        .font_family("JetBrains Mono")
+                        .text_size(px(10.))
+                        .text_color(rgb(0x6e7681))
                         .child(
                             div()
-                                .text_xs()
-                                .font_family("JetBrains Mono")
-                                .text_color(rgb(0x98a3b8))
-                                .child(format!(
-                                    "{} · {}",
-                                    compact_id(&container.id),
-                                    truncate_preview(&container.image, 64)
-                                )),
-                        ),
-                )
-                .child(status_pill(
-                    docker_state_label(&container.state),
-                    docker_state_color(&container.state),
-                    rgb(0x17233a),
-                )),
+                                .min_w_0()
+                                .flex_1()
+                                .overflow_hidden()
+                                .child(truncate_preview(&container.image, 48)),
+                        )
+                        .child(div().flex_none().child(short.clone())),
+                ),
         )
+        .on_click(cx.listener(move |this, _, window, cx| {
+            this.docker_container_menu_id = None;
+            this.load_docker_details(details_id.clone(), window, cx);
+        }))
         .child(
             div()
-                .text_xs()
-                .text_color(rgb(0xaeb7c8))
-                .line_height(px(18.))
-                .child(truncate_preview(&container.status, 120)),
-        )
-        .child(
-            div()
-                .text_xs()
-                .text_color(rgb(0x64748b))
-                .child(truncate_preview(&container.ports, 120)),
-        )
-        .child(
-            div()
-                .flex()
-                .items_center()
-                .justify_end()
-                .gap_1()
-                .child(small_button(
-                    format!("docker-details-{}", compact_id(&container_id)),
-                    "Details",
-                    cx.listener({
-                        let container_id = container_id.clone();
-                        move |this, _, window, cx| {
-                            this.load_docker_details(container_id.clone(), window, cx);
-                        }
-                    }),
-                ))
-                .child(small_button(
-                    format!("docker-logs-{}", compact_id(&container_id)),
-                    "Logs",
-                    cx.listener({
-                        let container_id = container_id.clone();
-                        move |this, _, window, cx| {
-                            this.load_docker_logs(container_id.clone(), window, cx);
-                        }
-                    }),
-                ))
-                .child(small_button(
-                    format!("docker-follow-{}", compact_id(&container_id)),
-                    "Follow",
-                    cx.listener({
-                        let container_id = container_id.clone();
-                        move |this, _, _, cx| {
-                            this.send_docker_container_logs_to_terminal(container_id.clone(), cx);
-                        }
-                    }),
-                ))
-                .child(small_button(
-                    format!("docker-enter-{}", compact_id(&container_id)),
-                    "Enter",
-                    cx.listener({
-                        let container_id = container_id.clone();
-                        move |this, _, _, cx| {
-                            this.enter_docker_container_terminal(container_id.clone(), cx);
-                        }
-                    }),
-                ))
-                .child(small_button(
-                    format!("docker-start-{}", compact_id(&container_id)),
-                    "Start",
-                    cx.listener({
-                        let container_id = container_id.clone();
-                        move |this, _, window, cx| {
-                            this.docker_container_action(container_id.clone(), "start", window, cx);
-                        }
-                    }),
-                ))
-                .child(small_button(
-                    format!("docker-stop-{}", compact_id(&container_id)),
-                    "Stop",
-                    cx.listener({
-                        let container_id = container_id.clone();
-                        move |this, _, window, cx| {
-                            this.docker_container_action(container_id.clone(), "stop", window, cx);
-                        }
-                    }),
-                ))
-                .child(small_button(
-                    format!("docker-restart-{}", compact_id(&container_id)),
-                    "Restart",
-                    cx.listener({
-                        let container_id = container_id.clone();
-                        move |this, _, window, cx| {
-                            this.docker_container_action(
+                .absolute()
+                .top(px(8.))
+                .right(px(6.))
+                .child(
+                    div()
+                        .relative()
+                        .child(icon_button(
+                            format!("docker-menu-toggle-{short}"),
+                            "⋮",
+                            cx.listener(move |this, _, _, cx| {
+                                cx.stop_propagation();
+                                if this.docker_container_menu_id.as_deref() == Some(menu_id.as_str())
+                                {
+                                    this.docker_container_menu_id = None;
+                                } else {
+                                    this.docker_container_menu_id = Some(menu_id.clone());
+                                }
+                                cx.notify();
+                            }),
+                        ))
+                        .when(menu_open, |this| {
+                            this.child(docker_container_action_menu(
                                 container_id.clone(),
-                                "restart",
-                                window,
+                                container.name.clone(),
+                                running,
                                 cx,
-                            );
-                        }
-                    }),
-                ))
-                .child(docker_container_confirm_button(
-                    "kill",
-                    "Kill",
-                    container_id.clone(),
-                    container.name.clone(),
-                    cx,
-                ))
-                .child(docker_container_confirm_button(
-                    "remove",
-                    "Remove",
-                    container_id,
-                    container.name,
-                    cx,
-                )),
+                            ))
+                        }),
+                ),
         )
+}
+
+fn docker_container_action_menu(
+    container_id: String,
+    container_name: String,
+    running: bool,
+    cx: &mut Context<NyaTermApp>,
+) -> impl IntoElement {
+    let short = compact_id(&container_id);
+    let logs_id = container_id.clone();
+    let enter_id = container_id.clone();
+    let start_id = container_id.clone();
+    let stop_id = container_id.clone();
+    let restart_id = container_id.clone();
+    let kill_id = container_id.clone();
+    let remove_id = container_id.clone();
+    let kill_name = container_name.clone();
+    let remove_name = container_name;
+
+    div()
+        .id(SharedString::from(format!("docker-menu-{short}")))
+        .absolute()
+        .top(px(28.))
+        .right_0()
+        .w(px(148.))
+        .rounded_md()
+        .border_1()
+        .border_color(rgb(0x30363d))
+        .bg(rgb(0x161b22))
+        .shadow_lg()
+        .py_1()
+        .flex()
+        .flex_col()
+        .on_mouse_down(gpui::MouseButton::Left, |_, _, _| {})
+        .child(docker_menu_item(
+            format!("docker-menu-logs-{short}"),
+            "Logs",
+            false,
+            cx.listener(move |this, _, window, cx| {
+                this.docker_container_menu_id = None;
+                this.load_docker_logs(logs_id.clone(), window, cx);
+            }),
+        ))
+        .child(docker_menu_item(
+            format!("docker-menu-enter-{short}"),
+            "Enter",
+            !running,
+            cx.listener(move |this, _, _, cx| {
+                this.docker_container_menu_id = None;
+                this.enter_docker_container_terminal(enter_id.clone(), cx);
+            }),
+        ))
+        .child(docker_menu_separator())
+        .child(docker_menu_item(
+            format!("docker-menu-start-{short}"),
+            "Start",
+            running,
+            cx.listener(move |this, _, window, cx| {
+                this.docker_container_menu_id = None;
+                this.docker_container_action(start_id.clone(), "start", window, cx);
+            }),
+        ))
+        .child(docker_menu_item(
+            format!("docker-menu-stop-{short}"),
+            "Stop",
+            !running,
+            cx.listener(move |this, _, window, cx| {
+                this.docker_container_menu_id = None;
+                this.docker_container_action(stop_id.clone(), "stop", window, cx);
+            }),
+        ))
+        .child(docker_menu_item(
+            format!("docker-menu-restart-{short}"),
+            "Restart",
+            false,
+            cx.listener(move |this, _, window, cx| {
+                this.docker_container_menu_id = None;
+                this.docker_container_action(restart_id.clone(), "restart", window, cx);
+            }),
+        ))
+        .child(docker_menu_separator())
+        .child(docker_menu_item(
+            format!("docker-menu-kill-{short}"),
+            "Kill",
+            !running,
+            cx.listener(move |this, _, _, cx| {
+                this.docker_container_menu_id = None;
+                let target = if kill_name.trim().is_empty() {
+                    compact_id(&kill_id)
+                } else {
+                    kill_name.clone()
+                };
+                this.request_docker_confirm(
+                    DockerConfirmState {
+                        title: format!("Kill container {target}"),
+                        detail: format!("docker kill {}", compact_id(&kill_id)),
+                        action: DockerConfirmAction::ContainerAction {
+                            container_id: kill_id.clone(),
+                            action: "kill",
+                        },
+                    },
+                    cx,
+                );
+            }),
+        ))
+        .child(docker_menu_item(
+            format!("docker-menu-remove-{short}"),
+            "Remove",
+            false,
+            cx.listener(move |this, _, _, cx| {
+                this.docker_container_menu_id = None;
+                let target = if remove_name.trim().is_empty() {
+                    compact_id(&remove_id)
+                } else {
+                    remove_name.clone()
+                };
+                this.request_docker_confirm(
+                    DockerConfirmState {
+                        title: format!("Remove container {target}"),
+                        detail: format!("docker rm {}", compact_id(&remove_id)),
+                        action: DockerConfirmAction::ContainerAction {
+                            container_id: remove_id.clone(),
+                            action: "remove",
+                        },
+                    },
+                    cx,
+                );
+            }),
+        ))
+}
+
+fn docker_menu_item(
+    id: impl Into<String>,
+    label: &'static str,
+    disabled: bool,
+    on_click: impl Fn(&gpui::ClickEvent, &mut gpui::Window, &mut gpui::App) + 'static,
+) -> impl IntoElement {
+    div()
+        .id(SharedString::from(id.into()))
+        .h(px(28.))
+        .px_3()
+        .flex()
+        .items_center()
+        .text_size(px(12.))
+        .text_color(if disabled {
+            rgb(0x484f58)
+        } else {
+            rgb(0xc9d1d9)
+        })
+        .when(!disabled, |this| {
+            this.cursor_pointer()
+                .hover(|s| s.bg(rgb(0x21262d)))
+                .on_click(on_click)
+        })
+        .when(disabled, |this| this.opacity(0.5))
+        .child(label)
+}
+
+fn docker_menu_separator() -> impl IntoElement {
+    div().h(px(1.)).mx_2().my_1().bg(rgb(0x30363d))
+}
+
+fn docker_state_border_color(state: &str) -> gpui::Hsla {
+    match state.trim().to_ascii_lowercase().as_str() {
+        "running" => rgb(0x22c55e).into(),
+        "restarting" | "paused" => rgb(0xf59e0b).into(),
+        "exited" | "dead" => rgb(0xef4444).into(),
+        "created" => rgb(0x3b82f6).into(),
+        _ => rgb(0x6e7681).into(),
+    }
 }

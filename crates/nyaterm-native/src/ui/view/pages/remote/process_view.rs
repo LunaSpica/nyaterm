@@ -1,4 +1,5 @@
 use super::*;
+use gpui::{SharedString, prelude::*};
 
 impl NyaTermApp {
     pub(in crate::ui::view) fn processes_view(
@@ -67,12 +68,24 @@ impl NyaTermApp {
                     process_table_row(
                         process,
                         selected,
+                        self.process_menu_pid == Some(pid),
                         cx.listener(move |this, _, _, cx| {
+                            this.process_menu_pid = None;
                             this.toggle_process_selection(pid, cx);
+                        }),
+                        cx.listener(move |this, _, _, cx| {
+                            cx.stop_propagation();
+                            if this.process_menu_pid == Some(pid) {
+                                this.process_menu_pid = None;
+                            } else {
+                                this.process_menu_pid = Some(pid);
+                            }
+                            cx.notify();
                         }),
                         cx.listener({
                             let value = pid.to_string();
                             move |this, _, _, cx| {
+                                this.process_menu_pid = None;
                                 this.copy_process_text(value.clone(), "pid", cx);
                             }
                         }),
@@ -83,13 +96,28 @@ impl NyaTermApp {
                                 process.command_line.clone()
                             };
                             move |this, _, _, cx| {
+                                this.process_menu_pid = None;
                                 this.copy_process_text(value.clone(), "command", cx);
                             }
                         }),
                         cx.listener(move |this, _, window, cx| {
+                            this.process_menu_pid = None;
                             this.request_process_signal(pid, "TERM", window, cx);
                         }),
                         cx.listener(move |this, _, window, cx| {
+                            this.process_menu_pid = None;
+                            this.request_process_signal(pid, "HUP", window, cx);
+                        }),
+                        cx.listener(move |this, _, window, cx| {
+                            this.process_menu_pid = None;
+                            this.request_process_signal(pid, "STOP", window, cx);
+                        }),
+                        cx.listener(move |this, _, window, cx| {
+                            this.process_menu_pid = None;
+                            this.request_process_signal(pid, "CONT", window, cx);
+                        }),
+                        cx.listener(move |this, _, window, cx| {
+                            this.process_menu_pid = None;
                             this.request_process_signal(pid, "KILL", window, cx);
                         }),
                     )
@@ -111,131 +139,42 @@ impl NyaTermApp {
             }
         }
 
+        // Tauri ProcessManager shell: dense search toolbar + sort strip + scrollable table.
+        let _ = (top_cpu, top_memory, user_count);
+        let count_label = format!(
+            "{}/{}",
+            filtered_processes.len(),
+            self.processes.len()
+        );
         div()
             .flex()
             .flex_col()
             .size_full()
-            .p_5()
-            .gap_4()
-            .child(section_header(
-                "Processes",
-                "Native SSH exec process inspector for the active remote session.",
-            ))
+            .overflow_hidden()
+            .bg(rgb(0x161b22))
             .child(
                 div()
-                    .grid()
-                    .grid_cols(4)
-                    .gap_3()
-                    .child(metric(
-                        "SSH",
-                        if self.active_ssh_config.is_some() {
-                            "ready".to_string()
-                        } else {
-                            "none".to_string()
-                        },
-                    ))
-                    .child(metric("Processes", self.processes.len().to_string()))
-                    .child(metric("Visible", filtered_processes.len().to_string()))
-                    .child(metric(
-                        "Status",
-                        if self.process_pending {
-                            "running".to_string()
-                        } else {
-                            "idle".to_string()
-                        },
-                    )),
-            )
-            .child(
-                div()
-                    .grid()
-                    .grid_cols(4)
-                    .gap_3()
-                    .child(process_summary_card(
-                        "Top CPU",
-                        truncate_preview(&top_cpu, 44),
-                        top_process_ratio(&self.processes, true),
-                    ))
-                    .child(process_summary_card(
-                        "Top Memory",
-                        truncate_preview(&top_memory, 44),
-                        top_process_ratio(&self.processes, false),
-                    ))
-                    .child(process_summary_card(
-                        "Users",
-                        format!("{user_count} owner(s)"),
-                        (user_count as f64 / 12.).clamp(0., 1.),
-                    ))
-                    .child(process_summary_card(
-                        "Sort",
-                        format!(
-                            "{} {}",
-                            self.process_sort_key.label(),
-                            self.process_sort_direction.marker()
-                        ),
-                        filtered_processes.len() as f64 / self.processes.len().max(1) as f64,
-                    )),
-            )
-            .child(
-                div()
-                    .rounded_md()
-                    .border_1()
-                    .border_color(rgb(0x2a3140))
-                    .bg(rgb(0x151923))
-                    .p_4()
-                    .child(
-                        div()
-                            .flex()
-                            .items_center()
-                            .justify_between()
-                            .gap_3()
-                            .child(
-                                div()
-                                    .text_sm()
-                                    .text_color(rgb(0xe5edf7))
-                                    .child(self.process_status.clone()),
-                            )
-                            .child(
-                                div()
-                                    .flex()
-                                    .items_center()
-                                    .gap_2()
-                                    .when(!can_list, |this| this.opacity(0.45))
-                                    .child(small_button(
-                                        "process-refresh",
-                                        "Refresh",
-                                        cx.listener(|this, _, window, cx| {
-                                            this.refresh_processes(window, cx);
-                                        }),
-                                    )),
-                            ),
-                    ),
-            )
-            .when_some(self.process_signal_confirm.clone(), |this, confirm| {
-                this.child(process_signal_confirm_panel(confirm, cx))
-            })
-            .child(
-                div()
-                    .rounded_md()
-                    .border_1()
-                    .border_color(rgb(0x2a3140))
-                    .bg(rgb(0x151923))
-                    .p_3()
+                    .h(px(36.))
+                    .flex_none()
+                    .px_2()
+                    .border_b_1()
+                    .border_color(rgb(0x30363d))
+                    .bg(rgb(0x12171f))
                     .flex()
-                    .flex_col()
-                    .gap_3()
+                    .items_center()
+                    .gap_1()
                     .child(
                         div()
-                            .flex()
-                            .items_center()
-                            .gap_2()
+                            .flex_1()
+                            .min_w_0()
                             .child(
                                 transfer_input(
                                     "process-search-input",
-                                    "Search",
+                                    "Search processes…",
                                     self.process_search_draft.clone(),
                                     true,
                                 )
-                                .flex_1()
+                                .h(px(28.))
                                 .track_focus(&self.process_search_focus)
                                 .on_click(cx.listener(|this, _, window, cx| {
                                     window.focus(&this.process_search_focus);
@@ -247,72 +186,105 @@ impl NyaTermApp {
                                         this.handle_process_search_key_down(event, cx);
                                     },
                                 )),
-                            )
-                            .child(status_pill("filtered", rgb(0x93c5fd), rgb(0x17233a)))
-                            .child(
-                                div()
-                                    .font_family("JetBrains Mono")
-                                    .text_xs()
-                                    .text_color(rgb(0x98a3b8))
-                                    .child(format!(
-                                        "{} / {}",
-                                        filtered_processes.len(),
-                                        self.processes.len()
-                                    )),
                             ),
                     )
                     .child(
                         div()
-                            .flex()
-                            .items_center()
-                            .gap_2()
-                            .flex_wrap()
-                            .child(process_sort_button(
-                                "process-sort-cpu",
-                                "CPU",
-                                self.process_sort_key == RemoteProcessSortKey::Cpu,
-                                self.process_sort_direction,
-                                cx.listener(|this, _, _, cx| {
-                                    this.toggle_process_sort(RemoteProcessSortKey::Cpu, cx);
-                                }),
-                            ))
-                            .child(process_sort_button(
-                                "process-sort-memory",
-                                "Memory",
-                                self.process_sort_key == RemoteProcessSortKey::Memory,
-                                self.process_sort_direction,
-                                cx.listener(|this, _, _, cx| {
-                                    this.toggle_process_sort(RemoteProcessSortKey::Memory, cx);
-                                }),
-                            ))
-                            .child(process_sort_button(
-                                "process-sort-pid",
-                                "PID",
-                                self.process_sort_key == RemoteProcessSortKey::Pid,
-                                self.process_sort_direction,
-                                cx.listener(|this, _, _, cx| {
-                                    this.toggle_process_sort(RemoteProcessSortKey::Pid, cx);
-                                }),
-                            ))
-                            .child(process_sort_button(
-                                "process-sort-user",
-                                "User",
-                                self.process_sort_key == RemoteProcessSortKey::User,
-                                self.process_sort_direction,
-                                cx.listener(|this, _, _, cx| {
-                                    this.toggle_process_sort(RemoteProcessSortKey::User, cx);
-                                }),
-                            ))
-                            .child(process_sort_button(
-                                "process-sort-command",
-                                "Command",
-                                self.process_sort_key == RemoteProcessSortKey::Command,
-                                self.process_sort_direction,
-                                cx.listener(|this, _, _, cx| {
-                                    this.toggle_process_sort(RemoteProcessSortKey::Command, cx);
+                            .when(!can_list, |this| this.opacity(0.45))
+                            .child(icon_button(
+                                "process-refresh",
+                                "↻",
+                                cx.listener(|this, _, window, cx| {
+                                    this.refresh_processes(window, cx);
                                 }),
                             )),
                     )
+                    .child(
+                        div()
+                            .text_size(px(11.))
+                            .text_color(rgb(0x6e7681))
+                            .child(count_label),
+                    ),
+            )
+            .when_some(self.process_signal_confirm.clone(), |this, confirm| {
+                this.child(process_signal_confirm_panel(confirm, cx))
+            })
+            .child(
+                div()
+                    .h(px(28.))
+                    .flex_none()
+                    .px_2()
+                    .border_b_1()
+                    .border_color(rgb(0x30363d))
+                    .bg(rgb(0x0d1117))
+                    .flex()
+                    .items_center()
+                    .gap_1()
+                    .overflow_hidden()
+                    .child(process_sort_button(
+                        "process-sort-command",
+                        "Process",
+                        self.process_sort_key == RemoteProcessSortKey::Command,
+                        self.process_sort_direction,
+                        cx.listener(|this, _, _, cx| {
+                            this.toggle_process_sort(RemoteProcessSortKey::Command, cx);
+                        }),
+                    ))
+                    .child(process_sort_button(
+                        "process-sort-cpu",
+                        "CPU",
+                        self.process_sort_key == RemoteProcessSortKey::Cpu,
+                        self.process_sort_direction,
+                        cx.listener(|this, _, _, cx| {
+                            this.toggle_process_sort(RemoteProcessSortKey::Cpu, cx);
+                        }),
+                    ))
+                    .child(process_sort_button(
+                        "process-sort-memory",
+                        "Mem",
+                        self.process_sort_key == RemoteProcessSortKey::Memory,
+                        self.process_sort_direction,
+                        cx.listener(|this, _, _, cx| {
+                            this.toggle_process_sort(RemoteProcessSortKey::Memory, cx);
+                        }),
+                    ))
+                    .child(process_sort_button(
+                        "process-sort-pid",
+                        "PID",
+                        self.process_sort_key == RemoteProcessSortKey::Pid,
+                        self.process_sort_direction,
+                        cx.listener(|this, _, _, cx| {
+                            this.toggle_process_sort(RemoteProcessSortKey::Pid, cx);
+                        }),
+                    ))
+                    .child(process_sort_button(
+                        "process-sort-user",
+                        "User",
+                        self.process_sort_key == RemoteProcessSortKey::User,
+                        self.process_sort_direction,
+                        cx.listener(|this, _, _, cx| {
+                            this.toggle_process_sort(RemoteProcessSortKey::User, cx);
+                        }),
+                    ))
+                    .child(process_sort_button(
+                        "process-sort-command",
+                        "Cmd",
+                        self.process_sort_key == RemoteProcessSortKey::Command,
+                        self.process_sort_direction,
+                        cx.listener(|this, _, _, cx| {
+                            this.toggle_process_sort(RemoteProcessSortKey::Command, cx);
+                        }),
+                    )),
+            )
+            .child(
+                div()
+                    .id(SharedString::from("process-list-scroll"))
+                    .flex_1()
+                    .min_h_0()
+                    .overflow_scroll()
+                    .scrollbar_width(px(6.))
+                    .flex()
+                    .flex_col()
                     .child(process_table_header())
                     .child(rows),
             )

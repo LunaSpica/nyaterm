@@ -108,12 +108,27 @@ impl NyaTermApp {
             .flex()
             .flex_col()
             .size_full()
-            .p_5()
+            .p_3()
             .gap_4()
-            .child(section_header(
-                "Network",
-                "Proxy and SSH tunnel profiles grouped like the legacy network panel.",
-            ))
+            .child(
+                div()
+                    .flex()
+                    .items_center()
+                    .justify_between()
+                    .child(
+                        div()
+                            .text_xs()
+                            .font_weight(FontWeight(800.))
+                            .text_color(rgb(0x8b949e))
+                            .child("NETWORK"),
+                    )
+                    .child(
+                        div()
+                            .text_xs()
+                            .text_color(rgb(0x6e7681))
+                            .child("tunnels / proxies"),
+                    ),
+            )
             .child(
                 div()
                     .flex()
@@ -269,7 +284,7 @@ impl NyaTermApp {
                 div()
                     .rounded_md()
                     .border_1()
-                    .border_color(rgb(0x2a3140))
+                    .border_color(rgb(0x30363d))
                     .bg(rgb(0x151923))
                     .p_3()
                     .flex()

@@ -108,7 +108,7 @@ impl NyaTermApp {
     ) {
         let Some(config) = self.active_ssh_config.clone() else {
             self.terminal_status = "start an SSH session first".to_string();
-            self.selected_nav = crate::ui::models::NavItem::Transfers;
+            self.ensure_panel_open(crate::ui::models::NavItem::Transfers);
             cx.notify();
             return;
         };
@@ -248,7 +248,7 @@ impl NyaTermApp {
     ) {
         let Some(config) = self.active_ssh_config.clone() else {
             self.terminal_status = "start an SSH session first".to_string();
-            self.selected_nav = crate::ui::models::NavItem::Transfers;
+            self.ensure_panel_open(crate::ui::models::NavItem::Transfers);
             cx.notify();
             return;
         };
@@ -415,7 +415,7 @@ impl NyaTermApp {
     ) {
         let Some(config) = self.active_ssh_config.clone() else {
             self.terminal_status = "start an SSH session first".to_string();
-            self.selected_nav = crate::ui::models::NavItem::Transfers;
+            self.ensure_panel_open(crate::ui::models::NavItem::Transfers);
             cx.notify();
             return;
         };
@@ -462,9 +462,7 @@ impl NyaTermApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        if self.selected_nav != crate::ui::models::NavItem::Transfers {
-            self.selected_nav = crate::ui::models::NavItem::Transfers;
-        }
+        self.ensure_panel_open(crate::ui::models::NavItem::Transfers);
         let Some(old_path) = self.transfer_selected_remote_path.clone() else {
             self.terminal_status = "select an SFTP list entry before renaming".to_string();
             cx.notify();
@@ -590,7 +588,7 @@ impl NyaTermApp {
     ) {
         let Some(config) = self.active_ssh_config.clone() else {
             self.terminal_status = "start an SSH session first".to_string();
-            self.selected_nav = crate::ui::models::NavItem::Transfers;
+            self.ensure_panel_open(crate::ui::models::NavItem::Transfers);
             cx.notify();
             return;
         };
@@ -746,7 +744,7 @@ impl NyaTermApp {
     ) {
         let Some(config) = self.active_ssh_config.clone() else {
             self.terminal_status = "start an SSH session first".to_string();
-            self.selected_nav = crate::ui::models::NavItem::Transfers;
+            self.ensure_panel_open(crate::ui::models::NavItem::Transfers);
             cx.notify();
             return;
         };
@@ -871,7 +869,7 @@ impl NyaTermApp {
     ) {
         let Some(config) = self.active_ssh_config.clone() else {
             self.terminal_status = "start an SSH session first".to_string();
-            self.selected_nav = crate::ui::models::NavItem::Transfers;
+            self.ensure_panel_open(crate::ui::models::NavItem::Transfers);
             cx.notify();
             return;
         };

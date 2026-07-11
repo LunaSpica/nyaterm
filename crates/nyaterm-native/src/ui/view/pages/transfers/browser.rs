@@ -46,36 +46,84 @@ impl NyaTermApp {
             .iter()
             .any(|path| path == &current_browser_path);
         let auto_sync_cwd = self.transfer_browser_auto_sync_cwd_enabled();
-        let mut rows = div().mt_2().flex().flex_col().gap_1();
-        if current_browser_path != "/" && current_browser_path != "." {
+        let mut rows = div().flex().flex_col();
+        if can_transfer && current_browser_path != "/" && current_browser_path != "." {
             rows = rows.child(transfer_browser_parent_entry_row(
                 current_browser_path.clone(),
                 column_widths,
                 cx,
             ));
         }
-        if self.transfer_browser_entries.is_empty() {
+        if !can_transfer {
             rows = rows.child(
                 div()
-                    .rounded_md()
-                    .border_1()
-                    .border_color(rgb(0x2a3140))
-                    .bg(rgb(0x10151e))
-                    .p_4()
-                    .text_sm()
-                    .text_color(rgb(0xaeb7c8))
-                    .child("No remote entries loaded."),
+                    .flex()
+                    .flex_col()
+                    .items_center()
+                    .justify_center()
+                    .px_4()
+                    .py_8()
+                    .gap_1()
+                    .child(
+                        div()
+                            .text_size(px(18.))
+                            .text_color(rgb(0x484f58))
+                            .child("📁"),
+                    )
+                    .child(
+                        div()
+                            .text_size(px(12.))
+                            .text_color(rgb(0x8b949e))
+                            .child(if self.active_session_id.is_some() {
+                                "Unsupported session"
+                            } else {
+                                "Connect to an SSH session"
+                            }),
+                    )
+                    .child(
+                        div()
+                            .text_size(px(11.))
+                            .text_color(rgb(0x6e7681))
+                            .child(if self.active_session_id.is_some() {
+                                "File Explorer requires an active SSH session."
+                            } else {
+                                "Open an SSH connection to browse remote files."
+                            }),
+                    ),
+            );
+        } else if self.transfer_browser_entries.is_empty() {
+            rows = rows.child(
+                div()
+                    .flex()
+                    .flex_col()
+                    .items_center()
+                    .justify_center()
+                    .px_4()
+                    .py_8()
+                    .gap_1()
+                    .child(
+                        div()
+                            .text_size(px(12.))
+                            .text_color(rgb(0x8b949e))
+                            .child("No remote entries loaded"),
+                    )
+                    .child(
+                        div()
+                            .text_size(px(11.))
+                            .text_color(rgb(0x6e7681))
+                            .child(truncate_preview(&self.transfer_browser_status, 64)),
+                    ),
             );
         } else if visible_entries.is_empty() {
             rows = rows.child(
                 div()
-                    .rounded_md()
-                    .border_1()
-                    .border_color(rgb(0x2a3140))
-                    .bg(rgb(0x10151e))
-                    .p_4()
-                    .text_sm()
-                    .text_color(rgb(0xaeb7c8))
+                    .flex()
+                    .items_center()
+                    .justify_center()
+                    .px_4()
+                    .py_8()
+                    .text_size(px(11.))
+                    .text_color(rgb(0x6e7681))
                     .child("No remote entries match the current search."),
             );
         } else {
@@ -95,219 +143,173 @@ impl NyaTermApp {
         }
 
         div()
-            .mt_3()
-            .rounded_md()
-            .border_1()
-            .border_color(rgb(0x2a3140))
-            .bg(rgb(0x151923))
-            .p_4()
+            .id(SharedString::from("transfer-browser-panel"))
+            .size_full()
             .flex()
             .flex_col()
-            .gap_3()
+            .overflow_hidden()
+            .bg(rgb(0x161b22))
             .track_focus(&self.transfer_browser_focus)
             .on_key_down(cx.listener(|this, event: &KeyDownEvent, window, cx| {
                 this.handle_transfer_browser_key_down(event, window, cx);
             }))
-            .child(
-                div()
-                    .flex()
-                    .items_center()
-                    .justify_between()
-                    .gap_3()
-                    .child(
-                        div()
-                            .min_w_0()
-                            .flex()
-                            .flex_col()
-                            .gap_1()
-                            .child(
-                                div()
-                                    .text_sm()
-                                    .font_weight(FontWeight(800.))
-                                    .text_color(rgb(0xe5edf7))
-                                    .child("Remote Files"),
-                            )
-                            .child(
-                                div()
-                                    .font_family("JetBrains Mono")
-                                    .text_xs()
-                                    .text_color(rgb(0x98a3b8))
-                                    .child(truncate_preview(&self.transfer_browser_path, 84)),
-                            ),
-                    )
-                    .child(
-                        div()
-                            .flex()
-                            .items_center()
-                            .gap_1()
-                            .child(status_pill(
-                                if can_transfer { "ready" } else { "offline" },
-                                if can_transfer {
-                                    rgb(0x34d399)
-                                } else {
-                                    rgb(0x94a3b8)
-                                },
-                                if can_transfer {
-                                    rgb(0x10251d)
-                                } else {
-                                    rgb(0x202633)
-                                },
-                            ))
-                            .child(transfer_toolbar_divider())
-                            .child(compact_transfer_toolbar_button(
-                                "transfer-browser-new-file",
-                                "+F",
-                                cx.listener(|this, _, window, cx| {
-                                    this.open_transfer_new_file_dialog(window, cx);
-                                }),
-                            ))
-                            .child(compact_transfer_toolbar_button(
-                                "transfer-browser-new-folder",
-                                "+D",
-                                cx.listener(|this, _, window, cx| {
-                                    this.open_transfer_new_folder_dialog(window, cx);
-                                }),
-                            ))
-                            .child(compact_transfer_toolbar_button(
-                                "transfer-browser-new-symlink",
-                                "+L",
-                                cx.listener(|this, _, window, cx| {
-                                    this.open_transfer_new_symlink_dialog(window, cx);
-                                }),
-                            ))
-                            .child(transfer_toolbar_divider())
-                            .child(compact_transfer_toolbar_button(
-                                "transfer-browser-upload-file",
-                                "UF",
-                                cx.listener(|this, _, _, cx| {
-                                    this.prompt_transfer_browser_upload_path(
-                                        TransferPathPromptKind::UploadFile,
-                                        cx,
-                                    );
-                                }),
-                            ))
-                            .child(compact_transfer_toolbar_button(
-                                "transfer-browser-upload-folder",
-                                "UD",
-                                cx.listener(|this, _, _, cx| {
-                                    this.prompt_transfer_browser_upload_path(
-                                        TransferPathPromptKind::UploadDirectory,
-                                        cx,
-                                    );
-                                }),
-                            ))
-                            .child(
-                                div()
-                                    .when(selected_count == 0, |this| this.opacity(0.45))
-                                    .child(compact_transfer_toolbar_button(
-                                        "transfer-browser-download-marked-top",
-                                        "DL",
-                                        cx.listener(|this, _, window, cx| {
-                                            this.start_selected_sftp_download_jobs(window, cx);
-                                        }),
-                                    )),
-                            )
-                            .child(
-                                div()
-                                    .when(selected_count == 0, |this| this.opacity(0.45))
-                                    .child(compact_transfer_toolbar_button(
-                                        "transfer-browser-delete-marked-top",
-                                        "Del",
-                                        cx.listener(|this, _, window, cx| {
-                                            this.open_selected_transfer_delete_dialog(window, cx);
-                                        }),
-                                    )),
-                            )
-                            .child(transfer_toolbar_divider())
-                            .child(div().when(!can_go_back, |this| this.opacity(0.45)).child(
-                                compact_transfer_toolbar_button(
+            .when(can_transfer, |this| {
+                this.child(
+                    div()
+                        .h(px(32.))
+                        .px_2()
+                        .border_b_1()
+                        .border_color(rgb(0x30363d))
+                        .bg(rgb(0x12171f))
+                        .flex()
+                        .items_center()
+                        .gap_1()
+                        .child(compact_transfer_toolbar_button(
+                            "transfer-browser-new-file",
+                            "＋F",
+                            cx.listener(|this, _, window, cx| {
+                                this.open_transfer_new_file_dialog(window, cx);
+                            }),
+                        ))
+                        .child(compact_transfer_toolbar_button(
+                            "transfer-browser-new-folder",
+                            "＋D",
+                            cx.listener(|this, _, window, cx| {
+                                this.open_transfer_new_folder_dialog(window, cx);
+                            }),
+                        ))
+                        .child(transfer_toolbar_divider())
+                        .child(compact_transfer_toolbar_button(
+                            "transfer-browser-upload-file",
+                            "⬆",
+                            cx.listener(|this, _, _, cx| {
+                                this.prompt_transfer_browser_upload_path(
+                                    TransferPathPromptKind::UploadFile,
+                                    cx,
+                                );
+                            }),
+                        ))
+                        .child(compact_transfer_toolbar_button(
+                            "transfer-browser-upload-folder",
+                            "⬆D",
+                            cx.listener(|this, _, _, cx| {
+                                this.prompt_transfer_browser_upload_path(
+                                    TransferPathPromptKind::UploadDirectory,
+                                    cx,
+                                );
+                            }),
+                        ))
+                        .child(
+                            div()
+                                .when(selected_count == 0, |this| this.opacity(0.45))
+                                .child(compact_transfer_toolbar_button(
+                                    "transfer-browser-download-selected",
+                                    "⬇",
+                                    cx.listener(|this, _, window, cx| {
+                                        this.start_selected_sftp_download_jobs(window, cx);
+                                    }),
+                                )),
+                        )
+                        .child(
+                            div()
+                                .when(selected_count == 0, |this| this.opacity(0.45))
+                                .child(compact_transfer_toolbar_button(
+                                    "transfer-browser-delete-selected",
+                                    "🗑",
+                                    cx.listener(|this, _, window, cx| {
+                                        this.open_selected_transfer_delete_dialog(window, cx);
+                                    }),
+                                )),
+                        )
+                        .child(transfer_toolbar_divider())
+                        .child(compact_transfer_toolbar_button(
+                            "transfer-browser-go-up",
+                            "⤴",
+                            cx.listener(|this, _, window, cx| {
+                                this.open_transfer_parent_directory(window, cx);
+                            }),
+                        ))
+                        .child(
+                            div()
+                                .when(!can_go_back, |this| this.opacity(0.4))
+                                .child(compact_transfer_toolbar_button(
                                     "transfer-browser-back",
-                                    "<",
+                                    "◀",
                                     cx.listener(|this, _, window, cx| {
                                         this.open_transfer_browser_history(1, window, cx);
                                     }),
-                                ),
-                            ))
-                            .child(
-                                div()
-                                    .when(!can_go_forward, |this| this.opacity(0.45))
-                                    .child(compact_transfer_toolbar_button(
-                                        "transfer-browser-forward",
-                                        ">",
-                                        cx.listener(|this, _, window, cx| {
-                                            this.open_transfer_browser_history(-1, window, cx);
-                                        }),
-                                    )),
-                            )
-                            .child(compact_transfer_toolbar_button(
-                                "transfer-browser-up",
-                                "Up",
-                                cx.listener(|this, _, window, cx| {
-                                    this.open_transfer_parent_directory(window, cx);
-                                }),
-                            ))
-                            .child(compact_transfer_toolbar_button(
-                                "transfer-browser-refresh",
-                                "Ref",
-                                cx.listener(|this, _, window, cx| {
-                                    this.refresh_transfer_browser(window, cx);
-                                }),
-                            ))
-                            .child(compact_transfer_toolbar_button(
-                                "transfer-browser-open-path",
-                                "Go",
-                                cx.listener(|this, _, window, cx| {
-                                    this.open_transfer_remote_path_from_input(window, cx);
-                                }),
-                            ))
-                            .child(transfer_toolbar_divider())
-                            .child(compact_transfer_toolbar_button(
-                                "transfer-browser-sync-cwd",
-                                "CWD",
-                                cx.listener(|this, _, window, cx| {
-                                    this.start_transfer_sync_cwd_job(window, cx);
-                                }),
-                            ))
-                            .child(compact_transfer_toolbar_button(
-                                "transfer-browser-auto-sync-cwd",
-                                if auto_sync_cwd { "Auto" } else { "CWD+" },
-                                cx.listener(|this, _, window, cx| {
-                                    this.toggle_transfer_browser_auto_sync_cwd(window, cx);
-                                }),
-                            ))
-                            .child(compact_transfer_toolbar_button(
-                                "transfer-browser-toggle-favorite",
-                                if is_current_favorite { "Fav-" } else { "Fav+" },
-                                cx.listener(|this, _, _, cx| {
-                                    this.toggle_current_transfer_browser_favorite(cx);
-                                }),
-                            ))
-                            .child(transfer_toolbar_divider())
-                            .child(compact_transfer_toolbar_button(
-                                "transfer-browser-expand-search",
-                                if search_active { "Find*" } else { "Find" },
-                                cx.listener(|this, _, window, cx| {
-                                    this.transfer_browser_search_expanded = true;
-                                    this.transfer_browser_status =
-                                        "file search focused".to_string();
-                                    window.focus(&this.transfer_browser_search_focus);
-                                    cx.notify();
-                                }),
-                            )),
-                    ),
-            )
-            .child(self.transfer_browser_path_row(current_browser_path.clone(), cx))
-            .when(search_expanded, |this| {
+                                )),
+                        )
+                        .child(
+                            div()
+                                .when(!can_go_forward, |this| this.opacity(0.4))
+                                .child(compact_transfer_toolbar_button(
+                                    "transfer-browser-forward",
+                                    "▶",
+                                    cx.listener(|this, _, window, cx| {
+                                        this.open_transfer_browser_history(-1, window, cx);
+                                    }),
+                                )),
+                        )
+                        .child(compact_transfer_toolbar_button(
+                            "transfer-browser-refresh",
+                            "↻",
+                            cx.listener(|this, _, window, cx| {
+                                this.refresh_transfer_browser(window, cx);
+                            }),
+                        ))
+                        .child(div().flex_1())
+                        .child(status_pill(
+                            if can_transfer { "SSH" } else { "off" },
+                            if can_transfer { rgb(0x34d399) } else { rgb(0x94a3b8) },
+                            if can_transfer { rgb(0x10251d) } else { rgb(0x202633) },
+                        ))
+                        .child(compact_transfer_toolbar_button(
+                            "transfer-browser-sync-cwd",
+                            "CWD",
+                            cx.listener(|this, _, window, cx| {
+                                this.start_transfer_sync_cwd_job(window, cx);
+                            }),
+                        ))
+                        .child(compact_transfer_toolbar_button(
+                            "transfer-browser-auto-sync-cwd",
+                            if auto_sync_cwd { "Auto*" } else { "Auto" },
+                            cx.listener(|this, _, window, cx| {
+                                this.toggle_transfer_browser_auto_sync_cwd(window, cx);
+                            }),
+                        ))
+                        .child(compact_transfer_toolbar_button(
+                            "transfer-browser-toggle-favorite",
+                            if is_current_favorite { "★" } else { "☆" },
+                            cx.listener(|this, _, _, cx| {
+                                this.toggle_current_transfer_browser_favorite(cx);
+                            }),
+                        ))
+                        .child(compact_transfer_toolbar_button(
+                            "transfer-browser-expand-search",
+                            if search_active { "Find*" } else { "Find" },
+                            cx.listener(|this, _, window, cx| {
+                                this.transfer_browser_search_expanded = true;
+                                this.transfer_browser_status = "file search focused".to_string();
+                                window.focus(&this.transfer_browser_search_focus);
+                                cx.notify();
+                            }),
+                        )),
+                )
+                .child(self.transfer_browser_path_row(current_browser_path.clone(), cx))
+            })
+            .when(can_transfer && search_expanded, |this| {
                 this.child(
                     div()
                         .flex()
                         .items_center()
                         .justify_between()
                         .gap_2()
-                        .rounded_sm()
-                        .bg(rgb(0x0f1724))
-                        .px_3()
-                        .py_2()
+                        .border_b_1()
+                        .border_color(rgb(0x30363d))
+                        .bg(rgb(0x12171f))
+                        .px_2()
+                        .py_1()
                         .child(
                             div()
                                 .text_xs()
@@ -603,8 +605,10 @@ impl NyaTermApp {
             .child(
                 div()
                     .id(SharedString::from("transfer-browser-table-scroll"))
+                    .flex_1()
+                    .min_h_0()
                     .min_w_0()
-                    .overflow_x_scroll()
+                    .overflow_scroll()
                     .scrollbar_width(px(8.))
                     .on_mouse_down(
                         MouseButton::Right,
@@ -617,7 +621,6 @@ impl NyaTermApp {
                             .min_w(table_width)
                             .flex()
                             .flex_col()
-                            .gap_1()
                             .child(
                                 div()
                                     .flex()
@@ -701,9 +704,9 @@ fn compact_transfer_toolbar_button(
 ) -> impl IntoElement {
     div()
         .id(SharedString::from(id.into()))
-        .h(px(28.))
-        .min_w(px(32.))
-        .px_2()
+        .h(px(24.))
+        .min_w(px(28.))
+        .px_1()
         .flex()
         .items_center()
         .justify_center()

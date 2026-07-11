@@ -5,6 +5,27 @@ pub struct NyaTermApp {
     pub(in crate::ui::view) services: NativeServices,
     pub(in crate::ui::view) inventory: MigrationInventory,
     pub(in crate::ui::view) connections: Vec<SavedConnection>,
+    pub(in crate::ui::view) connection_groups: Vec<Group>,
+    pub(in crate::ui::view) connection_search_draft: String,
+    pub(in crate::ui::view) connection_search_focus: FocusHandle,
+    pub(in crate::ui::view) connection_sort_mode: ConnectionSortMode,
+    pub(in crate::ui::view) connections_more_menu_open: bool,
+    pub(in crate::ui::view) connection_context_menu: Option<ConnectionContextMenuState>,
+    pub(in crate::ui::view) connection_group_context_menu: Option<ConnectionGroupContextMenuState>,
+    pub(in crate::ui::view) hovered_connection_id: Option<String>,
+    pub(in crate::ui::view) hovered_connection_group_id: Option<String>,
+    pub(in crate::ui::view) expanded_connection_groups: HashSet<String>,
+    pub(in crate::ui::view) connection_editor: Option<ConnectionEditorState>,
+    pub(in crate::ui::view) connection_editor_focus: FocusHandle,
+    pub(in crate::ui::view) connection_group_editor: Option<ConnectionGroupEditorState>,
+    pub(in crate::ui::view) connection_group_editor_focus: FocusHandle,
+    pub(in crate::ui::view) connection_delete_confirm: Option<ConnectionDeleteConfirmState>,
+    pub(in crate::ui::view) connection_group_delete_confirm: Option<ConnectionGroupDeleteConfirmState>,
+    pub(in crate::ui::view) connection_ssh_keys: Vec<SshKey>,
+    pub(in crate::ui::view) connection_otp_entries: Vec<OtpEntry>,
+    pub(in crate::ui::view) connection_saved_passwords: Vec<SavedPassword>,
+    pub(in crate::ui::view) connection_saved_credentials: Vec<SavedCredential>,
+    pub(in crate::ui::view) connection_serial_ports: Vec<String>,
     pub(in crate::ui::view) tunnels: Vec<TunnelConfig>,
     pub(in crate::ui::view) tunnel_groups: Vec<TunnelGroup>,
     pub(in crate::ui::view) proxies: Vec<ProxyConfig>,
@@ -105,6 +126,7 @@ pub struct NyaTermApp {
     pub(in crate::ui::view) process_sort_key: RemoteProcessSortKey,
     pub(in crate::ui::view) process_sort_direction: RemoteProcessSortDirection,
     pub(in crate::ui::view) process_selected_pid: Option<u32>,
+    pub(in crate::ui::view) process_menu_pid: Option<u32>,
     pub(in crate::ui::view) process_nice_draft: String,
     pub(in crate::ui::view) process_nice_focus: FocusHandle,
     pub(in crate::ui::view) process_signal_confirm: Option<RemoteProcessSignalConfirmState>,
@@ -144,6 +166,8 @@ pub struct NyaTermApp {
     pub(in crate::ui::view) docker_details_container_id: Option<String>,
     pub(in crate::ui::view) docker_details_last_refresh_at: Option<Instant>,
     pub(in crate::ui::view) docker_confirm: Option<DockerConfirmState>,
+    pub(in crate::ui::view) docker_container_menu_id: Option<String>,
+    pub(in crate::ui::view) docker_compose_menu_id: Option<String>,
     pub(in crate::ui::view) docker_tab: DockerTab,
     pub(in crate::ui::view) docker_search_draft: String,
     pub(in crate::ui::view) docker_search_focus: FocusHandle,
@@ -235,6 +259,8 @@ pub struct NyaTermApp {
     pub(in crate::ui::view) ai_prompt_draft: String,
     pub(in crate::ui::view) ai_prepared_request: Option<AiPreparedRequest>,
     pub(in crate::ui::view) ai_response_preview: String,
+    pub(in crate::ui::view) ai_chat_messages: Vec<AiMessage>,
+    pub(in crate::ui::view) ai_streaming_assistant_id: Option<String>,
     pub(in crate::ui::view) ai_command_cards: Vec<AiCommandCard>,
     pub(in crate::ui::view) ai_agent_task_prompt: Option<String>,
     pub(in crate::ui::view) ai_agent_step_index: u16,
@@ -326,10 +352,45 @@ pub struct NyaTermApp {
     pub(in crate::ui::view) selected_nav: NavItem,
     pub(in crate::ui::view) main_mode: MainMode,
     pub(in crate::ui::view) settings_active_tab: SettingsTab,
+    pub(in crate::ui::view) active_left_panel: Option<NavItem>,
+    pub(in crate::ui::view) active_right_panel: Option<NavItem>,
+    pub(in crate::ui::view) left_open_panels: Vec<String>,
+    pub(in crate::ui::view) right_open_panels: Vec<String>,
+    pub(in crate::ui::view) panel_stack_sizes: HashMap<String, f32>,
+    pub(in crate::ui::view) panel_multi_open: bool,
     pub(in crate::ui::view) right_focus: RightFocus,
     pub(in crate::ui::view) left_sidebar_collapsed: bool,
     pub(in crate::ui::view) right_inspector_collapsed: bool,
+    pub(in crate::ui::view) left_panel_width: f32,
+    pub(in crate::ui::view) right_panel_width: f32,
+    pub(in crate::ui::view) transfer_panel_height: f32,
+    pub(in crate::ui::view) panel_resize: Option<PanelResizeState>,
+    pub(in crate::ui::view) transfer_height_resize: Option<TransferHeightResizeState>,
+    pub(in crate::ui::view) panel_stack_resize: Option<PanelStackResizeState>,
+    pub(in crate::ui::view) activity_bar_layout: ActivityBarLayoutState,
+    pub(in crate::ui::view) activity_bar_context_menu: Option<ActivityBarContextMenuState>,
+    pub(in crate::ui::view) title_menu_open: Option<TitleMenu>,
+    pub(in crate::ui::view) security_auth_tab: SecurityAuthTab,
+    pub(in crate::ui::view) security_key_editor: Option<SecurityKeyEditorState>,
+    pub(in crate::ui::view) security_key_editor_focus: FocusHandle,
+    pub(in crate::ui::view) security_otp_editor: Option<SecurityOtpEditorState>,
+    pub(in crate::ui::view) security_otp_editor_focus: FocusHandle,
+    pub(in crate::ui::view) security_password_editor: Option<SecurityPasswordEditorState>,
+    pub(in crate::ui::view) security_password_editor_focus: FocusHandle,
+    pub(in crate::ui::view) security_credential_editor: Option<SecurityCredentialEditorState>,
+    pub(in crate::ui::view) security_credential_editor_focus: FocusHandle,
+    pub(in crate::ui::view) security_delete_confirm: Option<SecurityDeleteConfirmState>,
+    pub(in crate::ui::view) security_otp_codes: HashMap<String, String>,
+    pub(in crate::ui::view) security_revealed_passwords: HashMap<String, String>,
+    pub(in crate::ui::view) security_revealed_credentials: HashMap<String, String>,
+    pub(in crate::ui::view) security_status: String,
+    pub(in crate::ui::view) security_secrets_unlocked: bool,
+    pub(in crate::ui::view) security_unlock_prompt_open: bool,
+    pub(in crate::ui::view) security_unlock_draft: String,
+    pub(in crate::ui::view) security_unlock_error: Option<String>,
+    pub(in crate::ui::view) security_unlock_focus: FocusHandle,
     pub(in crate::ui::view) workspace_split: Option<WorkspaceSplitState>,
+    pub(in crate::ui::view) workspace_split_resize: Option<WorkspaceSplitResizeState>,
     pub(in crate::ui::view) is_locked: bool,
     pub(in crate::ui::view) last_user_activity_at: Instant,
 }
@@ -350,6 +411,11 @@ impl NyaTermApp {
         let (ai_chat_tx, ai_chat_rx) = mpsc::channel();
         let (
             connections,
+            connection_groups,
+            connection_ssh_keys,
+            connection_otp_entries,
+            connection_saved_passwords,
+            connection_saved_credentials,
             tunnels,
             tunnel_groups,
             proxies,
@@ -376,6 +442,12 @@ impl NyaTermApp {
                 match store.load_sessions() {
                     Ok(config) => {
                         let settings = store.load_app_settings_summary().unwrap_or_default();
+                        let connection_groups = config.groups.clone();
+                        let connection_ssh_keys = store.list_ssh_keys().unwrap_or_default();
+                        let connection_otp_entries = store.list_otp_entries().unwrap_or_default();
+                        let connection_saved_passwords = store.list_passwords().unwrap_or_default();
+                        let connection_saved_credentials =
+                            store.list_credentials().unwrap_or_default();
                         let tunnels = store.list_tunnels().unwrap_or_default();
                         let tunnel_groups = store.list_tunnel_groups().unwrap_or_default();
                         let proxies = store.list_proxies().unwrap_or_default();
@@ -398,6 +470,11 @@ impl NyaTermApp {
                             ai_usage_counts(&store);
                         (
                             config.connections,
+                            connection_groups,
+                            connection_ssh_keys,
+                            connection_otp_entries,
+                            connection_saved_passwords,
+                            connection_saved_credentials,
                             tunnels,
                             tunnel_groups,
                             proxies,
@@ -430,6 +507,11 @@ impl NyaTermApp {
                         Vec::new(),
                         Vec::new(),
                         Vec::new(),
+                        Vec::new(),
+                        Vec::new(),
+                        Vec::new(),
+                        Vec::new(),
+                        Vec::new(),
                         KeywordHighlightConfig::default(),
                         AppSettingsSummary::default(),
                         StoreStatus {
@@ -448,6 +530,11 @@ impl NyaTermApp {
                 }
             }
             Err(error) => (
+                Vec::new(),
+                Vec::new(),
+                Vec::new(),
+                Vec::new(),
+                Vec::new(),
                 Vec::new(),
                 Vec::new(),
                 Vec::new(),
@@ -491,6 +578,41 @@ impl NyaTermApp {
         )
         .unwrap_or_default();
         let (ai_model_draft, ai_base_url_draft) = ai_active_profile_drafts(&ai_settings);
+        let left_panel_width = settings.ui_left_panel_width as f32;
+        let right_panel_width = settings.ui_right_panel_width as f32;
+        let transfer_panel_height = settings.ui_transfer_height as f32;
+        let active_left_panel = settings
+            .ui_active_left_panel
+            .as_deref()
+            .and_then(NavItem::from_persistence_id)
+            .filter(|item| item.is_left_panel())
+            .or(Some(NavItem::Transfers));
+        let active_right_panel = settings
+            .ui_active_right_panel
+            .as_deref()
+            .and_then(NavItem::from_persistence_id)
+            .filter(|item| item.is_right_panel())
+            .or(Some(NavItem::Connections));
+        let left_sidebar_collapsed = settings.ui_left_panel_collapsed;
+        let right_inspector_collapsed = settings.ui_right_panel_collapsed;
+        let security_secrets_unlocked = !settings.has_master_password;
+        let activity_bar_layout = ActivityBarLayoutState {
+            left_top: settings.ui_activity_bar_left_top.clone(),
+            left_bottom: settings.ui_activity_bar_left_bottom.clone(),
+            right_top: settings.ui_activity_bar_right_top.clone(),
+            right_bottom: settings.ui_activity_bar_right_bottom.clone(),
+            show_labels: settings.ui_activity_bar_show_labels,
+        };
+        let left_open_panels = settings.ui_left_open_panels.clone();
+        let right_open_panels = settings.ui_right_open_panels.clone();
+        let panel_stack_sizes = settings
+            .ui_panel_stack_sizes
+            .iter()
+            .filter_map(|(key, value)| {
+                (*value > 0).then(|| (key.clone(), (*value as f32) / 1000.))
+            })
+            .collect::<HashMap<_, _>>();
+        let panel_multi_open = settings.ui_panel_multi_open;
         let translate_target_language = translation_settings.target_language.clone();
 
         Self {
@@ -498,6 +620,30 @@ impl NyaTermApp {
             services: NativeServices::new(),
             inventory,
             connections,
+            connection_search_draft: String::new(),
+            connection_search_focus: cx.focus_handle(),
+            connection_sort_mode: ConnectionSortMode::Default,
+            connections_more_menu_open: false,
+            connection_context_menu: None,
+            connection_group_context_menu: None,
+            hovered_connection_id: None,
+            hovered_connection_group_id: None,
+            expanded_connection_groups: connection_groups
+                .iter()
+                .map(|group| group.id.clone())
+                .collect(),
+            connection_groups,
+            connection_editor: None,
+            connection_editor_focus: cx.focus_handle(),
+            connection_group_editor: None,
+            connection_group_editor_focus: cx.focus_handle(),
+            connection_delete_confirm: None,
+            connection_group_delete_confirm: None,
+            connection_ssh_keys,
+            connection_otp_entries,
+            connection_saved_passwords,
+            connection_saved_credentials,
+            connection_serial_ports: Vec::new(),
             tunnels,
             tunnel_groups,
             proxies,
@@ -601,6 +747,7 @@ impl NyaTermApp {
             process_sort_key: RemoteProcessSortKey::Cpu,
             process_sort_direction: RemoteProcessSortDirection::Descending,
             process_selected_pid: None,
+            process_menu_pid: None,
             process_nice_draft: "0".to_string(),
             process_nice_focus: cx.focus_handle(),
             process_signal_confirm: None,
@@ -640,6 +787,8 @@ impl NyaTermApp {
             docker_details_container_id: None,
             docker_details_last_refresh_at: None,
             docker_confirm: None,
+            docker_container_menu_id: None,
+            docker_compose_menu_id: None,
             docker_tab: DockerTab::Containers,
             docker_search_draft: String::new(),
             docker_search_focus: cx.focus_handle(),
@@ -726,6 +875,8 @@ impl NyaTermApp {
             ai_prompt_draft: String::new(),
             ai_prepared_request: None,
             ai_response_preview: "Ask mode ready".to_string(),
+            ai_chat_messages: Vec::new(),
+            ai_streaming_assistant_id: None,
             ai_command_cards: Vec::new(),
             ai_agent_task_prompt: None,
             ai_agent_step_index: 0,
@@ -817,10 +968,45 @@ impl NyaTermApp {
             selected_nav: NavItem::Workspace,
             main_mode: MainMode::Workspace,
             settings_active_tab: SettingsTab::General,
+            active_left_panel,
+            active_right_panel,
+            left_open_panels,
+            right_open_panels,
+            panel_stack_sizes,
+            panel_multi_open,
             right_focus: RightFocus::Default,
-            left_sidebar_collapsed: false,
-            right_inspector_collapsed: false,
+            left_sidebar_collapsed,
+            right_inspector_collapsed,
+            left_panel_width,
+            right_panel_width,
+            transfer_panel_height,
+            panel_resize: None,
+            transfer_height_resize: None,
+            panel_stack_resize: None,
+            activity_bar_layout,
+            activity_bar_context_menu: None,
+            title_menu_open: None,
+            security_auth_tab: SecurityAuthTab::Keys,
+            security_key_editor: None,
+            security_key_editor_focus: cx.focus_handle(),
+            security_otp_editor: None,
+            security_otp_editor_focus: cx.focus_handle(),
+            security_password_editor: None,
+            security_password_editor_focus: cx.focus_handle(),
+            security_credential_editor: None,
+            security_credential_editor_focus: cx.focus_handle(),
+            security_delete_confirm: None,
+            security_otp_codes: HashMap::new(),
+            security_revealed_passwords: HashMap::new(),
+            security_revealed_credentials: HashMap::new(),
+            security_status: "security ready".to_string(),
+            security_secrets_unlocked,
+            security_unlock_prompt_open: false,
+            security_unlock_draft: String::new(),
+            security_unlock_error: None,
+            security_unlock_focus: cx.focus_handle(),
             workspace_split: None,
+            workspace_split_resize: None,
             is_locked: false,
             last_user_activity_at: Instant::now(),
         }

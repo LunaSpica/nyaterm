@@ -96,7 +96,7 @@ impl NyaTermApp {
             .flex()
             .flex_col()
             .size_full()
-            .p_5()
+            .p_3()
             .gap_4()
             .child(section_header(
                 "Translation",
@@ -116,7 +116,7 @@ impl NyaTermApp {
                 div()
                     .rounded_md()
                     .border_1()
-                    .border_color(rgb(0x2a3140))
+                    .border_color(rgb(0x30363d))
                     .bg(rgb(0x151923))
                     .p_4()
                     .child(
@@ -168,7 +168,7 @@ impl NyaTermApp {
                         div()
                             .rounded_md()
                             .border_1()
-                            .border_color(rgb(0x2a3140))
+                            .border_color(rgb(0x30363d))
                             .bg(rgb(0x151923))
                             .p_4()
                             .child(
@@ -212,7 +212,7 @@ impl NyaTermApp {
                             .col_span(2)
                             .rounded_md()
                             .border_1()
-                            .border_color(rgb(0x2a3140))
+                            .border_color(rgb(0x30363d))
                             .bg(rgb(0x151923))
                             .p_4()
                             .child(
@@ -254,7 +254,7 @@ impl NyaTermApp {
                 div()
                     .rounded_md()
                     .border_1()
-                    .border_color(rgb(0x2a3140))
+                    .border_color(rgb(0x30363d))
                     .bg(rgb(0x151923))
                     .p_4()
                     .child(

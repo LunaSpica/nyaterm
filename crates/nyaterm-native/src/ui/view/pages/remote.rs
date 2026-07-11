@@ -4,7 +4,7 @@ use gpui::{
 };
 
 use crate::ui::components::{
-    capability_line, empty_panel, section_header, small_button, status_pill,
+    capability_line, empty_panel, icon_button, section_header, small_button, status_pill,
 };
 use std::collections::{HashMap, HashSet};
 

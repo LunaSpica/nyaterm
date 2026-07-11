@@ -581,6 +581,12 @@ impl NyaTermApp {
                 match store.load_sessions() {
                     Ok(config) => {
                         self.connections = config.connections;
+                        self.connection_groups = config.groups;
+                        self.connection_ssh_keys = store.list_ssh_keys().unwrap_or_default();
+                        self.connection_otp_entries = store.list_otp_entries().unwrap_or_default();
+                        self.connection_saved_passwords = store.list_passwords().unwrap_or_default();
+                        self.connection_saved_credentials =
+                            store.list_credentials().unwrap_or_default();
                         self.tunnels = store.list_tunnels().unwrap_or_default();
                         self.tunnel_groups = store.list_tunnel_groups().unwrap_or_default();
                         self.proxies = store.list_proxies().unwrap_or_default();
@@ -592,6 +598,7 @@ impl NyaTermApp {
                         self.keyword_highlights =
                             store.load_keyword_highlights().unwrap_or_default();
                         self.settings = store.load_app_settings_summary().unwrap_or_default();
+                        self.apply_ui_layout_from_settings();
                         self.translation_settings = store
                             .load_translation_settings()
                             .unwrap_or_else(|_| TranslationSettings {
@@ -620,6 +627,11 @@ impl NyaTermApp {
                     }
                     Err(error) => {
                         self.connections.clear();
+                        self.connection_groups.clear();
+                        self.connection_ssh_keys.clear();
+                        self.connection_otp_entries.clear();
+                        self.connection_saved_passwords.clear();
+                        self.connection_saved_credentials.clear();
                         self.tunnels.clear();
                         self.tunnel_groups.clear();
                         self.proxies.clear();

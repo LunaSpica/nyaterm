@@ -131,6 +131,53 @@ pub struct DecryptedSshKey {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct SavedPassword {
+    #[serde(default = "uuid_v4")]
+    pub id: String,
+    pub name: String,
+    #[serde(default)]
+    pub password: Option<String>,
+    #[serde(default, skip_serializing)]
+    pub has_password: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DecryptedSavedPassword {
+    pub id: String,
+    pub name: String,
+    pub password: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct SavedCredential {
+    #[serde(default = "uuid_v4")]
+    pub id: String,
+    pub name: String,
+    pub username: String,
+    #[serde(default)]
+    pub password: Option<String>,
+    #[serde(default)]
+    pub username_prompt_regex: Option<String>,
+    #[serde(default)]
+    pub password_prompt_regex: Option<String>,
+    #[serde(default = "default_true")]
+    pub enabled: bool,
+    #[serde(default, skip_serializing)]
+    pub has_password: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DecryptedSavedCredential {
+    pub id: String,
+    pub name: String,
+    pub username: String,
+    pub password: Option<String>,
+    pub username_prompt_regex: Option<String>,
+    pub password_prompt_regex: Option<String>,
+    pub enabled: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct OtpEntry {
     #[serde(default = "uuid_v4")]
     pub id: String,
@@ -489,6 +536,38 @@ pub struct AppSettingsSummary {
     pub ui_file_explorer_auto_sync_cwd_connection_ids: Vec<String>,
     #[serde(default)]
     pub ui_file_explorer_favorite_dirs_by_connection_id: HashMap<String, Vec<String>>,
+    #[serde(default = "default_left_panel_width")]
+    pub ui_left_panel_width: u32,
+    #[serde(default = "default_right_panel_width")]
+    pub ui_right_panel_width: u32,
+    #[serde(default = "default_transfer_height")]
+    pub ui_transfer_height: u32,
+    #[serde(default)]
+    pub ui_active_left_panel: Option<String>,
+    #[serde(default)]
+    pub ui_active_right_panel: Option<String>,
+    #[serde(default)]
+    pub ui_left_panel_collapsed: bool,
+    #[serde(default)]
+    pub ui_right_panel_collapsed: bool,
+    #[serde(default = "default_activity_left_top")]
+    pub ui_activity_bar_left_top: Vec<String>,
+    #[serde(default = "default_activity_left_bottom")]
+    pub ui_activity_bar_left_bottom: Vec<String>,
+    #[serde(default = "default_activity_right_top")]
+    pub ui_activity_bar_right_top: Vec<String>,
+    #[serde(default = "default_activity_right_bottom")]
+    pub ui_activity_bar_right_bottom: Vec<String>,
+    #[serde(default)]
+    pub ui_activity_bar_show_labels: bool,
+    #[serde(default)]
+    pub ui_panel_multi_open: bool,
+    #[serde(default)]
+    pub ui_left_open_panels: Vec<String>,
+    #[serde(default)]
+    pub ui_right_open_panels: Vec<String>,
+    #[serde(default)]
+    pub ui_panel_stack_sizes: HashMap<String, u32>,
     pub interaction_copy_on_select: bool,
     pub interaction_right_click_paste: bool,
     pub interaction_command_suggestions_enabled: bool,
@@ -603,6 +682,22 @@ impl Default for AppSettingsSummary {
             ui_quick_cmd_sort_mode: default_quick_cmd_sort_mode(),
             ui_file_explorer_auto_sync_cwd_connection_ids: Vec::new(),
             ui_file_explorer_favorite_dirs_by_connection_id: HashMap::new(),
+            ui_left_panel_width: 256,
+            ui_right_panel_width: 288,
+            ui_transfer_height: 180,
+            ui_active_left_panel: Some("fileExplorer".to_string()),
+            ui_active_right_panel: Some("savedConnections".to_string()),
+            ui_left_panel_collapsed: false,
+            ui_right_panel_collapsed: false,
+            ui_activity_bar_left_top: default_activity_left_top(),
+            ui_activity_bar_left_bottom: default_activity_left_bottom(),
+            ui_activity_bar_right_top: default_activity_right_top(),
+            ui_activity_bar_right_bottom: default_activity_right_bottom(),
+            ui_activity_bar_show_labels: false,
+            ui_panel_multi_open: false,
+            ui_left_open_panels: Vec::new(),
+            ui_right_open_panels: Vec::new(),
+            ui_panel_stack_sizes: HashMap::new(),
             interaction_copy_on_select: false,
             interaction_right_click_paste: false,
             interaction_command_suggestions_enabled: true,
@@ -644,6 +739,51 @@ impl Default for AppSettingsSummary {
             keybindings: HashMap::new(),
         }
     }
+}
+
+fn default_activity_left_top() -> Vec<String> {
+    vec![
+        "fileExplorer".to_string(),
+        "network".to_string(),
+        "securityAuth".to_string(),
+    ]
+}
+
+fn default_activity_left_bottom() -> Vec<String> {
+    vec!["syncBackupHistory".to_string(), "settings".to_string()]
+}
+
+fn default_activity_right_top() -> Vec<String> {
+    vec![
+        "savedConnections".to_string(),
+        "aiAssistant".to_string(),
+        "activeSessions".to_string(),
+        "commandHistory".to_string(),
+        "resourceMonitor".to_string(),
+        "processManager".to_string(),
+        "dockerManager".to_string(),
+    ]
+}
+
+fn default_activity_right_bottom() -> Vec<String> {
+    vec![
+        "quickCmdBar".to_string(),
+        "serialSend".to_string(),
+        "recording".to_string(),
+        "lock".to_string(),
+    ]
+}
+
+fn default_left_panel_width() -> u32 {
+    256
+}
+
+fn default_right_panel_width() -> u32 {
+    288
+}
+
+fn default_transfer_height() -> u32 {
+    180
 }
 
 fn default_quick_cmd_view_mode() -> String {

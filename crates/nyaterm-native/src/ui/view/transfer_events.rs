@@ -385,10 +385,7 @@ impl NyaTermApp {
                         file.size
                     );
                     self.ai_status = format!("AI file action ready: {action_name} ({action_id})");
-                    self.selected_nav = NavItem::Workspace;
-                    self.main_mode = MainMode::Workspace;
-                    self.right_focus = RightFocus::Default;
-                    self.right_inspector_collapsed = false;
+                    self.ensure_panel_open(NavItem::AiAssistant);
                     self.ai_chat_focus_pending = true;
                     self.transfer_browser_status = format!("AI action ready for {remote_path}");
                     self.terminal_status =

@@ -20,7 +20,7 @@ pub(in crate::ui::view) fn logo_mark() -> impl IntoElement {
     div()
         .size(px(26.))
         .rounded_md()
-        .bg(rgb(0x6ee7b7))
+        .bg(rgb(0x238636))
         .shadow_sm()
         .child(
             div()
@@ -28,7 +28,7 @@ pub(in crate::ui::view) fn logo_mark() -> impl IntoElement {
                 .flex()
                 .items_center()
                 .justify_center()
-                .text_color(rgb(0x062018))
+                .text_color(rgb(0xffffff))
                 .font_weight(FontWeight(900.))
                 .child("N"),
         )
@@ -46,9 +46,9 @@ pub(in crate::ui::view) fn menu_bar_button(
         .items_center()
         .rounded_sm()
         .text_xs()
-        .text_color(rgb(0xcbd5e1))
+        .text_color(rgb(0x8b949e))
         .cursor_pointer()
-        .hover(|this| this.bg(rgb(0x202632)).text_color(rgb(0xffffff)))
+        .hover(|this| this.bg(rgb(0x1c2128)).text_color(rgb(0x58a6ff)))
         .child(label)
         .on_click(on_click)
 }
@@ -68,7 +68,7 @@ pub(in crate::ui::view) fn status_bar_label(
         .px_2()
         .rounded_sm()
         .text_xs()
-        .text_color(rgb(0x8f98aa))
+        .text_color(rgb(0x8b949e))
         .child(label)
         .child(
             div()
@@ -96,9 +96,9 @@ pub(in crate::ui::view) fn status_bar_button(
         .px_2()
         .rounded_sm()
         .text_xs()
-        .text_color(rgb(0x8f98aa))
+        .text_color(rgb(0x8b949e))
         .cursor_pointer()
-        .hover(|this| this.bg(rgb(0x202632)).text_color(rgb(0xe5edf7)))
+        .hover(|this| this.bg(rgb(0x1c2128)).text_color(rgb(0xc9d1d9)))
         .child(label)
         .child(
             div()
@@ -123,14 +123,14 @@ pub(in crate::ui::view) fn window_control_button(
         .items_center()
         .justify_center()
         .text_xs()
-        .text_color(rgb(0xaeb7c8))
+        .text_color(rgb(0x8b949e))
         .window_control_area(area)
         .cursor_pointer()
         .hover(|this| {
             if matches!(area, WindowControlArea::Close) {
                 this.bg(rgb(0xe81123)).text_color(rgb(0xffffff))
             } else {
-                this.bg(rgb(0x202632)).text_color(rgb(0xffffff))
+                this.bg(rgb(0x1c2128)).text_color(rgb(0xffffff))
             }
         })
         .child(label)
@@ -141,24 +141,41 @@ pub(in crate::ui::view) fn panel_header(
     title: &'static str,
     meta: &'static str,
 ) -> impl IntoElement {
+    // Tauri PanelHeader: min-h-9, uppercase tracking title + dimmed meta, optional actions slot.
     div()
         .h(px(36.))
+        .flex_none()
         .flex()
         .items_center()
         .justify_between()
         .gap_3()
         .px_3()
         .border_b_1()
-        .border_color(rgb(0x242a35))
-        .bg(rgb(0x191e27))
+        .border_color(rgb(0x30363d))
+        .bg(rgb(0x12171f))
         .child(
             div()
-                .text_xs()
-                .font_weight(FontWeight(800.))
-                .text_color(rgb(0x9ca3af))
-                .child(title),
+                .min_w_0()
+                .flex_1()
+                .flex()
+                .items_baseline()
+                .gap_2()
+                .child(
+                    div()
+                        .text_size(px(11.))
+                        .font_weight(FontWeight(700.))
+                        .text_color(rgb(0x8b949e))
+                        .child(title.to_uppercase()),
+                )
+                .child(
+                    div()
+                        .min_w_0()
+                        .text_size(px(11.))
+                        .text_color(rgb(0x6e7681))
+                        .overflow_hidden()
+                        .child(meta),
+                ),
         )
-        .child(div().text_xs().text_color(rgb(0x64748b)).child(meta))
 }
 
 pub(in crate::ui::view) fn inspector_card(title: &'static str) -> gpui::Div {
@@ -172,7 +189,7 @@ pub(in crate::ui::view) fn inspector_card(title: &'static str) -> gpui::Div {
             div()
                 .text_sm()
                 .font_weight(FontWeight(800.))
-                .text_color(rgb(0xe5edf7))
+                .text_color(rgb(0xc9d1d9))
                 .child(title),
         )
 }
@@ -216,7 +233,7 @@ pub(in crate::ui::view) fn compact_network_rows(networks: &[NetworkInfo]) -> imp
                                 div()
                                     .text_xs()
                                     .font_weight(FontWeight(800.))
-                                    .text_color(rgb(0xe5edf7))
+                                    .text_color(rgb(0xc9d1d9))
                                     .child(network.nic.clone()),
                             )
                             .child(
@@ -278,7 +295,7 @@ pub(in crate::ui::view) fn compact_process_rows(processes: &[RemoteProcess]) -> 
                                     .min_w_0()
                                     .text_xs()
                                     .font_weight(FontWeight(800.))
-                                    .text_color(rgb(0xe5edf7))
+                                    .text_color(rgb(0xc9d1d9))
                                     .child(truncate_preview(&process.command, 24)),
                             )
                             .child(
@@ -333,7 +350,7 @@ pub(in crate::ui::view) fn compact_docker_container_rows(
                                     .min_w_0()
                                     .text_xs()
                                     .font_weight(FontWeight(800.))
-                                    .text_color(rgb(0xe5edf7))
+                                    .text_color(rgb(0xc9d1d9))
                                     .child(truncate_preview(&container.name, 24)),
                             )
                             .child(status_pill(
@@ -355,36 +372,54 @@ pub(in crate::ui::view) fn compact_docker_container_rows(
     rows
 }
 
+/// Tauri EmptyWorkspaceState row: action label (primary) + shortcut key chips.
 pub(in crate::ui::view) fn empty_workspace_action(
     label: &'static str,
-    shortcut: &'static str,
+    shortcut: impl Into<String>,
     on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
 ) -> impl IntoElement {
+    let shortcut = shortcut.into();
+    let mut keys = div().flex().items_center().gap_1();
+    for part in shortcut.split('+').map(str::trim).filter(|p| !p.is_empty()) {
+        keys = keys.child(
+            div()
+                .h(px(22.))
+                .min_w(px(22.))
+                .px_1()
+                .flex()
+                .items_center()
+                .justify_center()
+                .rounded_sm()
+                .border_1()
+                .border_color(rgb(0x30363d))
+                .bg(rgb(0x161b22))
+                .text_size(px(10.))
+                .font_weight(FontWeight(700.))
+                .text_color(rgb(0x8b949e))
+                .child(part.to_string()),
+        );
+    }
+
     div()
         .id(SharedString::from(format!("empty-action-{label}")))
-        .h(px(42.))
-        .min_w(px(220.))
         .flex()
         .items_center()
         .justify_between()
         .gap_4()
-        .rounded_sm()
-        .border_1()
-        .border_color(rgb(0x202633))
-        .bg(rgb(0x0d1118))
-        .px_3()
+        .w_full()
         .cursor_pointer()
-        .hover(|this| this.bg(rgb(0x151b24)).border_color(rgb(0x334155)))
         .child(
             div()
                 .text_sm()
-                .font_weight(FontWeight(700.))
-                .text_color(rgb(0x6ee7b7))
+                .font_weight(FontWeight(600.))
+                .text_color(rgb(0x58a6ff))
+                .hover(|this| this.text_color(rgb(0x79b8ff)))
                 .child(label),
         )
-        .child(div().text_xs().text_color(rgb(0x64748b)).child(shortcut))
+        .child(keys)
         .on_click(on_click)
 }
+
 
 pub(in crate::ui::view) fn tab_action_button(
     id: impl Into<String>,
@@ -411,13 +446,13 @@ pub(in crate::ui::view) fn tab_action_button(
             div()
                 .text_xs()
                 .font_weight(FontWeight(800.))
-                .text_color(rgb(0xe5edf7))
+                .text_color(rgb(0xc9d1d9))
                 .child(label),
         )
         .child(
             div()
                 .text_size(px(10.))
-                .text_color(rgb(0x8f98aa))
+                .text_color(rgb(0x8b949e))
                 .child(detail),
         )
         .on_click(on_click)
@@ -462,7 +497,7 @@ pub(in crate::ui::view) fn stats_resource_row(
                         .min_w_0()
                         .text_sm()
                         .font_weight(FontWeight(700.))
-                        .text_color(rgb(0xe5edf7))
+                        .text_color(rgb(0xc9d1d9))
                         .child(truncate_preview(label, 36)),
                 )
                 .child(

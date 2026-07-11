@@ -6,11 +6,13 @@ mod ai_jobs;
 mod ai_runtime;
 mod app_state;
 mod appearance;
+mod activity_bar_runtime;
 mod auth_runtime;
 mod cloud_sync_provider;
 mod cloud_sync_runtime;
 mod command_runtime;
 mod config_runtime;
+mod connection_runtime;
 mod connections;
 mod event_pump;
 mod formatting;
@@ -21,6 +23,9 @@ mod keybinding_runtime;
 mod layout;
 mod lock_diagnostics_runtime;
 mod navigation_runtime;
+mod security_runtime;
+mod panel_resize_runtime;
+mod panel_stack_runtime;
 mod pages;
 mod panels;
 mod prompt_runtime;
@@ -59,6 +64,7 @@ pub(in crate::ui::view) use ai_jobs::{
     is_agent_command_card, observation_summary, remote_command_observation, run_ai_ask_job,
 };
 pub use app_state::NyaTermApp;
+pub(in crate::ui::view) use connection_runtime::ConnectionEditorToggle;
 pub(in crate::ui::view) use auth_runtime::{
     CredentialPromptBroker, CredentialPromptState, HostKeyPromptBroker, HostKeyPromptChoice,
     HostKeyPromptIssue, HostKeyPromptRequest, NativeHostKeyVerifier, NativeOtpProvider,
@@ -79,6 +85,12 @@ pub(in crate::ui::view) use runtime_jobs::{
     AiChatJobOutput, AiChatJobResult, AiChatWorkerEvent, AiDiscoveryJobResult, DockerJobOutput,
     DockerJobResult, ProcessJobOutput, ProcessJobResult, SessionStartResult, SessionStartSuccess,
     StatsJobResult, TranslateJobResult, TunnelJobOutput, TunnelJobResult, UpdateJobResult,
+};
+pub(in crate::ui::view) use activity_bar_runtime::{
+    ActivityBarDragPayload, ActivityBarDragPreview,
+};
+pub(in crate::ui::view) use connections::{
+    ConnectionDragKind, ConnectionDragPayload, ConnectionDragPreview,
 };
 pub(in crate::ui::view) use tab_mouse::{
     SessionTabDragPayload, SessionTabDragPreview, TabMouseActionTarget, tab_mouse_action_label,

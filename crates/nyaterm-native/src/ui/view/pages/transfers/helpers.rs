@@ -492,19 +492,19 @@ pub(super) fn transfer_job_row(
 
     div()
         .id(SharedString::from(format!("transfer-job-row-{}", job.id)))
-        .rounded_md()
-        .border_1()
+        .border_b_1()
         .border_color(if job_selected {
             rgb(0x256d3f)
         } else {
-            rgb(0x2a3140)
+            rgb(0x21262d)
         })
         .bg(if job_selected {
             rgb(0x10251d)
         } else {
-            rgb(0x151923)
+            rgb(0x161b22)
         })
-        .p_4()
+        .px_2()
+        .py_2()
         .cursor_pointer()
         .on_click({
             let job_id = job.id.clone();
@@ -598,19 +598,20 @@ pub(super) fn sort_header_cell(
             "transfer-browser-sort-{}",
             column.label().to_lowercase()
         )))
-        .h(px(24.))
+        .h(px(28.))
         .w(width)
         .flex_none()
         .relative()
         .flex()
         .items_center()
         .px_2()
-        .rounded_sm()
+        .border_r_1()
+        .border_color(rgb(0x21262d))
         .cursor_pointer()
         .bg(if is_active {
             rgb(0x17253b)
         } else {
-            rgb(0x10151e)
+            rgb(0x12171f)
         })
         .text_size(px(10.))
         .font_weight(FontWeight(800.))
@@ -826,44 +827,27 @@ pub(super) fn queue_action_button(
 ) -> impl IntoElement {
     div()
         .id(SharedString::from(id.into()))
-        .h(px(26.))
-        .px_2()
+        .h(px(22.))
+        .min_w(px(22.))
+        .px_1()
         .flex()
         .items_center()
+        .justify_center()
         .rounded_sm()
-        .border_1()
-        .border_color(if enabled {
-            rgb(0x303848)
-        } else {
-            rgb(0x202633)
-        })
-        .bg(if enabled {
-            rgb(0x151b27)
-        } else {
-            rgb(0x0f141d)
-        })
         .text_size(px(10.))
-        .font_weight(FontWeight(800.))
         .text_color(if enabled {
-            rgb(0xdbeafe)
+            rgb(0x8b949e)
         } else {
-            rgb(0x64748b)
+            rgb(0x484f58)
         })
         .cursor_pointer()
-        .hover(move |this| {
-            if enabled {
-                this.bg(rgb(0x1b2535))
-            } else {
-                this
-            }
-        })
-        .on_click(move |event, window, cx| {
-            if enabled {
-                on_click(event, window, cx);
-            }
-        })
+        .hover(|this| this.bg(rgb(0x21262d)).text_color(rgb(0xc9d1d9)))
+        .opacity(if enabled { 1. } else { 0.4 })
+        .when(enabled, |this| this.on_click(on_click))
         .child(label)
 }
+
+
 
 pub(super) fn duplicate_policy_short_label(policy: SftpDuplicatePolicy) -> &'static str {
     match policy {

@@ -105,20 +105,15 @@ impl NyaTermApp {
             return true;
         }
         if shortcut_matches(event, "view.openChat", &keybindings) {
-            self.selected_nav = NavItem::Workspace;
-            self.main_mode = MainMode::Workspace;
-            self.right_focus = RightFocus::Default;
-            self.right_inspector_collapsed = false;
+            self.ensure_panel_open(NavItem::AiAssistant);
+            window.focus(&self.ai_chat_focus);
             self.terminal_status = "AI panel focused".to_string();
             cx.notify();
             return true;
         }
         if shortcut_matches(event, "view.showAllCommands", &keybindings) {
-            self.selected_nav = NavItem::Workspace;
-            self.main_mode = MainMode::Workspace;
-            self.right_focus = RightFocus::Default;
-            self.right_inspector_collapsed = false;
-            self.terminal_status = "command center focused".to_string();
+            self.bottom_panel = BottomPanelMode::QuickCommands;
+            self.terminal_status = "quick commands opened".to_string();
             cx.notify();
             return true;
         }
@@ -135,9 +130,6 @@ impl NyaTermApp {
             return true;
         }
         if shortcut_matches(event, "view.toggleRightSidebar", &keybindings) {
-            self.selected_nav = NavItem::Workspace;
-            self.main_mode = MainMode::Workspace;
-            self.right_focus = RightFocus::Default;
             self.toggle_right_inspector(cx);
             return true;
         }

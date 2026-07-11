@@ -330,7 +330,138 @@ service boundary first:
   native subprocess calls without Tauri commands, plugins, invoke handlers, or
   WebView dependencies.
 
+
+
+## UI Shell Parity Progress
+
+- The native shell now keeps the terminal workspace permanently centered, matching the Tauri layout model of activity bars + left/right side panels around a fixed terminal surface.
+- Activity bar items map to the legacy left/right panel set: File Explorer, Network, Security/Auth, Sync/Backup, Settings on the left; Saved Connections, AI Assistant, Active Sessions, Command History, Resource Monitor, Process Manager, Docker, plus Quick Commands / Command Send / Recording / Lock on the right.
+- Side panels now host full native views instead of summary cards for transfers, tunnels, connections, remote stats/process/docker, AI, command history, recording, security/auth inventory, and sync history.
+- Settings open as a full-screen native page with a Back action and keep the terminal workspace state when closed.
+- Workspace chrome has been tightened toward the legacy look: GitHub Dark surface colors, tab strip above the terminal without an extra debug toolbar, empty-workspace quick actions, and denser connection list/editor UX in the right panel.
+
 ## Optional Platform Polish
 
 - OS-level tray/menu integration is now optional platform polish because the
   tray actions have a GPUI Command Center substitute.
+
+## UI shell parity (2026-07-11)
+
+- Center remains terminal workspace; left/right side panels wrap it (no page-switch for panels).
+- Side panels support drag-resize handles (left 160–720, default 256; right 200–720, default 288).
+- Activity bar uses compact glyphs instead of two-letter codes.
+- Security / Auth side panel: Keys + OTP tabs with list/add/edit/delete, OTP code generate+copy, file browse for keys.
+- Domain storage: `save_ssh_key` / `delete_ssh_key` / `save_otp_entry` / `delete_otp_entry`.
+- File Explorer inner header densified under shared panel chrome.
+
+## Security + layout (continued)
+
+- Security / Auth tabs: Keys, Passwords, Credentials, OTP with list/add/edit/delete.
+- Passwords/Credentials reveal+copy via domain decrypt APIs.
+- Domain: `SavedPassword` / `SavedCredential` + list/save/delete/decrypt APIs.
+- Panel widths persisted to settings `ui.left_width` / `ui.right_width` (defaults 256/288).
+
+## Secret unlock + panel layout persistence
+
+- Security panel secret unlock footer (Lock/Unlock) with master-password dialog.
+- Password/credential reveal, OTP code, and secret editors require unlock when master password is set.
+- UI layout persistence now includes left/right widths, active panel ids, and collapsed flags under `ui.*`.
+- Active panels restored on startup/import via `NavItem::from_persistence_id` (Tauri-compatible ids like `fileExplorer`).
+
+## Activity bar layout parity
+
+- Activity bar items are driven by persisted `ui.activity_bar_layout` zones (`left_top/left_bottom/right_top/right_bottom`) with Tauri-compatible ids.
+- Right-click an activity item to reorder (Up/Down), move across zones, or toggle labels.
+- Labels mode widens the bar and shows compact captions under glyphs.
+- Layout is saved with panel widths/active panels via `save_ui_layout_settings`.
+
+## Multi-open panel stack
+
+- Settings > Appearance: toggle multi-open side panels (`appearance.panel_multi_open` / `ui.panel_multi_open`).
+- In multi-open mode, activity bar clicks toggle panels into left/right stacks ordered by activity bar layout.
+- AI Assistant remains exclusive overlay (does not join stack), matching Tauri `EXCLUSIVE_PANEL_IDS`.
+- Stacked panels are vertically split with drag resize handles; weights persist in `ui.panel_stack_sizes`.
+- Open panel lists persist as `ui.left_open_panels` / `ui.right_open_panels`.
+
+## Workspace split resize + denser chrome
+
+- Terminal dual-pane splits support drag-resize handles (H/V) and +/- ratio controls in the tab strip.
+- File Explorer control strip and connection list/toolbars densified for side-panel use.
+- Shared `transfer_input` height reduced to 36px for denser forms across panels.
+
+## 2026-07-11 FE stack parity
+- File Explorer now stacks browser (flex-1) + resizable File Transfer queue (default 180px, persisted as `ui.transfer_height`).
+- Removed page-like transfer control chrome from FE; densified toolbar/path/list/queue to match Tauri AppPanelContent.
+
+## 2026-07-11 Connections + FE chrome parity
+- Saved Connections: Tauri-like filter strip with icon actions (+ / folder / temp SSH / sort / more menu for import-export).
+- Connection rows densified to ~30px with double-click connect; group tree no longer card-framed.
+- FE: hide toolbar/path when no SSH; Tauri-style empty states for offline/unsupported/empty/search-miss.
+- Panel headers densified to 32px; security list rows slightly tighter.
+
+## 2026-07-11 Connections context menus
+- Right-click connection: Connect / Edit / Rename / Copy / Delete (multi-select connect when applicable).
+- Right-click group: New connection / New folder / Open all / Rename / Delete.
+- Row actions reveal on hover (or while selected), matching Tauri hover chrome.
+
+## 2026-07-11 Recursive workspace splits
+- Replaced dual-pane-only `WorkspaceSplitState` with recursive `WorkspacePaneNode` (Leaf | Split), matching Tauri `PaneNode` / `SplitPane`.
+- Nested H/V splits: each split has id, direction, ratio; focused split resizes via handle and tab-strip −/+.
+- Repeated H/V split on the active leaf grows a nested tree (duplicate session into new leaf).
+- Unsplit collapses around the active leaf (closes sibling panes) instead of only supporting one level.
+- Active leaf chrome ring + click-to-focus panes.
+
+## 2026-07-11 Connections drag-and-drop
+- Connection rows and group headers support GPUI drag/drop (same pattern as session tabs).
+- Drop connection on another connection: reorder within/target parent (`sort_order` rewritten).
+- Drop connection on group header: move into that group (append).
+- Drop group on group: reorder among same parent or use list background to ungroup/root.
+- Drop on list background: move connection/group to ungrouped root.
+- Persist via domain `save_connection` / `save_group` with updated `group_id`/`parent_id` + sequential `sort_order`.
+
+## 2026-07-11 Activity bar drag-and-drop
+- Activity bar entries support GPUI `on_drag` / `on_drop` with `ActivityBarDragPayload` + drag preview.
+- Drop on an item inserts before it; end-of-zone hit targets append.
+- Cross left/right moves clear open-panel state on the source side (Tauri parity).
+- Right-click context menu (move zones / up-down / labels) retained.
+
+## 2026-07-11 Empty workspace + shell chrome
+- Empty workspace matches Tauri `EmptyWorkspaceState`: large faded logo mark + primary-colored action rows with shortcut key chips.
+- Actions: Temporary SSH Link, Open Chat, Show All Commands, Switch Terminal (resolved via keybindings).
+- Panel headers densified to Tauri-like min-height with title + meta baseline layout.
+
+## 2026-07-11 Title menubar + Active Sessions
+- File / View / Terminal / Help are real dropdown menus (new session, import/export, zoom, sidebars, settings, splits, sync groups, clear, update check, about).
+- Active Sessions is a dedicated dense panel (search strip + compact rows with type badge and icon actions) instead of workspace summary cards.
+
+## 2026-07-11 AI panel + Command History density
+- AI Assistant panel is no longer a stacked card + command search; full-height shell with mode toolbar (Ask/Agent), model label, new-chat / settings, scroll transcript (response + agent steps + command cards), and bottom composer.
+- Command History matches Tauri: dense mono list with › prefix, click to insert, ▶ to run (no card chrome / 8-item cap).
+
+## 2026-07-11 Remote panels densify (Docker / Process / Stats)
+- Docker: side-panel shell with dense search toolbar + icon refresh/prune, flex list body, compact logs footer (removed page section_header + metric grid).
+- Process Manager: dense search toolbar, compact sort strip, scrollable table (removed summary cards / page chrome).
+- Resource Monitor: host summary toolbar + scrollable gauges/lists (removed page header + duplicate status refresh card).
+
+## 2026-07-11 Docker container rows
+- Containers list uses Tauri-like ~66px dense rows: left state accent, name + state badge, mono image/id line.
+- Actions moved into ⋮ dropdown (Logs / Enter / Start / Stop / Restart / Kill / Remove) instead of a row of text buttons.
+- Click row opens details; kill/remove still go through confirm dialog.
+
+## 2026-07-11 Process overflow menu + full signals
+- Process rows use ⋮ overflow menu (Copy PID / Copy Command / TERM / HUP / STOP / CONT / KILL) matching Tauri ProcessActionMenu.
+- `process_menu_pid` tracks open menu; cleared on row select, refresh, and menu actions.
+- Sort strip includes Process/Command in addition to CPU/Mem/PID/User.
+- STOP/KILL still go through existing signal confirm panel.
+
+## 2026-07-11 Docker Compose dense rows + menus
+- Compose projects: ~74px dense rows with chevron expand, status pill, config path, ⋮ menu (Up/Restart/Down).
+- Compose services: ~58px dense rows with status + container summary and ⋮ menu (Logs/Enter/Up/Stop/Restart).
+- Removed wide inline action button strips; menus mirror container-row pattern.
+- `docker_compose_menu_id` cleared on Docker tab change.
+
+## 2026-07-11 AI chat message bubbles
+- AI transcript now renders user/assistant bubbles (role label, reasoning block, streaming indicator) instead of a single preview card.
+- In-memory `ai_chat_messages` + `ai_streaming_assistant_id` filled on Ask/Agent start, stream deltas, finish, cancel.
+- Empty state guides enablement / model setup / start conversation (Tauri-like).
+- New chat clears message list; command cards + agent steps remain below transcript.

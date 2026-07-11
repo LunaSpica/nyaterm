@@ -35,11 +35,12 @@ impl NyaTermApp {
         div()
             .flex()
             .flex_col()
-            .gap_1()
-            .rounded_sm()
-            .bg(rgb(0x0f1724))
-            .px_3()
-            .py_2()
+            .gap_0()
+            .border_b_1()
+            .border_color(rgb(0x30363d))
+            .bg(rgb(0x161b22))
+            .px_2()
+            .py_1()
             .child(
                 div()
                     .flex()
@@ -48,16 +49,16 @@ impl NyaTermApp {
                     .child(
                         div()
                             .flex_shrink_0()
-                            .text_xs()
-                            .font_weight(FontWeight(800.))
-                            .text_color(rgb(0x64748b))
+                            .text_size(px(10.))
+                            .font_weight(FontWeight(700.))
+                            .text_color(rgb(0x6e7681))
                             .child("Path"),
                     )
                     .when(self.transfer_browser_path_editing, |this| {
                         this.child(
                             div()
                                 .id(SharedString::from("transfer-browser-path-input"))
-                                .h(px(28.))
+                                .h(px(22.))
                                 .flex_1()
                                 .min_w_0()
                                 .rounded_sm()
@@ -117,7 +118,7 @@ impl NyaTermApp {
                     .child(
                         div()
                             .id(SharedString::from("transfer-browser-path-favorite"))
-                            .size(px(28.))
+                            .size(px(22.))
                             .flex_none()
                             .flex()
                             .items_center()

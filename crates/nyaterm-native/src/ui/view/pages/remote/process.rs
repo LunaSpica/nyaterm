@@ -141,42 +141,50 @@ pub(super) fn process_table_header() -> impl IntoElement {
     div()
         .grid()
         .grid_cols(6)
-        .gap_2()
-        .rounded_sm()
-        .border_1()
-        .border_color(rgb(0x253044))
-        .bg(rgb(0x0d1320))
-        .px_3()
-        .py_2()
-        .text_xs()
-        .font_weight(FontWeight(800.))
-        .text_color(rgb(0x8f98aa))
+        .gap_1()
+        .h(px(26.))
+        .flex_none()
+        .border_b_1()
+        .border_color(rgb(0x30363d))
+        .bg(rgb(0x0d1117))
+        .px_2()
+        .items_center()
+        .text_size(px(10.))
+        .font_weight(FontWeight(700.))
+        .text_color(rgb(0x6e7681))
         .child("Command")
         .child("PID")
         .child("CPU")
-        .child("Memory")
+        .child("Mem")
         .child("User")
-        .child("Actions")
+        .child("")
 }
 
 pub(super) fn process_table_row(
     process: &RemoteProcess,
     selected: bool,
+    menu_open: bool,
     on_select: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
+    on_menu: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
     on_copy_pid: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
     on_copy_command: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
     on_term: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
+    on_hup: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
+    on_stop: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
+    on_cont: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
     on_kill: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
 ) -> gpui::Div {
+    // Tauri ProcessManager: denser mono table + ⋮ overflow actions.
     div()
+        .relative()
         .border_b_1()
-        .border_color(rgb(0x253044))
+        .border_color(rgb(0x21262d))
         .bg(if selected {
-            rgb(0x102a3d)
+            rgb(0x122033)
         } else {
-            rgb(0x151923)
+            rgb(0x161b22)
         })
-        .hover(|this| this.bg(rgb(0x1c2230)))
+        .hover(|this| this.bg(rgb(0x1c2128)))
         .child(
             div()
                 .grid()
@@ -185,9 +193,9 @@ pub(super) fn process_table_row(
                     process.pid
                 )))
                 .grid_cols(6)
-                .gap_2()
-                .px_3()
-                .py_2()
+                .gap_1()
+                .h(px(40.))
+                .px_2()
                 .items_center()
                 .cursor_pointer()
                 .on_click(on_select)
@@ -196,20 +204,21 @@ pub(super) fn process_table_row(
                         .min_w_0()
                         .flex()
                         .flex_col()
-                        .gap_1()
                         .child(
                             div()
-                                .text_sm()
-                                .font_weight(FontWeight(800.))
+                                .text_size(px(12.))
+                                .font_weight(FontWeight(700.))
                                 .text_color(rgb(0xe5edf7))
-                                .child(truncate_preview(&process.command, 42)),
+                                .overflow_hidden()
+                                .child(truncate_preview(&process.command, 36)),
                         )
                         .child(
                             div()
                                 .font_family("JetBrains Mono")
-                                .text_xs()
-                                .text_color(rgb(0x98a3b8))
-                                .child(truncate_preview(&process.command_line, 76)),
+                                .text_size(px(10.))
+                                .text_color(rgb(0x6e7681))
+                                .overflow_hidden()
+                                .child(truncate_preview(&process.command_line, 48)),
                         ),
                 )
                 .child(process_table_cell(process.pid.to_string(), None))
@@ -222,36 +231,104 @@ pub(super) fn process_table_row(
                     Some(usage_color(process.memory_percent / 100.)),
                 ))
                 .child(process_table_cell(
-                    truncate_preview(&process.user, 18),
+                    truncate_preview(&process.user, 12),
                     None,
                 ))
                 .child(
                     div()
+                        .relative()
                         .flex()
                         .items_center()
-                        .gap_1()
-                        .child(icon_action_button(
-                            format!("process-copy-pid-{}", process.pid),
-                            "Copy PID",
-                            on_copy_pid,
+                        .justify_end()
+                        .child(icon_button(
+                            format!("process-menu-{}", process.pid),
+                            "⋮",
+                            on_menu,
                         ))
-                        .child(icon_action_button(
-                            format!("process-copy-command-{}", process.pid),
-                            "Copy CMD",
-                            on_copy_command,
-                        ))
-                        .child(icon_action_button(
-                            format!("process-term-{}", process.pid),
-                            "TERM",
-                            on_term,
-                        ))
-                        .child(icon_action_button(
-                            format!("process-kill-{}", process.pid),
-                            "KILL",
-                            on_kill,
-                        )),
+                        .when(menu_open, |this| {
+                            this.child(
+                                div()
+                                    .id(gpui::SharedString::from(format!(
+                                        "process-menu-pop-{}",
+                                        process.pid
+                                    )))
+                                    .absolute()
+                                    .top(px(26.))
+                                    .right_0()
+                                    .w(px(148.))
+                                    .rounded_md()
+                                    .border_1()
+                                    .border_color(rgb(0x30363d))
+                                    .bg(rgb(0x161b22))
+                                    .shadow_lg()
+                                    .py_1()
+                                    .flex()
+                                    .flex_col()
+                                    .on_mouse_down(gpui::MouseButton::Left, |_, _, _| {})
+                                    .child(process_menu_item(
+                                        format!("process-copy-pid-{}", process.pid),
+                                        "Copy PID",
+                                        on_copy_pid,
+                                    ))
+                                    .child(process_menu_item(
+                                        format!("process-copy-cmd-{}", process.pid),
+                                        "Copy Command",
+                                        on_copy_command,
+                                    ))
+                                    .child(process_menu_sep())
+                                    .child(process_menu_item(
+                                        format!("process-term-{}", process.pid),
+                                        "TERM",
+                                        on_term,
+                                    ))
+                                    .child(process_menu_item(
+                                        format!("process-hup-{}", process.pid),
+                                        "HUP",
+                                        on_hup,
+                                    ))
+                                    .child(process_menu_item(
+                                        format!("process-stop-{}", process.pid),
+                                        "STOP",
+                                        on_stop,
+                                    ))
+                                    .child(process_menu_item(
+                                        format!("process-cont-{}", process.pid),
+                                        "CONT",
+                                        on_cont,
+                                    ))
+                                    .child(process_menu_sep())
+                                    .child(process_menu_item(
+                                        format!("process-kill-{}", process.pid),
+                                        "KILL",
+                                        on_kill,
+                                    )),
+                            )
+                        }),
                 ),
         )
+}
+
+fn process_menu_item(
+    id: impl Into<String>,
+    label: &'static str,
+    on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
+) -> impl IntoElement {
+    div()
+        .id(gpui::SharedString::from(id.into()))
+        .h(px(28.))
+        .px_3()
+        .flex()
+        .items_center()
+        .text_size(px(12.))
+        .text_color(rgb(0xc9d1d9))
+        .cursor_pointer()
+        .hover(|this| this.bg(rgb(0x21262d)))
+        .on_click(on_click)
+        .child(label)
+}
+
+fn process_menu_sep() -> impl IntoElement {
+    div().h(px(1.)).mx_2().my_1().bg(rgb(0x30363d))
 }
 
 pub(super) fn process_table_cell(value: String, color: Option<gpui::Hsla>) -> impl IntoElement {

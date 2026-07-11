@@ -2,31 +2,15 @@ use super::*;
 
 impl NyaTermApp {
     pub(in crate::ui::view) fn main_surface(&mut self, cx: &mut Context<Self>) -> impl IntoElement {
+        // The main surface always hosts the terminal workspace. Side panels are
+        // rendered by the shell around this surface to match the Tauri layout.
         div()
             .flex_1()
             .min_w_0()
             .flex()
             .flex_col()
-            .bg(rgb(0x0b0d12))
-            .child(
-                if self.main_mode == MainMode::Workspace || self.selected_nav == NavItem::Workspace
-                {
-                    self.workspace_view(cx).into_any_element()
-                } else {
-                    match self.selected_nav {
-                        NavItem::Workspace => self.workspace_view(cx).into_any_element(),
-                        NavItem::Connections => self.connections_view(cx).into_any_element(),
-                        NavItem::Tunnels => self.tunnels_view(cx).into_any_element(),
-                        NavItem::Stats => self.stats_view(cx).into_any_element(),
-                        NavItem::Processes => self.processes_view(cx).into_any_element(),
-                        NavItem::Docker => self.docker_view(cx).into_any_element(),
-                        NavItem::Translation => self.translation_view(cx).into_any_element(),
-                        NavItem::Transfers => self.transfers_view(cx).into_any_element(),
-                        NavItem::Settings => self.settings_view(cx).into_any_element(),
-                        NavItem::Migration => self.migration_view().into_any_element(),
-                    }
-                },
-            )
+            .bg(rgb(0x0d1117))
+            .child(self.workspace_view(cx))
     }
 
     pub(in crate::ui::view) fn session_tab_strip(
@@ -53,15 +37,15 @@ impl NyaTermApp {
                     .items_center()
                     .gap_2()
                     .border_r_1()
-                    .border_color(rgb(0x202633))
-                    .bg(rgb(0x151b24))
-                    .child(div().size(px(8.)).rounded_full().bg(rgb(0xfacc15)))
+                    .border_color(rgb(0x30363d))
+                    .bg(rgb(0x161b22))
+                    .child(div().size(px(8.)).rounded_full().bg(rgb(0xd29922)))
                     .child(
                         div()
                             .min_w_0()
                             .text_xs()
                             .font_weight(FontWeight(700.))
-                            .text_color(rgb(0xe5edf7))
+                            .text_color(rgb(0xc9d1d9))
                             .overflow_hidden()
                             .child(format!("Connecting {pending_name}")),
                     ),
@@ -77,8 +61,8 @@ impl NyaTermApp {
                     .items_center()
                     .gap_2()
                     .text_xs()
-                    .text_color(rgb(0x8f98aa))
-                    .child(div().size(px(8.)).rounded_full().bg(rgb(0x64748b)))
+                    .text_color(rgb(0x8b949e))
+                    .child(div().size(px(8.)).rounded_full().bg(rgb(0x6e7681)))
                     .child("No sessions"),
             );
         } else {
@@ -102,11 +86,11 @@ impl NyaTermApp {
                 let accent = if let Some(custom_color) = custom_color {
                     rgb(custom_color)
                 } else if is_active {
-                    rgb(0x6ee7b7)
+                    rgb(0x3fb950)
                 } else if has_unread {
-                    rgb(0xfacc15)
+                    rgb(0xd29922)
                 } else {
-                    rgb(0x64748b)
+                    rgb(0x6e7681)
                 };
                 let bg = if let Some(custom_color) = custom_color {
                     rgba((custom_color << 8) | if is_active { 0x24 } else { 0x14 })
@@ -177,11 +161,11 @@ impl NyaTermApp {
                                     div()
                                         .text_xs()
                                         .font_weight(FontWeight(700.))
-                                        .text_color(rgb(0xe5edf7))
+                                        .text_color(rgb(0xc9d1d9))
                                         .overflow_hidden()
                                         .child(truncate_preview(&display_name, 32)),
                                 )
-                                .child(div().text_size(px(10.)).text_color(rgb(0x8f98aa)).child(
+                                .child(div().text_size(px(10.)).text_color(rgb(0x8b949e)).child(
                                     format!(
                                         "{} · {}",
                                         session_kind_label(session.kind),
@@ -201,8 +185,8 @@ impl NyaTermApp {
                                 .rounded_sm()
                                 .text_xs()
                                 .font_weight(FontWeight(800.))
-                                .text_color(rgb(0x94a3b8))
-                                .hover(|this| this.bg(rgb(0x2a3140)).text_color(rgb(0x6ee7b7)))
+                                .text_color(rgb(0x8b949e))
+                                .hover(|this| this.bg(rgb(0x30363d)).text_color(rgb(0x3fb950)))
                                 .child("...")
                                 .on_click(cx.listener(move |this, _, window, cx| {
                                     cx.stop_propagation();
@@ -220,8 +204,8 @@ impl NyaTermApp {
                                 .justify_center()
                                 .rounded_sm()
                                 .text_xs()
-                                .text_color(rgb(0x94a3b8))
-                                .hover(|this| this.bg(rgb(0x2a3140)).text_color(rgb(0xfca5a5)))
+                                .text_color(rgb(0x8b949e))
+                                .hover(|this| this.bg(rgb(0x30363d)).text_color(rgb(0xff7b72)))
                                 .child("x")
                                 .on_click(cx.listener(move |this, _, _, cx| {
                                     cx.stop_propagation();
@@ -243,8 +227,8 @@ impl NyaTermApp {
                     .min_w(px(28.))
                     .flex_none()
                     .border_l_1()
-                    .border_color(rgb(0x202633))
-                    .hover(|this| this.bg(rgb(0x14211e)))
+                    .border_color(rgb(0x30363d))
+                    .hover(|this| this.bg(rgb(0x12261a)))
                     .on_drop(cx.listener(|this, payload: &SessionTabDragPayload, _, cx| {
                         this.reorder_session_to_end(payload.session_id.clone(), cx);
                     })),
@@ -255,84 +239,70 @@ impl NyaTermApp {
             .h_full()
             .flex()
             .items_center()
-            .gap_2()
-            .px_3()
+            .gap_1()
+            .px_2()
             .border_l_1()
-            .border_color(rgb(0x202633))
-            .child(
-                div()
-                    .text_xs()
-                    .text_color(rgb(0x8f98aa))
-                    .child(format!("{session_count} open")),
-            )
+            .border_color(rgb(0x30363d))
             .child(small_button(
                 "workspace-new-local-session",
-                "New",
+                "+",
                 cx.listener(|this, _, window, cx| {
                     this.start_local_session(window, cx);
                 }),
+            ))
+            .child(small_button(
+                "workspace-quick-switch",
+                "Switch",
+                cx.listener(|this, _, window, cx| {
+                    this.open_quick_switch(window, cx);
+                }),
             ));
-        if let Some(active_session_id) = self.active_session_id.clone() {
-            let can_copy_ssh = self.session_ssh_address(&active_session_id).is_some();
-            let inactive_anchor = active_session_id.clone();
-            let right_anchor = active_session_id.clone();
+        if self.active_session_id.is_some() {
             session_actions = session_actions
                 .child(small_button(
-                    "workspace-tab-color",
-                    "Color",
+                    "workspace-split-horizontal",
+                    "H",
                     cx.listener(|this, _, window, cx| {
-                        this.open_tab_color_picker(window, cx);
+                        this.split_workspace_with_duplicate(
+                            WorkspaceSplitDirection::Horizontal,
+                            window,
+                            cx,
+                        );
                     }),
                 ))
                 .child(small_button(
-                    "workspace-copy-session-name",
-                    "Name",
-                    cx.listener(|this, _, _, cx| {
-                        this.copy_active_session_name(cx);
-                    }),
-                ))
-                .child(small_button(
-                    "workspace-copy-session-endpoint",
-                    "Endpt",
-                    cx.listener(|this, _, _, cx| {
-                        this.copy_active_session_endpoint(cx);
-                    }),
-                ))
-                .when(can_copy_ssh, |this| {
-                    this.child(small_button(
-                        "workspace-copy-ssh-host",
-                        "IP",
-                        cx.listener(|this, _, _, cx| {
-                            this.copy_active_session_ssh_host(cx);
-                        }),
-                    ))
-                    .child(small_button(
-                        "workspace-copy-ssh-address",
-                        "SSH",
-                        cx.listener(|this, _, _, cx| {
-                            this.copy_active_session_ssh_address(cx);
-                        }),
-                    ))
-                })
-                .child(small_button(
-                    "workspace-session-info",
-                    "Info",
+                    "workspace-split-vertical",
+                    "V",
                     cx.listener(|this, _, window, cx| {
-                        this.open_active_session_info(window, cx);
+                        this.split_workspace_with_duplicate(
+                            WorkspaceSplitDirection::Vertical,
+                            window,
+                            cx,
+                        );
+                    }),
+                ));
+        }
+        if self.workspace_split.is_some() {
+            session_actions = session_actions
+                .child(small_button(
+                    "workspace-split-ratio-dec",
+                    "−",
+                    cx.listener(|this, _, _, cx| {
+                        this.adjust_workspace_split_ratio(-5, cx);
                     }),
                 ))
                 .child(small_button(
-                    "workspace-close-inactive-sessions",
-                    "Others",
-                    cx.listener(move |this, _, _, cx| {
-                        this.close_inactive_sessions(inactive_anchor.clone(), cx);
+                    "workspace-split-ratio-inc",
+                    "+",
+                    cx.listener(|this, _, _, cx| {
+                        this.adjust_workspace_split_ratio(5, cx);
                     }),
                 ))
                 .child(small_button(
-                    "workspace-close-right-sessions",
-                    "Right",
-                    cx.listener(move |this, _, _, cx| {
-                        this.close_sessions_to_right(right_anchor.clone(), cx);
+                    "workspace-unsplit",
+                    "Unsplit",
+                    cx.listener(|this, _, _, cx| {
+                        this.unsplit_workspace(cx);
                     }),
                 ));
         }
@@ -347,12 +317,12 @@ impl NyaTermApp {
         }
 
         div()
-            .h(px(34.))
+            .h(px(32.))
             .flex()
             .items_center()
             .border_b_1()
-            .border_color(rgb(0x202633))
-            .bg(rgb(0x11151c))
+            .border_color(rgb(0x30363d))
+            .bg(rgb(0x161b22))
             .child(tabs)
             .child(session_actions)
     }
@@ -361,73 +331,82 @@ impl NyaTermApp {
         &mut self,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
+        // Match Tauri EmptyWorkspaceState: large faded logo + label|shortcut rows.
+        let temporary_ssh = self.display_shortcut_for("tab.temporarySshLink", "Ctrl+Alt+N");
+        let open_chat = self.display_shortcut_for("view.openChat", "Ctrl+Alt+I");
+        let show_commands = self.display_shortcut_for("view.showAllCommands", "Ctrl+Shift+P");
+        let switch_terminal = self.display_shortcut_for("tab.quickSwitch", "Ctrl+Shift+S");
+
         div()
             .flex_1()
             .min_h_0()
             .flex()
             .items_center()
             .justify_center()
-            .bg(rgb(0x07090d))
+            .bg(rgb(0x0d1117))
             .px_6()
             .child(
                 div()
-                    .w(px(520.))
+                    .w(px(544.))
                     .max_w_full()
                     .flex()
                     .flex_col()
                     .items_center()
                     .child(
                         div()
-                            .size(px(168.))
-                            .rounded_md()
-                            .border_1()
-                            .border_color(rgb(0x202633))
-                            .bg(rgb(0x0d1118))
-                            .opacity(0.62)
+                            .size(px(200.))
+                            .mb_8()
+                            .rounded_lg()
+                            .opacity(0.14)
+                            .bg(rgb(0x238636))
                             .flex()
                             .items_center()
                             .justify_center()
-                            .text_size(px(84.))
+                            .text_size(px(96.))
                             .font_weight(FontWeight(900.))
-                            .text_color(rgb(0x293241))
+                            .text_color(rgb(0x8b949e))
                             .child("N"),
                     )
                     .child(
                         div()
-                            .mt_8()
-                            .grid()
-                            .grid_cols(2)
+                            .w(px(420.))
+                            .max_w_full()
+                            .flex()
+                            .flex_col()
                             .gap_3()
                             .child(empty_workspace_action(
-                                "Temporary SSH",
-                                "connections",
-                                cx.listener(|this, _, _, cx| {
-                                    this.select(NavItem::Connections, cx);
+                                "Temporary SSH Link",
+                                temporary_ssh,
+                                cx.listener(|this, _, window, cx| {
+                                    this.ensure_panel_open(NavItem::Connections);
+                                    this.open_temporary_ssh_link_dialog(window, cx);
                                 }),
                             ))
                             .child(empty_workspace_action(
                                 "Open Chat",
-                                "AI assistant",
+                                open_chat,
                                 cx.listener(|this, _, window, cx| {
+                                    this.ensure_panel_open(NavItem::AiAssistant);
                                     window.focus(&this.ai_chat_focus);
                                     this.ai_status = "AI assistant focused".to_string();
                                     cx.notify();
                                 }),
                             ))
                             .child(empty_workspace_action(
-                                "Show Commands",
-                                "quick commands",
+                                "Show All Commands",
+                                show_commands,
                                 cx.listener(|this, _, window, cx| {
+                                    this.bottom_panel = BottomPanelMode::QuickCommands;
                                     window.focus(&this.command_search_focus);
-                                    this.terminal_status = "command search focused".to_string();
+                                    this.terminal_status = "quick commands opened".to_string();
                                     cx.notify();
                                 }),
                             ))
                             .child(empty_workspace_action(
-                                "Start Local",
-                                "new terminal",
+                                "Switch Terminal",
+                                switch_terminal,
                                 cx.listener(|this, _, window, cx| {
-                                    this.start_local_session(window, cx);
+                                    this.open_quick_switch(window, cx);
                                 }),
                             )),
                     ),
@@ -439,7 +418,14 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) -> gpui::AnyElement {
         match self.bottom_panel {
-            BottomPanelMode::QuickCommands => self.bottom_quick_commands_bar(cx).into_any_element(),
+            BottomPanelMode::QuickCommands => div()
+                .h(px(220.))
+                .flex_none()
+                .border_t_1()
+                .border_color(rgb(0x30363d))
+                .bg(rgb(0x161b22))
+                .child(self.quick_commands_panel(cx))
+                .into_any_element(),
             BottomPanelMode::CommandSend => self.bottom_command_send_bar(cx).into_any_element(),
             BottomPanelMode::Hidden => div().into_any_element(),
         }
@@ -457,7 +443,7 @@ impl NyaTermApp {
             command_row = command_row.child(
                 div()
                     .text_xs()
-                    .text_color(rgb(0x64748b))
+                    .text_color(rgb(0x6e7681))
                     .child("No quick commands saved."),
             );
         } else {
@@ -470,8 +456,8 @@ impl NyaTermApp {
             .h(px(112.))
             .flex_none()
             .border_t_1()
-            .border_color(rgb(0x202633))
-            .bg(rgb(0x11151c))
+            .border_color(rgb(0x30363d))
+            .bg(rgb(0x161b22))
             .p_3()
             .child(
                 div()
@@ -543,8 +529,8 @@ impl NyaTermApp {
             .flex_none()
             .rounded_md()
             .border_1()
-            .border_color(rgb(0x2a3140))
-            .bg(rgb(0x151b24))
+            .border_color(rgb(0x30363d))
+            .bg(rgb(0x161b22))
             .p_2()
             .cursor_pointer()
             .hover(|this| this.bg(rgb(0x1c2431)))
@@ -559,13 +545,13 @@ impl NyaTermApp {
                             .min_w_0()
                             .text_xs()
                             .font_weight(FontWeight(800.))
-                            .text_color(rgb(0xe5edf7))
+                            .text_color(rgb(0xc9d1d9))
                             .child(title),
                     )
                     .child(
                         div()
                             .text_xs()
-                            .text_color(rgb(0x6ee7b7))
+                            .text_color(rgb(0x3fb950))
                             .child(execute_label),
                     ),
             )

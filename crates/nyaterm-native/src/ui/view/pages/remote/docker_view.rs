@@ -1,4 +1,5 @@
 use super::*;
+use gpui::{SharedString, prelude::*};
 
 impl NyaTermApp {
     pub(in crate::ui::view) fn docker_view(&mut self, cx: &mut Context<Self>) -> impl IntoElement {
@@ -58,6 +59,7 @@ impl NyaTermApp {
                 overview.available,
                 &filtered_containers,
                 query.is_empty(),
+                self.docker_container_menu_id.as_deref(),
                 cx,
             )
             .into_any_element(),
@@ -69,101 +71,82 @@ impl NyaTermApp {
                 &self.docker_compose_expanded,
                 &self.docker_compose_services,
                 &self.docker_compose_service_errors,
+                self.docker_compose_menu_id.as_deref(),
                 cx,
             )
             .into_any_element(),
         };
 
+        // Tauri DockerManager shell: dense toolbar (search+actions) + tabs + flex list body.
+        // Shared PanelHeader already shows title/meta; avoid page-like section headers.
+        let status_short = truncate_preview(&self.docker_status, 36);
         div()
             .flex()
             .flex_col()
             .size_full()
-            .p_5()
-            .gap_4()
-            .child(section_header(
-                "Docker",
-                "Native SSH exec Docker manager for the active remote session.",
-            ))
+            .overflow_hidden()
+            .bg(rgb(0x161b22))
             .child(
                 div()
-                    .grid()
-                    .grid_cols(6)
-                    .gap_3()
-                    .child(metric(
-                        "SSH",
-                        if self.active_ssh_config.is_some() {
-                            "ready".to_string()
-                        } else {
-                            "none".to_string()
-                        },
-                    ))
-                    .child(metric(
-                        "Docker",
-                        if overview.available {
-                            "available".to_string()
-                        } else {
-                            "unknown".to_string()
-                        },
-                    ))
-                    .child(metric(
-                        "Version",
-                        if overview.version.trim().is_empty() {
-                            "n/a".to_string()
-                        } else {
-                            overview.version.clone()
-                        },
-                    ))
-                    .child(metric("Containers", overview.containers.len().to_string()))
-                    .child(metric("Images", overview.images.len().to_string()))
-                    .child(metric(
-                        "Compose",
-                        if overview.compose_available {
-                            overview.compose_projects.len().to_string()
-                        } else {
-                            "off".to_string()
-                        },
-                    )),
-            )
-            .child(
-                div()
-                    .rounded_md()
-                    .border_1()
-                    .border_color(rgb(0x2a3140))
-                    .bg(rgb(0x151923))
-                    .p_4()
+                    .h(px(36.))
+                    .flex_none()
+                    .px_2()
+                    .border_b_1()
+                    .border_color(rgb(0x30363d))
+                    .bg(rgb(0x12171f))
+                    .flex()
+                    .items_center()
+                    .gap_1()
                     .child(
                         div()
+                            .flex_1()
+                            .min_w_0()
+                            .child(
+                                transfer_input(
+                                    "docker-search-input",
+                                    "Search containers…",
+                                    self.docker_search_draft.clone(),
+                                    true,
+                                )
+                                .h(px(28.))
+                                .track_focus(&self.docker_search_focus)
+                                .on_click(cx.listener(|this, _, window, cx| {
+                                    window.focus(&this.docker_search_focus);
+                                    cx.notify();
+                                }))
+                                .on_key_down(cx.listener(|this, event: &KeyDownEvent, _, cx| {
+                                    cx.stop_propagation();
+                                    this.handle_docker_search_key_down(event, cx);
+                                })),
+                            ),
+                    )
+                    .child(
+                        div()
+                            .when(!can_run, |this| this.opacity(0.45))
                             .flex()
                             .items_center()
-                            .justify_between()
-                            .gap_3()
-                            .child(
-                                div()
-                                    .text_sm()
-                                    .text_color(rgb(0xe5edf7))
-                                    .child(self.docker_status.clone()),
-                            )
-                            .child(
-                                div()
-                                    .flex()
-                                    .items_center()
-                                    .gap_2()
-                                    .when(!can_run, |this| this.opacity(0.45))
-                                    .child(small_button(
-                                        "docker-refresh",
-                                        "Refresh",
-                                        cx.listener(|this, _, window, cx| {
-                                            this.refresh_docker(window, cx);
-                                        }),
-                                    ))
-                                    .child(small_button(
-                                        "docker-prune",
-                                        "Prune",
-                                        cx.listener(|this, _, _, cx| {
-                                            this.prune_docker_system(cx);
-                                        }),
-                                    )),
-                            ),
+                            .gap_0()
+                            .child(icon_button(
+                                "docker-refresh",
+                                "↻",
+                                cx.listener(|this, _, window, cx| {
+                                    this.refresh_docker(window, cx);
+                                }),
+                            ))
+                            .child(icon_button(
+                                "docker-prune",
+                                "🗑",
+                                cx.listener(|this, _, _, cx| {
+                                    this.prune_docker_system(cx);
+                                }),
+                            )),
+                    )
+                    .child(
+                        div()
+                            .ml_1()
+                            .text_size(px(10.))
+                            .text_color(rgb(0x6e7681))
+                            .child(status_short),
                     ),
             )
             .when_some(self.docker_confirm.clone(), |this, confirm| {
@@ -171,23 +154,12 @@ impl NyaTermApp {
             })
             .child(docker_tab_bar(active_tab, &overview, cx))
             .child(
-                transfer_input(
-                    "docker-search-input",
-                    "Search",
-                    self.docker_search_draft.clone(),
-                    true,
-                )
-                .track_focus(&self.docker_search_focus)
-                .on_click(cx.listener(|this, _, window, cx| {
-                    window.focus(&this.docker_search_focus);
-                    cx.notify();
-                }))
-                .on_key_down(cx.listener(|this, event: &KeyDownEvent, _, cx| {
-                    cx.stop_propagation();
-                    this.handle_docker_search_key_down(event, cx);
-                })),
+                div()
+                    .flex_1()
+                    .min_h_0()
+                    .overflow_hidden()
+                    .child(docker_content),
             )
-            .child(docker_content)
             .child(docker_details_panel(
                 self.docker_details_container_id.clone(),
                 self.docker_details.clone(),
@@ -202,62 +174,40 @@ impl NyaTermApp {
                     .cloned(),
                 cx,
             ))
-            .child(
-                div()
-                    .grid()
-                    .grid_cols(2)
-                    .gap_3()
-                    .child(
-                        div()
-                            .rounded_md()
-                            .border_1()
-                            .border_color(rgb(0x2a3140))
-                            .bg(rgb(0x151923))
-                            .p_4()
-                            .child(
-                                div()
-                                    .text_sm()
-                                    .font_weight(FontWeight(700.))
-                                    .child("Resources"),
-                            )
-                            .child(capability_line(
-                                "Volumes",
-                                overview.volumes.len().to_string(),
-                            ))
-                            .child(capability_line(
-                                "Networks",
-                                overview.networks.len().to_string(),
-                            ))
-                            .child(capability_line(
-                                "Compose Projects",
-                                overview.compose_projects.len().to_string(),
-                            )),
-                    )
-                    .child(
-                        div()
-                            .rounded_md()
-                            .border_1()
-                            .border_color(rgb(0x2a3140))
-                            .bg(rgb(0x151923))
-                            .p_4()
-                            .child(
-                                div()
-                                    .text_sm()
-                                    .font_weight(FontWeight(700.))
-                                    .child(logs_title),
-                            )
-                            .child(
-                                div()
-                                    .mt_3()
-                                    .max_h(px(180.))
-                                    .overflow_hidden()
-                                    .font_family("JetBrains Mono")
-                                    .text_xs()
-                                    .line_height(px(18.))
-                                    .text_color(rgb(0xaeb7c8))
-                                    .child(logs),
-                            ),
-                    ),
-            )
+            .when(!logs.trim().is_empty() && logs != "No logs loaded.", |this| {
+                this.child(
+                    div()
+                        .flex_none()
+                        .max_h(px(140.))
+                        .border_t_1()
+                        .border_color(rgb(0x30363d))
+                        .bg(rgb(0x0d1117))
+                        .px_2()
+                        .py_1()
+                        .flex()
+                        .flex_col()
+                        .gap_1()
+                        .child(
+                            div()
+                                .text_size(px(10.))
+                                .font_weight(FontWeight(700.))
+                                .text_color(rgb(0x8b949e))
+                                .child(logs_title),
+                        )
+                        .child(
+                            div()
+                                .flex_1()
+                                .min_h_0()
+                                .id(SharedString::from("docker-logs-scroll"))
+                                .overflow_scroll()
+                                .scrollbar_width(px(6.))
+                                .font_family("JetBrains Mono")
+                                .text_size(px(10.))
+                                .line_height(px(16.))
+                                .text_color(rgb(0xaeb7c8))
+                                .child(logs),
+                        ),
+                )
+            })
     }
 }

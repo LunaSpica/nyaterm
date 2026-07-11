@@ -114,8 +114,8 @@ impl NyaTermApp {
             .gap_2()
             .px_2()
             .border_t_1()
-            .border_color(rgb(0x242a35))
-            .bg(rgb(0x0f141c))
+            .border_color(rgb(0x30363d))
+            .bg(rgb(0x0d1117))
             .text_xs()
             .child(
                 div()
@@ -128,32 +128,32 @@ impl NyaTermApp {
                         "Session",
                         session_status,
                         if self.active_session_id.is_some() {
-                            rgb(0x6ee7b7)
+                            rgb(0x3fb950)
                         } else {
-                            rgb(0x98a3b8)
+                            rgb(0x8b949e)
                         },
                         cx.listener(|this, _, _, cx| {
-                            this.select(NavItem::Workspace, cx);
+                            this.main_mode = MainMode::Workspace;
+                            this.terminal_status = "workspace focused".to_string();
+                            cx.notify();
                         }),
                     ))
                     .child(status_bar_label(
                         "Tabs",
                         sessions.len().to_string(),
-                        rgb(0x93c5fd),
+                        rgb(0x58a6ff),
                     ))
                     .child(status_bar_button(
                         "status-recording",
                         "Recording",
                         recording_status,
                         if recording_count > 0 {
-                            rgb(0xfca5a5)
+                            rgb(0xff7b72)
                         } else {
-                            rgb(0x98a3b8)
+                            rgb(0x8b949e)
                         },
                         cx.listener(|this, _, _, cx| {
-                            this.selected_nav = NavItem::Workspace;
-                            this.main_mode = MainMode::Workspace;
-                            this.right_focus = RightFocus::Recording;
+                            this.ensure_panel_open(NavItem::Recording);
                             cx.notify();
                         }),
                     ))
@@ -162,14 +162,15 @@ impl NyaTermApp {
                         "Transfer",
                         transfer_status,
                         if running_transfers > 0 {
-                            rgb(0xfacc15)
+                            rgb(0xd29922)
                         } else if failed_transfers > 0 {
-                            rgb(0xfca5a5)
+                            rgb(0xff7b72)
                         } else {
-                            rgb(0x98a3b8)
+                            rgb(0x8b949e)
                         },
                         cx.listener(|this, _, _, cx| {
-                            this.select(NavItem::Transfers, cx);
+                            this.ensure_panel_open(NavItem::Transfers);
+                            cx.notify();
                         }),
                     ))
                     .child(status_bar_label("Panel", bottom_panel, rgb(0xc4b5fd))),
@@ -186,14 +187,12 @@ impl NyaTermApp {
                         "AI",
                         ai_status,
                         if self.ai_settings.enabled {
-                            rgb(0x93c5fd)
+                            rgb(0x58a6ff)
                         } else {
-                            rgb(0x98a3b8)
+                            rgb(0x8b949e)
                         },
                         cx.listener(|this, _, _, cx| {
-                            this.selected_nav = NavItem::Workspace;
-                            this.main_mode = MainMode::Workspace;
-                            this.right_focus = RightFocus::Default;
+                            this.ensure_panel_open(NavItem::AiAssistant);
                             cx.notify();
                         }),
                     ))
@@ -201,18 +200,20 @@ impl NyaTermApp {
                         "status-cpu",
                         "CPU",
                         cpu_status,
-                        rgb(0x93c5fd),
+                        rgb(0x58a6ff),
                         cx.listener(|this, _, _, cx| {
-                            this.select(NavItem::Stats, cx);
+                            this.ensure_panel_open(NavItem::Stats);
+                            cx.notify();
                         }),
                     ))
                     .child(status_bar_button(
                         "status-memory",
                         "MEM",
                         mem_status,
-                        rgb(0x93c5fd),
+                        rgb(0x58a6ff),
                         cx.listener(|this, _, _, cx| {
-                            this.select(NavItem::Stats, cx);
+                            this.ensure_panel_open(NavItem::Stats);
+                            cx.notify();
                         }),
                     ))
                     .child(status_bar_label(
@@ -223,9 +224,9 @@ impl NyaTermApp {
                             "offline"
                         },
                         if self.store_status.ready {
-                            rgb(0x6ee7b7)
+                            rgb(0x3fb950)
                         } else {
-                            rgb(0xfca5a5)
+                            rgb(0xff7b72)
                         },
                     ))
                     .child(status_bar_button(
@@ -233,15 +234,145 @@ impl NyaTermApp {
                         "Lock",
                         lock_status,
                         if self.is_locked {
-                            rgb(0xfca5a5)
+                            rgb(0xff7b72)
                         } else {
-                            rgb(0x98a3b8)
+                            rgb(0x8b949e)
                         },
                         cx.listener(|this, _, window, cx| {
                             this.lock_app(window, cx);
                         }),
                     )),
             )
+    }
+
+    pub(in crate::ui::view) fn activity_bar_context_menu_overlay(
+        &mut self,
+        cx: &mut Context<Self>,
+    ) -> impl IntoElement {
+        let Some(menu) = self.activity_bar_context_menu.clone() else {
+            return div().into_any_element();
+        };
+        let entry_id = menu.entry_id.clone();
+        let move_up_id = entry_id.clone();
+        let move_down_id = entry_id.clone();
+        let entry_label = ActivityBarEntry::from_persistence_id(&menu.entry_id)
+            .map(|entry| entry.label())
+            .unwrap_or("Item");
+
+        let mut zone_buttons = div().flex().flex_col().gap_1();
+        for zone in ActivityBarZone::all() {
+            let target = zone;
+            let id = entry_id.clone();
+            let selected = zone == menu.zone;
+            zone_buttons = zone_buttons.child(
+                div()
+                    .id(SharedString::from(format!(
+                        "activity-move-{}",
+                        zone.persistence_key()
+                    )))
+                    .h(px(28.))
+                    .px_2()
+                    .flex()
+                    .items_center()
+                    .rounded_sm()
+                    .cursor_pointer()
+                    .text_xs()
+                    .text_color(if selected {
+                        rgb(0x58a6ff)
+                    } else {
+                        rgb(0xc9d1d9)
+                    })
+                    .bg(if selected {
+                        rgb(0x1c2128)
+                    } else {
+                        rgb(0x0d1117)
+                    })
+                    .hover(|this| this.bg(rgb(0x21262d)))
+                    .child(zone.label())
+                    .on_click(cx.listener(move |this, _, _, cx| {
+                        this.move_activity_entry(id.clone(), target, None, cx);
+                    })),
+            );
+        }
+
+        div()
+            .id(SharedString::from("activity-context-backdrop"))
+            .absolute()
+            .inset_0()
+            .flex()
+            .items_start()
+            .justify_center()
+            .pt(px(72.))
+            .bg(rgba(0x0d111788))
+            .on_click(cx.listener(|this, _, _, cx| {
+                this.close_activity_bar_context_menu(cx);
+            }))
+            .child(
+                div()
+                    .id(SharedString::from("activity-context-menu"))
+                    .w(px(240.))
+                    .rounded_md()
+                    .border_1()
+                    .border_color(rgb(0x30363d))
+                    .bg(rgb(0x161b22))
+                    .p_3()
+                    .flex()
+                    .flex_col()
+                    .gap_2()
+                    .on_mouse_down(MouseButton::Left, |_, _, _| {})
+                    .child(
+                        div()
+                            .text_xs()
+                            .font_weight(FontWeight(800.))
+                            .text_color(rgb(0xc9d1d9))
+                            .child(format!("Activity · {entry_label}")),
+                    )
+                    .child(
+                        div()
+                            .flex()
+                            .gap_2()
+                            .child(small_button(
+                                "activity-move-up",
+                                "Up",
+                                cx.listener(move |this, _, _, cx| {
+                                    this.reorder_activity_entry(move_up_id.clone(), -1, cx);
+                                }),
+                            ))
+                            .child(small_button(
+                                "activity-move-down",
+                                "Down",
+                                cx.listener(move |this, _, _, cx| {
+                                    this.reorder_activity_entry(move_down_id.clone(), 1, cx);
+                                }),
+                            ))
+                            .child(small_button(
+                                "activity-toggle-labels",
+                                if self.activity_bar_layout.show_labels {
+                                    "Hide Labels"
+                                } else {
+                                    "Show Labels"
+                                },
+                                cx.listener(|this, _, _, cx| {
+                                    this.toggle_activity_bar_labels(cx);
+                                }),
+                            )),
+                    )
+                    .child(
+                        div()
+                            .text_size(px(10.))
+                            .text_color(rgb(0x8b949e))
+                            .child("Move to zone"),
+                    )
+                    .child(zone_buttons)
+                    .child(small_button(
+                        "activity-menu-close",
+                        "Close",
+                        cx.listener(|this, _, _, cx| {
+                            this.close_activity_bar_context_menu(cx);
+                        }),
+                    )),
+            )
+            .into_any_element()
     }
 
     pub(in crate::ui::view) fn title_bar(&mut self, cx: &mut Context<Self>) -> impl IntoElement {
@@ -251,8 +382,8 @@ impl NyaTermApp {
             .items_center()
             .justify_between()
             .border_b_1()
-            .border_color(rgb(0x202630))
-            .bg(rgb(0x11151c))
+            .border_color(rgb(0x30363d))
+            .bg(rgb(0x161b22))
             .child(
                 div()
                     .h_full()
@@ -275,24 +406,10 @@ impl NyaTermApp {
                                     .child("NyaTerm"),
                             ),
                     )
-                    .child(menu_bar_button(
-                        "File",
-                        cx.listener(|this, _, _, cx| this.select(NavItem::Connections, cx)),
-                    ))
-                    .child(menu_bar_button(
-                        "View",
-                        cx.listener(|this, _, _, cx| this.select(NavItem::Workspace, cx)),
-                    ))
-                    .child(menu_bar_button(
-                        "Terminal",
-                        cx.listener(|this, _, window, cx| {
-                            this.start_local_session(window, cx);
-                        }),
-                    ))
-                    .child(menu_bar_button(
-                        "Help",
-                        cx.listener(|this, _, _, cx| this.open_page(NavItem::Migration, cx)),
-                    )),
+                    .child(self.title_menu_trigger(TitleMenu::File, cx))
+                    .child(self.title_menu_trigger(TitleMenu::View, cx))
+                    .child(self.title_menu_trigger(TitleMenu::Terminal, cx))
+                    .child(self.title_menu_trigger(TitleMenu::Help, cx)),
             )
             .child(
                 div()
@@ -307,7 +424,7 @@ impl NyaTermApp {
                             .max_w(px(520.))
                             .overflow_hidden()
                             .text_xs()
-                            .text_color(rgb(0x8f98aa))
+                            .text_color(rgb(0x8b949e))
                             .child(self.title_context_label()),
                     ),
             )
@@ -316,7 +433,6 @@ impl NyaTermApp {
                     .h_full()
                     .flex()
                     .items_center()
-                    .child(status_pill("native", rgb(0x6ee7b7), rgb(0x14352b)))
                     .child(
                         div()
                             .w(px(10.))
@@ -345,31 +461,23 @@ impl NyaTermApp {
     }
 
     fn title_context_label(&self) -> String {
-        let session = self
-            .active_session_id
-            .as_deref()
-            .map(|id| format!("session {}", short_id(id)))
-            .unwrap_or_else(|| "no active session".to_string());
-        format!(
-            "{} / {} / {}",
-            self.selected_nav.label(),
-            session,
-            status_label(&self.terminal_status)
-        )
+        if let Some(name) = self.active_session_name() {
+            return name;
+        }
+        if let Some(pending) = self.pending_session_name.as_ref() {
+            return format!("Connecting {pending}");
+        }
+        "NyaTerm".to_string()
     }
 
     fn left_panel_meta(&self) -> &'static str {
-        match self.selected_nav {
-            NavItem::Workspace => "workspace",
-            NavItem::Connections => "connections",
+        match self.current_left_panel().unwrap_or(NavItem::Transfers) {
+            NavItem::Transfers => "file explorer",
             NavItem::Tunnels => "network",
-            NavItem::Stats => "resources",
-            NavItem::Processes => "processes",
-            NavItem::Docker => "containers",
-            NavItem::Translation => "translation",
-            NavItem::Transfers => "sftp",
-            NavItem::Settings => "settings",
+            NavItem::SecurityAuth => "security / auth",
+            NavItem::SyncBackupHistory => "sync / backup",
             NavItem::Migration => "migration",
+            other => other.label(),
         }
     }
 
@@ -378,29 +486,22 @@ impl NyaTermApp {
         side: ActivitySide,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
-        let top_items: &[(NavItem, &str, &str)] = match side {
-            ActivitySide::Left => &[
-                (NavItem::Workspace, "WS", "Workspace"),
-                (NavItem::Connections, "CN", "Saved Connections"),
-                (NavItem::Transfers, "FE", "File Explorer"),
-                (NavItem::Tunnels, "NW", "Network"),
-            ],
-            ActivitySide::Right => &[
-                (NavItem::Stats, "RS", "Resource Monitor"),
-                (NavItem::Processes, "PS", "Process Manager"),
-                (NavItem::Docker, "DK", "Docker"),
-                (NavItem::Translation, "TR", "Translation"),
-            ],
+        let (top_zone, bottom_zone) = match side {
+            ActivitySide::Left => (ActivityBarZone::LeftTop, ActivityBarZone::LeftBottom),
+            ActivitySide::Right => (ActivityBarZone::RightTop, ActivityBarZone::RightBottom),
         };
-        let bottom_items: &[(NavItem, &str, &str)] = match side {
-            ActivitySide::Left => &[(NavItem::Migration, "MG", "Migration")],
-            ActivitySide::Right => &[(NavItem::Settings, "ST", "Settings")],
-        };
+        let top_entries = self.activity_entries_for_zone(top_zone);
+        let bottom_entries = self.activity_entries_for_zone(bottom_zone);
+        let top_len = top_entries.len();
+        let bottom_len = bottom_entries.len();
+        let show_labels = self.activity_bar_layout.show_labels;
 
         let mut top = div().flex().flex_col().items_center().gap_1().pt_1();
-        for (item, icon, tooltip) in top_items {
-            top = top.child(self.activity_button(*item, icon, tooltip, side, cx));
+        for (index, entry) in top_entries.into_iter().enumerate() {
+            top = top.child(self.activity_entry_button(entry, side, top_zone, index, show_labels, cx));
         }
+        // End-of-zone drop target (append).
+        top = top.child(self.activity_zone_end_drop_target(top_zone, top_len, cx));
 
         let mut bottom = div()
             .mt_auto()
@@ -409,107 +510,187 @@ impl NyaTermApp {
             .items_center()
             .gap_1()
             .pb_1();
-        if side == ActivitySide::Right {
-            bottom = bottom
-                .child(self.bottom_panel_button(
-                    BottomPanelMode::QuickCommands,
-                    "QC",
-                    "Quick Commands",
-                    cx,
-                ))
-                .child(self.bottom_panel_button(
-                    BottomPanelMode::CommandSend,
-                    "SD",
-                    "Command Send",
-                    cx,
-                ))
-                .child(self.recording_activity_button(cx))
-                .child(self.lock_activity_button(cx));
+        for (index, entry) in bottom_entries.into_iter().enumerate() {
+            bottom =
+                bottom.child(self.activity_entry_button(entry, side, bottom_zone, index, show_labels, cx));
         }
-        for (item, icon, tooltip) in bottom_items {
-            bottom = bottom.child(self.activity_button(*item, icon, tooltip, side, cx));
-        }
+        bottom = bottom.child(self.activity_zone_end_drop_target(bottom_zone, bottom_len, cx));
 
         div()
-            .w(px(40.))
+            .w(if show_labels { px(56.) } else { px(40.) })
             .flex_none()
             .flex()
             .flex_col()
-            .border_color(rgb(0x242a35))
+            .border_color(rgb(0x30363d))
             .when(side == ActivitySide::Left, |this| this.border_r_1())
             .when(side == ActivitySide::Right, |this| this.border_l_1())
-            .bg(rgb(0x10141b))
+            .bg(rgb(0x0d1117))
             .child(top)
             .child(bottom)
     }
 
-    fn activity_button(
+    fn activity_zone_end_drop_target(
         &self,
-        item: NavItem,
-        icon: &'static str,
-        tooltip: &'static str,
-        side: ActivitySide,
+        zone: ActivityBarZone,
+        end_index: usize,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
-        let selected = self.selected_nav == item;
+        let zone_key = zone.persistence_key();
         div()
-            .id(SharedString::from(format!("activity-{tooltip}")))
+            .id(SharedString::from(format!("activity-zone-end-{zone_key}")))
+            .w_full()
+            .h(px(8.))
+            .flex_none()
+            .on_drop(cx.listener(move |this, payload: &ActivityBarDragPayload, _, cx| {
+                if payload.entry_id.is_empty() {
+                    return;
+                }
+                this.move_activity_entry(
+                    payload.entry_id.clone(),
+                    zone,
+                    Some(end_index),
+                    cx,
+                );
+            }))
+    }
+
+    fn activity_entry_button(
+        &self,
+        entry: ActivityBarEntry,
+        side: ActivitySide,
+        zone: ActivityBarZone,
+        index: usize,
+        show_labels: bool,
+        cx: &mut Context<Self>,
+    ) -> impl IntoElement {
+        let selected = self.activity_entry_selected(entry);
+        let icon = entry.glyph();
+        let tooltip = entry.label();
+        let entry_id = entry.persistence_id().to_string();
+        let context_entry_id = entry_id.clone();
+        let recording_active = matches!(entry, ActivityBarEntry::Recording)
+            && !self.recording_manager.list_recording_sessions().is_empty();
+        let indicator = if recording_active {
+            rgb(0xff7b72)
+        } else if selected {
+            match side {
+                ActivitySide::Left => rgb(0x58a6ff),
+                ActivitySide::Right => rgb(0x3fb950),
+            }
+        } else {
+            rgb(0x0d1117)
+        };
+        let bg = if recording_active {
+            rgb(0x3d1418)
+        } else if selected {
+            rgb(0x1c2128)
+        } else {
+            rgb(0x0d1117)
+        };
+
+        div()
+            .id(SharedString::from(format!("activity-{entry_id}")))
             .relative()
-            .size(px(32.))
-            .flex()
-            .items_center()
-            .justify_center()
+            .when(show_labels, |this| {
+                this.w_full()
+                    .px_1()
+                    .py_1()
+                    .flex()
+                    .flex_col()
+                    .items_center()
+                    .gap_1()
+            })
+            .when(!show_labels, |this| {
+                this.size(px(36.))
+                    .flex()
+                    .items_center()
+                    .justify_center()
+            })
             .rounded_sm()
             .cursor_pointer()
-            .text_xs()
-            .font_weight(FontWeight(800.))
+            .text_sm()
+            .font_weight(FontWeight(700.))
             .text_color(if selected {
-                rgb(0xffffff)
+                // Tauri ActivityBarButton uses primary color when active.
+                match side {
+                    ActivitySide::Left => rgb(0x58a6ff),
+                    ActivitySide::Right => rgb(0x3fb950),
+                }
             } else {
-                rgb(0x98a3b8)
+                rgb(0x8b949e)
             })
-            .bg(if selected {
-                rgb(0x243044)
-            } else {
-                rgb(0x10141b)
+            .bg(bg)
+            .hover(|hover| {
+                hover
+                    .bg(rgb(0x1c2128))
+                    .text_color(match side {
+                        ActivitySide::Left => rgb(0x79b8ff),
+                        ActivitySide::Right => rgb(0x56d364),
+                    })
             })
-            .hover(|hover| hover.bg(rgb(0x202632)).text_color(rgb(0xffffff)))
             .child(
                 div()
                     .absolute()
-                    .top(px(7.))
-                    .bottom(px(7.))
+                    .top(px(8.))
+                    .bottom(px(8.))
                     .w(px(2.))
                     .rounded_full()
-                    .bg(if selected {
-                        rgb(0x6ee7b7)
-                    } else {
-                        rgb(0x10141b)
-                    })
+                    .bg(indicator)
                     .when(side == ActivitySide::Left, |this| this.left_0())
                     .when(side == ActivitySide::Right, |this| this.right_0()),
             )
             .child(icon)
-            .on_click(cx.listener(move |this, _, _, cx| {
-                match side {
-                    ActivitySide::Left => {
-                        this.left_sidebar_collapsed = false;
+            .when(show_labels, |this| {
+                this.child(
+                    div()
+                        .text_size(px(8.))
+                        .font_weight(FontWeight(600.))
+                        .text_color(rgb(0x8b949e))
+                        .child(truncate_preview(tooltip, 8)),
+                )
+            })
+            .cursor_move()
+            .on_drag(
+                ActivityBarDragPayload {
+                    entry_id: entry_id.clone(),
+                    zone,
+                    index,
+                    label: tooltip.to_string(),
+                },
+                |payload, position, _, cx| {
+                    cx.new(|_| ActivityBarDragPreview::new(payload.clone(), position))
+                },
+            )
+            .on_drop({
+                let drop_zone = zone;
+                let drop_index = index;
+                cx.listener(move |this, payload: &ActivityBarDragPayload, _, cx| {
+                    if payload.entry_id.is_empty() {
+                        return;
                     }
-                    ActivitySide::Right
-                        if matches!(
-                            item,
-                            NavItem::Stats
-                                | NavItem::Processes
-                                | NavItem::Docker
-                                | NavItem::Translation
-                        ) =>
-                    {
-                        this.right_inspector_collapsed = false;
-                    }
-                    ActivitySide::Right => {}
-                }
-                this.select(item, cx);
+                    // Drop onto this button inserts before it (Tauri dropIndex == idx).
+                    this.move_activity_entry(
+                        payload.entry_id.clone(),
+                        drop_zone,
+                        Some(drop_index),
+                        cx,
+                    );
+                })
+            })
+            .on_click(cx.listener(move |this, _, window, cx| {
+                this.activate_activity_entry(entry, window, cx);
             }))
+            .on_mouse_down(
+                MouseButton::Right,
+                cx.listener(move |this, _, _, cx| {
+                    this.open_activity_bar_context_menu(
+                        context_entry_id.clone(),
+                        zone,
+                        index,
+                        cx,
+                    );
+                }),
+            )
     }
 
     fn bottom_panel_button(
@@ -523,25 +704,25 @@ impl NyaTermApp {
         div()
             .id(SharedString::from(format!("bottom-panel-{tooltip}")))
             .relative()
-            .size(px(32.))
+            .size(px(36.))
             .flex()
             .items_center()
             .justify_center()
             .rounded_sm()
             .cursor_pointer()
-            .text_xs()
-            .font_weight(FontWeight(800.))
+            .text_sm()
+            .font_weight(FontWeight(700.))
             .text_color(if selected {
                 rgb(0xffffff)
             } else {
-                rgb(0x98a3b8)
+                rgb(0x8b949e)
             })
             .bg(if selected {
-                rgb(0x243044)
+                rgb(0x1c2128)
             } else {
-                rgb(0x10141b)
+                rgb(0x0d1117)
             })
-            .hover(|hover| hover.bg(rgb(0x202632)).text_color(rgb(0xffffff)))
+            .hover(|hover| hover.bg(rgb(0x1c2128)).text_color(rgb(0xffffff)))
             .child(
                 div()
                     .absolute()
@@ -551,9 +732,9 @@ impl NyaTermApp {
                     .w(px(2.))
                     .rounded_full()
                     .bg(if selected {
-                        rgb(0x6ee7b7)
+                        rgb(0x3fb950)
                     } else {
-                        rgb(0x10141b)
+                        rgb(0x0d1117)
                     }),
             )
             .child(icon)
@@ -573,29 +754,29 @@ impl NyaTermApp {
         div()
             .id(SharedString::from("activity-recording"))
             .relative()
-            .size(px(32.))
+            .size(px(36.))
             .flex()
             .items_center()
             .justify_center()
             .rounded_sm()
             .cursor_pointer()
-            .text_xs()
-            .font_weight(FontWeight(800.))
+            .text_sm()
+            .font_weight(FontWeight(700.))
             .text_color(if selected {
                 rgb(0xffffff)
             } else {
-                rgb(0x98a3b8)
+                rgb(0x8b949e)
             })
             .bg(if selected {
                 if recording_count > 0 {
-                    rgb(0x3a1717)
+                    rgb(0x3d1418)
                 } else {
-                    rgb(0x243044)
+                    rgb(0x1c2128)
                 }
             } else {
-                rgb(0x10141b)
+                rgb(0x0d1117)
             })
-            .hover(|hover| hover.bg(rgb(0x202632)).text_color(rgb(0xffffff)))
+            .hover(|hover| hover.bg(rgb(0x1c2128)).text_color(rgb(0xffffff)))
             .child(
                 div()
                     .absolute()
@@ -605,29 +786,16 @@ impl NyaTermApp {
                     .w(px(2.))
                     .rounded_full()
                     .bg(if recording_count > 0 {
-                        rgb(0xfca5a5)
+                        rgb(0xff7b72)
                     } else if selected {
-                        rgb(0x6ee7b7)
+                        rgb(0x3fb950)
                     } else {
-                        rgb(0x10141b)
+                        rgb(0x0d1117)
                     }),
             )
-            .child("RC")
+            .child("●")
             .on_click(cx.listener(|this, _, _, cx| {
-                this.selected_nav = NavItem::Workspace;
-                this.main_mode = MainMode::Workspace;
-                this.right_inspector_collapsed = false;
-                this.right_focus = if this.right_focus == RightFocus::Recording {
-                    RightFocus::Default
-                } else {
-                    RightFocus::Recording
-                };
-                this.terminal_status = if this.right_focus == RightFocus::Recording {
-                    "recording panel opened".to_string()
-                } else {
-                    "inspector restored".to_string()
-                };
-                cx.notify();
+                this.open_panel(NavItem::Recording, cx);
             }))
     }
 
@@ -635,25 +803,25 @@ impl NyaTermApp {
         div()
             .id(SharedString::from("activity-lock"))
             .relative()
-            .size(px(32.))
+            .size(px(36.))
             .flex()
             .items_center()
             .justify_center()
             .rounded_sm()
             .cursor_pointer()
-            .text_xs()
-            .font_weight(FontWeight(800.))
+            .text_sm()
+            .font_weight(FontWeight(700.))
             .text_color(if self.is_locked {
                 rgb(0xffffff)
             } else {
-                rgb(0x98a3b8)
+                rgb(0x8b949e)
             })
             .bg(if self.is_locked {
-                rgb(0x243044)
+                rgb(0x1c2128)
             } else {
-                rgb(0x10141b)
+                rgb(0x0d1117)
             })
-            .hover(|hover| hover.bg(rgb(0x202632)).text_color(rgb(0xffffff)))
+            .hover(|hover| hover.bg(rgb(0x1c2128)).text_color(rgb(0xffffff)))
             .child(
                 div()
                     .absolute()
@@ -663,14 +831,347 @@ impl NyaTermApp {
                     .w(px(2.))
                     .rounded_full()
                     .bg(if self.is_locked {
-                        rgb(0x6ee7b7)
+                        rgb(0x3fb950)
                     } else {
-                        rgb(0x10141b)
+                        rgb(0x0d1117)
                     }),
             )
-            .child("LK")
+            .child("🔒")
             .on_click(cx.listener(|this, _, window, cx| {
                 this.lock_app(window, cx);
             }))
     }
+
+    fn title_menu_trigger(
+        &self,
+        menu: TitleMenu,
+        cx: &mut Context<Self>,
+    ) -> impl IntoElement {
+        let open = self.title_menu_open == Some(menu);
+        let label = menu.label();
+        div()
+            .relative()
+            .child(
+                div()
+                    .id(SharedString::from(format!("title-menu-trigger-{label}")))
+                    .h(px(28.))
+                    .px_2()
+                    .flex()
+                    .items_center()
+                    .rounded_sm()
+                    .text_xs()
+                    .text_color(if open {
+                        rgb(0xffffff)
+                    } else {
+                        rgb(0x8b949e)
+                    })
+                    .bg(if open { rgb(0x1c2128) } else { rgb(0x161b22) })
+                    .cursor_pointer()
+                    .hover(|this| this.bg(rgb(0x1c2128)).text_color(rgb(0x58a6ff)))
+                    .child(label)
+                    .on_click(cx.listener(move |this, _, _, cx| {
+                        this.toggle_title_menu(menu, cx);
+                    })),
+            )
+            .when(open, |this| {
+                this.child(self.title_menu_dropdown(menu, cx))
+            })
+    }
+
+    fn title_menu_dropdown(
+        &self,
+        menu: TitleMenu,
+        cx: &mut Context<Self>,
+    ) -> impl IntoElement {
+        let shortcut = |id: &str, fallback: &str| self.display_shortcut_for(id, fallback);
+        let mut items = div()
+            .id(SharedString::from(format!("title-menu-{}", menu.label())))
+            .absolute()
+            .top(px(30.))
+            .left_0()
+                        .w(px(240.))
+            .rounded_md()
+            .border_1()
+            .border_color(rgb(0x30363d))
+            .bg(rgb(0x161b22))
+            .shadow_lg()
+            .py_1()
+            .flex()
+            .flex_col();
+
+        match menu {
+            TitleMenu::File => {
+                items = items
+                    .child(title_menu_item(
+                        "title-file-new-session",
+                        "New Session",
+                        Some(shortcut("tab.newSession", "Ctrl+Shift+N")),
+                        cx.listener(|this, _, window, cx| {
+                            this.close_title_menu(cx);
+                            this.start_local_session(window, cx);
+                        }),
+                    ))
+                    .child(title_menu_separator())
+                    .child(title_menu_item(
+                        "title-file-import",
+                        "Import Config",
+                        None,
+                        cx.listener(|this, _, _, cx| {
+                            this.close_title_menu(cx);
+                            this.prompt_config_import(cx);
+                        }),
+                    ))
+                    .child(title_menu_item(
+                        "title-file-export",
+                        "Export Config",
+                        None,
+                        cx.listener(|this, _, _, cx| {
+                            this.close_title_menu(cx);
+                            this.prompt_config_export(cx);
+                        }),
+                    ));
+            }
+            TitleMenu::View => {
+                items = items
+                    .child(title_menu_item(
+                        "title-view-zoom-in",
+                        "Zoom In",
+                        Some(shortcut("view.zoomIn", "Ctrl+=")),
+                        cx.listener(|this, _, _, cx| {
+                            this.close_title_menu(cx);
+                            this.zoom_terminal_in(cx);
+                        }),
+                    ))
+                    .child(title_menu_item(
+                        "title-view-zoom-out",
+                        "Zoom Out",
+                        Some(shortcut("view.zoomOut", "Ctrl+-")),
+                        cx.listener(|this, _, _, cx| {
+                            this.close_title_menu(cx);
+                            this.zoom_terminal_out(cx);
+                        }),
+                    ))
+                    .child(title_menu_item(
+                        "title-view-reset-zoom",
+                        "Reset Zoom",
+                        Some(shortcut("view.resetZoom", "Ctrl+0")),
+                        cx.listener(|this, _, _, cx| {
+                            this.close_title_menu(cx);
+                            this.reset_terminal_font_size(cx);
+                        }),
+                    ))
+                    .child(title_menu_separator())
+                    .child(title_menu_item(
+                        "title-view-toggle-left",
+                        "Toggle Left Sidebar",
+                        Some(shortcut("view.toggleLeftSidebar", "Ctrl+Shift+E")),
+                        cx.listener(|this, _, _, cx| {
+                            this.close_title_menu(cx);
+                            this.toggle_left_sidebar(cx);
+                        }),
+                    ))
+                    .child(title_menu_item(
+                        "title-view-toggle-right",
+                        "Toggle Right Sidebar",
+                        Some(shortcut("view.toggleRightSidebar", "Ctrl+Shift+B")),
+                        cx.listener(|this, _, _, cx| {
+                            this.close_title_menu(cx);
+                            this.toggle_right_inspector(cx);
+                        }),
+                    ))
+                    .child(title_menu_separator())
+                    .child(title_menu_item(
+                        "title-view-settings",
+                        "Settings",
+                        Some(shortcut("view.openSettings", "Ctrl+,")),
+                        cx.listener(|this, _, _, cx| {
+                            this.close_title_menu(cx);
+                            this.open_page(NavItem::Settings, cx);
+                        }),
+                    ));
+            }
+            TitleMenu::Terminal => {
+                items = items
+                    .child(title_menu_item(
+                        "title-term-quick-switch",
+                        "Command Palette",
+                        Some(shortcut("tab.quickSwitch", "Ctrl+Shift+S")),
+                        cx.listener(|this, _, window, cx| {
+                            this.close_title_menu(cx);
+                            this.open_quick_switch(window, cx);
+                        }),
+                    ))
+                    .child(title_menu_separator())
+                    .child(title_menu_item(
+                        "title-term-split-h",
+                        "Split Horizontal",
+                        None,
+                        cx.listener(|this, _, window, cx| {
+                            this.close_title_menu(cx);
+                            this.split_workspace_with_duplicate(
+                                WorkspaceSplitDirection::Horizontal,
+                                window,
+                                cx,
+                            );
+                        }),
+                    ))
+                    .child(title_menu_item(
+                        "title-term-split-v",
+                        "Split Vertical",
+                        None,
+                        cx.listener(|this, _, window, cx| {
+                            this.close_title_menu(cx);
+                            this.split_workspace_with_duplicate(
+                                WorkspaceSplitDirection::Vertical,
+                                window,
+                                cx,
+                            );
+                        }),
+                    ))
+                    .child(title_menu_item(
+                        "title-term-unsplit",
+                        "Unsplit",
+                        None,
+                        cx.listener(|this, _, _, cx| {
+                            this.close_title_menu(cx);
+                            this.unsplit_workspace(cx);
+                        }),
+                    ))
+                    .child(title_menu_separator())
+                    .child(title_menu_item(
+                        "title-term-sync-groups",
+                        "Manage Sync Groups",
+                        Some(shortcut("terminal.manageSyncGroups", "Ctrl+Shift+G")),
+                        cx.listener(|this, _, window, cx| {
+                            this.close_title_menu(cx);
+                            this.open_sync_groups(window, cx);
+                        }),
+                    ))
+                    .child(title_menu_separator())
+                    .child(title_menu_item(
+                        "title-term-clear",
+                        "Clear Terminal",
+                        Some(shortcut("terminal.clear", "Ctrl+L")),
+                        cx.listener(|this, _, _, cx| {
+                            this.close_title_menu(cx);
+                            this.clear_terminal(cx);
+                        }),
+                    ));
+            }
+            TitleMenu::Help => {
+                let update_label = if self.update_pending {
+                    "Checking Updates…"
+                } else if self.update_info.as_ref().is_some_and(|info| info.available) {
+                    "Update Available"
+                } else {
+                    "Check for Updates"
+                };
+                items = items
+                    .child(title_menu_item(
+                        "title-help-docs",
+                        "Documentation",
+                        None,
+                        cx.listener(|this, _, _, cx| {
+                            this.close_title_menu(cx);
+                            this.terminal_status =
+                                "docs: https://github.com/nyaterm/nyaterm".to_string();
+                            cx.notify();
+                        }),
+                    ))
+                    .child(title_menu_item(
+                        "title-help-update",
+                        update_label,
+                        None,
+                        cx.listener(|this, _, _, cx| {
+                            this.close_title_menu(cx);
+                            this.start_update_check(cx);
+                        }),
+                    ))
+                    .child(title_menu_item(
+                        "title-help-migration",
+                        "Migration Status",
+                        None,
+                        cx.listener(|this, _, _, cx| {
+                            this.close_title_menu(cx);
+                            this.open_page(NavItem::Migration, cx);
+                        }),
+                    ))
+                    .child(title_menu_separator())
+                    .child(title_menu_item(
+                        "title-help-about",
+                        "About NyaTerm",
+                        None,
+                        cx.listener(|this, _, _, cx| {
+                            this.close_title_menu(cx);
+                            this.terminal_status = format!(
+                                "NyaTerm native {}",
+                                env!("CARGO_PKG_VERSION")
+                            );
+                            cx.notify();
+                        }),
+                    ));
+            }
+        }
+
+        items
+    }
+
+    pub(in crate::ui::view) fn toggle_title_menu(
+        &mut self,
+        menu: TitleMenu,
+        cx: &mut Context<Self>,
+    ) {
+        self.title_menu_open = if self.title_menu_open == Some(menu) {
+            None
+        } else {
+            Some(menu)
+        };
+        cx.notify();
+    }
+
+    pub(in crate::ui::view) fn close_title_menu(&mut self, cx: &mut Context<Self>) {
+        if self.title_menu_open.take().is_some() {
+            cx.notify();
+        }
+    }
+}
+
+fn title_menu_item(
+    id: impl Into<String>,
+    label: impl Into<String>,
+    shortcut: Option<String>,
+    on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
+) -> impl IntoElement {
+    let label = label.into();
+    let mut row = div()
+        .id(SharedString::from(id.into()))
+        .h(px(30.))
+        .px_3()
+        .flex()
+        .items_center()
+        .justify_between()
+        .gap_3()
+        .text_size(px(12.))
+        .text_color(rgb(0xc9d1d9))
+        .cursor_pointer()
+        .hover(|this| this.bg(rgb(0x21262d)))
+        .on_click(on_click)
+        .child(div().min_w_0().flex_1().child(label));
+    if let Some(shortcut) = shortcut {
+        row = row.child(
+            div()
+                .text_size(px(10.))
+                .text_color(rgb(0x6e7681))
+                .child(shortcut),
+        );
+    }
+    row
+}
+
+fn title_menu_separator() -> impl IntoElement {
+    div()
+        .h(px(1.))
+        .mx_2()
+        .my_1()
+        .bg(rgb(0x30363d))
 }

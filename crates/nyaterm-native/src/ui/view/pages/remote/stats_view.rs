@@ -1,4 +1,5 @@
 use super::*;
+use gpui::{SharedString, prelude::*};
 
 impl NyaTermApp {
     pub(in crate::ui::view) fn stats_view(&mut self, cx: &mut Context<Self>) -> impl IntoElement {
@@ -80,43 +81,65 @@ impl NyaTermApp {
             }
         }
 
+        // Tauri ResourceMonitor: compact toolbar + scrollable gauges/lists.
+        let host_label = if stats.system.hostname.trim().is_empty() {
+            "remote".to_string()
+        } else {
+            truncate_preview(&stats.system.hostname, 24)
+        };
         div()
             .flex()
             .flex_col()
             .size_full()
-            .p_5()
-            .gap_4()
-            .child(section_header(
-                "Stats",
-                "Native SSH exec system snapshot for the active remote session.",
-            ))
+            .overflow_hidden()
+            .bg(rgb(0x161b22))
             .child(
                 div()
-                    .grid()
-                    .grid_cols(6)
-                    .gap_3()
-                    .child(metric(
-                        "SSH",
-                        if self.active_ssh_config.is_some() {
-                            "ready".to_string()
-                        } else {
-                            "none".to_string()
-                        },
-                    ))
-                    .child(metric(
-                        "Host",
-                        if stats.system.hostname.trim().is_empty() {
-                            "n/a".to_string()
-                        } else {
-                            truncate_preview(&stats.system.hostname, 28)
-                        },
-                    ))
-                    .child(metric("CPU", format!("{:.1}%", stats.cpu.usage)))
-                    .child(metric("Load", format!("{:.2}", stats.load.load1)))
-                    .child(metric("Memory", format!("{memory_percent:.0}%")))
-                    .child(metric("Disk", disk_summary)),
+                    .h(px(36.))
+                    .flex_none()
+                    .px_2()
+                    .border_b_1()
+                    .border_color(rgb(0x30363d))
+                    .bg(rgb(0x12171f))
+                    .flex()
+                    .items_center()
+                    .gap_2()
+                    .child(
+                        div()
+                            .min_w_0()
+                            .flex_1()
+                            .text_size(px(11.))
+                            .text_color(rgb(0x8b949e))
+                            .overflow_hidden()
+                            .child(format!(
+                                "{host_label} · CPU {:.0}% · MEM {:.0}% · {}",
+                                stats.cpu.usage, memory_percent, disk_summary
+                            )),
+                    )
+                    .child(
+                        div()
+                            .when(!can_refresh, |this| this.opacity(0.45))
+                            .child(icon_button(
+                                "stats-refresh",
+                                "↻",
+                                cx.listener(|this, _, window, cx| {
+                                    this.refresh_stats(window, cx);
+                                }),
+                            )),
+                    ),
             )
             .child(
+                div()
+                    .id(SharedString::from("stats-scroll"))
+                    .flex_1()
+                    .min_h_0()
+                    .overflow_scroll()
+                    .scrollbar_width(px(6.))
+                    .p_2()
+                    .flex()
+                    .flex_col()
+                    .gap_2()
+.child(
                 div()
                     .grid()
                     .grid_cols(4)
@@ -167,41 +190,7 @@ impl NyaTermApp {
                         (total_rx_rate + total_tx_rate) / net_summary.max(1.0),
                     )),
             )
-            .child(
-                div()
-                    .rounded_md()
-                    .border_1()
-                    .border_color(rgb(0x2a3140))
-                    .bg(rgb(0x151923))
-                    .p_4()
-                    .child(
-                        div()
-                            .flex()
-                            .items_center()
-                            .justify_between()
-                            .gap_3()
-                            .child(
-                                div()
-                                    .text_sm()
-                                    .text_color(rgb(0xe5edf7))
-                                    .child(self.stats_status.clone()),
-                            )
-                            .child(
-                                div()
-                                    .flex()
-                                    .items_center()
-                                    .gap_2()
-                                    .when(!can_refresh, |this| this.opacity(0.45))
-                                    .child(small_button(
-                                        "stats-refresh",
-                                        "Refresh",
-                                        cx.listener(|this, _, window, cx| {
-                                            this.refresh_stats(window, cx);
-                                        }),
-                                    )),
-                            ),
-                    ),
-            )
+            
             .child(
                 div()
                     .grid()
@@ -211,7 +200,7 @@ impl NyaTermApp {
                         div()
                             .rounded_md()
                             .border_1()
-                            .border_color(rgb(0x2a3140))
+                            .border_color(rgb(0x30363d))
                             .bg(rgb(0x151923))
                             .p_4()
                             .child(
@@ -239,7 +228,7 @@ impl NyaTermApp {
                         div()
                             .rounded_md()
                             .border_1()
-                            .border_color(rgb(0x2a3140))
+                            .border_color(rgb(0x30363d))
                             .bg(rgb(0x151923))
                             .p_4()
                             .child(div().text_sm().font_weight(FontWeight(700.)).child("Load"))
@@ -261,7 +250,7 @@ impl NyaTermApp {
                         div()
                             .rounded_md()
                             .border_1()
-                            .border_color(rgb(0x2a3140))
+                            .border_color(rgb(0x30363d))
                             .bg(rgb(0x151923))
                             .p_4()
                             .child(
@@ -298,7 +287,7 @@ impl NyaTermApp {
                         div()
                             .rounded_md()
                             .border_1()
-                            .border_color(rgb(0x2a3140))
+                            .border_color(rgb(0x30363d))
                             .bg(rgb(0x151923))
                             .p_4()
                             .child(
@@ -313,7 +302,7 @@ impl NyaTermApp {
                         div()
                             .rounded_md()
                             .border_1()
-                            .border_color(rgb(0x2a3140))
+                            .border_color(rgb(0x30363d))
                             .bg(rgb(0x151923))
                             .p_4()
                             .child(div().text_sm().font_weight(FontWeight(700.)).child("Disks"))
@@ -342,6 +331,7 @@ impl NyaTermApp {
                             })
                             .child(disks),
                     ),
+            )
             )
     }
 }

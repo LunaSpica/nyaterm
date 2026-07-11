@@ -269,6 +269,66 @@ impl NyaTermApp {
                     .p_4()
                     .child(
                         div()
+                            .flex()
+                            .items_center()
+                            .justify_between()
+                            .gap_3()
+                            .child(
+                                div()
+                                    .text_sm()
+                                    .font_weight(FontWeight(700.))
+                                    .child("Side Panels"),
+                            )
+                            .child(status_pill(
+                                if self.panel_multi_open {
+                                    "multi-open"
+                                } else {
+                                    "single"
+                                },
+                                if self.panel_multi_open {
+                                    rgb(0x6ee7b7)
+                                } else {
+                                    rgb(0x98a3b8)
+                                },
+                                if self.panel_multi_open {
+                                    rgb(0x12342a)
+                                } else {
+                                    rgb(0x202633)
+                                },
+                            )),
+                    )
+                    .child(
+                        div()
+                            .mt_2()
+                            .text_xs()
+                            .text_color(rgb(0x8b949e))
+                            .child("Allow multiple side panels stacked on each edge, matching Tauri multi-open mode."),
+                    )
+                    .child(
+                        div()
+                            .mt_3()
+                            .child(small_button(
+                                "settings-panel-multi-open",
+                                if self.panel_multi_open {
+                                    "Disable Multi-Open"
+                                } else {
+                                    "Enable Multi-Open"
+                                },
+                                cx.listener(|this, _, _, cx| {
+                                    this.toggle_panel_multi_open(cx);
+                                }),
+                            )),
+                    ),
+            )
+            .child(
+                div()
+                    .rounded_md()
+                    .border_1()
+                    .border_color(rgb(0x2a3140))
+                    .bg(rgb(0x151923))
+                    .p_4()
+                    .child(
+                        div()
                             .text_sm()
                             .font_weight(FontWeight(700.))
                             .child("Clipboard and Mouse"),

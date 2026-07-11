@@ -18,7 +18,7 @@ impl NyaTermApp {
             "Ask"
         };
         let mut command_rows = div().mt_3().flex().flex_col().gap_2();
-        for (index, card) in self.ai_command_cards.iter().cloned().take(3).enumerate() {
+        for (index, card) in self.ai_command_cards.iter().cloned().take(8).enumerate() {
             let risk = risk_label(card.risk_level.as_ref());
             let title = if card.title.trim().is_empty() {
                 "Command".to_string()
@@ -123,7 +123,7 @@ impl NyaTermApp {
                         .child("No Agent steps yet."),
                 );
             } else {
-                for step in self.ai_agent_steps.iter().cloned().rev().take(8).rev() {
+                for step in self.ai_agent_steps.iter().cloned().rev().take(16).rev() {
                     let (label, fg, bg) = ai_agent_step_status_style(step.status);
                     agent_step_rows = agent_step_rows.child(
                         div()
@@ -161,94 +161,196 @@ impl NyaTermApp {
                 }
             }
         }
+        let model_label = self
+            .ai_settings
+            .default_model_id
+            .clone()
+            .unwrap_or_else(|| "default model".to_string());
+        let mode_label = if agent_mode { "Agent" } else { "Ask" };
+        let enabled = self.ai_settings.enabled;
+
+        // Full-height AI shell (Tauri-like): toolbar / scroll body / composer.
         div()
-            .rounded_md()
-            .border_1()
-            .border_color(rgb(0x2a3140))
-            .bg(rgb(0x151923))
-            .p_4()
+            .size_full()
+            .flex()
+            .flex_col()
+            .overflow_hidden()
+            .bg(rgb(0x161b22))
             .child(
                 div()
+                    .h(px(36.))
+                    .flex_none()
+                    .px_2()
+                    .border_b_1()
+                    .border_color(rgb(0x30363d))
+                    .bg(rgb(0x12171f))
                     .flex()
                     .items_center()
-                    .justify_between()
-                    .gap_2()
-                    .child(div().text_sm().font_weight(FontWeight(700.)).child(
-                        if file_action_ready {
-                            "AI File Action"
-                        } else if agent_mode {
-                            "AI Agent"
-                        } else {
-                            "AI Ask"
-                        },
+                    .gap_1()
+                    .child(mode_button(
+                        "ai-mode-ask",
+                        "Ask",
+                        !agent_mode,
+                        cx.listener(|this, _, _, cx| {
+                            this.set_ai_mode(AiMode::Ask, cx);
+                        }),
                     ))
+                    .child(mode_button(
+                        "ai-mode-agent",
+                        "Agent",
+                        agent_mode,
+                        cx.listener(|this, _, _, cx| {
+                            this.set_ai_mode(AiMode::Agent, cx);
+                        }),
+                    ))
+                    .child(
+                        div()
+                            .ml_1()
+                            .min_w_0()
+                            .flex_1()
+                            .text_size(px(11.))
+                            .text_color(rgb(0x8b949e))
+                            .overflow_hidden()
+                            .child(truncate_preview(&model_label, 28)),
+                    )
                     .child(status_pill(
-                        if ai_running { "running" } else { "ready" },
-                        if ai_running {
+                        if !enabled {
+                            "off"
+                        } else if ai_running {
+                            "run"
+                        } else {
+                            "ok"
+                        },
+                        if !enabled {
+                            rgb(0x8b949e)
+                        } else if ai_running {
                             rgb(0xfacc15)
                         } else {
                             rgb(0x6ee7b7)
                         },
-                        if ai_running {
+                        if !enabled {
+                            rgb(0x21262d)
+                        } else if ai_running {
                             rgb(0x3a2f14)
                         } else {
                             rgb(0x12342a)
                         },
-                    )),
-            )
-            .child(
-                div()
-                    .mt_3()
-                    .text_xs()
-                    .text_color(rgb(0xaeb7c8))
-                    .line_height(px(18.))
-                    .child(self.ai_response_preview.clone()),
-            )
-            .child(agent_step_rows)
-            .child(
-                transfer_input(
-                    "ai-ask-prompt",
-                    "Prompt",
-                    self.ai_prompt_draft.clone(),
-                    true,
-                )
-                .mt_3()
-                .track_focus(&self.ai_chat_focus)
-                .on_click(cx.listener(|this, _, window, cx| {
-                    window.focus(&this.ai_chat_focus);
-                    cx.notify();
-                }))
-                .on_key_down(cx.listener(|this, event: &KeyDownEvent, _, cx| {
-                    cx.stop_propagation();
-                    this.handle_ai_prompt_key_down(event, cx);
-                })),
-            )
-            .child(
-                div()
-                    .mt_3()
-                    .flex()
-                    .items_center()
-                    .justify_between()
-                    .gap_2()
-                    .child(
-                        div()
-                            .text_xs()
-                            .text_color(rgb(0x98a3b8))
-                            .child(compact_id(&self.ai_chat_session_id)),
-                    )
-                    .child(small_button(
-                        "ai-ask-run",
-                        action_label,
+                    ))
+                    .child(icon_button(
+                        "ai-new-chat",
+                        "＋",
                         cx.listener(|this, _, _, cx| {
-                            if this.ai_chat_pending || this.ai_agent_loop.is_some() {
-                                this.cancel_ai_chat(cx);
+                            this.ai_prompt_draft.clear();
+                            this.ai_response_preview = if this.ai_settings.default_mode
+                                == AiMode::Agent
+                            {
+                                "Agent mode ready".to_string()
                             } else {
-                                this.start_ai_ask(cx);
-                            }
+                                "Ask mode ready".to_string()
+                            };
+                            this.ai_command_cards.clear();
+                            this.ai_agent_steps.clear();
+                            this.ai_chat_messages.clear();
+                            this.ai_streaming_assistant_id = None;
+                            this.ai_prepared_request = None;
+                            this.ai_chat_session_id = format!("ai-session-{}", uuid());
+                            this.ai_status = "new AI chat".to_string();
+                            cx.notify();
+                        }),
+                    ))
+                    .child(icon_button(
+                        "ai-open-settings",
+                        "⚙",
+                        cx.listener(|this, _, _, cx| {
+                            this.settings_active_tab = SettingsTab::AiGeneral;
+                            this.open_page(NavItem::Settings, cx);
                         }),
                     )),
             )
-            .child(command_rows)
+            .child(
+                div()
+                    .id(SharedString::from("ai-transcript-scroll"))
+                    .flex_1()
+                    .min_h_0()
+                    .overflow_scroll()
+                    .scrollbar_width(px(6.))
+                    .px_3()
+                    .py_2()
+                    .flex()
+                    .flex_col()
+                    .gap_2()
+                    .child(self.ai_transcript_body(
+                        mode_label,
+                        enabled,
+                        agent_step_rows,
+                        command_rows,
+                        cx,
+                    )),
+            )
+            .child(
+                div()
+                    .flex_none()
+                    .border_t_1()
+                    .border_color(rgb(0x30363d))
+                    .bg(rgb(0x12171f))
+                    .p_2()
+                    .flex()
+                    .flex_col()
+                    .gap_2()
+                    .child(
+                        transfer_input(
+                            "ai-ask-prompt",
+                            if agent_mode {
+                                "Describe a task for the agent…"
+                            } else {
+                                "Ask about the terminal or generate a command…"
+                            },
+                            self.ai_prompt_draft.clone(),
+                            true,
+                        )
+                        .h(px(56.))
+                        .track_focus(&self.ai_chat_focus)
+                        .on_click(cx.listener(|this, _, window, cx| {
+                            window.focus(&this.ai_chat_focus);
+                            cx.notify();
+                        }))
+                        .on_key_down(cx.listener(|this, event: &KeyDownEvent, _, cx| {
+                            cx.stop_propagation();
+                            this.handle_ai_prompt_key_down(event, cx);
+                        })),
+                    )
+                    .child(
+                        div()
+                            .flex()
+                            .items_center()
+                            .justify_between()
+                            .gap_2()
+                            .child(
+                                div()
+                                    .text_size(px(10.))
+                                    .text_color(rgb(0x6e7681))
+                                    .child(if file_action_ready {
+                                        "File action ready — press Run".to_string()
+                                    } else {
+                                        format!(
+                                            "{} · Enter to send",
+                                            if agent_mode { "Agent" } else { "Ask" }
+                                        )
+                                    }),
+                            )
+                            .child(small_button(
+                                "ai-ask-run",
+                                action_label,
+                                cx.listener(|this, _, _, cx| {
+                                    if this.ai_chat_pending || this.ai_agent_loop.is_some() {
+                                        this.cancel_ai_chat(cx);
+                                    } else {
+                                        this.start_ai_ask(cx);
+                                    }
+                                }),
+                            )),
+                    ),
+            )
     }
 
     fn command_center_panel(&mut self, cx: &mut Context<Self>) -> impl IntoElement {
@@ -565,187 +667,123 @@ impl NyaTermApp {
     }
 
     fn command_history_panel(&mut self, cx: &mut Context<Self>) -> impl IntoElement {
-        let active_session_name = self
-            .active_session_id
-            .as_deref()
-            .and_then(|session_id| self.session_display_name(session_id))
-            .unwrap_or_else(|| "No active session".to_string());
+        // Tauri CommandHistory: header meta is shared PanelHeader; body is dense mono list.
         let history = self.active_session_history_commands();
-        let mut rows = div().mt_3().flex().flex_col().gap_2();
+        let mut rows = div().flex().flex_col().gap_0().p_2();
         if history.is_empty() {
             rows = rows.child(
                 div()
-                    .text_xs()
-                    .text_color(rgb(0x98a3b8))
-                    .line_height(px(18.))
-                    .child("No command history yet."),
+                    .py_4()
+                    .text_center()
+                    .text_size(px(11.))
+                    .text_color(rgb(0x6e7681))
+                    .child("No commands yet"),
             );
         } else {
-            for (index, command) in history.into_iter().take(8).enumerate() {
+            for (index, command) in history.into_iter().enumerate() {
+                let run_index = index;
+                let insert_index = index;
                 rows = rows.child(
                     div()
-                        .border_t_1()
-                        .border_color(rgb(0x2a3140))
-                        .pt_2()
+                        .id(SharedString::from(format!("command-history-row-{index}")))
+                        .h(px(28.))
+                        .px_2()
+                        .rounded_sm()
                         .flex()
-                        .flex_col()
-                        .gap_2()
+                        .items_center()
+                        .gap_1()
+                        .cursor_pointer()
+                        .hover(|this| this.bg(rgb(0x1c2128)))
+                        .on_click(cx.listener(move |this, _, _, cx| {
+                            // Single click inserts; double-click not separate in GPUI easily —
+                            // keep insert on click and Run via trailing action.
+                            this.insert_history_command(insert_index, cx);
+                        }))
                         .child(
                             div()
-                                .flex()
-                                .items_center()
-                                .justify_between()
-                                .gap_2()
-                                .child(
-                                    div()
-                                        .min_w_0()
-                                        .text_xs()
-                                        .text_color(rgb(0xaeb7c8))
-                                        .font_family("JetBrains Mono")
-                                        .child(truncate_preview(&command, 120)),
-                                )
-                                .child(
-                                    div()
-                                        .text_xs()
-                                        .text_color(rgb(0x64748b))
-                                        .child(format!("#{}", index + 1)),
-                                ),
+                                .text_size(px(10.))
+                                .text_color(rgb(0x6e7681))
+                                .child("›"),
                         )
                         .child(
                             div()
-                                .flex()
-                                .items_center()
-                                .justify_end()
-                                .gap_1()
-                                .child(small_button(
-                                    format!("history-command-insert-{index}"),
-                                    "Insert",
-                                    cx.listener(move |this, _, _, cx| {
-                                        this.insert_history_command(index, cx);
-                                    }),
-                                ))
-                                .child(small_button(
-                                    format!("history-command-run-{index}"),
-                                    "Run",
-                                    cx.listener(move |this, _, _, cx| {
-                                        this.run_history_command(index, cx);
-                                    }),
-                                )),
-                        ),
+                                .min_w_0()
+                                .flex_1()
+                                .font_family("JetBrains Mono")
+                                .text_size(px(11.))
+                                .text_color(rgb(0xc9d1d9))
+                                .overflow_hidden()
+                                .child(truncate_preview(&command, 96)),
+                        )
+                        .child(icon_button(
+                            format!("history-run-{index}"),
+                            "▶",
+                            cx.listener(move |this, _, _, cx| {
+                                cx.stop_propagation();
+                                this.run_history_command(run_index, cx);
+                            }),
+                        )),
                 );
             }
         }
 
         div()
-            .rounded_md()
-            .border_1()
-            .border_color(rgb(0x2a3140))
-            .bg(rgb(0x151923))
-            .p_4()
+            .size_full()
+            .flex()
+            .flex_col()
+            .overflow_hidden()
+            .bg(rgb(0x161b22))
             .child(
                 div()
-                    .flex()
-                    .items_center()
-                    .justify_between()
-                    .gap_2()
-                    .child(
-                        div()
-                            .text_sm()
-                            .font_weight(FontWeight(700.))
-                            .child("Command History"),
-                    )
-                    .child(status_pill(
-                        if self.active_session_id.is_some() {
-                            "session"
-                        } else {
-                            "idle"
-                        },
-                        rgb(0x93c5fd),
-                        rgb(0x17233a),
-                    )),
+                    .id(SharedString::from("command-history-list"))
+                    .flex_1()
+                    .min_h_0()
+                    .overflow_scroll()
+                    .scrollbar_width(px(6.))
+                    .child(rows),
             )
-            .child(
-                div()
-                    .mt_2()
-                    .text_xs()
-                    .text_color(rgb(0x64748b))
-                    .child(truncate_preview(&active_session_name, 42)),
-            )
-            .child(rows)
     }
 
     pub(in crate::ui::view) fn right_panel(&mut self, cx: &mut Context<Self>) -> impl IntoElement {
+        let width = self.right_panel_width.clamp(200., 720.);
         div()
-            .w(px(344.))
+            .w(px(width))
             .flex_none()
             .flex()
             .flex_col()
             .border_l_1()
-            .border_color(rgb(0x242a35))
-            .bg(rgb(0x151923))
-            .child(panel_header("Inspector", self.right_panel_meta()))
-            .child(
-                div()
-                    .flex_1()
-                    .min_h_0()
-                    .overflow_hidden()
-                    .p_3()
-                    .flex()
-                    .flex_col()
-                    .gap_3()
-                    .child(self.right_panel_body(cx)),
-            )
-            .child(
-                div()
-                    .border_t_1()
-                    .border_color(rgb(0x242a35))
-                    .bg(rgb(0x10151e))
-                    .p_3()
-                    .child(
-                        div()
-                            .text_xs()
-                            .font_weight(FontWeight(700.))
-                            .text_color(rgb(0x8f98aa))
-                            .child("Runtime Sessions"),
-                    )
-                    .child(
-                        div().mt_1().text_2xl().font_weight(FontWeight(800.)).child(
-                            self.session_manager
-                                .list_sessions()
-                                .map(|sessions| sessions.len().to_string())
-                                .unwrap_or_else(|_| "0".to_string()),
-                        ),
-                    )
-                    .child(
-                        div()
-                            .mt_1()
-                            .text_xs()
-                            .text_color(rgb(0x98a3b8))
-                            .child("Managed by native nyaterm-session."),
-                    ),
-            )
+            .border_color(rgb(0x30363d))
+            .bg(rgb(0x161b22))
+            .child(self.side_panel_stack(PanelSide::Right, cx))
     }
 
     fn right_panel_meta(&self) -> &'static str {
-        if self.right_focus == RightFocus::Recording {
-            return "recording";
-        }
-        match self.selected_nav {
+        match self.current_right_panel().unwrap_or(NavItem::Connections) {
+            NavItem::Connections => "saved connections",
+            NavItem::AiAssistant => "assistant",
+            NavItem::ActiveSessions => "sessions",
+            NavItem::CommandHistory => "history",
             NavItem::Stats => "resource monitor",
             NavItem::Processes => "process manager",
             NavItem::Docker => "docker manager",
             NavItem::Translation => "translation",
-            _ => "AI / commands / recording",
+            NavItem::Recording => "recording",
+            other => other.label(),
         }
     }
 
-    fn right_panel_body(&mut self, cx: &mut Context<Self>) -> gpui::AnyElement {
-        if self.right_focus == RightFocus::Recording {
-            return self.recording_panel(cx).into_any_element();
-        }
-        match self.selected_nav {
+    pub(in crate::ui::view) fn right_panel_body(
+        &mut self,
+        panel: NavItem,
+        cx: &mut Context<Self>,
+    ) -> gpui::AnyElement {
+        match panel {
+            NavItem::Connections => self.connections_view(cx).into_any_element(),
+            NavItem::AiAssistant => self.ai_assistant_panel(cx).into_any_element(),
+            NavItem::ActiveSessions => self.active_sessions_panel(cx).into_any_element(),
+            NavItem::CommandHistory => self.command_history_panel(cx).into_any_element(),
             NavItem::Stats if self.settings.ui_show_remote_stats => {
-                self.right_stats_panel(cx).into_any_element()
+                self.stats_view(cx).into_any_element()
             }
             NavItem::Stats => disabled_inspector_panel(
                 "Remote Stats Disabled",
@@ -753,7 +791,7 @@ impl NyaTermApp {
             )
             .into_any_element(),
             NavItem::Processes if self.settings.ui_show_process_manager => {
-                self.right_process_panel(cx).into_any_element()
+                self.processes_view(cx).into_any_element()
             }
             NavItem::Processes => disabled_inspector_panel(
                 "Process Manager Disabled",
@@ -761,16 +799,207 @@ impl NyaTermApp {
             )
             .into_any_element(),
             NavItem::Docker if self.settings.ui_show_docker_manager => {
-                self.right_docker_panel(cx).into_any_element()
+                self.docker_view(cx).into_any_element()
             }
             NavItem::Docker => disabled_inspector_panel(
                 "Docker Manager Disabled",
                 "Enable Docker Manager in Settings > Terminal Session > General.",
             )
             .into_any_element(),
-            NavItem::Translation => self.right_translation_panel(cx).into_any_element(),
-            _ => self.right_ai_command_panel(cx).into_any_element(),
+            NavItem::Translation => self.translation_view(cx).into_any_element(),
+            NavItem::Recording => self.recording_panel(cx).into_any_element(),
+            _ => self.ai_assistant_panel(cx).into_any_element(),
         }
+    }
+
+
+    fn ai_transcript_body(
+        &self,
+        mode_label: &'static str,
+        enabled: bool,
+        agent_step_rows: impl IntoElement,
+        command_rows: impl IntoElement,
+        cx: &mut Context<Self>,
+    ) -> impl IntoElement {
+        let _ = cx;
+        let mut body = div().flex().flex_col().gap_2();
+        if self.ai_chat_messages.is_empty() {
+            body = body.child(self.ai_empty_transcript(mode_label, enabled));
+        } else {
+            for message in &self.ai_chat_messages {
+                body = body.child(self.ai_message_bubble(message));
+            }
+        }
+        body.child(agent_step_rows).child(command_rows)
+    }
+
+    fn ai_empty_transcript(&self, mode_label: &'static str, enabled: bool) -> impl IntoElement {
+        let has_model = self
+            .ai_settings
+            .default_model_id
+            .as_ref()
+            .is_some_and(|id| !id.trim().is_empty());
+        div()
+            .min_h(px(160.))
+            .flex()
+            .flex_col()
+            .items_center()
+            .justify_center()
+            .gap_2()
+            .px_3()
+            .child(
+                div()
+                    .text_size(px(22.))
+                    .text_color(rgb(0x8b949e))
+                    .child("✦"),
+            )
+            .child(
+                div()
+                    .text_size(px(12.))
+                    .font_weight(FontWeight(700.))
+                    .text_color(rgb(0xc9d1d9))
+                    .child(if !enabled {
+                        "AI is disabled"
+                    } else if !has_model {
+                        "Set up an AI model"
+                    } else {
+                        "Start a conversation"
+                    }),
+            )
+            .child(
+                div()
+                    .text_size(px(11.))
+                    .text_color(rgb(0x8b949e))
+                    .child(if !enabled {
+                        "Enable AI in Settings to use Ask/Agent.".to_string()
+                    } else if !has_model {
+                        "Open Settings → AI to pick a model and API key.".to_string()
+                    } else {
+                        format!(
+                            "{mode_label} replies appear here · session {}",
+                            compact_id(&self.ai_chat_session_id)
+                        )
+                    }),
+            )
+    }
+
+    fn ai_message_bubble(&self, message: &AiMessage) -> impl IntoElement {
+        let is_user = matches!(message.role, AiMessageRole::User);
+        let streaming = self
+            .ai_streaming_assistant_id
+            .as_deref()
+            .is_some_and(|id| id == message.id);
+        let role_label = if is_user { "USER" } else { "AI" };
+        let content = if message.content.trim().is_empty() {
+            if streaming {
+                "…".to_string()
+            } else {
+                String::new()
+            }
+        } else {
+            message.content.clone()
+        };
+        let mut bubble = div()
+            .id(SharedString::from(format!("ai-msg-{}", message.id)))
+            .rounded_md()
+            .border_1()
+            .border_color(if is_user {
+                rgb(0x1f6feb)
+            } else {
+                rgb(0x30363d)
+            })
+            .bg(if is_user {
+                rgb(0x122033)
+            } else {
+                rgb(0x0d1117)
+            })
+            .px_3()
+            .py_2()
+            .flex()
+            .flex_col()
+            .gap_1()
+            .child(
+                div()
+                    .text_size(px(10.))
+                    .font_weight(FontWeight(800.))
+                    .text_color(rgb(0x8b949e))
+                    .child(role_label),
+            );
+        if let Some(reasoning) = message
+            .reasoning_content
+            .as_ref()
+            .filter(|value| !value.trim().is_empty())
+        {
+            bubble = bubble.child(
+                div()
+                    .rounded_sm()
+                    .border_1()
+                    .border_color(rgb(0x30363d))
+                    .bg(rgb(0x12171f))
+                    .px_2()
+                    .py_1()
+                    .flex()
+                    .flex_col()
+                    .gap_1()
+                    .child(
+                        div()
+                            .text_size(px(10.))
+                            .font_weight(FontWeight(700.))
+                            .text_color(rgb(0x8b949e))
+                            .child("REASONING"),
+                    )
+                    .child(
+                        div()
+                            .text_size(px(11.))
+                            .text_color(rgb(0x8b949e))
+                            .line_height(px(16.))
+                            .child(truncate_preview(reasoning, 480)),
+                    ),
+            );
+        }
+        bubble = bubble.child(
+            div()
+                .text_xs()
+                .text_color(rgb(0xc9d1d9))
+                .line_height(px(18.))
+                .child(if content.is_empty() {
+                    if streaming {
+                        "Thinking…".to_string()
+                    } else {
+                        String::new()
+                    }
+                } else {
+                    // Keep more content than the old 320-char status preview.
+                    truncate_preview(&content, 4000)
+                }),
+        );
+        if !message.command_cards.is_empty() {
+            bubble = bubble.child(
+                div()
+                    .mt_1()
+                    .text_size(px(10.))
+                    .text_color(rgb(0x8b949e))
+                    .child(format!(
+                        "{} command card(s)",
+                        message.command_cards.len()
+                    )),
+            );
+        }
+        if streaming {
+            bubble = bubble.child(
+                div()
+                    .text_size(px(10.))
+                    .text_color(rgb(0x58a6ff))
+                    .child("streaming…"),
+            );
+        }
+        bubble
+    }
+
+    fn ai_assistant_panel(&mut self, cx: &mut Context<Self>) -> impl IntoElement {
+        // Tauri AIAssistantPanel: toolbar + scroll transcript + bottom composer.
+        // Shared stack already renders PanelHeader; body fills remaining height.
+        self.ai_ask_panel(cx)
     }
 
     fn right_ai_command_panel(&mut self, cx: &mut Context<Self>) -> impl IntoElement {
@@ -1008,7 +1237,7 @@ impl NyaTermApp {
     }
 }
 
-fn disabled_inspector_panel(title: &'static str, detail: &'static str) -> impl IntoElement {
+pub(in crate::ui::view) fn disabled_inspector_panel(title: &'static str, detail: &'static str) -> impl IntoElement {
     div()
         .flex()
         .flex_col()

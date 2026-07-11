@@ -140,27 +140,20 @@ pub(super) fn transfer_browser_entry_row(
         .id(SharedString::from(format!(
             "transfer-browser-entry-{entry_path}"
         )))
+        .h(px(30.))
         .flex()
-        .gap_2()
+        .gap_1()
         .items_center()
-        .rounded_sm()
-        .border_1()
-        .border_color(if is_selected {
-            rgb(0x256d3f)
-        } else if is_marked {
-            rgb(0x34d399)
-        } else {
-            rgb(0x202633)
-        })
+        .border_b_1()
+        .border_color(rgb(0x21262d))
         .bg(if is_selected {
             rgb(0x10251d)
         } else if is_marked {
-            rgb(0x10251d)
+            rgb(0x0f1f18)
         } else {
-            rgb(0x10151e)
+            rgb(0x161b22)
         })
         .px_2()
-        .py_2()
         .cursor_pointer()
         .hover(|this| this.bg(rgb(0x18202b)))
         .on_mouse_down(
@@ -212,12 +205,12 @@ pub(super) fn transfer_browser_entry_row(
                 .flex()
                 .items_center()
                 .gap_2()
-                .text_sm()
-                .font_weight(FontWeight(700.))
+                .text_size(px(12.))
+                .font_weight(FontWeight(600.))
                 .text_color(if is_selected {
                     rgb(0xdcfce7)
                 } else {
-                    rgb(0xe5edf7)
+                    rgb(0xc9d1d9)
                 })
                 .child(if is_directory { "dir" } else { "file" })
                 .child(if is_marked { "mark" } else { "" })

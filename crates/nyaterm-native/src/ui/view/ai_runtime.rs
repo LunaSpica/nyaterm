@@ -206,6 +206,18 @@ impl NyaTermApp {
         self.ai_agent_task_prompt = None;
         self.ai_command_cards.clear();
         self.ai_response_preview = "AI request cancelled".to_string();
+        if let Some(assistant_id) = self.ai_streaming_assistant_id.take() {
+            if let Some(message) = self
+                .ai_chat_messages
+                .iter_mut()
+                .rev()
+                .find(|message| message.id == assistant_id)
+            {
+                if message.content.trim().is_empty() {
+                    message.content = "AI request cancelled".to_string();
+                }
+            }
+        }
         self.ai_status = "AI request cancelled".to_string();
         if let Some(step_index) = cancelled_step {
             self.upsert_ai_agent_step(
@@ -553,7 +565,7 @@ impl NyaTermApp {
             model_id: settings.default_model_id.clone(),
             model_name: None,
             action,
-            user_input: prompt,
+            user_input: prompt.clone(),
             context,
             options: Default::default(),
         };
@@ -585,6 +597,27 @@ impl NyaTermApp {
             "Running AI request...".to_string()
         };
         self.ai_command_cards.clear();
+        let now = now_rfc3339();
+        let assistant_id = format!("assistant-{}", uuid());
+        self.ai_chat_messages.push(AiMessage {
+            id: format!("user-{}", uuid()),
+            session_id: self.ai_chat_session_id.clone(),
+            role: AiMessageRole::User,
+            content: prompt.clone(),
+            created_at: now.clone(),
+            reasoning_content: None,
+            command_cards: Vec::new(),
+        });
+        self.ai_chat_messages.push(AiMessage {
+            id: assistant_id.clone(),
+            session_id: self.ai_chat_session_id.clone(),
+            role: AiMessageRole::Assistant,
+            content: String::new(),
+            created_at: now,
+            reasoning_content: None,
+            command_cards: Vec::new(),
+        });
+        self.ai_streaming_assistant_id = Some(assistant_id);
         self.ai_status = if mode == AiMode::Agent {
             "AI Agent step started".to_string()
         } else if let Some(source_label) = source_label.as_ref() {
@@ -692,6 +725,22 @@ impl NyaTermApp {
                     }
                     self.ai_response_preview.push_str(&text_delta);
                     self.ai_response_preview = truncate_preview(&self.ai_response_preview, 320);
+                    if let Some(assistant_id) = self.ai_streaming_assistant_id.clone() {
+                        if let Some(message) = self
+                            .ai_chat_messages
+                            .iter_mut()
+                            .rev()
+                            .find(|message| message.id == assistant_id)
+                        {
+                            message.content.push_str(&text_delta);
+                            if let Some(delta) = reasoning_delta.as_ref() {
+                                if !delta.trim().is_empty() {
+                                    let existing = message.reasoning_content.take().unwrap_or_default();
+                                    message.reasoning_content = Some(format!("{existing}{delta}"));
+                                }
+                            }
+                        }
+                    }
                     self.ai_status = if reasoning_delta
                         .as_deref()
                         .is_some_and(|delta| !delta.trim().is_empty())
@@ -842,7 +891,23 @@ impl NyaTermApp {
                                     truncate_preview(&output.text, 140),
                                 );
                             }
-                            self.ai_command_cards = output.command_cards;
+                            self.ai_command_cards = output.command_cards.clone();
+                            if let Some(assistant_id) = self.ai_streaming_assistant_id.take() {
+                                if let Some(message) = self
+                                    .ai_chat_messages
+                                    .iter_mut()
+                                    .rev()
+                                    .find(|message| message.id == assistant_id)
+                                {
+                                    if !output.text.trim().is_empty() {
+                                        message.content = output.text.clone();
+                                    } else if message.content.trim().is_empty() {
+                                        message.content = "AI returned an empty response".to_string();
+                                    }
+                                    message.reasoning_content = output.reasoning.clone();
+                                    message.command_cards = output.command_cards.clone();
+                                }
+                            }
                             self.store_status.message =
                                 format!("AI session {} updated", event.session_id);
                             self.store_status.ready = true;
@@ -864,6 +929,16 @@ impl NyaTermApp {
                             self.ai_response_preview = format!("AI request failed: {error}");
                             self.ai_command_cards.clear();
                             self.ai_status = self.ai_response_preview.clone();
+                            if let Some(assistant_id) = self.ai_streaming_assistant_id.take() {
+                                if let Some(message) = self
+                                    .ai_chat_messages
+                                    .iter_mut()
+                                    .rev()
+                                    .find(|message| message.id == assistant_id)
+                                {
+                                    message.content = format!("AI request failed: {error}");
+                                }
+                            }
                             if self.ai_agent_task_prompt.is_some() {
                                 let step_index = self
                                     .ai_agent_steps

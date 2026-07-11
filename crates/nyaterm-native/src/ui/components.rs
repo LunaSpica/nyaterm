@@ -21,11 +21,11 @@ pub(super) fn empty_panel(text: &'static str) -> impl IntoElement {
     div()
         .rounded_md()
         .border_1()
-        .border_color(rgb(0x2a3140))
-        .bg(rgb(0x10151e))
+        .border_color(rgb(0x30363d))
+        .bg(rgb(0x0d1117))
         .p_4()
         .text_sm()
-        .text_color(rgb(0xaeb7c8))
+        .text_color(rgb(0x8b949e))
         .child(text)
 }
 
@@ -35,7 +35,7 @@ pub(super) fn section_header(title: &'static str, detail: &'static str) -> impl 
         .flex_col()
         .gap_1()
         .child(div().text_2xl().font_weight(FontWeight(800.)).child(title))
-        .child(div().text_sm().text_color(rgb(0x98a3b8)).child(detail))
+        .child(div().text_sm().text_color(rgb(0x8b949e)).child(detail))
 }
 
 pub(super) fn capability_line(
@@ -52,7 +52,7 @@ pub(super) fn capability_line(
         .child(
             div()
                 .text_xs()
-                .text_color(rgb(0x98a3b8))
+                .text_color(rgb(0x8b949e))
                 .child(value.into()),
         )
 }
@@ -127,7 +127,7 @@ pub(super) fn mode_button(
         .border_1()
         .border_color(if active { rgb(0x6ee7b7) } else { rgb(0x303848) })
         .bg(if active { rgb(0x14352b) } else { rgb(0x0d1320) })
-        .text_color(if active { rgb(0x6ee7b7) } else { rgb(0x98a3b8) })
+        .text_color(if active { rgb(0x6ee7b7) } else { rgb(0x8b949e) })
         .text_xs()
         .cursor_pointer()
         .hover(|this| this.bg(rgb(0x18202b)))
@@ -150,7 +150,7 @@ pub(super) fn icon_button(
         .border_1()
         .border_color(rgb(0x303848))
         .bg(rgb(0x0d1320))
-        .text_color(rgb(0x98a3b8))
+        .text_color(rgb(0x8b949e))
         .text_xs()
         .cursor_pointer()
         .hover(|this| this.bg(rgb(0x18202b)).text_color(rgb(0xe5edf7)))

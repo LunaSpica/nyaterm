@@ -14,11 +14,12 @@ use crate::{
     AiAuditFile, AiAuditLog, AiHistoryFile, AiMessage, AiMessageRole, AiSession, AiSettings,
     AliyunDriveSyncSettings, AppSettingsSummary, AppendAiAuditRequest, CloudSyncSettings,
     CloudSyncState, CommandHistoryEntry, CredentialCrypto, CredentialCryptoError,
-    DecryptedOtpEntry, DecryptedSshKey, Group, KeywordHighlightConfig,
-    KeywordHighlightImportResult, KeywordHighlightRule, OAuthDriveSyncSettings, OtpEntry,
-    PortableSnapshotError, PortableSnapshotKind, ProxyConfig, ProxyGroup, ProxyGroupsConfig,
-    QuickCommand, QuickCommandCategory, QuickCommandsConfig, RawPortableSnapshot, SavedConnection,
-    SessionsConfig, SshKey, TranslationSettings, TunnelConfig, TunnelGroup, TunnelGroupsConfig,
+    DecryptedOtpEntry, DecryptedSavedCredential, DecryptedSavedPassword, DecryptedSshKey, Group,
+    KeywordHighlightConfig, KeywordHighlightImportResult, KeywordHighlightRule,
+    OAuthDriveSyncSettings, OtpEntry, PortableSnapshotError, PortableSnapshotKind, ProxyConfig,
+    ProxyGroup, ProxyGroupsConfig, QuickCommand, QuickCommandCategory, QuickCommandsConfig,
+    RawPortableSnapshot, SavedConnection, SavedCredential, SavedPassword, SessionsConfig, SshKey,
+    TranslationSettings, TunnelConfig, TunnelGroup, TunnelGroupsConfig,
     ai_settings_has_secret, merge_masked_ai_settings, merge_masked_cloud_sync_settings,
     merge_masked_translation_settings, normalize_ai_settings, now_rfc3339,
     translation_settings_has_secret, trim_ai_audit, trim_ai_history, uuid,
@@ -615,6 +616,292 @@ impl ConnectionStore {
         Ok(())
     }
 
+    pub fn save_ssh_key(&self, mut key: SshKey) -> Result<String, StorageError> {
+        if key.id.trim().is_empty() {
+            key.id = uuid::Uuid::new_v4().to_string();
+        }
+        let target_id = key.id.clone();
+        let existing = self.load_ssh_key_by_id(&target_id)?;
+        let crypto = self.credential_crypto()?;
+
+        key.key = if let Some(path) = key
+            .key_file_path
+            .as_deref()
+            .map(str::trim)
+            .filter(|path| !path.is_empty())
+        {
+            let content = std::fs::read_to_string(path).map_err(|source| {
+                StorageError::InvalidData(format!("failed to read key material from {path}: {source}"))
+            })?;
+            let token = self.get_or_create_master_key_token(&crypto)?;
+            Some(crypto.encrypt_secret(&token, &content)?)
+        } else if let Some(plain) = key
+            .key
+            .as_deref()
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+        {
+            // Treat non-empty draft key material as plaintext replacement.
+            let token = self.get_or_create_master_key_token(&crypto)?;
+            Some(crypto.encrypt_secret(&token, plain)?)
+        } else {
+            existing.as_ref().and_then(|entry| entry.key.clone())
+        };
+
+        key.cert = if let Some(path) = key
+            .cert_file_path
+            .as_deref()
+            .map(str::trim)
+            .filter(|path| !path.is_empty())
+        {
+            let content = std::fs::read_to_string(path).map_err(|source| {
+                StorageError::InvalidData(format!("failed to read certificate from {path}: {source}"))
+            })?;
+            let token = self.get_or_create_master_key_token(&crypto)?;
+            Some(crypto.encrypt_secret(&token, &content)?)
+        } else if let Some(plain) = key
+            .cert
+            .as_deref()
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+        {
+            let token = self.get_or_create_master_key_token(&crypto)?;
+            Some(crypto.encrypt_secret(&token, plain)?)
+        } else {
+            existing.as_ref().and_then(|entry| entry.cert.clone())
+        };
+
+        key.passphrase = match key.passphrase.as_deref().map(str::trim) {
+            Some("") => None,
+            Some(plain) if !plain.is_empty() => {
+                let token = self.get_or_create_master_key_token(&crypto)?;
+                Some(crypto.encrypt_secret(&token, plain)?)
+            }
+            _ => existing.as_ref().and_then(|entry| entry.passphrase.clone()),
+        };
+
+        key.key_file_path = None;
+        key.cert_file_path = None;
+        apply_ssh_key_status_flags(&mut key);
+
+        let txn = self.db.begin_write()?;
+        write_json_in_txn(
+            &txn,
+            CREDENTIALS_TABLE,
+            &entity_key(SSH_KEY_PREFIX, &target_id),
+            &key,
+        )?;
+        txn.commit()?;
+        Ok(target_id)
+    }
+
+    pub fn delete_ssh_key(&self, key_id: &str) -> Result<(), StorageError> {
+        let txn = self.db.begin_write()?;
+        txn.open_table(CREDENTIALS_TABLE)?
+            .remove(entity_key(SSH_KEY_PREFIX, key_id).as_str())?;
+        txn.commit()?;
+        Ok(())
+    }
+
+    pub fn save_otp_entry(&self, mut entry: OtpEntry) -> Result<String, StorageError> {
+        if entry.id.trim().is_empty() {
+            entry.id = uuid::Uuid::new_v4().to_string();
+        }
+        let target_id = entry.id.clone();
+        let existing = self.load_otp_entry_by_id(&target_id)?;
+        let crypto = self.credential_crypto()?;
+
+        entry.secret = match entry.secret.as_deref().map(str::trim) {
+            Some(plain) if !plain.is_empty() => {
+                let token = self.get_or_create_master_key_token(&crypto)?;
+                Some(crypto.encrypt_secret(&token, plain)?)
+            }
+            _ => existing.as_ref().and_then(|entry| entry.secret.clone()),
+        };
+        if entry.otp_type.trim().is_empty() {
+            entry.otp_type = "totp".to_string();
+        }
+        if entry.algorithm.trim().is_empty() {
+            entry.algorithm = "SHA1".to_string();
+        }
+        if entry.digits == 0 {
+            entry.digits = 6;
+        }
+        if entry.period == 0 {
+            entry.period = 30;
+        }
+        entry.has_secret = entry.secret.is_some();
+
+        let txn = self.db.begin_write()?;
+        write_json_in_txn(
+            &txn,
+            OTP_ACCOUNTS_TABLE,
+            &entity_key(OTP_PREFIX, &target_id),
+            &entry,
+        )?;
+        txn.commit()?;
+        Ok(target_id)
+    }
+
+    pub fn delete_otp_entry(&self, otp_id: &str) -> Result<(), StorageError> {
+        let txn = self.db.begin_write()?;
+        txn.open_table(OTP_ACCOUNTS_TABLE)?
+            .remove(entity_key(OTP_PREFIX, otp_id).as_str())?;
+        txn.commit()?;
+        Ok(())
+    }
+
+    pub fn list_passwords(&self) -> Result<Vec<SavedPassword>, StorageError> {
+        let mut passwords: Vec<SavedPassword> =
+            self.list_json_by_prefix(CREDENTIALS_TABLE, PASSWORD_PREFIX)?;
+        for password in &mut passwords {
+            password.has_password = password.password.is_some();
+            password.password = None;
+        }
+        passwords.sort_by(|left, right| {
+            left.name.cmp(&right.name).then(left.id.cmp(&right.id))
+        });
+        Ok(passwords)
+    }
+
+    pub fn load_password_by_id(&self, password_id: &str) -> Result<Option<SavedPassword>, StorageError> {
+        let key = entity_key(PASSWORD_PREFIX, password_id);
+        let Some(mut entry) = self.read_json_table::<SavedPassword>(CREDENTIALS_TABLE, &key)? else {
+            return Ok(None);
+        };
+        entry.has_password = entry.password.is_some();
+        Ok(Some(entry))
+    }
+
+    pub fn load_decrypted_password_by_id(
+        &self,
+        password_id: &str,
+    ) -> Result<Option<DecryptedSavedPassword>, StorageError> {
+        let Some(entry) = self.load_password_by_id(password_id)? else {
+            return Ok(None);
+        };
+        let master_key_token = self.load_master_key_token()?;
+        let crypto = self.credential_crypto()?;
+        Ok(Some(DecryptedSavedPassword {
+            id: entry.id,
+            name: entry.name,
+            password: decrypt_optional_secret(&crypto, master_key_token.as_deref(), &entry.password)?,
+        }))
+    }
+
+    pub fn save_password(&self, mut entry: SavedPassword) -> Result<String, StorageError> {
+        if entry.id.trim().is_empty() {
+            entry.id = uuid::Uuid::new_v4().to_string();
+        }
+        let target_id = entry.id.clone();
+        let existing = self.load_password_by_id(&target_id)?;
+        let crypto = self.credential_crypto()?;
+        entry.password = match entry.password.as_deref().map(str::trim) {
+            Some(plain) if !plain.is_empty() => {
+                let token = self.get_or_create_master_key_token(&crypto)?;
+                Some(crypto.encrypt_secret(&token, plain)?)
+            }
+            _ => existing.as_ref().and_then(|entry| entry.password.clone()),
+        };
+        entry.has_password = entry.password.is_some();
+        let txn = self.db.begin_write()?;
+        write_json_in_txn(
+            &txn,
+            CREDENTIALS_TABLE,
+            &entity_key(PASSWORD_PREFIX, &target_id),
+            &entry,
+        )?;
+        txn.commit()?;
+        Ok(target_id)
+    }
+
+    pub fn delete_password(&self, password_id: &str) -> Result<(), StorageError> {
+        let txn = self.db.begin_write()?;
+        txn.open_table(CREDENTIALS_TABLE)?
+            .remove(entity_key(PASSWORD_PREFIX, password_id).as_str())?;
+        txn.commit()?;
+        Ok(())
+    }
+
+    pub fn list_credentials(&self) -> Result<Vec<SavedCredential>, StorageError> {
+        let mut credentials: Vec<SavedCredential> =
+            self.list_json_by_prefix(CREDENTIALS_TABLE, CREDENTIAL_PREFIX)?;
+        for credential in &mut credentials {
+            credential.has_password = credential.password.is_some();
+            credential.password = None;
+        }
+        credentials.sort_by(|left, right| {
+            left.name.cmp(&right.name).then(left.id.cmp(&right.id))
+        });
+        Ok(credentials)
+    }
+
+    pub fn load_credential_by_id(
+        &self,
+        credential_id: &str,
+    ) -> Result<Option<SavedCredential>, StorageError> {
+        let key = entity_key(CREDENTIAL_PREFIX, credential_id);
+        let Some(mut entry) = self.read_json_table::<SavedCredential>(CREDENTIALS_TABLE, &key)? else {
+            return Ok(None);
+        };
+        entry.has_password = entry.password.is_some();
+        Ok(Some(entry))
+    }
+
+    pub fn load_decrypted_credential_by_id(
+        &self,
+        credential_id: &str,
+    ) -> Result<Option<DecryptedSavedCredential>, StorageError> {
+        let Some(entry) = self.load_credential_by_id(credential_id)? else {
+            return Ok(None);
+        };
+        let master_key_token = self.load_master_key_token()?;
+        let crypto = self.credential_crypto()?;
+        Ok(Some(DecryptedSavedCredential {
+            id: entry.id,
+            name: entry.name,
+            username: entry.username,
+            password: decrypt_optional_secret(&crypto, master_key_token.as_deref(), &entry.password)?,
+            username_prompt_regex: entry.username_prompt_regex,
+            password_prompt_regex: entry.password_prompt_regex,
+            enabled: entry.enabled,
+        }))
+    }
+
+    pub fn save_credential(&self, mut entry: SavedCredential) -> Result<String, StorageError> {
+        if entry.id.trim().is_empty() {
+            entry.id = uuid::Uuid::new_v4().to_string();
+        }
+        let target_id = entry.id.clone();
+        let existing = self.load_credential_by_id(&target_id)?;
+        let crypto = self.credential_crypto()?;
+        entry.password = match entry.password.as_deref().map(str::trim) {
+            Some(plain) if !plain.is_empty() => {
+                let token = self.get_or_create_master_key_token(&crypto)?;
+                Some(crypto.encrypt_secret(&token, plain)?)
+            }
+            _ => existing.as_ref().and_then(|entry| entry.password.clone()),
+        };
+        entry.has_password = entry.password.is_some();
+        let txn = self.db.begin_write()?;
+        write_json_in_txn(
+            &txn,
+            CREDENTIALS_TABLE,
+            &entity_key(CREDENTIAL_PREFIX, &target_id),
+            &entry,
+        )?;
+        txn.commit()?;
+        Ok(target_id)
+    }
+
+    pub fn delete_credential(&self, credential_id: &str) -> Result<(), StorageError> {
+        let txn = self.db.begin_write()?;
+        txn.open_table(CREDENTIALS_TABLE)?
+            .remove(entity_key(CREDENTIAL_PREFIX, credential_id).as_str())?;
+        txn.commit()?;
+        Ok(())
+    }
+
     pub fn list_tunnels(&self) -> Result<Vec<TunnelConfig>, StorageError> {
         let mut tunnels: Vec<TunnelConfig> =
             self.list_json_by_prefix(TUNNELS_TABLE, TUNNEL_PREFIX)?;
@@ -959,6 +1246,71 @@ impl ConnectionStore {
                 &["ui", "file_explorer_favorite_dirs_by_connection_id"],
                 12,
             ),
+            ui_left_panel_width: json_u32(&value, &["ui", "left_width"], 256).clamp(160, 720),
+            ui_right_panel_width: json_u32(&value, &["ui", "right_width"], 288).clamp(200, 720),
+            ui_transfer_height: json_u32(&value, &["ui", "transfer_height"], 180).clamp(60, 600),
+            ui_active_left_panel: json_optional_string(&value, &["ui", "active_left_panel"]),
+            ui_active_right_panel: json_optional_string(&value, &["ui", "active_right_panel"]),
+            ui_left_panel_collapsed: json_bool(&value, &["ui", "left_panel_collapsed"], false),
+            ui_right_panel_collapsed: json_bool(&value, &["ui", "right_panel_collapsed"], false),
+            ui_activity_bar_left_top: {
+                let values = json_string_vec(
+                    &value,
+                    &["ui", "activity_bar_layout", "left_top"],
+                    32,
+                );
+                if values.is_empty() {
+                    default_activity_left_top()
+                } else {
+                    values
+                }
+            },
+            ui_activity_bar_left_bottom: {
+                let values = json_string_vec(
+                    &value,
+                    &["ui", "activity_bar_layout", "left_bottom"],
+                    32,
+                );
+                if values.is_empty() {
+                    default_activity_left_bottom()
+                } else {
+                    values
+                }
+            },
+            ui_activity_bar_right_top: {
+                let values = json_string_vec(
+                    &value,
+                    &["ui", "activity_bar_layout", "right_top"],
+                    32,
+                );
+                if values.is_empty() {
+                    default_activity_right_top()
+                } else {
+                    values
+                }
+            },
+            ui_activity_bar_right_bottom: {
+                let values = json_string_vec(
+                    &value,
+                    &["ui", "activity_bar_layout", "right_bottom"],
+                    32,
+                );
+                if values.is_empty() {
+                    default_activity_right_bottom()
+                } else {
+                    values
+                }
+            },
+            ui_activity_bar_show_labels: json_bool(
+                &value,
+                &["ui", "activity_bar_layout", "show_labels"],
+                false,
+            ),
+            ui_panel_multi_open: json_bool(&value, &["appearance", "panel_multi_open"], false)
+                || json_bool(&value, &["ui", "panel_multi_open"], false),
+            ui_left_open_panels: json_string_vec(&value, &["ui", "left_open_panels"], 32),
+            ui_right_open_panels: json_string_vec(&value, &["ui", "right_open_panels"], 32),
+            ui_panel_stack_sizes: json_u32_map(&value, &["ui", "panel_stack_sizes"]),
             interaction_copy_on_select: json_bool(
                 &value,
                 &["interaction", "copy_on_select"],
@@ -1260,6 +1612,115 @@ impl ConnectionStore {
             &mut value,
             &["ui", "quick_cmd_sort_mode"],
             normalize_quick_cmd_sort_mode(&settings.ui_quick_cmd_sort_mode),
+        );
+        self.save_settings_value(&value)?;
+        self.load_app_settings_summary()
+    }
+
+    pub fn save_ui_layout_settings(
+        &self,
+        settings: &AppSettingsSummary,
+    ) -> Result<AppSettingsSummary, StorageError> {
+        let mut value = self.load_settings_value()?;
+        set_nested_json_value(
+            &mut value,
+            &["ui", "left_width"],
+            serde_json::Value::from(settings.ui_left_panel_width.clamp(160, 720)),
+        );
+        set_nested_json_value(
+            &mut value,
+            &["ui", "right_width"],
+            serde_json::Value::from(settings.ui_right_panel_width.clamp(200, 720)),
+        );
+        set_nested_json_value(
+            &mut value,
+            &["ui", "transfer_height"],
+            serde_json::Value::from(settings.ui_transfer_height.clamp(60, 600)),
+        );
+        match &settings.ui_active_left_panel {
+            Some(panel) if !panel.trim().is_empty() => set_nested_json_string(
+                &mut value,
+                &["ui", "active_left_panel"],
+                panel.clone(),
+            ),
+            _ => set_nested_json_value(
+                &mut value,
+                &["ui", "active_left_panel"],
+                serde_json::Value::Null,
+            ),
+        }
+        match &settings.ui_active_right_panel {
+            Some(panel) if !panel.trim().is_empty() => set_nested_json_string(
+                &mut value,
+                &["ui", "active_right_panel"],
+                panel.clone(),
+            ),
+            _ => set_nested_json_value(
+                &mut value,
+                &["ui", "active_right_panel"],
+                serde_json::Value::Null,
+            ),
+        }
+        set_nested_json_value(
+            &mut value,
+            &["ui", "left_panel_collapsed"],
+            serde_json::Value::Bool(settings.ui_left_panel_collapsed),
+        );
+        set_nested_json_value(
+            &mut value,
+            &["ui", "right_panel_collapsed"],
+            serde_json::Value::Bool(settings.ui_right_panel_collapsed),
+        );
+        set_nested_json_value(
+            &mut value,
+            &["ui", "activity_bar_layout", "left_top"],
+            string_vec_json_value(&settings.ui_activity_bar_left_top, 32),
+        );
+        set_nested_json_value(
+            &mut value,
+            &["ui", "activity_bar_layout", "left_bottom"],
+            string_vec_json_value(&settings.ui_activity_bar_left_bottom, 32),
+        );
+        set_nested_json_value(
+            &mut value,
+            &["ui", "activity_bar_layout", "right_top"],
+            string_vec_json_value(&settings.ui_activity_bar_right_top, 32),
+        );
+        set_nested_json_value(
+            &mut value,
+            &["ui", "activity_bar_layout", "right_bottom"],
+            string_vec_json_value(&settings.ui_activity_bar_right_bottom, 32),
+        );
+        set_nested_json_value(
+            &mut value,
+            &["ui", "activity_bar_layout", "show_labels"],
+            serde_json::Value::Bool(settings.ui_activity_bar_show_labels),
+        );
+        set_nested_json_value(
+            &mut value,
+            &["ui", "panel_multi_open"],
+            serde_json::Value::Bool(settings.ui_panel_multi_open),
+        );
+        // Keep appearance key for Tauri compatibility.
+        set_nested_json_value(
+            &mut value,
+            &["appearance", "panel_multi_open"],
+            serde_json::Value::Bool(settings.ui_panel_multi_open),
+        );
+        set_nested_json_value(
+            &mut value,
+            &["ui", "left_open_panels"],
+            string_vec_json_value(&settings.ui_left_open_panels, 32),
+        );
+        set_nested_json_value(
+            &mut value,
+            &["ui", "right_open_panels"],
+            string_vec_json_value(&settings.ui_right_open_panels, 32),
+        );
+        set_nested_json_value(
+            &mut value,
+            &["ui", "panel_stack_sizes"],
+            u32_map_json_value(&settings.ui_panel_stack_sizes),
         );
         self.save_settings_value(&value)?;
         self.load_app_settings_summary()
@@ -3554,6 +4015,42 @@ fn default_settings_value() -> serde_json::Value {
     })
 }
 
+fn json_u32_map(value: &serde_json::Value, path: &[&str]) -> HashMap<String, u32> {
+    let mut map = HashMap::new();
+    let Some(object) = json_path(value, path).and_then(|value| value.as_object()) else {
+        return map;
+    };
+    for (key, raw) in object {
+        let number = raw
+            .as_u64()
+            .or_else(|| raw.as_f64().map(|value| value.round() as u64));
+        if let Some(number) = number {
+            if number > 0 {
+                map.insert(key.clone(), number.min(u32::MAX as u64) as u32);
+            }
+        }
+    }
+    map
+}
+
+fn u32_map_json_value(map: &HashMap<String, u32>) -> serde_json::Value {
+    let mut object = serde_json::Map::new();
+    for (key, value) in map {
+        if *value > 0 {
+            object.insert(key.clone(), serde_json::json!(*value));
+        }
+    }
+    serde_json::Value::Object(object)
+}
+
+fn json_optional_string(value: &serde_json::Value, path: &[&str]) -> Option<String> {
+    json_path(value, path)
+        .and_then(|value| value.as_str())
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(ToOwned::to_owned)
+}
+
 fn json_string(value: &serde_json::Value, path: &[&str], fallback: &str) -> String {
     json_path(value, path)
         .and_then(serde_json::Value::as_str)
@@ -3867,6 +4364,39 @@ fn normalize_transfer_file_permissions(value: &str) -> String {
     } else {
         "644".to_string()
     }
+}
+
+fn default_activity_left_top() -> Vec<String> {
+    vec![
+        "fileExplorer".to_string(),
+        "network".to_string(),
+        "securityAuth".to_string(),
+    ]
+}
+
+fn default_activity_left_bottom() -> Vec<String> {
+    vec!["syncBackupHistory".to_string(), "settings".to_string()]
+}
+
+fn default_activity_right_top() -> Vec<String> {
+    vec![
+        "savedConnections".to_string(),
+        "aiAssistant".to_string(),
+        "activeSessions".to_string(),
+        "commandHistory".to_string(),
+        "resourceMonitor".to_string(),
+        "processManager".to_string(),
+        "dockerManager".to_string(),
+    ]
+}
+
+fn default_activity_right_bottom() -> Vec<String> {
+    vec![
+        "quickCmdBar".to_string(),
+        "serialSend".to_string(),
+        "recording".to_string(),
+        "lock".to_string(),
+    ]
 }
 
 fn normalize_quick_cmd_view_mode(value: &str) -> String {
