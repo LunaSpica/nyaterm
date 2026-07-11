@@ -977,9 +977,7 @@ impl NyaTermApp {
 }
 
 
-fn ai_setting_hint(title: &'static str, detail: &'static str) -> impl IntoElement {
-    let palette = crate::ui::theme::theme_palette("github-dark");
-    div()
+fn ai_setting_hint(palette: crate::ui::theme::ThemePalette, title: &'static str, detail: &'static str) -> impl IntoElement {    div()
         .rounded_sm()
         .border_1()
         .border_color(rgb(palette.border))
@@ -1002,9 +1000,7 @@ fn ai_setting_hint(title: &'static str, detail: &'static str) -> impl IntoElemen
         )
 }
 
-fn ai_boolean_state(label: &'static str, enabled: bool) -> impl IntoElement {
-    let palette = crate::ui::theme::theme_palette("github-dark");
-    div()
+fn ai_boolean_state(palette: crate::ui::theme::ThemePalette, label: &'static str, enabled: bool) -> impl IntoElement {    div()
         .rounded_md()
         .border_1()
         .border_color(rgb(palette.border))

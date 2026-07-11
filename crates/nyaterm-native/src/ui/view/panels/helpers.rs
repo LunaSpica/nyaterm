@@ -118,12 +118,9 @@ pub(in crate::ui::view::panels) fn filtered_quick_commands(
     filtered
 }
 
-pub(in crate::ui::view::panels) fn quick_command_icon_mark(
+pub(in crate::ui::view::panels) fn quick_command_icon_mark(palette: crate::ui::theme::ThemePalette,
     icon_tag: Option<&str>,
-    color_tag: Option<&str>,
-) -> impl IntoElement {
-    let palette = crate::ui::theme::theme_palette("github-dark");
-    match icon_tag.and_then(quick_command_icon_def) {
+    color_tag: Option<&str>,) -> impl IntoElement {    match icon_tag.and_then(|tag| quick_command_icon_def(palette, tag)) {
         Some((label, color)) => div()
             .size(px(18.))
             .flex_none()
@@ -163,16 +160,17 @@ pub(in crate::ui::view::panels) fn quick_command_color(
     }
 }
 
-pub(in crate::ui::view::panels) fn quick_command_icon_label(icon_tag: Option<&str>) -> String {
+pub(in crate::ui::view::panels) fn quick_command_icon_label(
+    palette: crate::ui::theme::ThemePalette,
+    icon_tag: Option<&str>,
+) -> String {
     icon_tag
-        .and_then(quick_command_icon_def)
+        .and_then(|tag| quick_command_icon_def(palette, tag))
         .map(|(label, _)| label.to_string())
         .unwrap_or_else(|| "none".to_string())
 }
 
-fn quick_command_icon_def(icon_tag: &str) -> Option<(&'static str, gpui::Rgba)> {
-    let palette = crate::ui::theme::theme_palette("github-dark");
-    match icon_tag.trim().to_ascii_lowercase().as_str() {
+fn quick_command_icon_def(palette: crate::ui::theme::ThemePalette, icon_tag: &str) -> Option<(&'static str, gpui::Rgba)> {    match icon_tag.trim().to_ascii_lowercase().as_str() {
         "docker" => Some(("DK", rgb(0x2496ed))),
         "k8s" => Some(("K8", rgb(0x326ce5))),
         "linux" => Some(("LX", rgb(0xfcc624))),
@@ -207,16 +205,13 @@ fn quick_command_icon_def(icon_tag: &str) -> Option<(&'static str, gpui::Rgba)> 
     }
 }
 
-pub(in crate::ui::view::panels) fn quick_command_editor_field(
+pub(in crate::ui::view::panels) fn quick_command_editor_field(palette: crate::ui::theme::ThemePalette,
     id: &'static str,
     label: &'static str,
     placeholder: &'static str,
     value: String,
     active: bool,
-    on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
-) -> impl IntoElement {
-    let palette = crate::ui::theme::theme_palette("github-dark");
-    let is_placeholder = value.is_empty();
+    on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,) -> impl IntoElement {    let is_placeholder = value.is_empty();
     let display = if is_placeholder {
         placeholder.to_string()
     } else {
@@ -253,16 +248,13 @@ pub(in crate::ui::view::panels) fn quick_command_editor_field(
         )
 }
 
-pub(in crate::ui::view::panels) fn quick_command_editor_script_field(
+pub(in crate::ui::view::panels) fn quick_command_editor_script_field(palette: crate::ui::theme::ThemePalette,
     id: &'static str,
     label: &'static str,
     placeholder: &'static str,
     value: String,
     active: bool,
-    on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
-) -> impl IntoElement {
-    let palette = crate::ui::theme::theme_palette("github-dark");
-    let is_placeholder = value.is_empty();
+    on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,) -> impl IntoElement {    let is_placeholder = value.is_empty();
     let display = if is_placeholder {
         placeholder.to_string()
     } else {

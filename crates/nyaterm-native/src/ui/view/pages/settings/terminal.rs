@@ -410,13 +410,10 @@ impl NyaTermApp {
 }
 
 
-fn terminal_feature_card(
+fn terminal_feature_card(palette: crate::ui::theme::ThemePalette,
     title: &'static str,
     detail: &'static str,
-    enabled: bool,
-) -> impl IntoElement {
-    let palette = crate::ui::theme::theme_palette("github-dark");
-    div()
+    enabled: bool,) -> impl IntoElement {    div()
         .rounded_sm()
         .border_1()
         .border_color(rgb(palette.border))
@@ -460,9 +457,7 @@ fn terminal_feature_card(
         )
 }
 
-fn search_engine_hint(title: &'static str, detail: &'static str) -> impl IntoElement {
-    let palette = crate::ui::theme::theme_palette("github-dark");
-    div()
+fn search_engine_hint(palette: crate::ui::theme::ThemePalette, title: &'static str, detail: &'static str) -> impl IntoElement {    div()
         .rounded_sm()
         .border_1()
         .border_color(rgb(palette.border))
@@ -485,14 +480,11 @@ fn search_engine_hint(title: &'static str, detail: &'static str) -> impl IntoEle
         )
 }
 
-fn settings_toggle_button(
+fn settings_toggle_button(palette: crate::ui::theme::ThemePalette,
     id: impl Into<String>,
     label: &'static str,
     enabled: bool,
-    on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
-) -> impl IntoElement {
-    let palette = crate::ui::theme::theme_palette("github-dark");
-    div()
+    on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,) -> impl IntoElement {    div()
         .id(SharedString::from(id.into()))
         .h(px(32.))
         .px_3()

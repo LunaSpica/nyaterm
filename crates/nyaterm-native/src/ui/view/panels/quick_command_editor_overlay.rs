@@ -42,11 +42,12 @@ impl NyaTermApp {
             .color_tag
             .clone()
             .unwrap_or_else(|| "default".to_string());
-        let icon_label = quick_command_icon_label(editor.icon_tag.as_deref());
+        let icon_label = quick_command_icon_label(palette, editor.icon_tag.as_deref());
         let mut color_swatches = div().mt_2().flex().items_center().gap_2().flex_wrap();
         for option in QUICK_COMMAND_COLOR_OPTIONS {
             let selected = editor.color_tag.as_deref() == option && editor.icon_tag.is_none();
             color_swatches = color_swatches.child(quick_command_color_swatch(
+                palette,
                 option,
                 selected,
                 cx.listener(move |this, _, _, cx| {
@@ -63,6 +64,7 @@ impl NyaTermApp {
         for option in icon_options {
             let selected = editor.icon_tag.as_deref() == Some(option);
             icon_grid = icon_grid.child(quick_command_icon_option(
+                palette,
                 option,
                 editor.color_tag.as_deref(),
                 selected,
@@ -76,6 +78,7 @@ impl NyaTermApp {
             let uncategorized_selected =
                 editor.category_id.as_deref().unwrap_or_default().is_empty();
             category_choices = category_choices.child(quick_command_category_choice(
+                palette,
                 "quick-command-editor-category-none".to_string(),
                 "Uncategorized".to_string(),
                 uncategorized_selected,
@@ -96,6 +99,7 @@ impl NyaTermApp {
             let selected = editor.category_draft.trim().is_empty()
                 && editor.category_id.as_deref() == Some(category_id.as_str());
             category_choices = category_choices.child(quick_command_category_choice(
+                palette,
                 format!("quick-command-editor-category-{}", category.id),
                 truncate_preview(&category.name, 22),
                 selected,
@@ -107,6 +111,7 @@ impl NyaTermApp {
         if !category_draft.is_empty() && !exact_category_match {
             let label = format!("Create: {}", truncate_preview(&category_draft, 18));
             category_choices = category_choices.child(quick_command_category_choice(
+                palette,
                 "quick-command-editor-category-draft".to_string(),
                 label,
                 true,
@@ -195,6 +200,7 @@ impl NyaTermApp {
                             .grid_cols(2)
                             .gap_3()
                             .child(quick_command_editor_field(
+                                palette,
                                 "quick-command-editor-label",
                                 "Label",
                                 "Command label",
@@ -267,6 +273,7 @@ impl NyaTermApp {
                             ),
                     )
                     .child(div().mt_3().child(quick_command_editor_field(
+                        palette,
                         "quick-command-editor-description",
                         "Description",
                         "Optional description",
@@ -313,6 +320,7 @@ impl NyaTermApp {
                                                     .items_center()
                                                     .gap_1()
                                                     .child(quick_command_icon_mark(
+                                                        palette,
                                                         editor.icon_tag.as_deref(),
                                                         editor.color_tag.as_deref(),
                                                     ))
@@ -401,6 +409,7 @@ impl NyaTermApp {
                             ),
                     )
                     .child(div().mt_3().child(quick_command_editor_script_field(
+                        palette,
                         "quick-command-editor-command",
                         "Command Script",
                         "Command text",
@@ -456,14 +465,11 @@ impl NyaTermApp {
     }
 }
 
-fn quick_command_category_choice(
+fn quick_command_category_choice(palette: crate::ui::theme::ThemePalette,
     id: String,
     label: String,
     selected: bool,
-    on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
-) -> impl IntoElement {
-    let palette = crate::ui::theme::theme_palette("github-dark");
-    div()
+    on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,) -> impl IntoElement {    div()
         .id(SharedString::from(id))
         .h(px(24.))
         .max_w(px(148.))
@@ -494,13 +500,10 @@ fn quick_command_category_choice(
         .on_click(on_click)
 }
 
-fn quick_command_color_swatch(
+fn quick_command_color_swatch(palette: crate::ui::theme::ThemePalette,
     color_tag: Option<&'static str>,
     selected: bool,
-    on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
-) -> impl IntoElement {
-    let palette = crate::ui::theme::theme_palette("github-dark");
-    let id = format!(
+    on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,) -> impl IntoElement {    let id = format!(
         "quick-command-color-swatch-{}",
         color_tag.unwrap_or("default")
     );
@@ -520,14 +523,11 @@ fn quick_command_color_swatch(
         .hover(|style| style.border_color(rgb(palette.accent)))
 }
 
-fn quick_command_icon_option(
+fn quick_command_icon_option(palette: crate::ui::theme::ThemePalette,
     icon_tag: &'static str,
     color_tag: Option<&str>,
     selected: bool,
-    on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
-) -> impl IntoElement {
-    let palette = crate::ui::theme::theme_palette("github-dark");
-    div()
+    on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,) -> impl IntoElement {    div()
         .id(SharedString::from(format!(
             "quick-command-icon-option-{icon_tag}"
         )))
@@ -550,5 +550,5 @@ fn quick_command_icon_option(
         .justify_center()
         .on_click(on_click)
         .hover(|style| style.border_color(rgb(palette.accent)))
-        .child(quick_command_icon_mark(Some(icon_tag), color_tag))
+        .child(quick_command_icon_mark(palette, Some(icon_tag), color_tag))
 }

@@ -1200,6 +1200,7 @@ impl NyaTermApp {
                     .items_center()
                     .gap_1()
                     .child(kind_chip(
+                        palette,
                         "SSH",
                         editor.kind == ConnectionKindTab::Ssh,
                         cx.listener(|this, _, _, cx| {
@@ -1207,6 +1208,7 @@ impl NyaTermApp {
                         }),
                     ))
                     .child(kind_chip(
+                        palette,
                         "Local",
                         editor.kind == ConnectionKindTab::Local,
                         cx.listener(|this, _, _, cx| {
@@ -1214,6 +1216,7 @@ impl NyaTermApp {
                         }),
                     ))
                     .child(kind_chip(
+                        palette,
                         "Telnet",
                         editor.kind == ConnectionKindTab::Telnet,
                         cx.listener(|this, _, _, cx| {
@@ -1221,6 +1224,7 @@ impl NyaTermApp {
                         }),
                     ))
                     .child(kind_chip(
+                        palette,
                         "Serial",
                         editor.kind == ConnectionKindTab::Serial,
                         cx.listener(|this, _, _, cx| {
@@ -1234,6 +1238,7 @@ impl NyaTermApp {
                     .flex_col()
                     .gap_2()
                     .child(editor_field(
+                        palette,
                         "connection-editor-name",
                         "Name",
                         editor.name.clone(),
@@ -1243,6 +1248,7 @@ impl NyaTermApp {
                         }),
                     ))
                     .child(editor_field(
+                        palette,
                         "connection-editor-description",
                         "Description",
                         editor.description.clone(),
@@ -1282,6 +1288,7 @@ impl NyaTermApp {
                                 .grid_cols(2)
                                 .gap_2()
                                 .child(editor_field(
+                                    palette,
                                     "connection-editor-host",
                                     "Host",
                                     editor.host.clone(),
@@ -1295,6 +1302,7 @@ impl NyaTermApp {
                                     }),
                                 ))
                                 .child(editor_field(
+                                    palette,
                                     "connection-editor-port",
                                     "Port",
                                     editor.port.clone(),
@@ -1309,6 +1317,7 @@ impl NyaTermApp {
                                 )),
                         )
                         .child(editor_field(
+                            palette,
                             "connection-editor-username",
                             "Username",
                             editor.username.clone(),
@@ -1343,6 +1352,7 @@ impl NyaTermApp {
                         )
                         .when(editor.auth_mode == "password", |this| {
                             this.child(editor_field(
+                                palette,
                                 "connection-editor-password",
                                 "Password",
                                 password_display.clone(),
@@ -1404,6 +1414,7 @@ impl NyaTermApp {
                                 .items_center()
                                 .gap_1()
                                 .child(toggle_chip(
+                                    palette,
                                     "OTP Fill",
                                     editor.auto_fill_otp,
                                     cx.listener(|this, _, _, cx| {
@@ -1414,6 +1425,7 @@ impl NyaTermApp {
                                     }),
                                 ))
                                 .child(toggle_chip(
+                                    palette,
                                     "X11",
                                     editor.x11_forwarding,
                                     cx.listener(|this, _, _, cx| {
@@ -1424,6 +1436,7 @@ impl NyaTermApp {
                                     }),
                                 ))
                                 .child(toggle_chip(
+                                    palette,
                                     "Post Login",
                                     editor.post_login_enabled,
                                     cx.listener(|this, _, _, cx| {
@@ -1434,6 +1447,7 @@ impl NyaTermApp {
                                     }),
                                 ))
                                 .child(toggle_chip(
+                                    palette,
                                     "Open After Save",
                                     editor.connect_after_save,
                                     cx.listener(|this, _, _, cx| {
@@ -1447,6 +1461,7 @@ impl NyaTermApp {
                     })
                     .when(editor.kind == ConnectionKindTab::Local, |this| {
                         this.child(editor_field(
+                            palette,
                             "connection-editor-shell",
                             "Shell",
                             editor.shell_path.clone(),
@@ -1460,6 +1475,7 @@ impl NyaTermApp {
                             }),
                         ))
                         .child(editor_field(
+                            palette,
                             "connection-editor-args",
                             "Args",
                             editor.shell_args.clone(),
@@ -1473,6 +1489,7 @@ impl NyaTermApp {
                             }),
                         ))
                         .child(editor_field(
+                            palette,
                             "connection-editor-cwd",
                             "Working Dir",
                             editor.working_dir.clone(),
@@ -1493,6 +1510,7 @@ impl NyaTermApp {
                                 .grid_cols(2)
                                 .gap_2()
                                 .child(editor_field(
+                                    palette,
                                     "connection-editor-telnet-host",
                                     "Host",
                                     editor.host.clone(),
@@ -1506,6 +1524,7 @@ impl NyaTermApp {
                                     }),
                                 ))
                                 .child(editor_field(
+                                    palette,
                                     "connection-editor-telnet-port",
                                     "Port",
                                     editor.port.clone(),
@@ -1525,6 +1544,7 @@ impl NyaTermApp {
                                 .items_center()
                                 .gap_1()
                                 .child(toggle_chip(
+                                    palette,
                                     "Raw TCP",
                                     editor.raw_tcp_cli,
                                     cx.listener(|this, _, _, cx| {
@@ -1535,6 +1555,7 @@ impl NyaTermApp {
                                     }),
                                 ))
                                 .child(toggle_chip(
+                                    palette,
                                     "Local Echo",
                                     editor.local_echo,
                                     cx.listener(|this, _, _, cx| {
@@ -1575,6 +1596,7 @@ impl NyaTermApp {
                                 )),
                         )
                         .child(editor_field(
+                            palette,
                             "connection-editor-baud",
                             "Baud",
                             editor.baud_rate.clone(),
@@ -1659,6 +1681,7 @@ impl NyaTermApp {
                     .child(title),
             )
             .child(editor_field(
+                palette,
                 "connection-group-name",
                 "Group Name",
                 editor.name.clone(),
@@ -2183,13 +2206,10 @@ fn sort_connections(connections: &mut [SavedConnection], mode: ConnectionSortMod
     }
 }
 
-fn kind_chip(
+fn kind_chip(palette: crate::ui::theme::ThemePalette,
     label: &'static str,
     selected: bool,
-    on_click: impl Fn(&gpui::ClickEvent, &mut gpui::Window, &mut gpui::App) + 'static,
-) -> impl IntoElement {
-    let palette = crate::ui::theme::theme_palette("github-dark");
-    div()
+    on_click: impl Fn(&gpui::ClickEvent, &mut gpui::Window, &mut gpui::App) + 'static,) -> impl IntoElement {    div()
         .id(SharedString::from(format!("connection-kind-{label}")))
         .h(px(24.))
         .px_2()
@@ -2214,13 +2234,10 @@ fn kind_chip(
         .on_click(on_click)
 }
 
-fn toggle_chip(
+fn toggle_chip(palette: crate::ui::theme::ThemePalette,
     label: &'static str,
     selected: bool,
-    on_click: impl Fn(&gpui::ClickEvent, &mut gpui::Window, &mut gpui::App) + 'static,
-) -> impl IntoElement {
-    let palette = crate::ui::theme::theme_palette("github-dark");
-    div()
+    on_click: impl Fn(&gpui::ClickEvent, &mut gpui::Window, &mut gpui::App) + 'static,) -> impl IntoElement {    div()
         .id(SharedString::from(format!("connection-toggle-{label}")))
         .h(px(22.))
         .px_2()
@@ -2245,14 +2262,13 @@ fn toggle_chip(
         .on_click(on_click)
 }
 
-fn editor_field(
+fn editor_field(palette: crate::ui::theme::ThemePalette,
     id: impl Into<String>,
     label: &'static str,
     value: String,
     active: bool,
-    on_click: impl Fn(&gpui::ClickEvent, &mut gpui::Window, &mut gpui::App) + 'static,
-) -> impl IntoElement {
-    transfer_input(id, label, value, active, crate::ui::theme::theme_palette("github-dark")).on_click(on_click)
+    on_click: impl Fn(&gpui::ClickEvent, &mut gpui::Window, &mut gpui::App) + 'static,) -> impl IntoElement {
+    transfer_input(id, label, value, active, palette).on_click(on_click)
 }
 
 fn icon_action_button(palette: crate::ui::theme::ThemePalette,

@@ -885,3 +885,9 @@ service boundary first:
 - Transfer browser toolbar/footer/entry rows/queue helpers, progress bar, and overlay menus take live `ThemePalette`.
 - Tunnel/proxy section/editor/status free helpers take live palette; residual small_button dark fallbacks cleared in those modules.
 - Docker tab/details/resources/compose/container free helpers use palette params or `cx_theme_palette(cx)`.
+
+## 2026-07-11 Residual free-helper ThemePalette sweep
+- Title menus, inspector disabled panels, bottom send-command chips/steppers themed.
+- Connections editor chips/fields, Network icon actions, Settings AI/security/transfer/terminal free helpers themed.
+- Sidebar security/session free helpers, quick-command icon/editor helpers and editor overlay choices themed.
+- Zero remaining `theme_palette("github-dark")` hard fallbacks in `nyaterm-native` UI sources (brand/status hardcodes may remain intentionally).

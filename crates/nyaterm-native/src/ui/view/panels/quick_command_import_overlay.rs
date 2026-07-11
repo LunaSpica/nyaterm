@@ -77,6 +77,7 @@ impl NyaTermApp {
                             .grid_cols(2)
                             .gap_3()
                             .child(quick_command_import_source_card(
+                                palette,
                                 "quick-command-import-windterm-card",
                                 "WT",
                                 "WindTerm Quickbar",
@@ -90,6 +91,7 @@ impl NyaTermApp {
                                 }),
                             ))
                             .child(quick_command_import_source_card(
+                                palette,
                                 "quick-command-import-xshell-card",
                                 "XS",
                                 "Xshell XTS",
@@ -103,6 +105,7 @@ impl NyaTermApp {
                                 }),
                             ))
                             .child(quick_command_import_source_card(
+                                palette,
                                 "quick-command-import-json-card",
                                 "{}",
                                 "NyaTerm JSON",
@@ -142,16 +145,13 @@ impl NyaTermApp {
     }
 }
 
-fn quick_command_import_source_card(
+fn quick_command_import_source_card(palette: crate::ui::theme::ThemePalette,
     id: &'static str,
     monogram: &'static str,
     label: &'static str,
     hint: &'static str,
     accent: u32,
-    on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
-) -> impl IntoElement {
-    let palette = crate::ui::theme::theme_palette("github-dark");
-    div()
+    on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,) -> impl IntoElement {    div()
         .id(SharedString::from(id))
         .min_h(px(124.))
         .rounded_md()

@@ -603,16 +603,13 @@ fn transfer_editor_type_status(editor_type: &str) -> &'static str {
     }
 }
 
-fn transfer_stepper(
+fn transfer_stepper(palette: crate::ui::theme::ThemePalette,
     label: &'static str,
     value: u32,
     dec_id: &'static str,
     inc_id: &'static str,
     on_dec: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
-    on_inc: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
-) -> impl IntoElement {
-    let palette = crate::ui::theme::theme_palette("github-dark");
-    div()
+    on_inc: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,) -> impl IntoElement {    div()
         .rounded_sm()
         .border_1()
         .border_color(rgb(palette.border))
@@ -634,7 +631,7 @@ fn transfer_stepper(
                 .items_center()
                 .justify_between()
                 .gap_2()
-                .child(small_button(crate::ui::theme::theme_palette("github-dark"), dec_id, "-", on_dec))
+                .child(small_button(palette, dec_id, "-", on_dec))
                 .child(
                     div()
                         .min_w(px(38.))
@@ -645,18 +642,15 @@ fn transfer_stepper(
                         .text_color(rgb(palette.text))
                         .child(value.to_string()),
                 )
-                .child(small_button(crate::ui::theme::theme_palette("github-dark"), inc_id, "+", on_inc)),
+                .child(small_button(palette, inc_id, "+", on_inc)),
         )
 }
 
-fn permission_preset_button(
+fn permission_preset_button(palette: crate::ui::theme::ThemePalette,
     id: &'static str,
     label: &'static str,
     active: bool,
-    on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
-) -> impl IntoElement {
-    let palette = crate::ui::theme::theme_palette("github-dark");
-    div()
+    on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,) -> impl IntoElement {    div()
         .id(SharedString::from(id))
         .h(px(28.))
         .px_3()
@@ -675,9 +669,7 @@ fn permission_preset_button(
         .child(label)
 }
 
-fn transfer_capability_card(title: &'static str, detail: &'static str) -> impl IntoElement {
-    let palette = crate::ui::theme::theme_palette("github-dark");
-    div()
+fn transfer_capability_card(palette: crate::ui::theme::ThemePalette, title: &'static str, detail: &'static str) -> impl IntoElement {    div()
         .rounded_sm()
         .border_1()
         .border_color(rgb(palette.border))

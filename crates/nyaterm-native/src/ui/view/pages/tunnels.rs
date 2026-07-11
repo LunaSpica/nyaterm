@@ -247,6 +247,7 @@ impl NyaTermApp {
                                             .items_center()
                                             .gap_1()
                                             .child(icon_network_action(
+                                                palette,
                                                 "network-group-new",
                                                 "📁+",
                                                 cx.listener(|this, _, _, cx| {
@@ -386,11 +387,10 @@ impl NyaTermApp {
     }
 }
 
-fn icon_network_action(
+fn icon_network_action(palette: crate::ui::theme::ThemePalette,
     id: impl Into<String>,
     label: &'static str,
-    on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
-) -> impl IntoElement {
+    on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,) -> impl IntoElement {
     div()
         .id(gpui::SharedString::from(id.into()))
         .size(px(28.))
@@ -399,7 +399,7 @@ fn icon_network_action(
         .justify_center()
         .rounded_md()
         .text_size(px(12.))
-        .text_color(rgb(crate::ui::theme::theme_palette("github-dark").text_muted))
+        .text_color(rgb(palette.text_muted))
         .cursor_pointer()
         .hover(|this| this.bg(rgb(0x21262d)).text_color(rgb(0xc9d1d9)))
         .child(label)

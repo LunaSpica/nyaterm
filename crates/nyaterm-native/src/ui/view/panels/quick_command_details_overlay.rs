@@ -89,6 +89,7 @@ impl NyaTermApp {
                                     .items_start()
                                     .gap_3()
                                     .child(quick_command_icon_mark(
+                                        palette,
                                         command.icon_tag.as_deref(),
                                         command.color_tag.as_deref(),
                                     ))

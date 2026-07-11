@@ -248,11 +248,13 @@ impl NyaTermApp {
                             .items_center()
                             .gap_1()
                             .child(send_command_control_group(
+                                palette,
                                 "Data",
                                 div()
                                     .flex()
                                     .items_center()
                                     .child(send_command_chip(
+                                        palette,
                                         "bottom-command-send-text",
                                         "Text",
                                         self.send_command_data_type == SendCommandDataType::Text,
@@ -264,6 +266,7 @@ impl NyaTermApp {
                                         }),
                                     ))
                                     .child(send_command_chip(
+                                        palette,
                                         "bottom-command-send-hex",
                                         "Hex",
                                         self.send_command_data_type == SendCommandDataType::Hex,
@@ -276,11 +279,13 @@ impl NyaTermApp {
                                     )),
                             ))
                             .child(send_command_control_group(
+                                palette,
                                 "Target",
                                 {
                                     let mut chips = div().flex().items_center().flex_wrap().gap_0();
                                     chips = chips
                                         .child(send_command_chip(
+                                            palette,
                                             "bottom-command-target-current",
                                             "Current",
                                             matches!(
@@ -295,6 +300,7 @@ impl NyaTermApp {
                                             }),
                                         ))
                                         .child(send_command_chip(
+                                            palette,
                                             "bottom-command-target-all",
                                             "All",
                                             matches!(
@@ -325,6 +331,7 @@ impl NyaTermApp {
                                         let group_id = group_id.clone();
                                         // send_command_chip needs &'static str for label - use dynamic via local helper
                                         chips = chips.child(send_command_target_chip(
+                                            palette,
                                             format!("bottom-command-target-group-{group_id}"),
                                             label,
                                             selected,
@@ -340,11 +347,13 @@ impl NyaTermApp {
                                 },
                             ))
                             .child(send_command_control_group(
+                                palette,
                                 "Mode",
                                 div()
                                     .flex()
                                     .items_center()
                                     .child(send_command_chip(
+                                        palette,
                                         "bottom-command-send-mode-primary",
                                         if self.send_command_data_type == SendCommandDataType::Hex {
                                             "Byte"
@@ -367,6 +376,7 @@ impl NyaTermApp {
                                         }),
                                     ))
                                     .child(send_command_chip(
+                                        palette,
                                         "bottom-command-send-mode-secondary",
                                         if self.send_command_data_type == SendCommandDataType::Hex {
                                             "Packet"
@@ -390,11 +400,13 @@ impl NyaTermApp {
                                     )),
                             ))
                             .child(send_command_control_group(
+                                palette,
                                 "Count",
                                 div()
                                     .flex()
                                     .items_center()
                                     .child(send_command_stepper_button(
+                                        palette,
                                         "bottom-command-count-down",
                                         "−",
                                         cx.listener(|this, _, _, cx| {
@@ -415,6 +427,7 @@ impl NyaTermApp {
                                             .child(count_label),
                                     )
                                     .child(send_command_stepper_button(
+                                        palette,
                                         "bottom-command-count-up",
                                         "+",
                                         cx.listener(|this, _, _, cx| {
@@ -423,11 +436,13 @@ impl NyaTermApp {
                                     )),
                             ))
                             .child(send_command_control_group(
+                                palette,
                                 "Interval",
                                 div()
                                     .flex()
                                     .items_center()
                                     .child(send_command_stepper_button(
+                                        palette,
                                         "bottom-command-interval-down",
                                         "−",
                                         cx.listener(|this, _, _, cx| {
@@ -456,6 +471,7 @@ impl NyaTermApp {
                                             ),
                                     )
                                     .child(send_command_stepper_button(
+                                        palette,
                                         "bottom-command-interval-up",
                                         "+",
                                         cx.listener(|this, _, _, cx| {
@@ -465,11 +481,13 @@ impl NyaTermApp {
                             ))
                             .when(is_serial_text_line, |this| {
                                 this.child(send_command_control_group(
+                                    palette,
                                     "EOL",
                                     div()
                                         .flex()
                                         .items_center()
                                         .child(send_command_chip(
+                                            palette,
                                             "bottom-command-eol",
                                             line_ending_label,
                                             true,
@@ -919,12 +937,9 @@ impl NyaTermApp {
 }
 
 
-fn send_command_control_group(
+fn send_command_control_group(palette: crate::ui::theme::ThemePalette,
     label: &'static str,
-    content: impl IntoElement,
-) -> impl IntoElement {
-    let palette = crate::ui::theme::theme_palette("github-dark");
-    // Tauri labeled control: h-8 bordered group with muted label prefix.
+    content: impl IntoElement,) -> impl IntoElement {    // Tauri labeled control: h-8 bordered group with muted label prefix.
     div()
         .h(px(30.))
         .flex()
@@ -955,14 +970,11 @@ fn send_command_control_group(
         )
 }
 
-fn send_command_chip(
+fn send_command_chip(palette: crate::ui::theme::ThemePalette,
     id: impl Into<String>,
     label: &'static str,
     active: bool,
-    on_click: impl Fn(&gpui::ClickEvent, &mut gpui::Window, &mut gpui::App) + 'static,
-) -> impl IntoElement {
-    let palette = crate::ui::theme::theme_palette("github-dark");
-    div()
+    on_click: impl Fn(&gpui::ClickEvent, &mut gpui::Window, &mut gpui::App) + 'static,) -> impl IntoElement {    div()
         .id(SharedString::from(id.into()))
         .h(px(28.))
         .px_2()
@@ -990,14 +1002,11 @@ fn send_command_chip(
         .on_click(on_click)
 }
 
-fn send_command_target_chip(
+fn send_command_target_chip(palette: crate::ui::theme::ThemePalette,
     id: impl Into<String>,
     label: impl Into<SharedString>,
     active: bool,
-    on_click: impl Fn(&gpui::ClickEvent, &mut gpui::Window, &mut gpui::App) + 'static,
-) -> impl IntoElement {
-    let palette = crate::ui::theme::theme_palette("github-dark");
-    div()
+    on_click: impl Fn(&gpui::ClickEvent, &mut gpui::Window, &mut gpui::App) + 'static,) -> impl IntoElement {    div()
         .id(SharedString::from(id.into()))
         .h(px(28.))
         .px_2()
@@ -1026,13 +1035,10 @@ fn send_command_target_chip(
 }
 
 
-fn send_command_stepper_button(
+fn send_command_stepper_button(palette: crate::ui::theme::ThemePalette,
     id: impl Into<String>,
     label: &'static str,
-    on_click: impl Fn(&gpui::ClickEvent, &mut gpui::Window, &mut gpui::App) + 'static,
-) -> impl IntoElement {
-    let palette = crate::ui::theme::theme_palette("github-dark");
-    div()
+    on_click: impl Fn(&gpui::ClickEvent, &mut gpui::Window, &mut gpui::App) + 'static,) -> impl IntoElement {    div()
         .id(SharedString::from(id.into()))
         .size(px(28.))
         .flex()

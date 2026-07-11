@@ -951,6 +951,7 @@ impl NyaTermApp {
             TitleMenu::File => {
                 items = items
                     .child(title_menu_item(
+                        palette,
                         "title-file-new-session",
                         "New Session",
                         Some(shortcut("tab.newSession", "Ctrl+Shift+N")),
@@ -959,8 +960,9 @@ impl NyaTermApp {
                             this.start_local_session(window, cx);
                         }),
                     ))
-                    .child(title_menu_separator())
+                    .child(title_menu_separator(palette))
                     .child(title_menu_item(
+                        palette,
                         "title-file-import",
                         "Import Config",
                         None,
@@ -970,6 +972,7 @@ impl NyaTermApp {
                         }),
                     ))
                     .child(title_menu_item(
+                        palette,
                         "title-file-export",
                         "Export Config",
                         None,
@@ -982,6 +985,7 @@ impl NyaTermApp {
             TitleMenu::View => {
                 items = items
                     .child(title_menu_item(
+                        palette,
                         "title-view-zoom-in",
                         "Zoom In",
                         Some(shortcut("view.zoomIn", "Ctrl+=")),
@@ -991,6 +995,7 @@ impl NyaTermApp {
                         }),
                     ))
                     .child(title_menu_item(
+                        palette,
                         "title-view-zoom-out",
                         "Zoom Out",
                         Some(shortcut("view.zoomOut", "Ctrl+-")),
@@ -1000,6 +1005,7 @@ impl NyaTermApp {
                         }),
                     ))
                     .child(title_menu_item(
+                        palette,
                         "title-view-reset-zoom",
                         "Reset Zoom",
                         Some(shortcut("view.resetZoom", "Ctrl+0")),
@@ -1008,8 +1014,9 @@ impl NyaTermApp {
                             this.reset_terminal_font_size(cx);
                         }),
                     ))
-                    .child(title_menu_separator())
+                    .child(title_menu_separator(palette))
                     .child(title_menu_item(
+                        palette,
                         "title-view-toggle-left",
                         "Toggle Left Sidebar",
                         Some(shortcut("view.toggleLeftSidebar", "Ctrl+Shift+E")),
@@ -1019,6 +1026,7 @@ impl NyaTermApp {
                         }),
                     ))
                     .child(title_menu_item(
+                        palette,
                         "title-view-toggle-right",
                         "Toggle Right Sidebar",
                         Some(shortcut("view.toggleRightSidebar", "Ctrl+Shift+B")),
@@ -1027,8 +1035,9 @@ impl NyaTermApp {
                             this.toggle_right_inspector(cx);
                         }),
                     ))
-                    .child(title_menu_separator())
+                    .child(title_menu_separator(palette))
                     .child(title_menu_item(
+                        palette,
                         "title-view-settings",
                         "Settings",
                         Some(shortcut("view.openSettings", "Ctrl+,")),
@@ -1041,6 +1050,7 @@ impl NyaTermApp {
             TitleMenu::Terminal => {
                 items = items
                     .child(title_menu_item(
+                        palette,
                         "title-term-quick-switch",
                         "Command Palette",
                         Some(shortcut("tab.quickSwitch", "Ctrl+Shift+S")),
@@ -1049,8 +1059,9 @@ impl NyaTermApp {
                             this.open_quick_switch(window, cx);
                         }),
                     ))
-                    .child(title_menu_separator())
+                    .child(title_menu_separator(palette))
                     .child(title_menu_item(
+                        palette,
                         "title-term-split-h",
                         "Split Horizontal",
                         None,
@@ -1064,6 +1075,7 @@ impl NyaTermApp {
                         }),
                     ))
                     .child(title_menu_item(
+                        palette,
                         "title-term-split-v",
                         "Split Vertical",
                         None,
@@ -1077,6 +1089,7 @@ impl NyaTermApp {
                         }),
                     ))
                     .child(title_menu_item(
+                        palette,
                         "title-term-unsplit",
                         "Unsplit",
                         None,
@@ -1085,8 +1098,9 @@ impl NyaTermApp {
                             this.unsplit_workspace(cx);
                         }),
                     ))
-                    .child(title_menu_separator())
+                    .child(title_menu_separator(palette))
                     .child(title_menu_item(
+                        palette,
                         "title-term-sync-groups",
                         "Manage Sync Groups",
                         Some(shortcut("terminal.manageSyncGroups", "Ctrl+Shift+G")),
@@ -1095,8 +1109,9 @@ impl NyaTermApp {
                             this.open_sync_groups(window, cx);
                         }),
                     ))
-                    .child(title_menu_separator())
+                    .child(title_menu_separator(palette))
                     .child(title_menu_item(
+                        palette,
                         "title-term-clear",
                         "Clear Terminal",
                         Some(shortcut("terminal.clear", "Ctrl+L")),
@@ -1116,6 +1131,7 @@ impl NyaTermApp {
                 };
                 items = items
                     .child(title_menu_item(
+                        palette,
                         "title-help-docs",
                         "Documentation",
                         None,
@@ -1127,6 +1143,7 @@ impl NyaTermApp {
                         }),
                     ))
                     .child(title_menu_item(
+                        palette,
                         "title-help-update",
                         update_label,
                         None,
@@ -1136,6 +1153,7 @@ impl NyaTermApp {
                         }),
                     ))
                     .child(title_menu_item(
+                        palette,
                         "title-help-migration",
                         "Migration Status",
                         None,
@@ -1144,8 +1162,9 @@ impl NyaTermApp {
                             this.open_page(NavItem::Migration, cx);
                         }),
                     ))
-                    .child(title_menu_separator())
+                    .child(title_menu_separator(palette))
                     .child(title_menu_item(
+                        palette,
                         "title-help-about",
                         "About NyaTerm",
                         None,
@@ -1184,14 +1203,11 @@ impl NyaTermApp {
     }
 }
 
-fn title_menu_item(
+fn title_menu_item(palette: crate::ui::theme::ThemePalette,
     id: impl Into<String>,
     label: impl Into<String>,
     shortcut: Option<String>,
-    on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
-) -> impl IntoElement {
-    let palette = crate::ui::theme::theme_palette("github-dark");
-    let label = label.into();
+    on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,) -> impl IntoElement {    let label = label.into();
     let mut row = div()
         .id(SharedString::from(id.into()))
         .h(px(30.))
@@ -1217,9 +1233,7 @@ fn title_menu_item(
     row
 }
 
-fn title_menu_separator() -> impl IntoElement {
-    let palette = crate::ui::theme::theme_palette("github-dark");
-    div()
+fn title_menu_separator(palette: crate::ui::theme::ThemePalette) -> impl IntoElement {    div()
         .h(px(1.))
         .mx_2()
         .my_1()

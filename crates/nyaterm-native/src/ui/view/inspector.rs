@@ -104,6 +104,7 @@ impl NyaTermApp {
                             )),
                     )
                     .child(ai_svg_icon_button(
+                        palette,
                         "ai-execution-mode-toggle",
                         match self.ai_settings.agent_command_execution_mode {
                             AgentCommandExecutionMode::Auto => "icons/ai/exec-auto.svg",
@@ -116,6 +117,7 @@ impl NyaTermApp {
                         }),
                     ))
                     .child(ai_svg_icon_button(
+                        palette,
                         "ai-history-toggle",
                         "icons/ai/history.svg", cx.listener(|this, _, window, cx| {
                             this.ai_execution_menu_open = false;
@@ -130,6 +132,7 @@ impl NyaTermApp {
                         }),
                     ))
                     .child(ai_svg_icon_button(
+                        palette,
                         "ai-open-settings",
                         "icons/ai/settings.svg", cx.listener(|this, _, _, cx| {
                             this.settings_active_tab = SettingsTab::AiGeneral;
@@ -137,6 +140,7 @@ impl NyaTermApp {
                         }),
                     ))
                     .child(ai_svg_icon_button(
+                        palette,
                         "ai-new-chat",
                         "icons/ai/new.svg", cx.listener(|this, _, _, cx| {
                             this.ai_prompt_draft.clear();
@@ -269,6 +273,7 @@ impl NyaTermApp {
                                     ),
                             )
                             .child(ai_svg_icon_button(
+                                palette,
                                 "ai-ask-run",
                                 if ai_running {
                                     "icons/ai/stop.svg"
@@ -741,6 +746,7 @@ impl NyaTermApp {
         panel: NavItem,
         cx: &mut Context<Self>,
     ) -> gpui::AnyElement {
+        let palette = self.theme_palette();
         match panel {
             NavItem::Connections => self.connections_view(cx).into_any_element(),
             NavItem::AiAssistant => self.ai_assistant_panel(cx).into_any_element(),
@@ -750,6 +756,7 @@ impl NyaTermApp {
                 self.stats_view(cx).into_any_element()
             }
             NavItem::Stats => disabled_inspector_panel(
+                palette,
                 "Remote Stats Disabled",
                 "Enable Remote Stats in Settings > Terminal Session > General.",
             )
@@ -758,6 +765,7 @@ impl NyaTermApp {
                 self.processes_view(cx).into_any_element()
             }
             NavItem::Processes => disabled_inspector_panel(
+                palette,
                 "Process Manager Disabled",
                 "Enable Process Manager in Settings > Terminal Session > General.",
             )
@@ -766,6 +774,7 @@ impl NyaTermApp {
                 self.docker_view(cx).into_any_element()
             }
             NavItem::Docker => disabled_inspector_panel(
+                palette,
                 "Docker Manager Disabled",
                 "Enable Docker Manager in Settings > Terminal Session > General.",
             )
@@ -2224,9 +2233,7 @@ impl NyaTermApp {
     }
 }
 
-pub(in crate::ui::view) fn disabled_inspector_panel(title: &'static str, detail: &'static str) -> impl IntoElement {
-    let palette = crate::ui::theme::theme_palette("github-dark");
-    div()
+pub(in crate::ui::view) fn disabled_inspector_panel(palette: crate::ui::theme::ThemePalette, title: &'static str, detail: &'static str) -> impl IntoElement {    div()
         .flex()
         .flex_col()
         .gap_3()
@@ -2251,13 +2258,10 @@ pub(in crate::ui::view) fn disabled_inspector_panel(title: &'static str, detail:
 }
 
 
-fn ai_svg_icon_button(
+fn ai_svg_icon_button(palette: crate::ui::theme::ThemePalette,
     id: impl Into<String>,
     icon_path: &'static str,
-    on_click: impl Fn(&gpui::ClickEvent, &mut gpui::Window, &mut gpui::App) + 'static,
-) -> impl gpui::IntoElement {
-    let palette = crate::ui::theme::theme_palette("github-dark");
-    use gpui::{SharedString, div, prelude::*, px, rgb, svg};
+    on_click: impl Fn(&gpui::ClickEvent, &mut gpui::Window, &mut gpui::App) + 'static,) -> impl gpui::IntoElement {    use gpui::{SharedString, div, prelude::*, px, rgb, svg};
     div()
         .id(SharedString::from(id.into()))
         .size(px(28.))

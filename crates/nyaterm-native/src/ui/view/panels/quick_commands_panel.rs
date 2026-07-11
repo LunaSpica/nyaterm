@@ -227,6 +227,7 @@ impl NyaTermApp {
                                     this.run_quick_command_by_id(run_command_id.clone(), cx);
                                 }))
                                 .child(quick_command_icon_mark(
+                                    palette,
                                     command.icon_tag.as_deref(),
                                     command.color_tag.as_deref(),
                                 ))
@@ -372,6 +373,7 @@ impl NyaTermApp {
                                         );
                                     }))
                                     .child(quick_command_icon_mark(
+                                        palette,
                                         command.icon_tag.as_deref(),
                                         command.color_tag.as_deref(),
                                     ))
@@ -504,6 +506,7 @@ impl NyaTermApp {
                                         );
                                     }))
                                     .child(quick_command_icon_mark(
+                                        palette,
                                         command.icon_tag.as_deref(),
                                         command.color_tag.as_deref(),
                                     ))

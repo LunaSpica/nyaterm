@@ -492,6 +492,7 @@ impl NyaTermApp {
                             .items_center()
                             .gap_0()
                             .child(session_action_svg_button(
+                                palette,
                                 format!("active-session-rename-{rename_session_id}"),
                                 "icons/session/rename.svg",
                                 cx.listener(move |this, _, window, cx| {
@@ -500,6 +501,7 @@ impl NyaTermApp {
                                 }),
                             ))
                             .child(session_action_svg_button(
+                                palette,
                                 format!("active-session-reconnect-{reconnect_session_id}"),
                                 "icons/session/reconnect.svg",
                                 cx.listener(move |this, _, window, cx| {
@@ -509,6 +511,7 @@ impl NyaTermApp {
                                 }),
                             ))
                             .child(session_action_svg_button(
+                                palette,
                                 format!("active-session-close-{close_session_id}"),
                                 "icons/session/disconnect.svg",
                                 cx.listener(move |this, _, _, cx| {
@@ -1731,6 +1734,7 @@ impl NyaTermApp {
                     .child(title),
             )
             .child(security_editor_field(
+                palette,
                 "security-key-name",
                 "Name",
                 if editor.name.is_empty() {
@@ -1856,6 +1860,7 @@ impl NyaTermApp {
                     ),
             )
             .child(security_editor_field(
+                palette,
                 "security-key-passphrase",
                 "Passphrase",
                 passphrase_display,
@@ -1940,6 +1945,7 @@ impl NyaTermApp {
                     .items_center()
                     .gap_1()
                     .child(security_type_chip(
+                        palette,
                         "TOTP",
                         editor.otp_type != "hotp",
                         cx.listener(|this, _, _, cx| {
@@ -1947,6 +1953,7 @@ impl NyaTermApp {
                         }),
                     ))
                     .child(security_type_chip(
+                        palette,
                         "HOTP",
                         editor.otp_type == "hotp",
                         cx.listener(|this, _, _, cx| {
@@ -1975,6 +1982,7 @@ impl NyaTermApp {
                     ),
             )
             .child(security_editor_field(
+                palette,
                 "security-otp-issuer",
                 "Issuer",
                 if editor.issuer.is_empty() {
@@ -1988,6 +1996,7 @@ impl NyaTermApp {
                 }),
             ))
             .child(security_editor_field(
+                palette,
                 "security-otp-username",
                 "Account",
                 if editor.username.is_empty() {
@@ -2001,6 +2010,7 @@ impl NyaTermApp {
                 }),
             ))
             .child(security_editor_field(
+                palette,
                 "security-otp-secret",
                 "Secret",
                 secret_display,
@@ -2015,6 +2025,7 @@ impl NyaTermApp {
                     .grid_cols(3)
                     .gap_2()
                     .child(security_editor_field(
+                        palette,
                         "security-otp-digits",
                         "Digits",
                         if editor.digits.is_empty() {
@@ -2028,6 +2039,7 @@ impl NyaTermApp {
                         }),
                     ))
                     .child(security_editor_field(
+                        palette,
                         "security-otp-period",
                         "Period",
                         if editor.period.is_empty() {
@@ -2041,6 +2053,7 @@ impl NyaTermApp {
                         }),
                     ))
                     .child(security_editor_field(
+                        palette,
                         "security-otp-counter",
                         "Counter",
                         if editor.counter.is_empty() {
@@ -2452,6 +2465,7 @@ impl NyaTermApp {
                     .child(title),
             )
             .child(security_editor_field(
+                palette,
                 "security-pw-name",
                 "Name",
                 if editor.name.is_empty() {
@@ -2465,6 +2479,7 @@ impl NyaTermApp {
                 }),
             ))
             .child(security_editor_field(
+                palette,
                 "security-pw-value",
                 "Password",
                 password_display,
@@ -2561,6 +2576,7 @@ impl NyaTermApp {
                     )),
             )
             .child(security_editor_field(
+                palette,
                 "security-cred-name",
                 "Name",
                 if editor.name.is_empty() {
@@ -2578,6 +2594,7 @@ impl NyaTermApp {
                 }),
             ))
             .child(security_editor_field(
+                palette,
                 "security-cred-user",
                 "Username",
                 if editor.username.is_empty() {
@@ -2595,6 +2612,7 @@ impl NyaTermApp {
                 }),
             ))
             .child(security_editor_field(
+                palette,
                 "security-cred-pass",
                 "Password",
                 password_display,
@@ -2608,6 +2626,7 @@ impl NyaTermApp {
                 }),
             ))
             .child(security_editor_field(
+                palette,
                 "security-cred-user-re",
                 "User Prompt RE",
                 if editor.username_prompt_regex.is_empty() {
@@ -2625,6 +2644,7 @@ impl NyaTermApp {
                 }),
             ))
             .child(security_editor_field(
+                palette,
                 "security-cred-pass-re",
                 "Pass Prompt RE",
                 if editor.password_prompt_regex.is_empty() {
@@ -2672,25 +2692,21 @@ impl NyaTermApp {
 
 }
 
-fn security_editor_field(
+fn security_editor_field(palette: crate::ui::theme::ThemePalette,
     id: impl Into<String>,
     label: &'static str,
     value: String,
     active: bool,
-    on_click: impl Fn(&gpui::ClickEvent, &mut gpui::Window, &mut gpui::App) + 'static,
-) -> impl IntoElement {
-    transfer_input(id, label, value, active, crate::ui::theme::theme_palette("github-dark"))
+    on_click: impl Fn(&gpui::ClickEvent, &mut gpui::Window, &mut gpui::App) + 'static,) -> impl IntoElement {
+    transfer_input(id, label, value, active, palette)
         .h(px(42.))
         .on_click(on_click)
 }
 
-fn security_type_chip(
+fn security_type_chip(palette: crate::ui::theme::ThemePalette,
     label: &'static str,
     selected: bool,
-    on_click: impl Fn(&gpui::ClickEvent, &mut gpui::Window, &mut gpui::App) + 'static,
-) -> impl IntoElement {
-    let palette = crate::ui::theme::theme_palette("github-dark");
-    div()
+    on_click: impl Fn(&gpui::ClickEvent, &mut gpui::Window, &mut gpui::App) + 'static,) -> impl IntoElement {    div()
         .id(SharedString::from(format!("security-type-{label}")))
         .h(px(22.))
         .px_2()
@@ -2715,13 +2731,10 @@ fn security_type_chip(
         .on_click(on_click)
 }
 
-fn session_action_svg_button(
+fn session_action_svg_button(palette: crate::ui::theme::ThemePalette,
     id: impl Into<String>,
     icon_path: &'static str,
-    on_click: impl Fn(&gpui::ClickEvent, &mut gpui::Window, &mut gpui::App) + 'static,
-) -> impl IntoElement {
-    let palette = crate::ui::theme::theme_palette("github-dark");
-    // Tauri ActiveSessions action icons: h-7 ghost.
+    on_click: impl Fn(&gpui::ClickEvent, &mut gpui::Window, &mut gpui::App) + 'static,) -> impl IntoElement {    // Tauri ActiveSessions action icons: h-7 ghost.
     div()
         .id(SharedString::from(id.into()))
         .size(px(28.))

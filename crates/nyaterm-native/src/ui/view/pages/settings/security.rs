@@ -169,9 +169,7 @@ impl NyaTermApp {
     }
 }
 
-fn security_hint(title: &'static str, detail: &'static str) -> impl IntoElement {
-    let palette = crate::ui::theme::theme_palette("github-dark");
-    div()
+fn security_hint(palette: crate::ui::theme::ThemePalette, title: &'static str, detail: &'static str) -> impl IntoElement {    div()
         .rounded_sm()
         .border_1()
         .border_color(rgb(palette.border))

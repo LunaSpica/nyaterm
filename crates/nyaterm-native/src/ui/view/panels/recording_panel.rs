@@ -154,6 +154,7 @@ impl NyaTermApp {
                                 .items_center()
                                 .gap_0()
                                 .child(recording_action_svg_button(
+                                    palette,
                                     format!("recording-session-toggle-{session_id}"),
                                     if session_is_recording {
                                         "icons/session/stop.svg"
@@ -180,6 +181,7 @@ impl NyaTermApp {
                                     }),
                                 ))
                                 .child(recording_action_svg_button(
+                                    palette,
                                     format!("recording-session-save-{session_id}"),
                                     "icons/session/save.svg",
                                     rgb(palette.text_muted),
@@ -307,14 +309,11 @@ impl NyaTermApp {
     }
 }
 
-fn recording_action_svg_button(
+fn recording_action_svg_button(palette: crate::ui::theme::ThemePalette,
     id: impl Into<String>,
     icon_path: &'static str,
     color: impl Into<gpui::Hsla>,
-    on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
-) -> impl IntoElement {
-    let palette = crate::ui::theme::theme_palette("github-dark");
-    let color = color.into();
+    on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,) -> impl IntoElement {    let color = color.into();
     div()
         .id(SharedString::from(id.into()))
         .size(px(28.))
