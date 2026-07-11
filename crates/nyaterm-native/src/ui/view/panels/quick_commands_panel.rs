@@ -711,6 +711,24 @@ impl NyaTermApp {
                         cx.listener(|this, _, window, cx| {
                             this.open_quick_command_import_dialog(window, cx);
                         }),
+                    ))
+                    .child(small_button(
+                        palette,
+                        "quick-command-ai",
+                        "AI",
+                        cx.listener(|this, _, window, cx| {
+                            // Tauri QuickCommands AI popover -> openAIAssistant(generate_command).
+                            if this.ai_prompt_draft.trim().is_empty() {
+                                this.ai_prompt_draft =
+                                    "Generate a shell command for: ".to_string();
+                            }
+                            this.ai_response_preview =
+                                "Describe the command you want, then Ask.".to_string();
+                            this.ai_status = "quick command AI assist".to_string();
+                            this.ensure_panel_open(NavItem::AiAssistant);
+                            window.focus(&this.ai_chat_focus);
+                            cx.notify();
+                        }),
                     )),
             )
             .child(

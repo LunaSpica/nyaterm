@@ -1595,3 +1595,8 @@ service boundary first:
 - Recording panel: busy-state for record/stop/save actions, uppercase type badge,
   denser 44px rows, disabled opacity while busy (Tauri busyActions parity).
 - Quick Commands execution badges use append/exec labels instead of +/>.
+
+## 2026-07-12 Quick Commands AI toolbar entry
+
+- Quick Commands toolbar gains AI action that opens the AI assistant with a
+  generate-command prompt seed (Tauri AI popover parity).
