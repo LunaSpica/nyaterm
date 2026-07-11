@@ -11,7 +11,7 @@ use nyaterm_session::SftpDuplicatePolicy;
 use crate::ui::components::{section_header, small_button, status_pill};
 use crate::ui::theme::ThemePalette;
 use crate::ui::models::{
-    AiActionEditorField, AiActionListKind, AiInputField, CloudSyncConflictState, CloudSyncInputField, ConfigPathPromptKind,
+    AiActionEditorField, AiActionListKind, AiCredentialEditorField, AiInputField, CloudSyncConflictState, CloudSyncInputField, ConfigPathPromptKind,
     DiagnosticsPathPromptKind, KeywordHighlightEditorField, KeywordHighlightPathPromptKind, SettingsTab,
     SearchEngineEditorField, SnapshotPasswordPromptKind, SnapshotPasswordPromptState, TerminalSearchMode, TransferJobStatus,
     TransferPathPromptKind, TranslateInputField,

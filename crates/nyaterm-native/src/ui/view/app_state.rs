@@ -345,6 +345,12 @@ pub struct NyaTermApp {
     pub(in crate::ui::view) ai_manual_model_drafts: HashMap<String, String>,
     pub(in crate::ui::view) ai_manual_model_focus: FocusHandle,
     pub(in crate::ui::view) ai_manual_model_edit_group: Option<String>,
+    /// Expanded API-key credential card in Settings → AI Models (Tauri AiModelsTab).
+    pub(in crate::ui::view) ai_credential_expanded_id: Option<String>,
+    pub(in crate::ui::view) ai_credential_edit: Option<(String, AiCredentialEditorField)>,
+    pub(in crate::ui::view) ai_credential_focus: FocusHandle,
+    /// Per-credential API-key drafts; empty means keep the stored secret.
+    pub(in crate::ui::view) ai_credential_secret_drafts: HashMap<String, String>,
     pub(in crate::ui::view) transfer_focus: FocusHandle,
     pub(in crate::ui::view) transfer_queue_focus: FocusHandle,
     pub(in crate::ui::view) transfer_browser_focus: FocusHandle,
@@ -1087,6 +1093,10 @@ impl NyaTermApp {
             ai_manual_model_drafts: HashMap::new(),
             ai_manual_model_focus: cx.focus_handle(),
             ai_manual_model_edit_group: None,
+            ai_credential_expanded_id: None,
+            ai_credential_edit: None,
+            ai_credential_focus: cx.focus_handle(),
+            ai_credential_secret_drafts: HashMap::new(),
             transfer_focus: cx.focus_handle(),
             transfer_queue_focus: cx.focus_handle(),
             transfer_browser_focus: cx.focus_handle(),

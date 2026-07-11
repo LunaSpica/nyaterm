@@ -1538,3 +1538,14 @@ service boundary first:
 - Temporary SSH Link overlay matches Tauri dialog density: section header,
   live parse preview (user@host:port · name), inline parse errors, accent
   border when valid, Clear/Connect footer with keyboard hints.
+
+## 2026-07-12 Connection network + AI credential deep edit
+
+- Connection editor SSH form exposes Proxy / Jump Host cycle pickers (using
+  saved proxies and SSH connections) and nested post-login command + delay
+  fields under the Post Login toggle.
+- AI Models → API keys: expandable credential cards with enable switch,
+  Delete for custom providers, Add custom OpenAI-compatible profile, and
+  per-card Name/Base URL/API Key editing with Enter-to-save secret drafts.
+- Enabling a built-in provider seeds a compact default model catalog; disabling
+  removes non-credential-bound models for that provider kind.

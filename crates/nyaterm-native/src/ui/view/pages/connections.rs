@@ -1143,6 +1143,48 @@ impl NyaTermApp {
                     })
             })
             .unwrap_or_else(|| "No OTP".to_string());
+        let proxy_label = editor
+            .proxy_id
+            .as_deref()
+            .and_then(|id| {
+                self.proxies
+                    .iter()
+                    .find(|proxy| proxy.id == id)
+                    .map(|proxy| {
+                        if proxy.protocol == "proxycommand" {
+                            let command = proxy.command.as_deref().unwrap_or("").trim();
+                            if command.is_empty() {
+                                format!("{} · {}", proxy.name, proxy.protocol.to_ascii_uppercase())
+                            } else {
+                                format!(
+                                    "{} · {} {}",
+                                    proxy.name,
+                                    proxy.protocol.to_ascii_uppercase(),
+                                    truncate_preview(command, 18)
+                                )
+                            }
+                        } else {
+                            format!(
+                                "{} · {} {}:{}",
+                                proxy.name,
+                                proxy.protocol.to_ascii_uppercase(),
+                                proxy.host,
+                                proxy.port
+                            )
+                        }
+                    })
+            })
+            .unwrap_or_else(|| "No Proxy".to_string());
+        let jump_label = editor
+            .proxy_jump_id
+            .as_deref()
+            .and_then(|id| {
+                self.connections
+                    .iter()
+                    .find(|connection| connection.id == id)
+                    .map(|connection| connection.name.clone())
+            })
+            .unwrap_or_else(|| "No Jump Host".to_string());
         let password_display = if editor.password.is_empty() {
             if editor.existing_password.is_some() {
                 "•••••••• (saved)".to_string()
@@ -1164,7 +1206,7 @@ impl NyaTermApp {
             .flex()
             .flex_col()
             .gap_3()
-            .max_h(px(560.))
+            .max_h(px(640.))
             .overflow_hidden()
             .track_focus(&self.connection_editor_focus)
             .on_click(cx.listener(|this, _, window, cx| {
@@ -1412,6 +1454,80 @@ impl NyaTermApp {
                             div()
                                 .flex()
                                 .items_center()
+                                .justify_between()
+                                .gap_2()
+                                .child(
+                                    div()
+                                        .min_w_0()
+                                        .flex_1()
+                                        .flex()
+                                        .flex_col()
+                                        .gap_1()
+                                        .child(
+                                            div()
+                                                .text_xs()
+                                                .text_color(rgb(palette.text_muted))
+                                                .child(format!(
+                                                    "Proxy · {}",
+                                                    truncate_preview(&proxy_label, 36)
+                                                )),
+                                        )
+                                        .child(
+                                            div()
+                                                .text_size(px(10.))
+                                                .text_color(rgb(palette.text_dimmed))
+                                                .child("Optional SOCKS/HTTP/ProxyCommand for this SSH target."),
+                                        ),
+                                )
+                                .child(small_button(palette,
+                                    "connection-editor-proxy",
+                                    "Cycle",
+                                    cx.listener(|this, _, _, cx| {
+                                        this.cycle_connection_editor_proxy(cx);
+                                    }),
+                                )),
+                        )
+                        .child(
+                            div()
+                                .flex()
+                                .items_center()
+                                .justify_between()
+                                .gap_2()
+                                .child(
+                                    div()
+                                        .min_w_0()
+                                        .flex_1()
+                                        .flex()
+                                        .flex_col()
+                                        .gap_1()
+                                        .child(
+                                            div()
+                                                .text_xs()
+                                                .text_color(rgb(palette.text_muted))
+                                                .child(format!(
+                                                    "Jump Host · {}",
+                                                    truncate_preview(&jump_label, 36)
+                                                )),
+                                        )
+                                        .child(
+                                            div()
+                                                .text_size(px(10.))
+                                                .text_color(rgb(palette.text_dimmed))
+                                                .child("ProxyJump via another saved SSH connection."),
+                                        ),
+                                )
+                                .child(small_button(palette,
+                                    "connection-editor-jump",
+                                    "Cycle",
+                                    cx.listener(|this, _, _, cx| {
+                                        this.cycle_connection_editor_jump(cx);
+                                    }),
+                                )),
+                        )
+                        .child(
+                            div()
+                                .flex()
+                                .items_center()
                                 .gap_1()
                                 .child(toggle_chip(
                                     palette,
@@ -1458,6 +1574,48 @@ impl NyaTermApp {
                                     }),
                                 )),
                         )
+                        .when(editor.post_login_enabled, |this| {
+                            this.child(
+                                div()
+                                    .pl_3()
+                                    .ml_1()
+                                    .border_l_1()
+                                    .border_color(rgb(palette.border))
+                                    .flex()
+                                    .flex_col()
+                                    .gap_2()
+                                    .child(editor_field(
+                                        palette,
+                                        "connection-editor-post-login-command",
+                                        "Post-login command",
+                                        editor.post_login_command.clone(),
+                                        editor.focused_field
+                                            == ConnectionEditorField::PostLoginCommand,
+                                        cx.listener(|this, _, window, cx| {
+                                            this.focus_connection_editor_field(
+                                                ConnectionEditorField::PostLoginCommand,
+                                                window,
+                                                cx,
+                                            );
+                                        }),
+                                    ))
+                                    .child(editor_field(
+                                        palette,
+                                        "connection-editor-post-login-delay",
+                                        "Delay (ms)",
+                                        editor.post_login_delay_ms.clone(),
+                                        editor.focused_field
+                                            == ConnectionEditorField::PostLoginDelay,
+                                        cx.listener(|this, _, window, cx| {
+                                            this.focus_connection_editor_field(
+                                                ConnectionEditorField::PostLoginDelay,
+                                                window,
+                                                cx,
+                                            );
+                                        }),
+                                    )),
+                            )
+                        })
                     })
                     .when(editor.kind == ConnectionKindTab::Local, |this| {
                         this.child(editor_field(

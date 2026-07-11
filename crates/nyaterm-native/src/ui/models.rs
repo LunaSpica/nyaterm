@@ -3647,6 +3647,27 @@ impl AiActionEditorField {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum AiCredentialEditorField {
+    Name,
+    BaseUrl,
+    ApiKey,
+}
+
+impl AiCredentialEditorField {
+    pub(super) fn next(self, builtin: bool) -> Self {
+        if builtin {
+            Self::ApiKey
+        } else {
+            match self {
+                Self::Name => Self::BaseUrl,
+                Self::BaseUrl => Self::ApiKey,
+                Self::ApiKey => Self::Name,
+            }
+        }
+    }
+}
+
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) enum TranslateInputField {

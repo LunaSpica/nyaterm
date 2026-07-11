@@ -71,7 +71,7 @@ pub(super) use super::super::components::{
 };
 pub(super) use super::super::models::{
     ActivityBarContextMenuState, ActivityBarEntry, ActivityBarLayoutState, ActivityBarZone, TitleMenu,
-    AiActionEditorField, AiActionListKind, AiInputField, AiPreparedRequest, BottomPanelMode, CloudSyncConflictState, CloudSyncInputField,
+    AiActionEditorField, AiActionListKind, AiCredentialEditorField, AiInputField, AiPreparedRequest, BottomPanelMode, CloudSyncConflictState, CloudSyncInputField,
     CloudSyncSecretDraft, ConfigPathPromptKind, ConfigPathPromptResult,
     ConnectionContextMenuState, ConnectionDeleteConfirmState, ConnectionEditorField,
     ConnectionEditorState, ConnectionGroupContextMenuState, ConnectionGroupDeleteConfirmState,
