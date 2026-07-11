@@ -979,3 +979,10 @@ service boundary first:
 
 - Action link decorations: underline + accent color on matched viewport tokens.
 - Alt-click opens multi-action menu; Ctrl/Cmd-click runs default action.
+
+## 2026-07-11 Action link hover tooltip
+
+- Hover over matched action-link tokens shows a Tauri-like tooltip: kind badge,
+  value, Ctrl/Cmd+click default action preview, and Alt+click more-actions hint.
+- Tooltip tracks cursor position, clears on leave/menu/selection drag, and stays
+  hidden while context/action menus are open.

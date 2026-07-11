@@ -9,6 +9,7 @@ impl NyaTermApp {
     ) {
         let selected_text = self.selected_terminal_text().unwrap_or_default();
         self.action_link_menu = None;
+        self.action_link_tooltip = None;
         self.terminal_context_menu = Some(TerminalContextMenuState {
             x: event.position.x,
             y: event.position.y,
@@ -508,6 +509,142 @@ impl NyaTermApp {
                 }),
             )
             .child(items)
+            .into_any_element()
+    }
+
+    pub(in crate::ui::view) fn action_link_tooltip_overlay(
+        &self,
+        _cx: &mut Context<Self>,
+    ) -> impl IntoElement {
+        let palette = self.theme_palette();
+        let Some(tip) = self.action_link_tooltip.clone() else {
+            return div().into_any_element();
+        };
+        let mod_label = if cfg!(target_os = "macos") {
+            "⌘"
+        } else {
+            "Ctrl"
+        };
+        let kind_color = match tip.kind_label.as_str() {
+            "IPv4" => palette.accent,
+            "Host:Port" => 0xa78bfa,
+            "Archive" => palette.warning,
+            "URL" => palette.success,
+            _ => palette.text_muted,
+        };
+        let x = f32::from(tip.x) + 16.0;
+        let y = f32::from(tip.y) + 16.0;
+        div()
+            .id(SharedString::from("action-link-tooltip-overlay"))
+            .absolute()
+            .left(px(x.max(8.0)))
+            .top(px(y.max(8.0)))
+            .max_w(px(340.))
+            .rounded_lg()
+            .border_1()
+            .border_color(rgb(palette.border))
+            .bg(rgb(palette.surface_elevated))
+            .shadow_lg()
+            .overflow_hidden()
+            .child(
+                div()
+                    .flex()
+                    .items_center()
+                    .gap_2()
+                    .px_3()
+                    .py_2()
+                    .border_b_1()
+                    .border_color(rgb(palette.border))
+                    .bg(rgb(palette.surface))
+                    .child(
+                        div()
+                            .flex()
+                            .items_center()
+                            .gap_1()
+                            .px_1()
+                            .py(px(1.))
+                            .rounded_md()
+                            .border_1()
+                            .border_color(rgb(kind_color))
+                            .text_size(px(10.))
+                            .text_color(rgb(kind_color))
+                            .child(tip.kind_label.to_uppercase()),
+                    )
+                    .child(
+                        div()
+                            .min_w_0()
+                            .flex_1()
+                            .font_family("JetBrains Mono")
+                            .text_size(px(12.))
+                            .text_color(rgb(palette.text))
+                            .child(truncate_preview(&tip.value, 42)),
+                    ),
+            )
+            .child(
+                div()
+                    .px_3()
+                    .py_2()
+                    .flex()
+                    .flex_col()
+                    .gap_1()
+                    .child(
+                        div()
+                            .flex()
+                            .items_center()
+                            .gap_2()
+                            .min_w_0()
+                            .child(
+                                div()
+                                    .flex()
+                                    .items_center()
+                                    .gap_1()
+                                    .flex_none()
+                                    .child(
+                                        div()
+                                            .px_1()
+                                            .rounded_sm()
+                                            .border_1()
+                                            .border_color(rgb(palette.border))
+                                            .bg(rgb(palette.input))
+                                            .text_size(px(10.))
+                                            .text_color(rgb(palette.text))
+                                            .child(mod_label),
+                                    )
+                                    .child(
+                                        div()
+                                            .text_size(px(11.))
+                                            .text_color(rgb(palette.text_muted))
+                                            .child("+ click"),
+                                    ),
+                            )
+                            .child(
+                                div()
+                                    .text_size(px(11.))
+                                    .text_color(rgb(palette.text_dimmed))
+                                    .child("→"),
+                            )
+                            .child(
+                                div()
+                                    .min_w_0()
+                                    .flex_1()
+                                    .font_family("JetBrains Mono")
+                                    .text_size(px(11.))
+                                    .text_color(rgb(palette.text))
+                                    .child(truncate_preview(&tip.default_action_preview, 48)),
+                            ),
+                    )
+                    .when(tip.has_more_actions, |this| {
+                        this.child(
+                            div()
+                                .pt_1()
+                                .border_t_1()
+                                .border_color(rgb(palette.border))
+                                .text_size(px(10.))
+                                .text_color(rgb(palette.text_muted))
+                                .child("Alt+click for more actions"),
+                        )
+                    }),
+            )
             .into_any_element()
     }
 

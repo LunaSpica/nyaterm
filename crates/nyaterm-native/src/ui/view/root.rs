@@ -54,6 +54,7 @@ impl Render for NyaTermApp {
                 this.update_workspace_split_resize(event, cx);
                 this.update_terminal_selection_drag(event, cx);
                 this.update_terminal_scrollbar_drag(event, cx);
+                this.update_action_link_hover(event, cx);
             }))
             .on_mouse_up(
                 MouseButton::Left,
@@ -215,6 +216,12 @@ impl Render for NyaTermApp {
             .when(self.action_link_menu.is_some(), |this| {
                 this.child(self.action_link_menu_overlay(cx))
             })
+            .when(
+                self.action_link_tooltip.is_some()
+                    && self.action_link_menu.is_none()
+                    && self.terminal_context_menu.is_none(),
+                |this| this.child(self.action_link_tooltip_overlay(cx)),
+            )
             .when(self.sync_groups_open, |this| {
                 this.child(self.sync_groups_overlay(cx))
             })

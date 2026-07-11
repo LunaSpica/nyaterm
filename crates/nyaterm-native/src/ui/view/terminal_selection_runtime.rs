@@ -290,9 +290,132 @@ impl NyaTermApp {
 
 
 
+
+    pub(in crate::ui::view) fn clear_action_link_tooltip(&mut self, cx: &mut Context<Self>) {
+        if self.action_link_tooltip.take().is_some() {
+            cx.notify();
+        }
+    }
+
+    pub(in crate::ui::view) fn update_action_link_hover(
+        &mut self,
+        event: &MouseMoveEvent,
+        cx: &mut Context<Self>,
+    ) {
+        if !self.settings.terminal_action_links_enabled {
+            self.clear_action_link_tooltip(cx);
+            return;
+        }
+        // Hide while menus are open or while selecting text.
+        if self.action_link_menu.is_some()
+            || self.terminal_context_menu.is_some()
+            || self.terminal_selection_dragging
+        {
+            self.clear_action_link_tooltip(cx);
+            return;
+        }
+        let Some((item, actions)) = self.action_link_at_point(event.position) else {
+            self.clear_action_link_tooltip(cx);
+            return;
+        };
+        if actions.is_empty() {
+            self.clear_action_link_tooltip(cx);
+            return;
+        }
+        let default = actions
+            .iter()
+            .find(|action| action.is_default)
+            .cloned()
+            .or_else(|| actions.first().cloned());
+        let Some(default) = default else {
+            self.clear_action_link_tooltip(cx);
+            return;
+        };
+        let match_key = format!(
+            "{}|{}|{}|{}",
+            item.kind.label(),
+            item.value,
+            item.start,
+            item.end
+        );
+        let preview = default
+            .command
+            .clone()
+            .or_else(|| default.open_url.clone())
+            .unwrap_or_else(|| default.label.clone());
+        let next = ActionLinkTooltipState {
+            x: event.position.x,
+            y: event.position.y,
+            kind_label: item.kind.label().to_string(),
+            value: item.value.clone(),
+            default_action_label: default.label.clone(),
+            default_action_preview: preview,
+            has_more_actions: actions.len() > 1,
+            match_key: match_key.clone(),
+        };
+        if let Some(current) = self.action_link_tooltip.as_ref() {
+            if current.match_key == match_key {
+                // Keep identity stable; still track cursor for positioning.
+                if current.x != next.x || current.y != next.y {
+                    self.action_link_tooltip = Some(next);
+                    cx.notify();
+                }
+                return;
+            }
+        }
+        self.action_link_tooltip = Some(next);
+        cx.notify();
+    }
+
+    fn action_link_at_point(
+        &self,
+        position: Point<Pixels>,
+    ) -> Option<(ActionLinkMatch, Vec<ActionLinkAction>)> {
+        // Only hit-test when the pointer is over the painted terminal content area.
+        let bounds = self.terminal_surface_bounds?;
+        let (cell_w, cell_h) = self.terminal_cell_size();
+        let pad = self.terminal_content_padding_px();
+        let gutter = self.terminal_gutter_width_px();
+        let local_x = f32::from(position.x - bounds.origin.x) - pad - gutter;
+        let local_y = f32::from(position.y - bounds.origin.y) - pad;
+        if local_x < 0. || local_y < 0. {
+            return None;
+        }
+        let (rows, cols) = self.active_terminal_grid_size();
+        if local_y >= cell_h * rows as f32 || local_x >= cell_w * cols as f32 {
+            return None;
+        }
+        let cell = self.point_to_terminal_cell(position)?;
+        let offset = self.active_terminal_scroll_offset();
+        let snapshot = self
+            .active_session_id
+            .as_deref()
+            .and_then(|session_id| self.terminal_views.get(session_id))
+            .map(|view| view.screen.viewport_snapshot(offset))
+            .unwrap_or_else(|| self.terminal_screen.viewport_snapshot(offset));
+        let line = snapshot.lines.get(cell.row)?;
+        let chars: Vec<char> = line.chars().collect();
+        if chars.is_empty() {
+            return None;
+        }
+        let char_offset = cell.col.min(chars.len().saturating_sub(1));
+        let byte_offset: usize = chars.iter().take(char_offset).map(|ch| ch.len_utf8()).sum();
+        let matchers = &self.settings.terminal_action_links_matchers;
+        let item = match_at_offset(line, byte_offset, matchers)?;
+        let actions = actions_for_match(&item);
+        Some((item, actions))
+    }
+
     pub(in crate::ui::view) fn close_action_link_menu(&mut self, cx: &mut Context<Self>) {
+        let mut changed = false;
         if self.action_link_menu.take().is_some() {
             self.terminal_status = "action link menu closed".to_string();
+            changed = true;
+        }
+        if self.action_link_tooltip.take().is_some() {
+            changed = true;
+        }
+        if changed {
             cx.notify();
         }
     }
@@ -318,6 +441,7 @@ impl NyaTermApp {
                 is_default: action.is_default,
             })
             .collect::<Vec<_>>();
+        self.action_link_tooltip = None;
         self.action_link_menu = Some(ActionLinkMenuState {
             x: event.position().x,
             y: event.position().y,
@@ -335,25 +459,7 @@ impl NyaTermApp {
         &self,
         event: &ClickEvent,
     ) -> Option<(ActionLinkMatch, Vec<ActionLinkAction>)> {
-        let cell = self.point_to_terminal_cell(event.position())?;
-        let offset = self.active_terminal_scroll_offset();
-        let snapshot = self
-            .active_session_id
-            .as_deref()
-            .and_then(|session_id| self.terminal_views.get(session_id))
-            .map(|view| view.screen.viewport_snapshot(offset))
-            .unwrap_or_else(|| self.terminal_screen.viewport_snapshot(offset));
-        let line = snapshot.lines.get(cell.row)?;
-        let chars: Vec<char> = line.chars().collect();
-        if chars.is_empty() {
-            return None;
-        }
-        let char_offset = cell.col.min(chars.len().saturating_sub(1));
-        let byte_offset: usize = chars.iter().take(char_offset).map(|ch| ch.len_utf8()).sum();
-        let matchers = &self.settings.terminal_action_links_matchers;
-        let item = match_at_offset(line, byte_offset, matchers)?;
-        let actions = actions_for_match(&item);
-        Some((item, actions))
+        self.action_link_at_point(event.position())
     }
 
     pub(in crate::ui::view) fn try_activate_action_link_at_click(
@@ -364,6 +470,7 @@ impl NyaTermApp {
         let Some((item, actions)) = self.action_link_at_click(event) else {
             return false;
         };
+        self.action_link_tooltip = None;
         let Some(default) = actions
             .iter()
             .find(|action| action.is_default)

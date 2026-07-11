@@ -1095,6 +1095,19 @@ pub(super) struct ActionLinkMenuState {
 }
 
 #[derive(Debug, Clone, PartialEq)]
+pub(super) struct ActionLinkTooltipState {
+    pub(super) x: Pixels,
+    pub(super) y: Pixels,
+    pub(super) kind_label: String,
+    pub(super) value: String,
+    pub(super) default_action_label: String,
+    pub(super) default_action_preview: String,
+    pub(super) has_more_actions: bool,
+    /// Identity key for hover stability (kind|value|start|end).
+    pub(super) match_key: String,
+}
+
+#[derive(Debug, Clone, PartialEq)]
 pub(super) struct TerminalContextMenuState {
     pub(super) x: Pixels,
     pub(super) y: Pixels,
