@@ -125,7 +125,7 @@ pub(super) fn symlink_input_row(
                 .border_color(if invalid {
                     rgb(0x7f1d1d)
                 } else if focused {
-                    rgb(0x256d3f)
+                    rgb(palette.success)
                 } else {
                     rgb(palette.border)
                 })
@@ -152,6 +152,7 @@ pub(super) fn property_row(
     label: &'static str,
     value: impl Into<SharedString>,
 ) -> impl IntoElement {
+    let palette = crate::ui::theme::theme_palette("github-dark");
     div()
         .flex()
         .items_start()
@@ -160,7 +161,7 @@ pub(super) fn property_row(
         .child(
             div()
                 .w(px(88.))
-                .text_color(rgb(0x64748b))
+                .text_color(rgb(palette.text_muted))
                 .child(format!("{label}:")),
         )
         .child(
@@ -168,7 +169,7 @@ pub(super) fn property_row(
                 .min_w_0()
                 .flex_1()
                 .font_family("JetBrains Mono")
-                .text_color(rgb(0xdbeafe))
+                .text_color(rgb(palette.text))
                 .child(value.into()),
         )
 }
@@ -202,7 +203,7 @@ pub(super) fn property_input_row(
                 .rounded_sm()
                 .border_1()
                 .border_color(if focused {
-                    rgb(0x256d3f)
+                    rgb(palette.success)
                 } else {
                     rgb(palette.border)
                 })
@@ -449,7 +450,7 @@ pub(super) fn transfer_job_row(
                 .text_color(if is_selected {
                     rgb(0xdcfce7)
                 } else {
-                    rgb(0xaeb7c8)
+                    rgb(palette.text_muted)
                 })
                 .on_click(cx.listener(move |this, _, _, cx| {
                     this.transfer_selected_remote_path = Some(entry_path.clone());
@@ -473,7 +474,7 @@ pub(super) fn transfer_job_row(
             div()
                 .mt_2()
                 .text_xs()
-                .text_color(rgb(0xaeb7c8))
+                .text_color(rgb(palette.text_muted))
                 .child(format!(
                     "{} -> {}",
                     summary.remote_path,
@@ -497,7 +498,7 @@ pub(super) fn transfer_job_row(
         .id(SharedString::from(format!("transfer-job-row-{}", job.id)))
         .border_b_1()
         .border_color(if job_selected {
-            rgb(0x256d3f)
+            rgb(palette.success)
         } else {
             rgb(palette.surface_elevated)
         })
@@ -547,7 +548,7 @@ pub(super) fn transfer_job_row(
                                 .items_center()
                                 .gap_2()
                                 .text_xs()
-                                .text_color(rgb(0xaeb7c8))
+                                .text_color(rgb(palette.text_muted))
                                 .child(job.detail.clone())
                                 .child("·")
                                 .child(progress_detail),
@@ -643,11 +644,11 @@ pub(super) fn sort_header_cell(
                 .rounded_sm()
                 .cursor_col_resize()
                 .bg(if is_resizing {
-                    rgb(0x256d3f)
+                    rgb(palette.success)
                 } else {
                     rgb(0x1b2433)
                 })
-                .hover(|this| this.bg(rgb(0x256d3f)))
+                .hover(|this| this.bg(rgb(palette.success)))
                 .on_click(cx.listener(|_, _: &ClickEvent, _, cx| {
                     cx.stop_propagation();
                 }))

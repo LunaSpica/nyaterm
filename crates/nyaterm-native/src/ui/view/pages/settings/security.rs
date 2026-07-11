@@ -37,9 +37,9 @@ impl NyaTermApp {
                             .text_size(px(11.))
                             .font_weight(FontWeight(600.))
                             .text_color(if self.settings.has_master_password {
-                                rgb(0x3fb950)
+                                rgb(palette.success)
                             } else {
-                                rgb(0xd29922)
+                                rgb(palette.warning)
                             })
                             .child(if self.settings.has_master_password {
                                 "Ready"
@@ -54,7 +54,7 @@ impl NyaTermApp {
                         )),
                         div()
                             .text_size(px(11.))
-                            .text_color(rgb(0x8b949e))
+                            .text_color(rgb(palette.text_muted))
                             .child(if self.cloud_sync_settings.enabled {
                                 "Enabled"
                             } else {
@@ -97,7 +97,7 @@ impl NyaTermApp {
                                     .font_family("JetBrains Mono")
                                     .text_size(px(12.))
                                     .font_weight(FontWeight(600.))
-                                    .text_color(rgb(0xc9d1d9))
+                                    .text_color(rgb(palette.text))
                                     .child(idle_label),
                             )
                             .child(small_button(palette, 
@@ -125,9 +125,9 @@ impl NyaTermApp {
                             .text_size(px(11.))
                             .font_weight(FontWeight(600.))
                             .text_color(if self.is_locked {
-                                rgb(0xff7b72)
+                                rgb(palette.danger)
                             } else {
-                                rgb(0x3fb950)
+                                rgb(palette.success)
                             })
                             .child(if self.is_locked { "Locked" } else { "Unlocked" }),
                     )),
@@ -170,24 +170,25 @@ impl NyaTermApp {
 }
 
 fn security_hint(title: &'static str, detail: &'static str) -> impl IntoElement {
+    let palette = crate::ui::theme::theme_palette("github-dark");
     div()
         .rounded_sm()
         .border_1()
-        .border_color(rgb(0x263142))
-        .bg(rgb(0x0d1320))
+        .border_color(rgb(palette.border))
+        .bg(rgb(palette.input))
         .p_3()
         .child(
             div()
                 .text_xs()
                 .font_weight(FontWeight(800.))
-                .text_color(rgb(0xe5edf7))
+                .text_color(rgb(palette.text))
                 .child(title),
         )
         .child(
             div()
                 .mt_1()
                 .text_size(px(10.))
-                .text_color(rgb(0x8f98aa))
+                .text_color(rgb(palette.text_muted))
                 .line_height(px(14.))
                 .child(detail),
         )

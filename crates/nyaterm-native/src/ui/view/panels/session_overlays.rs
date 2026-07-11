@@ -39,8 +39,8 @@ impl NyaTermApp {
                     .w(px(320.))
                     .rounded_md()
                     .border_1()
-                    .border_color(rgb(0x303848))
-                    .bg(rgb(0x0b0f16))
+                    .border_color(rgb(palette.border))
+                    .bg(rgb(palette.bg))
                     .shadow_lg()
                     .p_4()
                     .child(
@@ -58,7 +58,7 @@ impl NyaTermApp {
                             .rounded_sm()
                             .border_1()
                             .border_color(if can_save {
-                                rgb(0x334155)
+                                rgb(palette.border)
                             } else {
                                 rgb(0x7f1d1d)
                             })
@@ -79,7 +79,7 @@ impl NyaTermApp {
                         div()
                             .mt_2()
                             .text_xs()
-                            .text_color(rgb(0x8f98aa))
+                            .text_color(rgb(palette.text_muted))
                             .child("Enter save / Esc cancel / 64 characters max"),
                     )
                     .child(
@@ -170,8 +170,8 @@ impl NyaTermApp {
                     .w(px(300.))
                     .rounded_md()
                     .border_1()
-                    .border_color(rgb(0x303848))
-                    .bg(rgb(0x0b0f16))
+                    .border_color(rgb(palette.border))
+                    .bg(rgb(palette.bg))
                     .shadow_lg()
                     .p_4()
                     .child(
@@ -186,7 +186,7 @@ impl NyaTermApp {
                         div()
                             .mt_3()
                             .text_xs()
-                            .text_color(rgb(0x8f98aa))
+                            .text_color(rgb(palette.text_muted))
                             .child("Pick a swatch / Esc cancel"),
                     )
                     .child(
@@ -231,7 +231,7 @@ impl NyaTermApp {
                 div()
                     .rounded_sm()
                     .border_1()
-                    .border_color(rgb(0x303848))
+                    .border_color(rgb(palette.border))
                     .bg(rgb(palette.input))
                     .p_3()
                     .text_sm()
@@ -272,8 +272,8 @@ impl NyaTermApp {
                     .w(px(520.))
                     .rounded_md()
                     .border_1()
-                    .border_color(rgb(0x303848))
-                    .bg(rgb(0x0b0f16))
+                    .border_color(rgb(palette.border))
+                    .bg(rgb(palette.bg))
                     .shadow_lg()
                     .p_4()
                     .child(
@@ -281,7 +281,7 @@ impl NyaTermApp {
                             .flex()
                             .items_start()
                             .gap_3()
-                            .child(div().size(px(10.)).mt_1().rounded_full().bg(rgb(0x6ee7b7)))
+                            .child(div().size(px(10.)).mt_1().rounded_full().bg(rgb(palette.success)))
                             .child(
                                 div()
                                     .min_w_0()
@@ -368,8 +368,8 @@ impl NyaTermApp {
                     .w(px(420.))
                     .rounded_md()
                     .border_1()
-                    .border_color(rgb(0x303848))
-                    .bg(rgb(0x0b0f16))
+                    .border_color(rgb(palette.border))
+                    .bg(rgb(palette.bg))
                     .shadow_lg()
                     .p_4()
                     .child(
@@ -387,7 +387,7 @@ impl NyaTermApp {
                             .rounded_sm()
                             .border_1()
                             .border_color(if can_submit {
-                                rgb(0x334155)
+                                rgb(palette.border)
                             } else {
                                 rgb(0x7f1d1d)
                             })
@@ -419,7 +419,7 @@ impl NyaTermApp {
                                     .child(
                                         div()
                                             .text_xs()
-                                            .text_color(rgb(0x8f98aa))
+                                            .text_color(rgb(palette.text_muted))
                                             .child("Command Delay"),
                                     )
                                     .child(
@@ -463,7 +463,7 @@ impl NyaTermApp {
                         div()
                             .mt_2()
                             .text_xs()
-                            .text_color(rgb(0x8f98aa))
+                            .text_color(rgb(palette.text_muted))
                             .child("Enter submit / Esc cancel / Up Down adjust delay"),
                     )
                     .child(

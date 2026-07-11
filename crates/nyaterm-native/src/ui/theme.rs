@@ -19,6 +19,8 @@ pub(crate) struct ThemePalette {
     pub success: u32,
     pub warning: u32,
     pub danger: u32,
+    pub terminal_bg: u32,
+    pub terminal_fg: u32,
 }
 
 /// All selectable appearance theme ids (Tauri theme list order).
@@ -84,6 +86,8 @@ pub(crate) fn theme_palette(theme: &str) -> ThemePalette {
             success: 0x3fb950,
             warning: 0xd29922,
             danger: 0xff7b72,
+            terminal_bg: 0x0d1117,
+            terminal_fg: 0xc9d1d9,
         },
         "nya-high-contrast" => ThemePalette {
             bg: 0x03070d,
@@ -100,6 +104,8 @@ pub(crate) fn theme_palette(theme: &str) -> ThemePalette {
             success: 0x6ee7b7,
             warning: 0xfacc15,
             danger: 0xff6b6b,
+            terminal_bg: 0x000307,
+            terminal_fg: 0xd7dee8,
         },
         "nya-high-contrast-white" => ThemePalette {
             bg: 0xffffff,
@@ -116,6 +122,8 @@ pub(crate) fn theme_palette(theme: &str) -> ThemePalette {
             success: 0x166534,
             warning: 0x854d0e,
             danger: 0xb91c1c,
+            terminal_bg: 0xffffff,
+            terminal_fg: 0x0b1220,
         },
         "dracula" => ThemePalette {
             bg: 0x251b33,
@@ -132,6 +140,8 @@ pub(crate) fn theme_palette(theme: &str) -> ThemePalette {
             success: 0x50fa7b,
             warning: 0xf1fa8c,
             danger: 0xff5555,
+            terminal_bg: 0x24172f,
+            terminal_fg: 0xf8f8f2,
         },
         "nord" => ThemePalette {
             bg: 0x253040,
@@ -148,6 +158,8 @@ pub(crate) fn theme_palette(theme: &str) -> ThemePalette {
             success: 0xa3be8c,
             warning: 0xebcb8b,
             danger: 0xbf616a,
+            terminal_bg: 0x202a38,
+            terminal_fg: 0xd8dee9,
         },
         "monokai-pro" => ThemePalette {
             bg: 0x2f271f,
@@ -164,6 +176,8 @@ pub(crate) fn theme_palette(theme: &str) -> ThemePalette {
             success: 0xa9dc76,
             warning: 0xffd866,
             danger: 0xff6188,
+            terminal_bg: 0x2b241d,
+            terminal_fg: 0xfcfcfa,
         },
         "solarized-light" => ThemePalette {
             bg: 0xfff4d6,
@@ -180,6 +194,8 @@ pub(crate) fn theme_palette(theme: &str) -> ThemePalette {
             success: 0x859900,
             warning: 0xb58900,
             danger: 0xdc322f,
+            terminal_bg: 0xfff7df,
+            terminal_fg: 0x586e75,
         },
         "catppuccin" | "catppuccin-mocha" => ThemePalette {
             bg: 0x221827,
@@ -196,6 +212,8 @@ pub(crate) fn theme_palette(theme: &str) -> ThemePalette {
             success: 0xa6e3a1,
             warning: 0xf9e2af,
             danger: 0xf38ba8,
+            terminal_bg: 0x1e1324,
+            terminal_fg: 0xcdd6f4,
         },
         "tokyo-night" => ThemePalette {
             bg: 0x111827,
@@ -212,6 +230,8 @@ pub(crate) fn theme_palette(theme: &str) -> ThemePalette {
             success: 0x9ece6a,
             warning: 0xe0af68,
             danger: 0xf7768e,
+            terminal_bg: 0x0b1020,
+            terminal_fg: 0xa9b1d6,
         },
         "one-dark-pro" => ThemePalette {
             bg: 0x252a32,
@@ -228,6 +248,8 @@ pub(crate) fn theme_palette(theme: &str) -> ThemePalette {
             success: 0x98c379,
             warning: 0xe5c07b,
             danger: 0xe06c75,
+            terminal_bg: 0x222831,
+            terminal_fg: 0xabb2bf,
         },
         "rose-pine" => ThemePalette {
             bg: 0x21121d,
@@ -244,6 +266,8 @@ pub(crate) fn theme_palette(theme: &str) -> ThemePalette {
             success: 0x9ccfd8,
             warning: 0xf6c177,
             danger: 0xeb6f92,
+            terminal_bg: 0x1d101b,
+            terminal_fg: 0xe0def4,
         },
         "gruvbox-dark" => ThemePalette {
             bg: 0x2b2118,
@@ -260,6 +284,8 @@ pub(crate) fn theme_palette(theme: &str) -> ThemePalette {
             success: 0xb8bb26,
             warning: 0xfabd2f,
             danger: 0xfb4934,
+            terminal_bg: 0x271d14,
+            terminal_fg: 0xebdbb2,
         },
         "github-light" => ThemePalette {
             bg: 0xffffff,
@@ -276,6 +302,8 @@ pub(crate) fn theme_palette(theme: &str) -> ThemePalette {
             success: 0x1a7f37,
             warning: 0x9a6700,
             danger: 0xcf222e,
+            terminal_bg: 0xffffff,
+            terminal_fg: 0x1f2328,
         },
         "catppuccin-latte" => ThemePalette {
             bg: 0xf3effa,
@@ -292,6 +320,8 @@ pub(crate) fn theme_palette(theme: &str) -> ThemePalette {
             success: 0x40a02b,
             warning: 0xdf8e1d,
             danger: 0xd20f39,
+            terminal_bg: 0xf7f3fb,
+            terminal_fg: 0x4c4f69,
         },
         "rose-pine-dawn" => ThemePalette {
             bg: 0xfff0e8,
@@ -308,6 +338,8 @@ pub(crate) fn theme_palette(theme: &str) -> ThemePalette {
             success: 0x56949f,
             warning: 0xea9d34,
             danger: 0xb4637a,
+            terminal_bg: 0xfff6ef,
+            terminal_fg: 0x575279,
         },
         "nord-light" => ThemePalette {
             bg: 0xeef6fb,
@@ -324,6 +356,8 @@ pub(crate) fn theme_palette(theme: &str) -> ThemePalette {
             success: 0x5e8f57,
             warning: 0xb7791f,
             danger: 0xbf616a,
+            terminal_bg: 0xf4f9fd,
+            terminal_fg: 0x2e3440,
         },
         "one-light" => ThemePalette {
             bg: 0xfafafa,
@@ -340,6 +374,8 @@ pub(crate) fn theme_palette(theme: &str) -> ThemePalette {
             success: 0x50a14f,
             warning: 0xc18401,
             danger: 0xca1243,
+            terminal_bg: 0xfafafa,
+            terminal_fg: 0x383a42,
         },
         _ => ThemePalette {
             bg: 0x0d1117,
@@ -356,6 +392,8 @@ pub(crate) fn theme_palette(theme: &str) -> ThemePalette {
             success: 0x3fb950,
             warning: 0xd29922,
             danger: 0xff7b72,
+            terminal_bg: 0x0d1117,
+            terminal_fg: 0xc9d1d9,
         },
     }
 }

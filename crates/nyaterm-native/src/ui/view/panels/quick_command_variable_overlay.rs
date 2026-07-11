@@ -36,12 +36,12 @@ impl NyaTermApp {
                     .border_color(if focused {
                         rgb(0x4ade80)
                     } else {
-                        rgb(0x263142)
+                        rgb(palette.border)
                     })
                     .bg(if focused {
                         rgb(0x0f1f18)
                     } else {
-                        rgb(0x0d1320)
+                        rgb(palette.input)
                     })
                     .p_2()
                     .cursor_pointer()
@@ -64,7 +64,7 @@ impl NyaTermApp {
                                     .child(
                                         div()
                                             .text_size(px(10.))
-                                            .text_color(rgb(0x64748b))
+                                            .text_color(rgb(palette.text_muted))
                                             .child(truncate_preview(&variable_name, 48)),
                                     )
                                     .child(if variable.options.is_empty() {
@@ -81,7 +81,7 @@ impl NyaTermApp {
                                         div()
                                             .font_family("JetBrains Mono")
                                             .text_xs()
-                                            .text_color(rgb(0xe5edf7))
+                                            .text_color(rgb(palette.text))
                                             .child(if variable.value.is_empty() {
                                                 "-".to_string()
                                             } else {
@@ -146,7 +146,7 @@ impl NyaTermApp {
                     .w(px(460.))
                     .rounded_md()
                     .border_1()
-                    .border_color(rgb(0x303848))
+                    .border_color(rgb(palette.border))
                     .bg(rgb(0x0b0f16))
                     .shadow_lg()
                     .p_4()
@@ -166,13 +166,13 @@ impl NyaTermApp {
                                         div()
                                             .text_sm()
                                             .font_weight(FontWeight(800.))
-                                            .text_color(rgb(0xe5edf7))
+                                            .text_color(rgb(palette.text))
                                             .child("Fill Quick Command Variables"),
                                     )
                                     .child(
                                         div()
                                             .text_xs()
-                                            .text_color(rgb(0x98a3b8))
+                                            .text_color(rgb(palette.text_muted))
                                             .child(truncate_preview(&prompt.label, 64)),
                                     ),
                             )
@@ -185,12 +185,12 @@ impl NyaTermApp {
                                     "insert"
                                 },
                                 if prompt.send_to_all || prompt.execute {
-                                    rgb(0x6ee7b7)
+                                    rgb(palette.success)
                                 } else {
                                     rgb(0xfacc15)
                                 },
                                 if prompt.send_to_all || prompt.execute {
-                                    rgb(0x12342a)
+                                    rgb(palette.hover)
                                 } else {
                                     rgb(0x32280f)
                                 },
@@ -202,13 +202,13 @@ impl NyaTermApp {
                             .mt_3()
                             .rounded_sm()
                             .border_1()
-                            .border_color(rgb(0x263142))
-                            .bg(rgb(0x0d1320))
+                            .border_color(rgb(palette.border))
+                            .bg(rgb(palette.input))
                             .p_2()
                             .child(
                                 div()
                                     .text_size(px(10.))
-                                    .text_color(rgb(0x64748b))
+                                    .text_color(rgb(palette.text_muted))
                                     .child("Preview"),
                             )
                             .child(
@@ -217,7 +217,7 @@ impl NyaTermApp {
                                     .font_family("JetBrains Mono")
                                     .text_xs()
                                     .line_height(px(18.))
-                                    .text_color(rgb(0xaeb7c8))
+                                    .text_color(rgb(palette.text_muted))
                                     .child(if preview.trim().is_empty() {
                                         "Empty command".to_string()
                                     } else {
@@ -232,7 +232,7 @@ impl NyaTermApp {
                             .items_center()
                             .justify_between()
                             .gap_2()
-                            .child(div().text_size(px(10.)).text_color(rgb(0x64748b)).child(
+                            .child(div().text_size(px(10.)).text_color(rgb(palette.text_muted)).child(
                                 "Tab switches fields. Enter submits. Arrow keys cycle options.",
                             ))
                             .child(

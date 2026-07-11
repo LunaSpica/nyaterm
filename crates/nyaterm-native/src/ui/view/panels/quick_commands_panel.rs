@@ -91,7 +91,7 @@ impl NyaTermApp {
                                 .bg(if selected {
                                     rgb(0x203456)
                                 } else {
-                                    rgb(0x202633)
+                                    rgb(palette.border)
                                 })
                                 .text_size(px(10.))
                                 .text_color(if selected {
@@ -261,12 +261,12 @@ impl NyaTermApp {
                             if execution_mode == "append" {
                                 rgb(0xfacc15)
                             } else {
-                                rgb(0x6ee7b7)
+                                rgb(palette.success)
                             },
                             if execution_mode == "append" {
                                 rgb(0x32280f)
                             } else {
-                                rgb(0x12342a)
+                                rgb(palette.hover)
                             },
                         ))
                         .child(icon_button(
@@ -415,12 +415,12 @@ impl NyaTermApp {
                             if execution_mode == "append" {
                                 rgb(0xfacc15)
                             } else {
-                                rgb(0x6ee7b7)
+                                rgb(palette.success)
                             },
                             if execution_mode == "append" {
                                 rgb(0x32280f)
                             } else {
-                                rgb(0x12342a)
+                                rgb(palette.hover)
                             },
                         ));
                         actions = actions.child(icon_button(

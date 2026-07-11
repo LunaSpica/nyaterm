@@ -852,3 +852,8 @@ service boundary first:
 ## 2026-07-11 Overlay/Docker/workspace residual palette densify
 - Quick command editor/sync groups/recording/quick-switch overlays, session tab strip chips, host-key/credential prompts.
 - Docker containers/compose menus & rows; Settings AI/workspace residual hardcodes; sidebar residual chrome.
+
+## 2026-07-11 Terminal palette + residual chrome sweep
+- `ThemePalette` gains `terminal_bg` / `terminal_fg` from Tauri terminal colors; terminal canvas uses them.
+- `terminal_line_element` search/active match chrome takes palette; keyword highlight span bg uses surface.
+- Broad residual densify: Settings terminal/transfer forms, overlays, Docker resource rows, transfer widgets, formatting status colors mapped where chrome-like, sidebar/session chrome.

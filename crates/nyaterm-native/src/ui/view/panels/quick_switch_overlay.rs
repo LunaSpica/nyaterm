@@ -40,7 +40,7 @@ impl NyaTermApp {
                 let badge = match &item {
                     QuickSwitchItem::Session { active, unread, .. } => {
                         if *active {
-                            status_pill("active", rgb(0x6ee7b7), rgb(0x12342a)).into_any_element()
+                            status_pill("active", rgb(palette.success), rgb(palette.hover)).into_any_element()
                         } else if *unread {
                             status_pill("unread", rgb(0xfacc15), rgb(0x3a2f14)).into_any_element()
                         } else {
@@ -68,11 +68,11 @@ impl NyaTermApp {
                         .items_center()
                         .gap_3()
                         .border_b_1()
-                        .border_color(rgb(0x202633))
+                        .border_color(rgb(palette.border))
                         .bg(if selected {
                             rgb(0x17233a)
                         } else {
-                            rgb(0x0d1118)
+                            rgb(palette.input)
                         })
                         .cursor_pointer()
                         .hover(|this| this.bg(rgb(0x151b24)))
@@ -137,8 +137,8 @@ impl NyaTermApp {
                     .mx_4()
                     .rounded_md()
                     .border_1()
-                    .border_color(rgb(0x303848))
-                    .bg(rgb(0x0b0f16))
+                    .border_color(rgb(palette.border))
+                    .bg(rgb(palette.bg))
                     .shadow_lg()
                     .overflow_hidden()
                     .child(
@@ -149,14 +149,14 @@ impl NyaTermApp {
                             .gap_3()
                             .px_3()
                             .border_b_1()
-                            .border_color(rgb(0x202633))
+                            .border_color(rgb(palette.border))
                             .bg(rgb(0x0f131a))
                             .child(
                                 div()
                                     .size(px(18.))
                                     .rounded_sm()
                                     .border_1()
-                                    .border_color(rgb(0x334155))
+                                    .border_color(rgb(palette.border))
                                     .flex()
                                     .items_center()
                                     .justify_center()
@@ -187,7 +187,7 @@ impl NyaTermApp {
                             .gap_3()
                             .px_3()
                             .border_t_1()
-                            .border_color(rgb(0x202633))
+                            .border_color(rgb(palette.border))
                             .bg(rgb(0x0f131a))
                             .child(
                                 div()

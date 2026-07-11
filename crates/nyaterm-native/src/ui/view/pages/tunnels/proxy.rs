@@ -375,7 +375,7 @@ fn proxy_move_picker(
 
     for group in groups {
         if current_group_id.as_deref() == Some(group.id.as_str()) {
-            targets = targets.child(status_pill("current", rgb(0x6ee7b7), rgb(0x12342a)));
+            targets = targets.child(status_pill("current", rgb(palette.success), rgb(palette.hover)));
             targets = targets.child(
                 div()
                     .text_xs()
@@ -615,13 +615,13 @@ pub(super) fn network_proxy_editor_panel(
             div()
                 .rounded_sm()
                 .border_1()
-                .border_color(rgb(0x303848))
+                .border_color(rgb(palette.border))
                 .bg(rgb(palette.input))
                 .p_3()
                 .flex()
                 .flex_col()
                 .gap_1()
-                .child(div().text_xs().text_color(rgb(0x8f98aa)).child("Preview"))
+                .child(div().text_xs().text_color(rgb(palette.text_muted)).child("Preview"))
                 .child(
                     div()
                         .font_family("JetBrains Mono")

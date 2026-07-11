@@ -353,7 +353,7 @@ impl NyaTermApp {
                             .min_h_0()
                             .rounded_md()
                             .border_1()
-                            .border_color(rgb(0x202633))
+                            .border_color(rgb(palette.border))
                             .bg(rgb(palette.input))
                             .p_3()
                             .font_family("JetBrains Mono")

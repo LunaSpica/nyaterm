@@ -185,7 +185,7 @@ impl NyaTermApp {
                                     .items_center()
                                     .rounded_sm()
                                     .border_1()
-                                    .border_color(rgb(0x303848))
+                                    .border_color(rgb(palette.border))
                                     .bg(rgb(palette.input))
                                     .font_family("JetBrains Mono")
                                     .text_sm()
@@ -227,7 +227,7 @@ impl NyaTermApp {
                                     .p_3()
                                     .rounded_sm()
                                     .border_1()
-                                    .border_color(rgb(0x303848))
+                                    .border_color(rgb(palette.border))
                                     .bg(rgb(palette.input))
                                     .font_family("JetBrains Mono")
                                     .text_sm()
@@ -289,7 +289,7 @@ impl NyaTermApp {
                             .p_3()
                             .rounded_sm()
                             .border_1()
-                            .border_color(rgb(0x303848))
+                            .border_color(rgb(palette.border))
                             .bg(rgb(palette.input))
                             .text_sm()
                             .line_height(px(20.))
@@ -367,10 +367,10 @@ fn translation_provider_button(
         .border_color(if selected {
             rgb(0x60a5fa)
         } else {
-            rgb(0x303848)
+            rgb(palette.border)
         })
         .bg(if selected {
-            rgb(0x17253b)
+            rgb(palette.hover)
         } else {
             rgb(palette.input)
         })
@@ -422,10 +422,10 @@ fn language_button(
         .border_color(if selected {
             rgb(0x60a5fa)
         } else {
-            rgb(0x303848)
+            rgb(palette.border)
         })
         .bg(if selected {
-            rgb(0x17253b)
+            rgb(palette.hover)
         } else {
             rgb(palette.input)
         })
@@ -433,7 +433,7 @@ fn language_button(
         .text_color(if selected {
             rgb(palette.text)
         } else {
-            rgb(0xaeb7c8)
+            rgb(palette.text_muted)
         })
         .cursor_pointer()
         .hover(|this| this.bg(rgb(0x202a3a)))

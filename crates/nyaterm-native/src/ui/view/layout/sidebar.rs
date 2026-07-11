@@ -244,7 +244,7 @@ impl NyaTermApp {
                                     .text_color(if query.is_empty() {
                                         rgb(palette.text_muted)
                                     } else {
-                                        rgb(0x6ee7b7)
+                                        rgb(palette.success)
                                     })
                                     .child(if query.is_empty() {
                                         session_count.to_string()
@@ -297,7 +297,7 @@ impl NyaTermApp {
                             .child(status_pill(
                                 status_label(&self.terminal_status),
                                 rgb(0x93c5fd),
-                                rgb(0x17253b),
+                                rgb(palette.hover),
                             )),
                     )
                     .child(
@@ -363,7 +363,7 @@ impl NyaTermApp {
                             .mt_1()
                             .text_sm()
                             .text_color(if self.store_status.ready {
-                                rgb(0x6ee7b7)
+                                rgb(palette.success)
                             } else {
                                 rgb(0xfca5a5)
                             })
@@ -399,7 +399,7 @@ impl NyaTermApp {
         let accent = if let Some(custom_color) = custom_color {
             rgb(custom_color)
         } else if is_active {
-            rgb(0x6ee7b7)
+            rgb(palette.success)
         } else if has_unread {
             rgb(0xfacc15)
         } else {
@@ -415,7 +415,7 @@ impl NyaTermApp {
         let hover_bg = if let Some(custom_color) = custom_color {
             rgba((custom_color << 8) | if is_active { 0x30 } else { 0x20 })
         } else {
-            rgb(0x1a2230)
+            rgb(palette.hover)
         };
         let status_label = if is_active {
             "active"
@@ -568,7 +568,7 @@ impl NyaTermApp {
                             .child(status_pill(
                                 status_label(&self.terminal_status),
                                 rgb(0x93c5fd),
-                                rgb(0x17253b),
+                                rgb(palette.hover),
                             )),
                     )
                     .child(
@@ -797,7 +797,7 @@ impl NyaTermApp {
                             .mt_2()
                             .text_sm()
                             .text_color(if self.store_status.ready {
-                                rgb(0x6ee7b7)
+                                rgb(palette.success)
                             } else {
                                 rgb(0xfca5a5)
                             })
@@ -837,7 +837,7 @@ impl NyaTermApp {
                 this.bg(rgb(0x243044)).text_color(rgb(0xffffff))
             })
             .when(!selected, |this| {
-                this.text_color(rgb(0xaeb7c8))
+                this.text_color(rgb(palette.text_muted))
                     .hover(|hover| hover.bg(rgb(0x202632)).text_color(rgb(0xffffff)))
             })
             .child(div().min_w_0().overflow_hidden().child(label))
@@ -1774,7 +1774,7 @@ impl NyaTermApp {
                                     {
                                         rgb(0x4b6f97)
                                     } else {
-                                        rgb(0x303848)
+                                        rgb(palette.border)
                                     })
                                     .bg(rgb(palette.input))
                                     .text_size(px(10.))
@@ -1830,7 +1830,7 @@ impl NyaTermApp {
                                     {
                                         rgb(0x4b6f97)
                                     } else {
-                                        rgb(0x303848)
+                                        rgb(palette.border)
                                     })
                                     .bg(rgb(palette.input))
                                     .text_size(px(10.))

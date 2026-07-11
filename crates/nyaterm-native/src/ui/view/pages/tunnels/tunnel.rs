@@ -300,7 +300,7 @@ fn tunnel_move_picker(
 
     for group in groups {
         if current_group_id.as_deref() == Some(group.id.as_str()) {
-            targets = targets.child(status_pill("current", rgb(0x6ee7b7), rgb(0x12342a)));
+            targets = targets.child(status_pill("current", rgb(palette.success), rgb(palette.hover)));
             targets = targets.child(
                 div()
                     .text_xs()
@@ -745,13 +745,13 @@ pub(super) fn network_tunnel_editor_panel(
             div()
                 .rounded_sm()
                 .border_1()
-                .border_color(rgb(0x303848))
+                .border_color(rgb(palette.border))
                 .bg(rgb(palette.input))
                 .p_3()
                 .flex()
                 .flex_col()
                 .gap_1()
-                .child(div().text_xs().text_color(rgb(0x8f98aa)).child("Preview"))
+                .child(div().text_xs().text_color(rgb(palette.text_muted)).child("Preview"))
                 .child(
                     div()
                         .font_family("JetBrains Mono")
@@ -899,12 +899,13 @@ pub(super) fn tunnel_editor_preview(editor: &NetworkTunnelEditorState) -> String
 }
 
 pub(super) fn tunnel_status_style(pending: bool, is_open: bool, supported: bool) -> (Hsla, Hsla) {
+    let palette = crate::ui::theme::theme_palette("github-dark");
     if pending {
         (rgb(0xfacc15).into(), rgb(0x3a2f14).into())
     } else if is_open {
-        (rgb(0x6ee7b7).into(), rgb(0x12342a).into())
+        (rgb(palette.success).into(), rgb(palette.hover).into())
     } else if supported {
-        (rgb(0x93c5fd).into(), rgb(0x17253b).into())
+        (rgb(0x93c5fd).into(), rgb(palette.hover).into())
     } else {
         (rgb(0xfbbf24).into(), rgb(0x3a2f14).into())
     }

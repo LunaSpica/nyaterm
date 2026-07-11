@@ -94,7 +94,7 @@ impl NyaTermApp {
                                         div()
                                             .size(px(82.))
                                             .rounded_lg()
-                                            .bg(rgb(0x6ee7b7))
+                                            .bg(rgb(palette.success))
                                             .shadow_lg()
                                             .flex()
                                             .items_center()
@@ -134,7 +134,7 @@ impl NyaTermApp {
                                     .text_center()
                                     .text_sm()
                                     .line_height(px(20.))
-                                    .text_color(rgb(0x8f98aa))
+                                    .text_color(rgb(palette.text_muted))
                                     .child("The workspace is hidden until you unlock this window."),
                             )
                             .when(self.settings.has_master_password, |this| {
@@ -156,12 +156,12 @@ impl NyaTermApp {
                                                 .border_color(if status_is_error {
                                                     rgb(0x8b2d2d)
                                                 } else {
-                                                    rgb(0x334155)
+                                                    rgb(palette.border)
                                                 })
-                                                .bg(rgb(0x10151e))
+                                                .bg(rgb(palette.input))
                                                 .font_family("JetBrains Mono")
                                                 .text_sm()
-                                                .text_color(rgb(0xe5edf7))
+                                                .text_color(rgb(palette.text))
                                                 .cursor_pointer()
                                                 .track_focus(&self.lock_focus)
                                                 .on_click(cx.listener(|this, _, window, cx| {
@@ -177,7 +177,7 @@ impl NyaTermApp {
                                                 .text_color(if status_is_error {
                                                     rgb(0xfca5a5)
                                                 } else {
-                                                    rgb(0x8f98aa)
+                                                    rgb(palette.text_muted)
                                                 })
                                                 .child(lock_status.clone()),
                                         ),
@@ -188,7 +188,7 @@ impl NyaTermApp {
                                     div()
                                         .text_center()
                                         .text_xs()
-                                        .text_color(rgb(0x8f98aa))
+                                        .text_color(rgb(palette.text_muted))
                                         .child(lock_status.clone()),
                                 )
                             })

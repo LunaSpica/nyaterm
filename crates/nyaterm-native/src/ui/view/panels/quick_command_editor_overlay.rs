@@ -143,8 +143,8 @@ impl NyaTermApp {
                     .w(px(560.))
                     .rounded_md()
                     .border_1()
-                    .border_color(rgb(0x303848))
-                    .bg(rgb(0x0b0f16))
+                    .border_color(rgb(palette.border))
+                    .bg(rgb(palette.bg))
                     .shadow_lg()
                     .p_4()
                     .child(
@@ -163,12 +163,12 @@ impl NyaTermApp {
                             .child(status_pill(
                                 if can_save { "ready" } else { "required" },
                                 if can_save {
-                                    rgb(0x6ee7b7)
+                                    rgb(palette.success)
                                 } else {
                                     rgb(0xfca5a5)
                                 },
                                 if can_save {
-                                    rgb(0x12342a)
+                                    rgb(palette.hover)
                                 } else {
                                     rgb(0x3a1717)
                                 },
@@ -478,14 +478,14 @@ fn quick_command_category_choice(
         .bg(if selected {
             rgb(0x10251a)
         } else {
-            rgb(0x101827)
+            rgb(palette.input)
         })
         .cursor_pointer()
         .flex()
         .items_center()
         .text_size(px(10.))
         .text_color(if selected {
-            rgb(0xbbf7d0)
+            rgb(palette.success)
         } else {
             rgb(0xcbd5e1)
         })
@@ -542,7 +542,7 @@ fn quick_command_icon_option(
         .bg(if selected {
             rgb(0x17233a)
         } else {
-            rgb(0x101827)
+            rgb(palette.input)
         })
         .cursor_pointer()
         .flex()

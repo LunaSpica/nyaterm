@@ -68,7 +68,7 @@ fn docker_compose_project_row(
         .border_1()
         .border_color(rgb(palette.border))
         .bg(rgb(palette.section_header))
-        .hover(|this| this.bg(rgb(0x18202b)))
+        .hover(|this| this.bg(rgb(palette.hover)))
         .overflow_hidden()
         .flex()
         .flex_col()
@@ -697,7 +697,7 @@ fn compose_status_label(status: &str) -> &'static str {
 fn compose_status_color(status: &str) -> gpui::Hsla {
     let palette = crate::ui::theme::theme_palette("github-dark");
     match status {
-        "running" => rgb(0x6ee7b7).into(),
+        "running" => rgb(palette.success).into(),
         "stopped" => rgb(0xfca5a5).into(),
         "created" | "paused" => rgb(0xfbbf24).into(),
         "not created" => rgb(palette.text_muted).into(),

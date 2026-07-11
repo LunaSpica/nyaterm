@@ -270,7 +270,7 @@ pub(in crate::ui::view) fn inspector_status_line(text: String) -> impl IntoEleme
     div()
         .rounded_md()
         .border_1()
-        .border_color(rgb(0x273244))
+        .border_color(rgb(palette.border))
         .bg(rgb(palette.input))
         .p_3()
         .text_xs()
@@ -375,7 +375,7 @@ pub(in crate::ui::view) fn compact_process_rows(processes: &[RemoteProcess]) -> 
                             .child(
                                 div()
                                     .text_xs()
-                                    .text_color(rgb(0x6ee7b7))
+                                    .text_color(rgb(palette.success))
                                     .child(format!("{:.1}%", process.cpu_percent)),
                             ),
                     )
@@ -536,7 +536,7 @@ pub(in crate::ui::view) fn tab_action_button(
         .justify_center()
         .gap_1()
         .cursor_pointer()
-        .hover(|this| this.bg(rgb(0x223047)).border_color(rgb(0x3b82f6)))
+        .hover(|this| this.bg(rgb(palette.hover)).border_color(rgb(0x3b82f6)))
         .child(
             div()
                 .text_xs()
@@ -554,18 +554,19 @@ pub(in crate::ui::view) fn tab_action_button(
 }
 
 pub(in crate::ui::view) fn split_divider(direction: WorkspaceSplitDirection) -> gpui::AnyElement {
+    let palette = crate::ui::theme::theme_palette("github-dark");
     match direction {
         WorkspaceSplitDirection::Horizontal => div()
             .h(px(6.))
             .flex_none()
             .rounded_sm()
-            .bg(rgb(0x202633))
+            .bg(rgb(palette.border))
             .into_any_element(),
         WorkspaceSplitDirection::Vertical => div()
             .w(px(6.))
             .flex_none()
             .rounded_sm()
-            .bg(rgb(0x202633))
+            .bg(rgb(palette.border))
             .into_any_element(),
     }
 }
@@ -614,6 +615,7 @@ pub(in crate::ui::view) fn stats_resource_row(
 }
 
 pub(in crate::ui::view) fn stats_progress_bar(ratio: f64) -> impl IntoElement {
+    let palette = crate::ui::theme::theme_palette("github-dark");
     let ratio = ratio.clamp(0., 1.);
     div()
         .mt_3()
@@ -621,7 +623,7 @@ pub(in crate::ui::view) fn stats_progress_bar(ratio: f64) -> impl IntoElement {
         .w_full()
         .overflow_hidden()
         .rounded_sm()
-        .bg(rgb(0x242b38))
+        .bg(rgb(palette.border))
         .child(
             div()
                 .h(px(6.))
@@ -638,9 +640,10 @@ pub(in crate::ui::view) fn stats_progress_bar(ratio: f64) -> impl IntoElement {
 }
 
 pub(in crate::ui::view) fn service_status(status: NativeServiceStatus) -> impl IntoElement {
+    let palette = crate::ui::theme::theme_palette("github-dark");
     match status {
         NativeServiceStatus::Ready => {
-            status_pill("ready", rgb(0x6ee7b7), rgb(0x12342a)).into_any_element()
+            status_pill("ready", rgb(palette.success), rgb(palette.hover)).into_any_element()
         }
         NativeServiceStatus::Porting => {
             status_pill("porting", rgb(0xfbbf24), rgb(0x3a2f14)).into_any_element()
@@ -916,6 +919,7 @@ pub(in crate::ui::view) fn policy_button(
     selected: bool,
     on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
 ) -> impl IntoElement {
+    let palette = crate::ui::theme::theme_palette("github-dark");
     div()
         .id(SharedString::from(id))
         .h(px(30.))
@@ -927,21 +931,21 @@ pub(in crate::ui::view) fn policy_button(
         .border_color(if selected {
             rgb(0x4ade80)
         } else {
-            rgb(0x303848)
+            rgb(palette.border)
         })
         .bg(if selected {
             rgb(0x173823)
         } else {
-            rgb(0x151b27)
+            rgb(palette.surface)
         })
         .text_color(if selected {
-            rgb(0xbbf7d0)
+            rgb(palette.success)
         } else {
-            rgb(0xdbeafe)
+            rgb(palette.text)
         })
         .text_xs()
         .cursor_pointer()
-        .hover(|this| this.bg(rgb(0x223047)))
+        .hover(|this| this.bg(rgb(palette.hover)))
         .child(label)
         .on_click(on_click)
 }
@@ -978,12 +982,12 @@ pub(in crate::ui::view) fn connection_row(
             rgb(palette.border)
         })
         .bg(if selected {
-            rgb(0x101b2d)
+            rgb(palette.hover)
         } else {
             rgb(palette.surface)
         })
         .p_3()
-        .hover(|this| this.bg(rgb(0x1c2230)))
+        .hover(|this| this.bg(rgb(palette.hover)))
         .child(
             div()
                 .min_w_0()
@@ -1042,7 +1046,7 @@ pub(in crate::ui::view) fn compact_connection_row(
         .border_color(rgb(palette.border))
         .bg(rgb(palette.input))
         .p_3()
-        .hover(|this| this.bg(rgb(0x1a2230)))
+        .hover(|this| this.bg(rgb(palette.hover)))
         .child(
             div()
                 .flex()
@@ -1117,9 +1121,9 @@ pub(in crate::ui::view) fn compact_tunnel_row(
     let (status_fg, status_bg) = if is_pending {
         (rgb(0xfacc15), rgb(0x3a2f14))
     } else if is_open {
-        (rgb(0x6ee7b7), rgb(0x12342a))
+        (rgb(palette.success), rgb(palette.hover))
     } else {
-        (rgb(palette.text_muted), rgb(0x202633))
+        (rgb(palette.text_muted), rgb(palette.border))
     };
 
     div()
@@ -1128,7 +1132,7 @@ pub(in crate::ui::view) fn compact_tunnel_row(
         .border_color(rgb(palette.border))
         .bg(rgb(palette.input))
         .p_3()
-        .hover(|this| this.bg(rgb(0x1a2230)))
+        .hover(|this| this.bg(rgb(palette.hover)))
         .child(
             div()
                 .flex()

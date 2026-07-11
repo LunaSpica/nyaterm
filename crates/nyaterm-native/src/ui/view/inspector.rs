@@ -348,12 +348,12 @@ impl NyaTermApp {
                         .child(status_pill(
                             if is_active { "active" } else { "open" },
                             if is_active {
-                                rgb(0x6ee7b7)
+                                rgb(palette.success)
                             } else {
                                 rgb(0x93c5fd)
                             },
                             if is_active {
-                                rgb(0x12342a)
+                                rgb(palette.hover)
                             } else {
                                 rgb(0x17233a)
                             },
@@ -380,7 +380,7 @@ impl NyaTermApp {
                             .font_weight(FontWeight(700.))
                             .child("Command Center"),
                     )
-                    .child(status_pill("native", rgb(0x6ee7b7), rgb(0x12342a))),
+                    .child(status_pill("native", rgb(palette.success), rgb(palette.hover))),
             )
             .child(
                 div()
@@ -937,7 +937,7 @@ impl NyaTermApp {
             .child(
                 div()
                     .text_size(px(10.))
-                    .text_color(rgb(0x484f58))
+                    .text_color(rgb(palette.border))
                     .child(format!(
                         "{mode_label} · {}",
                         compact_id(&self.ai_chat_session_id)
@@ -1792,7 +1792,7 @@ impl NyaTermApp {
                             .items_center()
                             .text_size(px(11.))
                             .text_color(if total_count == 0 {
-                                rgb(0x484f58)
+                                rgb(palette.border)
                             } else {
                                 rgb(palette.text_muted)
                             })

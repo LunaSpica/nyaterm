@@ -54,6 +54,7 @@ impl NyaTermApp {
                 &self.keyword_highlights,
                 matched_lines.contains(&line_index),
                 active_match_line == Some(line_index),
+                palette,
             ));
         }
         let pane_title = self
@@ -69,20 +70,20 @@ impl NyaTermApp {
             .min_h_0()
             .font_family(terminal_font_family)
             .text_size(px(terminal_font_size))
-            .text_color(rgb(0xc8d3f5))
+            .text_color(rgb(palette.terminal_fg))
             .child(
                 div()
                     .size_full()
                     .flex()
                     .flex_col()
                     .relative()
-                    .bg(rgb(0x07090d))
+                    .bg(rgb(palette.terminal_bg))
                     .when(show_pane_chrome, |this| {
                         this.border_1()
                             .border_color(if is_active {
-                                rgb(0x3b82f6)
+                                rgb(palette.accent)
                             } else {
-                                rgb(0x202633)
+                                rgb(palette.border)
                             })
                             .child(
                                 div()
@@ -93,11 +94,11 @@ impl NyaTermApp {
                                     .gap_2()
                                     .px_2()
                                     .border_b_1()
-                                    .border_color(rgb(0x202633))
+                                    .border_color(rgb(palette.border))
                                     .bg(if is_active {
-                                        rgb(0x101b2d)
+                                        rgb(palette.hover)
                                     } else {
-                                        rgb(0x0d1118)
+                                        rgb(palette.input)
                                     })
                                     .child(
                                         div()
@@ -123,19 +124,19 @@ impl NyaTermApp {
                                                         .px_2()
                                                         .py_1()
                                                         .text_xs()
-                                                        .text_color(rgb(0xc4b5fd))
-                                                        .bg(rgb(0x2e2148))
+                                                        .text_color(rgb(palette.accent))
+                                                        .bg(rgb(palette.hover))
                                                         .child(truncate_preview(&label, 18)),
                                                 )
                                             })
                                             .child(status_pill(
                                                 if is_active { "active" } else { "pane" },
                                                 if is_active {
-                                                    rgb(0x6ee7b7)
+                                                    rgb(palette.success)
                                                 } else {
-                                                    rgb(0x93c5fd)
+                                                    rgb(palette.accent)
                                                 },
-                                                rgb(0x17233a),
+                                                rgb(palette.hover),
                                             )),
                                     ),
                             )
@@ -169,8 +170,8 @@ impl NyaTermApp {
                             .gap_2()
                             .px_3()
                             .border_b_1()
-                            .border_color(rgb(0x1d2430))
-                            .bg(rgb(0x0d1118))
+                            .border_color(rgb(palette.border))
+                            .bg(rgb(palette.input))
                             .child(small_button(palette, 
                                 "terminal-start-local",
                                 "Start Local",
@@ -277,8 +278,8 @@ impl NyaTermApp {
                                 } else {
                                     "plain"
                                 },
-                                rgb(0x93c5fd),
-                                rgb(0x17253b),
+                                rgb(palette.accent),
+                                rgb(palette.hover),
                             ))
                             .child(status_pill(
                                 if self.settings.terminal_hardware_acceleration {
@@ -286,8 +287,8 @@ impl NyaTermApp {
                                 } else {
                                     "cpu"
                                 },
-                                rgb(0x6ee7b7),
-                                rgb(0x12342a),
+                                rgb(palette.success),
+                                rgb(palette.hover),
                             )),
                     )
                     .when(is_active && self.terminal_search_open, |this| {
@@ -350,7 +351,7 @@ impl NyaTermApp {
                             .px_2()
                             .py_2()
                             .text_xs()
-                            .text_color(rgb(0x8f98aa))
+                            .text_color(rgb(palette.text_muted))
                             .child("No history matches."),
                     );
                 }
@@ -360,8 +361,8 @@ impl NyaTermApp {
                             div()
                                 .rounded_sm()
                                 .border_1()
-                                .border_color(rgb(0x202633))
-                                .bg(rgb(0x0b111b))
+                                .border_color(rgb(palette.border))
+                                .bg(rgb(palette.input))
                                 .p_2()
                                 .child(
                                     div()
@@ -375,7 +376,7 @@ impl NyaTermApp {
                                         .mt_1()
                                         .font_family("JetBrains Mono")
                                         .text_xs()
-                                        .text_color(rgb(0xaeb7c8))
+                                        .text_color(rgb(palette.text_muted))
                                         .line_height(px(18.))
                                         .child(truncate_preview(&result.preview, 96)),
                                 ),
@@ -388,7 +389,7 @@ impl NyaTermApp {
                             .px_2()
                             .py_2()
                             .text_xs()
-                            .text_color(rgb(0xfca5a5))
+                            .text_color(rgb(palette.danger))
                             .child(truncate_preview(&error, 96)),
                     );
                 }
@@ -404,8 +405,8 @@ impl NyaTermApp {
             .max_w_full()
             .rounded_md()
             .border_1()
-            .border_color(rgb(0x303848))
-            .bg(rgb(0x0b0f16))
+            .border_color(rgb(palette.border))
+            .bg(rgb(palette.terminal_bg))
             .shadow_lg()
             .p_2()
             .track_focus(&self.terminal_search_focus)
@@ -445,9 +446,9 @@ impl NyaTermApp {
                         div()
                             .text_xs()
                             .text_color(if is_error {
-                                rgb(0xfca5a5)
+                                rgb(palette.danger)
                             } else {
-                                rgb(0x8f98aa)
+                                rgb(palette.text_muted)
                             })
                             .child(status),
                     )
@@ -472,7 +473,7 @@ impl NyaTermApp {
                             .flex_1()
                             .rounded_sm()
                             .border_1()
-                            .border_color(rgb(0x303848))
+                            .border_color(rgb(palette.border))
                             .bg(rgb(palette.input))
                             .px_2()
                             .flex()

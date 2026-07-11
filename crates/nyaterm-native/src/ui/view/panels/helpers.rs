@@ -122,6 +122,7 @@ pub(in crate::ui::view::panels) fn quick_command_icon_mark(
     icon_tag: Option<&str>,
     color_tag: Option<&str>,
 ) -> impl IntoElement {
+    let palette = crate::ui::theme::theme_palette("github-dark");
     match icon_tag.and_then(quick_command_icon_def) {
         Some((label, color)) => div()
             .size(px(18.))
@@ -129,7 +130,7 @@ pub(in crate::ui::view::panels) fn quick_command_icon_mark(
             .rounded_sm()
             .border_1()
             .border_color(color)
-            .bg(rgb(0x101827))
+            .bg(rgb(palette.input))
             .flex()
             .items_center()
             .justify_center()
@@ -167,6 +168,7 @@ pub(in crate::ui::view::panels) fn quick_command_icon_label(icon_tag: Option<&st
 }
 
 fn quick_command_icon_def(icon_tag: &str) -> Option<(&'static str, gpui::Rgba)> {
+    let palette = crate::ui::theme::theme_palette("github-dark");
     match icon_tag.trim().to_ascii_lowercase().as_str() {
         "docker" => Some(("DK", rgb(0x2496ed))),
         "k8s" => Some(("K8", rgb(0x326ce5))),
@@ -192,7 +194,7 @@ fn quick_command_icon_def(icon_tag: &str) -> Option<(&'static str, gpui::Rgba)> 
         "php" => Some(("PH", rgb(0x777bb4))),
         "aws" => Some(("AWS", rgb(0xff9900))),
         "gcp" => Some(("GC", rgb(0x4285f4))),
-        "terminal" => Some((">$", rgb(0x6ee7b7))),
+        "terminal" => Some((">$", rgb(palette.success))),
         "code" => Some(("</>", rgb(0x93c5fd))),
         "server" => Some(("SR", rgb(0xc4b5fd))),
         "folder" => Some(("FD", rgb(0xfacc15))),
@@ -268,7 +270,7 @@ pub(in crate::ui::view::panels) fn quick_command_editor_script_field(
         .rounded_sm()
         .border_1()
         .border_color(if active { rgb(0x4ade80) } else { rgb(palette.border) })
-        .bg(if active { rgb(0x0f1f18) } else { rgb(0x101827) })
+        .bg(if active { rgb(0x0f1f18) } else { rgb(palette.input) })
         .p_2()
         .cursor_pointer()
         .on_click(on_click)

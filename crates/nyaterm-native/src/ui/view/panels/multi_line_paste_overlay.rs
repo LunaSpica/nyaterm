@@ -25,19 +25,19 @@ impl NyaTermApp {
             .rounded_sm()
             .border_1()
             .border_color(if can_send {
-                rgb(0x334155)
+                rgb(palette.border)
             } else {
                 rgb(0x7f1d1d)
             })
-            .bg(rgb(0x0d1320))
+            .bg(rgb(palette.input))
             .p_3()
             .font_family("JetBrains Mono")
             .text_xs()
             .line_height(px(18.))
             .text_color(if can_send {
-                rgb(0xdbeafe)
+                rgb(palette.text)
             } else {
-                rgb(0x64748b)
+                rgb(palette.text_muted)
             });
         let display_lines = normalized
             .lines()
@@ -91,8 +91,8 @@ impl NyaTermApp {
                     .mx_4()
                     .rounded_md()
                     .border_1()
-                    .border_color(rgb(0x303848))
-                    .bg(rgb(0x0b0f16))
+                    .border_color(rgb(palette.border))
+                    .bg(rgb(palette.bg))
                     .shadow_lg()
                     .p_4()
                     .on_click(|_, _, cx| cx.stop_propagation())
@@ -100,14 +100,14 @@ impl NyaTermApp {
                         div()
                             .text_sm()
                             .font_weight(FontWeight(800.))
-                            .text_color(rgb(0xe5edf7))
+                            .text_color(rgb(palette.text))
                             .child("Multi-line Paste"),
                     )
                     .child(
                         div()
                             .mt_1()
                             .text_xs()
-                            .text_color(rgb(0x98a3b8))
+                            .text_color(rgb(palette.text_muted))
                             .child(stats),
                     )
                     .child(preview)
@@ -115,7 +115,7 @@ impl NyaTermApp {
                         div()
                             .mt_2()
                             .text_xs()
-                            .text_color(rgb(0x8f98aa))
+                            .text_color(rgb(palette.text_muted))
                             .child("Review the pasted text before sending."),
                     )
                     .child(

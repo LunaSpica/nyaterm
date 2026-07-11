@@ -33,7 +33,7 @@ impl NyaTermApp {
                     .rounded_md()
                     .border_1()
                     .border_color(rgb(0x7f1d1d))
-                    .bg(rgb(0x0b0f16))
+                    .bg(rgb(palette.bg))
                     .shadow_lg()
                     .p_4()
                     .child(
@@ -111,15 +111,15 @@ impl NyaTermApp {
                     .w(px(420.))
                     .rounded_md()
                     .border_1()
-                    .border_color(rgb(0x334155))
-                    .bg(rgb(0x0b0f16))
+                    .border_color(rgb(palette.border))
+                    .bg(rgb(palette.bg))
                     .shadow_lg()
                     .p_4()
                     .child(
                         div()
                             .text_sm()
                             .font_weight(FontWeight(800.))
-                            .text_color(rgb(0xdbeafe))
+                            .text_color(rgb(palette.text))
                             .child("Rename Quick Command Category"),
                     )
                     .child(
@@ -127,7 +127,7 @@ impl NyaTermApp {
                             .mt_2()
                             .text_xs()
                             .line_height(px(18.))
-                            .text_color(rgb(0x98a3b8))
+                            .text_color(rgb(palette.text_muted))
                             .child(format!("Current name: {}", rename.original_name)),
                     )
                     .child(

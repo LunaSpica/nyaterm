@@ -444,12 +444,13 @@ impl NyaTermApp {
 }
 
 fn context_menu_group() -> gpui::Div {
+    let palette = crate::ui::theme::theme_palette("github-dark");
     div()
         .flex()
         .flex_col()
         .gap_1()
         .border_t_1()
-        .border_color(rgb(0x202633))
+        .border_color(rgb(palette.border))
         .pt_2()
 }
 
@@ -458,6 +459,7 @@ fn context_menu_button(
     label: impl Into<SharedString>,
     on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
 ) -> impl IntoElement {
+    let palette = crate::ui::theme::theme_palette("github-dark");
     div()
         .id(SharedString::from(id.into()))
         .h(px(28.))
@@ -466,12 +468,12 @@ fn context_menu_button(
         .items_center()
         .rounded_sm()
         .border_1()
-        .border_color(rgb(0x303848))
-        .bg(rgb(0x151b27))
-        .text_color(rgb(0xdbeafe))
+        .border_color(rgb(palette.border))
+        .bg(rgb(palette.surface))
+        .text_color(rgb(palette.text))
         .text_xs()
         .cursor_pointer()
-        .hover(|this| this.bg(rgb(0x223047)))
+        .hover(|this| this.bg(rgb(palette.hover)))
         .child(label.into())
         .on_click(on_click)
 }

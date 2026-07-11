@@ -40,7 +40,7 @@ impl NyaTermApp {
                         ))),
                         div()
                             .text_size(px(11.))
-                            .text_color(rgb(0x8b949e))
+                            .text_color(rgb(palette.text_muted))
                             .child(prompt_label),
                     ))
                     .child(settings_form_row(palette, 
@@ -166,7 +166,7 @@ impl NyaTermApp {
                         Some(SharedString::from(truncate_preview(&log_dir, 64))),
                         div()
                             .text_size(px(11.))
-                            .text_color(rgb(0x8b949e))
+                            .text_color(rgb(palette.text_muted))
                             .child("On disk"),
                     )),
             ))
@@ -210,7 +210,7 @@ impl NyaTermApp {
                             ))),
                             div()
                                 .text_size(px(11.))
-                                .text_color(rgb(0x8b949e))
+                                .text_color(rgb(palette.text_muted))
                                 .child(if notes.trim().is_empty() {
                                     "no notes".to_string()
                                 } else {
@@ -304,7 +304,7 @@ impl NyaTermApp {
                                     .text_color(rgb(0xe2e8f0))
                                     .child(conflict.message),
                             )
-                            .child(div().text_xs().text_color(rgb(0x98a3b8)).child(format!(
+                            .child(div().text_xs().text_color(rgb(palette.text_muted)).child(format!(
                                 "{} · local {} · remote {}",
                                 conflict.provider, local_hash, remote_revision
                             ))),
@@ -982,12 +982,12 @@ impl NyaTermApp {
                             div()
                                 .rounded_md()
                                 .border_1()
-                                .border_color(rgb(0x21262d))
-                                .bg(rgb(0x0d1117))
+                                .border_color(rgb(palette.surface_elevated))
+                                .bg(rgb(palette.bg))
                                 .px_3()
                                 .py_2()
                                 .text_size(px(11.))
-                                .text_color(rgb(0x8b949e))
+                                .text_color(rgb(palette.text_muted))
                                 .child("No sync runs recorded"),
                         )
                     })
@@ -1027,24 +1027,25 @@ impl NyaTermApp {
 
 
 fn sync_provider_hint(title: &'static str, detail: &'static str) -> impl IntoElement {
+    let palette = crate::ui::theme::theme_palette("github-dark");
     div()
         .rounded_sm()
         .border_1()
-        .border_color(rgb(0x263142))
-        .bg(rgb(0x0d1320))
+        .border_color(rgb(palette.border))
+        .bg(rgb(palette.input))
         .p_3()
         .child(
             div()
                 .text_xs()
                 .font_weight(FontWeight(800.))
-                .text_color(rgb(0xe5edf7))
+                .text_color(rgb(palette.text))
                 .child(title),
         )
         .child(
             div()
                 .mt_1()
                 .text_size(px(10.))
-                .text_color(rgb(0x8f98aa))
+                .text_color(rgb(palette.text_muted))
                 .line_height(px(14.))
                 .child(detail),
         )

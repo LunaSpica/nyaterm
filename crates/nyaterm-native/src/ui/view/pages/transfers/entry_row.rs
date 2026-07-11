@@ -81,12 +81,13 @@ pub(super) fn transfer_browser_parent_entry_row(
 }
 
 fn transfer_browser_text_cell(width: gpui::Pixels, value: &'static str) -> impl IntoElement {
+    let palette = crate::ui::theme::theme_palette("github-dark");
     div()
         .w(width)
         .flex_none()
         .truncate()
         .text_xs()
-        .text_color(rgb(0x64748b))
+        .text_color(rgb(palette.text_muted))
         .child(value)
 }
 
@@ -306,7 +307,7 @@ pub(super) fn transfer_browser_entry_row(
                 .truncate()
                 .text_right()
                 .text_xs()
-                .text_color(rgb(0xaeb7c8))
+                .text_color(rgb(palette.text_muted))
                 .child(format_file_size(entry.size)),
         )
         .child(

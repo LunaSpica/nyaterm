@@ -42,7 +42,7 @@ impl NyaTermApp {
                     .mx_4()
                     .rounded_md()
                     .border_1()
-                    .border_color(rgb(0x303848))
+                    .border_color(rgb(palette.border))
                     .bg(rgb(0x0b0f16))
                     .shadow_lg()
                     .p_4()
@@ -62,13 +62,13 @@ impl NyaTermApp {
                                         div()
                                             .text_sm()
                                             .font_weight(FontWeight(800.))
-                                            .text_color(rgb(0xe5edf7))
+                                            .text_color(rgb(palette.text))
                                             .child("Temporary SSH Link"),
                                     )
                                     .child(
                                         div()
                                             .text_xs()
-                                            .text_color(rgb(0x98a3b8))
+                                            .text_color(rgb(palette.text_muted))
                                             .child("Transient SSH session; password is requested securely during connect."),
                                     ),
                             )
@@ -92,17 +92,17 @@ impl NyaTermApp {
                             } else if can_submit {
                                 rgb(0x334155)
                             } else {
-                                rgb(0x202633)
+                                rgb(palette.border)
                             })
-                            .bg(rgb(0x0d1320))
+                            .bg(rgb(palette.input))
                             .px_3()
                             .py_2()
                             .font_family("JetBrains Mono")
                             .text_sm()
                             .text_color(if self.temporary_ssh_link_draft.is_empty() {
-                                rgb(0x64748b)
+                                rgb(palette.text_muted)
                             } else {
-                                rgb(0xe5edf7)
+                                rgb(palette.text)
                             })
                             .child(truncate_preview(&input_display, 104)),
                     )
@@ -125,7 +125,7 @@ impl NyaTermApp {
                             .child(
                                 div()
                                     .text_xs()
-                                    .text_color(rgb(0x64748b))
+                                    .text_color(rgb(palette.text_muted))
                                     .child("Enter connects; Esc cancels; Ctrl/Cmd+V pastes."),
                             )
                             .child(
@@ -159,9 +159,9 @@ impl NyaTermApp {
                                             .items_center()
                                             .rounded_sm()
                                             .border_1()
-                                            .border_color(rgb(0x202633))
-                                            .bg(rgb(0x111722))
-                                            .text_color(rgb(0x64748b))
+                                            .border_color(rgb(palette.border))
+                                            .bg(rgb(palette.input))
+                                            .text_color(rgb(palette.text_muted))
                                             .text_xs()
                                             .child("Connect")
                                             .into_any_element()

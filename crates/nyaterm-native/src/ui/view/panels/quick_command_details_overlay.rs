@@ -72,7 +72,7 @@ impl NyaTermApp {
                     .w(px(560.))
                     .rounded_md()
                     .border_1()
-                    .border_color(rgb(0x303848))
+                    .border_color(rgb(palette.border))
                     .bg(rgb(0x0b0f16))
                     .shadow_lg()
                     .p_4()
@@ -99,14 +99,14 @@ impl NyaTermApp {
                                                 div()
                                                     .text_sm()
                                                     .font_weight(FontWeight(800.))
-                                                    .text_color(rgb(0xe5edf7))
+                                                    .text_color(rgb(palette.text))
                                                     .child(truncate_preview(&command.label, 64)),
                                             )
                                             .child(
                                                 div()
                                                     .mt_1()
                                                     .text_xs()
-                                                    .text_color(rgb(0x98a3b8))
+                                                    .text_color(rgb(palette.text_muted))
                                                     .child(format!(
                                                         "{} / used {} / {}",
                                                         details.category,
@@ -121,12 +121,12 @@ impl NyaTermApp {
                                 if command.execution_mode.as_deref() == Some("append") {
                                     rgb(0xfacc15)
                                 } else {
-                                    rgb(0x6ee7b7)
+                                    rgb(palette.success)
                                 },
                                 if command.execution_mode.as_deref() == Some("append") {
                                     rgb(0x32280f)
                                 } else {
-                                    rgb(0x12342a)
+                                    rgb(palette.hover)
                                 },
                             )),
                     )
@@ -135,13 +135,13 @@ impl NyaTermApp {
                             .mt_4()
                             .rounded_sm()
                             .border_1()
-                            .border_color(rgb(0x263142))
-                            .bg(rgb(0x0d1320))
+                            .border_color(rgb(palette.border))
+                            .bg(rgb(palette.input))
                             .p_3()
                             .child(
                                 div()
                                     .text_size(px(10.))
-                                    .text_color(rgb(0x64748b))
+                                    .text_color(rgb(palette.text_muted))
                                     .child("Command"),
                             )
                             .child(
@@ -165,13 +165,13 @@ impl NyaTermApp {
                             .mt_3()
                             .rounded_sm()
                             .border_1()
-                            .border_color(rgb(0x263142))
-                            .bg(rgb(0x0d1320))
+                            .border_color(rgb(palette.border))
+                            .bg(rgb(palette.input))
                             .p_3()
                             .child(
                                 div()
                                     .text_size(px(10.))
-                                    .text_color(rgb(0x64748b))
+                                    .text_color(rgb(palette.text_muted))
                                     .child("Description"),
                             )
                             .child(
@@ -179,7 +179,7 @@ impl NyaTermApp {
                                     .mt_2()
                                     .text_xs()
                                     .line_height(px(18.))
-                                    .text_color(rgb(0xaeb7c8))
+                                    .text_color(rgb(palette.text_muted))
                                     .child(description.to_string()),
                             ),
                     )
@@ -193,7 +193,7 @@ impl NyaTermApp {
                             .child(
                                 div()
                                     .text_size(px(10.))
-                                    .text_color(rgb(0x64748b))
+                                    .text_color(rgb(palette.text_muted))
                                     .child(format!("ID {}", truncate_preview(&command_id, 42))),
                             )
                             .child(

@@ -27,14 +27,14 @@ impl NyaTermApp {
                         div()
                             .min_w_0()
                             .overflow_hidden()
-                            .text_color(rgb(0xe5edf7))
+                            .text_color(rgb(palette.text))
                             .child(truncate_preview(&name, 44)),
                     )
                     .child(
                         div()
                             .flex_none()
                             .text_size(px(10.))
-                            .text_color(rgb(0x8f98aa))
+                            .text_color(rgb(palette.text_muted))
                             .child(short_session_id),
                     ),
             );
@@ -43,7 +43,7 @@ impl NyaTermApp {
             session_list = session_list.child(
                 div()
                     .text_xs()
-                    .text_color(rgb(0x8f98aa))
+                    .text_color(rgb(palette.text_muted))
                     .child(format!("and {} more session(s)", session_count - 6)),
             );
         }
@@ -82,7 +82,7 @@ impl NyaTermApp {
                     .rounded_md()
                     .border_1()
                     .border_color(rgb(0x3f1f27))
-                    .bg(rgb(0x0b0f16))
+                    .bg(rgb(palette.bg))
                     .shadow_lg()
                     .p_4()
                     .on_click(|_, _, cx| cx.stop_propagation())
@@ -98,7 +98,7 @@ impl NyaTermApp {
                                     .text_color(rgb(0xfca5a5))
                                     .child("Close All Sessions"),
                             )
-                            .child(div().text_xs().text_color(rgb(0x98a3b8)).child(format!(
+                            .child(div().text_xs().text_color(rgb(palette.text_muted)).child(format!(
                                 "This will close {session_count} active session(s)."
                             ))),
                     )

@@ -26,6 +26,7 @@ pub(super) fn terminal_line_element(
     config: &KeywordHighlightConfig,
     search_match: bool,
     active_search_match: bool,
+    palette: crate::ui::theme::ThemePalette,
 ) -> impl IntoElement {
     let spans = keyword_highlight_spans(line, config);
     let mut row = div()
@@ -37,11 +38,11 @@ pub(super) fn terminal_line_element(
         .whitespace_nowrap();
     if active_search_match {
         row = row
-            .bg(rgb(0x3a2f14))
+            .bg(rgb(palette.hover))
             .border_l_2()
-            .border_color(rgb(0xfacc15));
+            .border_color(rgb(palette.warning));
     } else if search_match {
-        row = row.bg(rgb(0x16202e));
+        row = row.bg(rgb(palette.surface));
     }
 
     for span in spans {
@@ -50,7 +51,7 @@ pub(super) fn terminal_line_element(
             .whitespace_nowrap()
             .child(span.text);
         if let Some(color) = span.color {
-            child = child.text_color(rgb(color)).bg(rgb(0x16202e));
+            child = child.text_color(rgb(color)).bg(rgb(palette.surface));
         }
         row = row.child(child);
     }

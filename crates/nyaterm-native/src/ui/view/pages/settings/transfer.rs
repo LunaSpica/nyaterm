@@ -146,7 +146,7 @@ impl NyaTermApp {
                     ))),
                     div()
                         .text_size(px(11.))
-                        .text_color(rgb(0x8b949e))
+                        .text_color(rgb(palette.text_muted))
                         .child("Live queue"),
                 ),
             ))
@@ -284,7 +284,7 @@ impl NyaTermApp {
                                     .font_family("JetBrains Mono")
                                     .text_size(px(12.))
                                     .font_weight(FontWeight(700.))
-                                    .text_color(rgb(0xc9d1d9))
+                                    .text_color(rgb(palette.text))
                                     .child(self.settings.transfer_download_threads.to_string()),
                             )
                             .child(small_button(palette, 
@@ -319,7 +319,7 @@ impl NyaTermApp {
                                     .font_family("JetBrains Mono")
                                     .text_size(px(12.))
                                     .font_weight(FontWeight(700.))
-                                    .text_color(rgb(0xc9d1d9))
+                                    .text_color(rgb(palette.text))
                                     .child(self.settings.transfer_upload_threads.to_string()),
                             )
                             .child(small_button(palette, 
@@ -354,7 +354,7 @@ impl NyaTermApp {
                                     .font_family("JetBrains Mono")
                                     .text_size(px(12.))
                                     .font_weight(FontWeight(700.))
-                                    .text_color(rgb(0xc9d1d9))
+                                    .text_color(rgb(palette.text))
                                     .child(self.settings.transfer_max_retries.to_string()),
                             )
                             .child(small_button(palette, 
@@ -389,7 +389,7 @@ impl NyaTermApp {
                                     .font_family("JetBrains Mono")
                                     .text_size(px(12.))
                                     .font_weight(FontWeight(700.))
-                                    .text_color(rgb(0xc9d1d9))
+                                    .text_color(rgb(palette.text))
                                     .child(self.settings.transfer_buffer_size.to_string()),
                             )
                             .child(small_button(palette, 
@@ -501,7 +501,7 @@ impl NyaTermApp {
                         Some(SharedString::from(truncate_preview(&path, 56))),
                         div()
                             .text_size(px(11.))
-                            .text_color(rgb(0x8b949e))
+                            .text_color(rgb(palette.text_muted))
                             .child("On disk"),
                     ))
                     .child(settings_form_row(palette, 
@@ -525,7 +525,7 @@ impl NyaTermApp {
                                     .font_family("JetBrains Mono")
                                     .text_size(px(12.))
                                     .font_weight(FontWeight(700.))
-                                    .text_color(rgb(0xc9d1d9))
+                                    .text_color(rgb(palette.text))
                                     .child(format!("{memory_mib}")),
                             )
                             .child(small_button(palette, 
@@ -611,11 +611,12 @@ fn transfer_stepper(
     on_dec: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
     on_inc: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
 ) -> impl IntoElement {
+    let palette = crate::ui::theme::theme_palette("github-dark");
     div()
         .rounded_sm()
         .border_1()
-        .border_color(rgb(0x263142))
-        .bg(rgb(0x0d1320))
+        .border_color(rgb(palette.border))
+        .bg(rgb(palette.input))
         .p_3()
         .flex()
         .flex_col()
@@ -624,7 +625,7 @@ fn transfer_stepper(
             div()
                 .text_size(px(10.))
                 .font_weight(FontWeight(800.))
-                .text_color(rgb(0x98a3b8))
+                .text_color(rgb(palette.text_muted))
                 .child(label),
         )
         .child(
@@ -641,7 +642,7 @@ fn transfer_stepper(
                         .font_family("JetBrains Mono")
                         .text_sm()
                         .font_weight(FontWeight(800.))
-                        .text_color(rgb(0xe5edf7))
+                        .text_color(rgb(palette.text))
                         .child(value.to_string()),
                 )
                 .child(small_button(crate::ui::theme::theme_palette("github-dark"), inc_id, "+", on_inc)),
@@ -654,6 +655,7 @@ fn permission_preset_button(
     active: bool,
     on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
 ) -> impl IntoElement {
+    let palette = crate::ui::theme::theme_palette("github-dark");
     div()
         .id(SharedString::from(id))
         .h(px(28.))
@@ -662,36 +664,37 @@ fn permission_preset_button(
         .items_center()
         .rounded_sm()
         .border_1()
-        .border_color(if active { rgb(0x256d3f) } else { rgb(0x303848) })
-        .bg(if active { rgb(0x17253b) } else { rgb(0x151b27) })
+        .border_color(if active { rgb(palette.success) } else { rgb(palette.border) })
+        .bg(if active { rgb(palette.hover) } else { rgb(palette.surface) })
         .cursor_pointer()
         .text_xs()
         .font_weight(FontWeight(800.))
-        .text_color(if active { rgb(0xdbeafe) } else { rgb(0xaeb7c8) })
-        .hover(|this| this.bg(rgb(0x1b2535)))
+        .text_color(if active { rgb(palette.text) } else { rgb(palette.text_muted) })
+        .hover(|this| this.bg(rgb(palette.hover)))
         .on_click(on_click)
         .child(label)
 }
 
 fn transfer_capability_card(title: &'static str, detail: &'static str) -> impl IntoElement {
+    let palette = crate::ui::theme::theme_palette("github-dark");
     div()
         .rounded_sm()
         .border_1()
-        .border_color(rgb(0x263142))
-        .bg(rgb(0x0d1320))
+        .border_color(rgb(palette.border))
+        .bg(rgb(palette.input))
         .p_3()
         .child(
             div()
                 .text_xs()
                 .font_weight(FontWeight(800.))
-                .text_color(rgb(0xe5edf7))
+                .text_color(rgb(palette.text))
                 .child(title),
         )
         .child(
             div()
                 .mt_1()
                 .text_size(px(10.))
-                .text_color(rgb(0x8f98aa))
+                .text_color(rgb(palette.text_muted))
                 .line_height(px(14.))
                 .child(detail),
         )

@@ -132,7 +132,7 @@ impl NyaTermApp {
             .px_2()
             .py_2()
             .overflow_scroll()
-            .child(settings_category_header(palette, "Workspace", "WS", rgb(0x58a6ff)))
+            .child(settings_category_header(palette, "Workspace", "WS", rgb(palette.accent)))
             .child(self.settings_tab_button(SettingsTab::General, "settings-tab-general", cx))
             .child(self.settings_tab_button(SettingsTab::Appearance, "settings-tab-appearance", cx))
             .child(self.settings_tab_button(
@@ -148,7 +148,7 @@ impl NyaTermApp {
             .child(settings_category_header(palette, 
                 "Terminal Session",
                 "TM",
-                rgb(0x3fb950),
+                rgb(palette.success),
             ))
             .child(self.settings_tab_button(
                 SettingsTab::TerminalGeneral,
@@ -165,11 +165,11 @@ impl NyaTermApp {
             .child(self.settings_tab_button(SettingsTab::AiGeneral, "settings-tab-ai-general", cx))
             .child(self.settings_tab_button(SettingsTab::AiModels, "settings-tab-ai-models", cx))
             .child(self.settings_tab_button(SettingsTab::AiRules, "settings-tab-ai-rules", cx))
-            .child(settings_category_header(palette, "Transfer", "TF", rgb(0x58a6ff)))
+            .child(settings_category_header(palette, "Transfer", "TF", rgb(palette.accent)))
             .child(self.settings_tab_button(SettingsTab::Transfer, "settings-tab-transfer", cx))
-            .child(settings_category_header(palette, "Security", "SC", rgb(0xd29922)))
+            .child(settings_category_header(palette, "Security", "SC", rgb(palette.warning)))
             .child(self.settings_tab_button(SettingsTab::Security, "settings-tab-security", cx))
-            .child(settings_category_header(palette, "Sync Backup", "BK", rgb(0x3fb950)))
+            .child(settings_category_header(palette, "Sync Backup", "BK", rgb(palette.success)))
             .child(self.settings_tab_button(
                 SettingsTab::SyncBackup,
                 "settings-tab-sync-backup",

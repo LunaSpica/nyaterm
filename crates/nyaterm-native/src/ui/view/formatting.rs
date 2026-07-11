@@ -110,12 +110,13 @@ pub(in crate::ui::view) fn docker_state_label(state: &str) -> &'static str {
 }
 
 pub(in crate::ui::view) fn docker_state_color(state: &str) -> gpui::Hsla {
+    let palette = crate::ui::theme::theme_palette("github-dark");
     match state.trim().to_ascii_lowercase().as_str() {
-        "running" => rgb(0x6ee7b7).into(),
+        "running" => rgb(palette.success).into(),
         "restarting" | "paused" => rgb(0xfbbf24).into(),
         "created" => rgb(0x93c5fd).into(),
         "exited" | "dead" => rgb(0xfca5a5).into(),
-        _ => rgb(0x98a3b8).into(),
+        _ => rgb(palette.text_muted).into(),
     }
 }
 
@@ -244,32 +245,35 @@ pub(in crate::ui::view) fn format_duration_ms(duration_ms: Option<u64>) -> Optio
 }
 
 pub(in crate::ui::view) fn cloud_sync_status_dot_color(status: &str) -> gpui::Rgba {
+    let palette = crate::ui::theme::theme_palette("github-dark");
     match status {
         "running" => rgb(0x3b82f6),
         "success" => rgb(0x22c55e),
         "failed" => rgb(0xef4444),
         "conflict" => rgb(0xf59e0b),
-        "disabled" => rgb(0x6e7681),
-        _ => rgb(0x8b949e),
+        "disabled" => rgb(palette.text_dimmed),
+        _ => rgb(palette.text_muted),
     }
 }
 
 pub(in crate::ui::view) fn cloud_sync_status_text_color(status: &str) -> gpui::Rgba {
+    let palette = crate::ui::theme::theme_palette("github-dark");
     match status {
-        "running" => rgb(0x58a6ff),
-        "success" => rgb(0x3fb950),
-        "failed" => rgb(0xff7b72),
-        "conflict" => rgb(0xd29922),
-        "disabled" => rgb(0x6e7681),
-        _ => rgb(0x8b949e),
+        "running" => rgb(palette.accent),
+        "success" => rgb(palette.success),
+        "failed" => rgb(palette.danger),
+        "conflict" => rgb(palette.warning),
+        "disabled" => rgb(palette.text_dimmed),
+        _ => rgb(palette.text_muted),
     }
 }
 
 pub(in crate::ui::view) fn cloud_sync_kind_text_color(kind: &str) -> gpui::Rgba {
+    let palette = crate::ui::theme::theme_palette("github-dark");
     match kind {
-        "sync" => rgb(0x58a6ff),
+        "sync" => rgb(palette.accent),
         "backup" => rgb(0xa371f7),
-        _ => rgb(0x8b949e),
+        _ => rgb(palette.text_muted),
     }
 }
 

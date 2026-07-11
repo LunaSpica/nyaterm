@@ -14,7 +14,7 @@ impl NyaTermApp {
                 div()
                     .rounded_sm()
                     .border_1()
-                    .border_color(rgb(0x303848))
+                    .border_color(rgb(palette.border))
                     .bg(rgb(palette.input))
                     .p_3()
                     .text_xs()
@@ -33,10 +33,10 @@ impl NyaTermApp {
                     .border_color(if selected {
                         rgb(0x3b82f6)
                     } else {
-                        rgb(0x303848)
+                        rgb(palette.border)
                     })
                     .bg(if selected {
-                        rgb(0x101b2d)
+                        rgb(palette.hover)
                     } else {
                         rgb(palette.input)
                     })
@@ -68,14 +68,14 @@ impl NyaTermApp {
                             .child(status_pill(
                                 if group.enabled { "on" } else { "off" },
                                 if group.enabled {
-                                    rgb(0x6ee7b7)
+                                    rgb(palette.success)
                                 } else {
                                     rgb(palette.text_muted)
                                 },
                                 if group.enabled {
-                                    rgb(0x12342a)
+                                    rgb(palette.hover)
                                 } else {
-                                    rgb(0x202633)
+                                    rgb(palette.border)
                                 },
                             )),
                     )
@@ -113,7 +113,7 @@ impl NyaTermApp {
                 div()
                     .rounded_sm()
                     .border_1()
-                    .border_color(rgb(0x303848))
+                    .border_color(rgb(palette.border))
                     .bg(rgb(palette.input))
                     .p_3()
                     .text_xs()
@@ -133,9 +133,9 @@ impl NyaTermApp {
                     .rounded_sm()
                     .border_1()
                     .border_color(if in_group {
-                        rgb(0x334155)
+                        rgb(palette.border)
                     } else {
-                        rgb(0x202633)
+                        rgb(palette.border)
                     })
                     .bg(if in_group {
                         rgb(0x111827)
@@ -193,16 +193,16 @@ impl NyaTermApp {
                                         if paused {
                                             rgb(0xfacc15)
                                         } else if in_group {
-                                            rgb(0x6ee7b7)
+                                            rgb(palette.success)
                                         } else {
                                             rgb(palette.text_muted)
                                         },
                                         if paused {
                                             rgb(0x3a2f14)
                                         } else if in_group {
-                                            rgb(0x12342a)
+                                            rgb(palette.hover)
                                         } else {
-                                            rgb(0x202633)
+                                            rgb(palette.border)
                                         },
                                     ))
                                     .child(small_button(palette, 
@@ -271,8 +271,8 @@ impl NyaTermApp {
                     .mx_4()
                     .rounded_md()
                     .border_1()
-                    .border_color(rgb(0x303848))
-                    .bg(rgb(0x0b0f16))
+                    .border_color(rgb(palette.border))
+                    .bg(rgb(palette.bg))
                     .shadow_lg()
                     .p_4()
                     .on_click(|_, _, cx| cx.stop_propagation())

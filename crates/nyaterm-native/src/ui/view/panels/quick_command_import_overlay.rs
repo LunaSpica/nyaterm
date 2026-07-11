@@ -34,8 +34,8 @@ impl NyaTermApp {
                     .w(px(420.))
                     .rounded_md()
                     .border_1()
-                    .border_color(rgb(0x303848))
-                    .bg(rgb(0x0b0f16))
+                    .border_color(rgb(palette.border))
+                    .bg(rgb(palette.bg))
                     .shadow_lg()
                     .p_4()
                     .child(
@@ -51,14 +51,14 @@ impl NyaTermApp {
                                         div()
                                             .text_sm()
                                             .font_weight(FontWeight(800.))
-                                            .text_color(rgb(0xe5edf7))
+                                            .text_color(rgb(palette.text))
                                             .child("Import Quick Commands"),
                                     )
                                     .child(
                                         div()
                                             .mt_1()
                                             .text_xs()
-                                            .text_color(rgb(0x98a3b8))
+                                            .text_color(rgb(palette.text_muted))
                                             .child("WindTerm, Xshell, or NyaTerm JSON"),
                                     ),
                             )
@@ -127,7 +127,7 @@ impl NyaTermApp {
                                 div()
                                     .text_size(px(11.))
                                     .line_height(px(16.))
-                                    .text_color(rgb(0x98a3b8))
+                                    .text_color(rgb(palette.text_muted))
                                     .child("Imports merge with existing commands and update matching IDs."),
                             )
                             .child(small_button(palette, 
@@ -150,13 +150,14 @@ fn quick_command_import_source_card(
     accent: u32,
     on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
 ) -> impl IntoElement {
+    let palette = crate::ui::theme::theme_palette("github-dark");
     div()
         .id(SharedString::from(id))
         .min_h(px(124.))
         .rounded_md()
         .border_1()
-        .border_color(rgb(0x263142))
-        .bg(rgb(0x0d1320))
+        .border_color(rgb(palette.border))
+        .bg(rgb(palette.input))
         .p_3()
         .cursor_pointer()
         .flex()
@@ -172,7 +173,7 @@ fn quick_command_import_source_card(
                 .rounded_sm()
                 .border_1()
                 .border_color(rgb(accent))
-                .bg(rgb(0x101827))
+                .bg(rgb(palette.input))
                 .flex()
                 .items_center()
                 .justify_center()
@@ -186,13 +187,13 @@ fn quick_command_import_source_card(
             div()
                 .text_xs()
                 .font_weight(FontWeight(700.))
-                .text_color(rgb(0xe5edf7))
+                .text_color(rgb(palette.text))
                 .child(label),
         )
         .child(
             div()
                 .text_size(px(10.))
-                .text_color(rgb(0x98a3b8))
+                .text_color(rgb(palette.text_muted))
                 .child(hint),
         )
 }

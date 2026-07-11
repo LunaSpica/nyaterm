@@ -39,6 +39,7 @@ pub(super) fn network_delete_confirm_panel(
     confirm: NetworkDeleteConfirmState,
     cx: &mut Context<NyaTermApp>,
 ) -> impl IntoElement {
+        let palette = cx.entity().read(cx).theme_palette();
     let card = div()
         .p_4()
         .flex()
@@ -54,7 +55,7 @@ pub(super) fn network_delete_confirm_panel(
         .child(
             div()
                 .text_size(px(12.))
-                .text_color(rgb(0xc9d1d9))
+                .text_color(rgb(palette.text))
                 .child(format!(
                     "{} · {}",
                     truncate_preview(&confirm.label, 72),
@@ -80,6 +81,7 @@ pub(super) fn network_group_editor_panel(
     focus: &gpui::FocusHandle,
     cx: &mut Context<NyaTermApp>,
 ) -> impl IntoElement {
+        let palette = cx.entity().read(cx).theme_palette();
     let card = div()
         .p_4()
         .flex()
@@ -95,7 +97,7 @@ pub(super) fn network_group_editor_panel(
                     div()
                         .text_size(px(15.))
                         .font_weight(FontWeight(700.))
-                        .text_color(rgb(0xc9d1d9))
+                        .text_color(rgb(palette.text))
                         .child(if editor.id.is_some() {
                             format!("Rename {} group", editor.tab.label())
                         } else {
@@ -147,6 +149,7 @@ pub(super) fn network_group_delete_confirm_panel(
     confirm: NetworkGroupDeleteConfirmState,
     cx: &mut Context<NyaTermApp>,
 ) -> impl IntoElement {
+        let palette = cx.entity().read(cx).theme_palette();
     let card = div()
         .p_4()
         .flex()
@@ -162,7 +165,7 @@ pub(super) fn network_group_delete_confirm_panel(
         .child(
             div()
                 .text_size(px(12.))
-                .text_color(rgb(0xc9d1d9))
+                .text_color(rgb(palette.text))
                 .child(format!(
                     "{} · {} item(s) will be removed",
                     truncate_preview(&confirm.label, 72),

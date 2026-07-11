@@ -38,7 +38,7 @@ impl NyaTermApp {
                                     .font_family("JetBrains Mono")
                                     .text_size(px(12.))
                                     .font_weight(FontWeight(600.))
-                                    .text_color(rgb(0xc9d1d9))
+                                    .text_color(rgb(palette.text))
                                     .child(scrollback),
                             )
                             .child(small_button(palette, 
@@ -69,7 +69,7 @@ impl NyaTermApp {
                                     .font_family("JetBrains Mono")
                                     .text_size(px(12.))
                                     .font_weight(FontWeight(600.))
-                                    .text_color(rgb(0xc9d1d9))
+                                    .text_color(rgb(palette.text))
                                     .child(format!("{keep_alive}s")),
                             )
                             .child(small_button(palette, 
@@ -340,7 +340,7 @@ impl NyaTermApp {
                     ))),
                     div()
                         .text_size(px(11.))
-                        .text_color(rgb(0x8b949e))
+                        .text_color(rgb(palette.text_muted))
                         .child("Native fuzzy"),
                 ),
             ))
@@ -415,11 +415,12 @@ fn terminal_feature_card(
     detail: &'static str,
     enabled: bool,
 ) -> impl IntoElement {
+    let palette = crate::ui::theme::theme_palette("github-dark");
     div()
         .rounded_sm()
         .border_1()
-        .border_color(rgb(0x263142))
-        .bg(rgb(0x0d1320))
+        .border_color(rgb(palette.border))
+        .bg(rgb(palette.input))
         .p_3()
         .child(
             div()
@@ -432,20 +433,20 @@ fn terminal_feature_card(
                         .min_w_0()
                         .text_xs()
                         .font_weight(FontWeight(800.))
-                        .text_color(rgb(0xe5edf7))
+                        .text_color(rgb(palette.text))
                         .child(title),
                 )
                 .child(status_pill(
                     if enabled { "on" } else { "off" },
                     if enabled {
-                        rgb(0x6ee7b7)
+                        rgb(palette.success)
                     } else {
-                        rgb(0x98a3b8)
+                        rgb(palette.text_muted)
                     },
                     if enabled {
-                        rgb(0x12342a)
+                        rgb(palette.hover)
                     } else {
-                        rgb(0x202633)
+                        rgb(palette.border)
                     },
                 )),
         )
@@ -453,31 +454,32 @@ fn terminal_feature_card(
             div()
                 .mt_1()
                 .text_size(px(10.))
-                .text_color(rgb(0x8f98aa))
+                .text_color(rgb(palette.text_muted))
                 .line_height(px(14.))
                 .child(detail),
         )
 }
 
 fn search_engine_hint(title: &'static str, detail: &'static str) -> impl IntoElement {
+    let palette = crate::ui::theme::theme_palette("github-dark");
     div()
         .rounded_sm()
         .border_1()
-        .border_color(rgb(0x263142))
-        .bg(rgb(0x0d1320))
+        .border_color(rgb(palette.border))
+        .bg(rgb(palette.input))
         .p_3()
         .child(
             div()
                 .text_xs()
                 .font_weight(FontWeight(800.))
-                .text_color(rgb(0xe5edf7))
+                .text_color(rgb(palette.text))
                 .child(title),
         )
         .child(
             div()
                 .mt_1()
                 .text_size(px(10.))
-                .text_color(rgb(0x8f98aa))
+                .text_color(rgb(palette.text_muted))
                 .line_height(px(14.))
                 .child(detail),
         )
@@ -489,6 +491,7 @@ fn settings_toggle_button(
     enabled: bool,
     on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
 ) -> impl IntoElement {
+    let palette = crate::ui::theme::theme_palette("github-dark");
     div()
         .id(SharedString::from(id.into()))
         .h(px(32.))
@@ -500,19 +503,19 @@ fn settings_toggle_button(
         .rounded_sm()
         .border_1()
         .border_color(if enabled {
-            rgb(0x2f8f5b)
+            rgb(palette.success)
         } else {
-            rgb(0x303848)
+            rgb(palette.border)
         })
         .bg(if enabled {
-            rgb(0x12342a)
+            rgb(palette.hover)
         } else {
-            rgb(0x151b27)
+            rgb(palette.surface)
         })
         .text_color(if enabled {
-            rgb(0xbbf7d0)
+            rgb(palette.success)
         } else {
-            rgb(0xdbeafe)
+            rgb(palette.text)
         })
         .text_xs()
         .cursor_pointer()
@@ -521,14 +524,14 @@ fn settings_toggle_button(
         .child(status_pill(
             if enabled { "on" } else { "off" },
             if enabled {
-                rgb(0x6ee7b7)
+                rgb(palette.success)
             } else {
-                rgb(0x98a3b8)
+                rgb(palette.text_muted)
             },
             if enabled {
                 rgb(0x0d241c)
             } else {
-                rgb(0x202633)
+                rgb(palette.border)
             },
         ))
         .on_click(on_click)

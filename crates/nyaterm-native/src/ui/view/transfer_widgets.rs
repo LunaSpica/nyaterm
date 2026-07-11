@@ -9,11 +9,12 @@ use crate::ui::components::status_pill;
 use crate::ui::models::{TransferJobKind, TransferJobState, TransferJobStatus};
 
 pub(in crate::ui::view) fn compact_transfer_job_row(job: &TransferJobState) -> impl IntoElement {
+    let palette = crate::ui::theme::theme_palette("github-dark");
     let (status_fg, status_bg) = match job.status {
-        TransferJobStatus::Running => (rgb(0x6ee7b7), rgb(0x12342a)),
+        TransferJobStatus::Running => (rgb(palette.success), rgb(palette.hover)),
         TransferJobStatus::Paused => (rgb(0xfacc15), rgb(0x3a2f14)),
         TransferJobStatus::Cancelling => (rgb(0xfbbf24), rgb(0x3a2f14)),
-        TransferJobStatus::Cancelled => (rgb(0xcbd5e1), rgb(0x273244)),
+        TransferJobStatus::Cancelled => (rgb(0xcbd5e1), rgb(palette.border)),
         TransferJobStatus::Completed => (rgb(0x86efac), rgb(0x12301f)),
         TransferJobStatus::Failed => (rgb(0xfca5a5), rgb(0x3a1717)),
     };
@@ -26,8 +27,8 @@ pub(in crate::ui::view) fn compact_transfer_job_row(job: &TransferJobState) -> i
     div()
         .rounded_md()
         .border_1()
-        .border_color(rgb(0x2a3140))
-        .bg(rgb(0x111722))
+        .border_color(rgb(palette.border))
+        .bg(rgb(palette.input))
         .p_3()
         .child(
             div()
@@ -52,7 +53,7 @@ pub(in crate::ui::view) fn compact_transfer_job_row(job: &TransferJobState) -> i
             div()
                 .mt_1()
                 .text_xs()
-                .text_color(rgb(0x98a3b8))
+                .text_color(rgb(palette.text_muted))
                 .child(truncate_preview(&detail, 48)),
         )
 }
@@ -161,6 +162,7 @@ pub(in crate::ui::view) fn transfer_status_label(status: TransferJobStatus) -> &
 pub(in crate::ui::view) fn transfer_progress_bar(
     progress: &SftpTransferProgress,
 ) -> gpui::AnyElement {
+    let palette = crate::ui::theme::theme_palette("github-dark");
     let percent = progress
         .total_bytes
         .filter(|total| *total > 0)
@@ -179,7 +181,7 @@ pub(in crate::ui::view) fn transfer_progress_bar(
                 .w_full()
                 .overflow_hidden()
                 .rounded_sm()
-                .bg(rgb(0x242b38))
+                .bg(rgb(palette.border))
                 .child(
                     div()
                         .h(px(6.))
@@ -191,7 +193,7 @@ pub(in crate::ui::view) fn transfer_progress_bar(
         .child(
             div()
                 .text_xs()
-                .text_color(rgb(0x98a3b8))
+                .text_color(rgb(palette.text_muted))
                 .child(format_transfer_progress(progress)),
         )
         .into_any_element()

@@ -182,15 +182,16 @@ fn docker_resource_window(
 }
 
 fn docker_resource_range_footer(start: usize, end: usize, total: usize) -> impl IntoElement {
+    let palette = crate::ui::theme::theme_palette("github-dark");
     div()
         .px_2()
         .py_1()
         .rounded_md()
         .border_1()
-        .border_color(rgb(0x21262d))
-        .bg(rgb(0x0d1117))
+        .border_color(rgb(palette.surface_elevated))
+        .bg(rgb(palette.bg))
         .text_size(px(10.))
-        .text_color(rgb(0x6e7681))
+        .text_color(rgb(palette.text_dimmed))
         .child(format!("Rows {start}-{end}/{total} · scroll or refine search"))
 }
 
@@ -215,6 +216,7 @@ pub(in crate::ui::view::pages::remote) fn docker_resource_panel(
     _scroll_offset: usize,
     cx: &mut Context<NyaTermApp>,
 ) -> gpui::AnyElement {
+        let palette = cx.entity().read(cx).theme_palette();
     // Tauri resource tabs: full-height virtual list + wheel offset.
     let _ = title;
     let total_for_scroll = count;
@@ -259,7 +261,7 @@ pub(in crate::ui::view::pages::remote) fn docker_resource_panel(
                     div()
                         .text_size(px(10.))
                         .font_weight(FontWeight(700.))
-                        .text_color(rgb(0x6e7681))
+                        .text_color(rgb(palette.text_dimmed))
                         .child(format!("{title} · {count}")),
                 ),
         )
@@ -281,6 +283,7 @@ pub(in crate::ui::view::pages::remote) fn docker_resource_static_panel(
     count: usize,
     rows: impl IntoElement,
 ) -> impl IntoElement {
+    let palette = crate::ui::theme::theme_palette("github-dark");
     div()
         .id(SharedString::from(format!(
             "docker-resource-{}",
@@ -304,7 +307,7 @@ pub(in crate::ui::view::pages::remote) fn docker_resource_static_panel(
                     div()
                         .text_size(px(10.))
                         .font_weight(FontWeight(700.))
-                        .text_color(rgb(0x6e7681))
+                        .text_color(rgb(palette.text_dimmed))
                         .child(format!("{title} · {count}")),
                 ),
         )
@@ -315,19 +318,20 @@ pub(in crate::ui::view::pages::remote) fn docker_resource_row(
     title: String,
     detail: String,
 ) -> gpui::Div {
+    let palette = crate::ui::theme::theme_palette("github-dark");
     // ~64px Tauri SIMPLE_ROW_HEIGHT-ish dense resource row (slightly tighter chrome).
     div()
         .h(px(64.))
         .rounded_md()
         .border_1()
-        .border_color(rgb(0x30363d))
-        .bg(rgb(0x12171f))
+        .border_color(rgb(palette.border))
+        .bg(rgb(palette.section_header))
         .px_3()
         .flex()
         .items_center()
         .justify_between()
         .gap_2()
-        .hover(|this| this.bg(rgb(0x18202b)))
+        .hover(|this| this.bg(rgb(palette.hover)))
         .child(
             div()
                 .min_w_0()
@@ -339,7 +343,7 @@ pub(in crate::ui::view::pages::remote) fn docker_resource_row(
                     div()
                         .text_size(px(12.))
                         .font_weight(FontWeight(600.))
-                        .text_color(rgb(0xc9d1d9))
+                        .text_color(rgb(palette.text))
                         .overflow_hidden()
                         .child(truncate_preview(&title, 48)),
                 )
@@ -347,7 +351,7 @@ pub(in crate::ui::view::pages::remote) fn docker_resource_row(
                     div()
                         .font_family("JetBrains Mono")
                         .text_size(px(10.))
-                        .text_color(rgb(0x6e7681))
+                        .text_color(rgb(palette.text_dimmed))
                         .overflow_hidden()
                         .child(truncate_preview(&detail, 72)),
                 ),

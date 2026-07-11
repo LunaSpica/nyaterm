@@ -104,7 +104,7 @@ impl NyaTermApp {
                 let hover_bg = if let Some(custom_color) = custom_color {
                     rgba((custom_color << 8) | if is_active { 0x32 } else { 0x22 })
                 } else {
-                    rgb(0x18202b)
+                    rgb(palette.hover)
                 };
                 tabs = tabs.child(
                     div()
@@ -119,9 +119,9 @@ impl NyaTermApp {
                         .relative()
                         .border_r_1()
                         .border_color(if is_active {
-                            custom_color.map(rgb).unwrap_or_else(|| rgb(0x334155))
+                            custom_color.map(rgb).unwrap_or_else(|| rgb(palette.border))
                         } else {
-                            rgb(0x202633)
+                            rgb(palette.border)
                         })
                         .bg(bg)
                         .cursor_pointer()
@@ -480,7 +480,7 @@ div()
                                     .text_color(rgb(0x9ca3af))
                                     .child("Quick Commands"),
                             )
-                            .child(status_pill("bottom panel", rgb(0x93c5fd), rgb(0x17253b))),
+                            .child(status_pill("bottom panel", rgb(0x93c5fd), rgb(palette.hover))),
                     )
                     .child(
                         div()
