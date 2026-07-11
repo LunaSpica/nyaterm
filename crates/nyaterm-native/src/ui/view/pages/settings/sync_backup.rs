@@ -121,123 +121,102 @@ impl NyaTermApp {
         &mut self,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
+        let log_dir = self.runtime.log_dir().display().to_string();
+        let prompt_label = match self.diagnostics_path_prompt {
+            Some(DiagnosticsPathPromptKind::Export) => "selecting export path",
+            None => "native diagnostics",
+        };
+
         div()
-            .rounded_md()
-            .border_1()
-            .border_color(rgb(0x2a3140))
-            .bg(rgb(0x151923))
-            .p_4()
-            .child(
+            .flex()
+            .flex_col()
+            .gap_3()
+            .child(settings_form_section(
+                Some("Diagnostics"),
+                Some("Export support bundles and open the native log directory."),
                 div()
-                    .text_sm()
-                    .font_weight(FontWeight(700.))
-                    .child("Diagnostics / Updates"),
-            )
-            .child(
-                div()
-                    .mt_3()
                     .flex()
-                    .items_center()
-                    .gap_2()
-                    .child(small_button(
-                        "settings-diagnostics-export",
-                        "Export",
-                        cx.listener(|this, _, _, cx| {
-                            this.prompt_diagnostics_export(cx);
-                        }),
-                    ))
-                    .child(small_button(
-                        "settings-diagnostics-logs",
-                        "Logs",
-                        cx.listener(|this, _, _, cx| {
-                            this.reveal_log_dir(cx);
-                        }),
-                    ))
-                    .child(div().text_xs().text_color(rgb(0x98a3b8)).child(
-                        match self.diagnostics_path_prompt {
-                            Some(DiagnosticsPathPromptKind::Export) => "selecting export path",
-                            None => "native diagnostics",
-                        },
-                    )),
-            )
-            .child(
-                div()
-                    .mt_3()
-                    .border_t_1()
-                    .border_color(rgb(0x2a3140))
-                    .pt_3()
-                    .flex()
-                    .items_center()
-                    .justify_between()
-                    .gap_2()
-                    .child(
+                    .flex_col()
+                    .gap_3()
+                    .child(settings_form_row(
+                        "Support bundle",
+                        Some(SharedString::from(prompt_label)),
                         div()
-                            .min_w_0()
                             .flex()
-                            .flex_col()
                             .gap_1()
-                            .child(
-                                div()
-                                    .text_xs()
-                                    .font_weight(FontWeight(700.))
-                                    .text_color(rgb(0xe5edf7))
-                                    .child("Native Update Check"),
-                            )
-                            .child(
-                                div()
-                                    .text_xs()
-                                    .text_color(rgb(0x98a3b8))
-                                    .line_height(px(18.))
-                                    .child(truncate_preview(&self.update_status, 120)),
-                            ),
-                    )
-                    .child(small_button(
-                        "settings-update-check",
-                        if self.update_pending {
-                            "Checking"
-                        } else {
-                            "Check"
-                        },
-                        cx.listener(|this, _, _, cx| {
-                            this.start_update_check(cx);
-                        }),
+                            .child(small_button(
+                                "settings-diagnostics-export",
+                                "Export",
+                                cx.listener(|this, _, _, cx| {
+                                    this.prompt_diagnostics_export(cx);
+                                }),
+                            ))
+                            .child(small_button(
+                                "settings-diagnostics-logs",
+                                "Logs",
+                                cx.listener(|this, _, _, cx| {
+                                    this.reveal_log_dir(cx);
+                                }),
+                            )),
+                    ))
+                    .child(settings_form_row(
+                        "Log directory",
+                        Some(SharedString::from(truncate_preview(&log_dir, 64))),
+                        div()
+                            .text_size(px(11.))
+                            .text_color(rgb(0x8b949e))
+                            .child("On disk"),
                     )),
-            )
-            .when_some(self.update_info.clone(), |this, info| {
-                let release_url = info
-                    .html_url
-                    .clone()
-                    .unwrap_or_else(|| "https://github.com/nyakang/nyaterm/releases".to_string());
-                let notes = info.release_notes.unwrap_or_default();
-                this.child(
-                    div()
-                        .mt_2()
-                        .flex()
-                        .flex_col()
-                        .gap_1()
-                        .text_xs()
-                        .text_color(rgb(0x98a3b8))
-                        .child(format!(
-                            "Latest: {}{}",
-                            info.latest_version,
-                            info.release_date
-                                .as_deref()
-                                .map(|date| format!(" · {date}"))
-                                .unwrap_or_default()
-                        ))
-                        .child(release_url)
-                        .when(!notes.trim().is_empty(), |this| {
-                            this.child(truncate_preview(&notes, 180))
-                        }),
-                )
-            })
-            .child(
+            ))
+            .child(settings_form_section(
+                Some("Updates"),
+                Some("Check for native application updates."),
                 div()
-                    .mt_3()
-                    .text_xs()
-                    .text_color(rgb(0x98a3b8))
-                    .child(self.runtime.log_dir().display().to_string()),
-            )
+                    .flex()
+                    .flex_col()
+                    .gap_3()
+                    .child(settings_form_row(
+                        "Native update",
+                        Some(SharedString::from(truncate_preview(&self.update_status, 96))),
+                        small_button(
+                            "settings-update-check",
+                            if self.update_pending {
+                                "Checking"
+                            } else {
+                                "Check"
+                            },
+                            cx.listener(|this, _, _, cx| {
+                                this.start_update_check(cx);
+                            }),
+                        ),
+                    ))
+                    .when_some(self.update_info.clone(), |this, info| {
+                        let release_url = info.html_url.clone().unwrap_or_else(|| {
+                            "https://github.com/nyakang/nyaterm/releases".to_string()
+                        });
+                        let notes = info.release_notes.unwrap_or_default();
+                        this.child(settings_form_row(
+                            "Latest release",
+                            Some(SharedString::from(format!(
+                                "{}{} · {}",
+                                info.latest_version,
+                                info.release_date
+                                    .as_deref()
+                                    .map(|date| format!(" · {date}"))
+                                    .unwrap_or_default(),
+                                truncate_preview(&release_url, 48)
+                            ))),
+                            div()
+                                .text_size(px(11.))
+                                .text_color(rgb(0x8b949e))
+                                .child(if notes.trim().is_empty() {
+                                    "no notes".to_string()
+                                } else {
+                                    truncate_preview(&notes, 48)
+                                }),
+                        ))
+                    }),
+            ))
     }
 
     pub(in crate::ui::view) fn cloud_sync_input(
@@ -598,117 +577,134 @@ impl NyaTermApp {
                     )),
             ))
             .when(active_cloud_provider == "webdav", |this| {
-                this.child(
+                this.child(settings_form_section(
+                    Some("WebDAV"),
+                    Some("Endpoint and credentials for the selected WebDAV target."),
                     div()
-                        .mt_2()
-                        .grid()
-                        .grid_cols(2)
-                        .gap_2()
-                        .child(self.cloud_sync_input(
-                            "cloud-webdav-endpoint",
-                            "Endpoint",
-                            self.cloud_sync_settings.webdav.endpoint.clone(),
-                            CloudSyncInputField::WebdavEndpoint,
-                            cx,
-                        ))
-                        .child(self.cloud_sync_input(
-                            "cloud-webdav-root",
-                            "Root",
-                            self.cloud_sync_settings.webdav.root.clone(),
-                            CloudSyncInputField::WebdavRoot,
-                            cx,
-                        ))
-                        .child(self.cloud_sync_input(
-                            "cloud-webdav-username",
-                            "Username",
-                            self.cloud_sync_settings.webdav.username.clone(),
-                            CloudSyncInputField::WebdavUsername,
-                            cx,
-                        ))
-                        .child(self.cloud_sync_input(
-                            "cloud-webdav-password",
-                            "Password",
-                            webdav_password_value,
-                            CloudSyncInputField::WebdavPassword,
-                            cx,
-                        )),
-                )
+                        .flex()
+                        .flex_col()
+                        .gap_3()
+                        .child(
+                            div()
+                                .grid()
+                                .grid_cols(2)
+                                .gap_2()
+                                .child(self.cloud_sync_input(
+                                    "cloud-webdav-endpoint",
+                                    "Endpoint",
+                                    self.cloud_sync_settings.webdav.endpoint.clone(),
+                                    CloudSyncInputField::WebdavEndpoint,
+                                    cx,
+                                ))
+                                .child(self.cloud_sync_input(
+                                    "cloud-webdav-root",
+                                    "Root",
+                                    self.cloud_sync_settings.webdav.root.clone(),
+                                    CloudSyncInputField::WebdavRoot,
+                                    cx,
+                                ))
+                                .child(self.cloud_sync_input(
+                                    "cloud-webdav-username",
+                                    "Username",
+                                    self.cloud_sync_settings.webdav.username.clone(),
+                                    CloudSyncInputField::WebdavUsername,
+                                    cx,
+                                ))
+                                .child(self.cloud_sync_input(
+                                    "cloud-webdav-password",
+                                    "Password",
+                                    webdav_password_value,
+                                    CloudSyncInputField::WebdavPassword,
+                                    cx,
+                                )),
+                        ),
+                ))
             })
             .when(active_cloud_provider == "s3", |this| {
-                this.child(
+                this.child(settings_form_section(
+                    Some("S3 Compatible"),
+                    Some("Bucket, region, and access keys for S3-compatible storage."),
                     div()
-                        .mt_2()
-                        .grid()
-                        .grid_cols(3)
-                        .gap_2()
-                        .child(self.cloud_sync_input(
-                            "cloud-s3-endpoint",
-                            "Endpoint",
-                            self.cloud_sync_settings.s3.endpoint.clone(),
-                            CloudSyncInputField::S3Endpoint,
-                            cx,
-                        ))
-                        .child(self.cloud_sync_input(
-                            "cloud-s3-bucket",
-                            "Bucket",
-                            self.cloud_sync_settings.s3.bucket.clone(),
-                            CloudSyncInputField::S3Bucket,
-                            cx,
-                        ))
-                        .child(self.cloud_sync_input(
-                            "cloud-s3-region",
-                            "Region",
-                            self.cloud_sync_settings.s3.region.clone(),
-                            CloudSyncInputField::S3Region,
-                            cx,
-                        ))
-                        .child(self.cloud_sync_input(
-                            "cloud-s3-root",
-                            "S3 Root",
-                            self.cloud_sync_settings.s3.root.clone(),
-                            CloudSyncInputField::S3Root,
-                            cx,
-                        ))
-                        .child(self.cloud_sync_input(
-                            "cloud-s3-access-key",
-                            "Access Key",
-                            s3_access_key_value,
-                            CloudSyncInputField::S3AccessKeyId,
-                            cx,
-                        ))
-                        .child(self.cloud_sync_input(
-                            "cloud-s3-secret-key",
-                            "Secret Key",
-                            s3_secret_key_value,
-                            CloudSyncInputField::S3SecretAccessKey,
-                            cx,
-                        ))
-                        .child(self.cloud_sync_input(
-                            "cloud-s3-session-token",
-                            "Session Token",
-                            s3_session_token_value,
-                            CloudSyncInputField::S3SessionToken,
-                            cx,
-                        ))
-                        .child(small_button(
-                            "cloud-s3-url-style",
-                            if self.cloud_sync_settings.s3.virtual_host_style {
-                                "Virtual Host"
-                            } else {
-                                "Path Style"
-                            },
-                            cx.listener(|this, _, _, cx| {
-                                this.toggle_s3_virtual_host_style(cx);
-                            }),
+                        .flex()
+                        .flex_col()
+                        .gap_3()
+                        .child(
+                            div()
+                                .grid()
+                                .grid_cols(3)
+                                .gap_2()
+                                .child(self.cloud_sync_input(
+                                    "cloud-s3-endpoint",
+                                    "Endpoint",
+                                    self.cloud_sync_settings.s3.endpoint.clone(),
+                                    CloudSyncInputField::S3Endpoint,
+                                    cx,
+                                ))
+                                .child(self.cloud_sync_input(
+                                    "cloud-s3-bucket",
+                                    "Bucket",
+                                    self.cloud_sync_settings.s3.bucket.clone(),
+                                    CloudSyncInputField::S3Bucket,
+                                    cx,
+                                ))
+                                .child(self.cloud_sync_input(
+                                    "cloud-s3-region",
+                                    "Region",
+                                    self.cloud_sync_settings.s3.region.clone(),
+                                    CloudSyncInputField::S3Region,
+                                    cx,
+                                ))
+                                .child(self.cloud_sync_input(
+                                    "cloud-s3-root",
+                                    "S3 Root",
+                                    self.cloud_sync_settings.s3.root.clone(),
+                                    CloudSyncInputField::S3Root,
+                                    cx,
+                                ))
+                                .child(self.cloud_sync_input(
+                                    "cloud-s3-access-key",
+                                    "Access Key",
+                                    s3_access_key_value,
+                                    CloudSyncInputField::S3AccessKeyId,
+                                    cx,
+                                ))
+                                .child(self.cloud_sync_input(
+                                    "cloud-s3-secret-key",
+                                    "Secret Key",
+                                    s3_secret_key_value,
+                                    CloudSyncInputField::S3SecretAccessKey,
+                                    cx,
+                                ))
+                                .child(self.cloud_sync_input(
+                                    "cloud-s3-session-token",
+                                    "Session Token",
+                                    s3_session_token_value,
+                                    CloudSyncInputField::S3SessionToken,
+                                    cx,
+                                )),
+                        )
+                        .child(settings_form_row(
+                            "Virtual host style",
+                            Some(SharedString::from(
+                                "Use virtual-hosted-style URLs instead of path style.",
+                            )),
+                            settings_switch(
+                                "cloud-s3-url-style",
+                                self.cloud_sync_settings.s3.virtual_host_style,
+                                cx.listener(|this, _, _, cx| {
+                                    this.toggle_s3_virtual_host_style(cx);
+                                }),
+                            ),
                         )),
-                )
+                ))
             })
             .when(active_cloud_provider == "google_drive", |this| {
-                this.child(
+                this.child(settings_form_section(
+                    Some("Google Drive"),
+                    Some("OAuth client credentials and tokens for Drive sync."),
                     div()
-                        .mt_2()
                         .grid()
-                        .grid_cols(3)
+                        .grid_cols(2)
                         .gap_2()
                         .child(self.cloud_sync_input(
                             "cloud-google-drive-root",
@@ -717,19 +713,17 @@ impl NyaTermApp {
                             CloudSyncInputField::GoogleDriveRoot,
                             cx,
                         ))
-                        .child(
-                            self.cloud_sync_input(
-                                "cloud-google-drive-client-id",
-                                "Client ID",
-                                self.cloud_sync_settings
-                                    .google_drive
-                                    .client_id
-                                    .clone()
-                                    .unwrap_or_default(),
-                                CloudSyncInputField::GoogleDriveClientId,
-                                cx,
-                            ),
-                        )
+                        .child(self.cloud_sync_input(
+                            "cloud-google-drive-client-id",
+                            "Client ID",
+                            self.cloud_sync_settings
+                                .google_drive
+                                .client_id
+                                .clone()
+                                .unwrap_or_default(),
+                            CloudSyncInputField::GoogleDriveClientId,
+                            cx,
+                        ))
                         .child(self.cloud_sync_input(
                             "cloud-google-drive-client-secret",
                             "Client Secret",
@@ -751,14 +745,15 @@ impl NyaTermApp {
                             CloudSyncInputField::GoogleDriveRefreshToken,
                             cx,
                         )),
-                )
+                ))
             })
             .when(active_cloud_provider == "onedrive", |this| {
-                this.child(
+                this.child(settings_form_section(
+                    Some("OneDrive"),
+                    Some("Microsoft Graph credentials for OneDrive sync."),
                     div()
-                        .mt_2()
                         .grid()
-                        .grid_cols(3)
+                        .grid_cols(2)
                         .gap_2()
                         .child(self.cloud_sync_input(
                             "cloud-onedrive-root",
@@ -767,19 +762,17 @@ impl NyaTermApp {
                             CloudSyncInputField::OneDriveRoot,
                             cx,
                         ))
-                        .child(
-                            self.cloud_sync_input(
-                                "cloud-onedrive-client-id",
-                                "Client ID",
-                                self.cloud_sync_settings
-                                    .onedrive
-                                    .client_id
-                                    .clone()
-                                    .unwrap_or_default(),
-                                CloudSyncInputField::OneDriveClientId,
-                                cx,
-                            ),
-                        )
+                        .child(self.cloud_sync_input(
+                            "cloud-onedrive-client-id",
+                            "Client ID",
+                            self.cloud_sync_settings
+                                .onedrive
+                                .client_id
+                                .clone()
+                                .unwrap_or_default(),
+                            CloudSyncInputField::OneDriveClientId,
+                            cx,
+                        ))
                         .child(self.cloud_sync_input(
                             "cloud-onedrive-client-secret",
                             "Client Secret",
@@ -801,42 +794,34 @@ impl NyaTermApp {
                             CloudSyncInputField::OneDriveRefreshToken,
                             cx,
                         )),
-                )
+                ))
             })
             .when(active_cloud_provider == "aliyun_drive", |this| {
-                this.child(
+                this.child(settings_form_section(
+                    Some("Aliyun Drive"),
+                    Some("AliyunDrive OAuth credentials and tokens."),
                     div()
-                        .mt_2()
                         .grid()
-                        .grid_cols(3)
+                        .grid_cols(2)
                         .gap_2()
                         .child(self.cloud_sync_input(
                             "cloud-aliyun-drive-root",
-                            "Aliyun Root",
+                            "Drive Root",
                             self.cloud_sync_settings.aliyun_drive.root.clone(),
                             CloudSyncInputField::AliyunDriveRoot,
                             cx,
                         ))
                         .child(self.cloud_sync_input(
-                            "cloud-aliyun-drive-type",
-                            "Drive Type",
-                            self.cloud_sync_settings.aliyun_drive.drive_type.clone(),
-                            CloudSyncInputField::AliyunDriveType,
+                            "cloud-aliyun-drive-client-id",
+                            "Client ID",
+                            self.cloud_sync_settings
+                                .aliyun_drive
+                                .client_id
+                                .clone()
+                                .unwrap_or_default(),
+                            CloudSyncInputField::AliyunDriveClientId,
                             cx,
                         ))
-                        .child(
-                            self.cloud_sync_input(
-                                "cloud-aliyun-drive-client-id",
-                                "Client ID",
-                                self.cloud_sync_settings
-                                    .aliyun_drive
-                                    .client_id
-                                    .clone()
-                                    .unwrap_or_default(),
-                                CloudSyncInputField::AliyunDriveClientId,
-                                cx,
-                            ),
-                        )
                         .child(self.cloud_sync_input(
                             "cloud-aliyun-drive-client-secret",
                             "Client Secret",
@@ -858,12 +843,13 @@ impl NyaTermApp {
                             CloudSyncInputField::AliyunDriveRefreshToken,
                             cx,
                         )),
-                )
+                ))
             })
             .when(active_cloud_provider == "gitee_snippet", |this| {
-                this.child(
+                this.child(settings_form_section(
+                    Some("Gitee Snippet"),
+                    Some("API endpoint, snippet id, and personal access token."),
                     div()
-                        .mt_2()
                         .grid()
                         .grid_cols(3)
                         .gap_2()
@@ -888,12 +874,13 @@ impl NyaTermApp {
                             CloudSyncInputField::GiteeToken,
                             cx,
                         )),
-                )
+                ))
             })
             .when(active_cloud_provider == "github_gist", |this| {
-                this.child(
+                this.child(settings_form_section(
+                    Some("GitHub Gist"),
+                    Some("Gist id and token for encrypted snapshot sync."),
                     div()
-                        .mt_2()
                         .grid()
                         .grid_cols(2)
                         .gap_2()
@@ -911,96 +898,91 @@ impl NyaTermApp {
                             CloudSyncInputField::GithubToken,
                             cx,
                         )),
-                )
+                ))
             })
-            .child(
+            .child(settings_form_section(
+                Some("Sync actions"),
+                Some("Push or pull encrypted snapshots locally or via the selected provider."),
                 div()
-                    .mt_3()
                     .flex()
-                    .items_center()
-                    .gap_2()
-                    .child(small_button(
-                        "settings-cloud-sync-push",
-                        "Push Local",
-                        cx.listener(|this, _, _, cx| {
-                            this.prompt_local_cloud_sync_push(cx);
-                        }),
-                    ))
-                    .child(small_button(
-                        "settings-cloud-sync-pull",
-                        "Pull Local",
-                        cx.listener(|this, _, _, cx| {
-                            this.prompt_local_cloud_sync_pull(cx);
-                        }),
-                    ))
-                    .child(div().text_xs().text_color(rgb(0x98a3b8)).child(format!(
-                        "device {}",
-                        compact_id(&self.cloud_sync_state.device_id)
-                    ))),
-            )
-            .child(
-                div()
-                    .mt_2()
-                    .flex()
-                    .items_center()
-                    .gap_2()
-                    .child(small_button(
-                        "settings-provider-cloud-sync-push",
-                        "Push Provider",
-                        cx.listener(|this, _, _, cx| {
-                            this.prompt_provider_cloud_sync_push(cx);
-                        }),
-                    ))
-                    .child(small_button(
-                        "settings-provider-cloud-sync-pull",
-                        "Pull Provider",
-                        cx.listener(|this, _, _, cx| {
-                            this.prompt_provider_cloud_sync_pull(cx);
-                        }),
-                    ))
-                    .child(
+                    .flex_col()
+                    .gap_3()
+                    .child(settings_form_row(
+                        "Local mirror",
+                        Some(SharedString::from(format!(
+                            "device {} · revision {} · hash {}",
+                            compact_id(&self.cloud_sync_state.device_id),
+                            cloud_last_revision,
+                            cloud_last_hash
+                        ))),
                         div()
-                            .text_xs()
-                            .text_color(rgb(0x98a3b8))
-                            .child(self.cloud_sync_settings.provider.clone()),
-                    ),
-            )
+                            .flex()
+                            .gap_1()
+                            .child(small_button(
+                                "settings-cloud-sync-push",
+                                "Push Local",
+                                cx.listener(|this, _, _, cx| {
+                                    this.prompt_local_cloud_sync_push(cx);
+                                }),
+                            ))
+                            .child(small_button(
+                                "settings-cloud-sync-pull",
+                                "Pull Local",
+                                cx.listener(|this, _, _, cx| {
+                                    this.prompt_local_cloud_sync_pull(cx);
+                                }),
+                            )),
+                    ))
+                    .child(settings_form_row(
+                        "Provider",
+                        Some(SharedString::from(format!(
+                            "{} · {}",
+                            cloud_provider_label,
+                            truncate_preview(&cloud_remote_path, 40)
+                        ))),
+                        div()
+                            .flex()
+                            .gap_1()
+                            .child(small_button(
+                                "settings-provider-cloud-sync-push",
+                                "Push Provider",
+                                cx.listener(|this, _, _, cx| {
+                                    this.prompt_provider_cloud_sync_push(cx);
+                                }),
+                            ))
+                            .child(small_button(
+                                "settings-provider-cloud-sync-pull",
+                                "Pull Provider",
+                                cx.listener(|this, _, _, cx| {
+                                    this.prompt_provider_cloud_sync_pull(cx);
+                                }),
+                            )),
+                    )),
+            ))
             .when_some(cloud_conflict, |this, conflict| {
                 this.child(self.cloud_sync_conflict_banner(conflict, cx))
             })
             .when_some(cloud_snapshot_prompt, |this, prompt| {
                 this.child(self.snapshot_password_prompt_banner(prompt, cx))
             })
-            .child(
+            .child(settings_form_section(
+                Some("Recent history"),
+                None,
                 div()
-                    .mt_3()
-                    .text_xs()
-                    .text_color(rgb(0x98a3b8))
-                    .child(cloud_remote_path),
-            )
-            .child(
-                div()
-                    .mt_3()
                     .flex()
                     .flex_col()
                     .gap_2()
-                    .child(
-                        div()
-                            .text_size(px(10.))
-                            .font_weight(FontWeight(700.))
-                            .text_color(rgb(0x6e7681))
-                            .child("RECENT HISTORY"),
-                    )
                     .when(cloud_history_empty, |this| {
                         this.child(
                             div()
-                                .rounded_sm()
+                                .rounded_md()
                                 .border_1()
-                                .border_color(rgb(0x273244))
-                                .bg(rgb(0x111722))
-                                .p_3()
-                                .text_xs()
-                                .text_color(rgb(0x98a3b8))
+                                .border_color(rgb(0x21262d))
+                                .bg(rgb(0x0d1117))
+                                .px_3()
+                                .py_2()
+                                .text_size(px(11.))
+                                .text_color(rgb(0x8b949e))
                                 .child("No sync runs recorded"),
                         )
                     })
@@ -1034,9 +1016,10 @@ impl NyaTermApp {
                             }),
                         ))
                     }),
-            )
+            ))
     }
 }
+
 
 fn sync_provider_hint(title: &'static str, detail: &'static str) -> impl IntoElement {
     div()

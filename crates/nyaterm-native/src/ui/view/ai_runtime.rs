@@ -133,6 +133,16 @@ impl NyaTermApp {
         cx.notify();
     }
 
+    pub(in crate::ui::view) fn update_ai_smart_auto_execute_max_risk(
+        &mut self,
+        risk: RiskLevel,
+        cx: &mut Context<Self>,
+    ) {
+        self.ai_settings.agent_smart_auto_execute_max_risk = risk;
+        self.ai_status = "AI smart auto-execute risk edited; save to persist".to_string();
+        cx.notify();
+    }
+
     pub(in crate::ui::view) fn toggle_ai_model_enabled(
         &mut self,
         model_id: String,

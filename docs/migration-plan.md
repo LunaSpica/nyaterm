@@ -633,3 +633,14 @@ service boundary first:
 ## 2026-07-11 Command Send progress + stop
 - Mid-send progress card with completed/total units, current round, and percent bar.
 - Send/Send↵ buttons become Stop while a multi-round send is active; cancel uses AtomicBool.
+
+## 2026-07-11 AI Models + Cloud Sync header densify
+- AI Models: compact model/credential rows with status dots; catalog summary + provider chips + credential grid (no metric cards).
+- Cloud Sync header: enable switch, provider chips, remote root form rows.
+
+## 2026-07-11 Cloud Sync body + remaining settings form density
+- Cloud Sync provider fields (WebDAV/S3/Drive/OneDrive/Aliyun/Gitee/GitHub) wrapped in settings form sections.
+- Sync actions (local/provider push-pull) and recent history use dense form sections.
+- Diagnostics/Updates rewritten to form rows (export, logs, update check).
+- AI Rules: max file size, agent step timeout, smart risk chips, dense action lists.
+- Transfer Editor/Advanced/Recording rewritten to SettingSection/Row switches + steppers.

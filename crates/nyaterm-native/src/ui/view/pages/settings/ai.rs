@@ -786,6 +786,7 @@ impl NyaTermApp {
         &mut self,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
+        // Tauri AiRulesTab: max file size + terminal/file action lists.
         let terminal_enabled = self
             .ai_settings
             .terminal_ai_actions
@@ -799,52 +800,27 @@ impl NyaTermApp {
             .filter(|action| action.enabled)
             .count();
         let file_size_mb = (self.ai_settings.max_ai_file_size_bytes / (1024 * 1024)).max(1);
+        let step_timeout_s = (self.ai_settings.agent_step_timeout_ms.unwrap_or(30_000) / 1000).max(1);
+        let smart_risk = ai_risk_label(&self.ai_settings.agent_smart_auto_execute_max_risk);
 
         div()
             .flex()
             .flex_col()
-            .gap_4()
-            .child(
+            .gap_3()
+            .child(settings_form_section(
+                Some("Rules"),
+                Some("Limits and auto-execute risk for AI-assisted actions."),
                 div()
-                    .rounded_md()
-                    .border_1()
-                    .border_color(rgb(0x2a3140))
-                    .bg(rgb(0x151923))
-                    .p_4()
-                    .child(div().text_sm().font_weight(FontWeight(700.)).child("Rules"))
-                    .child(
+                    .flex()
+                    .flex_col()
+                    .gap_3()
+                    .child(settings_form_row(
+                        "Max AI file size",
+                        Some(SharedString::from(format!("{file_size_mb} MiB per attachment"))),
                         div()
-                            .mt_3()
-                            .grid()
-                            .grid_cols(4)
-                            .gap_3()
-                            .child(metric("Max File", format!("{file_size_mb} MiB")))
-                            .child(metric(
-                                "Terminal Actions",
-                                format!(
-                                    "{terminal_enabled}/{}",
-                                    self.ai_settings.terminal_ai_actions.len()
-                                ),
-                            ))
-                            .child(metric(
-                                "File Actions",
-                                format!(
-                                    "{file_enabled}/{}",
-                                    self.ai_settings.file_ai_actions.len()
-                                ),
-                            ))
-                            .child(metric(
-                                "Smart Risk",
-                                ai_risk_label(&self.ai_settings.agent_smart_auto_execute_max_risk),
-                            )),
-                    )
-                    .child(
-                        div()
-                            .mt_3()
                             .flex()
                             .items_center()
-                            .gap_2()
-                            .flex_wrap()
+                            .gap_1()
                             .child(small_button(
                                 "ai-file-size-minus",
                                 "-1 MiB",
@@ -852,38 +828,132 @@ impl NyaTermApp {
                                     this.adjust_ai_file_size_mb(-1, cx);
                                 }),
                             ))
+                            .child(
+                                div()
+                                    .min_w(px(42.))
+                                    .text_center()
+                                    .font_family("JetBrains Mono")
+                                    .text_size(px(12.))
+                                    .font_weight(FontWeight(700.))
+                                    .text_color(rgb(0xc9d1d9))
+                                    .child(format!("{file_size_mb}")),
+                            )
                             .child(small_button(
                                 "ai-file-size-plus",
                                 "+1 MiB",
                                 cx.listener(|this, _, _, cx| {
                                     this.adjust_ai_file_size_mb(1, cx);
                                 }),
-                            ))
+                            )),
+                    ))
+                    .child(settings_form_row(
+                        "Agent step timeout",
+                        Some(SharedString::from(format!("{step_timeout_s}s per agent step"))),
+                        div()
+                            .flex()
+                            .items_center()
+                            .gap_1()
                             .child(small_button(
                                 "ai-agent-step-timeout-minus",
-                                "-1s Step",
+                                "-1s",
                                 cx.listener(|this, _, _, cx| {
                                     this.adjust_ai_agent_step_timeout_ms(-1_000, cx);
                                 }),
                             ))
+                            .child(
+                                div()
+                                    .min_w(px(42.))
+                                    .text_center()
+                                    .font_family("JetBrains Mono")
+                                    .text_size(px(12.))
+                                    .font_weight(FontWeight(700.))
+                                    .text_color(rgb(0xc9d1d9))
+                                    .child(format!("{step_timeout_s}s")),
+                            )
                             .child(small_button(
                                 "ai-agent-step-timeout-plus",
-                                "+1s Step",
+                                "+1s",
                                 cx.listener(|this, _, _, cx| {
                                     this.adjust_ai_agent_step_timeout_ms(1_000, cx);
                                 }),
-                            ))
-                            .child(small_button(
-                                "ai-rules-save",
-                                "Save",
+                            )),
+                    ))
+                    .child(settings_form_row(
+                        "Smart auto-execute risk",
+                        Some(SharedString::from(format!("current: {smart_risk}"))),
+                        div()
+                            .flex()
+                            .flex_wrap()
+                            .gap_1()
+                            .child(settings_choice_chip(
+                                "ai-risk-low",
+                                "Low",
+                                matches!(
+                                    self.ai_settings.agent_smart_auto_execute_max_risk,
+                                    RiskLevel::Low
+                                ),
                                 cx.listener(|this, _, _, cx| {
-                                    this.save_ai_settings(cx);
+                                    this.update_ai_smart_auto_execute_max_risk(RiskLevel::Low, cx);
+                                }),
+                            ))
+                            .child(settings_choice_chip(
+                                "ai-risk-medium",
+                                "Medium",
+                                matches!(
+                                    self.ai_settings.agent_smart_auto_execute_max_risk,
+                                    RiskLevel::Medium
+                                ),
+                                cx.listener(|this, _, _, cx| {
+                                    this.update_ai_smart_auto_execute_max_risk(
+                                        RiskLevel::Medium,
+                                        cx,
+                                    );
+                                }),
+                            ))
+                            .child(settings_choice_chip(
+                                "ai-risk-high",
+                                "High",
+                                matches!(
+                                    self.ai_settings.agent_smart_auto_execute_max_risk,
+                                    RiskLevel::High
+                                ),
+                                cx.listener(|this, _, _, cx| {
+                                    this.update_ai_smart_auto_execute_max_risk(RiskLevel::High, cx);
+                                }),
+                            ))
+                            .child(settings_choice_chip(
+                                "ai-risk-critical",
+                                "Critical",
+                                matches!(
+                                    self.ai_settings.agent_smart_auto_execute_max_risk,
+                                    RiskLevel::Critical
+                                ),
+                                cx.listener(|this, _, _, cx| {
+                                    this.update_ai_smart_auto_execute_max_risk(
+                                        RiskLevel::Critical,
+                                        cx,
+                                    );
                                 }),
                             )),
-                    ),
-            )
+                    ))
+                    .child(settings_form_row(
+                        "Actions",
+                        Some(SharedString::from(self.ai_status.clone())),
+                        small_button(
+                            "ai-rules-save",
+                            "Save",
+                            cx.listener(|this, _, _, cx| {
+                                this.save_ai_settings(cx);
+                            }),
+                        ),
+                    )),
+            ))
             .child(ai_action_list(
                 "Terminal Actions",
+                format!(
+                    "{terminal_enabled}/{} enabled",
+                    self.ai_settings.terminal_ai_actions.len()
+                ),
                 self.ai_settings
                     .terminal_ai_actions
                     .iter()
@@ -892,10 +962,15 @@ impl NyaTermApp {
             ))
             .child(ai_action_list(
                 "File Actions",
+                format!(
+                    "{file_enabled}/{} enabled",
+                    self.ai_settings.file_ai_actions.len()
+                ),
                 self.ai_settings.file_ai_actions.iter().cloned().collect(),
             ))
     }
 }
+
 
 fn ai_setting_hint(title: &'static str, detail: &'static str) -> impl IntoElement {
     div()
@@ -975,85 +1050,88 @@ fn ai_risk_label(risk: &RiskLevel) -> String {
     }
 }
 
-fn ai_action_list(title: &'static str, actions: Vec<AiCustomActionConfig>) -> impl IntoElement {
-    let enabled = actions.iter().filter(|action| action.enabled).count();
-    let rows =
-        actions
-            .into_iter()
-            .take(6)
-            .fold(div().mt_3().flex().flex_col().gap_2(), |rows, action| {
-                rows.child(
-                    div()
-                        .rounded_sm()
-                        .border_1()
-                        .border_color(rgb(0x263142))
-                        .bg(rgb(0x0d1320))
-                        .p_3()
-                        .child(
-                            div()
-                                .flex()
-                                .items_center()
-                                .justify_between()
-                                .gap_3()
-                                .child(
-                                    div()
-                                        .min_w_0()
-                                        .text_xs()
-                                        .font_weight(FontWeight(800.))
-                                        .text_color(rgb(0xe5edf7))
-                                        .child(truncate_preview(&action.name, 44)),
-                                )
-                                .child(status_pill(
-                                    if action.enabled { "enabled" } else { "off" },
-                                    if action.enabled {
-                                        rgb(0x6ee7b7)
-                                    } else {
-                                        rgb(0x98a3b8)
-                                    },
-                                    if action.enabled {
-                                        rgb(0x12342a)
-                                    } else {
-                                        rgb(0x202633)
-                                    },
-                                )),
-                        )
-                        .child(
-                            div()
-                                .mt_1()
-                                .text_size(px(10.))
-                                .text_color(rgb(0x8f98aa))
-                                .line_height(px(14.))
-                                .child(truncate_preview(&action.prompt, 120)),
-                        ),
-                )
-            });
+fn ai_action_list(
+    title: &'static str,
+    summary: String,
+    actions: Vec<AiCustomActionConfig>,
+) -> impl IntoElement {
+    let rows = actions.into_iter().take(8).fold(
+        div().flex().flex_col().gap_1(),
+        |rows, action| {
+            rows.child(
+                div()
+                    .rounded_md()
+                    .px_2()
+                    .py_1()
+                    .border_1()
+                    .border_color(rgb(0x21262d))
+                    .bg(rgb(0x0d1117))
+                    .flex()
+                    .items_center()
+                    .gap_2()
+                    .child(
+                        div()
+                            .size(px(8.))
+                            .rounded_full()
+                            .flex_none()
+                            .bg(if action.enabled {
+                                rgb(0x3fb950)
+                            } else {
+                                rgb(0x484f58)
+                            }),
+                    )
+                    .child(
+                        div()
+                            .min_w_0()
+                            .flex_1()
+                            .flex()
+                            .flex_col()
+                            .child(
+                                div()
+                                    .text_size(px(12.))
+                                    .font_weight(FontWeight(600.))
+                                    .text_color(rgb(0xc9d1d9))
+                                    .overflow_hidden()
+                                    .child(truncate_preview(&action.name, 44)),
+                            )
+                            .child(
+                                div()
+                                    .text_size(px(10.))
+                                    .text_color(rgb(0x6e7681))
+                                    .overflow_hidden()
+                                    .child(truncate_preview(&action.prompt, 96)),
+                            ),
+                    )
+                    .child(
+                        div()
+                            .text_size(px(10.))
+                            .font_weight(FontWeight(600.))
+                            .text_color(if action.enabled {
+                                rgb(0x3fb950)
+                            } else {
+                                rgb(0x8b949e)
+                            })
+                            .child(if action.enabled { "on" } else { "off" }),
+                    ),
+            )
+        },
+    );
 
-    div()
-        .rounded_md()
-        .border_1()
-        .border_color(rgb(0x2a3140))
-        .bg(rgb(0x151923))
-        .p_4()
-        .child(
-            div()
-                .flex()
-                .items_center()
-                .justify_between()
-                .gap_3()
-                .child(div().text_sm().font_weight(FontWeight(700.)).child(title))
-                .child(status_pill(
-                    if enabled > 0 { "active" } else { "empty" },
-                    if enabled > 0 {
-                        rgb(0x6ee7b7)
-                    } else {
-                        rgb(0x98a3b8)
-                    },
-                    if enabled > 0 {
-                        rgb(0x12342a)
-                    } else {
-                        rgb(0x202633)
-                    },
-                )),
-        )
-        .child(rows)
+    settings_form_section(
+        Some(title),
+        None,
+        div()
+            .flex()
+            .flex_col()
+            .gap_2()
+            .child(settings_form_row(
+                "Catalog",
+                Some(SharedString::from(summary)),
+                div()
+                    .text_size(px(11.))
+                    .text_color(rgb(0x8b949e))
+                    .child("Custom"),
+            ))
+            .child(rows),
+    )
 }
