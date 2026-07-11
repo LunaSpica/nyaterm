@@ -117,7 +117,14 @@ pub(in crate::ui::view) struct AiAgentStepView {
     pub(in crate::ui::view) step_index: u16,
     pub(in crate::ui::view) status: AiAgentStepStatus,
     pub(in crate::ui::view) title: String,
+    /// Short summary line (Tauri duration / status meta).
     pub(in crate::ui::view) detail: String,
+    /// Collapsible thought text (Tauri AgentStepView.thought).
+    pub(in crate::ui::view) thought: Option<String>,
+    /// Shell command body when the step is execute_command-like.
+    pub(in crate::ui::view) command: Option<String>,
+    /// Observation / terminal output snippet.
+    pub(in crate::ui::view) observation: Option<String>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

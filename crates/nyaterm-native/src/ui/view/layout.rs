@@ -376,6 +376,8 @@ impl NyaTermApp {
     }
 
     pub(in crate::ui::view) fn title_bar(&mut self, cx: &mut Context<Self>) -> impl IntoElement {
+
+        let palette = self.theme_palette();
         // Compact chrome closer to Tauri title/menu strip density.
         div()
             .h(px(36.))
@@ -383,8 +385,8 @@ impl NyaTermApp {
             .items_center()
             .justify_between()
             .border_b_1()
-            .border_color(rgb(0x30363d))
-            .bg(rgb(0x161b22))
+            .border_color(rgb(palette.border))
+            .bg(rgb(palette.surface))
             .child(
                 div()
                     .h_full()

@@ -44,73 +44,8 @@ impl NyaTermApp {
                 );
             } else {
                 for step in self.ai_agent_steps.iter().cloned().rev().take(16).rev() {
-                    let (label, fg, bg) = ai_agent_step_status_style(step.status);
-                    let border = match step.status {
-                        AiAgentStepStatus::Completed => rgb(0x3fb950),
-                        AiAgentStepStatus::Failed | AiAgentStepStatus::Cancelled => rgb(0xf85149),
-                        AiAgentStepStatus::Running | AiAgentStepStatus::Tool => rgb(0x58a6ff),
-                        AiAgentStepStatus::NeedsApproval => rgb(0xd29922),
-                        AiAgentStepStatus::Planning => rgb(0x8b949e),
-                    };
-                    agent_step_rows = agent_step_rows.child(
-                        div()
-                            .relative()
-                            .rounded_md()
-                            .border_1()
-                            .border_color(rgb(0x30363d))
-                            .bg(rgb(0x0d1117))
-                            .overflow_hidden()
-                            .child(
-                                div()
-                                    .absolute()
-                                    .left_0()
-                                    .top_0()
-                                    .bottom_0()
-                                    .w(px(3.))
-                                    .bg(border),
-                            )
-                            .child(
-                                div()
-                                    .px_2()
-                                    .py_1()
-                                    .pl(px(10.))
-                                    .flex()
-                                    .flex_col()
-                                    .gap(px(2.))
-                            .child(
-                                div()
-                                    .flex()
-                                    .items_center()
-                                    .justify_between()
-                                    .gap_2()
-                                    .child(
-                                        div()
-                                            .min_w_0()
-                                            .flex_1()
-                                            .text_size(px(11.))
-                                            .font_weight(FontWeight(600.))
-                                            .text_color(rgb(0xc9d1d9))
-                                            .overflow_hidden()
-                                            .child(format!(
-                                                "#{} {}",
-                                                step.step_index.saturating_add(1),
-                                                truncate_preview(&step.title, 42)
-                                            )),
-                                    )
-                                    .child(status_pill(label, rgb(fg), rgb(bg))),
-                            )
-                            .when(!step.detail.trim().is_empty(), |this| {
-                                this.child(
-                                    div()
-                                        .font_family("JetBrains Mono")
-                                        .text_size(px(11.))
-                                        .text_color(rgb(0x8b949e))
-                                        .line_height(px(16.))
-                                        .child(truncate_preview(&step.detail, 220)),
-                                )
-                            }),
-                            ),
-                    );
+                    agent_step_rows =
+                        agent_step_rows.child(self.ai_agent_step_card(step, cx));
                 }
             }
         }
@@ -216,6 +151,8 @@ impl NyaTermApp {
                             };
                             this.ai_command_cards.clear();
                             this.ai_agent_steps.clear();
+                            this.ai_agent_thought_expanded.clear();
+                            this.ai_agent_output_expanded.clear();
                             this.ai_chat_messages.clear();
                             this.ai_streaming_assistant_id = None;
                             this.ai_prepared_request = None;
@@ -1042,6 +979,256 @@ impl NyaTermApp {
     }
 
 
+
+    fn ai_agent_step_card(
+        &self,
+        step: AiAgentStepView,
+        cx: &mut Context<Self>,
+    ) -> impl IntoElement {
+        // Tauri AgentStepView: collapsible thought, left-accent command shell, optional output.
+        let (label, fg, bg) = ai_agent_step_status_style(step.status);
+        let border = match step.status {
+            AiAgentStepStatus::Completed => rgb(0x3fb950),
+            AiAgentStepStatus::Failed | AiAgentStepStatus::Cancelled => rgb(0xf85149),
+            AiAgentStepStatus::Running | AiAgentStepStatus::Tool => rgb(0x58a6ff),
+            AiAgentStepStatus::NeedsApproval => rgb(0xd29922),
+            AiAgentStepStatus::Planning => rgb(0x8b949e),
+        };
+        let step_index = step.step_index;
+        let thought_open = self.ai_agent_thought_expanded.contains(&step_index);
+        let output_open = self.ai_agent_output_expanded.contains(&step_index);
+        let thought = step
+            .thought
+            .clone()
+            .filter(|value| !value.trim().is_empty());
+        let command = step
+            .command
+            .clone()
+            .or_else(|| {
+                if step.detail.trim().is_empty() {
+                    None
+                } else if thought.as_ref().is_some_and(|t| t == &step.detail) {
+                    None
+                } else {
+                    Some(step.detail.clone())
+                }
+            })
+            .filter(|value| !value.trim().is_empty());
+        let observation = step
+            .observation
+            .clone()
+            .filter(|value| !value.trim().is_empty());
+        let has_thought = thought.is_some();
+        let thought_label = if has_thought {
+            if thought_open {
+                "Hide thought"
+            } else {
+                "Show thought"
+            }
+        } else if matches!(
+            step.status,
+            AiAgentStepStatus::Completed | AiAgentStepStatus::Planning
+        ) {
+            "Step"
+        } else {
+            ""
+        };
+
+        let mut card = div()
+            .id(SharedString::from(format!("ai-agent-step-{step_index}")))
+            .flex()
+            .flex_col()
+            .gap_1()
+            .pb_2()
+            .child(
+                div()
+                    .id(SharedString::from(format!(
+                        "ai-agent-step-thought-toggle-{step_index}"
+                    )))
+                    .flex()
+                    .items_center()
+                    .gap_1()
+                    .cursor_pointer()
+                    .on_click(cx.listener(move |this, _, _, cx| {
+                        this.toggle_ai_agent_thought_expanded(step_index, cx);
+                    }))
+                    .child(
+                        div()
+                            .text_size(px(11.))
+                            .text_color(rgb(0x8b949e))
+                            .child(if thought_open { "▾" } else { "▸" }),
+                    )
+                    .child(
+                        div()
+                            .text_size(px(11.))
+                            .font_weight(FontWeight(700.))
+                            .text_color(rgb(0xe5edf7))
+                            .child(format!("#{}", step.step_index.saturating_add(1))),
+                    )
+                    .child(
+                        div()
+                            .min_w_0()
+                            .flex_1()
+                            .text_size(px(11.))
+                            .text_color(rgb(0x8b949e))
+                            .overflow_hidden()
+                            .child(if thought_label.is_empty() {
+                                truncate_preview(&step.title, 36)
+                            } else {
+                                format!(
+                                    "{} · {}",
+                                    thought_label,
+                                    truncate_preview(&step.title, 28)
+                                )
+                            }),
+                    )
+                    .child(status_pill(label, rgb(fg), rgb(bg))),
+            );
+
+        if thought_open {
+            if let Some(thought_text) = thought.clone() {
+                card = card.child(
+                    div()
+                        .ml_4()
+                        .text_size(px(11.))
+                        .text_color(rgb(0x8b949e))
+                        .line_height(px(16.))
+                        .child(markdown_content_view(&truncate_preview(
+                            &thought_text,
+                            800,
+                        ))),
+                );
+            }
+        }
+
+        if let Some(command_text) = command {
+            let mut shell = div()
+                .ml_1()
+                .rounded_md()
+                .border_1()
+                .border_color(rgb(0x30363d))
+                .border_l_2()
+                .border_color(border)
+                .bg(rgb(0x0d1117))
+                .overflow_hidden()
+                .child(
+                    div()
+                        .px_2()
+                        .py_1()
+                        .border_b_1()
+                        .border_color(rgb(0x21262d))
+                        .flex()
+                        .items_center()
+                        .gap_2()
+                        .child(
+                            div()
+                                .text_size(px(10.))
+                                .font_weight(FontWeight(700.))
+                                .text_color(rgb(0x8b949e))
+                                .child("SHELL"),
+                        )
+                        .child(
+                            div()
+                                .ml_auto()
+                                .text_size(px(10.))
+                                .text_color(rgb(0x6e7681))
+                                .child(truncate_preview(&step.title, 24)),
+                        ),
+                )
+                .child(
+                    div()
+                        .px_2()
+                        .py_1()
+                        .font_family("JetBrains Mono")
+                        .text_size(px(11.))
+                        .text_color(rgb(0xc9d1d9))
+                        .line_height(px(16.))
+                        .child(truncate_preview(&command_text, 600)),
+                );
+
+            if let Some(obs) = observation.clone() {
+                shell = shell
+                    .child(
+                        div()
+                            .id(SharedString::from(format!(
+                                "ai-agent-step-output-toggle-{step_index}"
+                            )))
+                            .px_2()
+                            .py_1()
+                            .border_t_1()
+                            .border_color(rgb(0x21262d))
+                            .flex()
+                            .items_center()
+                            .gap_1()
+                            .cursor_pointer()
+                            .hover(|this| this.bg(rgb(0x161b22)))
+                            .on_click(cx.listener(move |this, _, _, cx| {
+                                this.toggle_ai_agent_output_expanded(step_index, cx);
+                            }))
+                            .child(
+                                div()
+                                    .text_size(px(10.))
+                                    .text_color(rgb(0x8b949e))
+                                    .child(if output_open { "▾" } else { "▸" }),
+                            )
+                            .child(
+                                div()
+                                    .text_size(px(10.))
+                                    .text_color(rgb(0x8b949e))
+                                    .child(if output_open {
+                                        "Hide output"
+                                    } else {
+                                        "Show output"
+                                    }),
+                            ),
+                    );
+                if output_open {
+                    shell = shell.child(
+                        div()
+                            .px_2()
+                            .py_1()
+                            .max_h(px(120.))
+                            .overflow_hidden()
+                            .font_family("JetBrains Mono")
+                            .text_size(px(10.))
+                            .text_color(rgb(0x8b949e))
+                            .line_height(px(14.))
+                            .child(truncate_preview(&obs, 1200)),
+                    );
+                }
+            } else if matches!(step.status, AiAgentStepStatus::Running | AiAgentStepStatus::Tool) {
+                shell = shell.child(
+                    div()
+                        .px_2()
+                        .py_1()
+                        .border_t_1()
+                        .border_color(rgb(0x21262d))
+                        .text_size(px(10.))
+                        .text_color(rgb(0x58a6ff))
+                        .child("Executing…"),
+                );
+            }
+
+            card = card.child(shell);
+        } else if let Some(obs) = observation {
+            card = card.child(
+                div()
+                    .ml_4()
+                    .rounded_md()
+                    .border_1()
+                    .border_color(rgb(0x30363d))
+                    .bg(rgb(0x0d1117))
+                    .px_2()
+                    .py_1()
+                    .font_family("JetBrains Mono")
+                    .text_size(px(10.))
+                    .text_color(rgb(0x8b949e))
+                    .child(truncate_preview(&obs, 400)),
+            );
+        }
+
+        card
+    }
 
     fn ai_command_card_list(&self, cx: &mut Context<Self>) -> gpui::AnyElement {
         // Tauri AICommandCardView list under transcript.

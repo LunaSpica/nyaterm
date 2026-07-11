@@ -10,6 +10,28 @@ impl NyaTermApp {
     ) {
         let title = title.into();
         let detail = detail.into();
+        // Infer Tauri AgentStepView sections from existing call-site titles.
+        let lower_title = title.to_ascii_lowercase();
+        let looks_like_command = matches!(
+            status,
+            AiAgentStepStatus::Running
+                | AiAgentStepStatus::Tool
+                | AiAgentStepStatus::NeedsApproval
+        ) || lower_title.contains("background")
+            || lower_title.contains("auto execute")
+            || lower_title.contains("needs approval")
+            || lower_title.contains("shell")
+            || lower_title.contains("running");
+        let looks_like_observation = lower_title.contains("observ")
+            || lower_title == "done"
+            || lower_title == "completed"
+            || lower_title == "failed"
+            || matches!(status, AiAgentStepStatus::Completed | AiAgentStepStatus::Failed);
+        let looks_like_thought = lower_title.contains("plan")
+            || lower_title.contains("think")
+            || lower_title.contains("final answer")
+            || matches!(status, AiAgentStepStatus::Planning);
+
         if let Some(step) = self
             .ai_agent_steps
             .iter_mut()
@@ -17,19 +39,84 @@ impl NyaTermApp {
         {
             step.status = status;
             step.title = title;
-            step.detail = detail;
+            if !detail.trim().is_empty() {
+                step.detail = detail.clone();
+            }
+            if looks_like_command && !detail.trim().is_empty() {
+                step.command = Some(detail.clone());
+            }
+            if looks_like_observation && !detail.trim().is_empty() {
+                step.observation = Some(detail.clone());
+            }
+            if looks_like_thought && !detail.trim().is_empty() {
+                step.thought = Some(detail);
+            }
         } else {
+            let command = if looks_like_command && !detail.trim().is_empty() {
+                Some(detail.clone())
+            } else {
+                None
+            };
+            let observation = if looks_like_observation && !detail.trim().is_empty() {
+                Some(detail.clone())
+            } else {
+                None
+            };
+            let thought = if looks_like_thought && !detail.trim().is_empty() {
+                Some(detail.clone())
+            } else {
+                None
+            };
             self.ai_agent_steps.push(AiAgentStepView {
                 step_index,
                 status,
                 title,
                 detail,
+                thought,
+                command,
+                observation,
             });
         }
-        let overflow = self.ai_agent_steps.len().saturating_sub(8);
+        let overflow = self.ai_agent_steps.len().saturating_sub(16);
         if overflow > 0 {
+            let removed: Vec<u16> = self
+                .ai_agent_steps
+                .iter()
+                .take(overflow)
+                .map(|step| step.step_index)
+                .collect();
             self.ai_agent_steps.drain(..overflow);
+            for idx in removed {
+                self.ai_agent_thought_expanded.remove(&idx);
+                self.ai_agent_output_expanded.remove(&idx);
+            }
         }
+    }
+
+    pub(in crate::ui::view) fn toggle_ai_agent_thought_expanded(
+        &mut self,
+        step_index: u16,
+        cx: &mut Context<Self>,
+    ) {
+        if self.ai_agent_thought_expanded.contains(&step_index) {
+            self.ai_agent_thought_expanded.remove(&step_index);
+        } else {
+            self.ai_agent_thought_expanded.insert(step_index);
+        }
+        cx.notify();
+    }
+
+    pub(in crate::ui::view) fn toggle_ai_agent_output_expanded(
+        &mut self,
+        step_index: u16,
+        cx: &mut Context<Self>,
+    ) {
+        if self.ai_agent_output_expanded.contains(&step_index) {
+            self.ai_agent_output_expanded.remove(&step_index);
+        } else {
+            self.ai_agent_output_expanded.insert(step_index);
+        }
+        cx.notify();
     }
 
     pub(in crate::ui::view) fn record_ai_command_card_audit(

@@ -588,6 +588,8 @@ impl NyaTermApp {
             self.ai_agent_task_prompt = Some(request.user_input.clone());
             self.ai_agent_step_index = 0;
             self.ai_agent_steps.clear();
+            self.ai_agent_thought_expanded.clear();
+            self.ai_agent_output_expanded.clear();
             self.upsert_ai_agent_step(
                 0,
                 AiAgentStepStatus::Planning,
@@ -599,6 +601,8 @@ impl NyaTermApp {
             self.ai_agent_step_index = 0;
             self.ai_agent_loop = None;
             self.ai_agent_steps.clear();
+            self.ai_agent_thought_expanded.clear();
+            self.ai_agent_output_expanded.clear();
         }
         self.ai_chat_pending = true;
         self.ai_response_preview = if mode == AiMode::Agent {

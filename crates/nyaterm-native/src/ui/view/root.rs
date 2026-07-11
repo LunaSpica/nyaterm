@@ -15,13 +15,14 @@ impl Render for NyaTermApp {
             window.focus(&self.transfer_rename_focus);
             self.transfer_rename_focus_pending = false;
         }
+        let palette = self.theme_palette();
         let content = div()
             .id(SharedString::from("nyaterm-root"))
             .size_full()
             .relative()
-            .bg(rgb(0x0d1117))
-            .text_color(rgb(0xc9d1d9))
-            .font_family("JetBrains Mono")
+            .bg(rgb(palette.bg))
+            .text_color(rgb(palette.text))
+            .font_family(self.settings.terminal_font_family.clone())
             .on_click(cx.listener(|this, _, _, _| {
                 this.mark_user_activity();
             }))
@@ -79,7 +80,7 @@ impl Render for NyaTermApp {
                                 .flex()
                                 .flex_1()
                                 .min_h_0()
-                                .bg(rgb(0x0d1117))
+                                .bg(rgb(palette.bg))
                                 .child(self.settings_view(cx))
                                 .into_any_element()
                         } else {
@@ -87,7 +88,7 @@ impl Render for NyaTermApp {
                                 .flex()
                                 .flex_1()
                                 .min_h_0()
-                                .bg(rgb(0x0d1117))
+                                .bg(rgb(palette.bg))
                                 .child(self.activity_bar(ActivitySide::Left, cx))
                                 .when(self.left_side_open(), |this| {
                                     this.child(self.sidebar(cx))

@@ -777,3 +777,12 @@ service boundary first:
 - Flatten expanded group tree into fixed-height rows (group header 28px, connection 34px, separator 10px).
 - Spacer + wheel virtual window via `connection_list_offset` (viewport 36 + overscan 8).
 - Search/sort/group expand reset offset; group headers use header-only section chrome so nested rows stay virtualized.
+
+## 2026-07-11 AI Agent Step cards (Tauri AgentStepView)
+- `AiAgentStepView` stores thought/command/observation sections inferred from upsert call sites.
+- Steps render as collapsible cards: thought toggle, left-accent SHELL block, optional output expand, running footer.
+- Expand state tracked in `ai_agent_thought_expanded` / `ai_agent_output_expanded` (cleared with step list).
+
+## 2026-07-11 Appearance theme palette application
+- `ThemePalette` for github-dark / github-light / catppuccin.
+- Root shell + title bar apply palette bg/surface/border/text; font family follows appearance.font_family.
