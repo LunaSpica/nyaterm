@@ -1248,3 +1248,9 @@ service boundary first:
 - `TerminalWindowNode::dock_tab` merges (center) or edge-splits the target leaf.
 - Multi-leaf leaf content accepts `SessionTabDragPayload` with live drop overlay
   chrome and applies dock on drop; model unit tests cover zone detection and edge dock.
+
+## 2026-07-11 Multi-leaf leaf tab strip densify
+
+- Leaf mini-tabs now mirror global strip chrome: status/color accent, unread/disconnected
+  cues, close button, right-click tab actions, and in-strip reorder via
+  `place_tab_before` (same leaf) / move-to-before (across leaves).

@@ -166,6 +166,30 @@ impl NyaTermApp {
         }
     }
 
+    pub(in crate::ui::view) fn place_tab_before_in_terminal_windows(
+        &mut self,
+        tab_id: String,
+        before_tab_id: String,
+        cx: &mut Context<Self>,
+    ) {
+        self.terminal_window_drop = None;
+        let Some(root) = self.terminal_windows.as_mut() else {
+            return;
+        };
+        if root.place_tab_before(&tab_id, &before_tab_id) {
+            let _ = root.set_active_tab(&tab_id);
+            self.focused_terminal_window_leaf_id =
+                find_leaf_with_tab(root, &tab_id).or_else(|| root.first_leaf_id());
+            self.activate_session_id(&tab_id);
+            self.terminal_status = format!(
+                "moved tab {} before {}",
+                short_id(&tab_id),
+                short_id(&before_tab_id)
+            );
+        }
+        cx.notify();
+    }
+
     pub(in crate::ui::view) fn set_terminal_window_drop(
         &mut self,
         leaf_id: String,

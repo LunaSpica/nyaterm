@@ -115,37 +115,91 @@ impl NyaTermApp {
                         .unwrap_or_else(|| short_id(tab_id).to_string());
                     let leaf_id = id.clone();
                     let select_id = tab_id.clone();
+                    let close_id = tab_id.clone();
+                    let actions_id = tab_id.clone();
+                    let drop_before_id = tab_id.clone();
                     let kind_label = self
                         .ordered_sessions()
                         .into_iter()
                         .find(|session| session.id == *tab_id)
                         .map(|session| session_kind_label(session.kind))
                         .unwrap_or("Session");
+                    let custom_color = self.session_tab_colors.get(tab_id).copied();
+                    let is_disconnected = self.is_session_disconnected(tab_id);
+                    let has_unread = self
+                        .terminal_views
+                        .get(tab_id)
+                        .is_some_and(|view| view.has_unread);
+                    let accent = if let Some(custom_color) = custom_color {
+                        rgb(custom_color)
+                    } else if is_disconnected {
+                        rgb(palette.danger)
+                    } else if is_active_tab {
+                        rgb(palette.success)
+                    } else if has_unread {
+                        rgb(palette.warning)
+                    } else {
+                        rgb(palette.text_dimmed)
+                    };
+                    let bg = if let Some(custom_color) = custom_color {
+                        rgba((custom_color << 8) | if is_active_tab { 0x24 } else { 0x14 })
+                    } else if is_active_tab {
+                        rgb(palette.hover)
+                    } else {
+                        rgb(palette.surface)
+                    };
                     let drag_payload = SessionTabDragPayload {
                         session_id: tab_id.clone(),
                         display_name: title.clone(),
                         kind_label,
                     };
+                    let tab_title = if is_disconnected {
+                        format!("{} · disconnected", truncate_preview(&title, 14))
+                    } else {
+                        truncate_preview(&title, 18)
+                    };
                     strip = strip.child(
                         div()
                             .id(SharedString::from(format!("tw-tab-{leaf_id}-{select_id}")))
                             .h(px(24.))
-                            .px_2()
+                            .px_1()
+                            .pl_2()
                             .rounded_sm()
                             .flex()
                             .items_center()
+                            .gap_1()
+                            .relative()
                             .cursor_pointer()
                             .cursor_move()
-                            .bg(if is_active_tab {
-                                rgb(palette.hover)
-                            } else {
-                                rgb(palette.surface)
-                            })
+                            .bg(bg)
+                            .when(is_disconnected, |this| this.opacity(0.78))
                             .border_1()
                             .border_color(if is_active_tab {
                                 rgb(palette.accent)
                             } else {
                                 rgb(palette.border)
+                            })
+                            .when(is_active_tab, |this| {
+                                this.child(
+                                    div()
+                                        .absolute()
+                                        .top_0()
+                                        .left_0()
+                                        .right_0()
+                                        .h(px(2.))
+                                        .bg(accent),
+                                )
+                            })
+                            .when(custom_color.is_some(), |this| {
+                                this.child(
+                                    div()
+                                        .absolute()
+                                        .top_0()
+                                        .bottom_0()
+                                        .left_0()
+                                        .w(px(3.))
+                                        .bg(accent),
+                                )
                             })
                             .on_click(cx.listener(move |this, _, window, cx| {
                                 this.activate_terminal_window_tab(
@@ -155,19 +209,61 @@ impl NyaTermApp {
                                 );
                                 window.focus(&this.terminal_focus);
                             }))
+                            .on_mouse_down(
+                                gpui::MouseButton::Right,
+                                cx.listener(move |this, _, window, cx| {
+                                    cx.stop_propagation();
+                                    this.open_tab_actions(actions_id.clone(), window, cx);
+                                }),
+                            )
                             .on_drag(drag_payload, |payload, position, _, cx| {
                                 cx.new(|_| SessionTabDragPreview::new(payload.clone(), position))
                             })
+                            .on_drop(cx.listener(
+                                move |this, payload: &SessionTabDragPayload, _, cx| {
+                                    this.place_tab_before_in_terminal_windows(
+                                        payload.session_id.clone(),
+                                        drop_before_id.clone(),
+                                        cx,
+                                    );
+                                },
+                            ))
+                            .child(div().size(px(7.)).rounded_full().bg(accent))
                             .child(
                                 div()
+                                    .min_w_0()
                                     .text_xs()
                                     .font_weight(FontWeight(if is_active_tab { 700. } else { 500. }))
-                                    .text_color(if is_active_tab {
+                                    .text_color(if is_disconnected {
+                                        rgb(palette.text_dimmed)
+                                    } else if is_active_tab {
                                         rgb(palette.text)
                                     } else {
                                         rgb(palette.text_muted)
                                     })
-                                    .child(truncate_preview(&title, 18)),
+                                    .child(tab_title),
+                            )
+                            .child(
+                                div()
+                                    .id(SharedString::from(format!(
+                                        "tw-tab-close-{id}-{close_id}"
+                                    )))
+                                    .size(px(16.))
+                                    .flex()
+                                    .items_center()
+                                    .justify_center()
+                                    .rounded_sm()
+                                    .text_size(px(10.))
+                                    .text_color(rgb(palette.text_muted))
+                                    .hover(|this| {
+                                        this.bg(rgb(palette.border))
+                                            .text_color(rgb(palette.danger))
+                                    })
+                                    .child("x")
+                                    .on_click(cx.listener(move |this, _, _, cx| {
+                                        cx.stop_propagation();
+                                        this.close_session(close_id.clone(), cx);
+                                    })),
                             ),
                     );
                 }

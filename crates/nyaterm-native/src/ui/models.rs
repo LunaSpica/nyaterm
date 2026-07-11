@@ -2105,6 +2105,73 @@ impl TerminalWindowNode {
         }
     }
 
+    /// Place `tab_id` immediately before `before_tab_id` (same or other leaf).
+    /// Mirrors Tauri TabBar reorder / move-tab-here within multi-leaf windows.
+    pub(super) fn place_tab_before(&mut self, tab_id: &str, before_tab_id: &str) -> bool {
+        if tab_id.is_empty() || before_tab_id.is_empty() || tab_id == before_tab_id {
+            return false;
+        }
+        if !self.contains_tab(tab_id) || !self.contains_tab(before_tab_id) {
+            return false;
+        }
+        // Already immediately before target.
+        if let Some(ids) = self.leaf_tab_ids_for_tab(before_tab_id) {
+            if let Some(pos) = ids.iter().position(|id| id == before_tab_id) {
+                if pos > 0 && ids[pos - 1] == tab_id {
+                    return true;
+                }
+            }
+        }
+        let Some(next) = self.remove_tab(tab_id) else {
+            return false;
+        };
+        *self = next;
+        if !self.contains_tab(before_tab_id) {
+            self.insert_tab_into_first_leaf(tab_id);
+            return false;
+        }
+        self.insert_tab_before(before_tab_id, tab_id)
+    }
+
+    pub(super) fn leaf_tab_ids_for_tab(&self, tab_id: &str) -> Option<Vec<String>> {
+        match self {
+            Self::Leaf { tab_ids, .. } => {
+                if tab_ids.iter().any(|id| id == tab_id) {
+                    Some(tab_ids.clone())
+                } else {
+                    None
+                }
+            }
+            Self::Split { first, second, .. } => first
+                .leaf_tab_ids_for_tab(tab_id)
+                .or_else(|| second.leaf_tab_ids_for_tab(tab_id)),
+        }
+    }
+
+    fn insert_tab_before(&mut self, before_tab_id: &str, tab_id: &str) -> bool {
+        match self {
+            Self::Leaf {
+                tab_ids,
+                active_tab_id,
+                ..
+            } => {
+                if let Some(pos) = tab_ids.iter().position(|id| id == before_tab_id) {
+                    if !tab_ids.iter().any(|id| id == tab_id) {
+                        tab_ids.insert(pos, tab_id.to_string());
+                    }
+                    *active_tab_id = Some(tab_id.to_string());
+                    true
+                } else {
+                    false
+                }
+            }
+            Self::Split { first, second, .. } => {
+                first.insert_tab_before(before_tab_id, tab_id)
+                    || second.insert_tab_before(before_tab_id, tab_id)
+            }
+        }
+    }
+
     /// Dock `tab_id` onto `target_leaf_id` center (merge) or edge (split).
     pub(super) fn dock_tab(
         &mut self,
@@ -3395,6 +3462,29 @@ mod terminal_window_tests {
         assert!(root.dock_tab("b", &a_leaf, TabDockZone::Edge(TabDockEdge::Left)));
         assert_eq!(root.leaf_ids().len(), 2);
         assert!(root.contains_tab("a") && root.contains_tab("b"));
+    }
+
+    #[test]
+    fn place_tab_before_reorders_and_moves() {
+        let mut root = TerminalWindowNode::leaf(
+            vec!["a".into(), "b".into(), "c".into()],
+            Some("a".into()),
+        );
+        assert!(root.place_tab_before("c", "a"));
+        assert_eq!(root.collect_tab_ids(), vec!["c".to_string(), "a".to_string(), "b".to_string()]);
+        assert!(root.split_tab_to_edge(
+            "b",
+            WorkspaceSplitDirection::Vertical,
+            SplitEdge::After,
+        ));
+        // Move c next to b (other leaf)
+        assert!(root.place_tab_before("c", "b"));
+        assert!(root.contains_tab("c") && root.contains_tab("b"));
+        let ids = root.leaf_tab_ids_for_tab("b").expect("b leaf");
+        assert!(ids.iter().any(|id| id == "b") && ids.iter().any(|id| id == "c"));
+        let a_pos = ids.iter().position(|id| id == "c");
+        let b_pos = ids.iter().position(|id| id == "b");
+        assert!(a_pos.is_some() && b_pos.is_some() && a_pos.unwrap() < b_pos.unwrap());
     }
 
     #[test]
