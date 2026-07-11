@@ -600,3 +600,8 @@ service boundary first:
 - Conflict card + Push/Pull/Settings strip; full scroll history list.
 - History rows densified: status dot, kind/status colors, summary, trigger/provider/duration meta, expandable details.
 - PanelHeader meta shows history count.
+
+## 2026-07-11 Command Send labeled controls
+- Bottom Command Send title row matches Tauri (title + session kind + target + Hide).
+- Controls reworked into labeled bordered groups: Data, Mode, Count steppers, Interval steppers, serial EOL cycle.
+- Editor uses mono placeholder; footer denser with Clear / Send / Send ↵.
