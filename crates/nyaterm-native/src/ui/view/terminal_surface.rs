@@ -43,15 +43,35 @@ impl NyaTermApp {
         } else {
             Vec::new()
         };
+        // Buffer matches use absolute history indices; map into current viewport rows.
+        let (abs_start, abs_end) = self
+            .terminal_views
+            .get(&session_id)
+            .map(|view| view.screen.viewport_absolute_range(scroll_offset))
+            .unwrap_or_else(|| self.terminal_screen.viewport_absolute_range(scroll_offset));
         let active_match_line = search_matches
             .get(
                 self.terminal_search_active_index
                     .min(search_matches.len().saturating_sub(1)),
             )
-            .map(|search_match| search_match.line_index);
+            .map(|search_match| search_match.line_index)
+            .and_then(|abs| {
+                if abs >= abs_start && abs < abs_end {
+                    Some(abs - abs_start)
+                } else {
+                    None
+                }
+            });
         let matched_lines = search_matches
             .iter()
-            .map(|search_match| search_match.line_index)
+            .filter_map(|search_match| {
+                let abs = search_match.line_index;
+                if abs >= abs_start && abs < abs_end {
+                    Some(abs - abs_start)
+                } else {
+                    None
+                }
+            })
             .collect::<HashSet<_>>();
         for (line_index, line) in lines.into_iter().enumerate() {
             let line = if line.is_empty() {

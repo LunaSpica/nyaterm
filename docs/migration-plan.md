@@ -951,3 +951,9 @@ service boundary first:
 - `Shift+Home/End` jump to oldest history / live bottom.
 - `Ctrl+Shift+Up/Down` scroll one line.
 - Typing while scrolled in history snaps back to the live bottom before sending input.
+
+## Terminal buffer search over scrollback
+
+- Buffer find searches absolute scrollback + live screen via `all_lines()`.
+- Next/prev match reveals the absolute line by adjusting `scroll_offset`.
+- Highlight mapping converts absolute indices into the current viewport window.

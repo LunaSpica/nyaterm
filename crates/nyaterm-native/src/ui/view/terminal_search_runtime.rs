@@ -42,13 +42,42 @@ impl NyaTermApp {
             return Ok(Vec::new());
         }
         let flags = self.terminal_search_flags();
-        let visible_text = self
+        // Search absolute scrollback + live screen (Tauri xterm buffer find).
+        let buffer_text = self
             .active_session_id
             .as_deref()
             .and_then(|session_id| self.terminal_views.get(session_id))
-            .map(|view| view.screen.lines().join("\n"))
-            .unwrap_or_else(|| self.terminal_screen.lines().join("\n"));
-        terminal_buffer_matches(&visible_text, query, &flags, 1000)
+            .map(|view| view.screen.all_lines().join("
+"))
+            .unwrap_or_else(|| self.terminal_screen.all_lines().join("
+"));
+        terminal_buffer_matches(&buffer_text, query, &flags, 1000)
+    }
+
+    /// Ensure the absolute buffer line is visible by adjusting scroll_offset.
+    pub(in crate::ui::view) fn reveal_terminal_absolute_line(
+        &mut self,
+        abs_line: usize,
+        cx: &mut Context<Self>,
+    ) {
+        if let Some(session_id) = self.active_session_id.clone() {
+            if let Some(view) = self.terminal_views.get_mut(&session_id) {
+                let total = view.screen.total_rows().max(1);
+                let rows = view.screen.viewport_snapshot(0).lines.len().max(1);
+                let max_start = total.saturating_sub(rows);
+                let start = abs_line.min(max_start);
+                let offset = total.saturating_sub(start + rows);
+                view.scroll_offset = offset.min(view.screen.scrollback_len());
+            }
+        } else {
+            let total = self.terminal_screen.total_rows().max(1);
+            let rows = self.terminal_screen.viewport_snapshot(0).lines.len().max(1);
+            let max_start = total.saturating_sub(rows);
+            let start = abs_line.min(max_start);
+            let offset = total.saturating_sub(start + rows);
+            self.terminal_scroll_offset = offset.min(self.terminal_screen.scrollback_len());
+        }
+        cx.notify();
     }
 
     pub(in crate::ui::view) fn terminal_history_search_results(
@@ -109,6 +138,13 @@ impl NyaTermApp {
         }
         self.terminal_search_active_index = (self.terminal_search_active_index as isize + direction)
             .rem_euclid(count as isize) as usize;
+        if self.terminal_search_mode == TerminalSearchMode::Buffer {
+            if let Ok(matches) = self.terminal_buffer_matches() {
+                if let Some(m) = matches.get(self.terminal_search_active_index) {
+                    self.reveal_terminal_absolute_line(m.line_index, cx);
+                }
+            }
+        }
         self.terminal_status = format!(
             "terminal search match {}/{}",
             self.terminal_search_active_index + 1,

@@ -192,6 +192,28 @@ impl TerminalScreen {
         self.snapshot().styled_lines
     }
 
+    /// Full history + live screen plain text lines (absolute order, oldest first).
+    pub fn all_lines(&self) -> Vec<String> {
+        let total = self.total_rows();
+        let mut lines = Vec::with_capacity(total);
+        for abs in 0..total {
+            let row = self.row_at(abs);
+            let text: String = row.iter().map(|cell| cell.ch).collect();
+            lines.push(text.trim_end().to_string());
+        }
+        lines
+    }
+
+    /// Absolute line range covered by a viewport offset (half-open).
+    pub fn viewport_absolute_range(&self, offset: usize) -> (usize, usize) {
+        let total = self.total_rows();
+        let max_offset = total.saturating_sub(self.rows);
+        let offset = offset.min(max_offset);
+        let end = total.saturating_sub(offset);
+        let start = end.saturating_sub(self.rows);
+        (start, end)
+    }
+
     fn row_at(&self, abs_row: usize) -> &[Cell] {
         if abs_row < self.scrollback.len() {
             &self.scrollback[abs_row]
