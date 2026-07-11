@@ -1,4 +1,5 @@
 use super::*;
+use super::common::{network_dialog_footer, network_modal_shell};
 
 #[derive(Debug, Clone)]
 pub(super) struct TunnelSection {
@@ -569,19 +570,15 @@ pub(super) fn network_tunnel_editor_panel(
     };
     let preview = tunnel_editor_preview(&editor);
 
-    div()
-        .rounded_md()
-        .border_1()
-        .border_color(rgb(0x38bdf8))
-        .bg(rgb(0x102033))
-        .p_3()
+    let card = div()
+        .p_4()
         .flex()
         .flex_col()
-        .gap_3()
+        .gap_4()
         .child(
             div()
                 .flex()
-                .items_center()
+                .items_start()
                 .justify_between()
                 .gap_3()
                 .child(
@@ -592,9 +589,9 @@ pub(super) fn network_tunnel_editor_panel(
                         .gap_1()
                         .child(
                             div()
-                                .text_sm()
-                                .font_weight(FontWeight(800.))
-                                .text_color(rgb(0xe5edf7))
+                                .text_size(px(15.))
+                                .font_weight(FontWeight(700.))
+                                .text_color(rgb(0xc9d1d9))
                                 .child(if editor.id.is_some() {
                                     "Edit Tunnel"
                                 } else {
@@ -603,9 +600,9 @@ pub(super) fn network_tunnel_editor_panel(
                         )
                         .child(
                             div()
-                                .text_xs()
-                                .text_color(rgb(0x98a3b8))
-                                .child("Configure SSH forwarding with the same fields as the legacy tunnel dialog."),
+                                .text_size(px(12.))
+                                .text_color(rgb(0x8b949e))
+                                .child("Configure SSH local, remote, or dynamic port forwarding."),
                         ),
                 )
                 .child(status_pill(mode_label, rgb(0x93c5fd), rgb(0x17233a))),
@@ -755,27 +752,19 @@ pub(super) fn network_tunnel_editor_panel(
         .when_some(editor.error.clone(), |this, error| {
             this.child(div().text_xs().text_color(rgb(0xfda4af)).child(error))
         })
-        .child(
-            div()
-                .flex()
-                .items_center()
-                .justify_end()
-                .gap_2()
-                .child(small_button(
-                    "network-tunnel-editor-cancel",
-                    "Cancel",
-                    cx.listener(|this, _, _, cx| {
-                        this.close_network_tunnel_editor(cx);
-                    }),
-                ))
-                .child(small_button(
-                    "network-tunnel-editor-save",
-                    "Save",
-                    cx.listener(|this, _, _, cx| {
-                        this.save_network_tunnel_editor(cx);
-                    }),
-                )),
-        )
+        .child(network_dialog_footer(
+            "network-tunnel-editor-cancel",
+            "network-tunnel-editor-save",
+            "Save",
+            cx.listener(|this, _, _, cx| {
+                this.close_network_tunnel_editor(cx);
+            }),
+            cx.listener(|this, _, _, cx| {
+                this.save_network_tunnel_editor(cx);
+            }),
+        ));
+
+    network_modal_shell("network-tunnel-editor-modal", 640., card)
 }
 
 pub(super) fn tunnel_editor_input(
@@ -806,24 +795,24 @@ pub(super) fn tunnel_editor_selector(
 ) -> impl IntoElement {
     div()
         .id(gpui::SharedString::from(id.into()))
-        .h(px(46.))
+        .h(px(52.))
         .px_3()
         .py_2()
         .flex()
         .flex_col()
         .gap_1()
-        .rounded_sm()
+        .rounded_md()
         .border_1()
-        .border_color(rgb(0x303848))
-        .bg(rgb(0x0d1320))
+        .border_color(rgb(0x30363d))
+        .bg(rgb(0x0d1117))
         .cursor_pointer()
-        .hover(|this| this.bg(rgb(0x18202b)))
-        .child(div().text_xs().text_color(rgb(0x8f98aa)).child(label))
+        .hover(|this| this.bg(rgb(0x161b22)))
+        .child(div().text_size(px(11.)).text_color(rgb(0x8b949e)).child(label))
         .child(
             div()
                 .font_family("JetBrains Mono")
-                .text_xs()
-                .text_color(rgb(0xe5edf7))
+                .text_size(px(12.))
+                .text_color(rgb(0xc9d1d9))
                 .child(truncate_preview(&value, 42)),
         )
         .on_click(on_click)
@@ -836,26 +825,28 @@ pub(super) fn tunnel_editor_option(
     active: bool,
     on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
 ) -> impl IntoElement {
+    // Tauri-like selectable option cards for bind host / auto open.
     div()
         .id(gpui::SharedString::from(id.into()))
-        .rounded_sm()
+        .rounded_md()
         .border_1()
-        .border_color(if active { rgb(0x38bdf8) } else { rgb(0x303848) })
-        .bg(if active { rgb(0x102a3d) } else { rgb(0x0d1320) })
-        .p_3()
+        .border_color(if active { rgb(0x388bfd) } else { rgb(0x30363d) })
+        .bg(if active { rgb(0x122033) } else { rgb(0x0d1117) })
+        .px_3()
+        .py_2()
         .flex()
         .flex_col()
         .gap_1()
         .cursor_pointer()
-        .hover(|this| this.bg(rgb(0x18202b)))
+        .hover(|this| this.bg(rgb(0x161b22)))
         .child(
             div()
-                .text_sm()
-                .font_weight(FontWeight(800.))
-                .text_color(if active { rgb(0x7dd3fc) } else { rgb(0xe5edf7) })
+                .text_size(px(12.))
+                .font_weight(FontWeight(600.))
+                .text_color(if active { rgb(0x79b8ff) } else { rgb(0xc9d1d9) })
                 .child(title),
         )
-        .child(div().text_xs().text_color(rgb(0x98a3b8)).child(detail))
+        .child(div().text_size(px(11.)).text_color(rgb(0x8b949e)).child(detail))
         .on_click(on_click)
 }
 

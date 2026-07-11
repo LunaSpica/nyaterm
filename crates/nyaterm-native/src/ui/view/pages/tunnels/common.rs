@@ -30,55 +30,40 @@ pub(super) fn network_delete_confirm_panel(
     confirm: NetworkDeleteConfirmState,
     cx: &mut Context<NyaTermApp>,
 ) -> impl IntoElement {
-    div()
-        .rounded_md()
-        .border_1()
-        .border_color(rgb(0xfb7185))
-        .bg(rgb(0x2a121a))
-        .p_3()
+    let card = div()
+        .p_4()
         .flex()
-        .items_center()
-        .justify_between()
+        .flex_col()
         .gap_3()
         .child(
             div()
-                .min_w_0()
-                .flex()
-                .flex_col()
-                .gap_1()
-                .child(
-                    div()
-                        .text_sm()
-                        .font_weight(FontWeight(800.))
-                        .text_color(rgb(0xfda4af))
-                        .child(format!("Delete {} profile?", confirm.tab.label())),
-                )
-                .child(div().text_xs().text_color(rgb(0xfecdd3)).child(format!(
-                    "{} · {}",
-                    truncate_preview(&confirm.label, 72),
-                    truncate_preview(&confirm.id, 32)
-                ))),
+                .text_size(px(15.))
+                .font_weight(FontWeight(700.))
+                .text_color(rgb(0xfda4af))
+                .child(format!("Delete {} profile?", confirm.tab.label())),
         )
         .child(
             div()
-                .flex()
-                .items_center()
-                .gap_2()
-                .child(small_button(
-                    "network-delete-cancel",
-                    "Cancel",
-                    cx.listener(|this, _, _, cx| {
-                        this.cancel_network_delete(cx);
-                    }),
-                ))
-                .child(small_button(
-                    "network-delete-confirm",
-                    "Delete",
-                    cx.listener(|this, _, _, cx| {
-                        this.confirm_network_delete(cx);
-                    }),
+                .text_size(px(12.))
+                .text_color(rgb(0xc9d1d9))
+                .child(format!(
+                    "{} · {}",
+                    truncate_preview(&confirm.label, 72),
+                    truncate_preview(&confirm.id, 32)
                 )),
         )
+        .child(network_dialog_footer(
+            "network-delete-cancel",
+            "network-delete-confirm",
+            "Delete",
+            cx.listener(|this, _, _, cx| {
+                this.cancel_network_delete(cx);
+            }),
+            cx.listener(|this, _, _, cx| {
+                this.confirm_network_delete(cx);
+            }),
+        ));
+    network_modal_shell("network-delete-confirm-modal", 420., card)
 }
 
 pub(super) fn network_group_editor_panel(
@@ -86,15 +71,11 @@ pub(super) fn network_group_editor_panel(
     focus: &gpui::FocusHandle,
     cx: &mut Context<NyaTermApp>,
 ) -> impl IntoElement {
-    div()
-        .rounded_md()
-        .border_1()
-        .border_color(rgb(0x38bdf8))
-        .bg(rgb(0x102033))
-        .p_3()
+    let card = div()
+        .p_4()
         .flex()
         .flex_col()
-        .gap_3()
+        .gap_4()
         .child(
             div()
                 .flex()
@@ -103,9 +84,9 @@ pub(super) fn network_group_editor_panel(
                 .gap_3()
                 .child(
                     div()
-                        .text_sm()
-                        .font_weight(FontWeight(800.))
-                        .text_color(rgb(0xe5edf7))
+                        .text_size(px(15.))
+                        .font_weight(FontWeight(700.))
+                        .text_color(rgb(0xc9d1d9))
                         .child(if editor.id.is_some() {
                             format!("Rename {} group", editor.tab.label())
                         } else {
@@ -136,82 +117,111 @@ pub(super) fn network_group_editor_panel(
             })),
         )
         .when_some(editor.error.clone(), |this, error| {
-            this.child(div().text_xs().text_color(rgb(0xfda4af)).child(error))
+            this.child(div().text_size(px(12.)).text_color(rgb(0xfda4af)).child(error))
         })
-        .child(
-            div()
-                .flex()
-                .items_center()
-                .justify_end()
-                .gap_2()
-                .child(small_button(
-                    "network-group-editor-cancel",
-                    "Cancel",
-                    cx.listener(|this, _, _, cx| {
-                        this.close_network_group_editor(cx);
-                    }),
-                ))
-                .child(small_button(
-                    "network-group-editor-save",
-                    "Save",
-                    cx.listener(|this, _, _, cx| {
-                        this.save_network_group_editor(cx);
-                    }),
-                )),
-        )
+        .child(network_dialog_footer(
+            "network-group-editor-cancel",
+            "network-group-editor-save",
+            "Save",
+            cx.listener(|this, _, _, cx| {
+                this.close_network_group_editor(cx);
+            }),
+            cx.listener(|this, _, _, cx| {
+                this.save_network_group_editor(cx);
+            }),
+        ));
+    network_modal_shell("network-group-editor-modal", 420., card)
 }
 
 pub(super) fn network_group_delete_confirm_panel(
     confirm: NetworkGroupDeleteConfirmState,
     cx: &mut Context<NyaTermApp>,
 ) -> impl IntoElement {
-    div()
-        .rounded_md()
-        .border_1()
-        .border_color(rgb(0xfb7185))
-        .bg(rgb(0x2a121a))
-        .p_3()
+    let card = div()
+        .p_4()
         .flex()
-        .items_center()
-        .justify_between()
+        .flex_col()
         .gap_3()
         .child(
             div()
-                .min_w_0()
-                .flex()
-                .flex_col()
-                .gap_1()
-                .child(
-                    div()
-                        .text_sm()
-                        .font_weight(FontWeight(800.))
-                        .text_color(rgb(0xfda4af))
-                        .child(format!("Delete {} group?", confirm.tab.label())),
-                )
-                .child(div().text_xs().text_color(rgb(0xfecdd3)).child(format!(
-                    "{} · {} item(s) will be removed",
-                    truncate_preview(&confirm.label, 72),
-                    confirm.item_count
-                ))),
+                .text_size(px(15.))
+                .font_weight(FontWeight(700.))
+                .text_color(rgb(0xfda4af))
+                .child(format!("Delete {} group?", confirm.tab.label())),
         )
         .child(
             div()
-                .flex()
-                .items_center()
-                .gap_2()
-                .child(small_button(
-                    "network-group-delete-cancel",
-                    "Cancel",
-                    cx.listener(|this, _, _, cx| {
-                        this.cancel_network_group_delete(cx);
-                    }),
-                ))
-                .child(small_button(
-                    "network-group-delete-confirm",
-                    "Delete",
-                    cx.listener(|this, _, _, cx| {
-                        this.confirm_network_group_delete(cx);
-                    }),
+                .text_size(px(12.))
+                .text_color(rgb(0xc9d1d9))
+                .child(format!(
+                    "{} · {} item(s) will be removed",
+                    truncate_preview(&confirm.label, 72),
+                    confirm.item_count
                 )),
         )
+        .child(network_dialog_footer(
+            "network-group-delete-cancel",
+            "network-group-delete-confirm",
+            "Delete",
+            cx.listener(|this, _, _, cx| {
+                this.cancel_network_group_delete(cx);
+            }),
+            cx.listener(|this, _, _, cx| {
+                this.confirm_network_group_delete(cx);
+            }),
+        ));
+    network_modal_shell("network-group-delete-modal", 420., card)
 }
+
+/// Full-panel modal chrome matching Tauri Dialog (dimmed backdrop + centered card).
+pub(super) fn network_modal_shell(
+    id: impl Into<String>,
+    width: f32,
+    content: impl IntoElement,
+) -> impl IntoElement {
+    div()
+        .id(gpui::SharedString::from(id.into()))
+        .absolute()
+        .top_0()
+        .bottom_0()
+        .left_0()
+        .right_0()
+        .bg(rgba(0x030508d8))
+        .flex()
+        .items_center()
+        .justify_center()
+        .p_3()
+        .child(
+            div()
+                .w(px(width))
+                .max_w_full()
+                .max_h_full()
+                .rounded_md()
+                .border_1()
+                .border_color(rgb(0x30363d))
+                .bg(rgb(0x0d1117))
+                .shadow_lg()
+                .child(content),
+        )
+}
+
+pub(super) fn network_dialog_footer(
+    cancel_id: impl Into<String>,
+    save_id: impl Into<String>,
+    save_label: &'static str,
+    on_cancel: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
+    on_save: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
+) -> impl IntoElement {
+    div()
+        .mt_1()
+        .pt_3()
+        .border_t_1()
+        .border_color(rgb(0x30363d))
+        .flex()
+        .items_center()
+        .justify_end()
+        .gap_2()
+        .child(small_button(cancel_id, "Cancel", on_cancel))
+        .child(small_button(save_id, save_label, on_save))
+}
+

@@ -1,5 +1,6 @@
 use super::tunnel::tunnel_editor_selector;
 use super::*;
+use super::common::{network_dialog_footer, network_modal_shell};
 
 #[derive(Debug, Clone)]
 pub(super) struct ProxySection {
@@ -467,19 +468,15 @@ pub(super) fn network_proxy_editor_panel(
         "*".repeat(editor.password.chars().count().max(1))
     };
 
-    div()
-        .rounded_md()
-        .border_1()
-        .border_color(rgb(0x38bdf8))
-        .bg(rgb(0x102033))
-        .p_3()
+    let card = div()
+        .p_4()
         .flex()
         .flex_col()
-        .gap_3()
+        .gap_4()
         .child(
             div()
                 .flex()
-                .items_center()
+                .items_start()
                 .justify_between()
                 .gap_3()
                 .child(
@@ -490,9 +487,9 @@ pub(super) fn network_proxy_editor_panel(
                         .gap_1()
                         .child(
                             div()
-                                .text_sm()
-                                .font_weight(FontWeight(800.))
-                                .text_color(rgb(0xe5edf7))
+                                .text_size(px(15.))
+                                .font_weight(FontWeight(700.))
+                                .text_color(rgb(0xc9d1d9))
                                 .child(if editor.id.is_some() {
                                     "Edit Proxy"
                                 } else {
@@ -501,9 +498,9 @@ pub(super) fn network_proxy_editor_panel(
                         )
                         .child(
                             div()
-                                .text_xs()
-                                .text_color(rgb(0x98a3b8))
-                                .child("Configure SOCKS, HTTP, or ProxyCommand entries for SSH connection routing."),
+                                .text_size(px(12.))
+                                .text_color(rgb(0x8b949e))
+                                .child("Configure SOCKS, HTTP, or ProxyCommand routing for SSH connections."),
                         ),
                 )
                 .child(status_pill(protocol_label, rgb(0x93c5fd), rgb(0x17233a))),
@@ -628,27 +625,19 @@ pub(super) fn network_proxy_editor_panel(
         .when_some(editor.error.clone(), |this, error| {
             this.child(div().text_xs().text_color(rgb(0xfda4af)).child(error))
         })
-        .child(
-            div()
-                .flex()
-                .items_center()
-                .justify_end()
-                .gap_2()
-                .child(small_button(
-                    "network-proxy-editor-cancel",
-                    "Cancel",
-                    cx.listener(|this, _, _, cx| {
-                        this.close_network_proxy_editor(cx);
-                    }),
-                ))
-                .child(small_button(
-                    "network-proxy-editor-save",
-                    "Save",
-                    cx.listener(|this, _, _, cx| {
-                        this.save_network_proxy_editor(cx);
-                    }),
-                )),
-        )
+        .child(network_dialog_footer(
+            "network-proxy-editor-cancel",
+            "network-proxy-editor-save",
+            "Save",
+            cx.listener(|this, _, _, cx| {
+                this.close_network_proxy_editor(cx);
+            }),
+            cx.listener(|this, _, _, cx| {
+                this.save_network_proxy_editor(cx);
+            }),
+        ));
+
+    network_modal_shell("network-proxy-editor-modal", 520., card)
 }
 
 pub(super) fn proxy_editor_input(

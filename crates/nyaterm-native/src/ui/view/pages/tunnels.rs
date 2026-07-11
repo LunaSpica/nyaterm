@@ -1,6 +1,6 @@
 use gpui::{
     App, ClickEvent, Context, FontWeight, Hsla, IntoElement, KeyDownEvent, Window, div, prelude::*,
-    px, rgb, svg,
+    px, rgb, rgba, svg,
 };
 
 use std::collections::{HashMap, HashSet};
@@ -95,7 +95,7 @@ impl NyaTermApp {
 
         // Tauri NetworkPanel body (PanelHeader is shared):
         // scroll(p-3) > Tabs(grid-cols-2) > config row (label + New Group/New item) > grouped list.
-        // Inline editors/confirm banners stay above the list for native UX.
+        // Network create/edit/delete use modal dialogs (Tauri Dialog) over the panel.
         let config_label = match self.network_tab {
             NetworkTab::Tunnels => "Tunnel Config",
             NetworkTab::Proxies => "Proxy Config",
@@ -355,6 +355,36 @@ impl NyaTermApp {
                             }),
                     ),
             )
+            // Tauri-style Dialog overlays (absolute) above the panel body.
+            .when_some(self.network_delete_confirm.clone(), |this, confirm| {
+                this.child(network_delete_confirm_panel(confirm, cx))
+            })
+            .when_some(self.network_group_editor.clone(), |this, editor| {
+                this.child(network_group_editor_panel(
+                    editor,
+                    &self.network_group_editor_focus,
+                    cx,
+                ))
+            })
+            .when_some(self.network_group_delete_confirm.clone(), |this, confirm| {
+                this.child(network_group_delete_confirm_panel(confirm, cx))
+            })
+            .when_some(self.network_tunnel_editor.clone(), |this, editor| {
+                this.child(network_tunnel_editor_panel(
+                    editor,
+                    self,
+                    &self.network_tunnel_editor_focus,
+                    cx,
+                ))
+            })
+            .when_some(self.network_proxy_editor.clone(), |this, editor| {
+                this.child(network_proxy_editor_panel(
+                    editor,
+                    self,
+                    &self.network_proxy_editor_focus,
+                    cx,
+                ))
+            })
     }
 }
 

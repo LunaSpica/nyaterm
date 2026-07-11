@@ -570,3 +570,8 @@ service boundary first:
 - Footer densified (~28px) with item count + total file size + 24px cwd/send icons.
 - Activity bar lock/recording use SVG assets (`lock.svg` / `record.svg`) instead of emoji/glyphs.
 - Security / Auth: full-width 4-col segment tabs (Keys/Passwords/OTP/Credentials order) under PanelHeader; header meta shows active-tab count.
+
+## 2026-07-11 Network modal dialogs
+- Tunnel/Proxy editors, group editor, and delete confirms moved from inline banners to Tauri-like modal shells (`network_modal_shell` dimmed backdrop + centered card).
+- Dialog footer uses Cancel/Save action row with top border (ActionFooter-like).
+- Network panel root is `relative` so modals cover the full panel body.
