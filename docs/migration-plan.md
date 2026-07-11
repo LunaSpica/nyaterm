@@ -1370,3 +1370,11 @@ service boundary first:
 - Tab strip **+** menu mirrors Tauri sections: New Local / Temporary SSH / All
   Connections, then **Shell Sessions** (local_terminal) and **Recent Sessions**
   sorted by `last_used_at_ms` (fallback to non-shell list).
+
+
+## 2026-07-11 Open Tabs reverse + status session accent
+
+- Open Tabs overflow menu lists tabs rightmost-first with stable global ordinals
+  (Tauri openTabsMenuItems reverse).
+- Status bar Session chip uses warning while connecting and danger when
+  disconnected or last connect failed.

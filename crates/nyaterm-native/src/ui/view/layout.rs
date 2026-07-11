@@ -127,8 +127,18 @@ impl NyaTermApp {
                         "status-session",
                         "Session",
                         session_status,
-                        if self.active_session_id.is_some() {
+                        if self.pending_session_name.is_some() {
+                            rgb(palette.warning)
+                        } else if self
+                            .active_session_id
+                            .as_deref()
+                            .is_some_and(|id| self.is_session_disconnected(id))
+                        {
+                            rgb(palette.danger)
+                        } else if self.active_session_id.is_some() {
                             rgb(palette.success)
+                        } else if self.last_connect_failure_name.is_some() {
+                            rgb(palette.danger)
                         } else {
                             rgb(palette.text_muted)
                         },

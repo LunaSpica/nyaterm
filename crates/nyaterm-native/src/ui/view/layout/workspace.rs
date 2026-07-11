@@ -708,7 +708,15 @@ impl NyaTermApp {
 
     fn render_open_tabs_menu(&mut self, cx: &mut Context<Self>) -> impl IntoElement {
         let palette = self.theme_palette();
-        let sessions = self.ordered_sessions();
+        // Tauri openTabsMenuItems is reversed (rightmost first) but keeps global ordinals.
+        let ordered = self.ordered_sessions();
+        let ordinals: std::collections::HashMap<String, usize> = ordered
+            .iter()
+            .enumerate()
+            .map(|(index, session)| (session.id.clone(), index + 1))
+            .collect();
+        let mut sessions = ordered;
+        sessions.reverse();
         let active_id = self.active_session_id.clone();
         let mut menu = div()
             .id("workspace-open-tabs-dropdown")
@@ -800,7 +808,10 @@ impl NyaTermApp {
                                 .text_size(px(11.))
                                 .font_weight(FontWeight(700.))
                                 .text_color(rgb(palette.text_dimmed))
-                                .child(format!("{}", index + 1)),
+                                .child(format!(
+                                    "{}",
+                                    ordinals.get(&session.id).copied().unwrap_or(index + 1)
+                                )),
                         )
                         .child(
                             div()
