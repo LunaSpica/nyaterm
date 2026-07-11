@@ -69,8 +69,7 @@ impl NyaTermApp {
         } else if self
             .ai_prepared_request
             .as_ref()
-            .is_some_and(|request| request.action == AiAction::CustomFileAction)
-        {
+            .is_some_and(|request| request.action == AiAction::CustomFileAction) {
             "file".to_string()
         } else if self.ai_settings.enabled {
             match self.ai_settings.default_mode {
@@ -403,7 +402,7 @@ impl NyaTermApp {
                             .items_center()
                             .gap_2()
                             .mr_2()
-                            .child(logo_mark())
+                            .child(logo_mark(palette))
                             .child(
                                 div()
                                     .text_sm()
@@ -446,18 +445,21 @@ impl NyaTermApp {
                             .window_control_area(WindowControlArea::Drag),
                     )
                     .child(window_control_button(
+                        palette,
                         "window-min",
                         "–",
                         WindowControlArea::Min,
                         |_, window, _| window.minimize_window(),
                     ))
                     .child(window_control_button(
+                        palette,
                         "window-max",
                         "□",
                         WindowControlArea::Max,
                         |_, window, _| window.zoom_window(),
                     ))
                     .child(window_control_button(
+                        palette,
                         "window-close",
                         "×",
                         WindowControlArea::Close,

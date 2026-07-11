@@ -216,6 +216,7 @@ impl NyaTermApp {
                                             .grid_cols(2)
                                             .gap_2()
                                             .child(tab_action_button(
+                                                palette,
                                                 "tab-actions-rename",
                                                 "Rename",
                                                 "Edit tab title",
@@ -229,6 +230,7 @@ impl NyaTermApp {
                                                 }),
                                             ))
                                             .child(tab_action_button(
+                                                palette,
                                                 "tab-actions-copy-name",
                                                 "Copy Name",
                                                 "Clipboard title",
@@ -242,6 +244,7 @@ impl NyaTermApp {
                                                 }),
                                             ))
                                             .child(tab_action_button(
+                                                palette,
                                                 "tab-actions-copy-endpoint",
                                                 "Copy Endpoint",
                                                 "Host or shell",
@@ -256,6 +259,7 @@ impl NyaTermApp {
                                             ))
                                             .when(can_copy_ssh, |this| {
                                                 this.child(tab_action_button(
+                                                    palette,
                                                     "tab-actions-copy-ip",
                                                     "Copy IP",
                                                     "SSH host",
@@ -269,6 +273,7 @@ impl NyaTermApp {
                                                     }),
                                                 ))
                                                 .child(tab_action_button(
+                                                    palette,
                                                     "tab-actions-copy-ssh",
                                                     "Copy SSH",
                                                     "user@host",
@@ -292,6 +297,7 @@ impl NyaTermApp {
                             .grid_cols(3)
                             .gap_2()
                             .child(tab_action_button(
+                                palette,
                                 "tab-actions-duplicate",
                                 "Duplicate",
                                 "New same session",
@@ -303,6 +309,7 @@ impl NyaTermApp {
                             ))
                             .when(can_multiplex, |this| {
                                 this.child(tab_action_button(
+                                    palette,
                                     "tab-actions-multiplex",
                                     "Multiplex",
                                     "Reuse SSH channel",
@@ -314,6 +321,7 @@ impl NyaTermApp {
                                 ))
                             })
                             .child(tab_action_button(
+                                palette,
                                 "tab-actions-duplicate-command",
                                 "Duplicate + Run",
                                 "Startup command",
@@ -325,6 +333,7 @@ impl NyaTermApp {
                             ))
                             .when(can_multiplex, |this| {
                                 this.child(tab_action_button(
+                                    palette,
                                     "tab-actions-multiplex-command",
                                     "Multiplex + Run",
                                     "Startup command",
@@ -340,6 +349,7 @@ impl NyaTermApp {
                                 ))
                             })
                             .child(tab_action_button(
+                                palette,
                                 "tab-actions-split-horizontal",
                                 "Split H",
                                 "Duplicate pane",
@@ -354,6 +364,7 @@ impl NyaTermApp {
                                 }),
                             ))
                             .child(tab_action_button(
+                                palette,
                                 "tab-actions-split-vertical",
                                 "Split V",
                                 "Duplicate pane",
@@ -368,6 +379,7 @@ impl NyaTermApp {
                                 }),
                             ))
                             .child(tab_action_button(
+                                palette,
                                 "tab-actions-reconnect",
                                 "Reconnect",
                                 "Restart session",
@@ -378,6 +390,7 @@ impl NyaTermApp {
                                 }),
                             ))
                             .child(tab_action_button(
+                                palette,
                                 "tab-actions-info",
                                 "Info",
                                 "Connection detail",
@@ -388,6 +401,7 @@ impl NyaTermApp {
                                 }),
                             ))
                             .child(tab_action_button(
+                                palette,
                                 "tab-actions-ai-explain",
                                 "AI Explain",
                                 "visible output",
@@ -410,6 +424,7 @@ impl NyaTermApp {
                                 }),
                             ))
                             .child(tab_action_button(
+                                palette,
                                 "tab-actions-ai-analyze",
                                 "AI Analyze",
                                 "buffer errors",
@@ -432,6 +447,7 @@ impl NyaTermApp {
                             ))
                             .when(can_unsplit, |this| {
                                 this.child(tab_action_button(
+                                    palette,
                                     "tab-actions-unsplit",
                                     "Unsplit",
                                     "Close split view",
@@ -442,6 +458,7 @@ impl NyaTermApp {
                                 ))
                             })
                             .child(tab_action_button(
+                                palette,
                                 "tab-actions-close-session",
                                 "Close Tab",
                                 "End this session",
@@ -452,6 +469,7 @@ impl NyaTermApp {
                             ))
                             .when(can_close_inactive, |this| {
                                 this.child(tab_action_button(
+                                    palette,
                                     "tab-actions-close-inactive",
                                     "Close Others",
                                     "Keep this tab",
@@ -463,6 +481,7 @@ impl NyaTermApp {
                             })
                             .when(can_close_right, |this| {
                                 this.child(tab_action_button(
+                                    palette,
                                     "tab-actions-close-right",
                                     "Close Right",
                                     "Tabs after this",
@@ -474,6 +493,7 @@ impl NyaTermApp {
                             })
                             .when(sessions.len() > 0, |this| {
                                 this.child(tab_action_button(
+                                    palette,
                                     "tab-actions-close-all",
                                     "Close All",
                                     "End all sessions",

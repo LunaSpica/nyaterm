@@ -168,6 +168,7 @@ impl NyaTermApp {
                             .items_center()
                             .gap_0()
                             .child(compact_remote_svg_button(
+                                palette,
                                 "docker-refresh",
                                 "icons/fe/refresh.svg",
                                 cx.listener(|this, _, window, cx| {
@@ -175,6 +176,7 @@ impl NyaTermApp {
                                 }),
                             ))
                             .child(compact_remote_svg_button(
+                                palette,
                                 "docker-prune",
                                 "icons/fe/delete.svg",
                                 cx.listener(|this, _, _, cx| {

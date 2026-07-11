@@ -531,6 +531,7 @@ impl NyaTermApp {
         } else {
             for connection in self.connections.iter().take(8).cloned() {
                 rows = rows.child(compact_connection_row(
+                    palette,
                     &connection,
                     cx.listener({
                         let connection = connection.clone();
@@ -607,6 +608,7 @@ impl NyaTermApp {
                 let is_pending = self.pending_tunnels.iter().any(|id| id == &tunnel.id);
                 let is_open = self.tunnel_manager.is_open(&tunnel.id).unwrap_or(false);
                 rows = rows.child(compact_tunnel_row(
+                    palette,
                     &tunnel,
                     is_open,
                     is_pending,
@@ -1221,8 +1223,7 @@ impl NyaTermApp {
                         let edit_id = entry.id.clone();
                         let delete_id = entry.id.clone();
                         let code_id = entry.id.clone();
-                        let title = if !entry.issuer.trim().is_empty() || !entry.username.trim().is_empty()
-                        {
+                        let title = if !entry.issuer.trim().is_empty() || !entry.username.trim().is_empty() {
                             format!(
                                 "{}{}",
                                 entry.issuer,
@@ -2104,13 +2105,11 @@ impl NyaTermApp {
             "failed"
         } else if self.cloud_sync_status.to_ascii_lowercase().contains("push")
             || self.cloud_sync_status.to_ascii_lowercase().contains("pull")
-            || self.cloud_sync_status.to_ascii_lowercase().contains("running")
-        {
+            || self.cloud_sync_status.to_ascii_lowercase().contains("running") {
             "running"
         } else if self.cloud_sync_status.to_ascii_lowercase().contains("success")
             || self.cloud_sync_status.to_ascii_lowercase().contains("synced")
-            || self.cloud_sync_status.to_ascii_lowercase().contains("ready")
-        {
+            || self.cloud_sync_status.to_ascii_lowercase().contains("ready") {
             "success"
         } else {
             "idle"
@@ -2144,6 +2143,7 @@ impl NyaTermApp {
                 let entry_id = entry.id.clone();
                 let is_open = expanded.contains(&entry_id);
                 rows = rows.child(cloud_sync_history_row(
+                    palette,
                     entry,
                     is_open,
                     cx.listener(move |this, _, _, cx| {
@@ -2215,6 +2215,7 @@ impl NyaTermApp {
                             )
                             .child(
                                 toolbar_svg_button(
+                                    palette,
                                     SharedString::from("sync-history-refresh"),
                                     "icons/fe/refresh.svg",
                                     cx.listener(|this, _, _, cx| {

@@ -1,6 +1,7 @@
 use super::*;
+use crate::ui::theme::ThemePalette;
 
-pub(super) fn process_matches(process: &RemoteProcess, normalized_query: &str) -> bool {
+pub(super) fn process_matches(process: &RemoteProcess, normalized_query: &str) -> bool  {
     if normalized_query.is_empty() {
         return true;
     }
@@ -62,7 +63,7 @@ pub(super) fn sort_processes(
     });
 }
 
-pub(super) fn top_process_ratio(processes: &[RemoteProcess], cpu: bool) -> f64 {
+pub(super) fn top_process_ratio(processes: &[RemoteProcess], cpu: bool) -> f64  {
     processes
         .iter()
         .map(|process| {
@@ -76,12 +77,10 @@ pub(super) fn top_process_ratio(processes: &[RemoteProcess], cpu: bool) -> f64 {
         / 100.
 }
 
-pub(super) fn process_summary_card(
+pub(super) fn process_summary_card(palette: ThemePalette,
     title: &'static str,
     value: String,
-    ratio: f64,
-) -> impl IntoElement {
-    let palette = crate::ui::theme::theme_palette("github-dark");
+    ratio: f64,) -> impl IntoElement {
     let ratio = ratio.clamp(0., 1.);
     // Compact metric chip for Process Manager summary strip.
     div()
@@ -105,10 +104,10 @@ pub(super) fn process_summary_card(
             div()
                 .text_size(px(12.))
                 .font_weight(FontWeight(700.))
-                .text_color(usage_color(ratio))
+                .text_color(usage_color(palette, ratio))
                 .child(value),
         )
-        .child(stats_progress_bar(ratio))
+        .child(stats_progress_bar(palette, ratio))
 }
 
 
@@ -133,7 +132,7 @@ pub(super) fn process_display_mode(panel_width: f32) -> ProcessDisplayMode {
     }
 }
 
-pub(super) fn process_row_height_px(mode: ProcessDisplayMode) -> f32 {
+pub(super) fn process_row_height_px(mode: ProcessDisplayMode) -> f32  {
     match mode {
         ProcessDisplayMode::Compact => 62.,
         _ => 38.,
@@ -149,16 +148,13 @@ pub(super) fn process_details_height_px(mode: ProcessDisplayMode) -> f32 {
     }
 }
 
-pub(super) fn process_sort_button(
+pub(super) fn process_sort_button(palette: ThemePalette,
     id: impl Into<String>,
     label: &'static str,
     active: bool,
     direction: RemoteProcessSortDirection,
     numeric: bool,
-    on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
-) -> impl IntoElement {
-    let palette = crate::ui::theme::theme_palette("github-dark");
-    // Flat sortable header cell (Tauri table header).
+    on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,) -> impl IntoElement {    // Flat sortable header cell (Tauri table header).
     div()
         .id(gpui::SharedString::from(id.into()))
         .h_full()
@@ -181,9 +177,7 @@ pub(super) fn process_sort_button(
         .on_click(on_click)
 }
 
-pub(super) fn process_table_header() -> impl IntoElement {
-    let palette = crate::ui::theme::theme_palette("github-dark");
-    // Static fallback header; live header uses process_sort_button grid in process_view.
+pub(super) fn process_table_header(palette: ThemePalette) -> impl IntoElement {    // Static fallback header; live header uses process_sort_button grid in process_view.
     div()
         .grid()
         .grid_cols(6)
@@ -206,7 +200,7 @@ pub(super) fn process_table_header() -> impl IntoElement {
         .child("")
 }
 
-pub(super) fn process_table_row(
+pub(super) fn process_table_row(palette: ThemePalette,
     process: &RemoteProcess,
     mode: ProcessDisplayMode,
     selected: bool,
@@ -219,10 +213,7 @@ pub(super) fn process_table_row(
     on_hup: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
     on_stop: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
     on_cont: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
-    on_kill: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
-) -> gpui::Div {
-    let palette = crate::ui::theme::theme_palette("github-dark");
-    // Tauri ProcessManager: left accent + mode-aware columns (compact/narrow/medium/wide).
+    on_kill: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,) -> gpui::Div {    // Tauri ProcessManager: left accent + mode-aware columns (compact/narrow/medium/wide).
     let accent = if process.cpu_percent >= 80.0 {
         rgb(palette.danger)
     } else if process.memory_percent >= 80.0 {
@@ -248,6 +239,7 @@ pub(super) fn process_table_row(
         .items_center()
         .justify_end()
         .child(compact_remote_svg_button(
+            palette,
             format!("process-menu-{}", process.pid),
             "icons/conn/more.svg",
             on_menu,
@@ -273,37 +265,44 @@ pub(super) fn process_table_row(
                     .flex_col()
                     .on_mouse_down(gpui::MouseButton::Left, |_, _, _| {})
                     .child(process_menu_item(
+                        palette,
                         format!("process-copy-pid-{}", process.pid),
                         "Copy PID",
                         on_copy_pid,
                     ))
                     .child(process_menu_item(
+                        palette,
                         format!("process-copy-cmd-{}", process.pid),
                         "Copy Command",
                         on_copy_command,
                     ))
-                    .child(process_menu_sep())
+                    .child(process_menu_sep(palette))
                     .child(process_menu_item(
+                        palette,
                         format!("process-term-{}", process.pid),
                         "TERM",
                         on_term,
                     ))
                     .child(process_menu_item(
+                        palette,
                         format!("process-hup-{}", process.pid),
                         "HUP",
                         on_hup,
                     ))
                     .child(process_menu_item(
+                        palette,
                         format!("process-stop-{}", process.pid),
                         "STOP",
                         on_stop,
                     ))
                     .child(process_menu_item(
+                        palette,
                         format!("process-cont-{}", process.pid),
                         "CONT",
                         on_cont,
                     ))
                     .child(process_menu_item(
+                        palette,
                         format!("process-kill-{}", process.pid),
                         "KILL",
                         on_kill,
@@ -392,21 +391,24 @@ pub(super) fn process_table_row(
                             .child(truncate_preview(&process.command_line, 52)),
                     ),
             )
-            .child(process_table_cell(process.pid.to_string(), None, true))
+            .child(process_table_cell(palette, process.pid.to_string(), None, true))
             .child(process_table_cell(
+                palette,
                 format!("{:.1}%", process.cpu_percent),
-                Some(usage_color(process.cpu_percent / 100.)),
+                Some(usage_color(palette, process.cpu_percent / 100.)),
                 true,
             ));
         if show_memory {
             grid = grid.child(process_table_cell(
+                palette,
                 format!("{:.1}%", process.memory_percent),
-                Some(usage_color(process.memory_percent / 100.)),
+                Some(usage_color(palette, process.memory_percent / 100.)),
                 true,
             ));
         }
         if show_user {
             grid = grid.child(process_table_cell(
+                palette,
                 truncate_preview(&process.user, 12),
                 None,
                 false,
@@ -439,12 +441,10 @@ pub(super) fn process_table_row(
 
 
 
-fn process_menu_item(
+fn process_menu_item(palette: ThemePalette,
     id: impl Into<String>,
     label: &'static str,
-    on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
-) -> impl IntoElement {
-    let palette = crate::ui::theme::theme_palette("github-dark");
+    on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,) -> impl IntoElement {
     div()
         .id(gpui::SharedString::from(id.into()))
         .h(px(24.))
@@ -459,18 +459,14 @@ fn process_menu_item(
         .child(label)
 }
 
-fn process_menu_sep() -> impl IntoElement {
-    let palette = crate::ui::theme::theme_palette("github-dark");
+fn process_menu_sep(palette: ThemePalette) -> impl IntoElement {
     div().h(px(1.)).mx_2().my_1().bg(rgb(palette.border))
 }
 
-pub(super) fn process_table_cell(
+pub(super) fn process_table_cell(palette: ThemePalette,
     value: String,
     color: Option<gpui::Hsla>,
-    numeric: bool,
-) -> impl IntoElement {
-    let palette = crate::ui::theme::theme_palette("github-dark");
-    // Tauri ProcessManager numeric columns are mono + right-aligned.
+    numeric: bool,) -> impl IntoElement {    // Tauri ProcessManager numeric columns are mono + right-aligned.
     div()
         .min_w_0()
         .font_family("JetBrains Mono")
@@ -481,12 +477,10 @@ pub(super) fn process_table_cell(
         .child(value)
 }
 
-pub(super) fn icon_action_button(
+pub(super) fn icon_action_button(palette: ThemePalette,
     id: impl Into<String>,
     label: &'static str,
-    on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
-) -> impl IntoElement {
-    let palette = crate::ui::theme::theme_palette("github-dark");
+    on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,) -> impl IntoElement {
     div()
         .id(gpui::SharedString::from(id.into()))
         .h(px(24.))
@@ -505,15 +499,12 @@ pub(super) fn icon_action_button(
         .on_click(on_click)
 }
 
-pub(super) fn process_details(
+pub(super) fn process_details(palette: ThemePalette,
     process: &RemoteProcess,
     mode: ProcessDisplayMode,
     nice_draft: String,
     nice_focus: &gpui::FocusHandle,
-    cx: &mut Context<NyaTermApp>,
-) -> gpui::AnyElement {
-    let palette = crate::ui::theme::theme_palette("github-dark");
-    // Tauri expanded process details: compact mono command + meta chips + dense actions.
+    cx: &mut Context<NyaTermApp>,) -> gpui::AnyElement {    // Tauri expanded process details: compact mono command + meta chips + dense actions.
     let command = if process.command_line.trim().is_empty() {
         process.command.clone()
     } else {
@@ -548,15 +539,16 @@ pub(super) fn process_details(
                 .flex()
                 .flex_wrap()
                 .gap_1()
-                .child(process_detail_chip("PPID", process.ppid.to_string()))
+                .child(process_detail_chip(palette, "PPID", process.ppid.to_string()))
                 .child(process_detail_chip(
+                    palette,
                     "RSS",
                     format_file_size(Some(process.rss_kb.saturating_mul(1024))),
                 ))
-                .child(process_detail_chip("State", process.state.clone()))
-                .child(process_detail_chip("User", process.user.clone()))
-                .child(process_detail_chip("PID", process.pid.to_string()))
-                .child(process_detail_chip("Elapsed", process.elapsed.clone())),
+                .child(process_detail_chip(palette, "State", process.state.clone()))
+                .child(process_detail_chip(palette, "User", process.user.clone()))
+                .child(process_detail_chip(palette, "PID", process.pid.to_string()))
+                .child(process_detail_chip(palette, "Elapsed", process.elapsed.clone())),
         )
         .child(
             div()
@@ -580,28 +572,28 @@ pub(super) fn process_details(
                             },
                         )),
                 )
-                .child(small_button(crate::ui::theme::theme_palette("github-dark"), 
+                .child(small_button(palette, 
                     format!("process-nice-apply-{pid}"),
                     "Apply",
                     cx.listener(move |this, _, window, cx| {
                         this.apply_process_nice_draft(window, cx);
                     }),
                 ))
-                .child(small_button(crate::ui::theme::theme_palette("github-dark"), 
+                .child(small_button(palette, 
                     format!("process-nice-low-{pid}"),
                     "-5",
                     cx.listener(move |this, _, window, cx| {
                         this.renice_process(pid, -5, window, cx);
                     }),
                 ))
-                .child(small_button(crate::ui::theme::theme_palette("github-dark"), 
+                .child(small_button(palette, 
                     format!("process-nice-zero-{pid}"),
                     "0",
                     cx.listener(move |this, _, window, cx| {
                         this.renice_process(pid, 0, window, cx);
                     }),
                 ))
-                .child(small_button(crate::ui::theme::theme_palette("github-dark"), 
+                .child(small_button(palette, 
                     format!("process-nice-high-{pid}"),
                     "+5",
                     cx.listener(move |this, _, window, cx| {
@@ -616,35 +608,35 @@ pub(super) fn process_details(
                         .text_color(rgb(palette.text_dimmed))
                         .child("SIG"),
                 )
-                .child(small_button(crate::ui::theme::theme_palette("github-dark"), 
+                .child(small_button(palette, 
                     format!("process-signal-term-{pid}"),
                     "TERM",
                     cx.listener(move |this, _, window, cx| {
                         this.request_process_signal(pid, "TERM", window, cx);
                     }),
                 ))
-                .child(small_button(crate::ui::theme::theme_palette("github-dark"), 
+                .child(small_button(palette, 
                     format!("process-signal-hup-{pid}"),
                     "HUP",
                     cx.listener(move |this, _, window, cx| {
                         this.request_process_signal(pid, "HUP", window, cx);
                     }),
                 ))
-                .child(small_button(crate::ui::theme::theme_palette("github-dark"), 
+                .child(small_button(palette, 
                     format!("process-signal-stop-{pid}"),
                     "STOP",
                     cx.listener(move |this, _, window, cx| {
                         this.request_process_signal(pid, "STOP", window, cx);
                     }),
                 ))
-                .child(small_button(crate::ui::theme::theme_palette("github-dark"), 
+                .child(small_button(palette, 
                     format!("process-signal-cont-{pid}"),
                     "CONT",
                     cx.listener(move |this, _, window, cx| {
                         this.request_process_signal(pid, "CONT", window, cx);
                     }),
                 ))
-                .child(small_button(crate::ui::theme::theme_palette("github-dark"), 
+                .child(small_button(palette, 
                     format!("process-signal-kill-{pid}"),
                     "KILL",
                     cx.listener(move |this, _, window, cx| {
@@ -655,8 +647,7 @@ pub(super) fn process_details(
         .into_any_element()
 }
 
-pub(super) fn process_detail_chip(label: &'static str, value: String) -> impl IntoElement {
-    let palette = crate::ui::theme::theme_palette("github-dark");
+pub(super) fn process_detail_chip(palette: ThemePalette, label: &'static str, value: String) -> impl IntoElement {
     div()
         .rounded_md()
         .border_1()
@@ -684,11 +675,10 @@ pub(super) fn process_detail_chip(label: &'static str, value: String) -> impl In
         )
 }
 
-pub(super) fn process_signal_confirm_panel(
+pub(super) fn process_signal_confirm_panel(palette: ThemePalette,
     confirm: RemoteProcessSignalConfirmState,
-    cx: &mut Context<NyaTermApp>,
-) -> impl IntoElement {
-        let palette = cx.entity().read(cx).theme_palette();
+    cx: &mut Context<NyaTermApp>,) -> impl IntoElement {
+    let palette = cx.entity().read(cx).theme_palette();
     div()
         .rounded_md()
         .border_1()
@@ -733,14 +723,14 @@ pub(super) fn process_signal_confirm_panel(
                 .flex()
                 .items_center()
                 .gap_2()
-                .child(small_button(crate::ui::theme::theme_palette("github-dark"), 
+                .child(small_button(palette, 
                     "process-signal-cancel",
                     "Cancel",
                     cx.listener(|this, _, _, cx| {
                         this.cancel_process_signal_confirm(cx);
                     }),
                 ))
-                .child(small_button(crate::ui::theme::theme_palette("github-dark"), 
+                .child(small_button(palette, 
                     "process-signal-confirm",
                     "Confirm",
                     cx.listener(|this, _, window, cx| {
@@ -780,14 +770,11 @@ pub(super) fn dense_capability_line(
         )
 }
 
-pub(super) fn resource_gauge_card(
+pub(super) fn resource_gauge_card(palette: ThemePalette,
     title: &'static str,
     value: String,
     detail: String,
-    ratio: f64,
-) -> impl IntoElement {
-    let palette = crate::ui::theme::theme_palette("github-dark");
-    // Tauri ResourceMonitor ring-ish card: compact height, dense mono value.
+    ratio: f64,) -> impl IntoElement {    // Tauri ResourceMonitor ring-ish card: compact height, dense mono value.
     let ratio = ratio.clamp(0., 1.);
     div()
         .rounded_md()
@@ -804,7 +791,7 @@ pub(super) fn resource_gauge_card(
                 .size(px(44.))
                 .rounded_full()
                 .border_1()
-                .border_color(usage_color(ratio))
+                .border_color(usage_color(palette, ratio))
                 .bg(rgb(palette.surface))
                 .flex()
                 .items_center()
@@ -814,7 +801,7 @@ pub(super) fn resource_gauge_card(
                         .font_family("JetBrains Mono")
                         .text_size(px(11.))
                         .font_weight(FontWeight(700.))
-                        .text_color(usage_color(ratio))
+                        .text_color(usage_color(palette, ratio))
                         .child(value),
                 ),
         )
@@ -839,17 +826,15 @@ pub(super) fn resource_gauge_card(
                         .text_color(rgb(palette.text_dimmed))
                         .child(truncate_preview(&detail, 48)),
                 )
-                .child(stats_progress_bar(ratio)),
+                .child(stats_progress_bar(palette, ratio)),
         )
 }
 
-pub(super) fn resource_summary_card(
+pub(super) fn resource_summary_card(palette: ThemePalette,
     title: &'static str,
     value: String,
     detail: String,
-    ratio: f64,
-) -> impl IntoElement {
-    let palette = crate::ui::theme::theme_palette("github-dark");
+    ratio: f64,) -> impl IntoElement {
     let ratio = ratio.clamp(0., 1.);
     div()
         .rounded_md()
@@ -873,7 +858,7 @@ pub(super) fn resource_summary_card(
                 .font_family("JetBrains Mono")
                 .text_size(px(12.))
                 .font_weight(FontWeight(700.))
-                .text_color(usage_color(ratio))
+                .text_color(usage_color(palette, ratio))
                 .child(value),
         )
         .child(
@@ -883,11 +868,10 @@ pub(super) fn resource_summary_card(
                 .text_color(rgb(palette.text_muted))
                 .child(truncate_preview(&detail, 56)),
         )
-        .child(stats_progress_bar(ratio))
+        .child(stats_progress_bar(palette, ratio))
 }
 
-pub(super) fn usage_color(ratio: f64) -> gpui::Hsla {
-    let palette = crate::ui::theme::theme_palette("github-dark");
+pub(super) fn usage_color(palette: ThemePalette, ratio: f64) -> gpui::Hsla {
     if ratio >= 0.9 {
         rgb(0xfb7185).into()
     } else if ratio >= 0.7 {
@@ -897,18 +881,16 @@ pub(super) fn usage_color(ratio: f64) -> gpui::Hsla {
     }
 }
 
-pub(super) fn load_ratio(load1: f64, cores: u32) -> f64 {
+pub(super) fn load_ratio(load1: f64, cores: u32) -> f64  {
     let cores = cores.max(1) as f64;
     (load1 / cores).clamp(0., 1.)
 }
 
 
-pub(super) fn compact_remote_svg_button(
+pub(super) fn compact_remote_svg_button(palette: ThemePalette,
     id: impl Into<String>,
     icon_path: &'static str,
-    on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
-) -> impl IntoElement {
-    let palette = crate::ui::theme::theme_palette("github-dark");
+    on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,) -> impl IntoElement {
     div()
         .id(gpui::SharedString::from(id.into()))
         .size(px(28.))

@@ -1097,7 +1097,7 @@ impl NyaTermApp {
                         .text_size(px(11.))
                         .text_color(rgb(palette.text_muted))
                         .line_height(px(16.))
-                        .child(markdown_content_view(&truncate_preview(
+                        .child(markdown_content_view(palette, &truncate_preview(
                             &thought_text,
                             800,
                         ))),
@@ -1920,7 +1920,7 @@ impl NyaTermApp {
                             .text_size(px(11.))
                             .text_color(rgb(palette.text_muted))
                             .line_height(px(16.))
-                            .child(markdown_content_view(&truncate_preview(
+                            .child(markdown_content_view(palette, &truncate_preview(
                                 &reasoning,
                                 1200,
                             ))),
@@ -1953,7 +1953,7 @@ impl NyaTermApp {
                 );
             } else {
                 let rendered = truncate_preview(&display, 8000);
-                bubble = bubble.child(markdown_content_view(&rendered));
+                bubble = bubble.child(markdown_content_view(palette, &rendered));
             }
         }
 
@@ -2051,8 +2051,8 @@ impl NyaTermApp {
                         }),
                     ))),
             )
-            .child(inspector_card(palette, "Networks").child(compact_network_rows(&stats.networks)))
-            .child(inspector_status_line(self.stats_status.clone()))
+            .child(inspector_card(palette, "Networks").child(compact_network_rows(palette, &stats.networks)))
+            .child(inspector_status_line(palette, self.stats_status.clone()))
     }
 
     fn right_process_panel(&mut self, cx: &mut Context<Self>) -> impl IntoElement {
@@ -2103,8 +2103,8 @@ impl NyaTermApp {
                         }),
                     ))),
             )
-            .child(inspector_card(palette, "Hot Processes").child(compact_process_rows(&self.processes)))
-            .child(inspector_status_line(self.process_status.clone()))
+            .child(inspector_card(palette, "Hot Processes").child(compact_process_rows(palette, &self.processes)))
+            .child(inspector_status_line(palette, self.process_status.clone()))
     }
 
     fn right_docker_panel(&mut self, cx: &mut Context<Self>) -> impl IntoElement {
@@ -2157,9 +2157,9 @@ impl NyaTermApp {
             )
             .child(
                 inspector_card(palette, "Containers")
-                    .child(compact_docker_container_rows(&overview.containers)),
+                    .child(compact_docker_container_rows(palette, &overview.containers)),
             )
-            .child(inspector_status_line(self.docker_status.clone()))
+            .child(inspector_status_line(palette, self.docker_status.clone()))
     }
 
     fn right_translation_panel(&mut self, cx: &mut Context<Self>) -> impl IntoElement {
@@ -2220,7 +2220,7 @@ impl NyaTermApp {
                             )),
                     ),
             )
-            .child(inspector_status_line(self.translate_status.clone()))
+            .child(inspector_status_line(palette, self.translate_status.clone()))
     }
 }
 

@@ -38,7 +38,7 @@ impl NyaTermApp {
                                     .child(capability.note),
                             ),
                     )
-                    .child(service_status(capability.status)),
+                    .child(service_status(palette, capability.status)),
             );
         }
 

@@ -874,3 +874,9 @@ service boundary first:
 - Domain `AppSettingsSummary` loads/saves Tauri wallpaper fields: path, fit, image opacity, content opacity.
 - Settings Appearance adds Background image section (browse/clear/fit/opacity steppers).
 - Root shell layers wallpaper `img` under chrome with content opacity when a path is set.
+
+## 2026-07-11 Shared chrome free helpers live ThemePalette
+- `view_widgets` free helpers (logo/window controls, inspector status/compact rows, empty workspace, tab actions, stats bars, service status, markdown, toolbar SVG, connection type icon, compact connection/tunnel rows, cloud sync history row) take live `ThemePalette` as first arg.
+- Process Manager free helpers (`process_table_*`, menus, resource gauge/summary cards, `usage_color`, compact remote SVG buttons) take live palette; Process/Stats views pass `self.theme_palette()`.
+- Connections local icon/menu free helpers themed; stats CPU core rows use live palette tokens.
+- Remaining dark fallbacks concentrated in Transfers/Tunnels/Docker free helpers and some settings/panels.

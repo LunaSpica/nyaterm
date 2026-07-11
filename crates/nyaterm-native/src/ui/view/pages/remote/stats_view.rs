@@ -52,6 +52,7 @@ impl NyaTermApp {
         } else {
             for network in &stats.networks {
                 networks = networks.child(stats_resource_row(
+                    palette,
                     &network.nic,
                     &format!(
                         "{} · rx {} · tx {}",
@@ -70,6 +71,7 @@ impl NyaTermApp {
         } else {
             for disk in &stats.disks {
                 disks = disks.child(stats_resource_row(
+                    palette,
                     &disk.mount,
                     &format!(
                         "{} · {} free of {}",
@@ -121,6 +123,7 @@ impl NyaTermApp {
                         div()
                             .when(!can_refresh, |this| this.opacity(0.45))
                             .child(compact_remote_svg_button(
+                                palette,
                                 "stats-refresh",
                                 "icons/fe/refresh.svg",
                                 cx.listener(|this, _, window, cx| {
@@ -146,12 +149,14 @@ impl NyaTermApp {
                     .grid_cols(4)
                     .gap_2()
                     .child(resource_gauge_card(
+                        palette,
                         "CPU",
                         format!("{:.0}%", stats.cpu.usage.clamp(0., 100.)),
                         truncate_preview(&stats.cpu.model, 54),
                         stats.cpu.usage / 100.,
                     ))
                     .child(resource_gauge_card(
+                        palette,
                         "Memory",
                         format!("{memory_percent:.0}%"),
                         format!(
@@ -162,6 +167,7 @@ impl NyaTermApp {
                         memory_percent / 100.,
                     ))
                     .child(resource_summary_card(
+                        palette,
                         "Load",
                         format!("{:.2}", stats.load.load1),
                         format!(
@@ -171,6 +177,7 @@ impl NyaTermApp {
                         load_ratio(stats.load.load1, stats.cpu.cores),
                     ))
                     .child(resource_summary_card(
+                        palette,
                         "Network",
                         format!(
                             "{} / {}",
@@ -269,7 +276,7 @@ impl NyaTermApp {
                             .child(dense_capability_line(palette, "Total",
                                 format_file_size(Some(memory_total)),
                             ))
-                            .child(stats_progress_bar(memory_percent / 100.)),
+                            .child(stats_progress_bar(palette, memory_percent / 100.)),
                     ),
             )
             .child(
@@ -308,7 +315,7 @@ impl NyaTermApp {
                                         .mt_2()
                                         .rounded_sm()
                                         .border_1()
-                                        .border_color(usage_color(disk.use_percent as f64 / 100.))
+                                        .border_color(usage_color(palette, disk.use_percent as f64 / 100.))
                                         .bg(rgb(palette.input))
                                         .p_2()
                                         .child(
@@ -321,7 +328,7 @@ impl NyaTermApp {
                                                     disk.mount, disk.use_percent
                                                 )),
                                         )
-                                        .child(stats_progress_bar(disk.use_percent as f64 / 100.)),
+                                        .child(stats_progress_bar(palette, disk.use_percent as f64 / 100.)),
                                 )
                             })
                             .child(disks),
@@ -356,8 +363,8 @@ fn cpu_core_summary(per_core: &[f64], expanded: bool, cx: &mut Context<NyaTermAp
             .items_center()
             .justify_between()
             .gap_2()
-            .child(dense_capability_line(crate::ui::theme::theme_palette("github-dark"), "Per Core", summary))
-            .child(small_button(crate::ui::theme::theme_palette("github-dark"), 
+            .child(dense_capability_line(cx_theme_palette(cx), "Per Core", summary))
+            .child(small_button(cx_theme_palette(cx), 
                 "stats-cpu-cores-toggle",
                 if expanded { "Hide" } else { "Show" },
                 cx.listener(|this, _, _, cx| {
@@ -369,7 +376,7 @@ fn cpu_core_summary(per_core: &[f64], expanded: bool, cx: &mut Context<NyaTermAp
     if expanded {
         let mut core_rows = div().grid().grid_cols(2).gap_2();
         for (index, usage) in per_core.iter().copied().enumerate() {
-            core_rows = core_rows.child(cpu_core_row(index + 1, usage));
+            core_rows = core_rows.child(cpu_core_row(cx_theme_palette(cx), index + 1, usage));
         }
         rows = rows.child(core_rows);
     }
@@ -377,13 +384,12 @@ fn cpu_core_summary(per_core: &[f64], expanded: bool, cx: &mut Context<NyaTermAp
     rows
 }
 
-fn cpu_core_row(index: usize, usage: f64) -> gpui::Div {
-    let palette = crate::ui::theme::theme_palette("github-dark");
+fn cpu_core_row(palette: crate::ui::theme::ThemePalette, index: usize, usage: f64) -> gpui::Div {
     let ratio = (usage / 100.).clamp(0., 1.);
     div()
         .rounded_sm()
         .border_1()
-        .border_color(rgb(0x303848))
+        .border_color(rgb(palette.border))
         .bg(rgb(palette.input))
         .p_2()
         .flex()
@@ -399,16 +405,16 @@ fn cpu_core_row(index: usize, usage: f64) -> gpui::Div {
                     div()
                         .font_family("JetBrains Mono")
                         .text_xs()
-                        .text_color(rgb(0xcbd5e1))
+                        .text_color(rgb(palette.text))
                         .child(format!("CPU {index}")),
                 )
                 .child(
                     div()
                         .font_family("JetBrains Mono")
                         .text_xs()
-                        .text_color(usage_color(ratio))
+                        .text_color(usage_color(palette, ratio))
                         .child(format!("{usage:.1}%")),
                 ),
         )
-        .child(stats_progress_bar(ratio))
+        .child(stats_progress_bar(palette, ratio))
 }

@@ -20,8 +20,7 @@ use super::{
     tunnel_name,
 };
 
-pub(in crate::ui::view) fn logo_mark() -> impl IntoElement {
-    let palette = crate::ui::theme::theme_palette("github-dark");
+pub(in crate::ui::view) fn logo_mark(palette: ThemePalette) -> impl IntoElement {
     div()
         .size(px(22.))
         .flex_none()
@@ -36,11 +35,9 @@ pub(in crate::ui::view) fn logo_mark() -> impl IntoElement {
         )
 }
 
-pub(in crate::ui::view) fn menu_bar_button(
+pub(in crate::ui::view) fn menu_bar_button(palette: ThemePalette,
     label: &'static str,
-    on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
-) -> impl IntoElement {
-    let palette = crate::ui::theme::theme_palette("github-dark");
+    on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,) -> impl IntoElement {
     div()
         .id(SharedString::from(format!("menu-{label}")))
         .h(px(26.))
@@ -116,13 +113,11 @@ pub(in crate::ui::view) fn status_bar_button(
         .on_click(on_click)
 }
 
-pub(in crate::ui::view) fn window_control_button(
+pub(in crate::ui::view) fn window_control_button(palette: ThemePalette,
     id: &'static str,
     label: &'static str,
     area: WindowControlArea,
-    on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
-) -> impl IntoElement {
-    let palette = crate::ui::theme::theme_palette("github-dark");
+    on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,) -> impl IntoElement {
     div()
         .id(SharedString::from(id))
         .w(px(46.))
@@ -265,8 +260,7 @@ pub(in crate::ui::view) fn inspector_card(palette: ThemePalette, title: &'static
         )
 }
 
-pub(in crate::ui::view) fn inspector_status_line(text: String) -> impl IntoElement {
-    let palette = crate::ui::theme::theme_palette("github-dark");
+pub(in crate::ui::view) fn inspector_status_line(palette: ThemePalette, text: String) -> impl IntoElement {
     div()
         .rounded_md()
         .border_1()
@@ -279,8 +273,7 @@ pub(in crate::ui::view) fn inspector_status_line(text: String) -> impl IntoEleme
         .child(text)
 }
 
-pub(in crate::ui::view) fn compact_network_rows(networks: &[NetworkInfo]) -> impl IntoElement {
-    let palette = crate::ui::theme::theme_palette("github-dark");
+pub(in crate::ui::view) fn compact_network_rows(palette: ThemePalette, networks: &[NetworkInfo]) -> impl IntoElement {
     let mut rows = div().mt_3().flex().flex_col().gap_2();
     if networks.is_empty() {
         rows = rows.child(
@@ -333,8 +326,7 @@ pub(in crate::ui::view) fn compact_network_rows(networks: &[NetworkInfo]) -> imp
     rows
 }
 
-pub(in crate::ui::view) fn compact_process_rows(processes: &[RemoteProcess]) -> impl IntoElement {
-    let palette = crate::ui::theme::theme_palette("github-dark");
+pub(in crate::ui::view) fn compact_process_rows(palette: ThemePalette, processes: &[RemoteProcess]) -> impl IntoElement {
     let mut rows = div().mt_3().flex().flex_col().gap_2();
     if processes.is_empty() {
         rows = rows.child(
@@ -395,10 +387,7 @@ pub(in crate::ui::view) fn compact_process_rows(processes: &[RemoteProcess]) -> 
     rows
 }
 
-pub(in crate::ui::view) fn compact_docker_container_rows(
-    containers: &[DockerContainer],
-) -> impl IntoElement {
-    let palette = crate::ui::theme::theme_palette("github-dark");
+pub(in crate::ui::view) fn compact_docker_container_rows(palette: ThemePalette, containers: &[DockerContainer],) -> impl IntoElement {
     let mut rows = div().mt_3().flex().flex_col().gap_2();
     if containers.is_empty() {
         rows = rows.child(
@@ -448,13 +437,10 @@ pub(in crate::ui::view) fn compact_docker_container_rows(
 }
 
 /// Tauri EmptyWorkspaceState row: action label (primary) + shortcut key chips.
-pub(in crate::ui::view) fn empty_workspace_action(
+pub(in crate::ui::view) fn empty_workspace_action(palette: ThemePalette,
     label: &'static str,
     shortcut: impl Into<String>,
-    on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
-) -> impl IntoElement {
-    let palette = crate::ui::theme::theme_palette("github-dark");
-    // Tauri EmptyWorkspaceState: primary label left, Kbd chips right with "+" separators.
+    on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,) -> impl IntoElement {    // Tauri EmptyWorkspaceState: primary label left, Kbd chips right with "+" separators.
     let shortcut = shortcut.into();
     let parts: Vec<String> = shortcut
         .split('+')
@@ -515,13 +501,11 @@ pub(in crate::ui::view) fn empty_workspace_action(
 }
 
 
-pub(in crate::ui::view) fn tab_action_button(
+pub(in crate::ui::view) fn tab_action_button(palette: ThemePalette,
     id: impl Into<String>,
     label: &'static str,
     detail: &'static str,
-    on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
-) -> impl IntoElement {
-    let palette = crate::ui::theme::theme_palette("github-dark");
+    on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,) -> impl IntoElement {
     div()
         .id(SharedString::from(id.into()))
         .min_h(px(46.))
@@ -553,8 +537,7 @@ pub(in crate::ui::view) fn tab_action_button(
         .on_click(on_click)
 }
 
-pub(in crate::ui::view) fn split_divider(direction: WorkspaceSplitDirection) -> gpui::AnyElement {
-    let palette = crate::ui::theme::theme_palette("github-dark");
+pub(in crate::ui::view) fn split_divider(palette: ThemePalette, direction: WorkspaceSplitDirection) -> gpui::AnyElement {
     match direction {
         WorkspaceSplitDirection::Horizontal => div()
             .h(px(6.))
@@ -571,12 +554,10 @@ pub(in crate::ui::view) fn split_divider(direction: WorkspaceSplitDirection) -> 
     }
 }
 
-pub(in crate::ui::view) fn stats_resource_row(
+pub(in crate::ui::view) fn stats_resource_row(palette: ThemePalette,
     label: &str,
     detail: &str,
-    ratio: f64,
-) -> impl IntoElement {
-    let palette = crate::ui::theme::theme_palette("github-dark");
+    ratio: f64,) -> impl IntoElement {
     div()
         .rounded_md()
         .border_1()
@@ -611,11 +592,10 @@ pub(in crate::ui::view) fn stats_resource_row(
                 .text_color(rgb(palette.text_muted))
                 .child(truncate_preview(detail, 96)),
         )
-        .child(stats_progress_bar(ratio))
+        .child(stats_progress_bar(palette, ratio))
 }
 
-pub(in crate::ui::view) fn stats_progress_bar(ratio: f64) -> impl IntoElement {
-    let palette = crate::ui::theme::theme_palette("github-dark");
+pub(in crate::ui::view) fn stats_progress_bar(palette: ThemePalette, ratio: f64) -> impl IntoElement {
     let ratio = ratio.clamp(0., 1.);
     div()
         .mt_3()
@@ -639,8 +619,7 @@ pub(in crate::ui::view) fn stats_progress_bar(ratio: f64) -> impl IntoElement {
         )
 }
 
-pub(in crate::ui::view) fn service_status(status: NativeServiceStatus) -> impl IntoElement {
-    let palette = crate::ui::theme::theme_palette("github-dark");
+pub(in crate::ui::view) fn service_status(palette: ThemePalette, status: NativeServiceStatus) -> impl IntoElement {
     match status {
         NativeServiceStatus::Ready => {
             status_pill("ready", rgb(palette.success), rgb(palette.hover)).into_any_element()
@@ -676,11 +655,9 @@ pub(in crate::ui::view) fn metric(
         )
 }
 
-pub(in crate::ui::view) fn setting_state(
+pub(in crate::ui::view) fn setting_state(palette: ThemePalette,
     label: &'static str,
-    value: &'static str,
-) -> impl IntoElement {
-    let palette = crate::ui::theme::theme_palette("github-dark");
+    value: &'static str,) -> impl IntoElement {
     div()
         .rounded_md()
         .border_1()
@@ -697,11 +674,9 @@ pub(in crate::ui::view) fn setting_state(
         )
 }
 
-pub(in crate::ui::view) fn compact_setting_state(
+pub(in crate::ui::view) fn compact_setting_state(palette: ThemePalette,
     label: &'static str,
-    value: String,
-) -> impl IntoElement {
-    let palette = crate::ui::theme::theme_palette("github-dark");
+    value: String,) -> impl IntoElement {
     div()
         .rounded_md()
         .border_1()
@@ -718,12 +693,10 @@ pub(in crate::ui::view) fn compact_setting_state(
         )
 }
 
-pub(in crate::ui::view) fn cloud_sync_history_row(
+pub(in crate::ui::view) fn cloud_sync_history_row(palette: ThemePalette,
     entry: CloudSyncHistoryEntry,
     expanded: bool,
-    on_toggle: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
-) -> impl IntoElement {
-    let palette = crate::ui::theme::theme_palette("github-dark");
+    on_toggle: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,) -> impl IntoElement {
     let summary = cloud_sync_history_summary(&entry);
     let normalized = entry.message.split_whitespace().collect::<Vec<_>>().join(" ");
     let is_problem = matches!(entry.status.as_str(), "failed" | "conflict");
@@ -913,13 +886,11 @@ pub(in crate::ui::view) fn cloud_sync_history_row(
         )
 }
 
-pub(in crate::ui::view) fn policy_button(
+pub(in crate::ui::view) fn policy_button(palette: ThemePalette,
     id: &'static str,
     label: &'static str,
     selected: bool,
-    on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
-) -> impl IntoElement {
-    let palette = crate::ui::theme::theme_palette("github-dark");
+    on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,) -> impl IntoElement {
     div()
         .id(SharedString::from(id))
         .h(px(30.))
@@ -950,13 +921,11 @@ pub(in crate::ui::view) fn policy_button(
         .on_click(on_click)
 }
 
-pub(in crate::ui::view) fn connection_row(
+pub(in crate::ui::view) fn connection_row(palette: ThemePalette,
     connection: &SavedConnection,
     selected: bool,
     on_select: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
-    on_connect: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
-) -> impl IntoElement {
-    let palette = crate::ui::theme::theme_palette("github-dark");
+    on_connect: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,) -> impl IntoElement {
     let can_connect = matches!(
         connection.config,
         ConnectionType::Ssh { .. }
@@ -965,7 +934,7 @@ pub(in crate::ui::view) fn connection_row(
             | ConnectionType::Serial { .. }
     );
     let action = if can_connect {
-        small_button(crate::ui::theme::theme_palette("github-dark"), format!("connect-{}", connection.id), "Connect", on_connect).into_any_element()
+        small_button(palette, format!("connect-{}", connection.id), "Connect", on_connect).into_any_element()
     } else {
         status_pill("porting", rgb(palette.warning), rgb(palette.hover)).into_any_element()
     };
@@ -998,7 +967,7 @@ pub(in crate::ui::view) fn connection_row(
                     format!("select-connection-{}", connection.id),
                     if selected { "Selected" } else { "Select" },
                     selected,
-                    crate::ui::theme::theme_palette("github-dark"),
+                    palette,
                     on_select,
                 ))
                 .child(
@@ -1035,11 +1004,9 @@ pub(in crate::ui::view) fn connection_row(
         )
 }
 
-pub(in crate::ui::view) fn compact_connection_row(
+pub(in crate::ui::view) fn compact_connection_row(palette: ThemePalette,
     connection: &SavedConnection,
-    on_connect: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
-) -> impl IntoElement {
-    let palette = crate::ui::theme::theme_palette("github-dark");
+    on_connect: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,) -> impl IntoElement {
     div()
         .rounded_md()
         .border_1()
@@ -1095,7 +1062,7 @@ pub(in crate::ui::view) fn compact_connection_row(
                         }
                     }),
                 ))
-                .child(small_button(crate::ui::theme::theme_palette("github-dark"), 
+                .child(small_button(palette, 
                     format!("left-connect-{}", connection.id),
                     "Connect",
                     on_connect,
@@ -1103,14 +1070,12 @@ pub(in crate::ui::view) fn compact_connection_row(
         )
 }
 
-pub(in crate::ui::view) fn compact_tunnel_row(
+pub(in crate::ui::view) fn compact_tunnel_row(palette: ThemePalette,
     tunnel: &TunnelConfig,
     is_open: bool,
     is_pending: bool,
     on_open: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
-    on_close: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
-) -> impl IntoElement {
-    let palette = crate::ui::theme::theme_palette("github-dark");
+    on_close: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,) -> impl IntoElement {
     let status = if is_pending {
         "pending"
     } else if is_open {
@@ -1171,14 +1136,14 @@ pub(in crate::ui::view) fn compact_tunnel_row(
                     rgb(palette.hover),
                 ))
                 .child(if is_open {
-                    small_button(crate::ui::theme::theme_palette("github-dark"), 
+                    small_button(palette, 
                         format!("left-tunnel-close-{}", tunnel.id),
                         "Close",
                         on_close,
                     )
                     .into_any_element()
                 } else {
-                    small_button(crate::ui::theme::theme_palette("github-dark"), format!("left-tunnel-open-{}", tunnel.id), "Open", on_open)
+                    small_button(palette, format!("left-tunnel-open-{}", tunnel.id), "Open", on_open)
                         .into_any_element()
                 }),
         )
@@ -1216,12 +1181,10 @@ pub(in crate::ui::view) fn activity_icon(
 
 
 /// Compact ghost icon button with bundled SVG (Tauri ToolbarIconButton h-7).
-pub(in crate::ui::view) fn toolbar_svg_button(
+pub(in crate::ui::view) fn toolbar_svg_button(palette: ThemePalette,
     id: impl Into<SharedString>,
     icon_path: &'static str,
-    on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
-) -> impl IntoElement {
-    let palette = crate::ui::theme::theme_palette("github-dark");
+    on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,) -> impl IntoElement {
     div()
         .id(id.into())
         .size(px(28.))
@@ -1243,8 +1206,7 @@ pub(in crate::ui::view) fn toolbar_svg_button(
 }
 
 /// Faded NyaTerm logo used by empty workspace (Tauri EmptyWorkspaceState).
-pub(in crate::ui::view) fn nyaterm_logo_mark(size_px: f32, opacity: f32) -> impl IntoElement {
-    let palette = crate::ui::theme::theme_palette("github-dark");
+pub(in crate::ui::view) fn nyaterm_logo_mark(palette: ThemePalette, size_px: f32, opacity: f32) -> impl IntoElement {
     let size = px(size_px);
     div()
         .size(size)
@@ -1263,12 +1225,10 @@ pub(in crate::ui::view) fn nyaterm_logo_mark(size_px: f32, opacity: f32) -> impl
 
 
 /// Colored connection/OS icon for saved connection rows (Tauri resolveConnectionIcon).
-pub(in crate::ui::view) fn connection_type_icon(
+pub(in crate::ui::view) fn connection_type_icon(palette: ThemePalette,
     def: super::ConnectionIconDef,
     selected: bool,
-    size_px: f32,
-) -> gpui::AnyElement {
-    let palette = crate::ui::theme::theme_palette("github-dark");
+    size_px: f32,) -> gpui::AnyElement {
     let size = px(size_px);
     let color = if selected {
         rgb(palette.accent)
@@ -1285,7 +1245,7 @@ pub(in crate::ui::view) fn connection_type_icon(
 
 
 /// Lightweight GFM markdown renderer for AI transcript (Tauri MarkdownContent parity).
-pub(in crate::ui::view) fn markdown_content_view(content: &str) -> impl IntoElement {
+pub(in crate::ui::view) fn markdown_content_view(palette: ThemePalette, content: &str) -> impl IntoElement {
     let blocks = parse_markdown_blocks(content);
     let mut root = div()
         .flex()
@@ -1297,13 +1257,12 @@ pub(in crate::ui::view) fn markdown_content_view(content: &str) -> impl IntoElem
         return root;
     }
     for (index, block) in blocks.into_iter().enumerate() {
-        root = root.child(markdown_block_view(index, block));
+        root = root.child(markdown_block_view(palette, index, block));
     }
     root
 }
 
-fn markdown_inline_text(raw: &str) -> gpui::AnyElement {
-    let palette = crate::ui::theme::theme_palette("github-dark");
+fn markdown_inline_text(palette: ThemePalette, raw: &str) -> gpui::AnyElement {
     let parsed = parse_inline_markdown(raw);
     if parsed.highlights.is_empty() {
         return div().child(parsed.text).into_any_element();
@@ -1354,15 +1313,14 @@ fn markdown_inline_text(raw: &str) -> gpui::AnyElement {
         .into_any_element()
 }
 
-fn markdown_block_view(index: usize, block: MarkdownBlock) -> gpui::AnyElement {
-    let palette = crate::ui::theme::theme_palette("github-dark");
+fn markdown_block_view(palette: ThemePalette, index: usize, block: MarkdownBlock) -> gpui::AnyElement {
     match block {
         MarkdownBlock::Paragraph(text) => div()
             .id(SharedString::from(format!("md-p-{index}")))
             .text_size(px(12.))
             .text_color(rgb(palette.text))
             .line_height(px(18.))
-            .child(markdown_inline_text(&text))
+            .child(markdown_inline_text(palette, &text))
             .into_any_element(),
         MarkdownBlock::Bullet(text) => div()
             .id(SharedString::from(format!("md-ul-{index}")))
@@ -1383,7 +1341,7 @@ fn markdown_block_view(index: usize, block: MarkdownBlock) -> gpui::AnyElement {
                     .text_size(px(12.))
                     .text_color(rgb(palette.text))
                     .line_height(px(18.))
-                    .child(markdown_inline_text(&text)),
+                    .child(markdown_inline_text(palette, &text)),
             )
             .into_any_element(),
         MarkdownBlock::Numbered { index: n, text } => div()
@@ -1405,7 +1363,7 @@ fn markdown_block_view(index: usize, block: MarkdownBlock) -> gpui::AnyElement {
                     .text_size(px(12.))
                     .text_color(rgb(palette.text))
                     .line_height(px(18.))
-                    .child(markdown_inline_text(&text)),
+                    .child(markdown_inline_text(palette, &text)),
             )
             .into_any_element(),
         MarkdownBlock::Code { language, code } => div()
@@ -1448,7 +1406,7 @@ fn markdown_block_view(index: usize, block: MarkdownBlock) -> gpui::AnyElement {
                 body = body.child(
                     div()
                         .id(SharedString::from(format!("md-q-{index}-{qi}")))
-                        .child(markdown_inline_text(line)),
+                        .child(markdown_inline_text(palette, line)),
                 );
             }
             div()
@@ -1474,7 +1432,7 @@ fn markdown_block_view(index: usize, block: MarkdownBlock) -> gpui::AnyElement {
                 .font_weight(FontWeight(800.))
                 .text_color(rgb(palette.text))
                 .line_height(px(size + 4.))
-                .child(markdown_inline_text(&text))
+                .child(markdown_inline_text(palette, &text))
                 .into_any_element()
         }
         MarkdownBlock::Table { headers, rows } => {
@@ -1509,7 +1467,7 @@ fn markdown_block_view(index: usize, block: MarkdownBlock) -> gpui::AnyElement {
                         .text_size(px(11.))
                         .font_weight(FontWeight(700.))
                         .text_color(rgb(palette.text))
-                        .child(markdown_inline_text(&cell)),
+                        .child(markdown_inline_text(palette, &cell)),
                 );
             }
             table = table.child(header_row);
@@ -1536,7 +1494,7 @@ fn markdown_block_view(index: usize, block: MarkdownBlock) -> gpui::AnyElement {
                             .border_color(rgb(palette.surface_elevated))
                             .text_size(px(11.))
                             .text_color(rgb(palette.text))
-                            .child(markdown_inline_text(&cell)),
+                            .child(markdown_inline_text(palette, &cell)),
                     );
                 }
                 table = table.child(body_row);

@@ -324,29 +324,25 @@ impl NyaTermApp {
                     }),
             )
             // Count lives in PanelHeader (Tauri).
-            .child(icon_action_button(
-                "connections-sort",
+            .child(icon_action_button(palette, "connections-sort",
                 sort_label,
                 cx.listener(|this, _, _, cx| {
                     this.cycle_connection_sort_mode(cx);
                 }),
             ))
-            .child(icon_action_button(
-                "connections-temp-ssh",
+            .child(icon_action_button(palette, "connections-temp-ssh",
                 "icons/conn/flash.svg",
                 cx.listener(|this, _, window, cx| {
                     this.open_temporary_ssh_link_dialog(window, cx);
                 }),
             ))
-            .child(icon_action_button(
-                "connections-new-group",
+            .child(icon_action_button(palette, "connections-new-group",
                 "icons/conn/folder.svg",
                 cx.listener(|this, _, window, cx| {
                     this.open_connection_group_editor(None, None, window, cx);
                 }),
             ))
-            .child(icon_action_button(
-                "connections-new",
+            .child(icon_action_button(palette, "connections-new",
                 "icons/conn/add.svg",
                 cx.listener(|this, _, window, cx| {
                     this.open_connection_editor(None, None, false, window, cx);
@@ -355,8 +351,7 @@ impl NyaTermApp {
             .child(
                 div()
                     .relative()
-                    .child(icon_action_button(
-                        "connections-more",
+                    .child(icon_action_button(palette, "connections-more",
                         "icons/conn/more.svg",
                         cx.listener(|this, _, _, cx| {
                             this.connections_more_menu_open = !this.connections_more_menu_open;
@@ -378,6 +373,7 @@ impl NyaTermApp {
                                 .shadow_sm()
                                 .py_1()
                                                                 .child(menu_item(
+                                    palette,
                                     "connections-export",
                                     "Export config",
                                     cx.listener(|this, _, _, cx| {
@@ -386,6 +382,7 @@ impl NyaTermApp {
                                     }),
                                 ))
                                 .child(menu_item(
+                                    palette,
                                     "connections-import",
                                     "Import config",
                                     cx.listener(|this, _, _, cx| {
@@ -394,6 +391,7 @@ impl NyaTermApp {
                                     }),
                                 ))
                                 .child(menu_item(
+                                    palette,
                                     "connections-refresh",
                                     "Refresh",
                                     cx.listener(|this, _, _, cx| {
@@ -404,6 +402,7 @@ impl NyaTermApp {
                                     }),
                                 ))
                                 .child(menu_item(
+                                    palette,
                                     "connections-local",
                                     "Local shell",
                                     cx.listener(|this, _, window, cx| {
@@ -489,8 +488,7 @@ impl NyaTermApp {
                             .as_ref()
                             .is_some_and(|id| {
                                 self.hovered_connection_group_id.as_deref() == Some(id.as_str())
-                            })
-                        {
+                            }) {
                             rgb(palette.hover)
                         } else {
                             rgb(palette.surface)
@@ -511,8 +509,7 @@ impl NyaTermApp {
                                 if *hovered {
                                     this.hovered_connection_group_id = Some(group_id);
                                 } else if this.hovered_connection_group_id.as_deref()
-                                    == Some(group_id.as_str())
-                                {
+                                    == Some(group_id.as_str()) {
                                     this.hovered_connection_group_id = None;
                                 }
                                 cx.notify();
@@ -633,6 +630,7 @@ impl NyaTermApp {
                                     .child(if expanded { "▾" } else { "▸" }),
                             )
                             .child(connection_type_icon(
+                                palette,
                                 resolve_connection_icon(Some("folder"), "SSH"),
                                 false,
                                 13.,
@@ -664,8 +662,7 @@ impl NyaTermApp {
                                 .items_center()
                                 .gap_1()
                                 .opacity(if show_group_actions { 1. } else { 0. })
-                                .child(icon_action_button(
-                                    format!(
+                                .child(icon_action_button(palette, format!(
                                         "connection-group-edit-{}",
                                         group_id_for_edit.clone().unwrap_or_default()
                                     ),
@@ -680,8 +677,7 @@ impl NyaTermApp {
                                         );
                                     }),
                                 ))
-                                .child(icon_action_button(
-                                    format!(
+                                .child(icon_action_button(palette, format!(
                                         "connection-group-delete-{}",
                                         group_id_for_delete.clone().unwrap_or_default()
                                     ),
@@ -964,7 +960,7 @@ impl NyaTermApp {
                 this.select_connection(select_id.clone(), additive, range, cx);
             }))
             // Single-line name row (endpoint/last-used live in hover tooltip, like Tauri).
-            .child(connection_type_icon(icon_def, selected, 14.))
+            .child(connection_type_icon(palette, icon_def, selected, 14.))
             .child(
                 div()
                     .min_w_0()
@@ -987,15 +983,13 @@ impl NyaTermApp {
                     .rounded_sm()
                     .bg(if show_actions { rgb(palette.hover) } else { rgb(palette.surface) })
                     .opacity(if show_actions { 1. } else { 0. })
-                    .child(icon_action_button(
-                        format!("connection-connect-{}", connection.id),
+                    .child(icon_action_button(palette, format!("connection-connect-{}", connection.id),
                         "icons/conn/connect.svg",
                         cx.listener(move |this, _, window, cx| {
                             this.start_saved_connection(connect_connection.clone(), window, cx);
                         }),
                     ))
-                    .child(icon_action_button(
-                        format!("connection-edit-{}", connection.id),
+                    .child(icon_action_button(palette, format!("connection-edit-{}", connection.id),
                         "icons/net/edit.svg",
                         cx.listener(move |this, _, window, cx| {
                             this.open_connection_editor(
@@ -1007,8 +1001,7 @@ impl NyaTermApp {
                             );
                         }),
                     ))
-                    .child(icon_action_button(
-                        format!("connection-delete-{}", connection.id),
+                    .child(icon_action_button(palette, format!("connection-delete-{}", connection.id),
                         "icons/net/delete.svg",
                         cx.listener(move |this, _, _, cx| {
                             this.open_connection_delete_confirm(delete_id.clone(), cx);
@@ -1784,8 +1777,7 @@ impl NyaTermApp {
         let connect_label = if selected_count > 1
             && connection
                 .as_ref()
-                .is_some_and(|conn| self.selected_connection_ids.contains(&conn.id))
-        {
+                .is_some_and(|conn| self.selected_connection_ids.contains(&conn.id)) {
             format!("Connect selected ({selected_count})")
         } else {
             "Connect".to_string()
@@ -1822,14 +1814,14 @@ impl NyaTermApp {
                     .py_1()
                     .on_click(|_, _, cx| cx.stop_propagation())
                     .child(menu_item_owned(
+                        palette,
                         "connection-context-connect",
                         connect_label,
                         cx.listener(move |this, _, window, cx| {
                             this.close_connection_context_menus(cx);
                             let selected = this.selected_connections();
                             if selected.len() > 1
-                                && selected.iter().any(|conn| conn.id == connection_id)
-                            {
+                                && selected.iter().any(|conn| conn.id == connection_id) {
                                 this.start_selected_saved_connections(window, cx);
                             } else if let Some(connection) = connection_for_connect.clone() {
                                 this.start_saved_connection(connection, window, cx);
@@ -1837,6 +1829,7 @@ impl NyaTermApp {
                         }),
                     ))
                     .child(menu_item(
+                        palette,
                         "connection-context-edit",
                         "Edit",
                         cx.listener(move |this, _, window, cx| {
@@ -1850,8 +1843,9 @@ impl NyaTermApp {
                             );
                         }),
                     ))
-                    .child(menu_separator())
+                    .child(menu_separator(palette))
                     .child(menu_item(
+                        palette,
                         "connection-context-rename",
                         "Rename",
                         cx.listener(move |this, _, window, cx| {
@@ -1860,6 +1854,7 @@ impl NyaTermApp {
                         }),
                     ))
                     .child(menu_item(
+                        palette,
                         "connection-context-copy",
                         if selected_count > 1 { "Copy selected" } else { "Copy" },
                         cx.listener(move |this, _, _, cx| {
@@ -1871,8 +1866,9 @@ impl NyaTermApp {
                             }
                         }),
                     ))
-                    .child(menu_separator())
+                    .child(menu_separator(palette))
                     .child(menu_item(
+                        palette,
                         "connection-context-delete",
                         if selected_count > 1 { "Delete selected" } else { "Delete" },
                         cx.listener(move |this, _, _, cx| {
@@ -1958,6 +1954,7 @@ impl NyaTermApp {
                     .py_1()
                     .on_click(|_, _, cx| cx.stop_propagation())
                     .child(menu_item(
+                        palette,
                         "connection-group-context-new",
                         "New connection",
                         cx.listener(move |this, _, window, cx| {
@@ -1972,6 +1969,7 @@ impl NyaTermApp {
                         }),
                     ))
                     .child(menu_item(
+                        palette,
                         "connection-group-context-folder",
                         "New folder",
                         cx.listener(move |this, _, window, cx| {
@@ -1985,7 +1983,8 @@ impl NyaTermApp {
                         }),
                     ))
                     .when(total_in_group > 0, |this| {
-                        this.child(menu_separator()).child(menu_item(
+                        this.child(menu_separator(palette)).child(menu_item(
+                            palette,
                             "connection-group-context-open-all",
                             "Open all",
                             cx.listener(move |this, _, window, cx| {
@@ -1994,8 +1993,9 @@ impl NyaTermApp {
                             }),
                         ))
                     })
-                    .child(menu_separator())
+                    .child(menu_separator(palette))
                     .child(menu_item(
+                        palette,
                         "connection-group-context-rename",
                         "Rename",
                         cx.listener(move |this, _, window, cx| {
@@ -2009,6 +2009,7 @@ impl NyaTermApp {
                         }),
                     ))
                     .child(menu_item(
+                        palette,
                         "connection-group-context-delete",
                         "Delete",
                         cx.listener(move |this, _, _, cx| {
@@ -2254,13 +2255,10 @@ fn editor_field(
     transfer_input(id, label, value, active, crate::ui::theme::theme_palette("github-dark")).on_click(on_click)
 }
 
-fn icon_action_button(
+fn icon_action_button(palette: crate::ui::theme::ThemePalette,
     id: impl Into<String>,
     label: &'static str,
-    on_click: impl Fn(&gpui::ClickEvent, &mut gpui::Window, &mut gpui::App) + 'static,
-) -> impl IntoElement {
-    let palette = crate::ui::theme::theme_palette("github-dark");
-    // label may be a glyph fallback or an icons/*.svg path.
+    on_click: impl Fn(&gpui::ClickEvent, &mut gpui::Window, &mut gpui::App) + 'static,) -> impl IntoElement {    // label may be a glyph fallback or an icons/*.svg path.
     let is_svg = label.starts_with("icons/") && label.ends_with(".svg");
     div()
         .id(SharedString::from(id.into()))
@@ -2285,22 +2283,17 @@ fn icon_action_button(
         .when(!is_svg, |this| this.child(label))
 }
 
-fn menu_separator() -> impl IntoElement {
-    let palette = crate::ui::theme::theme_palette("github-dark");
-    div()
+fn menu_separator(palette: crate::ui::theme::ThemePalette) -> impl IntoElement {    div()
         .h(px(1.))
         .mx_2()
         .my_1()
         .bg(rgb(palette.border))
 }
 
-fn menu_item(
+fn menu_item(palette: crate::ui::theme::ThemePalette,
     id: impl Into<String>,
     label: &'static str,
-    on_click: impl Fn(&gpui::ClickEvent, &mut gpui::Window, &mut gpui::App) + 'static,
-) -> impl IntoElement {
-    let palette = crate::ui::theme::theme_palette("github-dark");
-    div()
+    on_click: impl Fn(&gpui::ClickEvent, &mut gpui::Window, &mut gpui::App) + 'static,) -> impl IntoElement {    div()
         .id(SharedString::from(id.into()))
         .h(px(28.))
         .px_3()
@@ -2314,13 +2307,10 @@ fn menu_item(
         .child(label)
 }
 
-fn menu_item_owned(
+fn menu_item_owned(palette: crate::ui::theme::ThemePalette,
     id: impl Into<String>,
     label: String,
-    on_click: impl Fn(&gpui::ClickEvent, &mut gpui::Window, &mut gpui::App) + 'static,
-) -> impl IntoElement {
-    let palette = crate::ui::theme::theme_palette("github-dark");
-    div()
+    on_click: impl Fn(&gpui::ClickEvent, &mut gpui::Window, &mut gpui::App) + 'static,) -> impl IntoElement {    div()
         .id(SharedString::from(id.into()))
         .h(px(28.))
         .px_3()

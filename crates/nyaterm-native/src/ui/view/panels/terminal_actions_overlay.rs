@@ -109,6 +109,7 @@ impl NyaTermApp {
                             .grid_cols(4)
                             .gap_2()
                             .child(tab_action_button(
+                                palette,
                                 "terminal-actions-copy-visible",
                                 "Copy",
                                 "visible screen",
@@ -117,6 +118,7 @@ impl NyaTermApp {
                                 }),
                             ))
                             .child(tab_action_button(
+                                palette,
                                 "terminal-actions-select-all",
                                 "Select All",
                                 "copy buffer",
@@ -125,6 +127,7 @@ impl NyaTermApp {
                                 }),
                             ))
                             .child(tab_action_button(
+                                palette,
                                 "terminal-actions-find",
                                 "Find",
                                 "search buffer",
@@ -133,6 +136,7 @@ impl NyaTermApp {
                                 }),
                             ))
                             .child(tab_action_button(
+                                palette,
                                 "terminal-actions-sync-groups",
                                 "Sync Groups",
                                 "broadcast input",
@@ -142,6 +146,7 @@ impl NyaTermApp {
                                 }),
                             ))
                             .child(tab_action_button(
+                                palette,
                                 "terminal-actions-paste",
                                 "Paste",
                                 "clipboard text",
@@ -151,6 +156,7 @@ impl NyaTermApp {
                                 }),
                             ))
                             .child(tab_action_button(
+                                palette,
                                 "terminal-actions-clear-screen",
                                 "Clear Screen",
                                 "shell clear",
@@ -159,6 +165,7 @@ impl NyaTermApp {
                                 }),
                             ))
                             .child(tab_action_button(
+                                palette,
                                 "terminal-actions-clear-all",
                                 "Clear All",
                                 "drop buffer",
@@ -168,6 +175,7 @@ impl NyaTermApp {
                                 }),
                             ))
                             .child(tab_action_button(
+                                palette,
                                 "terminal-actions-temporary-ssh-link",
                                 "Temp SSH",
                                 "paste link",
@@ -186,6 +194,7 @@ impl NyaTermApp {
                             .child(
                                 div().when(!has_visible_text, |this| this.opacity(0.45)).child(
                                     tab_action_button(
+                                        palette,
                                         "terminal-actions-translate-visible",
                                         "Translate",
                                         "visible screen",
@@ -210,6 +219,7 @@ impl NyaTermApp {
                             .child(
                                 div().when(!has_visible_text, |this| this.opacity(0.45)).child(
                                     tab_action_button(
+                                        palette,
                                         "terminal-actions-ai-visible",
                                         "Ask AI",
                                         "visible screen",
@@ -236,6 +246,7 @@ impl NyaTermApp {
                             .child(
                                 div().when(!has_buffer_text, |this| this.opacity(0.45)).child(
                                     tab_action_button(
+                                        palette,
                                         "terminal-actions-ai-buffer",
                                         "AI Buffer",
                                         "buffer context",
@@ -260,6 +271,7 @@ impl NyaTermApp {
                                 ),
                             )
                             .child(tab_action_button(
+                                palette,
                                 "terminal-actions-command-send",
                                 "Send Panel",
                                 "bottom sender",
@@ -278,6 +290,7 @@ impl NyaTermApp {
                             .grid_cols(4)
                             .gap_2()
                             .child(tab_action_button(
+                                palette,
                                 "terminal-actions-history-search",
                                 "History",
                                 "command history",
@@ -290,6 +303,7 @@ impl NyaTermApp {
                                 }),
                             ))
                             .child(tab_action_button(
+                                palette,
                                 "terminal-actions-quick-commands",
                                 "Commands",
                                 "quick commands",
@@ -300,6 +314,7 @@ impl NyaTermApp {
                                 }),
                             ))
                             .child(tab_action_button(
+                                palette,
                                 "terminal-actions-recording",
                                 "Recording",
                                 "session log",
@@ -310,6 +325,7 @@ impl NyaTermApp {
                                 }),
                             ))
                             .child(tab_action_button(
+                                palette,
                                 "terminal-actions-session-info",
                                 "Info",
                                 "session details",

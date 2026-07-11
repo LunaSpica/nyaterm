@@ -364,7 +364,7 @@ div()
                     .flex()
                     .flex_col()
                     .items_center()
-                    .child(div().mb_9().child(nyaterm_logo_mark(256., 0.13)))
+                    .child(div().mb_9().child(nyaterm_logo_mark(palette, 256., 0.13)))
                     .child(
                         // Tauri EmptyWorkspaceState: grid w-fit max-w-[30rem] gap-x-4 gap-y-3
                         div()
@@ -374,6 +374,7 @@ div()
                             .flex_col()
                             .gap_3()
                             .child(empty_workspace_action(
+                                palette,
                                 "Temporary Link",
                                 temporary_ssh,
                                 cx.listener(|this, _, window, cx| {
@@ -382,6 +383,7 @@ div()
                                 }),
                             ))
                             .child(empty_workspace_action(
+                                palette,
                                 "Open Chat",
                                 open_chat,
                                 cx.listener(|this, _, window, cx| {
@@ -392,6 +394,7 @@ div()
                                 }),
                             ))
                             .child(empty_workspace_action(
+                                palette,
                                 "Show All Commands",
                                 show_commands,
                                 cx.listener(|this, _, window, cx| {
@@ -402,6 +405,7 @@ div()
                                 }),
                             ))
                             .child(empty_workspace_action(
+                                palette,
                                 "Switch Terminal",
                                 switch_terminal,
                                 cx.listener(|this, _, window, cx| {

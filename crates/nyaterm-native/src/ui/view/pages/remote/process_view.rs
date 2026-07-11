@@ -6,6 +6,7 @@ impl NyaTermApp {
         &mut self,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
+        let palette = self.theme_palette();
         let can_list = self.active_ssh_config.is_some() && !self.process_pending;
         let normalized_query = self.process_search_draft.trim().to_ascii_lowercase();
         let mut filtered_processes = self
@@ -123,6 +124,7 @@ impl NyaTermApp {
                 let selected = self.process_selected_pid == Some(pid);
                 rows = rows.child(
                     process_table_row(
+                        palette,
                         process,
                         mode,
                         selected,
@@ -185,6 +187,7 @@ impl NyaTermApp {
                             .filter(|selected_process| selected_process.pid == pid)
                             .map(|selected_process| {
                                 process_details(
+                                    palette,
                                     selected_process,
                                     mode,
                                     self.process_nice_draft.clone(),
@@ -270,6 +273,7 @@ impl NyaTermApp {
                         div()
                             .when(!can_list, |this| this.opacity(0.45))
                             .child(compact_remote_svg_button(
+                                palette,
                                 "process-refresh",
                                 "icons/fe/refresh.svg",
                                 cx.listener(|this, _, window, cx| {
@@ -300,7 +304,7 @@ impl NyaTermApp {
                     ),
             )
             .when_some(self.process_signal_confirm.clone(), |this, confirm| {
-                this.child(process_signal_confirm_panel(confirm, cx))
+                this.child(process_signal_confirm_panel(palette, confirm, cx))
             })
             .child(
                 // Column header follows Tauri mode: hide Mem (narrow) / User (non-wide); compact label strip.
@@ -323,6 +327,7 @@ impl NyaTermApp {
                             .items_center()
                             .overflow_hidden()
                             .child(process_sort_button(
+                                palette,
                                 "process-sort-command",
                                 "Process",
                                 self.process_sort_key == RemoteProcessSortKey::Command,
@@ -333,6 +338,7 @@ impl NyaTermApp {
                                 }),
                             ))
                             .child(process_sort_button(
+                                palette,
                                 "process-sort-pid",
                                 "PID",
                                 self.process_sort_key == RemoteProcessSortKey::Pid,
@@ -343,6 +349,7 @@ impl NyaTermApp {
                                 }),
                             ))
                             .child(process_sort_button(
+                                palette,
                                 "process-sort-cpu",
                                 "CPU",
                                 self.process_sort_key == RemoteProcessSortKey::Cpu,
@@ -359,6 +366,7 @@ impl NyaTermApp {
                                 ),
                                 |this| {
                                     this.child(process_sort_button(
+                                        palette,
                                         "process-sort-memory",
                                         "Mem",
                                         self.process_sort_key == RemoteProcessSortKey::Memory,
@@ -375,6 +383,7 @@ impl NyaTermApp {
                             )
                             .when(mode == ProcessDisplayMode::Wide, |this| {
                                 this.child(process_sort_button(
+                                    palette,
                                     "process-sort-user",
                                     "User",
                                     self.process_sort_key == RemoteProcessSortKey::User,

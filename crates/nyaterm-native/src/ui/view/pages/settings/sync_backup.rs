@@ -994,6 +994,7 @@ impl NyaTermApp {
                     .when_some(cloud_history_0, |this, entry| {
                         let entry_id = entry.id.clone();
                         this.child(cloud_sync_history_row(
+                            palette,
                             entry,
                             cloud_history_0_expanded,
                             cx.listener(move |this, _, _, cx| {
@@ -1004,6 +1005,7 @@ impl NyaTermApp {
                     .when_some(cloud_history_1, |this, entry| {
                         let entry_id = entry.id.clone();
                         this.child(cloud_sync_history_row(
+                            palette,
                             entry,
                             cloud_history_1_expanded,
                             cx.listener(move |this, _, _, cx| {
@@ -1014,6 +1016,7 @@ impl NyaTermApp {
                     .when_some(cloud_history_2, |this, entry| {
                         let entry_id = entry.id.clone();
                         this.child(cloud_sync_history_row(
+                            palette,
                             entry,
                             cloud_history_2_expanded,
                             cx.listener(move |this, _, _, cx| {
