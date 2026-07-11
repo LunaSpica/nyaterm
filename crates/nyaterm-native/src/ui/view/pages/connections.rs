@@ -1793,20 +1793,97 @@ impl NyaTermApp {
                                     }),
                                 )),
                         )
-                        .child(editor_field(
-                            palette,
-                            "connection-editor-baud",
-                            "Baud",
-                            editor.baud_rate.clone(),
-                            editor.focused_field == ConnectionEditorField::BaudRate,
-                            cx.listener(|this, _, window, cx| {
-                                this.focus_connection_editor_field(
-                                    ConnectionEditorField::BaudRate,
-                                    window,
-                                    cx,
-                                );
-                            }),
-                        ))
+                        .child(
+                            div()
+                                .flex()
+                                .items_center()
+                                .justify_between()
+                                .gap_2()
+                                .child(editor_field(
+                                    palette,
+                                    "connection-editor-baud",
+                                    "Baud",
+                                    editor.baud_rate.clone(),
+                                    editor.focused_field == ConnectionEditorField::BaudRate,
+                                    cx.listener(|this, _, window, cx| {
+                                        this.focus_connection_editor_field(
+                                            ConnectionEditorField::BaudRate,
+                                            window,
+                                            cx,
+                                        );
+                                    }),
+                                ))
+                                .child(small_button(palette,
+                                    "connection-editor-baud-preset",
+                                    "Preset",
+                                    cx.listener(|this, _, _, cx| {
+                                        this.cycle_connection_editor_baud_preset(cx);
+                                    }),
+                                )),
+                        )
+                        .child(
+                            div()
+                                .flex()
+                                .items_center()
+                                .justify_between()
+                                .gap_2()
+                                .child(
+                                    div()
+                                        .text_xs()
+                                        .text_color(rgb(palette.text_muted))
+                                        .child(format!("Data bits · {}", editor.data_bits)),
+                                )
+                                .child(small_button(palette,
+                                    "connection-editor-data-bits",
+                                    "Cycle",
+                                    cx.listener(|this, _, _, cx| {
+                                        this.cycle_connection_editor_data_bits(cx);
+                                    }),
+                                )),
+                        )
+                        .child(
+                            div()
+                                .flex()
+                                .items_center()
+                                .justify_between()
+                                .gap_2()
+                                .child(
+                                    div()
+                                        .text_xs()
+                                        .text_color(rgb(palette.text_muted))
+                                        .child(format!(
+                                            "Parity · {}",
+                                            editor.parity.to_ascii_uppercase()
+                                        )),
+                                )
+                                .child(small_button(palette,
+                                    "connection-editor-parity",
+                                    "Cycle",
+                                    cx.listener(|this, _, _, cx| {
+                                        this.cycle_connection_editor_parity(cx);
+                                    }),
+                                )),
+                        )
+                        .child(
+                            div()
+                                .flex()
+                                .items_center()
+                                .justify_between()
+                                .gap_2()
+                                .child(
+                                    div()
+                                        .text_xs()
+                                        .text_color(rgb(palette.text_muted))
+                                        .child(format!("Stop bits · {}", editor.stop_bits)),
+                                )
+                                .child(small_button(palette,
+                                    "connection-editor-stop-bits",
+                                    "Cycle",
+                                    cx.listener(|this, _, _, cx| {
+                                        this.cycle_connection_editor_stop_bits(cx);
+                                    }),
+                                )),
+                        )
                     }),
             )
             .when_some(editor.error.clone(), |this, error| {
@@ -2620,10 +2697,16 @@ fn connection_detail_rows(
         nyaterm_domain::ConnectionType::Serial {
             port_name,
             baud_rate,
+            data_bits,
+            parity,
+            stop_bits,
             ..
         } => {
             rows.push(("Port", port_name.clone()));
             rows.push(("Baud", baud_rate.to_string()));
+            rows.push(("Data", data_bits.to_string()));
+            rows.push(("Parity", parity.clone()));
+            rows.push(("Stop", stop_bits.clone()));
         }
     }
     rows.push(("Last", format_last_used_ms(connection.last_used_at_ms)));

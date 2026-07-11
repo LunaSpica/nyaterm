@@ -1555,3 +1555,9 @@ service boundary first:
 - SSH connection editor adds Backspace mode cycle (DEL / Ctrl+H).
 - Connection details tooltip shows BS mode, X11, resolved proxy name, and
   ProxyJump chain labels (including cycle/missing markers).
+
+## 2026-07-12 Serial connection editor densify
+
+- Serial form exposes baud presets, data bits (5–8), parity
+  (none/odd/even/mark/space), and stop bits (1/1.5/2) cycle controls.
+- Connection details tooltip shows full serial line settings.

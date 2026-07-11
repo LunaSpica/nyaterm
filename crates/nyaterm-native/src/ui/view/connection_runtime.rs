@@ -254,6 +254,75 @@ impl NyaTermApp {
         cx.notify();
     }
 
+
+    pub(in crate::ui::view) fn cycle_connection_editor_data_bits(
+        &mut self,
+        cx: &mut Context<Self>,
+    ) {
+        if let Some(editor) = self.connection_editor.as_mut() {
+            editor.data_bits = match editor.data_bits.trim() {
+                "5" => "6".to_string(),
+                "6" => "7".to_string(),
+                "7" => "8".to_string(),
+                _ => "5".to_string(),
+            };
+            self.terminal_status = format!("serial data bits: {}", editor.data_bits);
+        }
+        cx.notify();
+    }
+
+    pub(in crate::ui::view) fn cycle_connection_editor_parity(
+        &mut self,
+        cx: &mut Context<Self>,
+    ) {
+        if let Some(editor) = self.connection_editor.as_mut() {
+            editor.parity = match editor.parity.trim().to_ascii_lowercase().as_str() {
+                "none" => "odd".to_string(),
+                "odd" => "even".to_string(),
+                "even" => "mark".to_string(),
+                "mark" => "space".to_string(),
+                _ => "none".to_string(),
+            };
+            self.terminal_status = format!("serial parity: {}", editor.parity);
+        }
+        cx.notify();
+    }
+
+    pub(in crate::ui::view) fn cycle_connection_editor_stop_bits(
+        &mut self,
+        cx: &mut Context<Self>,
+    ) {
+        if let Some(editor) = self.connection_editor.as_mut() {
+            editor.stop_bits = match editor.stop_bits.trim() {
+                "1" => "1.5".to_string(),
+                "1.5" => "2".to_string(),
+                _ => "1".to_string(),
+            };
+            self.terminal_status = format!("serial stop bits: {}", editor.stop_bits);
+        }
+        cx.notify();
+    }
+
+    pub(in crate::ui::view) fn cycle_connection_editor_baud_preset(
+        &mut self,
+        cx: &mut Context<Self>,
+    ) {
+        const PRESETS: &[&str] = &[
+            "9600", "19200", "38400", "57600", "115200", "230400", "460800", "921600",
+        ];
+        if let Some(editor) = self.connection_editor.as_mut() {
+            let current = editor.baud_rate.trim();
+            let next = PRESETS
+                .iter()
+                .position(|preset| *preset == current)
+                .map(|index| PRESETS[(index + 1) % PRESETS.len()])
+                .unwrap_or("115200");
+            editor.baud_rate = next.to_string();
+            self.terminal_status = format!("serial baud: {}", editor.baud_rate);
+        }
+        cx.notify();
+    }
+
     pub(in crate::ui::view) fn toggle_connection_editor_flag(
         &mut self,
         flag: ConnectionEditorToggle,
