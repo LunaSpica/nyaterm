@@ -103,6 +103,8 @@ pub(in crate::ui::view) use transfer_widgets::{
     format_file_size, format_transfer_progress, transfer_input, transfer_job_title,
     transfer_progress_bar, transfer_status_label,
 };
+#[allow(unused_imports)]
+pub(in crate::ui::view) use crate::ui::action_links::{ActionLinkAction, ActionLinkKind, ActionLinkMatch, actions_for_match, find_action_links, match_at_offset};
 pub(in crate::ui::view) use crate::ui::theme::{ThemePalette, theme_palette};
 pub(in crate::ui::view) use view_widgets::*;
 

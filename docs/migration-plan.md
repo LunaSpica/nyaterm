@@ -972,3 +972,7 @@ service boundary first:
 - Bracketed paste: track DECSET/DECRST `?2004` in the VTE screen and wrap
   clipboard paste with `ESC[200~` / `ESC[201~` when enabled.
 - Context menu Open Link for selected http(s) or dotted host URLs.
+
+- Action links: domain settings `terminal.action_links_*`, matcher module for
+  URL/IPv4/host:port/archive, context-menu actions, Ctrl/Cmd-click default action,
+  and Settings → Terminal toggles.

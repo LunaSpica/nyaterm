@@ -65,6 +65,28 @@ impl NyaTermApp {
         let translation_providers: Vec<(String, String)> = available_translation_providers(
             &self.translation_settings,
         );
+        let selection_link_kind: Option<&'static str> = None;
+        let selection_actions: Vec<(String, ActionLinkAction)> =
+            if self.settings.terminal_action_links_enabled && has_selection {
+                let trimmed = selected.trim();
+                let matchers = &self.settings.terminal_action_links_matchers;
+                let entity = find_action_links(trimmed, matchers, true)
+                    .into_iter()
+                    .find(|item| item.text == trimmed || item.value == trimmed)
+                    .or_else(|| find_action_links(trimmed, matchers, true).into_iter().next());
+                entity
+                    .map(|item| {
+                        let kind = item.kind.label().to_string();
+                        actions_for_match(&item)
+                            .into_iter()
+                            .map(|action| (kind.clone(), action))
+                            .collect()
+                    })
+                    .unwrap_or_default()
+            } else {
+                Vec::new()
+            };
+        let _ = selection_link_kind;
 
         let mut items = div()
             .id(SharedString::from("terminal-context-menu"))
@@ -118,6 +140,36 @@ impl NyaTermApp {
                         }),
                     ))
                 })
+                .children(selection_actions.into_iter().map(|(kind, action)| {
+                    let label = format!("{kind} · {}", action.label);
+                    let command = action.command.clone();
+                    let open_url = action.open_url.clone();
+                    terminal_ctx_item(
+                        palette,
+                        format!("term-ctx-action-link-{}", action.id),
+                        label,
+                        None,
+                        cx.listener(move |this, _, _, cx| {
+                            this.close_terminal_context_menu(cx);
+                            if let Some(url) = open_url.clone() {
+                                match open_external_url(&url) {
+                                    Ok(()) => {
+                                        this.terminal_status = format!("opened link: {url}");
+                                    }
+                                    Err(error) => {
+                                        this.terminal_status =
+                                            format!("open link failed: {error}");
+                                    }
+                                }
+                                cx.notify();
+                                return;
+                            }
+                            if let Some(command) = command.clone() {
+                                this.execute_action_link_command(command, cx);
+                            }
+                        }),
+                    )
+                }))
                 .child(terminal_ctx_item(
                     palette,
                     "term-ctx-find-selection",

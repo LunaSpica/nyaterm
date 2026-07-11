@@ -506,6 +506,31 @@ pub struct SessionsConfig {
     pub connections: Vec<SavedConnection>,
 }
 
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct ActionLinksMatcherSettings {
+    #[serde(default = "default_true_action_link")]
+    pub ipv4: bool,
+    #[serde(default = "default_true_action_link")]
+    pub archive: bool,
+    #[serde(default = "default_true_action_link")]
+    pub host_port: bool,
+}
+
+fn default_true_action_link() -> bool {
+    true
+}
+
+impl Default for ActionLinksMatcherSettings {
+    fn default() -> Self {
+        Self {
+            ipv4: true,
+            archive: true,
+            host_port: true,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct SearchEngineConfig {
     pub name: String,
@@ -570,6 +595,11 @@ pub struct AppSettingsSummary {
     pub terminal_show_timestamp_milliseconds: bool,
     pub terminal_show_multi_line_paste_dialog: bool,
     pub terminal_paste_image_as_path: bool,
+    /// Detect clickable entities (IP/host:port/archive) in terminal output (Tauri action_links_enabled).
+    #[serde(default)]
+    pub terminal_action_links_enabled: bool,
+    #[serde(default)]
+    pub terminal_action_links_matchers: ActionLinksMatcherSettings,
     /// Online search engines for terminal selection context menu (Tauri search.custom_engines).
     #[serde(default = "default_search_engines")]
     pub search_custom_engines: Vec<SearchEngineConfig>,
@@ -729,6 +759,8 @@ impl Default for AppSettingsSummary {
             terminal_show_timestamp_milliseconds: false,
             terminal_show_multi_line_paste_dialog: true,
             terminal_paste_image_as_path: true,
+            terminal_action_links_enabled: false,
+            terminal_action_links_matchers: ActionLinksMatcherSettings::default(),
             search_custom_engines: default_search_engines(),
             ui_show_remote_stats: true,
             ui_remote_stats_interval: 3,

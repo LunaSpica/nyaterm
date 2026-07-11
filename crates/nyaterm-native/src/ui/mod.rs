@@ -4,6 +4,7 @@ mod models;
 mod send_command;
 mod shortcuts;
 mod temporary_ssh_link;
+mod action_links;
 mod terminal;
 mod view;
 

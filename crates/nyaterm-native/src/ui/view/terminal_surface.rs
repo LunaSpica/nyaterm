@@ -404,6 +404,15 @@ impl NyaTermApp {
                                     return;
                                 }
                                 window.focus(&this.terminal_focus);
+                                let modifiers = event.modifiers();
+                                if this.settings.terminal_action_links_enabled
+                                    && (modifiers.control || modifiers.platform)
+                                {
+                                    if this.try_activate_action_link_at_click(event, cx) {
+                                        cx.stop_propagation();
+                                        return;
+                                    }
+                                }
                                 if this.terminal_selection.is_none() {
                                     this.terminal_status = "terminal focused".to_string();
                                 }

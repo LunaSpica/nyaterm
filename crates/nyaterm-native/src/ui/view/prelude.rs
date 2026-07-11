@@ -7,7 +7,7 @@ pub(super) use nyaterm_domain::{
     AgentApprovalDecision, AgentCapturedOutput, AgentCommandExecutionMode,
     AgentOutputCaptureProcessor, AiAction, AiChatRequest, AiChatStreamDelta, AiCommandCard,
     AiContext, AiExecutionProfile, AiMessage, AiMessageRole, AiMode, AiSession, AiModelDiscovery,
-    AiProviderCredential, AiProviderKind, AiSettings, AppRuntime, AppSettingsSummary, SearchEngineConfig, default_search_engines,
+    AiProviderCredential, AiProviderKind, AiSettings, AppRuntime, AppSettingsSummary, ActionLinksMatcherSettings, SearchEngineConfig, default_search_engines,
     AppendAiAuditRequest, CLOUD_SYNC_HISTORY_LIMIT, CloudSyncError, CloudSyncHistoryEntry,
     CloudSyncResult, CloudSyncSettings, CloudSyncState, CommandHistoryEntry, CommandObservation,
     ConnectionAuth, ConnectionNetwork, ConnectionPostLogin, ConnectionStore, ConnectionType,

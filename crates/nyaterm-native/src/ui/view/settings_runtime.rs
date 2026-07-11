@@ -711,6 +711,48 @@ impl NyaTermApp {
         self.terminal_status = "search engines reset to defaults".to_string();
     }
 
+
+    pub(in crate::ui::view) fn toggle_terminal_action_links(&mut self, cx: &mut Context<Self>) {
+        self.settings.terminal_action_links_enabled = !self.settings.terminal_action_links_enabled;
+        self.save_terminal_settings(cx);
+    }
+
+    pub(in crate::ui::view) fn toggle_terminal_action_links_matcher(
+        &mut self,
+        which: &'static str,
+        cx: &mut Context<Self>,
+    ) {
+        match which {
+            "ipv4" => {
+                self.settings.terminal_action_links_matchers.ipv4 =
+                    !self.settings.terminal_action_links_matchers.ipv4;
+            }
+            "archive" => {
+                self.settings.terminal_action_links_matchers.archive =
+                    !self.settings.terminal_action_links_matchers.archive;
+            }
+            "host_port" => {
+                self.settings.terminal_action_links_matchers.host_port =
+                    !self.settings.terminal_action_links_matchers.host_port;
+            }
+            _ => return,
+        }
+        self.save_terminal_settings(cx);
+    }
+
+    pub(in crate::ui::view) fn execute_action_link_command(
+        &mut self,
+        command: String,
+        cx: &mut Context<Self>,
+    ) {
+        let mut bytes = command.into_bytes();
+        if !bytes.ends_with(b"\n") {
+            bytes.push(b'\n');
+        }
+        self.send_terminal_input(bytes, cx);
+        self.terminal_status = "action link command sent".to_string();
+    }
+
     fn normalize_search_engines(&mut self) {
         self.settings.search_custom_engines.retain(|engine| {
             !engine.name.trim().is_empty() && !engine.url_template.trim().is_empty()

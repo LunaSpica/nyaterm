@@ -151,6 +151,58 @@ impl NyaTermApp {
                         ),
                     )),
             ))
+            .child(settings_form_section(palette,
+                Some("Action links"),
+                Some("Detect IP / host:port / archives in terminal text for quick commands."),
+                div()
+                    .flex()
+                    .flex_col()
+                    .gap_3()
+                    .child(settings_form_row(palette,
+                        "Enabled",
+                        Some(SharedString::from("Ctrl/Cmd-click runs the default action; context menu lists all.")),
+                        settings_switch(palette,
+                            "terminal-action-links",
+                            self.settings.terminal_action_links_enabled,
+                            cx.listener(|this, _, _, cx| {
+                                this.toggle_terminal_action_links(cx);
+                            }),
+                        ),
+                    ))
+                    .child(settings_form_row(palette,
+                        "IPv4 matcher",
+                        None,
+                        settings_switch(palette,
+                            "terminal-action-links-ipv4",
+                            self.settings.terminal_action_links_matchers.ipv4,
+                            cx.listener(|this, _, _, cx| {
+                                this.toggle_terminal_action_links_matcher("ipv4", cx);
+                            }),
+                        ),
+                    ))
+                    .child(settings_form_row(palette,
+                        "Host:Port matcher",
+                        None,
+                        settings_switch(palette,
+                            "terminal-action-links-host-port",
+                            self.settings.terminal_action_links_matchers.host_port,
+                            cx.listener(|this, _, _, cx| {
+                                this.toggle_terminal_action_links_matcher("host_port", cx);
+                            }),
+                        ),
+                    ))
+                    .child(settings_form_row(palette,
+                        "Archive matcher",
+                        None,
+                        settings_switch(palette,
+                            "terminal-action-links-archive",
+                            self.settings.terminal_action_links_matchers.archive,
+                            cx.listener(|this, _, _, cx| {
+                                this.toggle_terminal_action_links_matcher("archive", cx);
+                            }),
+                        ),
+                    )),
+            ))
             .child(settings_form_section(palette, 
                 Some("Paste & input"),
                 None,

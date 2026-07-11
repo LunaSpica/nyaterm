@@ -1267,6 +1267,12 @@ impl ConnectionStore {
                 &["terminal", "paste_image_as_path"],
                 true,
             ),
+            terminal_action_links_enabled: json_bool(
+                &value,
+                &["terminal", "action_links_enabled"],
+                false,
+            ),
+            terminal_action_links_matchers: load_action_links_matchers(&value),
             search_custom_engines: load_search_engines(&value),
             ui_show_remote_stats: json_bool(&value, &["ui", "show_remote_stats"], true),
             ui_remote_stats_interval: json_u32(&value, &["ui", "remote_stats_interval"], 3)
@@ -1896,6 +1902,20 @@ impl ConnectionStore {
             &mut value,
             &["terminal", "paste_image_as_path"],
             serde_json::Value::Bool(settings.terminal_paste_image_as_path),
+        );
+        set_nested_json_value(
+            &mut value,
+            &["terminal", "action_links_enabled"],
+            serde_json::Value::Bool(settings.terminal_action_links_enabled),
+        );
+        set_nested_json_value(
+            &mut value,
+            &["terminal", "action_links_matchers"],
+            serde_json::json!({
+                "ipv4": settings.terminal_action_links_matchers.ipv4,
+                "archive": settings.terminal_action_links_matchers.archive,
+                "host_port": settings.terminal_action_links_matchers.host_port,
+            }),
         );
         set_nested_json_value(
             &mut value,
@@ -4408,6 +4428,28 @@ fn set_nested_json_string(value: &mut serde_json::Value, path: &[&str], new_valu
     set_nested_json_value(value, path, serde_json::Value::String(new_value));
 }
 
+
+
+fn load_action_links_matchers(value: &serde_json::Value) -> crate::ActionLinksMatcherSettings {
+    let defaults = crate::ActionLinksMatcherSettings::default();
+    let Some(obj) = json_path(value, &["terminal", "action_links_matchers"]) else {
+        return defaults;
+    };
+    crate::ActionLinksMatcherSettings {
+        ipv4: obj
+            .get("ipv4")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(defaults.ipv4),
+        archive: obj
+            .get("archive")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(defaults.archive),
+        host_port: obj
+            .get("host_port")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(defaults.host_port),
+    }
+}
 
 fn load_search_engines(value: &serde_json::Value) -> Vec<SearchEngineConfig> {
     let Some(arr) = json_path(value, &["search", "custom_engines"]).and_then(|v| v.as_array()) else {

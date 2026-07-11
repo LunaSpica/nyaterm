@@ -1,5 +1,5 @@
 use super::*;
-use gpui::{Bounds, MouseDownEvent, MouseMoveEvent, MouseUpEvent, Pixels, Point};
+use gpui::{Bounds, ClickEvent, MouseDownEvent, MouseMoveEvent, MouseUpEvent, Pixels, Point};
 
 /// Approximate monospaced cell metrics used for hit-testing the painted terminal grid.
 /// Keep in sync with `terminal_line_element` row height and surface font size.
@@ -288,6 +288,59 @@ impl NyaTermApp {
         (start, end)
     }
 
+
+    pub(in crate::ui::view) fn try_activate_action_link_at_click(
+        &mut self,
+        event: &ClickEvent,
+        cx: &mut Context<Self>,
+    ) -> bool {
+        let Some(cell) = self.point_to_terminal_cell(event.position()) else {
+            return false;
+        };
+        let offset = self.active_terminal_scroll_offset();
+        let snapshot = self
+            .active_session_id
+            .as_deref()
+            .and_then(|session_id| self.terminal_views.get(session_id))
+            .map(|view| view.screen.viewport_snapshot(offset))
+            .unwrap_or_else(|| self.terminal_screen.viewport_snapshot(offset));
+        let Some(line) = snapshot.lines.get(cell.row) else {
+            return false;
+        };
+        let chars: Vec<char> = line.chars().collect();
+        if chars.is_empty() {
+            return false;
+        }
+        let char_offset = cell.col.min(chars.len().saturating_sub(1));
+        let byte_offset: usize = chars.iter().take(char_offset).map(|ch| ch.len_utf8()).sum();
+        let matchers = &self.settings.terminal_action_links_matchers;
+        let Some(item) = match_at_offset(line, byte_offset, matchers) else {
+            return false;
+        };
+        let actions = actions_for_match(&item);
+        let Some(default) = actions
+            .iter()
+            .find(|action| action.is_default)
+            .cloned()
+            .or_else(|| actions.first().cloned())
+        else {
+            return false;
+        };
+        if let Some(url) = default.open_url {
+            match open_external_url_for_action(&url) {
+                Ok(()) => self.terminal_status = format!("opened {}: {url}", item.kind.label()),
+                Err(error) => self.terminal_status = format!("open link failed: {error}"),
+            }
+            cx.notify();
+            return true;
+        }
+        if let Some(command) = default.command {
+            self.execute_action_link_command(command, cx);
+            return true;
+        }
+        false
+    }
+
     /// Capture painted bounds for hit-testing; called from a canvas prepaint under the output area.
     pub(in crate::ui::view) fn remember_terminal_surface_bounds(&mut self, bounds: Bounds<Pixels>) {
         self.terminal_surface_bounds = Some(bounds);
@@ -317,3 +370,36 @@ pub(in crate::ui::view) fn terminal_bounds_tracker(
     .absolute()
     .size_full()
 }
+
+fn open_external_url_for_action(url: &str) -> Result<(), String> {
+    let url = url.trim();
+    if url.is_empty() {
+        return Err("empty url".to_string());
+    }
+    #[cfg(target_os = "macos")]
+    {
+        std::process::Command::new("open")
+            .arg(url)
+            .spawn()
+            .map(|_| ())
+            .map_err(|error| format!("failed to open url: {error}"))
+    }
+    #[cfg(target_os = "windows")]
+    {
+        std::process::Command::new("cmd")
+            .args(["/C", "start", ""])
+            .arg(url)
+            .spawn()
+            .map(|_| ())
+            .map_err(|error| format!("failed to open url: {error}"))
+    }
+    #[cfg(all(unix, not(target_os = "macos")))]
+    {
+        std::process::Command::new("xdg-open")
+            .arg(url)
+            .spawn()
+            .map(|_| ())
+            .map_err(|error| format!("failed to open url: {error}"))
+    }
+}
+
