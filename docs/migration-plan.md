@@ -731,3 +731,7 @@ service boundary first:
 - Sort header uses the same 6-col grid as rows (Process/PID/CPU/Mem/User/menu) with numeric right-align.
 - Process rows: left load/selection accent bar; mono numeric PID/CPU/Mem.
 - Quick Commands / Recording panels densified slightly.
+
+## 2026-07-11 Resource Monitor + Active Sessions densify
+- Resource Monitor section titles + dense_capability_line mono values.
+- Active Sessions rows fixed 44px height.

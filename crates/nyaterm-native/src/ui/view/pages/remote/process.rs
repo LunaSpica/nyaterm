@@ -639,6 +639,35 @@ pub(super) fn process_signal_confirm_panel(
         )
 }
 
+
+pub(super) fn dense_capability_line(
+    label: &'static str,
+    value: impl Into<String>,
+) -> impl IntoElement {
+    // Compact key/value for Resource Monitor cards (Tauri denser than workspace cards).
+    div()
+        .mt(px(4.))
+        .flex()
+        .items_center()
+        .justify_between()
+        .gap_2()
+        .child(
+            div()
+                .text_size(px(10.))
+                .text_color(rgb(0x6e7681))
+                .child(label),
+        )
+        .child(
+            div()
+                .min_w_0()
+                .font_family("JetBrains Mono")
+                .text_size(px(10.))
+                .text_color(rgb(0xc9d1d9))
+                .overflow_hidden()
+                .child(value.into()),
+        )
+}
+
 pub(super) fn resource_gauge_card(
     title: &'static str,
     value: String,

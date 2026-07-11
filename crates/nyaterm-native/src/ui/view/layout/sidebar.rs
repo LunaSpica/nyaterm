@@ -427,14 +427,15 @@ impl NyaTermApp {
             .id(SharedString::from(format!(
                 "active-session-row-{session_id}"
             )))
+            .h(px(44.))
             .rounded_md()
             .px_2()
-            .py_1()
             .bg(if is_active { row_bg } else { rgb(0x161b22) })
             .cursor_pointer()
             .hover(move |this| this.bg(hover_bg))
             .child(
                 div()
+                    .size_full()
                     .flex()
                     .items_center()
                     .gap_2()

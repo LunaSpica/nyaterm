@@ -205,24 +205,25 @@ impl NyaTermApp {
                             .p_2()
                             .child(
                                 div()
-                                    .text_sm()
+                                    .text_xs()
                                     .font_weight(FontWeight(700.))
+                                    .text_color(rgb(0x8b949e))
                                     .child("System"),
                             )
-                            .child(capability_line(
+                            .child(dense_capability_line(
                                 "OS",
                                 truncate_preview(&stats.system.os, 52),
                             ))
-                            .child(capability_line("Arch", stats.system.arch.clone()))
-                            .child(capability_line(
+                            .child(dense_capability_line("Arch", stats.system.arch.clone()))
+                            .child(dense_capability_line(
                                 "Uptime",
                                 format_uptime(stats.system.uptime_sec),
                             ))
-                            .child(capability_line(
+                            .child(dense_capability_line(
                                 "CPU Model",
                                 truncate_preview(&stats.cpu.model, 52),
                             ))
-                            .child(capability_line("Cores", stats.cpu.cores.to_string())),
+                            .child(dense_capability_line("Cores", stats.cpu.cores.to_string())),
                     )
                     .child(
                         div()
@@ -232,9 +233,9 @@ impl NyaTermApp {
                             .bg(rgb(0x0d1117))
                             .p_2()
                             .child(div().text_sm().font_weight(FontWeight(700.)).child("Load"))
-                            .child(capability_line("1 min", format!("{:.2}", stats.load.load1)))
-                            .child(capability_line("5 min", format!("{:.2}", stats.load.load5)))
-                            .child(capability_line(
+                            .child(dense_capability_line("1 min", format!("{:.2}", stats.load.load1)))
+                            .child(dense_capability_line("5 min", format!("{:.2}", stats.load.load5)))
+                            .child(dense_capability_line(
                                 "15 min",
                                 format!("{:.2}", stats.load.load15),
                             ))
@@ -259,19 +260,19 @@ impl NyaTermApp {
                                     .font_weight(FontWeight(700.))
                                     .child("Memory"),
                             )
-                            .child(capability_line(
+                            .child(dense_capability_line(
                                 "Used",
                                 format_file_size(Some(stats.memory.used)),
                             ))
-                            .child(capability_line(
+                            .child(dense_capability_line(
                                 "Available",
                                 format_file_size(Some(stats.memory.available)),
                             ))
-                            .child(capability_line(
+                            .child(dense_capability_line(
                                 "Cached",
                                 format_file_size(Some(stats.memory.cached)),
                             ))
-                            .child(capability_line(
+                            .child(dense_capability_line(
                                 "Total",
                                 format_file_size(Some(memory_total)),
                             ))
@@ -292,8 +293,9 @@ impl NyaTermApp {
                             .p_2()
                             .child(
                                 div()
-                                    .text_sm()
+                                    .text_xs()
                                     .font_weight(FontWeight(700.))
+                                    .text_color(rgb(0x8b949e))
                                     .child("Network"),
                             )
                             .child(networks),
@@ -361,7 +363,7 @@ fn cpu_core_summary(per_core: &[f64], expanded: bool, cx: &mut Context<NyaTermAp
             .items_center()
             .justify_between()
             .gap_2()
-            .child(capability_line("Per Core", summary))
+            .child(dense_capability_line("Per Core", summary))
             .child(small_button(
                 "stats-cpu-cores-toggle",
                 if expanded { "Hide" } else { "Show" },
