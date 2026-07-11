@@ -1442,3 +1442,14 @@ service boundary first:
 
 - Session chip mirrors title densify (tab › leaf, endpoint, disconnect, pane count).
 - Tabs chip shows strip tab count and total pane leaves when they differ.
+
+## 2026-07-12 General settings densify
+
+- General tab mirrors Tauri `GeneralTab`: nested window-layout under startup
+  restore, minimize-to-tray switch, confirm-on-close, diagnostics level /
+  retention chips, open logs, and export support bundle.
+- Domain persists `general.minimize_to_tray`, `ui.language` (was mis-mapped to
+  translation target), and `diagnostics.level` / `retention_days` via
+  `save_diagnostics_settings`.
+- Sync & Backup diagnostics section shares the same level/retention controls.
+

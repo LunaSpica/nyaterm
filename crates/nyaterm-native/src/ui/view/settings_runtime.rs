@@ -426,6 +426,65 @@ impl NyaTermApp {
         self.save_general_settings(cx);
     }
 
+    pub(in crate::ui::view) fn toggle_minimize_to_tray(&mut self, cx: &mut Context<Self>) {
+        self.settings.minimize_to_tray = !self.settings.minimize_to_tray;
+        self.save_general_settings(cx);
+    }
+
+    pub(in crate::ui::view) fn set_diagnostics_level(
+        &mut self,
+        level: &'static str,
+        cx: &mut Context<Self>,
+    ) {
+        let level = match level {
+            "warn" | "debug" => level,
+            _ => "info",
+        };
+        if self.settings.diagnostics_level == level {
+            return;
+        }
+        self.settings.diagnostics_level = level.to_string();
+        self.save_diagnostics_settings(cx);
+    }
+
+    pub(in crate::ui::view) fn set_diagnostics_retention_days(
+        &mut self,
+        days: u32,
+        cx: &mut Context<Self>,
+    ) {
+        let days = match days {
+            3 | 7 | 14 | 30 => days,
+            _ => 7,
+        };
+        if self.settings.diagnostics_retention_days == days {
+            return;
+        }
+        self.settings.diagnostics_retention_days = days;
+        self.save_diagnostics_settings(cx);
+    }
+
+    pub(in crate::ui::view) fn save_diagnostics_settings(&mut self, cx: &mut Context<Self>) {
+        match ConnectionStore::open_with_portable_key_path(
+            self.runtime.config_dir(),
+            self.runtime.portable_key_path().map(ToOwned::to_owned),
+        )
+        .and_then(|store| store.save_diagnostics_settings(&self.settings))
+        {
+            Ok(settings) => {
+                self.settings = settings;
+                self.store_status.message = "diagnostics settings saved".to_string();
+                self.store_status.ready = true;
+                self.terminal_status = "diagnostics settings saved".to_string();
+            }
+            Err(error) => {
+                self.store_status.message = format!("diagnostics settings save failed: {error}");
+                self.store_status.ready = false;
+                self.terminal_status = self.store_status.message.clone();
+            }
+        }
+        cx.notify();
+    }
+
     pub(in crate::ui::view) fn save_general_settings(&mut self, cx: &mut Context<Self>) {
         match ConnectionStore::open_with_portable_key_path(
             self.runtime.config_dir(),

@@ -140,6 +140,72 @@ impl NyaTermApp {
                     .flex()
                     .flex_col()
                     .gap_3()
+                    .child(settings_form_row(
+                        palette,
+                        "Log level",
+                        Some(SharedString::from(
+                            "Same as General · Diagnostics; persists under diagnostics.level.",
+                        )),
+                        div()
+                            .flex()
+                            .items_center()
+                            .gap_1()
+                            .child(settings_choice_chip(
+                                palette,
+                                "sync-diag-warn",
+                                "Warn",
+                                self.settings.diagnostics_level == "warn",
+                                cx.listener(|this, _, _, cx| {
+                                    this.set_diagnostics_level("warn", cx);
+                                }),
+                            ))
+                            .child(settings_choice_chip(
+                                palette,
+                                "sync-diag-info",
+                                "Info",
+                                self.settings.diagnostics_level == "info",
+                                cx.listener(|this, _, _, cx| {
+                                    this.set_diagnostics_level("info", cx);
+                                }),
+                            ))
+                            .child(settings_choice_chip(
+                                palette,
+                                "sync-diag-debug",
+                                "Debug",
+                                self.settings.diagnostics_level == "debug",
+                                cx.listener(|this, _, _, cx| {
+                                    this.set_diagnostics_level("debug", cx);
+                                }),
+                            )),
+                    ))
+                    .child(settings_form_row(
+                        palette,
+                        "Log retention",
+                        Some(SharedString::from("Retained diagnostics JSONL days.")),
+                        div()
+                            .flex()
+                            .items_center()
+                            .gap_1()
+                            .children([3_u32, 7, 14, 30].into_iter().map(|days| {
+                                let selected = self.settings.diagnostics_retention_days == days;
+                                let id = format!("sync-diag-retention-{days}");
+                                let label: &'static str = match days {
+                                    3 => "3d",
+                                    7 => "7d",
+                                    14 => "14d",
+                                    _ => "30d",
+                                };
+                                settings_choice_chip(
+                                    palette,
+                                    id,
+                                    label,
+                                    selected,
+                                    cx.listener(move |this, _, _, cx| {
+                                        this.set_diagnostics_retention_days(days, cx);
+                                    }),
+                                )
+                            })),
+                    ))
                     .child(settings_form_row(palette, 
                         "Support bundle",
                         Some(SharedString::from(prompt_label)),

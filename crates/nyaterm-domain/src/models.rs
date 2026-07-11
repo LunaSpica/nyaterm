@@ -983,6 +983,9 @@ pub struct AppSettingsSummary {
     /// When true (default), restore multi-leaf tab window layout with sessions.
     #[serde(default = "default_true")]
     pub startup_restore_window_layout: bool,
+    /// When true, minimize hides the main window to the system tray (platform-dependent).
+    #[serde(default)]
+    pub minimize_to_tray: bool,
     pub confirm_on_close: bool,
     pub enable_screen_lock: bool,
     pub idle_lock_minutes: u32,
@@ -1123,6 +1126,7 @@ impl Default for AppSettingsSummary {
             diagnostics_retention_days: 7,
             startup_restore: false,
             startup_restore_window_layout: true,
+            minimize_to_tray: false,
             confirm_on_close: true,
             enable_screen_lock: false,
             idle_lock_minutes: 0,

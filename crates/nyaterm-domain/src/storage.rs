@@ -1212,7 +1212,8 @@ impl ConnectionStore {
                     .clamp(20, 100);
                 pct
             },
-            language: json_string(&value, &["translation", "target_language"], "zh-CN"),
+            // Tauri UiConfig.language (not translation.target_language).
+            language: json_string(&value, &["ui", "language"], "en"),
             terminal_font_family: json_string(
                 &value,
                 &["appearance", "font_family"],
@@ -1494,18 +1495,31 @@ impl ConnectionStore {
                 &["transfer", "recording_memory_limit_bytes"],
                 5 * 1024 * 1024,
             ),
-            diagnostics_level: json_string(&value, &["diagnostics", "level"], "info"),
-            diagnostics_retention_days: u32::from(json_u16(
-                &value,
-                &["diagnostics", "retention_days"],
-                7,
-            )),
+            diagnostics_level: {
+                let raw = json_string(&value, &["diagnostics", "level"], "info");
+                match raw.as_str() {
+                    "warn" | "debug" => raw,
+                    _ => "info".to_string(),
+                }
+            },
+            diagnostics_retention_days: {
+                let days = u32::from(json_u16(
+                    &value,
+                    &["diagnostics", "retention_days"],
+                    7,
+                ));
+                match days {
+                    3 | 7 | 14 | 30 => days,
+                    _ => 7,
+                }
+            },
             startup_restore: json_bool(&value, &["general", "startup_restore"], false),
             startup_restore_window_layout: json_bool(
                 &value,
                 &["general", "startup_restore_window_layout"],
                 true,
             ),
+            minimize_to_tray: json_bool(&value, &["general", "minimize_to_tray"], false),
             confirm_on_close: json_bool(&value, &["general", "confirm_on_close"], true),
             enable_screen_lock: json_bool(&value, &["security", "enable_screen_lock"], false),
             idle_lock_minutes: u32::from(json_u16(&value, &["security", "idle_lock_minutes"], 0)),
@@ -2062,8 +2076,44 @@ impl ConnectionStore {
         );
         set_nested_json_value(
             &mut value,
+            &["general", "minimize_to_tray"],
+            serde_json::Value::Bool(settings.minimize_to_tray),
+        );
+        set_nested_json_value(
+            &mut value,
             &["general", "confirm_on_close"],
             serde_json::Value::Bool(settings.confirm_on_close),
+        );
+        // UI language lives under ui.language (Tauri UiConfig.language).
+        let language = match settings.language.as_str() {
+            "zh-CN" | "zh" => "zh-CN",
+            "zh-TW" => "zh-TW",
+            "ja" => "ja",
+            _ => "en",
+        };
+        set_nested_json_string(&mut value, &["ui", "language"], language.to_string());
+        self.save_settings_value(&value)?;
+        self.load_app_settings_summary()
+    }
+
+    pub fn save_diagnostics_settings(
+        &self,
+        settings: &AppSettingsSummary,
+    ) -> Result<AppSettingsSummary, StorageError> {
+        let mut value = self.load_settings_value()?;
+        let level = match settings.diagnostics_level.as_str() {
+            "warn" | "debug" => settings.diagnostics_level.as_str(),
+            _ => "info",
+        };
+        let retention = match settings.diagnostics_retention_days {
+            3 | 7 | 14 | 30 => settings.diagnostics_retention_days,
+            _ => 7,
+        };
+        set_nested_json_string(&mut value, &["diagnostics", "level"], level.to_string());
+        set_nested_json_value(
+            &mut value,
+            &["diagnostics", "retention_days"],
+            serde_json::Value::from(retention),
         );
         self.save_settings_value(&value)?;
         self.load_app_settings_summary()
@@ -4196,6 +4246,7 @@ fn default_settings_value() -> serde_json::Value {
         "general": {
             "startup_restore": false,
             "startup_restore_window_layout": true,
+            "minimize_to_tray": false,
             "confirm_on_close": true
         },
         "appearance": {
@@ -5689,12 +5740,51 @@ mod tests {
     }
 
     #[test]
+    fn save_general_and_diagnostics_settings_roundtrip() {
+        let dir = unique_temp_dir("settings-general-diag");
+        let store = ConnectionStore::open(&dir).expect("store");
+        let mut summary = store.load_app_settings_summary().expect("load");
+        summary.startup_restore = true;
+        summary.startup_restore_window_layout = false;
+        summary.minimize_to_tray = true;
+        summary.confirm_on_close = false;
+        summary.language = "zh-CN".to_string();
+        let saved = store.save_general_settings(&summary).expect("save general");
+        assert!(saved.startup_restore);
+        assert!(!saved.startup_restore_window_layout);
+        assert!(saved.minimize_to_tray);
+        assert!(!saved.confirm_on_close);
+        assert_eq!(saved.language, "zh-CN");
+
+        summary = saved;
+        summary.diagnostics_level = "debug".to_string();
+        summary.diagnostics_retention_days = 14;
+        let saved = store
+            .save_diagnostics_settings(&summary)
+            .expect("save diagnostics");
+        assert_eq!(saved.diagnostics_level, "debug");
+        assert_eq!(saved.diagnostics_retention_days, 14);
+
+        let raw = store.load_settings_value().expect("raw");
+        assert_eq!(
+            raw["general"]["minimize_to_tray"],
+            serde_json::Value::Bool(true)
+        );
+        assert_eq!(raw["ui"]["language"], serde_json::Value::String("zh-CN".into()));
+        assert_eq!(raw["diagnostics"]["level"], serde_json::Value::String("debug".into()));
+        assert_eq!(raw["diagnostics"]["retention_days"], serde_json::Value::from(14));
+
+        std::fs::remove_dir_all(dir).ok();
+    }
+
+    #[test]
     fn app_settings_summary_reads_and_updates_host_key_policy() {
         let dir = unique_temp_dir("settings-summary");
         let store = ConnectionStore::open(&dir).expect("store");
         let initial = serde_json::json!({
             "general": {
                 "startup_restore": true,
+                "minimize_to_tray": true,
                 "confirm_on_close": false,
                 "custom_general": "keep"
             },
@@ -5744,6 +5834,7 @@ mod tests {
                 "paste_image_as_path": false
             },
             "ui": {
+                "language": "zh-CN",
                 "show_remote_stats": false,
                 "remote_stats_interval": 9,
                 "show_process_manager": false,
@@ -5790,7 +5881,7 @@ mod tests {
 
         let summary = store.load_app_settings_summary().expect("summary");
         assert_eq!(summary.theme, "catppuccin");
-        assert_eq!(summary.language, "ja");
+        assert_eq!(summary.language, "zh-CN");
         assert_eq!(summary.terminal_font_family, "Iosevka");
         assert_eq!(summary.terminal_font_size, 14);
         assert_eq!(summary.x11_display, "localhost:1");
@@ -5875,6 +5966,7 @@ mod tests {
         assert_eq!(summary.diagnostics_level, "debug");
         assert_eq!(summary.diagnostics_retention_days, 3);
         assert!(summary.startup_restore);
+        assert!(summary.minimize_to_tray);
         assert!(!summary.confirm_on_close);
         assert!(summary.enable_screen_lock);
         assert_eq!(summary.idle_lock_minutes, 12);
@@ -7030,8 +7122,13 @@ mod tests {
     }
 
     fn unique_temp_dir(name: &str) -> PathBuf {
-        let dir =
-            std::env::temp_dir().join(format!("nyaterm-domain-{name}-{}", std::process::id()));
+        use std::sync::atomic::{AtomicU64, Ordering};
+        static COUNTER: AtomicU64 = AtomicU64::new(0);
+        let n = COUNTER.fetch_add(1, Ordering::Relaxed);
+        let dir = std::env::temp_dir().join(format!(
+            "nyaterm-domain-{name}-{}-{n}",
+            std::process::id()
+        ));
         std::fs::remove_dir_all(&dir).ok();
         dir
     }
