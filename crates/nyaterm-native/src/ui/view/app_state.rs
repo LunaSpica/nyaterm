@@ -423,6 +423,10 @@ pub struct NyaTermApp {
     pub(in crate::ui::view) terminal_surface_bounds: Option<gpui::Bounds<gpui::Pixels>>,
     /// Measured monospaced cell size (width, height) from the terminal font when available.
     pub(in crate::ui::view) terminal_cell_metrics: Option<(f32, f32)>,
+    /// Remaining event-pump ticks for visual BEL flash (0 = off).
+    pub(in crate::ui::view) visual_bell_ticks: u8,
+    /// Session id currently under an external file drag (drop overlay).
+    pub(in crate::ui::view) terminal_file_drop_hover: Option<String>,
 
     pub(in crate::ui::view) last_viewport_size: (f32, f32),
     pub(in crate::ui::view) selected_nav: NavItem,
@@ -1097,6 +1101,8 @@ impl NyaTermApp {
             terminal_selection_dragging: false,
             terminal_surface_bounds: None,
             terminal_cell_metrics: None,
+            visual_bell_ticks: 0,
+            terminal_file_drop_hover: None,
             last_viewport_size: (1280., 800.),
             selected_nav: NavItem::Workspace,
             main_mode: MainMode::Workspace,

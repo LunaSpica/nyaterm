@@ -1148,3 +1148,15 @@ service boundary first:
 - Expanded (centered) Tab Actions dialog gains Disconnect (keep tab) alongside
   Reconnect/Close.
 
+
+## 2026-07-11 Scroll-to-bottom, visual BEL, file-drop overlay
+
+- When the viewport is scrolled into history (`scroll_offset > 0`), the active
+  terminal shows a compact `↓ Live` FAB that jumps back to live output.
+- BEL (`0x07`) sets a pending visual-bell flag on `TerminalScreen`; the GPUI
+  surface flashes a light border overlay for ~200ms (event-pump ticks).
+- External file drops (`gpui::ExternalPaths`) onto the terminal show a Tauri-like
+  dashed overlay. Local sessions insert shell-quoted paths; SSH/Telnet/Serial
+  report ZMODEM/SFTP guidance until the native ZMODEM pipeline lands.
+- Domain helpers: `quote_local_path`, `format_local_terminal_drop_input`,
+  `terminal_drop_overlay_copy`.

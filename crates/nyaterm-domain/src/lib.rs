@@ -5,6 +5,7 @@ pub mod command_search;
 pub mod command_suggestion_suppression;
 pub mod credential_autofill;
 pub mod terminal_input_tracker;
+pub mod terminal_file_drop;
 pub mod credentials_crypto;
 pub mod diagnostics;
 pub mod models;
@@ -79,6 +80,7 @@ pub use credential_autofill::{
     strip_terminal_control_sequences, validate_prompt_regex,
 };
 pub use credentials_crypto::{CredentialCrypto, CredentialCryptoError};
+pub use terminal_file_drop::{format_local_terminal_drop_input, quote_local_path, terminal_drop_overlay_copy};
 pub use terminal_input_tracker::{
     InputSelectionRange, TerminalInputState, apply_terminal_input_data,
     build_move_input_cursor_data, byte_index_to_char, can_register_command_from_tracker,

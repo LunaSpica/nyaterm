@@ -154,6 +154,14 @@ impl NyaTermApp {
                                     this.cursor_blink_on = true;
                                     this.cursor_blink_tick = 0;
                                 }
+                                // Visual BEL flash (~200ms at 50ms ticks).
+                                if this.visual_bell_ticks > 0 {
+                                    this.visual_bell_ticks = this.visual_bell_ticks.saturating_sub(1);
+                                }
+                                // Drop overlay only while a platform drag is active.
+                                if this.terminal_file_drop_hover.is_some() && !cx.has_active_drag() {
+                                    this.terminal_file_drop_hover = None;
+                                }
                                 cx.notify();
                                 this.event_pump_started
                             })

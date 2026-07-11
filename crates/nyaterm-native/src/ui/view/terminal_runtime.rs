@@ -651,6 +651,93 @@ impl NyaTermApp {
         cx.notify();
     }
 
+    /// Insert quoted local file paths into the active session (Tauri Local drop).
+    pub(in crate::ui::view) fn handle_terminal_external_file_drop(
+        &mut self,
+        session_id: String,
+        paths: Vec<std::path::PathBuf>,
+        cx: &mut Context<Self>,
+    ) {
+        self.terminal_file_drop_hover = None;
+        if session_id.is_empty() || paths.is_empty() {
+            cx.notify();
+            return;
+        }
+        if self.is_session_disconnected(&session_id) {
+            self.terminal_status =
+                "session disconnected — reconnect before dropping files".to_string();
+            cx.notify();
+            return;
+        }
+        let kind = self
+            .ordered_sessions()
+            .into_iter()
+            .find(|s| s.id == session_id)
+            .map(|s| s.kind);
+        let path_strings: Vec<String> = paths
+            .iter()
+            .filter_map(|p| {
+                if p.is_dir() {
+                    None
+                } else {
+                    Some(p.display().to_string())
+                }
+            })
+            .collect();
+        let has_dirs = paths.iter().any(|p| p.is_dir());
+        match kind {
+            Some(SessionKind::LocalPty) | None => {
+                if path_strings.is_empty() {
+                    self.terminal_status =
+                        "folders cannot be dropped into a local terminal".to_string();
+                    cx.notify();
+                    return;
+                }
+                // Activate target session if needed.
+                if self.active_session_id.as_deref() != Some(session_id.as_str()) {
+                    self.active_session_id = Some(session_id.clone());
+                }
+                let text = nyaterm_domain::format_local_terminal_drop_input(&path_strings);
+                self.send_terminal_input(text.into_bytes(), cx);
+                self.terminal_status = format!(
+                    "inserted {} path(s) into terminal",
+                    path_strings.len()
+                );
+                cx.notify();
+            }
+            Some(SessionKind::Ssh | SessionKind::Telnet | SessionKind::Serial | SessionKind::RawTcp) => {
+                if has_dirs {
+                    self.terminal_status =
+                        "folders cannot be uploaded via ZMODEM — use the file explorer for SFTP"
+                            .to_string();
+                    cx.notify();
+                    return;
+                }
+                if path_strings.is_empty() {
+                    cx.notify();
+                    return;
+                }
+                // Full ZMODEM pipeline is not yet native; surface clear status for parity UX.
+                self.terminal_status = format!(
+                    "ZMODEM upload not yet available for {} file(s) — open Transfers / use SFTP",
+                    path_strings.len()
+                );
+                cx.notify();
+            }
+        }
+    }
+
+    pub(in crate::ui::view) fn set_terminal_file_drop_hover(
+        &mut self,
+        session_id: Option<String>,
+        cx: &mut Context<Self>,
+    ) {
+        if self.terminal_file_drop_hover != session_id {
+            self.terminal_file_drop_hover = session_id;
+            cx.notify();
+        }
+    }
+
     pub(in crate::ui::view) fn scroll_terminal_to_bottom(&mut self, cx: &mut Context<Self>) {
         if let Some(session_id) = self.active_session_id.clone() {
             if let Some(view) = self.terminal_views.get_mut(&session_id) {
@@ -871,17 +958,26 @@ impl NyaTermApp {
             if mark_unread && !is_active {
                 view.has_unread = true;
             }
+            if view.screen.take_visual_bell() {
+                self.visual_bell_ticks = 4;
+            }
             if is_active {
                 self.terminal_output.push_str(text);
                 self.terminal_screen.advance(text.as_bytes());
                 let max_bytes = self.terminal_scrollback_max_bytes();
                 trim_terminal_output_to(&mut self.terminal_output, max_bytes);
+                if self.terminal_screen.take_visual_bell() {
+                    self.visual_bell_ticks = 4;
+                }
             }
         } else {
             self.terminal_output.push_str(text);
             self.terminal_screen.advance(text.as_bytes());
             let max_bytes = self.terminal_scrollback_max_bytes();
             trim_terminal_output_to(&mut self.terminal_output, max_bytes);
+            if self.terminal_screen.take_visual_bell() {
+                self.visual_bell_ticks = 4;
+            }
         }
     }
 
@@ -901,12 +997,18 @@ impl NyaTermApp {
             if mark_unread && !is_active {
                 view.has_unread = true;
             }
+            if view.screen.take_visual_bell() {
+                self.visual_bell_ticks = 4;
+            }
             if is_active {
                 self.terminal_screen.advance(data);
                 self.terminal_output
                     .push_str(&String::from_utf8_lossy(data));
                 let max_bytes = self.terminal_scrollback_max_bytes();
                 trim_terminal_output_to(&mut self.terminal_output, max_bytes);
+                if self.terminal_screen.take_visual_bell() {
+                    self.visual_bell_ticks = 4;
+                }
             }
         } else {
             self.terminal_screen.advance(data);
@@ -914,6 +1016,9 @@ impl NyaTermApp {
                 .push_str(&String::from_utf8_lossy(data));
             let max_bytes = self.terminal_scrollback_max_bytes();
             trim_terminal_output_to(&mut self.terminal_output, max_bytes);
+            if self.terminal_screen.take_visual_bell() {
+                self.visual_bell_ticks = 4;
+            }
         }
     }
 }

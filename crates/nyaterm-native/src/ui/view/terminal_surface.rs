@@ -216,6 +216,19 @@ impl NyaTermApp {
         let output_session_id = session_id.clone();
         let terminal_font_family = self.settings.terminal_font_family.clone();
         let terminal_font_size = self.settings.terminal_font_size as f32;
+        let show_scroll_to_bottom = is_active && scroll_offset > 0;
+        let show_visual_bell = is_active && self.visual_bell_ticks > 0;
+        let file_drop_hover = self
+            .terminal_file_drop_hover
+            .as_deref()
+            .is_some_and(|id| id == session_id.as_str());
+        let drop_session_kind = self
+            .ordered_sessions()
+            .into_iter()
+            .find(|s| s.id == session_id)
+            .map(|s| session_kind_label(s.kind))
+            .unwrap_or("Local");
+        let (drop_title, drop_hint) = nyaterm_domain::terminal_drop_overlay_copy(drop_session_kind);
 
         div()
             .flex_1()
@@ -463,6 +476,34 @@ impl NyaTermApp {
                                 px(8.)
                             })
                             .overflow_hidden()
+                            .can_drop(|drag, _, _| drag.is::<gpui::ExternalPaths>())
+                            .on_drag_move({
+                                let session_id = output_session_id.clone();
+                                cx.listener(
+                                    move |this,
+                                          event: &gpui::DragMoveEvent<gpui::ExternalPaths>,
+                                          _,
+                                          cx| {
+                                        let _ = event;
+                                        this.set_terminal_file_drop_hover(
+                                            Some(session_id.clone()),
+                                            cx,
+                                        );
+                                    },
+                                )
+                            })
+                            .on_drop({
+                                let session_id = output_session_id.clone();
+                                cx.listener(
+                                    move |this, paths: &gpui::ExternalPaths, _, cx| {
+                                        this.handle_terminal_external_file_drop(
+                                            session_id.clone(),
+                                            paths.paths().to_vec(),
+                                            cx,
+                                        );
+                                    },
+                                )
+                            })
                             .on_scroll_wheel(cx.listener(
                                 move |this, event: &ScrollWheelEvent, _, cx| {
                                     // Positive wheel delta.y scrolls into history (larger offset).
@@ -580,6 +621,95 @@ impl NyaTermApp {
                                         cx,
                                     )),
                             )
+                            .when(show_visual_bell, |this| {
+                                this.child(
+                                    div()
+                                        .absolute()
+                                        .inset_0()
+                                        .bg(rgba(0xffffff22))
+                                        .border_2()
+                                        .border_color(rgb(palette.warning))
+                                        .rounded_sm(),
+                                )
+                            })
+                            .when(file_drop_hover && !session_id.is_empty(), |this| {
+                                this.child(
+                                    div()
+                                        .absolute()
+                                        .inset_2()
+                                        .rounded_lg()
+                                        .border_2()
+                                        .border_color(rgb(palette.accent))
+                                        .bg(rgba(0x3b82f624))
+                                        .flex()
+                                        .items_center()
+                                        .justify_center()
+                                        .child(
+                                            div()
+                                                .max_w(px(320.))
+                                                .rounded_lg()
+                                                .border_1()
+                                                .border_color(rgb(palette.accent))
+                                                .bg(rgb(palette.surface))
+                                                .px_6()
+                                                .py_4()
+                                                .shadow_lg()
+                                                .flex()
+                                                .flex_col()
+                                                .items_center()
+                                                .gap_1()
+                                                .child(
+                                                    div()
+                                                        .text_sm()
+                                                        .font_weight(FontWeight(700.))
+                                                        .text_color(rgb(palette.text))
+                                                        .child(drop_title),
+                                                )
+                                                .child(
+                                                    div()
+                                                        .text_xs()
+                                                        .text_color(rgb(palette.text_muted))
+                                                        .child(drop_hint),
+                                                ),
+                                        ),
+                                )
+                            })
+                            .when(show_scroll_to_bottom, |this| {
+                                this.child(
+                                    div()
+                                        .id(SharedString::from(format!(
+                                            "terminal-scroll-bottom-{output_session_id}"
+                                        )))
+                                        .absolute()
+                                        .right(px(22.))
+                                        .bottom(px(14.))
+                                        .h(px(30.))
+                                        .px_3()
+                                        .rounded_md()
+                                        .border_1()
+                                        .border_color(rgb(palette.border))
+                                        .bg(rgb(palette.surface_elevated))
+                                        .shadow_md()
+                                        .flex()
+                                        .items_center()
+                                        .gap_1()
+                                        .cursor_pointer()
+                                        .hover(move |style| style.bg(rgb(palette.hover)))
+                                        .on_click(cx.listener(|this, _, _, cx| {
+                                            this.scroll_terminal_to_bottom(cx);
+                                            this.terminal_status =
+                                                "scrolled to live output".to_string();
+                                            cx.notify();
+                                        }))
+                                        .child(
+                                            div()
+                                                .text_xs()
+                                                .font_weight(FontWeight(700.))
+                                                .text_color(rgb(palette.accent))
+                                                .child("↓ Live"),
+                                        ),
+                                )
+                            })
                             .child(terminal_bounds_tracker(cx.entity())),
                     )
                     .when(is_active && self.terminal_search_open, |this| {

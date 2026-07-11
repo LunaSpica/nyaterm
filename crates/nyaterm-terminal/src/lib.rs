@@ -72,6 +72,8 @@ pub struct TerminalScreen {
     pen: CellStyle,
     /// DECSET 2004 bracketed paste mode.
     bracketed_paste: bool,
+    /// Set when BEL (0x07) is received; UI should flash and clear.
+    pending_visual_bell: bool,
 }
 
 impl Default for TerminalScreen {
@@ -97,6 +99,7 @@ impl TerminalScreen {
             scrollback_limit: 5_000,
             pen: CellStyle::default(),
             bracketed_paste: false,
+            pending_visual_bell: false,
         }
     }
 
@@ -135,6 +138,13 @@ impl TerminalScreen {
         self.bracketed_paste
     }
 
+    /// Consume a pending visual bell flag (BEL / 0x07).
+    pub fn take_visual_bell(&mut self) -> bool {
+        let pending = self.pending_visual_bell;
+        self.pending_visual_bell = false;
+        pending
+    }
+
     pub fn total_rows(&self) -> usize {
         self.scrollback.len() + self.rows
     }
@@ -150,6 +160,7 @@ impl TerminalScreen {
         self.cursor_col = 0;
         self.pen = CellStyle::default();
         self.bracketed_paste = false;
+        self.pending_visual_bell = false;
     }
 
     pub fn advance(&mut self, bytes: &[u8]) {
@@ -586,6 +597,10 @@ impl Perform for TerminalScreen {
             b'\r' => self.carriage_return(),
             0x08 => self.backspace(),
             b'\t' => self.tab(),
+            0x07 => {
+                // BEL — visual bell for the UI layer.
+                self.pending_visual_bell = true;
+            }
             _ => {}
         }
     }
@@ -643,6 +658,15 @@ impl Perform for TerminalScreen {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn visual_bell_on_bel() {
+        let mut screen = TerminalScreen::new(20, 5);
+        assert!(!screen.take_visual_bell());
+        screen.advance(b"hi\x07");
+        assert!(screen.take_visual_bell());
+        assert!(!screen.take_visual_bell());
+    }
 
     #[test]
     fn prints_and_wraps_lines() {
