@@ -53,6 +53,13 @@ impl NyaTermApp {
                 line
             };
             let ansi = styled_lines.get(line_index).map(|s| s.as_slice());
+            let selection_cols = if is_active {
+                self.terminal_selection
+                    .as_ref()
+                    .and_then(|selection| selection.cols_for_row(line_index))
+            } else {
+                None
+            };
             let content = terminal_line_element(
                 &line,
                 ansi,
@@ -65,6 +72,7 @@ impl NyaTermApp {
                     None
                 },
                 cursor_style,
+                selection_cols,
                 palette,
             );
             if self.settings.terminal_show_line_numbers {
@@ -248,7 +256,10 @@ impl NyaTermApp {
                     })
                     .child(
                         div()
-                            .id(SharedString::from("terminal-output"))
+                            .id(SharedString::from(format!(
+                                "terminal-output-{output_session_id}"
+                            )))
+                            .relative()
                             .flex_1()
                             .min_h_0()
                             .p(if self.settings.terminal_show_workspace_padding {
@@ -257,8 +268,22 @@ impl NyaTermApp {
                                 px(8.)
                             })
                             .overflow_hidden()
-                            .on_click(cx.listener(move |this, event: &ClickEvent, window, cx| {
-                                this.activate_workspace_pane(output_session_id.clone(), cx);
+                            .on_mouse_down(
+                                MouseButton::Left,
+                                {
+                                    let session_id = output_session_id.clone();
+                                    cx.listener(move |this, event: &gpui::MouseDownEvent, window, cx| {
+                                        this.activate_workspace_pane(session_id.clone(), cx);
+                                        window.focus(&this.terminal_focus);
+                                        this.start_terminal_selection(event, cx);
+                                        cx.stop_propagation();
+                                    })
+                                },
+                            )
+                            .on_click({
+                                let session_id = output_session_id.clone();
+                                cx.listener(move |this, event: &ClickEvent, window, cx| {
+                                this.activate_workspace_pane(session_id.clone(), cx);
                                 if event.is_right_click() {
                                     if this.settings.interaction_right_click_paste {
                                         this.paste_from_clipboard(window, cx);
@@ -269,10 +294,14 @@ impl NyaTermApp {
                                     return;
                                 }
                                 window.focus(&this.terminal_focus);
-                                this.terminal_status = "terminal focused".to_string();
+                                if this.terminal_selection.is_none() {
+                                    this.terminal_status = "terminal focused".to_string();
+                                }
                                 cx.notify();
-                            }))
-                            .child(output),
+                            })
+                            })
+                            .child(output)
+                            .child(terminal_bounds_tracker(cx.entity())),
                     )
                     .when(is_active && self.terminal_search_open, |this| {
                         this.child(self.terminal_search_bar(cx))

@@ -13,12 +13,18 @@ impl NyaTermApp {
 
         let keybindings = self.settings.keybindings.clone();
         if shortcut_matches(event, "terminal.copy", &keybindings) {
-            self.copy_terminal_visible_text(cx);
+            self.copy_terminal_selection_or_visible(cx);
             return true;
         }
         if shortcut_matches(event, "terminal.paste", &keybindings) {
             self.paste_from_clipboard(window, cx);
             return true;
+        }
+        if shortcut_matches(event, "terminal.pasteSelected", &keybindings) {
+            if let Some(text) = self.selected_terminal_text() {
+                self.paste_terminal_text(text, window, cx);
+                return true;
+            }
         }
         if shortcut_matches(event, "terminal.find", &keybindings) {
             self.open_terminal_search(window, cx);
@@ -33,7 +39,7 @@ impl NyaTermApp {
             return true;
         }
         if shortcut_matches(event, "terminal.selectAll", &keybindings) {
-            self.copy_terminal_buffer_text(cx);
+            self.select_all_terminal_visible(cx);
             return true;
         }
         if shortcut_matches(event, "tab.newSession", &keybindings) {

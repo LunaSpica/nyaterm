@@ -917,3 +917,11 @@ service boundary first:
 - Settings Appearance adds Cursor section (style chips + blink switch).
 - Terminal painter supports block / underline / bar caret approximations using theme cursor colors.
 - Event pump toggles `cursor_blink_on` (~530ms half-period) so blinking matches focused terminal caret.
+
+## Terminal text selection (native)
+
+- Mouse drag selects cells on the visible VTE grid with theme `terminal_selection` highlight.
+- Double-click selects a word; triple-click selects a line.
+- `interaction_copy_on_select` copies on mouse-up when enabled.
+- Copy / Select All / Paste Selected shortcuts prefer the live selection.
+- Hit-testing uses approximate monospaced cell metrics (`font_size * 0.62` × 18px line height) and the painted terminal output bounds.

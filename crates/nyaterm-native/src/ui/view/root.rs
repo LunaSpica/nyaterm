@@ -52,6 +52,7 @@ impl Render for NyaTermApp {
                 this.update_transfer_height_resize(event, cx);
                 this.update_panel_stack_resize(event, cx);
                 this.update_workspace_split_resize(event, cx);
+                this.update_terminal_selection_drag(event, cx);
             }))
             .on_mouse_up(
                 MouseButton::Left,
@@ -61,6 +62,7 @@ impl Render for NyaTermApp {
                     this.finish_transfer_height_resize(event, cx);
                     this.finish_panel_stack_resize(event, cx);
                     this.finish_workspace_split_resize(event, cx);
+                    this.finish_terminal_selection(event, cx);
                 }),
             )
             .on_mouse_up(

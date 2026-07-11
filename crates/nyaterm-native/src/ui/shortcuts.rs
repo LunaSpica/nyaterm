@@ -65,8 +65,8 @@ pub(in crate::ui) const SHORTCUT_REGISTRY: [ShortcutDefinition; 30] = [
         category: ShortcutCategory::Terminal,
         label: "Copy",
         default_keys: "Ctrl+Shift+C / Cmd+Shift+C",
-        native_status: ShortcutNativeStatus::Partial,
-        note: "Terminal actions can copy visible or full buffer; selected text is pending.",
+        native_status: ShortcutNativeStatus::Supported,
+        note: "Copies the current selection, otherwise the visible terminal text.",
     },
     ShortcutDefinition {
         id: "terminal.paste",
@@ -81,8 +81,8 @@ pub(in crate::ui) const SHORTCUT_REGISTRY: [ShortcutDefinition; 30] = [
         category: ShortcutCategory::Terminal,
         label: "Paste Selected Text",
         default_keys: "Ctrl+Shift+X / Cmd+Shift+X",
-        native_status: ShortcutNativeStatus::Pending,
-        note: "Terminal selection API is not wired yet.",
+        native_status: ShortcutNativeStatus::Supported,
+        note: "Pastes the current terminal text selection into the active session.",
     },
     ShortcutDefinition {
         id: "terminal.find",
@@ -105,8 +105,8 @@ pub(in crate::ui) const SHORTCUT_REGISTRY: [ShortcutDefinition; 30] = [
         category: ShortcutCategory::Terminal,
         label: "Select All",
         default_keys: "Ctrl+Shift+A / Cmd+Shift+A",
-        native_status: ShortcutNativeStatus::Partial,
-        note: "Terminal actions can copy the buffer; visual selection is pending.",
+        native_status: ShortcutNativeStatus::Supported,
+        note: "Selects the visible terminal grid; copy uses the selection when present.",
     },
     ShortcutDefinition {
         id: "terminal.manageSyncGroups",

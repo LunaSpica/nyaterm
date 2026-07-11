@@ -173,7 +173,7 @@ impl NyaTermApp {
                             cx.notify();
                         }),
                     ))
-                    .child(status_bar_label(palette, "Panel", bottom_panel, rgb(0xc4b5fd))),
+                    .child(status_bar_label(palette, "Panel", bottom_panel, rgb(palette.accent))),
             )
             .child(
                 div()

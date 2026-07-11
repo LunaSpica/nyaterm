@@ -57,6 +57,71 @@ impl TerminalViewState {
     }
 }
 
+/// Inclusive cell coordinate inside the visible terminal grid.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) struct TerminalCellPos {
+    pub(super) row: usize,
+    pub(super) col: usize,
+}
+
+impl TerminalCellPos {
+    pub(super) fn new(row: usize, col: usize) -> Self {
+        Self { row, col }
+    }
+}
+
+/// Visible-grid text selection (start/end are inclusive cell positions).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) struct TerminalSelection {
+    pub(super) anchor: TerminalCellPos,
+    pub(super) head: TerminalCellPos,
+}
+
+impl TerminalSelection {
+    pub(super) fn new(anchor: TerminalCellPos) -> Self {
+        Self {
+            anchor,
+            head: anchor,
+        }
+    }
+
+    pub(super) fn ordered(&self) -> (TerminalCellPos, TerminalCellPos) {
+        let a = self.anchor;
+        let b = self.head;
+        if (a.row, a.col) <= (b.row, b.col) {
+            (a, b)
+        } else {
+            (b, a)
+        }
+    }
+
+    pub(super) fn is_empty(&self) -> bool {
+        self.anchor == self.head
+    }
+
+    /// Column range [start, end) for a painted line, if any cells are selected.
+    /// Endpoints are inclusive cell positions; returned range is half-open for slicing.
+    pub(super) fn cols_for_row(&self, row: usize) -> Option<(usize, usize)> {
+        if self.is_empty() {
+            return None;
+        }
+        let (start, end) = self.ordered();
+        if row < start.row || row > end.row {
+            return None;
+        }
+        if start.row == end.row {
+            return Some((start.col, end.col.saturating_add(1)));
+        }
+        if row == start.row {
+            return Some((start.col, usize::MAX));
+        }
+        if row == end.row {
+            return Some((0, end.col.saturating_add(1)));
+        }
+        Some((0, usize::MAX))
+    }
+}
+
 #[derive(Clone)]
 pub(super) struct SessionRuntimeMetadata {
     pub(super) ssh_config: Option<SshSessionConfig>,

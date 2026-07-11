@@ -15,6 +15,7 @@ impl NyaTermApp {
         let buffer_for_ai = terminal_action_prompt_text(&buffer_text, 4_000);
         let has_visible_text = !visible_text.trim().is_empty();
         let has_buffer_text = !buffer_text.trim().is_empty();
+        let _has_selection = self.selected_terminal_text().is_some();
 
         div()
             .id(SharedString::from("terminal-actions-overlay"))
@@ -112,18 +113,18 @@ impl NyaTermApp {
                                 palette,
                                 "terminal-actions-copy-visible",
                                 "Copy",
-                                "visible screen",
+                                "selection / screen",
                                 cx.listener(|this, _, _, cx| {
-                                    this.copy_terminal_visible_text(cx);
+                                    this.copy_terminal_selection_or_visible(cx);
                                 }),
                             ))
                             .child(tab_action_button(
                                 palette,
                                 "terminal-actions-select-all",
                                 "Select All",
-                                "copy buffer",
+                                "visible grid",
                                 cx.listener(|this, _, _, cx| {
-                                    this.copy_terminal_buffer_text(cx);
+                                    this.select_all_terminal_visible(cx);
                                 }),
                             ))
                             .child(tab_action_button(

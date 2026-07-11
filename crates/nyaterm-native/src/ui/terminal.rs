@@ -31,6 +31,8 @@ pub(super) fn terminal_line_element(
     active_search_match: bool,
     cursor_col: Option<usize>,
     cursor_style: &str,
+    // Half-open column range selected on this line, if any.
+    selection_cols: Option<(usize, usize)>,
     palette: crate::ui::theme::ThemePalette,
 ) -> impl IntoElement {
     let mut spans = if let Some(ansi) = ansi_spans {
@@ -42,6 +44,9 @@ pub(super) fn terminal_line_element(
     } else {
         keyword_highlight_spans(line, config)
     };
+    if let Some((start, end)) = selection_cols {
+        spans = apply_selection_range(spans, start, end, palette);
+    }
     if let Some(col) = cursor_col {
         spans = apply_cursor_style(spans, col, cursor_style, palette);
     }
@@ -83,6 +88,68 @@ pub(super) fn terminal_line_element(
     }
 
     row
+}
+
+/// Highlight a half-open [start, end) column range with the theme selection background.
+fn apply_selection_range(
+    spans: Vec<TerminalHighlightSpan>,
+    start: usize,
+    end: usize,
+    palette: crate::ui::theme::ThemePalette,
+) -> Vec<TerminalHighlightSpan> {
+    if start >= end {
+        return spans;
+    }
+    let mut flat: Vec<(char, Option<u32>, Option<u32>, bool)> = Vec::new();
+    for span in spans {
+        if span.text.is_empty() {
+            continue;
+        }
+        for ch in span.text.chars() {
+            flat.push((ch, span.color, span.bg, span.keyword));
+        }
+    }
+    while flat.len() < end {
+        flat.push((' ', None, None, false));
+    }
+    let end = end.min(flat.len());
+    for idx in start..end {
+        if let Some(cell) = flat.get_mut(idx) {
+            cell.2 = Some(palette.terminal_selection);
+            cell.3 = false;
+        }
+    }
+    compress_flat_cells(flat)
+}
+
+fn compress_flat_cells(
+    flat: Vec<(char, Option<u32>, Option<u32>, bool)>,
+) -> Vec<TerminalHighlightSpan> {
+    let mut out = Vec::new();
+    let mut i = 0;
+    while i < flat.len() {
+        let (ch, color, bg, keyword) = flat[i];
+        let mut text = String::new();
+        text.push(ch);
+        let mut j = i + 1;
+        while j < flat.len() {
+            let (ch2, c2, b2, k2) = flat[j];
+            if c2 == color && b2 == bg && k2 == keyword {
+                text.push(ch2);
+                j += 1;
+            } else {
+                break;
+            }
+        }
+        out.push(TerminalHighlightSpan {
+            text,
+            color,
+            bg,
+            keyword,
+        });
+        i = j;
+    }
+    out
 }
 
 /// Paint a caret at `cursor_col` (char index) using Tauri cursor styles.
@@ -134,32 +201,7 @@ fn apply_cursor_style(
         }
     }
 
-    // Re-compress adjacent cells with identical style.
-    let mut out = Vec::new();
-    let mut i = 0;
-    while i < flat.len() {
-        let (ch, color, bg, keyword) = flat[i];
-        let mut text = String::new();
-        text.push(ch);
-        let mut j = i + 1;
-        while j < flat.len() {
-            let (ch2, c2, b2, k2) = flat[j];
-            if c2 == color && b2 == bg && k2 == keyword {
-                text.push(ch2);
-                j += 1;
-            } else {
-                break;
-            }
-        }
-        out.push(TerminalHighlightSpan {
-            text,
-            color,
-            bg,
-            keyword,
-        });
-        i = j;
-    }
-    out
+    compress_flat_cells(flat)
 }
 
 fn ansi_to_highlight_spans(

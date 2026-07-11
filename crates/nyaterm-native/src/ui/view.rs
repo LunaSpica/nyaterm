@@ -47,6 +47,8 @@ mod tab_mouse;
 mod temporary_ssh_link;
 mod terminal_runtime;
 mod terminal_search_runtime;
+mod terminal_selection_runtime;
+pub(in crate::ui::view) use terminal_selection_runtime::terminal_bounds_tracker;
 mod terminal_surface;
 mod transfer_events;
 mod transfer_jobs;

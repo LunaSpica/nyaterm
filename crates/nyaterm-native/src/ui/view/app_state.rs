@@ -378,6 +378,12 @@ pub struct NyaTermApp {
     /// Toggles on the event pump when cursor blink is enabled.
     pub(in crate::ui::view) cursor_blink_on: bool,
     pub(in crate::ui::view) cursor_blink_tick: u8,
+    /// Active visible-grid selection for the focused terminal surface.
+    pub(in crate::ui::view) terminal_selection: Option<TerminalSelection>,
+    /// True while the user is dragging a left-button text selection.
+    pub(in crate::ui::view) terminal_selection_dragging: bool,
+    /// Last painted bounds of the active terminal text area (window coords).
+    pub(in crate::ui::view) terminal_surface_bounds: Option<gpui::Bounds<gpui::Pixels>>,
     pub(in crate::ui::view) selected_nav: NavItem,
     pub(in crate::ui::view) main_mode: MainMode,
     pub(in crate::ui::view) settings_active_tab: SettingsTab,
@@ -1022,6 +1028,9 @@ impl NyaTermApp {
             event_pump_started: false,
             cursor_blink_on: true,
             cursor_blink_tick: 0,
+            terminal_selection: None,
+            terminal_selection_dragging: false,
+            terminal_surface_bounds: None,
             selected_nav: NavItem::Workspace,
             main_mode: MainMode::Workspace,
             settings_active_tab: SettingsTab::General,
