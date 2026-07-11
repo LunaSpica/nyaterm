@@ -58,7 +58,7 @@ pub(in crate::ui::view::pages::remote) fn docker_containers_panel(
     });
 
     // Tauri-like virtual list: fixed row slot, overscan window, spacer padding + wheel.
-    const DOCKER_ROW_PX: f32 = 52.; // 48px row + ~4px gap
+    const DOCKER_ROW_PX: f32 = 68.; // 66px Tauri row + gap
     const DOCKER_VIEWPORT_ROWS: usize = 16;
     const DOCKER_OVERSCAN: usize = 6;
     let total = containers.len();
@@ -147,7 +147,7 @@ fn docker_container_row(
     div()
         .id(SharedString::from(format!("docker-container-{short}")))
         .relative()
-        .h(px(48.))
+        .h(px(66.))
         .rounded_md()
         .border_1()
         .border_color(rgb(0x30363d))
@@ -214,6 +214,36 @@ fn docker_container_row(
                                 .child(truncate_preview(&container.image, 48)),
                         )
                         .child(div().flex_none().child(short.clone())),
+                )
+                .child(
+                    div()
+                        .flex()
+                        .items_center()
+                        .gap_2()
+                        .font_family("JetBrains Mono")
+                        .text_size(px(10.))
+                        .text_color(rgb(0x484f58))
+                        .child(
+                            div()
+                                .min_w_0()
+                                .flex_1()
+                                .overflow_hidden()
+                                .child(truncate_preview(
+                                    if container.ports.trim().is_empty() {
+                                        container.status.as_str()
+                                    } else {
+                                        container.ports.as_str()
+                                    },
+                                    56,
+                                )),
+                        )
+                        .when(!container.created_at.trim().is_empty(), |this| {
+                            this.child(
+                                div()
+                                    .flex_none()
+                                    .child(truncate_preview(&container.created_at, 18)),
+                            )
+                        }),
                 ),
         )
         .on_click(cx.listener(move |this, _, window, cx| {

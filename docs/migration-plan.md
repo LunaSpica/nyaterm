@@ -709,3 +709,7 @@ service boundary first:
 
 ## 2026-07-11 Process details fixed height for virtual list
 - Expanded process details use fixed 112px shell so spacer math stays stable under selection.
+
+## 2026-07-11 Docker container row Tauri height + meta
+- Container rows restored to 66px with ports/status + created_at third line (Tauri density).
+- Virtual list row slot 68px matches.
