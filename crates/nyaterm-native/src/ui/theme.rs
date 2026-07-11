@@ -78,6 +78,80 @@ impl ThemePalette {
         }
         style.bg.map(|idx| self.terminal_ansi_color(idx))
     }
+
+    /// Boost terminal fg/ANSI contrast against terminal background (Tauri minimum_contrast_ratio).
+    pub fn apply_minimum_contrast_ratio(&mut self, ratio: f32) {
+        if ratio <= 1.01 {
+            return;
+        }
+        let bg = self.terminal_bg;
+        self.terminal_fg = ensure_contrast(self.terminal_fg, bg, ratio);
+        self.terminal_cursor = ensure_contrast(self.terminal_cursor, bg, ratio.min(4.5));
+        for color in &mut self.terminal_ansi {
+            *color = ensure_contrast(*color, bg, ratio);
+        }
+    }
+}
+
+fn relative_luminance(rgb: u32) -> f32 {
+    let channel = |c: u32| -> f32 {
+        let v = (c as f32) / 255.0;
+        if v <= 0.03928 {
+            v / 12.92
+        } else {
+            ((v + 0.055) / 1.055).powf(2.4)
+        }
+    };
+    let r = channel((rgb >> 16) & 0xff);
+    let g = channel((rgb >> 8) & 0xff);
+    let b = channel(rgb & 0xff);
+    0.2126 * r + 0.7152 * g + 0.0722 * b
+}
+
+fn contrast_ratio(a: u32, b: u32) -> f32 {
+    let la = relative_luminance(a);
+    let lb = relative_luminance(b);
+    let (lighter, darker) = if la > lb { (la, lb) } else { (lb, la) };
+    (lighter + 0.05) / (darker + 0.05)
+}
+
+fn ensure_contrast(fg: u32, bg: u32, min_ratio: f32) -> u32 {
+    if contrast_ratio(fg, bg) >= min_ratio {
+        return fg;
+    }
+    let bg_lum = relative_luminance(bg);
+    // Prefer lightening on dark bg, darkening on light bg.
+    let target_toward_white = bg_lum < 0.5;
+    let mut best = fg;
+    let mut best_ratio = contrast_ratio(fg, bg);
+    for step in 1..=24 {
+        let t = step as f32 / 24.0;
+        let mix = |c: u32, toward: u32| -> u32 {
+            let c = c as f32;
+            let toward = toward as f32;
+            (c + (toward - c) * t).round().clamp(0.0, 255.0) as u32
+        };
+        let candidate = if target_toward_white {
+            let r = mix((fg >> 16) & 0xff, 0xff);
+            let g = mix((fg >> 8) & 0xff, 0xff);
+            let b = mix(fg & 0xff, 0xff);
+            (r << 16) | (g << 8) | b
+        } else {
+            let r = mix((fg >> 16) & 0xff, 0x00);
+            let g = mix((fg >> 8) & 0xff, 0x00);
+            let b = mix(fg & 0xff, 0x00);
+            (r << 16) | (g << 8) | b
+        };
+        let ratio = contrast_ratio(candidate, bg);
+        if ratio > best_ratio {
+            best_ratio = ratio;
+            best = candidate;
+        }
+        if ratio >= min_ratio {
+            return candidate;
+        }
+    }
+    best
 }
 
 /// All selectable appearance theme ids (Tauri theme list order).

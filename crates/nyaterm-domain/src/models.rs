@@ -882,6 +882,25 @@ pub struct AppSettingsSummary {
     /// Whether the terminal caret blinks (Tauri appearance.cursor_blink).
     #[serde(default = "default_cursor_blink")]
     pub cursor_blink: bool,
+    /// Optional terminal color theme id; None / empty follows UI theme (Tauri appearance.terminal_theme).
+    #[serde(default)]
+    pub terminal_theme: Option<String>,
+    /// Minimum contrast ratio for terminal colors (Tauri appearance.minimum_contrast_ratio).
+    /// Stored as a display string: "1", "3", "4.5", "7", or "21".
+    #[serde(default = "default_minimum_contrast_ratio")]
+    pub minimum_contrast_ratio: String,
+    /// UI chrome font family (Tauri appearance.ui_font_family).
+    #[serde(default = "default_ui_font_family")]
+    pub ui_font_family: String,
+    /// UI chrome font size in px (Tauri appearance.ui_font_size).
+    #[serde(default = "default_ui_font_size")]
+    pub ui_font_size: u16,
+    /// Terminal regular font weight (Tauri appearance.font_weight).
+    #[serde(default = "default_terminal_font_weight")]
+    pub terminal_font_weight: u16,
+    /// Terminal bold font weight (Tauri appearance.font_weight_bold).
+    #[serde(default = "default_terminal_font_weight_bold")]
+    pub terminal_font_weight_bold: u16,
     pub x11_display: String,
     pub terminal_scrollback_lines: u32,
     pub terminal_keep_alive_interval: u32,
@@ -1052,6 +1071,12 @@ impl Default for AppSettingsSummary {
             terminal_font_size: 16,
             cursor_style: default_cursor_style(),
             cursor_blink: default_cursor_blink(),
+            terminal_theme: None,
+            minimum_contrast_ratio: default_minimum_contrast_ratio(),
+            ui_font_family: default_ui_font_family(),
+            ui_font_size: default_ui_font_size(),
+            terminal_font_weight: default_terminal_font_weight(),
+            terminal_font_weight_bold: default_terminal_font_weight_bold(),
             x11_display: String::new(),
             terminal_scrollback_lines: 5000,
             terminal_keep_alive_interval: 30,
@@ -1191,6 +1216,26 @@ fn default_quick_cmd_sort_mode() -> String {
 
 fn default_background_image_fit() -> String {
     "cover".to_string()
+}
+
+fn default_minimum_contrast_ratio() -> String {
+    "1".to_string()
+}
+
+fn default_ui_font_family() -> String {
+    "Inter".to_string()
+}
+
+fn default_ui_font_size() -> u16 {
+    16
+}
+
+fn default_terminal_font_weight() -> u16 {
+    400
+}
+
+fn default_terminal_font_weight_bold() -> u16 {
+    700
 }
 
 fn default_cursor_style() -> String {

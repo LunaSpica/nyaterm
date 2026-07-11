@@ -12,7 +12,7 @@ impl NyaTermApp {
         show_pane_chrome: bool,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
-        let palette = self.theme_palette();
+        let palette = self.terminal_theme_palette();
         let is_active = self.active_session_id.as_deref() == Some(session_id.as_str());
         let is_disconnected = !session_id.is_empty() && self.is_session_disconnected(&session_id);
         let mut output = div().flex().flex_col();
@@ -154,6 +154,7 @@ impl NyaTermApp {
                 &link_ranges,
                 self.terminal_cell_size().1,
                 palette,
+                self.settings.terminal_font_weight_bold as f32,
             );
             if gutter_enabled {
                 let ts_label = if show_timestamps {
@@ -264,6 +265,7 @@ impl NyaTermApp {
             .min_h_0()
             .font_family(terminal_font_family)
             .text_size(px(terminal_font_size))
+            .font_weight(FontWeight(self.settings.terminal_font_weight as f32))
             .text_color(rgb(palette.terminal_fg))
             .child(
                 div()

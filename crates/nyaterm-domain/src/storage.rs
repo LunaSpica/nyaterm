@@ -1228,6 +1228,49 @@ impl ConnectionStore {
                 }
             },
             cursor_blink: json_bool(&value, &["appearance", "cursor_blink"], true),
+            terminal_theme: {
+                let raw = json_path(&value, &["appearance", "terminal_theme"])
+                    .and_then(|v| v.as_str())
+                    .map(str::trim)
+                    .filter(|s| !s.is_empty())
+                    .map(|s| s.to_string());
+                raw
+            },
+            minimum_contrast_ratio: {
+                let raw = json_path(&value, &["appearance", "minimum_contrast_ratio"]);
+                let num = raw.and_then(|v| {
+                    v.as_f64()
+                        .or_else(|| v.as_str().and_then(|s| s.parse::<f64>().ok()))
+                });
+                match num {
+                    Some(1.0) => "1".to_string(),
+                    Some(3.0) => "3".to_string(),
+                    Some(4.5) => "4.5".to_string(),
+                    Some(7.0) => "7".to_string(),
+                    Some(21.0) => "21".to_string(),
+                    _ => "1".to_string(),
+                }
+            },
+            ui_font_family: json_string(
+                &value,
+                &["appearance", "ui_font_family"],
+                "Inter",
+            ),
+            ui_font_size: json_u16(&value, &["appearance", "ui_font_size"], 16).clamp(12, 24),
+            terminal_font_weight: {
+                let w = json_u16(&value, &["appearance", "font_weight"], 400);
+                match w {
+                    300 | 400 | 500 | 600 | 700 | 800 => w,
+                    _ => 400,
+                }
+            },
+            terminal_font_weight_bold: {
+                let w = json_u16(&value, &["appearance", "font_weight_bold"], 700);
+                match w {
+                    300 | 400 | 500 | 600 | 700 | 800 => w,
+                    _ => 700,
+                }
+            },
             x11_display: json_string(&value, &["terminal", "x11_display"], ""),
             terminal_scrollback_lines: json_u32(&value, &["terminal", "scrollback_lines"], 5000)
                 .clamp(100, 100_000),
@@ -1857,6 +1900,67 @@ impl ConnectionStore {
             &mut value,
             &["appearance", "cursor_blink"],
             serde_json::Value::from(settings.cursor_blink),
+        );
+        match settings
+            .terminal_theme
+            .as_deref()
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+        {
+            Some(theme) => set_nested_json_string(
+                &mut value,
+                &["appearance", "terminal_theme"],
+                theme.to_string(),
+            ),
+            None => set_nested_json_value(
+                &mut value,
+                &["appearance", "terminal_theme"],
+                serde_json::Value::Null,
+            ),
+        }
+        let contrast = match settings.minimum_contrast_ratio.as_str() {
+            "3" => 3.0,
+            "4.5" => 4.5,
+            "7" => 7.0,
+            "21" => 21.0,
+            _ => 1.0,
+        };
+        set_nested_json_value(
+            &mut value,
+            &["appearance", "minimum_contrast_ratio"],
+            serde_json::Value::from(contrast),
+        );
+        set_nested_json_string(
+            &mut value,
+            &["appearance", "ui_font_family"],
+            if settings.ui_font_family.trim().is_empty() {
+                "Inter".to_string()
+            } else {
+                settings.ui_font_family.clone()
+            },
+        );
+        set_nested_json_value(
+            &mut value,
+            &["appearance", "ui_font_size"],
+            serde_json::Value::from(settings.ui_font_size.clamp(12, 24)),
+        );
+        let font_weight = match settings.terminal_font_weight {
+            300 | 400 | 500 | 600 | 700 | 800 => settings.terminal_font_weight,
+            _ => 400,
+        };
+        let font_weight_bold = match settings.terminal_font_weight_bold {
+            300 | 400 | 500 | 600 | 700 | 800 => settings.terminal_font_weight_bold,
+            _ => 700,
+        };
+        set_nested_json_value(
+            &mut value,
+            &["appearance", "font_weight"],
+            serde_json::Value::from(font_weight),
+        );
+        set_nested_json_value(
+            &mut value,
+            &["appearance", "font_weight_bold"],
+            serde_json::Value::from(font_weight_bold),
         );
         set_nested_json_string(
             &mut value,
@@ -5736,6 +5840,36 @@ mod tests {
             KnownHostCheck::Match
         );
 
+        std::fs::remove_dir_all(dir).ok();
+    }
+
+    #[test]
+    fn save_appearance_theme_and_contrast_roundtrip() {
+        let dir = unique_temp_dir("settings-appearance-extra");
+        let store = ConnectionStore::open(&dir).expect("store");
+        let mut summary = store.load_app_settings_summary().expect("load");
+        summary.theme = "dracula".to_string();
+        summary.terminal_theme = Some("nord".to_string());
+        summary.minimum_contrast_ratio = "4.5".to_string();
+        summary.ui_font_family = "Segoe UI".to_string();
+        summary.ui_font_size = 18;
+        summary.terminal_font_weight = 500;
+        summary.terminal_font_weight_bold = 800;
+        let saved = store.save_appearance_settings(&summary).expect("save");
+        assert_eq!(saved.theme, "dracula");
+        assert_eq!(saved.terminal_theme.as_deref(), Some("nord"));
+        assert_eq!(saved.minimum_contrast_ratio, "4.5");
+        assert_eq!(saved.ui_font_family, "Segoe UI");
+        assert_eq!(saved.ui_font_size, 18);
+        assert_eq!(saved.terminal_font_weight, 500);
+        assert_eq!(saved.terminal_font_weight_bold, 800);
+        let raw = store.load_settings_value().expect("raw");
+        assert_eq!(raw["appearance"]["terminal_theme"], serde_json::Value::String("nord".into()));
+        assert_eq!(raw["appearance"]["minimum_contrast_ratio"], serde_json::json!(4.5));
+        assert_eq!(raw["appearance"]["ui_font_family"], serde_json::Value::String("Segoe UI".into()));
+        assert_eq!(raw["appearance"]["ui_font_size"], serde_json::json!(18));
+        assert_eq!(raw["appearance"]["font_weight"], serde_json::json!(500));
+        assert_eq!(raw["appearance"]["font_weight_bold"], serde_json::json!(800));
         std::fs::remove_dir_all(dir).ok();
     }
 

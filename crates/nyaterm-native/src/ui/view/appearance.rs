@@ -12,6 +12,27 @@ impl NyaTermApp {
         theme_palette(&self.settings.theme)
     }
 
+    /// Terminal surface palette: follows optional `terminal_theme`, else UI theme.
+    pub(in crate::ui::view) fn terminal_theme_palette(&self) -> ThemePalette {
+        let id = self
+            .settings
+            .terminal_theme
+            .as_deref()
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+            .unwrap_or(self.settings.theme.as_str());
+        let id = if id == "catppuccin" {
+            "catppuccin-mocha"
+        } else {
+            id
+        };
+        let mut palette = theme_palette(id);
+        palette.apply_minimum_contrast_ratio(
+            parse_minimum_contrast_ratio(&self.settings.minimum_contrast_ratio),
+        );
+        palette
+    }
+
     pub(in crate::ui::view) fn update_appearance_theme(
         &mut self,
         theme: &str,
@@ -76,6 +97,96 @@ impl NyaTermApp {
         } else {
             "cursor blink off".to_string()
         };
+    }
+
+    pub(in crate::ui::view) fn set_terminal_theme(
+        &mut self,
+        theme: Option<&str>,
+        cx: &mut Context<Self>,
+    ) {
+        self.settings.terminal_theme = theme
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+            .map(|s| {
+                if s == "catppuccin" {
+                    "catppuccin-mocha".to_string()
+                } else {
+                    s.to_string()
+                }
+            });
+        self.save_appearance_settings(cx);
+        self.terminal_status = match self.settings.terminal_theme.as_deref() {
+            Some(id) => format!("terminal theme → {id}"),
+            None => "terminal theme → follow UI".to_string(),
+        };
+    }
+
+    pub(in crate::ui::view) fn set_minimum_contrast_ratio(
+        &mut self,
+        ratio: &'static str,
+        cx: &mut Context<Self>,
+    ) {
+        let ratio = match ratio {
+            "3" | "4.5" | "7" | "21" => ratio,
+            _ => "1",
+        };
+        if self.settings.minimum_contrast_ratio == ratio {
+            return;
+        }
+        self.settings.minimum_contrast_ratio = ratio.to_string();
+        self.save_appearance_settings(cx);
+        self.terminal_status = format!("minimum contrast → {ratio}");
+    }
+
+    pub(in crate::ui::view) fn update_ui_font_family(
+        &mut self,
+        family: &'static str,
+        cx: &mut Context<Self>,
+    ) {
+        self.settings.ui_font_family = family.to_string();
+        self.save_appearance_settings(cx);
+    }
+
+    pub(in crate::ui::view) fn adjust_ui_font_size(
+        &mut self,
+        delta: i16,
+        cx: &mut Context<Self>,
+    ) {
+        let next = (self.settings.ui_font_size as i16 + delta).clamp(12, 24) as u16;
+        self.settings.ui_font_size = next;
+        self.save_appearance_settings(cx);
+    }
+
+    pub(in crate::ui::view) fn set_terminal_font_weight(
+        &mut self,
+        weight: u16,
+        cx: &mut Context<Self>,
+    ) {
+        let weight = match weight {
+            300 | 400 | 500 | 600 | 700 | 800 => weight,
+            _ => 400,
+        };
+        if self.settings.terminal_font_weight == weight {
+            return;
+        }
+        self.settings.terminal_font_weight = weight;
+        self.save_appearance_settings(cx);
+    }
+
+    pub(in crate::ui::view) fn set_terminal_font_weight_bold(
+        &mut self,
+        weight: u16,
+        cx: &mut Context<Self>,
+    ) {
+        let weight = match weight {
+            300 | 400 | 500 | 600 | 700 | 800 => weight,
+            _ => 700,
+        };
+        if self.settings.terminal_font_weight_bold == weight {
+            return;
+        }
+        self.settings.terminal_font_weight_bold = weight;
+        self.save_appearance_settings(cx);
     }
 
     pub(in crate::ui::view) fn zoom_terminal_in(&mut self, cx: &mut Context<Self>) {
@@ -184,5 +295,16 @@ impl NyaTermApp {
             }
         }
         cx.notify();
+    }
+}
+
+
+fn parse_minimum_contrast_ratio(raw: &str) -> f32 {
+    match raw.trim() {
+        "3" => 3.0,
+        "4.5" => 4.5,
+        "7" => 7.0,
+        "21" => 21.0,
+        _ => 1.0,
     }
 }

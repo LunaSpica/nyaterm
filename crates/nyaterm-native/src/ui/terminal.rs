@@ -1,4 +1,4 @@
-use gpui::{IntoElement, KeyDownEvent, div, prelude::*, px, rgb};
+use gpui::{FontWeight, IntoElement, KeyDownEvent, div, prelude::*, px, rgb};
 use nyaterm_domain::KeywordHighlightConfig;
 use nyaterm_terminal::TerminalScreen;
 
@@ -25,6 +25,7 @@ struct TerminalHighlightSpan {
     bg: Option<u32>,
     keyword: bool,
     underline: bool,
+    bold: bool,
 }
 
 pub(super) fn terminal_line_element(
@@ -41,6 +42,7 @@ pub(super) fn terminal_line_element(
     link_ranges: &[(usize, usize)],
     line_height: f32,
     palette: crate::ui::theme::ThemePalette,
+    bold_weight: f32,
 ) -> impl IntoElement {
     let mut spans = if let Some(ansi) = ansi_spans {
         if ansi.is_empty() || (ansi.len() == 1 && ansi[0].text.is_empty()) {
@@ -100,6 +102,9 @@ pub(super) fn terminal_line_element(
         if span.underline {
             child = child.underline();
         }
+        if span.bold {
+            child = child.font_weight(FontWeight(bold_weight));
+        }
         row = row.child(child);
     }
 
@@ -116,13 +121,13 @@ fn apply_action_link_ranges(
     if ranges.is_empty() {
         return spans;
     }
-    let mut flat: Vec<(char, Option<u32>, Option<u32>, bool, bool)> = Vec::new();
+    let mut flat: Vec<(char, Option<u32>, Option<u32>, bool, bool, bool)> = Vec::new();
     for span in spans {
         if span.text.is_empty() {
             continue;
         }
         for ch in span.text.chars() {
-            flat.push((ch, span.color, span.bg, span.keyword, span.underline));
+            flat.push((ch, span.color, span.bg, span.keyword, span.underline, span.bold));
         }
     }
     for &(start, end) in ranges {
@@ -153,17 +158,17 @@ fn apply_selection_range(
     if start >= end {
         return spans;
     }
-    let mut flat: Vec<(char, Option<u32>, Option<u32>, bool, bool)> = Vec::new();
+    let mut flat: Vec<(char, Option<u32>, Option<u32>, bool, bool, bool)> = Vec::new();
     for span in spans {
         if span.text.is_empty() {
             continue;
         }
         for ch in span.text.chars() {
-            flat.push((ch, span.color, span.bg, span.keyword, span.underline));
+            flat.push((ch, span.color, span.bg, span.keyword, span.underline, span.bold));
         }
     }
     while flat.len() < end {
-        flat.push((' ', None, None, false, false));
+        flat.push((' ', None, None, false, false, false));
     }
     let end = end.min(flat.len());
     for idx in start..end {
@@ -184,18 +189,18 @@ fn apply_search_ranges(
     if ranges.is_empty() {
         return spans;
     }
-    let mut flat: Vec<(char, Option<u32>, Option<u32>, bool, bool)> = Vec::new();
+    let mut flat: Vec<(char, Option<u32>, Option<u32>, bool, bool, bool)> = Vec::new();
     for span in spans {
         if span.text.is_empty() {
             continue;
         }
         for ch in span.text.chars() {
-            flat.push((ch, span.color, span.bg, span.keyword, span.underline));
+            flat.push((ch, span.color, span.bg, span.keyword, span.underline, span.bold));
         }
     }
     let max_end = ranges.iter().map(|(_, end)| *end).max().unwrap_or(0);
     while flat.len() < max_end {
-        flat.push((' ', None, None, false, false));
+        flat.push((' ', None, None, false, false, false));
     }
     // Tauri xterm find decorations: inactive selection-ish, active stronger accent.
     let bg = if active {
@@ -228,18 +233,18 @@ fn apply_search_ranges(
 }
 
 fn compress_flat_cells(
-    flat: Vec<(char, Option<u32>, Option<u32>, bool, bool)>,
+    flat: Vec<(char, Option<u32>, Option<u32>, bool, bool, bool)>,
 ) -> Vec<TerminalHighlightSpan> {
     let mut out = Vec::new();
     let mut i = 0;
     while i < flat.len() {
-        let (ch, color, bg, keyword, underline) = flat[i];
+        let (ch, color, bg, keyword, underline, bold) = flat[i];
         let mut text = String::new();
         text.push(ch);
         let mut j = i + 1;
         while j < flat.len() {
-            let (ch2, c2, b2, k2, u2) = flat[j];
-            if c2 == color && b2 == bg && k2 == keyword && u2 == underline {
+            let (ch2, c2, b2, k2, u2, bold2) = flat[j];
+            if c2 == color && b2 == bg && k2 == keyword && u2 == underline && bold2 == bold {
                 text.push(ch2);
                 j += 1;
             } else {
@@ -252,6 +257,7 @@ fn compress_flat_cells(
             bg,
             keyword,
             underline,
+            bold,
         });
         i = j;
     }
@@ -265,22 +271,23 @@ fn apply_cursor_style(
     cursor_style: &str,
     palette: crate::ui::theme::ThemePalette,
 ) -> Vec<TerminalHighlightSpan> {
-    let mut flat: Vec<(char, Option<u32>, Option<u32>, bool, bool)> = Vec::new();
+    let mut flat: Vec<(char, Option<u32>, Option<u32>, bool, bool, bool)> = Vec::new();
     for span in spans {
         let color = span.color;
         let bg = span.bg;
         let keyword = span.keyword;
         let underline = span.underline;
+        let bold = span.bold;
         if span.text.is_empty() {
             continue;
         }
         for ch in span.text.chars() {
-            flat.push((ch, color, bg, keyword, underline));
+            flat.push((ch, color, bg, keyword, underline, bold));
         }
     }
     // Ensure the cursor column exists even on a short/empty line.
     while flat.len() <= cursor_col {
-        flat.push((' ', None, None, false, false));
+        flat.push((' ', None, None, false, false, false));
     }
     if let Some(cell) = flat.get_mut(cursor_col) {
         match cursor_style {
@@ -330,6 +337,7 @@ fn ansi_to_highlight_spans(
                 bg: palette.resolve_cell_bg(s.style),
                 keyword: false,
                 underline: s.style.underline,
+                bold: s.style.bold,
             })
             .collect();
     }
@@ -368,6 +376,7 @@ fn ansi_to_highlight_spans(
             bg,
             keyword,
             underline: s.style.underline,
+            bold: s.style.bold,
         });
     }
     if out.is_empty() {
@@ -377,6 +386,7 @@ fn ansi_to_highlight_spans(
             bg: None,
             keyword: false,
             underline: false,
+            bold: false,
         });
     }
     out
@@ -393,6 +403,7 @@ fn keyword_highlight_spans(
             bg: None,
             keyword: false,
             underline: false,
+            bold: false,
         }];
     }
 
@@ -430,6 +441,7 @@ fn keyword_highlight_spans(
                 bg: None,
                 keyword: false,
                 underline: false,
+                bold: false,
             });
             break;
         };
@@ -440,6 +452,7 @@ fn keyword_highlight_spans(
                 bg: None,
                 keyword: false,
                 underline: false,
+                bold: false,
             });
         }
         spans.push(TerminalHighlightSpan {
@@ -448,6 +461,7 @@ fn keyword_highlight_spans(
             bg: None,
             keyword: true,
             underline: false,
+            bold: false,
         });
         cursor = end;
     }
@@ -459,6 +473,7 @@ fn keyword_highlight_spans(
             bg: None,
             keyword: false,
             underline: false,
+            bold: false,
         });
     }
     spans

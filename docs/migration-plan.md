@@ -1471,3 +1471,13 @@ service boundary first:
 - Idle lock nested under Enable screen lock; host-key chips show live policy
   detail; accept/accept_new aliases recognized.
 
+## 2026-07-12 Appearance densify
+
+- Appearance tab mirrors Tauri fields: UI theme, terminal theme override
+  (follow UI), minimum contrast chips, multi-open panels, wallpaper, UI font
+  family/size, terminal font family/size/weights, cursor, X11 display.
+- Domain persists `appearance.terminal_theme`, `minimum_contrast_ratio`,
+  `ui_font_family`, `ui_font_size`, `font_weight`, `font_weight_bold`.
+- Terminal surface uses `terminal_theme_palette()` with contrast boost and
+  configured regular/bold font weights.
+
