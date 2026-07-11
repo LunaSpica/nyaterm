@@ -480,6 +480,8 @@ pub struct NyaTermApp {
     /// Tauri-style multi-leaf tab window layout (optional; None = flat tab strip).
     pub(in crate::ui::view) terminal_windows: Option<TerminalWindowNode>,
     pub(in crate::ui::view) focused_terminal_window_leaf_id: Option<String>,
+    /// Active tab-dock drop target while dragging a session tab over a multi-leaf window.
+    pub(in crate::ui::view) terminal_window_drop: Option<(String, TabDockZone)>,
     pub(in crate::ui::view) is_locked: bool,
     pub(in crate::ui::view) last_user_activity_at: Instant,
 }
@@ -1160,6 +1162,7 @@ impl NyaTermApp {
             workspace_split_resize: None,
             terminal_windows: None,
             focused_terminal_window_leaf_id: None,
+            terminal_window_drop: None,
             is_locked: false,
             last_user_activity_at: Instant::now(),
         }

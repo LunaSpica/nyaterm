@@ -147,6 +147,7 @@ impl NyaTermApp {
     pub(in crate::ui::view) fn close_terminal_window_layout(&mut self, cx: &mut Context<Self>) {
         self.terminal_windows = None;
         self.focused_terminal_window_leaf_id = None;
+        self.terminal_window_drop = None;
         self.terminal_status = "restored flat tab strip".to_string();
         cx.notify();
     }
@@ -163,6 +164,71 @@ impl NyaTermApp {
         if let Some(leaf_id) = find_leaf_with_tab(root, session_id) {
             self.focused_terminal_window_leaf_id = Some(leaf_id);
         }
+    }
+
+    pub(in crate::ui::view) fn set_terminal_window_drop(
+        &mut self,
+        leaf_id: String,
+        zone: TabDockZone,
+        cx: &mut Context<Self>,
+    ) {
+        let next = Some((leaf_id, zone));
+        if self.terminal_window_drop != next {
+            self.terminal_window_drop = next;
+            cx.notify();
+        }
+    }
+
+    pub(in crate::ui::view) fn clear_terminal_window_drop(&mut self, cx: &mut Context<Self>) {
+        if self.terminal_window_drop.take().is_some() {
+            cx.notify();
+        }
+    }
+
+    pub(in crate::ui::view) fn dock_tab_on_terminal_window_leaf(
+        &mut self,
+        tab_id: String,
+        target_leaf_id: String,
+        zone: TabDockZone,
+        cx: &mut Context<Self>,
+    ) {
+        self.terminal_window_drop = None;
+        self.ensure_terminal_windows_root();
+        let Some(root) = self.terminal_windows.as_mut() else {
+            cx.notify();
+            return;
+        };
+        if !root.contains_tab(&tab_id) {
+            self.terminal_status = format!("unknown tab {}", short_id(&tab_id));
+            cx.notify();
+            return;
+        }
+        // Dropping onto the sole-tab same leaf is a no-op for edge; center is fine.
+        if !root.dock_tab(&tab_id, &target_leaf_id, zone) {
+            self.terminal_status = "tab dock had no effect".to_string();
+            cx.notify();
+            return;
+        }
+        let _ = root.set_active_tab(&tab_id);
+        self.focused_terminal_window_leaf_id =
+            find_leaf_with_tab(root, &tab_id).or_else(|| root.first_leaf_id());
+        self.activate_session_id(&tab_id);
+        self.selected_nav = NavItem::Workspace;
+        self.main_mode = MainMode::Workspace;
+        let zone_label = match zone {
+            TabDockZone::Center => "merged into leaf".to_string(),
+            TabDockZone::Edge(edge) => format!("split to {}", edge.label()),
+        };
+        self.terminal_status = format!(
+            "docked tab {} ({})",
+            short_id(&tab_id),
+            zone_label
+        );
+        // Collapse back to flat strip if only one leaf remains.
+        if matches!(self.terminal_windows, Some(TerminalWindowNode::Leaf { .. })) {
+            // Keep multi-leaf structure only when still split; leaf-only can stay for active tabs.
+        }
+        cx.notify();
     }
 
 }

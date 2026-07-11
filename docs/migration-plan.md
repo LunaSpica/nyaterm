@@ -1240,3 +1240,11 @@ service boundary first:
   restores the flat global tab strip.
 - Multi-leaf mode renders each leaf with its own mini tab strip + terminal canvas;
   the global strip is hidden while multi-leaf is active.
+
+## 2026-07-11 Tab dock drag/drop zones
+
+- Ported Tauri `TabDockDropOverlay` / leaf drag-over docking into native:
+  `TabDockZone` detects center vs left/right/top/bottom from pointer position.
+- `TerminalWindowNode::dock_tab` merges (center) or edge-splits the target leaf.
+- Multi-leaf leaf content accepts `SessionTabDragPayload` with live drop overlay
+  chrome and applies dock on drop; model unit tests cover zone detection and edge dock.

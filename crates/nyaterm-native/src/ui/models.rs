@@ -2105,6 +2105,102 @@ impl TerminalWindowNode {
         }
     }
 
+    /// Dock `tab_id` onto `target_leaf_id` center (merge) or edge (split).
+    pub(super) fn dock_tab(
+        &mut self,
+        tab_id: &str,
+        target_leaf_id: &str,
+        zone: TabDockZone,
+    ) -> bool {
+        if tab_id.is_empty() {
+            return false;
+        }
+        match zone {
+            TabDockZone::Center => self.move_tab_to_leaf(tab_id, target_leaf_id),
+            TabDockZone::Edge(edge) => self.dock_tab_to_edge(tab_id, target_leaf_id, edge),
+        }
+    }
+
+    fn dock_tab_to_edge(
+        &mut self,
+        tab_id: &str,
+        target_leaf_id: &str,
+        edge: TabDockEdge,
+    ) -> bool {
+        // If tab is already the sole occupant of the target leaf, nothing to do.
+        if let Some((leaf_id, count)) = self.leaf_tab_count_for(tab_id) {
+            if leaf_id == target_leaf_id && count == 1 {
+                return false;
+            }
+        }
+        // Remove from current placement first.
+        let Some(mut next) = self.remove_tab(tab_id) else {
+            // Tree emptied — create target as detached only.
+            *self = Self::leaf(vec![tab_id.to_string()], Some(tab_id.to_string()));
+            return true;
+        };
+        *self = next;
+        // If target disappeared (was emptied by remove), just insert on first leaf.
+        if !self.leaf_ids().iter().any(|id| id == target_leaf_id) {
+            self.insert_tab_into_first_leaf(tab_id);
+            return true;
+        }
+        let detached = Self::leaf(vec![tab_id.to_string()], Some(tab_id.to_string()));
+        self.replace_leaf_with_edge_split(target_leaf_id, edge, detached)
+    }
+
+    fn leaf_tab_count_for(&self, tab_id: &str) -> Option<(String, usize)> {
+        match self {
+            Self::Leaf { id, tab_ids, .. } => {
+                if tab_ids.iter().any(|id| id == tab_id) {
+                    Some((id.clone(), tab_ids.len()))
+                } else {
+                    None
+                }
+            }
+            Self::Split { first, second, .. } => first
+                .leaf_tab_count_for(tab_id)
+                .or_else(|| second.leaf_tab_count_for(tab_id)),
+        }
+    }
+
+    fn replace_leaf_with_edge_split(
+        &mut self,
+        target_leaf_id: &str,
+        edge: TabDockEdge,
+        detached: Self,
+    ) -> bool {
+        match self {
+            Self::Leaf { id, tab_ids, active_tab_id } => {
+                if id != target_leaf_id {
+                    return false;
+                }
+                let remaining = Self::Leaf {
+                    id: id.clone(),
+                    tab_ids: tab_ids.clone(),
+                    active_tab_id: active_tab_id.clone(),
+                };
+                let (first, second) = if edge.first_is_dropped() {
+                    (detached, remaining)
+                } else {
+                    (remaining, detached)
+                };
+                *self = Self::Split {
+                    id: format!("tw-split-{}", uuid_v4_like()),
+                    direction: edge.direction(),
+                    ratio_percent: WorkspacePaneNode::DEFAULT_RATIO_PERCENT,
+                    first: Box::new(first),
+                    second: Box::new(second),
+                };
+                true
+            }
+            Self::Split { first, second, .. } => {
+                first.replace_leaf_with_edge_split(target_leaf_id, edge, detached.clone())
+                    || second.replace_leaf_with_edge_split(target_leaf_id, edge, detached)
+            }
+        }
+    }
+
     fn unique_tabs(tab_ids: Vec<String>) -> Vec<String> {
         let mut seen = HashSet::new();
         let mut out = Vec::new();
@@ -2121,6 +2217,67 @@ impl TerminalWindowNode {
 pub(super) enum SplitEdge {
     Before,
     After,
+}
+
+/// Edge drop zones for tab docking (Tauri SplitEdgeDirection).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum TabDockEdge {
+    Left,
+    Right,
+    Top,
+    Bottom,
+}
+
+impl TabDockEdge {
+    pub(super) fn direction(self) -> WorkspaceSplitDirection {
+        match self {
+            Self::Left | Self::Right => WorkspaceSplitDirection::Vertical,
+            Self::Top | Self::Bottom => WorkspaceSplitDirection::Horizontal,
+        }
+    }
+
+    pub(super) fn first_is_dropped(self) -> bool {
+        matches!(self, Self::Left | Self::Top)
+    }
+
+    pub(super) fn label(self) -> &'static str {
+        match self {
+            Self::Left => "left",
+            Self::Right => "right",
+            Self::Top => "top",
+            Self::Bottom => "bottom",
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum TabDockZone {
+    Center,
+    Edge(TabDockEdge),
+}
+
+impl TabDockZone {
+    /// Map local pointer position within a leaf's bounds to a dock zone.
+    pub(super) fn detect(local_x: f32, local_y: f32, width: f32, height: f32) -> Self {
+        if width <= 1.0 || height <= 1.0 {
+            return Self::Center;
+        }
+        let h_thresh = (width * 0.38).clamp(48.0, 180.0);
+        let v_thresh = (height * 0.34).clamp(40.0, 140.0);
+        let mut edges = [
+            (TabDockEdge::Left, local_x, h_thresh),
+            (TabDockEdge::Right, width - local_x, h_thresh),
+            (TabDockEdge::Top, local_y, v_thresh),
+            (TabDockEdge::Bottom, height - local_y, v_thresh),
+        ];
+        edges.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap_or(std::cmp::Ordering::Equal));
+        if let Some((edge, distance, threshold)) = edges.first().copied() {
+            if distance <= threshold {
+                return Self::Edge(edge);
+            }
+        }
+        Self::Center
+    }
 }
 
 fn uuid_v4_like() -> String {
@@ -3206,5 +3363,58 @@ mod terminal_window_tests {
         // after move, single leaf should remain if other empty collapsed via remove_tab path
         let tabs = root.collect_tab_ids();
         assert!(tabs.contains(&"a".to_string()) && tabs.contains(&"b".to_string()));
+    }
+
+    #[test]
+    fn dock_tab_to_edge_splits_target() {
+        use super::{TabDockEdge, TabDockZone};
+        let mut root = TerminalWindowNode::leaf(
+            vec!["a".into(), "b".into()],
+            Some("a".into()),
+        );
+        // Create two leaves first via split
+        assert!(root.split_tab_to_edge(
+            "b",
+            WorkspaceSplitDirection::Vertical,
+            SplitEdge::After,
+        ));
+        let leaves = root.leaf_ids();
+        assert_eq!(leaves.len(), 2);
+        let a_leaf = leaves
+            .iter()
+            .find(|id| match &root {
+                TerminalWindowNode::Split { first, second, .. } => {
+                    matches!(first.as_ref(), TerminalWindowNode::Leaf { id: lid, tab_ids, .. } if lid == *id && tab_ids.iter().any(|t| t == "a"))
+                        || matches!(second.as_ref(), TerminalWindowNode::Leaf { id: lid, tab_ids, .. } if lid == *id && tab_ids.iter().any(|t| t == "a"))
+                }
+                _ => false,
+            })
+            .cloned()
+            .expect("a leaf");
+        // Dock b onto a's left edge
+        assert!(root.dock_tab("b", &a_leaf, TabDockZone::Edge(TabDockEdge::Left)));
+        assert_eq!(root.leaf_ids().len(), 2);
+        assert!(root.contains_tab("a") && root.contains_tab("b"));
+    }
+
+    #[test]
+    fn dock_zone_detects_edges() {
+        use super::{TabDockEdge, TabDockZone};
+        assert_eq!(
+            TabDockZone::detect(10.0, 100.0, 400.0, 300.0),
+            TabDockZone::Edge(TabDockEdge::Left)
+        );
+        assert_eq!(
+            TabDockZone::detect(200.0, 150.0, 400.0, 300.0),
+            TabDockZone::Center
+        );
+        assert_eq!(
+            TabDockZone::detect(390.0, 100.0, 400.0, 300.0),
+            TabDockZone::Edge(TabDockEdge::Right)
+        );
+        assert_eq!(
+            TabDockZone::detect(200.0, 5.0, 400.0, 300.0),
+            TabDockZone::Edge(TabDockEdge::Top)
+        );
     }
 }
