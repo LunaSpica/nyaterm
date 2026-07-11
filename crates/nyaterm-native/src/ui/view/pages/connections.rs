@@ -1740,6 +1740,32 @@ impl NyaTermApp {
                             div()
                                 .flex()
                                 .items_center()
+                                .justify_between()
+                                .gap_2()
+                                .child(
+                                    div()
+                                        .text_xs()
+                                        .text_color(rgb(palette.text_muted))
+                                        .child(format!(
+                                            "Backspace · {}",
+                                            match editor.backspace_mode.as_str() {
+                                                "ctrl-h" | "bs" | "ctrl_h" => "Ctrl+H (BS)",
+                                                _ => "DEL (0x7F)",
+                                            }
+                                        )),
+                                )
+                                .child(small_button(palette,
+                                    "connection-editor-telnet-backspace",
+                                    "Cycle",
+                                    cx.listener(|this, _, _, cx| {
+                                        this.cycle_connection_editor_backspace(cx);
+                                    }),
+                                )),
+                        )
+                        .child(
+                            div()
+                                .flex()
+                                .items_center()
                                 .gap_1()
                                 .child(toggle_chip(
                                     palette,
@@ -1759,6 +1785,17 @@ impl NyaTermApp {
                                     cx.listener(|this, _, _, cx| {
                                         this.toggle_connection_editor_flag(
                                             ConnectionEditorToggle::LocalEcho,
+                                            cx,
+                                        );
+                                    }),
+                                ))
+                                .child(toggle_chip(
+                                    palette,
+                                    "Open After Save",
+                                    editor.connect_after_save,
+                                    cx.listener(|this, _, _, cx| {
+                                        this.toggle_connection_editor_flag(
+                                            ConnectionEditorToggle::ConnectAfterSave,
                                             cx,
                                         );
                                     }),
@@ -2690,9 +2727,29 @@ fn connection_detail_rows(
                     .unwrap_or_else(|| "—".to_string()),
             ));
         }
-        nyaterm_domain::ConnectionType::Telnet { host, port, .. } => {
+        nyaterm_domain::ConnectionType::Telnet {
+            host,
+            port,
+            backspace_mode,
+            raw_tcp_cli,
+            local_echo,
+            ..
+        } => {
             rows.push(("Host", host.clone()));
             rows.push(("Port", port.to_string()));
+            rows.push((
+                "BS",
+                match backspace_mode.as_str() {
+                    "ctrl-h" | "bs" | "ctrl_h" => "Ctrl+H".to_string(),
+                    _ => "DEL".to_string(),
+                },
+            ));
+            if *raw_tcp_cli {
+                rows.push(("Mode", "raw tcp".to_string()));
+            }
+            if *local_echo {
+                rows.push(("Echo", "local".to_string()));
+            }
         }
         nyaterm_domain::ConnectionType::Serial {
             port_name,
