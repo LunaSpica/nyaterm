@@ -1,3 +1,4 @@
+use crate::ui::theme::ThemePalette;
 use gpui::rgb;
 use nyaterm_domain::{
     AppSettingsSummary, CloudSyncError, CloudSyncHistoryEntry, CloudSyncSettings, RiskLevel,
@@ -109,8 +110,7 @@ pub(in crate::ui::view) fn docker_state_label(state: &str) -> &'static str {
     }
 }
 
-pub(in crate::ui::view) fn docker_state_color(state: &str) -> gpui::Hsla {
-    let palette = crate::ui::theme::theme_palette("github-dark");
+pub(in crate::ui::view) fn docker_state_color(palette: ThemePalette, state: &str) -> gpui::Hsla {
     match state.trim().to_ascii_lowercase().as_str() {
         "running" => rgb(palette.success).into(),
         "restarting" | "paused" => rgb(palette.warning).into(),
@@ -244,8 +244,7 @@ pub(in crate::ui::view) fn format_duration_ms(duration_ms: Option<u64>) -> Optio
     }
 }
 
-pub(in crate::ui::view) fn cloud_sync_status_dot_color(status: &str) -> gpui::Rgba {
-    let palette = crate::ui::theme::theme_palette("github-dark");
+pub(in crate::ui::view) fn cloud_sync_status_dot_color(palette: ThemePalette, status: &str) -> gpui::Rgba {
     match status {
         "running" => rgb(palette.accent),
         "success" => rgb(palette.success),
@@ -256,8 +255,7 @@ pub(in crate::ui::view) fn cloud_sync_status_dot_color(status: &str) -> gpui::Rg
     }
 }
 
-pub(in crate::ui::view) fn cloud_sync_status_text_color(status: &str) -> gpui::Rgba {
-    let palette = crate::ui::theme::theme_palette("github-dark");
+pub(in crate::ui::view) fn cloud_sync_status_text_color(palette: ThemePalette, status: &str) -> gpui::Rgba {
     match status {
         "running" => rgb(palette.accent),
         "success" => rgb(palette.success),
@@ -268,8 +266,7 @@ pub(in crate::ui::view) fn cloud_sync_status_text_color(status: &str) -> gpui::R
     }
 }
 
-pub(in crate::ui::view) fn cloud_sync_kind_text_color(kind: &str) -> gpui::Rgba {
-    let palette = crate::ui::theme::theme_palette("github-dark");
+pub(in crate::ui::view) fn cloud_sync_kind_text_color(palette: ThemePalette, kind: &str) -> gpui::Rgba {
     match kind {
         "sync" => rgb(palette.accent),
         "backup" => rgb(palette.accent),

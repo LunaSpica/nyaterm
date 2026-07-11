@@ -162,6 +162,160 @@ impl NyaTermApp {
                     chips
                 },
             ))
+                        .child(settings_form_section(
+                palette,
+                Some("Background image"),
+                Some("Optional shell wallpaper (Tauri Appearance background image)."),
+                {
+                    let path_label = self
+                        .settings
+                        .background_image_path
+                        .as_deref()
+                        .map(|p| {
+                            if p.chars().count() > 56 {
+                                format!("…{}", p.chars().rev().take(52).collect::<String>().chars().rev().collect::<String>())
+                            } else {
+                                p.to_string()
+                            }
+                        })
+                        .unwrap_or_else(|| "No image selected".to_string());
+                    let has_image = self.settings.background_image_path.is_some();
+                    let image_opacity = format!("{}%", self.settings.background_image_opacity);
+                    let content_opacity = format!("{}%", self.settings.background_content_opacity);
+                    let fit = self.settings.background_image_fit.clone();
+                    div()
+                        .flex()
+                        .flex_col()
+                        .gap_3()
+                        .child(settings_form_row(
+                            palette,
+                            "Image",
+                            Some(SharedString::from(path_label)),
+                            div()
+                                .flex()
+                                .items_center()
+                                .gap_1()
+                                .child(small_button(
+                                    palette,
+                                    "appearance-wallpaper-browse",
+                                    "Browse",
+                                    cx.listener(|this, _, _, cx| {
+                                        this.prompt_background_image(cx);
+                                    }),
+                                ))
+                                .when(has_image, |this| {
+                                    this.child(small_button(
+                                        palette,
+                                        "appearance-wallpaper-clear",
+                                        "Clear",
+                                        cx.listener(|this, _, _, cx| {
+                                            this.clear_background_image(cx);
+                                        }),
+                                    ))
+                                }),
+                        ))
+                        .child(settings_form_row(
+                            palette,
+                            "Fit",
+                            Some(SharedString::from("How the wallpaper is scaled in the shell.")),
+                            div()
+                                .flex()
+                                .flex_wrap()
+                                .gap_1()
+                                .child(settings_choice_chip(
+                                    palette,
+                                    "appearance-wallpaper-fit-cover",
+                                    "Cover",
+                                    fit == "cover",
+                                    cx.listener(|this, _, _, cx| {
+                                        this.set_background_image_fit("cover", cx);
+                                    }),
+                                ))
+                                .child(settings_choice_chip(
+                                    palette,
+                                    "appearance-wallpaper-fit-contain",
+                                    "Contain",
+                                    fit == "contain",
+                                    cx.listener(|this, _, _, cx| {
+                                        this.set_background_image_fit("contain", cx);
+                                    }),
+                                ))
+                                .child(settings_choice_chip(
+                                    palette,
+                                    "appearance-wallpaper-fit-fill",
+                                    "Fill",
+                                    fit == "fill",
+                                    cx.listener(|this, _, _, cx| {
+                                        this.set_background_image_fit("fill", cx);
+                                    }),
+                                )),
+                        ))
+                        .child(settings_form_row(
+                            palette,
+                            "Image opacity",
+                            Some(SharedString::from("Wallpaper strength over the theme background.")),
+                            div()
+                                .flex()
+                                .items_center()
+                                .gap_1()
+                                .child(small_button(
+                                    palette,
+                                    "appearance-wallpaper-opacity-dec",
+                                    "−",
+                                    cx.listener(|this, _, _, cx| {
+                                        this.adjust_background_image_opacity(-5, cx);
+                                    }),
+                                ))
+                                .child(
+                                    div()
+                                        .min_w(px(48.))
+                                        .text_size(px(11.))
+                                        .text_color(rgb(palette.text))
+                                        .child(image_opacity),
+                                )
+                                .child(small_button(
+                                    palette,
+                                    "appearance-wallpaper-opacity-inc",
+                                    "+",
+                                    cx.listener(|this, _, _, cx| {
+                                        this.adjust_background_image_opacity(5, cx);
+                                    }),
+                                )),
+                        ))
+                        .child(settings_form_row(
+                            palette,
+                            "Content opacity",
+                            Some(SharedString::from("How solid chrome stays when a wallpaper is active.")),
+                            div()
+                                .flex()
+                                .items_center()
+                                .gap_1()
+                                .child(small_button(
+                                    palette,
+                                    "appearance-content-opacity-dec",
+                                    "−",
+                                    cx.listener(|this, _, _, cx| {
+                                        this.adjust_background_content_opacity(-5, cx);
+                                    }),
+                                ))
+                                .child(
+                                    div()
+                                        .min_w(px(48.))
+                                        .text_size(px(11.))
+                                        .text_color(rgb(palette.text))
+                                        .child(content_opacity),
+                                )
+                                .child(small_button(
+                                    palette,
+                                    "appearance-content-opacity-inc",
+                                    "+",
+                                    cx.listener(|this, _, _, cx| {
+                                        this.adjust_background_content_opacity(5, cx);
+                                    }),
+                                )),
+                        ))
+                },
+            ))
             .child(settings_form_section(palette, 
                 Some("Terminal font"),
                 None,

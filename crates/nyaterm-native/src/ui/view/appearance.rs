@@ -60,6 +60,77 @@ impl NyaTermApp {
         self.adjust_terminal_font_size(-1, cx);
     }
 
+
+    pub(in crate::ui::view) fn prompt_background_image(&mut self, cx: &mut Context<Self>) {
+        if self.settings.background_image_path.is_some() {
+            // allow replace
+        }
+        let options = PathPromptOptions {
+            files: true,
+            directories: false,
+            multiple: false,
+            prompt: Some(SharedString::from("Select wallpaper image")),
+        };
+        let receiver = cx.prompt_for_paths(options);
+        self.terminal_status = "selecting wallpaper image".to_string();
+        cx.spawn(async move |this, cx| {
+            let path = match receiver.await {
+                Ok(Ok(Some(paths))) => paths.into_iter().next(),
+                _ => None,
+            };
+            let _ = this.update(cx, |this, cx| {
+                if let Some(path) = path {
+                    this.settings.background_image_path = Some(path.display().to_string());
+                    if this.settings.background_image_fit.trim().is_empty() {
+                        this.settings.background_image_fit = "cover".to_string();
+                    }
+                    this.save_appearance_settings(cx);
+                    this.terminal_status = "wallpaper image selected".to_string();
+                } else {
+                    this.terminal_status = "wallpaper selection cancelled".to_string();
+                    cx.notify();
+                }
+            });
+        })
+        .detach();
+        cx.notify();
+    }
+
+    pub(in crate::ui::view) fn clear_background_image(&mut self, cx: &mut Context<Self>) {
+        self.settings.background_image_path = None;
+        self.save_appearance_settings(cx);
+        self.terminal_status = "wallpaper cleared".to_string();
+    }
+
+    pub(in crate::ui::view) fn set_background_image_fit(
+        &mut self,
+        fit: &'static str,
+        cx: &mut Context<Self>,
+    ) {
+        self.settings.background_image_fit = fit.to_string();
+        self.save_appearance_settings(cx);
+    }
+
+    pub(in crate::ui::view) fn adjust_background_image_opacity(
+        &mut self,
+        delta: i16,
+        cx: &mut Context<Self>,
+    ) {
+        let next = (self.settings.background_image_opacity as i16 + delta).clamp(5, 100) as u8;
+        self.settings.background_image_opacity = next;
+        self.save_appearance_settings(cx);
+    }
+
+    pub(in crate::ui::view) fn adjust_background_content_opacity(
+        &mut self,
+        delta: i16,
+        cx: &mut Context<Self>,
+    ) {
+        let next = (self.settings.background_content_opacity as i16 + delta).clamp(20, 100) as u8;
+        self.settings.background_content_opacity = next;
+        self.save_appearance_settings(cx);
+    }
+
     fn save_appearance_settings(&mut self, cx: &mut Context<Self>) {
         match ConnectionStore::open_with_portable_key_path(
             self.runtime.config_dir(),

@@ -868,3 +868,9 @@ service boundary first:
 - Host-key/credential/snapshot prompt banners use warning/danger/input palette tokens.
 - Tunnel/proxy status pills, switches, editor options, and section chrome densified.
 - Process usage colors, transfer job status helpers, lock screen residual, and connection kind chips mapped.
+
+## 2026-07-11 Live palette free helpers + wallpaper settings shell
+- Status helpers (`docker_state_color`, cloud-sync status/kind colors, `quick_command_color`, network modal shell/footer) take live `ThemePalette` instead of hard github-dark fallbacks.
+- Domain `AppSettingsSummary` loads/saves Tauri wallpaper fields: path, fit, image opacity, content opacity.
+- Settings Appearance adds Background image section (browse/clear/fit/opacity steppers).
+- Root shell layers wallpaper `img` under chrome with content opacity when a path is set.

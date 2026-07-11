@@ -2181,7 +2181,7 @@ impl NyaTermApp {
                                     .size(px(8.))
                                     .rounded_full()
                                     .flex_none()
-                                    .bg(cloud_sync_status_dot_color(state)),
+                                    .bg(cloud_sync_status_dot_color(palette, state)),
                             )
                             .child(
                                 div()
@@ -2194,7 +2194,7 @@ impl NyaTermApp {
                                     .min_w_0()
                                     .text_size(px(12.))
                                     .font_weight(FontWeight(600.))
-                                    .text_color(cloud_sync_status_text_color(state))
+                                    .text_color(cloud_sync_status_text_color(palette, state))
                                     .overflow_hidden()
                                     .child(state_label),
                             )

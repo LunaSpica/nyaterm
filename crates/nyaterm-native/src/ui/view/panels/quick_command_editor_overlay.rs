@@ -514,7 +514,7 @@ fn quick_command_color_swatch(
         } else {
             rgb(palette.border)
         })
-        .bg(quick_command_color(color_tag))
+        .bg(quick_command_color(palette, color_tag))
         .cursor_pointer()
         .on_click(on_click)
         .hover(|style| style.border_color(rgb(palette.accent)))

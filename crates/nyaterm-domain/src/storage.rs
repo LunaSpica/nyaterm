@@ -1170,6 +1170,47 @@ impl ConnectionStore {
         let value = self.load_settings_value()?;
         Ok(AppSettingsSummary {
             theme: json_string(&value, &["appearance", "theme"], "github-dark"),
+            background_image_path: json_path(&value, &["appearance", "background_image_path"])
+                .and_then(|v| v.as_str())
+                .map(str::trim)
+                .filter(|s| !s.is_empty())
+                .map(|s| s.to_string()),
+            background_image_fit: json_string(
+                &value,
+                &["appearance", "background_image_fit"],
+                "cover",
+            ),
+            background_image_opacity: {
+                let raw = json_path(&value, &["appearance", "background_image_opacity"]);
+                let pct = raw
+                    .and_then(|v| v.as_f64())
+                    .map(|v| {
+                        // Accept both 0..1 float (Tauri) and 0..100 percent.
+                        if v <= 1.0 {
+                            (v * 100.0).round() as u8
+                        } else {
+                            v.round() as u8
+                        }
+                    })
+                    .unwrap_or(45)
+                    .clamp(5, 100);
+                pct
+            },
+            background_content_opacity: {
+                let raw = json_path(&value, &["appearance", "background_opacity"]);
+                let pct = raw
+                    .and_then(|v| v.as_f64())
+                    .map(|v| {
+                        if v <= 1.0 {
+                            (v * 100.0).round() as u8
+                        } else {
+                            v.round() as u8
+                        }
+                    })
+                    .unwrap_or(82)
+                    .clamp(20, 100);
+                pct
+            },
             language: json_string(&value, &["translation", "target_language"], "zh-CN"),
             terminal_font_family: json_string(
                 &value,
@@ -1732,6 +1773,33 @@ impl ConnectionStore {
     ) -> Result<AppSettingsSummary, StorageError> {
         let mut value = self.load_settings_value()?;
         set_nested_json_string(&mut value, &["appearance", "theme"], settings.theme.clone());
+        match settings.background_image_path.as_deref().map(str::trim).filter(|s| !s.is_empty()) {
+            Some(path) => set_nested_json_string(
+                &mut value,
+                &["appearance", "background_image_path"],
+                path.to_string(),
+            ),
+            None => set_nested_json_value(
+                &mut value,
+                &["appearance", "background_image_path"],
+                serde_json::Value::Null,
+            ),
+        }
+        set_nested_json_string(
+            &mut value,
+            &["appearance", "background_image_fit"],
+            settings.background_image_fit.clone(),
+        );
+        set_nested_json_value(
+            &mut value,
+            &["appearance", "background_image_opacity"],
+            serde_json::Value::from(settings.background_image_opacity as f64 / 100.0),
+        );
+        set_nested_json_value(
+            &mut value,
+            &["appearance", "background_opacity"],
+            serde_json::Value::from(settings.background_content_opacity as f64 / 100.0),
+        );
         set_nested_json_string(
             &mut value,
             &["appearance", "font_family"],

@@ -144,13 +144,15 @@ pub(in crate::ui::view::panels) fn quick_command_icon_mark(
             .size(px(9.))
             .flex_none()
             .rounded_full()
-            .bg(quick_command_color(color_tag))
+            .bg(quick_command_color(palette, color_tag))
             .into_any_element(),
     }
 }
 
-pub(in crate::ui::view::panels) fn quick_command_color(color_tag: Option<&str>) -> gpui::Rgba {
-    let palette = crate::ui::theme::theme_palette("github-dark");
+pub(in crate::ui::view::panels) fn quick_command_color(
+    palette: crate::ui::theme::ThemePalette,
+    color_tag: Option<&str>,
+) -> gpui::Rgba {
     match color_tag.unwrap_or_default() {
         "red" => rgb(palette.danger),
         "green" => rgb(palette.success),

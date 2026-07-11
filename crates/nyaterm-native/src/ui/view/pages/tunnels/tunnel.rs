@@ -763,7 +763,7 @@ pub(super) fn network_tunnel_editor_panel(
         .when_some(editor.error.clone(), |this, error| {
             this.child(div().text_xs().text_color(rgb(palette.danger)).child(error))
         })
-        .child(network_dialog_footer(
+        .child(network_dialog_footer(cx.entity().read(cx).theme_palette(), 
             "network-tunnel-editor-cancel",
             "network-tunnel-editor-save",
             "Save",
@@ -775,7 +775,7 @@ pub(super) fn network_tunnel_editor_panel(
             }),
         ));
 
-    network_modal_shell("network-tunnel-editor-modal", 640., card)
+    network_modal_shell(cx.entity().read(cx).theme_palette(), "network-tunnel-editor-modal", 640., card)
 }
 
 pub(super) fn tunnel_editor_input(

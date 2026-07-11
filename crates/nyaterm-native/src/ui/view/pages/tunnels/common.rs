@@ -62,7 +62,7 @@ pub(super) fn network_delete_confirm_panel(
                     truncate_preview(&confirm.id, 32)
                 )),
         )
-        .child(network_dialog_footer(
+        .child(network_dialog_footer(cx.entity().read(cx).theme_palette(), 
             "network-delete-cancel",
             "network-delete-confirm",
             "Delete",
@@ -73,7 +73,7 @@ pub(super) fn network_delete_confirm_panel(
                 this.confirm_network_delete(cx);
             }),
         ));
-    network_modal_shell("network-delete-confirm-modal", 420., card)
+    network_modal_shell(cx.entity().read(cx).theme_palette(), "network-delete-confirm-modal", 420., card)
 }
 
 pub(super) fn network_group_editor_panel(
@@ -131,7 +131,7 @@ pub(super) fn network_group_editor_panel(
         .when_some(editor.error.clone(), |this, error| {
             this.child(div().text_size(px(12.)).text_color(rgb(0xfda4af)).child(error))
         })
-        .child(network_dialog_footer(
+        .child(network_dialog_footer(cx.entity().read(cx).theme_palette(), 
             "network-group-editor-cancel",
             "network-group-editor-save",
             "Save",
@@ -142,7 +142,7 @@ pub(super) fn network_group_editor_panel(
                 this.save_network_group_editor(cx);
             }),
         ));
-    network_modal_shell("network-group-editor-modal", 420., card)
+    network_modal_shell(cx.entity().read(cx).theme_palette(), "network-group-editor-modal", 420., card)
 }
 
 pub(super) fn network_group_delete_confirm_panel(
@@ -172,7 +172,7 @@ pub(super) fn network_group_delete_confirm_panel(
                     confirm.item_count
                 )),
         )
-        .child(network_dialog_footer(
+        .child(network_dialog_footer(cx.entity().read(cx).theme_palette(), 
             "network-group-delete-cancel",
             "network-group-delete-confirm",
             "Delete",
@@ -183,25 +183,27 @@ pub(super) fn network_group_delete_confirm_panel(
                 this.confirm_network_group_delete(cx);
             }),
         ));
-    network_modal_shell("network-group-delete-modal", 420., card)
+    network_modal_shell(cx.entity().read(cx).theme_palette(), "network-group-delete-modal", 420., card)
 }
 
 
 pub(super) fn network_modal_shell(
+    palette: crate::ui::theme::ThemePalette,
     id: impl Into<String>,
     width: f32,
     content: impl IntoElement,
 ) -> impl IntoElement {
-    modal_dialog_shell(crate::ui::theme::theme_palette("github-dark"), id, width, content)
+    modal_dialog_shell(palette, id, width, content)
 }
 
 pub(super) fn network_dialog_footer(
+    palette: crate::ui::theme::ThemePalette,
     cancel_id: impl Into<String>,
     save_id: impl Into<String>,
     save_label: &'static str,
     on_cancel: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
     on_save: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
 ) -> impl IntoElement {
-    modal_dialog_footer(crate::ui::theme::theme_palette("github-dark"), cancel_id, save_id, save_label, on_cancel, on_save)
+    modal_dialog_footer(palette, cancel_id, save_id, save_label, on_cancel, on_save)
 }
 

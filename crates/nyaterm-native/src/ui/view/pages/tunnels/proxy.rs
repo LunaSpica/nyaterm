@@ -633,7 +633,7 @@ pub(super) fn network_proxy_editor_panel(
         .when_some(editor.error.clone(), |this, error| {
             this.child(div().text_xs().text_color(rgb(palette.danger)).child(error))
         })
-        .child(network_dialog_footer(
+        .child(network_dialog_footer(cx.entity().read(cx).theme_palette(), 
             "network-proxy-editor-cancel",
             "network-proxy-editor-save",
             "Save",
@@ -645,7 +645,7 @@ pub(super) fn network_proxy_editor_panel(
             }),
         ));
 
-    network_modal_shell("network-proxy-editor-modal", 520., card)
+    network_modal_shell(cx.entity().read(cx).theme_palette(), "network-proxy-editor-modal", 520., card)
 }
 
 pub(super) fn proxy_editor_input(

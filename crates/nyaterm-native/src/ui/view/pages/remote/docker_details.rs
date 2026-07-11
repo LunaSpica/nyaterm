@@ -189,7 +189,7 @@ pub(in crate::ui::view::pages::remote) fn docker_details_panel(
                         .when_some(details_state, |this, state| {
                             this.child(status_pill(
                                 docker_state_label(&state),
-                                docker_state_color(&state),
+                                docker_state_color(cx.entity().read(cx).theme_palette(), &state),
                                 rgb(0x17233a),
                             ))
                         }),

@@ -1,7 +1,7 @@
 use super::*;
 use gpui::{
     Context, IntoElement, KeyDownEvent, MouseButton, MouseMoveEvent, MouseUpEvent,
-    NavigationDirection, Render, SharedString, Window, div, rgb,
+    ImageSource, NavigationDirection, Render, SharedString, Window, div, img, rgb,
 };
 
 impl Render for NyaTermApp {
@@ -16,6 +16,21 @@ impl Render for NyaTermApp {
             self.transfer_rename_focus_pending = false;
         }
         let palette = self.theme_palette();
+        let wallpaper_path = self
+            .settings
+            .background_image_path
+            .as_ref()
+            .map(|p| p.trim())
+            .filter(|p| !p.is_empty())
+            .map(|p| p.to_string());
+        let wallpaper_enabled = wallpaper_path.is_some();
+        let wallpaper_opacity = (self.settings.background_image_opacity.clamp(5, 100) as f32) / 100.0;
+        let content_opacity = if wallpaper_enabled {
+            (self.settings.background_content_opacity.clamp(20, 100) as f32) / 100.0
+        } else {
+            1.0
+        };
+        let wallpaper_fit = self.settings.background_image_fit.as_str();
         let content = div()
             .id(SharedString::from("nyaterm-root"))
             .size_full()
@@ -66,11 +81,27 @@ impl Render for NyaTermApp {
                     }
                 }),
             )
+            .when_some(wallpaper_path.clone(), |this, path| {
+                let source: ImageSource = std::sync::Arc::<std::path::Path>::from(
+                    std::path::PathBuf::from(path).into_boxed_path(),
+                )
+                .into();
+                let mut image = img(source)
+                    .absolute()
+                    .top_0()
+                    .left_0()
+                    .size_full()
+                    .opacity(wallpaper_opacity);
+                // GPUI img object-fit is limited; cover-ish fill is the common wallpaper path.
+                let _ = wallpaper_fit;
+                this.child(image)
+            })
             .child(
                 div()
                     .flex()
                     .flex_col()
                     .size_full()
+                    .opacity(content_opacity)
                     .child(self.title_bar(cx))
                     .child(
                         if self.main_mode == MainMode::Page

@@ -194,7 +194,7 @@ fn docker_container_row(
                         )
                         .child(status_pill(
                             docker_state_label(&container.state),
-                            docker_state_color(&container.state),
+                            docker_state_color(cx.entity().read(cx).theme_palette(), &container.state),
                             rgb(0x17233a),
                         )),
                 )

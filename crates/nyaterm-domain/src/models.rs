@@ -509,6 +509,16 @@ pub struct SessionsConfig {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct AppSettingsSummary {
     pub theme: String,
+    #[serde(default)]
+    pub background_image_path: Option<String>,
+    #[serde(default = "default_background_image_fit")]
+    pub background_image_fit: String,
+    /// Wallpaper opacity percent (5..=100).
+    #[serde(default = "default_background_image_opacity")]
+    pub background_image_opacity: u8,
+    /// Shell chrome opacity percent when wallpaper is active (20..=100).
+    #[serde(default = "default_background_content_opacity")]
+    pub background_content_opacity: u8,
     pub language: String,
     pub terminal_font_family: String,
     pub terminal_font_size: u16,
@@ -659,6 +669,10 @@ impl Default for AppSettingsSummary {
     fn default() -> Self {
         Self {
             theme: "github-dark".to_string(),
+            background_image_path: None,
+            background_image_fit: default_background_image_fit(),
+            background_image_opacity: default_background_image_opacity(),
+            background_content_opacity: default_background_content_opacity(),
             language: "zh-CN".to_string(),
             terminal_font_family: "JetBrains Mono".to_string(),
             terminal_font_size: 16,
@@ -792,6 +806,18 @@ fn default_quick_cmd_view_mode() -> String {
 
 fn default_quick_cmd_sort_mode() -> String {
     "created".to_string()
+}
+
+fn default_background_image_fit() -> String {
+    "cover".to_string()
+}
+
+fn default_background_image_opacity() -> u8 {
+    45
+}
+
+fn default_background_content_opacity() -> u8 {
+    82
 }
 
 fn default_highlight_color_dark() -> String {

@@ -430,7 +430,7 @@ pub(in crate::ui::view) fn compact_docker_container_rows(
                             )
                             .child(status_pill(
                                 docker_state_label(&container.state),
-                                docker_state_color(&container.state),
+                                docker_state_color(palette, &container.state),
                                 rgb(palette.hover),
                             )),
                     )
@@ -730,9 +730,9 @@ pub(in crate::ui::view) fn cloud_sync_history_row(
     let has_message_details = !normalized.is_empty()
         && (is_problem || normalized != summary.split_whitespace().collect::<Vec<_>>().join(" "));
     let has_expandable = has_message_details || entry.revision.as_ref().is_some_and(|r| !r.trim().is_empty());
-    let kind_color = cloud_sync_kind_text_color(&entry.kind);
-    let status_color = cloud_sync_status_text_color(&entry.status);
-    let dot_color = cloud_sync_status_dot_color(&entry.status);
+    let kind_color = cloud_sync_kind_text_color(palette, &entry.kind);
+    let status_color = cloud_sync_status_text_color(palette, &entry.status);
+    let dot_color = cloud_sync_status_dot_color(palette, &entry.status);
     let timestamp = format_history_timestamp_ms(entry.timestamp_ms);
     let provider = entry
         .provider
