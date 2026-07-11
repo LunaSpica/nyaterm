@@ -62,6 +62,7 @@ mod tunnel_runtime;
 mod update_runtime;
 mod view_widgets;
 mod workspace_runtime;
+mod zmodem_runtime;
 
 pub(in crate::ui::view) use ai_jobs::{
     ai_active_profile_api_key, ai_active_profile_drafts, ai_job_cancelled, ai_usage_counts,

@@ -33,7 +33,7 @@ pub fn terminal_drop_overlay_copy(session_kind: &str) -> (&'static str, &'static
         ),
         _ => (
             "Drop files to upload",
-            "Files only, uploaded via ZMODEM (native transfer pending)",
+            "Files only, uploaded via ZMODEM",
         ),
     }
 }

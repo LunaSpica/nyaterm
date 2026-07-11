@@ -25,6 +25,12 @@ use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 use tokio::sync::{mpsc as tokio_mpsc, oneshot};
 
 mod recording;
+mod zmodem;
+
+pub use zmodem::{
+    ZmodemAction, ZmodemDetectResult, ZmodemDetector, ZmodemDirection, ZmodemEvent,
+    ZmodemTransfer, start_zmodem_transfer,
+};
 mod stats;
 
 mod docker;

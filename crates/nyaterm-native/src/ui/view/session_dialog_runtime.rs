@@ -230,6 +230,7 @@ impl NyaTermApp {
             .and_then(|metadata| metadata.ssh_multiplex_key);
         self.session_custom_names.remove(session_id);
         self.session_dynamic_titles.remove(session_id);
+        self.clear_zmodem_session(session_id);
         self.session_tab_colors.remove(session_id);
         self.terminal_views.remove(session_id);
         self.session_command_history.remove(session_id);

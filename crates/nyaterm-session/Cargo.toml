@@ -21,3 +21,5 @@ time.workspace = true
 tokio.workspace = true
 tokio-socks.workspace = true
 uuid.workspace = true
+zmodem2.workspace = true
+

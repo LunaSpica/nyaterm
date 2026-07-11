@@ -74,6 +74,7 @@ tracing-appender = "0.2.4"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
 uuid = { version = "1", features = ["v4", "serde"] }
 vte = "0.14"
+zmodem2 = { path = "vendor/zmodem2" }
 zed_reqwest = { package = "zed-reqwest", version = "0.12.15-zed", default-features = false, features = [
     "blocking",
     "json",

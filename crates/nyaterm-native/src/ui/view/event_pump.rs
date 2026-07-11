@@ -10,6 +10,11 @@ impl NyaTermApp {
         for event in events {
             match event {
                 SessionEvent::Output { session_id, data } => {
+                    // Intercept ZMODEM protocol bytes before terminal paint (Tauri parity).
+                    let data = self.process_zmodem_output(&session_id, &data, cx);
+                    if data.is_empty() {
+                        continue;
+                    }
                     if self.active_session_id.as_deref() == Some(session_id.as_str()) {
                         let text = String::from_utf8_lossy(&data);
                         if self.ai_agent_capture.has_active() {

@@ -1167,3 +1167,14 @@ service boundary first:
 - GPUI stores titles in `session_dynamic_titles`; display name priority is
   custom rename → OSC title → backend session name.
 - Titles migrate across reconnect restore maps and clear with session removal.
+
+## 2026-07-11 Native ZMODEM core + GPUI interception
+
+- Ported Tauri `core/zmodem.rs` into `nyaterm-session::zmodem` with `zmodem2`
+  path dependency; detector/transfer unit tests pass.
+- GPUI event pump intercepts raw session output via per-session
+  `ZmodemDetector` / `ZmodemTransfer` before terminal paint.
+- File-drop on SSH/Telnet/Serial/Raw queues upload paths, sends `rz\r`, and
+  auto-accepts when remote ZMODEM upload headers are detected.
+- Download detection opens a native folder picker; cancel aborts the transfer.
+- Progress/complete/failed update `terminal_status` (transfer-list polish later).

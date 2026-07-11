@@ -724,12 +724,11 @@ impl NyaTermApp {
                     cx.notify();
                     return;
                 }
-                // Full ZMODEM pipeline is not yet native; surface clear status for parity UX.
-                self.terminal_status = format!(
-                    "ZMODEM upload not yet available for {} file(s) — open Transfers / use SFTP",
-                    path_strings.len()
-                );
-                cx.notify();
+                let files: Vec<std::path::PathBuf> = path_strings
+                    .into_iter()
+                    .map(std::path::PathBuf::from)
+                    .collect();
+                self.start_zmodem_upload(session_id, files, cx);
             }
         }
     }
