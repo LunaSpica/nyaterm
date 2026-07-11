@@ -64,6 +64,7 @@ impl NyaTermApp {
             .get(window_start..window_end)
             .unwrap_or(&[])
             .to_vec();
+        let palette = self.theme_palette();
 
         let mut list = div()
             .id(SharedString::from("connections-list-scroll"))
@@ -193,7 +194,7 @@ impl NyaTermApp {
             .flex_col()
             .size_full()
             .overflow_hidden()
-            .bg(rgb(0x161b22))
+            .bg(rgb(palette.surface))
             .child(self.connections_search_bar(visible_count, cx))
             .when(selected_count > 0, |this| {
                 this.child(self.connections_selection_strip(selected_count, cx))
@@ -243,6 +244,7 @@ impl NyaTermApp {
         let more_open = self.connections_more_menu_open;
 
         // Tauri search strip: px-2 py-1.5, input h-7.
+        let palette = self.theme_palette();
         div()
             .h(px(36.))
             .px_2()
@@ -250,8 +252,8 @@ impl NyaTermApp {
             .items_center()
             .gap_1()
             .border_b_1()
-            .border_color(rgb(0x30363d))
-            .bg(rgb(0x12171f))
+            .border_color(rgb(palette.border))
+            .bg(rgb(palette.section_header))
             .child(
                 div()
                     .id(SharedString::from("connection-search-input"))
@@ -260,8 +262,8 @@ impl NyaTermApp {
                     .min_w_0()
                     .rounded_md()
                     .border_1()
-                    .border_color(rgb(0x30363d))
-                    .bg(rgb(0x0d1117))
+                    .border_color(rgb(palette.border))
+                    .bg(rgb(palette.hover))
                     .px_2()
                     .flex()
                     .items_center()
@@ -281,7 +283,7 @@ impl NyaTermApp {
                             .size(px(14.))
                             .flex_none()
                             .path("icons/fe/search.svg")
-                            .text_color(rgb(0x6e7681)),
+                            .text_color(rgb(palette.text_dimmed)),
                     )
                     .child(
                         div()
@@ -289,9 +291,9 @@ impl NyaTermApp {
                             .flex_1()
                             .text_size(px(12.))
                             .text_color(if self.connection_search_draft.is_empty() {
-                                rgb(0x6e7681)
+                                rgb(palette.text_dimmed)
                             } else {
-                                rgb(0xc9d1d9)
+                                rgb(palette.text)
                             })
                             .child(search_value),
                     )
@@ -305,9 +307,12 @@ impl NyaTermApp {
                                 .justify_center()
                                 .rounded_sm()
                                 .text_size(px(10.))
-                                .text_color(rgb(0x8b949e))
+                                .text_color(rgb(palette.text_muted))
                                 .cursor_pointer()
-                                .hover(|this| this.bg(rgb(0x21262d)).text_color(rgb(0xc9d1d9)))
+                                .hover(move |this| {
+                                    this.bg(rgb(palette.surface_elevated))
+                                        .text_color(rgb(palette.text))
+                                })
                                 .on_click(cx.listener(|this, _, window, cx| {
                                     this.connection_search_draft.clear();
                                     this.connection_list_offset = 0;
@@ -698,6 +703,7 @@ impl NyaTermApp {
         selected_count: usize,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
+        let palette = self.theme_palette();
         // Tauri multi-select strip under search bar.
         div()
             .h(px(30.))
@@ -727,10 +733,10 @@ impl NyaTermApp {
                     .items_center()
                     .text_size(px(11.))
                     .font_weight(FontWeight(600.))
-                    .text_color(rgb(0xc9d1d9))
+                    .text_color(rgb(palette.text))
                     .bg(rgb(0x21262d))
                     .cursor_pointer()
-                    .hover(|this| this.bg(rgb(0x30363d)))
+                    .hover(|this| this.bg(rgb(palette.border)))
                     .on_click(cx.listener(|this, _, window, cx| {
                         this.start_selected_saved_connections(window, cx);
                     }))
@@ -745,7 +751,7 @@ impl NyaTermApp {
                     .flex()
                     .items_center()
                     .text_size(px(11.))
-                    .text_color(rgb(0xc9d1d9))
+                    .text_color(rgb(palette.text))
                     .cursor_pointer()
                     .hover(|this| this.bg(rgb(0x21262d)))
                     .on_click(cx.listener(|this, _, _, cx| {
@@ -779,9 +785,9 @@ impl NyaTermApp {
                     .flex()
                     .items_center()
                     .text_size(px(11.))
-                    .text_color(rgb(0x8b949e))
+                    .text_color(rgb(palette.text_muted))
                     .cursor_pointer()
-                    .hover(|this| this.bg(rgb(0x21262d)).text_color(rgb(0xc9d1d9)))
+                    .hover(|this| this.bg(rgb(0x21262d)).text_color(rgb(palette.text)))
                     .on_click(cx.listener(|this, _, _, cx| {
                         this.clear_selected_connections(cx);
                     }))
@@ -819,6 +825,7 @@ impl NyaTermApp {
         let row_id = connection.id.clone();
 
         // Tauri ConnectionItem: py-1.5 single-line row (~34px) with hover actions.
+        let palette = self.theme_palette();
         div()
             .id(SharedString::from(format!("connection-row-{}", connection.id)))
             .relative()
@@ -829,15 +836,15 @@ impl NyaTermApp {
             .px_2()
             .pl(if indented { px(24.) } else { px(8.) })
             .bg(if selected {
-                rgb(0x122033)
+                rgb(palette.hover)
             } else if show_inside {
-                rgb(0x122033)
+                rgb(palette.hover)
             } else if hovered {
-                rgb(0x1c2128)
+                rgb(palette.hover)
             } else {
-                rgb(0x161b22)
+                rgb(palette.surface)
             })
-            .when(show_inside, |this| this.border_1().border_color(rgb(0x388bfd)))
+            .when(show_inside, |this| this.border_1().border_color(rgb(palette.accent)))
             .cursor_pointer()
             .cursor_move()
             .on_drag(
@@ -977,7 +984,7 @@ impl NyaTermApp {
                     .items_center()
                     .gap_0()
                     .rounded_sm()
-                    .bg(if show_actions { rgb(0x1c2128) } else { rgb(0x161b22) })
+                    .bg(if show_actions { rgb(palette.hover) } else { rgb(palette.surface) })
                     .opacity(if show_actions { 1. } else { 0. })
                     .child(icon_action_button(
                         format!("connection-connect-{}", connection.id),

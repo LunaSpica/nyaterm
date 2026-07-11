@@ -796,3 +796,7 @@ service boundary first:
 - Expand `ThemePalette` to Tauri surface tokens: section_header, hover, input, text_dimmed, success/warning/danger.
 - Align github-light / catppuccin(-mocha) hex values with `nyaterm-tauri/src/lib/themes.ts`.
 - Panel headers use section_header; tab strip, empty workspace, bottom panel, security-auth lists use palette.
+
+## 2026-07-11 Activity chrome + Connections palette pass
+- Activity bar entry buttons and title menus use live ThemePalette (accent/success/hover/muted).
+- Saved Connections search strip, root surface, selection strip, and row hover/selected states use palette tokens (Tauri toolbar + ConnectionItem density preserved).
