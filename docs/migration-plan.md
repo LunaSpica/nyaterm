@@ -1288,3 +1288,9 @@ service boundary first:
 - Native split/unsplit/resize/prune persist when startup restore + window layout
   restore are enabled; startup restores panes after open_tabs (and after multi-leaf
   if that wins and skips panes).
+
+## 2026-07-11 Smart Split / Tile multi-leaf
+
+- Ported Tauri `smartSplit` balanced binary tree (auto / horizontal / vertical).
+- View menu + tab actions: Smart Split, Tile Horizontally/Vertically, Merge Windows.
+- Applies full multi-leaf layout (one tab per leaf) and persists `terminal_window_layout`.

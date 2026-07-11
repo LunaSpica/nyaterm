@@ -1495,6 +1495,24 @@ impl WorkspaceSplitDirection {
     }
 }
 
+/// Tauri smart-split / tile modes for multi-leaf tab windows.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum SmartSplitMode {
+    Auto,
+    Horizontal,
+    Vertical,
+}
+
+impl SmartSplitMode {
+    pub(super) fn label(self) -> &'static str {
+        match self {
+            Self::Auto => "Smart Split",
+            Self::Horizontal => "Tile Horizontally",
+            Self::Vertical => "Tile Vertically",
+        }
+    }
+}
+
 /// Recursive workspace pane tree (Tauri PaneNode / SplitPane).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(super) enum WorkspacePaneNode {
@@ -1963,6 +1981,66 @@ impl TerminalWindowNode {
             id: format!("tw-leaf-{}", uuid_v4_like()),
             tab_ids,
             active_tab_id,
+        }
+    }
+
+    /// Build a balanced multi-leaf tree tiling every tab into its own leaf (Tauri smartSplit).
+    pub(super) fn build_smart_split_layout(
+        tab_ids: &[String],
+        mode: SmartSplitMode,
+    ) -> Option<Self> {
+        let tab_ids = Self::unique_tabs(tab_ids.to_vec());
+        if tab_ids.is_empty() {
+            return None;
+        }
+        if tab_ids.len() == 1 {
+            return Some(Self::leaf(tab_ids, None));
+        }
+        let (direction, alternate) = match mode {
+            SmartSplitMode::Auto => (WorkspaceSplitDirection::Horizontal, true),
+            SmartSplitMode::Horizontal => (WorkspaceSplitDirection::Horizontal, false),
+            SmartSplitMode::Vertical => (WorkspaceSplitDirection::Vertical, false),
+        };
+        Some(Self::build_balanced_tree(&tab_ids, direction, alternate))
+    }
+
+    fn build_balanced_tree(
+        tab_ids: &[String],
+        direction: WorkspaceSplitDirection,
+        alternate: bool,
+    ) -> Self {
+        if tab_ids.len() == 1 {
+            return Self::leaf(tab_ids.to_vec(), tab_ids.first().cloned());
+        }
+        let mid = (tab_ids.len() + 1) / 2; // ceil(len/2)
+        let mid = mid.max(1).min(tab_ids.len() - 1);
+        let next_direction = if alternate {
+            match direction {
+                WorkspaceSplitDirection::Horizontal => WorkspaceSplitDirection::Vertical,
+                WorkspaceSplitDirection::Vertical => WorkspaceSplitDirection::Horizontal,
+            }
+        } else {
+            direction
+        };
+        let ratio_f = mid as f64 / tab_ids.len() as f64;
+        let ratio_percent = ((ratio_f * 100.0).round() as u8).clamp(
+            WorkspacePaneNode::MIN_RATIO_PERCENT,
+            WorkspacePaneNode::MAX_RATIO_PERCENT,
+        );
+        Self::Split {
+            id: format!("tw-split-{}", uuid_v4_like()),
+            direction,
+            ratio_percent,
+            first: Box::new(Self::build_balanced_tree(
+                &tab_ids[..mid],
+                next_direction,
+                alternate,
+            )),
+            second: Box::new(Self::build_balanced_tree(
+                &tab_ids[mid..],
+                next_direction,
+                alternate,
+            )),
         }
     }
 
@@ -3749,7 +3827,7 @@ mod workspace_pane_tests {
 
 #[cfg(test)]
 mod terminal_window_tests {
-    use super::{SplitEdge, TerminalWindowNode, WorkspaceSplitDirection};
+    use super::{SmartSplitMode, SplitEdge, TerminalWindowNode, WorkspaceSplitDirection};
 
     #[test]
     fn split_tab_creates_two_leaves() {
@@ -3842,6 +3920,43 @@ mod terminal_window_tests {
         assert!(root.dock_tab("b", &a_leaf, TabDockZone::Edge(TabDockEdge::Left)));
         assert_eq!(root.leaf_ids().len(), 2);
         assert!(root.contains_tab("a") && root.contains_tab("b"));
+    }
+
+    #[test]
+    fn smart_split_auto_tiles_four_tabs() {
+        let tabs = vec!["a".into(), "b".into(), "c".into(), "d".into()];
+        let root = TerminalWindowNode::build_smart_split_layout(&tabs, SmartSplitMode::Auto)
+            .expect("layout");
+        assert!(matches!(root, TerminalWindowNode::Split { .. }));
+        let mut ids = root.collect_tab_ids();
+        ids.sort();
+        let mut expected = tabs.clone();
+        expected.sort();
+        assert_eq!(ids, expected);
+        // Each leaf should hold a single tab in smart split.
+        fn max_leaf_tabs(node: &TerminalWindowNode) -> usize {
+            match node {
+                TerminalWindowNode::Leaf { tab_ids, .. } => tab_ids.len(),
+                TerminalWindowNode::Split { first, second, .. } => {
+                    max_leaf_tabs(first).max(max_leaf_tabs(second))
+                }
+            }
+        }
+        assert_eq!(max_leaf_tabs(&root), 1);
+    }
+
+    #[test]
+    fn smart_split_horizontal_keeps_direction() {
+        let tabs = vec!["a".into(), "b".into(), "c".into()];
+        let root =
+            TerminalWindowNode::build_smart_split_layout(&tabs, SmartSplitMode::Horizontal)
+                .expect("layout");
+        match root {
+            TerminalWindowNode::Split { direction, .. } => {
+                assert_eq!(direction, WorkspaceSplitDirection::Horizontal);
+            }
+            _ => panic!("expected split"),
+        }
     }
 
     #[test]

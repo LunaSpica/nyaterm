@@ -469,6 +469,33 @@ impl NyaTermApp {
                             );
                         }),
                     ))
+                    .child(tab_menu_item(
+                        palette,
+                        "tab-ctx-smart-split",
+                        "Smart Split",
+                        cx.listener(|this, _, _, cx| {
+                            this.close_tab_actions(cx);
+                            this.apply_smart_split(SmartSplitMode::Auto, cx);
+                        }),
+                    ))
+                    .child(tab_menu_item(
+                        palette,
+                        "tab-ctx-tile-h",
+                        "Tile Horizontally",
+                        cx.listener(|this, _, _, cx| {
+                            this.close_tab_actions(cx);
+                            this.apply_smart_split(SmartSplitMode::Horizontal, cx);
+                        }),
+                    ))
+                    .child(tab_menu_item(
+                        palette,
+                        "tab-ctx-tile-v",
+                        "Tile Vertically",
+                        cx.listener(|this, _, _, cx| {
+                            this.close_tab_actions(cx);
+                            this.apply_smart_split(SmartSplitMode::Vertical, cx);
+                        }),
+                    ))
                     .when(can_merge_windows, |this| {
                         this.child(tab_menu_item(
                             palette,
@@ -928,6 +955,36 @@ impl NyaTermApp {
                                         SplitEdge::After,
                                         cx,
                                     );
+                                }),
+                            ))
+                            .child(tab_action_button(
+                                palette,
+                                "tab-actions-smart-split",
+                                "Smart Split",
+                                "Tile all tabs",
+                                cx.listener(|this, _, _, cx| {
+                                    this.close_tab_actions(cx);
+                                    this.apply_smart_split(SmartSplitMode::Auto, cx);
+                                }),
+                            ))
+                            .child(tab_action_button(
+                                palette,
+                                "tab-actions-tile-h",
+                                "Tile H",
+                                "Side by side",
+                                cx.listener(|this, _, _, cx| {
+                                    this.close_tab_actions(cx);
+                                    this.apply_smart_split(SmartSplitMode::Horizontal, cx);
+                                }),
+                            ))
+                            .child(tab_action_button(
+                                palette,
+                                "tab-actions-tile-v",
+                                "Tile V",
+                                "Stacked leaves",
+                                cx.listener(|this, _, _, cx| {
+                                    this.close_tab_actions(cx);
+                                    this.apply_smart_split(SmartSplitMode::Vertical, cx);
                                 }),
                             ))
                             .when(can_merge_windows, |this| {

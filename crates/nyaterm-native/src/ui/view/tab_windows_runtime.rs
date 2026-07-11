@@ -260,6 +260,49 @@ impl NyaTermApp {
         cx.notify();
     }
 
+    /// Apply Tauri smart-split / tile layout: each open tab becomes its own multi-leaf window.
+    pub(in crate::ui::view) fn apply_smart_split(
+        &mut self,
+        mode: SmartSplitMode,
+        cx: &mut Context<Self>,
+    ) {
+        let tab_ids = self
+            .ordered_sessions()
+            .into_iter()
+            .map(|session| session.id)
+            .collect::<Vec<_>>();
+        if tab_ids.is_empty() {
+            self.terminal_status = "no tabs to tile".to_string();
+            cx.notify();
+            return;
+        }
+        let Some(layout) = TerminalWindowNode::build_smart_split_layout(&tab_ids, mode) else {
+            self.terminal_status = "unable to build tile layout".to_string();
+            cx.notify();
+            return;
+        };
+        // Clear global pane splits so multi-leaf rendering takes precedence cleanly.
+        self.workspace_split = None;
+        self.workspace_split_resize = None;
+        if let Some(active) = self.active_session_id.clone() {
+            let mut root = layout;
+            let _ = root.set_active_tab(&active);
+            self.focused_terminal_window_leaf_id =
+                find_leaf_with_tab(&root, &active).or_else(|| root.first_leaf_id());
+            self.terminal_windows = Some(root);
+        } else {
+            self.focused_terminal_window_leaf_id = layout.first_leaf_id();
+            self.terminal_windows = Some(layout);
+        }
+        self.selected_nav = NavItem::Workspace;
+        self.main_mode = MainMode::Workspace;
+        self.terminal_status = format!("applied {}", mode.label().to_ascii_lowercase());
+        self.persist_terminal_window_layout();
+        // Global pane layout is obsolete while multi-leaf is active.
+        self.persist_workspace_pane_layout();
+        cx.notify();
+    }
+
     pub(in crate::ui::view) fn persist_terminal_window_layout(&mut self) {
         if !self.settings.startup_restore || !self.settings.startup_restore_window_layout {
             return;

@@ -1038,6 +1038,47 @@ impl NyaTermApp {
                     .child(title_menu_separator(palette))
                     .child(title_menu_item(
                         palette,
+                        "title-view-smart-split",
+                        "Smart Split",
+                        None,
+                        cx.listener(|this, _, _, cx| {
+                            this.close_title_menu(cx);
+                            this.apply_smart_split(SmartSplitMode::Auto, cx);
+                        }),
+                    ))
+                    .child(title_menu_item(
+                        palette,
+                        "title-view-tile-h",
+                        "Tile Horizontally",
+                        None,
+                        cx.listener(|this, _, _, cx| {
+                            this.close_title_menu(cx);
+                            this.apply_smart_split(SmartSplitMode::Horizontal, cx);
+                        }),
+                    ))
+                    .child(title_menu_item(
+                        palette,
+                        "title-view-tile-v",
+                        "Tile Vertically",
+                        None,
+                        cx.listener(|this, _, _, cx| {
+                            this.close_title_menu(cx);
+                            this.apply_smart_split(SmartSplitMode::Vertical, cx);
+                        }),
+                    ))
+                    .child(title_menu_item(
+                        palette,
+                        "title-view-merge-windows",
+                        "Merge Windows",
+                        None,
+                        cx.listener(|this, _, _, cx| {
+                            this.close_title_menu(cx);
+                            this.close_terminal_window_layout(cx);
+                        }),
+                    ))
+                    .child(title_menu_separator(palette))
+                    .child(title_menu_item(
+                        palette,
                         "title-view-settings",
                         "Settings",
                         Some(shortcut("view.openSettings", "Ctrl+,")),
