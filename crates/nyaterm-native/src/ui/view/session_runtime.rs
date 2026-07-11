@@ -399,6 +399,8 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         self.pending_session_name = Some(connection_name.clone());
+        self.last_connect_failure_name = None;
+        self.last_connect_failure_error = None;
         self.pending_ssh_config = Some(config.clone());
         self.pending_ai_execution_profile = ai_execution_profile;
         self.pending_session_custom_name = custom_name;
@@ -448,6 +450,8 @@ impl NyaTermApp {
     ) {
         let multiplex_key = ssh_multiplex_key(&config);
         self.pending_session_name = Some(connection_name.clone());
+        self.last_connect_failure_name = None;
+        self.last_connect_failure_error = None;
         self.pending_ssh_config = Some(config.clone());
         self.pending_ai_execution_profile = ai_execution_profile;
         self.pending_session_custom_name = custom_name;
@@ -514,6 +518,8 @@ impl NyaTermApp {
             self.pending_session_name = None;
             match event.result {
                 Ok(success) => {
+                    self.last_connect_failure_name = None;
+                    self.last_connect_failure_error = None;
                     let session_id = success.session_id;
                     let ssh_config = self.pending_ssh_config.take();
                     let launch_config = ssh_config
@@ -593,6 +599,8 @@ impl NyaTermApp {
                     self.pending_ai_execution_profile = AiExecutionProfile::SendOnly;
                     self.active_ssh_config = None;
                     self.active_ai_execution_profile = AiExecutionProfile::SendOnly;
+                    self.last_connect_failure_name = Some(event.connection_name.clone());
+                    self.last_connect_failure_error = Some(error.clone());
                     self.terminal_status =
                         format!("failed to start {}: {error}", event.connection_name);
                     if self.active_session_id.is_none() {

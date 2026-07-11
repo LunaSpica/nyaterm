@@ -21,6 +21,18 @@ impl NyaTermApp {
         let palette = self.theme_palette();
         let sessions = self.ordered_sessions();
         let session_count = sessions.len();
+        // Child index layout for ScrollHandle: optional connecting tab, then sessions,
+        // then optional end drop zone. Failed chrome is trailing after sessions.
+        let connecting_tab_present = self.pending_session_name.is_some();
+        if self.session_tab_scroll_into_view_pending {
+            if let Some(active_id) = self.active_session_id.as_deref() {
+                if let Some(index) = sessions.iter().position(|session| session.id == active_id) {
+                    let child_index = index + usize::from(connecting_tab_present);
+                    self.session_tab_strip_scroll.scroll_to_item(child_index);
+                }
+            }
+            self.session_tab_scroll_into_view_pending = false;
+        }
         let mut tabs = div()
             .id("session-tab-strip-scroll")
             .h_full()
@@ -30,7 +42,8 @@ impl NyaTermApp {
             .items_center()
             // Tauri tab-strip-scroll: horizontal overflow instead of clipping tabs.
             .overflow_x_scroll()
-            .overflow_y_hidden();
+            .overflow_y_hidden()
+            .track_scroll(&self.session_tab_strip_scroll);
 
         if let Some(pending_name) = self.pending_session_name.clone() {
             tabs = tabs.child(
@@ -351,6 +364,110 @@ impl NyaTermApp {
                         .on_click(cx.listener(move |this, event: &ClickEvent, window, cx| {
                             this.handle_session_tab_click(session_id.clone(), event, window, cx);
                         })),
+                );
+            }
+        }
+
+        // Tauri connectError tab chrome: ephemeral failed connect pill after sessions.
+        if self.pending_session_name.is_none() {
+            if let (Some(failed_name), Some(failed_error)) = (
+                self.last_connect_failure_name.clone(),
+                self.last_connect_failure_error.clone(),
+            ) {
+                let dismiss_name = failed_name.clone();
+                tabs = tabs.child(
+                    div()
+                        .id("session-tab-connect-failed")
+                        .h_full()
+                        .min_w(px(178.))
+                        .max_w(px(280.))
+                        .px_3()
+                        .flex()
+                        .items_center()
+                        .gap_2()
+                        .relative()
+                        .border_r_1()
+                        .border_color(rgb(palette.border))
+                        .bg(rgba((palette.danger << 8) | 0x18))
+                        .child(
+                            div()
+                                .absolute()
+                                .top_0()
+                                .left_0()
+                                .right_0()
+                                .h(px(2.))
+                                .bg(rgb(palette.danger)),
+                        )
+                        .child(
+                            div()
+                                .size(px(14.))
+                                .flex()
+                                .items_center()
+                                .justify_center()
+                                .child(
+                                    svg()
+                                        .size(px(12.))
+                                        .path("icons/session/disconnect.svg")
+                                        .text_color(rgb(palette.danger)),
+                                ),
+                        )
+                        .child(
+                            div()
+                                .min_w_0()
+                                .flex_1()
+                                .flex()
+                                .flex_col()
+                                .gap_0()
+                                .child(
+                                    div()
+                                        .text_xs()
+                                        .font_weight(FontWeight(700.))
+                                        .text_color(rgb(palette.danger))
+                                        .overflow_hidden()
+                                        .child(format!("Failed {failed_name}")),
+                                )
+                                .child(
+                                    div()
+                                        .text_size(px(10.))
+                                        .text_color(rgb(palette.text_muted))
+                                        .overflow_hidden()
+                                        .child(truncate_preview(&failed_error, 36)),
+                                ),
+                        )
+                        .child(
+                            div()
+                                .id("session-tab-connect-failed-dismiss")
+                                .size(px(18.))
+                                .flex()
+                                .items_center()
+                                .justify_center()
+                                .rounded_sm()
+                                .text_xs()
+                                .text_color(rgb(palette.text_muted))
+                                .hover(|this| {
+                                    this.bg(rgb(palette.border)).text_color(rgb(palette.danger))
+                                })
+                                .child("x")
+                                .on_click(cx.listener(move |this, _, _, cx| {
+                                    cx.stop_propagation();
+                                    if this.last_connect_failure_name.as_deref()
+                                        == Some(dismiss_name.as_str())
+                                    {
+                                        this.last_connect_failure_name = None;
+                                        this.last_connect_failure_error = None;
+                                        cx.notify();
+                                    }
+                                })),
+                        )
+                        .tooltip(move |_, cx| {
+                            cx.new(|_| {
+                                SessionTabTooltip::new(
+                                    format!("Failed {failed_name}"),
+                                    vec![failed_error.clone()],
+                                )
+                            })
+                            .into()
+                        }),
                 );
             }
         }

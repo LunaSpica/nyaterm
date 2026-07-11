@@ -462,6 +462,14 @@ pub struct NyaTermApp {
     pub(in crate::ui::view) open_tabs_menu_open: bool,
     /// New-session menu next to the tab strip + control.
     pub(in crate::ui::view) new_session_menu_open: bool,
+    /// Horizontal scroll handle for the global session tab strip (scroll-into-view).
+    pub(in crate::ui::view) session_tab_strip_scroll: ScrollHandle,
+    /// Request scroll-into-view of the active tab on next paint (Tauri TabBar).
+    pub(in crate::ui::view) session_tab_scroll_into_view_pending: bool,
+    /// Last failed connect name (shown as ephemeral failed tab chrome).
+    pub(in crate::ui::view) last_connect_failure_name: Option<String>,
+    /// Last failed connect error text.
+    pub(in crate::ui::view) last_connect_failure_error: Option<String>,
     pub(in crate::ui::view) security_auth_tab: SecurityAuthTab,
     pub(in crate::ui::view) security_key_editor: Option<SecurityKeyEditorState>,
     pub(in crate::ui::view) security_key_editor_focus: FocusHandle,
@@ -1158,6 +1166,10 @@ impl NyaTermApp {
             title_menu_open: None,
             open_tabs_menu_open: false,
             new_session_menu_open: false,
+            session_tab_strip_scroll: ScrollHandle::new(),
+            session_tab_scroll_into_view_pending: false,
+            last_connect_failure_name: None,
+            last_connect_failure_error: None,
             security_auth_tab: SecurityAuthTab::Keys,
             security_key_editor: None,
             security_key_editor_focus: cx.focus_handle(),

@@ -256,6 +256,7 @@ impl NyaTermApp {
         }
 
         self.active_session_id = Some(session_id.to_string());
+        self.session_tab_scroll_into_view_pending = true;
         self.transfer_auto_sync_cwd_last_at = None;
         if let Some(metadata) = self.session_metadata.get(session_id).cloned() {
             self.active_ssh_config = metadata.ssh_config;

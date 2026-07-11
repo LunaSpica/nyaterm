@@ -1347,3 +1347,11 @@ service boundary first:
 - Session tabs (global + multi-leaf) show GPUI hover tooltips with endpoint,
   SSH address, cwd, and disconnected hint (Tauri TabBar tooltip content).
 - Title bar center label and status bar session chip include endpoint/disconnect state.
+
+
+## 2026-07-11 Tab strip scroll-into-view + failed connect chrome
+
+- Global session tab strip tracks a GPUI `ScrollHandle` and scrolls the active tab
+  into view on activation (Tauri TabBar `scrollTabIntoView`).
+- Failed SSH/session starts show an ephemeral failed tab pill with danger accent,
+  disconnect icon, truncated error, dismiss control, and tooltip (Tauri connectError).
