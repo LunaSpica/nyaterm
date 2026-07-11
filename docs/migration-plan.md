@@ -1384,3 +1384,14 @@ service boundary first:
 
 - Empty terminal area shows connecting / failed-start banners above the shortcut
   action grid so failed SSH starts remain visible without an active tab.
+
+
+## 2026-07-12 Per-tab pane roots (Tauri Tab.root)
+
+- Split leaves no longer appear as separate strip tabs. `session_pane_roots`
+  stores a `WorkspacePaneNode` per tab-root session; `session_tab_owner` maps
+  secondary leaves to their tab root.
+- Tab strip / multi-leaf / open-tabs menus use `ordered_tab_sessions()`.
+- Closing a strip tab closes all leaves in that tab's pane tree; unsplit and
+  resize write back into the active tab root. open_tabs serialization attaches
+  RestorablePaneNode trees on split tabs.

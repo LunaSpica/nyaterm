@@ -23,15 +23,26 @@ impl NyaTermApp {
     }
 
     pub(in crate::ui::view) fn serialize_open_tabs(&self) -> Vec<RestorableOpenTab> {
-        // Prefer a single Tauri-style open_tabs entry when the workspace is one global
-        // pane split covering every open session (maps to open_tabs[0].root).
+        // Prefer a single Tauri-style open_tabs entry when one pane tree covers every session.
         if let Some(tabs) = self.serialize_open_tabs_as_single_pane_tab() {
             return tabs;
         }
 
-        self.ordered_sessions()
+        // One strip tab per tab-root; attach RestorablePaneNode when that tab is split.
+        self.ordered_tab_sessions()
             .into_iter()
-            .map(|session| self.serialize_open_tab_for_session(&session))
+            .map(|session| {
+                let mut tab = self.serialize_open_tab_for_session(&session);
+                if let Some(root) = self.session_pane_roots.get(&session.id) {
+                    if root.is_split() {
+                        if let Some(pane_root) = self.workspace_pane_to_restorable_pane(root) {
+                            tab.root = Some(pane_root);
+                            tab.active_pane_id = Some(self.active_pane_for_tab_root(&session.id));
+                        }
+                    }
+                }
+                tab
+            })
             .collect()
     }
 
@@ -63,7 +74,12 @@ impl NyaTermApp {
     /// When every session is present in a global workspace split, emit one open_tabs
     /// entry whose `root` is a Tauri RestorablePaneNode tree (for interop).
     fn serialize_open_tabs_as_single_pane_tab(&self) -> Option<Vec<RestorableOpenTab>> {
-        let root = self.workspace_split.as_ref()?;
+        // Single-tab workspace with an in-tab pane tree covering every live session.
+        let root = self
+            .session_pane_roots
+            .values()
+            .find(|root| root.is_split())
+            .or(self.workspace_split.as_ref())?;
         if !root.is_split() {
             return None;
         }
@@ -390,7 +406,11 @@ impl NyaTermApp {
         } else if let Some(first) = restored.session_ids().into_iter().next() {
             self.active_session_id = Some(first);
         }
-        self.workspace_split = Some(restored);
+        if let Some(first) = restored.session_ids().into_iter().next() {
+            self.session_pane_roots.insert(first, restored);
+            self.rebuild_session_tab_owners();
+            self.sync_workspace_split_from_active_tab();
+        }
         self.workspace_pane_layout_restored = true;
         self.selected_nav = NavItem::Workspace;
         self.main_mode = MainMode::Workspace;

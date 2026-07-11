@@ -29,7 +29,13 @@ impl NyaTermApp {
             .iter()
             .position(|session| session.id == session_id)
             .is_some_and(|index| index + 1 < sessions.len());
-        let can_unsplit = self.workspace_split.is_some();
+        let can_unsplit = self
+            .active_session_id
+            .as_deref()
+            .map(|id| self.tab_root_for_session(id))
+            .and_then(|root| self.session_pane_roots.get(&root))
+            .is_some_and(|root| root.is_split())
+            || self.workspace_split.is_some();
         let can_merge_windows = self.terminal_windows_is_multi_leaf();
         let visible_for_ai = terminal_action_prompt_text(
             &self

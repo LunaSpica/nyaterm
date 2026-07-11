@@ -224,6 +224,9 @@ impl NyaTermApp {
 
     pub(in crate::ui::view) fn remove_session_state(&mut self, session_id: &str) {
         self.session_order.retain(|id| id != session_id);
+        self.session_tab_owner.remove(session_id);
+        // If this leaf was a tab root, drop its pane tree (prune will rekey survivors).
+        self.session_pane_roots.remove(session_id);
         let multiplex_key = self
             .session_metadata
             .remove(session_id)

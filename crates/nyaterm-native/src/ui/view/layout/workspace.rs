@@ -19,7 +19,7 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
         let palette = self.theme_palette();
-        let sessions = self.ordered_sessions();
+        let sessions = self.ordered_tab_sessions();
         let session_count = sessions.len();
         // Child index layout for ScrollHandle: optional connecting tab, then sessions,
         // then optional end drop zone. Failed chrome is trailing after sessions.
@@ -138,8 +138,19 @@ impl NyaTermApp {
                 let custom_color = self.session_tab_colors.get(&session.id).copied();
                 let is_active = self.active_session_id.as_deref() == Some(session.id.as_str());
                 let is_disconnected = self.is_session_disconnected(&session.id);
+                let is_split_tab = self
+                    .session_pane_roots
+                    .get(&session.id)
+                    .is_some_and(|root| root.is_split());
+                let pane_count = self
+                    .session_pane_roots
+                    .get(&session.id)
+                    .map(|root| root.session_ids().len())
+                    .unwrap_or(1);
                 let tab_title = if is_disconnected {
                     format!("{} · disconnected", truncate_preview(&display_name, 20))
+                } else if is_split_tab {
+                    format!("{} · {pane_count}p", truncate_preview(&display_name, 22))
                 } else {
                     truncate_preview(&display_name, 28)
                 };
@@ -661,7 +672,14 @@ impl NyaTermApp {
                 }),
             ));
         }
-        if self.workspace_split.is_some() {
+        if self
+            .active_session_id
+            .as_deref()
+            .map(|id| self.tab_root_for_session(id))
+            .and_then(|root| self.session_pane_roots.get(&root))
+            .is_some_and(|root| root.is_split())
+            || self.workspace_split.is_some()
+        {
             session_actions = session_actions
                 .child(small_button(palette, 
                     "workspace-split-ratio-dec",
@@ -709,7 +727,7 @@ impl NyaTermApp {
     fn render_open_tabs_menu(&mut self, cx: &mut Context<Self>) -> impl IntoElement {
         let palette = self.theme_palette();
         // Tauri openTabsMenuItems is reversed (rightmost first) but keeps global ordinals.
-        let ordered = self.ordered_sessions();
+        let ordered = self.ordered_tab_sessions();
         let ordinals: std::collections::HashMap<String, usize> = ordered
             .iter()
             .enumerate()

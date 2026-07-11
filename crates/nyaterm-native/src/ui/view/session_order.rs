@@ -75,6 +75,51 @@ impl NyaTermApp {
         ordered
     }
 
+
+    /// True when this session is a secondary leaf inside another tab's pane tree
+    /// (Tauri: multiple SessionPanes under one Tab, only one strip entry).
+    pub(in crate::ui::view) fn is_secondary_pane_session(&self, session_id: &str) -> bool {
+        self.session_tab_owner
+            .get(session_id)
+            .is_some_and(|owner| owner != session_id)
+    }
+
+    /// Owning tab-root session id for a leaf (self when the session is a tab root).
+    pub(in crate::ui::view) fn tab_root_for_session(&self, session_id: &str) -> String {
+        let mut current = session_id.to_string();
+        // Flatten owner chains defensively.
+        for _ in 0..8 {
+            match self.session_tab_owner.get(&current) {
+                Some(owner) if owner != &current => current = owner.clone(),
+                _ => break,
+            }
+        }
+        current
+    }
+
+    /// Sessions shown in the global tab strip / multi-leaf tab lists (tab roots only).
+    pub(in crate::ui::view) fn ordered_tab_sessions(&self) -> Vec<SessionInfo> {
+        self.ordered_sessions()
+            .into_iter()
+            .filter(|session| !self.is_secondary_pane_session(&session.id))
+            .collect()
+    }
+
+    /// Prefer the currently focused leaf when it belongs to `tab_root`, else the tab root.
+    pub(in crate::ui::view) fn active_pane_for_tab_root(&self, tab_root: &str) -> String {
+        if let Some(active) = self.active_session_id.as_deref() {
+            if self.tab_root_for_session(active) == tab_root {
+                return active.to_string();
+            }
+        }
+        if let Some(root) = self.session_pane_roots.get(tab_root) {
+            if let Some(first) = root.session_ids().into_iter().next() {
+                return first;
+            }
+        }
+        tab_root.to_string()
+    }
+
     pub(in crate::ui::view) fn is_session_disconnected(&self, session_id: &str) -> bool {
         self.session_metadata
             .get(session_id)

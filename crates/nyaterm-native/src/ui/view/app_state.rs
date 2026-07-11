@@ -489,8 +489,13 @@ pub struct NyaTermApp {
     pub(in crate::ui::view) security_unlock_draft: String,
     pub(in crate::ui::view) security_unlock_error: Option<String>,
     pub(in crate::ui::view) security_unlock_focus: FocusHandle,
+    /// Legacy/global active pane tree view: mirrors the active tab's per-tab root when split.
     pub(in crate::ui::view) workspace_split: Option<WorkspaceSplitState>,
     pub(in crate::ui::view) workspace_split_resize: Option<WorkspaceSplitResizeState>,
+    /// Per-tab pane trees keyed by tab-root session id (Tauri `Tab.root`).
+    pub(in crate::ui::view) session_pane_roots: HashMap<String, WorkspacePaneNode>,
+    /// Leaf session id → owning tab-root session id (hidden from tab strip when secondary).
+    pub(in crate::ui::view) session_tab_owner: HashMap<String, String>,
     /// Tauri-style multi-leaf tab window layout (optional; None = flat tab strip).
     pub(in crate::ui::view) terminal_windows: Option<TerminalWindowNode>,
     pub(in crate::ui::view) focused_terminal_window_leaf_id: Option<String>,
@@ -1191,6 +1196,8 @@ impl NyaTermApp {
             security_unlock_focus: cx.focus_handle(),
             workspace_split: None,
             workspace_split_resize: None,
+            session_pane_roots: HashMap::new(),
+            session_tab_owner: HashMap::new(),
             terminal_windows: None,
             focused_terminal_window_leaf_id: None,
             terminal_window_drop: None,

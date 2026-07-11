@@ -109,7 +109,7 @@ impl NyaTermApp {
                     .border_color(rgb(palette.border))
                     .bg(rgb(palette.surface));
                 let global_index: std::collections::HashMap<String, usize> = self
-                    .ordered_sessions()
+                    .ordered_tab_sessions()
                     .into_iter()
                     .enumerate()
                     .map(|(index, session)| (session.id, index + 1))

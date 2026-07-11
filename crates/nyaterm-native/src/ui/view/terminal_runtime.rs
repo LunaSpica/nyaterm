@@ -447,20 +447,34 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         let was_active = self.active_session_id.as_deref() == Some(session_id.as_str());
-        let disconnected = self.is_session_disconnected(&session_id);
-        // Live backend close is best-effort; disconnected tabs only have UI state left.
-        match self.session_manager.close(&session_id) {
-            Ok(()) => {}
-            Err(_) if disconnected => {}
-            Err(error) if !disconnected && !self.session_metadata.contains_key(&session_id) => {
-                self.terminal_status = format!("close failed: {error}");
-                cx.notify();
-                return;
+        // Tauri: closing a strip tab closes the whole tab tree; closing a secondary leaf
+        // only removes that pane. Strip close uses the tab-root id.
+        let close_ids = if !self.is_secondary_pane_session(&session_id) {
+            if let Some(root) = self.session_pane_roots.get(&session_id) {
+                root.session_ids()
+            } else {
+                vec![session_id.clone()]
             }
-            Err(_) => {}
+        } else {
+            vec![session_id.clone()]
+        };
+        for close_id in &close_ids {
+            let disconnected = self.is_session_disconnected(close_id);
+            match self.session_manager.close(close_id) {
+                Ok(()) => {}
+                Err(_) if disconnected => {}
+                Err(error)
+                    if !disconnected && !self.session_metadata.contains_key(close_id) =>
+                {
+                    self.terminal_status = format!("close failed: {error}");
+                    cx.notify();
+                    return;
+                }
+                Err(_) => {}
+            }
+            self.recording_manager.cleanup_session(close_id);
+            self.remove_session_state(close_id);
         }
-        self.recording_manager.cleanup_session(&session_id);
-        self.remove_session_state(&session_id);
         self.prune_workspace_split();
         if was_active {
             self.ai_agent_loop = None;

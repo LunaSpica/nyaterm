@@ -11,28 +11,110 @@ impl NyaTermApp {
     }
 
     pub(in crate::ui::view) fn prune_workspace_split(&mut self) {
-        let Some(root) = self.workspace_split.take() else {
-            return;
-        };
-        let before = Some(root.clone());
-        let live_ids = self.live_session_ids();
-        match root.prune(&live_ids) {
-            Some(node) if node.is_split() => {
-                self.workspace_split = Some(node);
-            }
-            Some(WorkspacePaneNode::Leaf { session_id }) => {
-                // Collapse fully to single leaf: clear tree and keep active session.
-                if self.active_session_id.is_none() {
-                    self.active_session_id = Some(session_id);
+        let live_ids = self.live_session_ids_with_disconnected();
+        let before_roots = self.session_pane_roots.clone();
+        let root_keys: Vec<String> = self.session_pane_roots.keys().cloned().collect();
+        for tab_root in root_keys {
+            let Some(root) = self.session_pane_roots.remove(&tab_root) else {
+                continue;
+            };
+            match root.prune(&live_ids) {
+                Some(node) => {
+                    if node.is_split() {
+                        // Keep map key as original tab root when still present; else rekey.
+                        let key = if node.contains_session(&tab_root) {
+                            tab_root.clone()
+                        } else {
+                            node.session_ids()
+                                .into_iter()
+                                .next()
+                                .unwrap_or_else(|| tab_root.clone())
+                        };
+                        self.session_pane_roots.insert(key, node);
+                    }
+                    // Single leaf collapses to no stored tree for this tab.
                 }
-                self.workspace_split = None;
-            }
-            _ => {
-                self.workspace_split = None;
+                None => {}
             }
         }
-        if self.workspace_split != before {
+        // Also prune legacy workspace_split if roots empty (migration path).
+        if self.session_pane_roots.is_empty() {
+            if let Some(root) = self.workspace_split.take() {
+                match root.prune(&live_ids) {
+                    Some(node) => {
+                        if node.is_split() {
+                            if let Some(first) = node.session_ids().into_iter().next() {
+                                self.session_pane_roots.insert(first.clone(), node);
+                            }
+                        } else if let WorkspacePaneNode::Leaf { session_id } = node {
+                            if self.active_session_id.is_none() {
+                                self.active_session_id = Some(session_id);
+                            }
+                        }
+                    }
+                    None => {}
+                }
+            }
+        }
+        self.rebuild_session_tab_owners();
+        self.sync_workspace_split_from_active_tab();
+        if self.session_pane_roots != before_roots {
             self.persist_workspace_pane_layout();
+            if self.startup_restore_complete {
+                self.persist_open_tabs();
+            }
+        }
+    }
+
+    fn live_session_ids_with_disconnected(&self) -> HashSet<String> {
+        let mut live = self.live_session_ids();
+        for (session_id, metadata) in &self.session_metadata {
+            if metadata.disconnected {
+                live.insert(session_id.clone());
+            }
+        }
+        live
+    }
+
+    /// Rebuild leaf→tab-root ownership from `session_pane_roots`.
+    pub(in crate::ui::view) fn rebuild_session_tab_owners(&mut self) {
+        self.session_tab_owner.clear();
+        let roots: Vec<(String, WorkspacePaneNode)> = self
+            .session_pane_roots
+            .iter()
+            .map(|(k, v)| (k.clone(), v.clone()))
+            .collect();
+        for (tab_root, tree) in roots {
+            for leaf in tree.session_ids() {
+                self.session_tab_owner.insert(leaf, tab_root.clone());
+            }
+        }
+    }
+
+    /// Expose the active tab's pane tree via `workspace_split` for existing renderers.
+    pub(in crate::ui::view) fn sync_workspace_split_from_active_tab(&mut self) {
+        let Some(active) = self.active_session_id.clone() else {
+            self.workspace_split = None;
+            return;
+        };
+        let tab_root = self.tab_root_for_session(&active);
+        self.workspace_split = self
+            .session_pane_roots
+            .get(&tab_root)
+            .filter(|root| root.is_split())
+            .cloned();
+    }
+
+    fn write_back_active_tab_pane_root(&mut self) {
+        let Some(active) = self.active_session_id.clone() else {
+            return;
+        };
+        let tab_root = self.tab_root_for_session(&active);
+        if let Some(root) = self.workspace_split.clone() {
+            if root.is_split() {
+                self.session_pane_roots.insert(tab_root, root);
+                self.rebuild_session_tab_owners();
+            }
         }
     }
 
@@ -43,30 +125,44 @@ impl NyaTermApp {
         secondary_session_id: String,
     ) {
         let split_id = uuid();
-        if let Some(root) = self.workspace_split.as_mut() {
+        let tab_root = self.tab_root_for_session(&primary_session_id);
+        if let Some(root) = self.session_pane_roots.get_mut(&tab_root) {
             if root.split_leaf(
                 &primary_session_id,
                 secondary_session_id.clone(),
                 direction,
                 split_id.clone(),
             ) {
+                self.rebuild_session_tab_owners();
+                self.activate_session_id(&secondary_session_id);
+                self.sync_workspace_split_from_active_tab();
                 self.selected_nav = NavItem::Workspace;
                 self.main_mode = MainMode::Workspace;
                 self.persist_workspace_pane_layout();
+                if self.startup_restore_complete {
+                    self.persist_open_tabs();
+                }
                 return;
             }
         }
-        // No existing tree or target leaf missing: create root dual split.
-        self.workspace_split = Some(WorkspacePaneNode::Split {
+        // Create a new per-tab dual split rooted at the primary session tab.
+        let root = WorkspacePaneNode::Split {
             id: split_id,
             direction,
             ratio_percent: WorkspacePaneNode::DEFAULT_RATIO_PERCENT,
-            first: Box::new(WorkspacePaneNode::leaf(primary_session_id)),
-            second: Box::new(WorkspacePaneNode::leaf(secondary_session_id)),
-        });
+            first: Box::new(WorkspacePaneNode::leaf(primary_session_id.clone())),
+            second: Box::new(WorkspacePaneNode::leaf(secondary_session_id.clone())),
+        };
+        self.session_pane_roots.insert(tab_root, root);
+        self.rebuild_session_tab_owners();
+        self.activate_session_id(&secondary_session_id);
+        self.sync_workspace_split_from_active_tab();
         self.selected_nav = NavItem::Workspace;
         self.main_mode = MainMode::Workspace;
         self.persist_workspace_pane_layout();
+        if self.startup_restore_complete {
+            self.persist_open_tabs();
+        }
     }
 
     pub(in crate::ui::view) fn activate_workspace_pane(
@@ -78,9 +174,10 @@ impl NyaTermApp {
             return;
         }
         self.activate_session_id(&session_id);
+        self.sync_workspace_split_from_active_tab();
         self.selected_nav = NavItem::Workspace;
         self.main_mode = MainMode::Workspace;
-        self.terminal_status = format!("focused pane {session_id}");
+        self.terminal_status = format!("focused pane {}", short_id(&session_id));
         cx.notify();
     }
 
@@ -108,6 +205,7 @@ impl NyaTermApp {
         if root.adjust_ratio_for_split(&split_id, delta) {
             let ratio = root.ratio_for_split(&split_id).unwrap_or(50);
             self.terminal_status = format!("split ratio {ratio}%");
+            self.write_back_active_tab_pane_root();
             self.persist_workspace_pane_layout();
         } else {
             self.terminal_status = "workspace is not split".to_string();
@@ -153,40 +251,49 @@ impl NyaTermApp {
     }
 
     pub(in crate::ui::view) fn unsplit_workspace(&mut self, cx: &mut Context<Self>) {
-        let Some(root) = self.workspace_split.take() else {
+        let Some(active_id) = self.active_session_id.clone() else {
+            self.terminal_status = "workspace is not split".to_string();
+            cx.notify();
+            return;
+        };
+        let tab_root = self.tab_root_for_session(&active_id);
+        let Some(root) = self.session_pane_roots.remove(&tab_root) else {
+            self.workspace_split = None;
             self.terminal_status = "workspace is not split".to_string();
             cx.notify();
             return;
         };
         self.workspace_split_resize = None;
 
-        // Prefer collapsing the focused split around the active session leaf.
-        // If the active leaf is inside a split, remove the sibling leaf path by
-        // keeping only the active session's branch.
-        if let Some(active_id) = self.active_session_id.clone() {
-            if let Some(collapsed) = collapse_around_session(root.clone(), &active_id) {
-                match collapsed {
-                    WorkspacePaneNode::Split { .. } => {
-                        self.workspace_split = Some(collapsed);
-                        self.terminal_status = "collapsed focused split".to_string();
-                    }
-                    WorkspacePaneNode::Leaf { session_id } => {
-                        self.active_session_id = Some(session_id);
-                        self.workspace_split = None;
-                        self.terminal_status = "workspace split closed".to_string();
-                    }
+        if let Some(collapsed) = collapse_around_session(root.clone(), &active_id) {
+            match collapsed {
+                WorkspacePaneNode::Split { .. } => {
+                    self.session_pane_roots.insert(tab_root, collapsed);
+                    self.terminal_status = "collapsed focused split".to_string();
                 }
-                self.persist_workspace_pane_layout();
-                cx.notify();
-                return;
+                WorkspacePaneNode::Leaf { session_id } => {
+                    self.activate_session_id(&session_id);
+                    self.terminal_status = "workspace split closed".to_string();
+                }
             }
+            self.rebuild_session_tab_owners();
+            self.sync_workspace_split_from_active_tab();
+            self.persist_workspace_pane_layout();
+            if self.startup_restore_complete {
+                self.persist_open_tabs();
+            }
+            cx.notify();
+            return;
         }
 
-        // Fallback: clear entire tree.
         let _ = root;
-        self.workspace_split = None;
+        self.rebuild_session_tab_owners();
+        self.sync_workspace_split_from_active_tab();
         self.terminal_status = "workspace split closed".to_string();
         self.persist_workspace_pane_layout();
+        if self.startup_restore_complete {
+            self.persist_open_tabs();
+        }
         cx.notify();
     }
 
@@ -285,6 +392,7 @@ impl NyaTermApp {
             if let Some(root) = self.workspace_split.as_mut() {
                 if root.set_ratio_for_split(&state.split_id, next) {
                     applied = true;
+                    self.write_back_active_tab_pane_root();
                 }
             }
         }
@@ -315,6 +423,7 @@ impl NyaTermApp {
             if self.terminal_windows_is_multi_leaf() {
                 self.persist_terminal_window_layout();
             } else if self.workspace_split.as_ref().is_some_and(|root| root.is_split()) {
+                self.write_back_active_tab_pane_root();
                 self.persist_workspace_pane_layout();
             }
             cx.notify();
@@ -372,6 +481,9 @@ impl NyaTermApp {
         if !self.startup_restore_complete {
             return;
         }
+        self.sync_workspace_split_from_active_tab();
+        // Prefer serializing a global layout when a single split covers every tab-root leaf.
+        // Otherwise store the active tab's split against ordered_sessions indexes (legacy key).
         let ordered = self
             .ordered_sessions()
             .into_iter()
@@ -381,7 +493,13 @@ impl NyaTermApp {
             .workspace_split
             .as_ref()
             .filter(|root| root.is_split())
-            .and_then(|root| root.serialize_layout(&ordered));
+            .and_then(|root| root.serialize_layout(&ordered))
+            .or_else(|| {
+                self.session_pane_roots
+                    .values()
+                    .find(|root| root.is_split())
+                    .and_then(|root| root.serialize_layout(&ordered))
+            });
         match ConnectionStore::open_with_portable_key_path(
             self.runtime.config_dir(),
             self.runtime.portable_key_path().map(ToOwned::to_owned),
@@ -446,7 +564,12 @@ impl NyaTermApp {
         } else if let Some(first) = restored.session_ids().into_iter().next() {
             self.active_session_id = Some(first);
         }
-        self.workspace_split = Some(restored);
+        // Install as a per-tab root under the first leaf (legacy global layout path).
+        if let Some(first) = restored.session_ids().into_iter().next() {
+            self.session_pane_roots.insert(first, restored);
+            self.rebuild_session_tab_owners();
+            self.sync_workspace_split_from_active_tab();
+        }
         self.selected_nav = NavItem::Workspace;
         self.main_mode = MainMode::Workspace;
         self.terminal_status = "restored workspace pane layout".to_string();

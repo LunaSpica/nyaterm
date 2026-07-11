@@ -257,6 +257,8 @@ impl NyaTermApp {
 
         self.active_session_id = Some(session_id.to_string());
         self.session_tab_scroll_into_view_pending = true;
+        // Keep workspace_split mirrored to the active tab's per-tab pane root.
+        self.sync_workspace_split_from_active_tab();
         self.transfer_auto_sync_cwd_last_at = None;
         if let Some(metadata) = self.session_metadata.get(session_id).cloned() {
             self.active_ssh_config = metadata.ssh_config;
@@ -298,11 +300,18 @@ impl NyaTermApp {
             cx.notify();
             return;
         }
-        self.activate_session_id(&session_id);
-        self.terminal_status = if disconnected {
-            format!("disconnected {}", short_id(&session_id))
+        // Strip selection targets tab roots; focus the preferred leaf under that tab.
+        let focus_id = if !self.is_secondary_pane_session(&session_id) {
+            self.active_pane_for_tab_root(&session_id)
         } else {
-            format!("active {}", short_id(&session_id))
+            session_id.clone()
+        };
+        let disconnected = self.is_session_disconnected(&focus_id) || disconnected;
+        self.activate_session_id(&focus_id);
+        self.terminal_status = if disconnected {
+            format!("disconnected {}", short_id(&focus_id))
+        } else {
+            format!("active {}", short_id(&focus_id))
         };
         self.selected_nav = NavItem::Workspace;
         cx.notify();

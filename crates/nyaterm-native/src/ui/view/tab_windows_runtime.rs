@@ -4,7 +4,7 @@ impl NyaTermApp {
     /// Ensure every live session appears in the multi-leaf layout once it is enabled.
     pub(in crate::ui::view) fn reconcile_terminal_windows(&mut self) {
         let live_ids = self
-            .ordered_sessions()
+            .ordered_tab_sessions()
             .into_iter()
             .map(|session| session.id)
             .collect::<Vec<_>>();
@@ -60,7 +60,7 @@ impl NyaTermApp {
             return;
         }
         let tab_ids = self
-            .ordered_sessions()
+            .ordered_tab_sessions()
             .into_iter()
             .map(|session| session.id)
             .collect::<Vec<_>>();
@@ -267,7 +267,7 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         let tab_ids = self
-            .ordered_sessions()
+            .ordered_tab_sessions()
             .into_iter()
             .map(|session| session.id)
             .collect::<Vec<_>>();
@@ -309,7 +309,7 @@ impl NyaTermApp {
         }
         // Only multi-leaf layouts are worth persisting; flat strip stores null.
         let ordered = self
-            .ordered_sessions()
+            .ordered_tab_sessions()
             .into_iter()
             .map(|session| session.id)
             .collect::<Vec<_>>();
@@ -340,7 +340,7 @@ impl NyaTermApp {
             return;
         }
         let ordered = self
-            .ordered_sessions()
+            .ordered_tab_sessions()
             .into_iter()
             .map(|session| session.id)
             .collect::<Vec<_>>();
