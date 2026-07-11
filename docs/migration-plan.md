@@ -699,3 +699,7 @@ service boundary first:
 - File Explorer: 30px-row spacer virtual window + wheel offset (`transfer_browser_list_offset`); search/sort/path reset.
 - Process: spacer padding accounts for expanded details height when selected.
 - Command History: dense rows with inline Run (right-click still runs).
+
+## 2026-07-11 Hex editor chrome + Docker image window
+- Hex editor: Tauri-like "HEX Editor" header strip + invalid flag; guide marks use `(group*13-1)` ch positions.
+- Docker Images: first-80 window with refine-search footer; resource rows densified to 52px.

@@ -348,9 +348,9 @@ pub(in crate::ui::view::panels) fn send_command_hex_guide_rows(draft: &str) -> V
             let cleaned: String = line.chars().filter(|ch| ch.is_ascii_hexdigit()).collect();
             let bytes = cleaned.len() / 2;
             let groups = bytes / 4;
-            // Position after group g (1-based) ~ g * 12 mono columns.
+            // Tauri: left = (groupNumber * 13 - 1) ch
             (1..=groups)
-                .map(|group| (group as u32) * 12)
+                .map(|group| (group as u32) * 13 - 1)
                 .take(24)
                 .collect()
         })

@@ -8,7 +8,10 @@ pub(in crate::ui::view::pages::remote) fn docker_images_panel(
     if images.is_empty() {
         rows = rows.child(empty_panel("No images loaded."));
     } else {
-        for image in images {
+        const WINDOW: usize = 80;
+        let total = images.len();
+        let slice = if total > WINDOW { &images[..WINDOW] } else { images };
+        for image in slice {
             let image_id = image.id.clone();
             let label = docker_image_label(image);
             rows = rows.child(
@@ -38,6 +41,16 @@ pub(in crate::ui::view::pages::remote) fn docker_images_panel(
                         );
                     }),
                 )),
+            );
+        }
+        if total > WINDOW {
+            rows = rows.child(
+                div()
+                    .px_2()
+                    .py_1()
+                    .text_size(px(10.))
+                    .text_color(rgb(0x6e7681))
+                    .child(format!("Showing first {WINDOW} of {total} images · refine search")),
             );
         }
     }
@@ -167,9 +180,9 @@ pub(in crate::ui::view::pages::remote) fn docker_resource_row(
     title: String,
     detail: String,
 ) -> gpui::Div {
-    // ~64px Tauri SIMPLE_ROW_HEIGHT-ish dense resource row.
+    // ~64px Tauri SIMPLE_ROW_HEIGHT-ish dense resource row (slightly tighter chrome).
     div()
-        .h(px(56.))
+        .h(px(52.))
         .rounded_md()
         .border_1()
         .border_color(rgb(0x30363d))
@@ -186,12 +199,12 @@ pub(in crate::ui::view::pages::remote) fn docker_resource_row(
                 .flex_1()
                 .flex()
                 .flex_col()
-                .gap_1()
+                .gap(px(2.))
                 .child(
                     div()
                         .text_size(px(12.))
-                        .font_weight(FontWeight(700.))
-                        .text_color(rgb(0xe5edf7))
+                        .font_weight(FontWeight(600.))
+                        .text_color(rgb(0xc9d1d9))
                         .overflow_hidden()
                         .child(truncate_preview(&title, 48)),
                 )

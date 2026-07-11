@@ -527,7 +527,44 @@ impl NyaTermApp {
                                             this.child(
                                                 div()
                                                     .absolute()
+                                                    .top_0()
+                                                    .left_0()
+                                                    .right_0()
+                                                    .h(px(22.))
+                                                    .px_2()
+                                                    .flex()
+                                                    .items_center()
+                                                    .justify_between()
+                                                    .border_b_1()
+                                                    .border_color(rgb(0x21262d))
+                                                    .bg(rgb(0x0d1117))
+                                                    .child(
+                                                        div()
+                                                            .text_size(px(10.))
+                                                            .font_weight(FontWeight(600.))
+                                                            .text_color(rgb(0x6e7681))
+                                                            .child("HEX Editor"),
+                                                    )
+                                                    .child(
+                                                        div()
+                                                            .text_size(px(10.))
+                                                            .text_color(if validation_error {
+                                                                rgb(0xff7b72)
+                                                            } else {
+                                                                rgb(0x6e7681)
+                                                            })
+                                                            .child(if validation_error {
+                                                                "Invalid hex"
+                                                            } else {
+                                                                ""
+                                                            }),
+                                                    ),
+                                            )
+                                            .child(
+                                                div()
+                                                    .absolute()
                                                     .inset_0()
+                                                    .top(px(22.))
                                                     .px_2()
                                                     .py_1()
                                                     .overflow_hidden()
@@ -544,12 +581,12 @@ impl NyaTermApp {
                                                                     |mark| {
                                                                         div()
                                                                             .absolute()
-                                                                            .top(px(1.))
+                                                                            .top(px(0.))
                                                                             .left(px(mark as f32 * 7.2))
-                                                                            .h(px(HEX_LINE_PX - 2.))
-                                                                            .w(px(1.))
+                                                                            .h(px(HEX_LINE_PX + 2.))
+                                                                            .w(px(2.))
                                                                             .bg(rgb(0x1f6feb))
-                                                                            .opacity(0.45)
+                                                                            .opacity(0.55)
                                                                     },
                                                                 ))
                                                         },
@@ -574,6 +611,10 @@ impl NyaTermApp {
                                         )
                                         .flex_1()
                                         .min_h(px(72.))
+                                        .when(
+                                            self.send_command_data_type == SendCommandDataType::Hex,
+                                            |this| this.pt(px(22.)),
+                                        )
                                         .font_family("JetBrains Mono")
                                         .track_focus(&self.send_command_focus)
                                         .on_click(cx.listener(|this, _, window, cx| {
