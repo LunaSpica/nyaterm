@@ -281,8 +281,12 @@ impl NyaTermApp {
                         .hover(|this| this.bg(rgb(palette.hover)).text_color(rgb(palette.text)))
                         .cursor_pointer()
                         .child("+")
-                        .on_click(cx.listener(|this, _, window, cx| {
-                            this.start_local_session(window, cx);
+                        .on_click(cx.listener({
+                            let leaf_id = id.clone();
+                            move |this, _, window, cx| {
+                                this.focused_terminal_window_leaf_id = Some(leaf_id.clone());
+                                this.start_local_session(window, cx);
+                            }
                         })),
                 );
                 let canvas = if active.is_empty() {
