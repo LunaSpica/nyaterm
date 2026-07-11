@@ -673,7 +673,7 @@ impl NyaTermApp {
             jobs = jobs.child(empty_panel("No SFTP transfer jobs yet.", self.theme_palette()));
         } else {
             for job in self.transfer_jobs.iter().rev().take(5) {
-                jobs = jobs.child(compact_transfer_job_row(job));
+                jobs = jobs.child(compact_transfer_job_row(palette, job));
             }
         }
 

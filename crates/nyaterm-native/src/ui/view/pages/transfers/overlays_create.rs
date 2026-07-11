@@ -430,6 +430,7 @@ impl NyaTermApp {
                             .child(truncate_preview(&state.parent_path, 92)),
                     )
                     .child(symlink_input_row(
+                        palette,
                         "transfer-new-symlink-name",
                         "Name",
                         if state.name.is_empty() {
@@ -448,6 +449,7 @@ impl NyaTermApp {
                         }),
                     ))
                     .child(symlink_input_row(
+                        palette,
                         "transfer-new-symlink-target",
                         "Target",
                         if state.target.is_empty() {

@@ -1,11 +1,10 @@
 use super::*;
 
-pub(super) fn transfer_browser_parent_entry_row(
+pub(super) fn transfer_browser_parent_entry_row(palette: crate::ui::theme::ThemePalette,
     current_path: String,
     column_widths: TransferBrowserColumnWidths,
-    cx: &mut Context<NyaTermApp>,
-) -> impl IntoElement {
-        let palette = cx.entity().read(cx).theme_palette();
+    cx: &mut Context<NyaTermApp>,) -> impl IntoElement  {
+    let palette = cx.entity().read(cx).theme_palette();
     let parent_path = remote_parent_path(&current_path);
     let context_path = current_path.clone();
     div()
@@ -50,11 +49,11 @@ pub(super) fn transfer_browser_parent_entry_row(
                 .child(transfer_entry_icon(true, false, false))
                 .child(".."),
         )
-        .child(transfer_browser_text_cell(column_widths.modified, ""))
-        .child(transfer_browser_text_cell(column_widths.size, "-"))
-        .child(transfer_browser_text_cell(column_widths.permissions, ""))
-        .child(transfer_browser_text_cell(column_widths.owner, ""))
-        .child(transfer_browser_text_cell(column_widths.group, ""))
+        .child(transfer_browser_text_cell(palette, column_widths.modified, ""))
+        .child(transfer_browser_text_cell(palette, column_widths.size, "-"))
+        .child(transfer_browser_text_cell(palette, column_widths.permissions, ""))
+        .child(transfer_browser_text_cell(palette, column_widths.owner, ""))
+        .child(transfer_browser_text_cell(palette, column_widths.group, ""))
         .child(
             div()
                 .w(TRANSFER_BROWSER_ACTIONS_WIDTH)
@@ -62,7 +61,7 @@ pub(super) fn transfer_browser_parent_entry_row(
                 .flex()
                 .items_center()
                 .gap_1()
-                .child(small_button(crate::ui::theme::theme_palette("github-dark"), 
+                .child(small_button(palette, 
                     "transfer-open-parent-entry",
                     "Up",
                     cx.listener(|this, _, window, cx| {
@@ -80,8 +79,7 @@ pub(super) fn transfer_browser_parent_entry_row(
         )
 }
 
-fn transfer_browser_text_cell(width: gpui::Pixels, value: &'static str) -> impl IntoElement {
-    let palette = crate::ui::theme::theme_palette("github-dark");
+fn transfer_browser_text_cell(palette: crate::ui::theme::ThemePalette, width: gpui::Pixels, value: &'static str) -> impl IntoElement  {
     div()
         .w(width)
         .flex_none()
@@ -91,7 +89,7 @@ fn transfer_browser_text_cell(width: gpui::Pixels, value: &'static str) -> impl 
         .child(value)
 }
 
-pub(super) fn transfer_browser_entry_row(
+pub(super) fn transfer_browser_entry_row(palette: crate::ui::theme::ThemePalette,
     entry: SftpFileEntry,
     selected_remote_path: Option<String>,
     selected_remote_paths: &HashSet<String>,
@@ -99,9 +97,8 @@ pub(super) fn transfer_browser_entry_row(
     rename_state: Option<TransferRenameState>,
     rename_focus: gpui::FocusHandle,
     ai_actions: Vec<AiCustomActionConfig>,
-    cx: &mut Context<NyaTermApp>,
-) -> impl IntoElement {
-        let palette = cx.entity().read(cx).theme_palette();
+    cx: &mut Context<NyaTermApp>,) -> impl IntoElement  {
+    let palette = cx.entity().read(cx).theme_palette();
     let entry_path = entry.path.clone();
     let mouse_down_path = entry.path.clone();
     let mouse_move_path = entry.path.clone();
@@ -362,7 +359,7 @@ pub(super) fn transfer_browser_entry_row(
                 .flex_none()
                 .gap_1()
                 .flex_wrap()
-                .child(small_button(crate::ui::theme::theme_palette("github-dark"), 
+                .child(small_button(palette, 
                     format!("transfer-mark-entry-{mark_path}"),
                     if is_marked { "Marked" } else { "Mark" },
                     cx.listener(move |this, _, _, cx| {
@@ -370,14 +367,14 @@ pub(super) fn transfer_browser_entry_row(
                     }),
                 ))
                 .when(is_directory, |this| {
-                    this.child(small_button(crate::ui::theme::theme_palette("github-dark"), 
+                    this.child(small_button(palette, 
                         format!("transfer-open-{open_path}"),
                         "Open",
                         cx.listener(move |this, _, window, cx| {
                             this.open_transfer_browser_directory(open_path.clone(), window, cx);
                         }),
                     ))
-                    .child(small_button(crate::ui::theme::theme_palette("github-dark"), 
+                    .child(small_button(palette, 
                         format!("transfer-favorite-entry-{favorite_path}"),
                         "Fav",
                         cx.listener(move |this, _, _, cx| {
@@ -386,7 +383,7 @@ pub(super) fn transfer_browser_entry_row(
                     ))
                 })
                 .when(!is_directory, |this| {
-                    this.child(small_button(crate::ui::theme::theme_palette("github-dark"), 
+                    this.child(small_button(palette, 
                         format!("transfer-open-default-entry-{}", default_open_entry.path),
                         "Open",
                         cx.listener(move |this, _, window, cx| {
@@ -397,7 +394,7 @@ pub(super) fn transfer_browser_entry_row(
                         let action = first_ai_action
                             .clone()
                             .expect("first AI action exists after is_some check");
-                        this.child(small_button(crate::ui::theme::theme_palette("github-dark"), 
+                        this.child(small_button(palette, 
                             format!(
                                 "transfer-ai-file-entry-{}-{}",
                                 first_ai_entry.path, action.id
@@ -414,7 +411,7 @@ pub(super) fn transfer_browser_entry_row(
                         ))
                     })
                 })
-                .child(small_button(crate::ui::theme::theme_palette("github-dark"), 
+                .child(small_button(palette, 
                     format!("transfer-download-entry-{download_path}"),
                     "DL",
                     cx.listener(move |this, _, window, cx| {
@@ -426,7 +423,7 @@ pub(super) fn transfer_browser_entry_row(
                         this.start_selected_sftp_download_jobs(window, cx);
                     }),
                 ))
-                .child(small_button(crate::ui::theme::theme_palette("github-dark"), 
+                .child(small_button(palette, 
                     format!("transfer-move-entry-{move_path}"),
                     "Move",
                     cx.listener(move |this, _, window, cx| {
@@ -434,7 +431,7 @@ pub(super) fn transfer_browser_entry_row(
                         this.open_transfer_move_dialog(move_path.clone(), window, cx);
                     }),
                 ))
-                .child(small_button(crate::ui::theme::theme_palette("github-dark"), 
+                .child(small_button(palette, 
                     format!("transfer-delete-entry-{delete_path}"),
                     "Del",
                     cx.listener(move |this, _, window, cx| {
@@ -446,7 +443,7 @@ pub(super) fn transfer_browser_entry_row(
                         this.open_selected_transfer_delete_dialog(window, cx);
                     }),
                 ))
-                .child(small_button(crate::ui::theme::theme_palette("github-dark"), 
+                .child(small_button(palette, 
                     format!("transfer-rename-entry-{rename_path}"),
                     "Rename",
                     cx.listener(move |this, _, window, cx| {
@@ -454,7 +451,7 @@ pub(super) fn transfer_browser_entry_row(
                         this.open_transfer_rename_dialog(window, cx);
                     }),
                 ))
-                .child(small_button(crate::ui::theme::theme_palette("github-dark"), 
+                .child(small_button(palette, 
                     format!("transfer-properties-entry-{}", properties_entry.path),
                     "Props",
                     cx.listener(move |this, _, window, cx| {

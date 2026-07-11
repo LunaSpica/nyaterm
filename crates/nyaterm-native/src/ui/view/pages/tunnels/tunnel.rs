@@ -9,10 +9,9 @@ pub(super) struct TunnelSection {
     tunnels: Vec<TunnelConfig>,
 }
 
-pub(super) fn tunnel_sections(
+pub(super) fn tunnel_sections(palette: crate::ui::theme::ThemePalette,
     tunnels: &[TunnelConfig],
-    groups: &[TunnelGroup],
-) -> Vec<TunnelSection> {
+    groups: &[TunnelGroup],) -> Vec<TunnelSection>  {
     let valid_group_ids = groups
         .iter()
         .map(|group| group.id.as_str())
@@ -55,13 +54,11 @@ pub(super) fn tunnel_sections(
     sections
 }
 
-pub(super) fn tunnel_section(
+pub(super) fn tunnel_section(palette: crate::ui::theme::ThemePalette,
     section: TunnelSection,
     open_tunnels: &HashMap<String, SshTunnelInfo>,
     app: &NyaTermApp,
-    cx: &mut Context<NyaTermApp>,
-) -> impl IntoElement {
-        let palette = cx.entity().read(cx).theme_palette();
+    cx: &mut Context<NyaTermApp>,) -> impl IntoElement  {
     let item_count = section.tunnels.len();
     let open_count = section
         .tunnels
@@ -113,6 +110,7 @@ pub(super) fn tunnel_section(
                     .flex()
                     .flex_col()
                     .child(tunnel_network_row(
+                        palette,
                         &tunnel,
                         connection_label,
                         open_info,
@@ -149,6 +147,7 @@ pub(super) fn tunnel_section(
                     ))
                     .when(move_picker_open, |this| {
                         this.child(tunnel_move_picker(
+                            palette,
                             tunnel.id.clone(),
                             current_group_id,
                             &app.tunnel_groups,
@@ -243,7 +242,7 @@ pub(super) fn tunnel_section(
                             .flex()
                             .items_center()
                             .gap_1()
-                            .child(small_button(crate::ui::theme::theme_palette("github-dark"), 
+                            .child(small_button(palette, 
                                 format!("tunnel-group-rename-{}", group.id),
                                 "Rename",
                                 cx.listener(move |this, _, _, cx| {
@@ -254,7 +253,7 @@ pub(super) fn tunnel_section(
                                     );
                                 }),
                             ))
-                            .child(small_button(crate::ui::theme::theme_palette("github-dark"), 
+                            .child(small_button(palette, 
                                 format!("tunnel-group-delete-{}", group.id),
                                 "Delete",
                                 cx.listener(move |this, _, _, cx| {
@@ -273,13 +272,11 @@ pub(super) fn tunnel_section(
         .when(!collapsed, |this| this.child(rows))
 }
 
-fn tunnel_move_picker(
+fn tunnel_move_picker(palette: crate::ui::theme::ThemePalette,
     tunnel_id: String,
     current_group_id: Option<String>,
     groups: &[TunnelGroup],
-    cx: &mut Context<NyaTermApp>,
-) -> gpui::Div {
-        let palette = cx.entity().read(cx).theme_palette();
+    cx: &mut Context<NyaTermApp>,) -> gpui::Div  {
     let mut targets = div().flex().flex_wrap().items_center().gap_2();
     if current_group_id.is_none() {
         targets = targets.child(status_pill(
@@ -289,7 +286,7 @@ fn tunnel_move_picker(
         ));
     } else {
         let target_id = tunnel_id.clone();
-        targets = targets.child(small_button(crate::ui::theme::theme_palette("github-dark"), 
+        targets = targets.child(small_button(palette, 
             format!("network-tunnel-move-{tunnel_id}-ungrouped"),
             "Ungrouped",
             cx.listener(move |this, _, _, cx| {
@@ -310,7 +307,7 @@ fn tunnel_move_picker(
         } else {
             let target_id = tunnel_id.clone();
             let group_id = group.id.clone();
-            targets = targets.child(small_button(crate::ui::theme::theme_palette("github-dark"), 
+            targets = targets.child(small_button(palette, 
                 format!("network-tunnel-move-{tunnel_id}-{}", group.id),
                 "Move Here",
                 cx.listener(move |this, _, _, cx| {
@@ -346,7 +343,7 @@ fn tunnel_move_picker(
         .child(targets)
 }
 
-pub(super) fn tunnel_network_row(
+pub(super) fn tunnel_network_row(palette: crate::ui::theme::ThemePalette,
     tunnel: &TunnelConfig,
     connection_label: String,
     open_info: Option<SshTunnelInfo>,
@@ -356,9 +353,7 @@ pub(super) fn tunnel_network_row(
     on_close: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
     on_edit: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
     on_move: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
-    on_delete: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
-) -> impl IntoElement {
-    let palette = crate::ui::theme::theme_palette("github-dark");
+    on_delete: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,) -> impl IntoElement  {
     let supported = tunnel_mode(tunnel).is_some();
     let is_open = open_info.is_some();
     let status = if pending {
@@ -370,7 +365,7 @@ pub(super) fn tunnel_network_row(
     } else {
         "porting"
     };
-    let (status_color, status_bg) = tunnel_status_style(pending, is_open, supported);
+    let (status_color, status_bg) = tunnel_status_style(palette, pending, is_open, supported);
     let bind = if tunnel.bind_localhost {
         "127.0.0.1"
     } else {
@@ -385,6 +380,7 @@ pub(super) fn tunnel_network_row(
         status_pill("…", rgb(palette.warning), rgb(palette.hover)).into_any_element()
     } else if is_open {
         network_switch_button(
+            palette,
             format!("network-tunnel-close-{}", tunnel.id),
             true,
             on_close,
@@ -392,6 +388,7 @@ pub(super) fn tunnel_network_row(
         .into_any_element()
     } else if supported {
         network_switch_button(
+            palette,
             format!("network-tunnel-open-{}", tunnel.id),
             false,
             on_open,
@@ -471,18 +468,21 @@ pub(super) fn tunnel_network_row(
                 .gap_1()
                 .child(toggle)
                 .child(network_icon_action(
+                    palette,
                     format!("network-tunnel-edit-{}", tunnel.id),
                     "icons/net/edit.svg",
                     on_edit,
                 ))
                 .when(group_count > 0, |this| {
                     this.child(network_icon_action(
+                        palette,
                         format!("network-tunnel-move-{}", tunnel.id),
                         "icons/net/move.svg",
                         on_move,
                     ))
                 })
                 .child(network_icon_action(
+                    palette,
                     format!("network-tunnel-delete-{}", tunnel.id),
                     "icons/net/delete.svg",
                     on_delete,
@@ -490,13 +490,10 @@ pub(super) fn tunnel_network_row(
         )
 }
 
-fn network_switch_button(
+fn network_switch_button(palette: crate::ui::theme::ThemePalette,
     id: impl Into<String>,
     on: bool,
-    on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
-) -> impl IntoElement {
-    let palette = crate::ui::theme::theme_palette("github-dark");
-    // Compact switch stand-in for Tauri Switch next to tunnel rows.
+    on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,) -> impl IntoElement {    // Compact switch stand-in for Tauri Switch next to tunnel rows.
     div()
         .id(gpui::SharedString::from(id.into()))
         .w(px(34.))
@@ -521,12 +518,10 @@ fn network_switch_button(
         .on_click(on_click)
 }
 
-fn network_icon_action(
+fn network_icon_action(palette: crate::ui::theme::ThemePalette,
     id: impl Into<String>,
     label: &'static str,
-    on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
-) -> impl IntoElement {
-    let palette = crate::ui::theme::theme_palette("github-dark");
+    on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,) -> impl IntoElement  {
     div()
         .id(gpui::SharedString::from(id.into()))
         .size(px(24.))
@@ -547,13 +542,11 @@ fn network_icon_action(
         .on_click(on_click)
 }
 
-pub(super) fn network_tunnel_editor_panel(
+pub(super) fn network_tunnel_editor_panel(palette: crate::ui::theme::ThemePalette,
     editor: NetworkTunnelEditorState,
     app: &NyaTermApp,
     focus: &gpui::FocusHandle,
-    cx: &mut Context<NyaTermApp>,
-) -> impl IntoElement {
-        let palette = cx.entity().read(cx).theme_palette();
+    cx: &mut Context<NyaTermApp>,) -> impl IntoElement  {
     let connection_label = editor
         .connection_id
         .as_deref()
@@ -624,6 +617,7 @@ pub(super) fn network_tunnel_editor_panel(
                 .grid_cols(3)
                 .gap_2()
                 .child(tunnel_editor_input(
+                    palette,
                     "network-tunnel-editor-name",
                     "Tunnel name",
                     editor.name.clone(),
@@ -633,6 +627,7 @@ pub(super) fn network_tunnel_editor_panel(
                     cx,
                 ))
                 .child(tunnel_editor_selector(
+                    palette,
                     "network-tunnel-editor-type",
                     "Type",
                     mode_label.to_string(),
@@ -641,6 +636,7 @@ pub(super) fn network_tunnel_editor_panel(
                     }),
                 ))
                 .child(tunnel_editor_selector(
+                    palette,
                     "network-tunnel-editor-group",
                     "Group",
                     group_label,
@@ -655,6 +651,7 @@ pub(super) fn network_tunnel_editor_panel(
                 .grid_cols(2)
                 .gap_2()
                 .child(tunnel_editor_selector(
+                    palette,
                     "network-tunnel-editor-connection",
                     "SSH connection",
                     connection_label,
@@ -663,6 +660,7 @@ pub(super) fn network_tunnel_editor_panel(
                     }),
                 ))
                 .child(tunnel_editor_input(
+                    palette,
                     "network-tunnel-editor-listen-port",
                     match editor.tunnel_type.as_str() {
                         "remote" => "Remote listen port",
@@ -683,6 +681,7 @@ pub(super) fn network_tunnel_editor_panel(
                     .grid_cols(2)
                     .gap_2()
                     .child(tunnel_editor_input(
+                        palette,
                         "network-tunnel-editor-target-host",
                         match editor.tunnel_type.as_str() {
                             "remote" => "Remote target host",
@@ -695,6 +694,7 @@ pub(super) fn network_tunnel_editor_panel(
                         cx,
                     ))
                     .child(tunnel_editor_input(
+                        palette,
                         "network-tunnel-editor-target-port",
                         match editor.tunnel_type.as_str() {
                             "remote" => "Remote target port",
@@ -714,6 +714,7 @@ pub(super) fn network_tunnel_editor_panel(
                 .grid_cols(3)
                 .gap_2()
                 .child(tunnel_editor_option(
+                    palette,
                     "network-tunnel-editor-bind-local",
                     "Localhost only",
                     "127.0.0.1",
@@ -723,6 +724,7 @@ pub(super) fn network_tunnel_editor_panel(
                     }),
                 ))
                 .child(tunnel_editor_option(
+                    palette,
                     "network-tunnel-editor-bind-all",
                     "All interfaces",
                     "0.0.0.0",
@@ -732,6 +734,7 @@ pub(super) fn network_tunnel_editor_panel(
                     }),
                 ))
                 .child(tunnel_editor_option(
+                    palette,
                     "network-tunnel-editor-auto",
                     "Auto open",
                     "with connection",
@@ -778,15 +781,14 @@ pub(super) fn network_tunnel_editor_panel(
     network_modal_shell(cx.entity().read(cx).theme_palette(), "network-tunnel-editor-modal", 640., card)
 }
 
-pub(super) fn tunnel_editor_input(
+pub(super) fn tunnel_editor_input(palette: crate::ui::theme::ThemePalette,
     id: impl Into<String>,
     label: &'static str,
     value: String,
     active: bool,
     field: NetworkTunnelEditorField,
     focus: &gpui::FocusHandle,
-    cx: &mut Context<NyaTermApp>,
-) -> impl IntoElement {
+    cx: &mut Context<NyaTermApp>,) -> impl IntoElement  {
     transfer_input(id, label, value, active, crate::ui::theme::theme_palette(&cx.entity().read(cx).settings.theme))
         .track_focus(focus)
         .on_click(cx.listener(move |this, _, window, cx| {
@@ -798,13 +800,11 @@ pub(super) fn tunnel_editor_input(
         }))
 }
 
-pub(super) fn tunnel_editor_selector(
+pub(super) fn tunnel_editor_selector(palette: crate::ui::theme::ThemePalette,
     id: impl Into<String>,
     label: &'static str,
     value: String,
-    on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
-) -> impl IntoElement {
-    let palette = crate::ui::theme::theme_palette("github-dark");
+    on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,) -> impl IntoElement  {
     div()
         .id(gpui::SharedString::from(id.into()))
         .h(px(52.))
@@ -830,15 +830,12 @@ pub(super) fn tunnel_editor_selector(
         .on_click(on_click)
 }
 
-pub(super) fn tunnel_editor_option(
+pub(super) fn tunnel_editor_option(palette: crate::ui::theme::ThemePalette,
     id: impl Into<String>,
     title: &'static str,
     detail: &'static str,
     active: bool,
-    on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
-) -> impl IntoElement {
-    let palette = crate::ui::theme::theme_palette("github-dark");
-    // Tauri-like selectable option cards for bind host / auto open.
+    on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,) -> impl IntoElement {    // Tauri-like selectable option cards for bind host / auto open.
     div()
         .id(gpui::SharedString::from(id.into()))
         .rounded_md()
@@ -863,7 +860,7 @@ pub(super) fn tunnel_editor_option(
         .on_click(on_click)
 }
 
-pub(super) fn tunnel_editor_preview(editor: &NetworkTunnelEditorState) -> String {
+pub(super) fn tunnel_editor_preview(editor: &NetworkTunnelEditorState) -> String  {
     let bind_host = if editor.bind_localhost {
         "127.0.0.1"
     } else {
@@ -898,8 +895,7 @@ pub(super) fn tunnel_editor_preview(editor: &NetworkTunnelEditorState) -> String
     }
 }
 
-pub(super) fn tunnel_status_style(pending: bool, is_open: bool, supported: bool) -> (Hsla, Hsla) {
-    let palette = crate::ui::theme::theme_palette("github-dark");
+pub(super) fn tunnel_status_style(palette: crate::ui::theme::ThemePalette, pending: bool, is_open: bool, supported: bool) -> (Hsla, Hsla)  {
     if pending {
         (rgb(palette.warning).into(), rgb(palette.hover).into())
     } else if is_open {
@@ -911,7 +907,7 @@ pub(super) fn tunnel_status_style(pending: bool, is_open: bool, supported: bool)
     }
 }
 
-pub(super) fn tunnel_matches(tunnel: &TunnelConfig, query: &str) -> bool {
+pub(super) fn tunnel_matches(tunnel: &TunnelConfig, query: &str) -> bool  {
     if query.is_empty() {
         return true;
     }

@@ -9,6 +9,7 @@ pub(in crate::ui::view::pages::remote) fn docker_compose_panel(
     open_menu_id: Option<&str>,
     cx: &mut Context<NyaTermApp>,
 ) -> impl IntoElement {
+    let palette = super::cx_theme_palette(cx);
     // Tauri Compose tab: dense project rows (≈74px) + chevron + ⋮ overflow; services ≈58px.
     let mut rows = div().flex().flex_col().gap_1();
     if projects.is_empty() {
@@ -38,7 +39,7 @@ pub(in crate::ui::view::pages::remote) fn docker_compose_panel(
         }
     }
 
-    docker_resource_static_panel("Compose", projects.len(), rows)
+    docker_resource_static_panel(palette, "Compose", projects.len(), rows)
 }
 
 fn docker_compose_project_row(
@@ -58,7 +59,7 @@ fn docker_compose_project_row(
         !value.trim().is_empty() && value.trim().to_ascii_lowercase() != "n/a"
     });
     let status_label = compose_status_label(&project.status);
-    let status_color = compose_status_color(status_label);
+    let status_color = compose_status_color(palette, status_label);
     let chevron = if expanded { "▾" } else { "▸" };
     let key_for_toggle = project_key.to_string();
 
@@ -250,7 +251,7 @@ pub(in crate::ui::view::pages::remote) fn docker_compose_services_panel(
                         .overflow_hidden()
                         .child(truncate_preview(&error, 80)),
                 )
-                .child(small_button(crate::ui::theme::theme_palette("github-dark"), 
+                .child(small_button(super::cx_theme_palette(cx), 
                     format!("docker-compose-retry-{project_name}"),
                     "Retry",
                     cx.listener({
@@ -339,7 +340,7 @@ pub(in crate::ui::view::pages::remote) fn docker_compose_service_row(
     };
     let service_name = service.name.clone();
     let service_status_label = compose_status_label(&service.status);
-    let service_status_color = compose_status_color(service_status_label);
+    let service_status_color = compose_status_color(palette, service_status_label);
     let running_container_id = service
         .containers
         .iter()
@@ -460,6 +461,7 @@ fn docker_compose_project_action_menu(
         .flex_col()
         .on_mouse_down(gpui::MouseButton::Left, |_, _, _| {})
         .child(compose_menu_item(
+            palette,
             format!("compose-up-{short}"),
             "Up",
             false,
@@ -479,6 +481,7 @@ fn docker_compose_project_action_menu(
             }),
         ))
         .child(compose_menu_item(
+            palette,
             format!("compose-restart-{short}"),
             "Restart",
             false,
@@ -497,8 +500,9 @@ fn docker_compose_project_action_menu(
                 }
             }),
         ))
-        .child(compose_menu_separator())
+        .child(compose_menu_separator(palette))
         .child(compose_menu_item(
+            palette,
             format!("compose-down-{short}"),
             "Down",
             false,
@@ -547,6 +551,7 @@ fn docker_compose_service_action_menu(
         .flex_col()
         .on_mouse_down(gpui::MouseButton::Left, |_, _, _| {})
         .child(compose_menu_item(
+            palette,
             format!("compose-svc-logs-{short}"),
             "Logs",
             false,
@@ -566,6 +571,7 @@ fn docker_compose_service_action_menu(
             }),
         ))
         .child(compose_menu_item(
+            palette,
             format!("compose-svc-enter-{short}"),
             "Enter",
             !can_enter,
@@ -576,8 +582,9 @@ fn docker_compose_service_action_menu(
                 }
             }),
         ))
-        .child(compose_menu_separator())
+        .child(compose_menu_separator(palette))
         .child(compose_menu_item(
+            palette,
             format!("compose-svc-up-{short}"),
             "Up",
             false,
@@ -599,6 +606,7 @@ fn docker_compose_service_action_menu(
             }),
         ))
         .child(compose_menu_item(
+            palette,
             format!("compose-svc-stop-{short}"),
             "Stop",
             false,
@@ -620,6 +628,7 @@ fn docker_compose_service_action_menu(
             }),
         ))
         .child(compose_menu_item(
+            palette,
             format!("compose-svc-restart-{short}"),
             "Restart",
             false,
@@ -642,14 +651,11 @@ fn docker_compose_service_action_menu(
         ))
 }
 
-fn compose_menu_item(
+fn compose_menu_item(palette: crate::ui::theme::ThemePalette,
     id: impl Into<String>,
     label: &'static str,
     disabled: bool,
-    on_click: impl Fn(&gpui::ClickEvent, &mut gpui::Window, &mut gpui::App) + 'static,
-) -> impl IntoElement {
-    let palette = crate::ui::theme::theme_palette("github-dark");
-    div()
+    on_click: impl Fn(&gpui::ClickEvent, &mut gpui::Window, &mut gpui::App) + 'static,) -> impl IntoElement {    div()
         .id(SharedString::from(id.into()))
         .h(px(28.))
         .px_3()
@@ -670,9 +676,7 @@ fn compose_menu_item(
         .child(label)
 }
 
-fn compose_menu_separator() -> impl IntoElement {
-    let palette = crate::ui::theme::theme_palette("github-dark");
-    div().h(px(1.)).mx_2().my_1().bg(rgb(palette.border))
+fn compose_menu_separator(palette: crate::ui::theme::ThemePalette) -> impl IntoElement {    div().h(px(1.)).mx_2().my_1().bg(rgb(palette.border))
 }
 
 fn compose_status_label(status: &str) -> &'static str {
@@ -694,9 +698,7 @@ fn compose_status_label(status: &str) -> &'static str {
     }
 }
 
-fn compose_status_color(status: &str) -> gpui::Hsla {
-    let palette = crate::ui::theme::theme_palette("github-dark");
-    match status {
+fn compose_status_color(palette: crate::ui::theme::ThemePalette, status: &str) -> gpui::Hsla {    match status {
         "running" => rgb(palette.success).into(),
         "stopped" => rgb(0xfca5a5).into(),
         "created" | "paused" => rgb(0xfbbf24).into(),

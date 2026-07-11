@@ -6,7 +6,7 @@ pub(in crate::ui::view::pages::remote) fn docker_details_panel(
     container: Option<DockerContainer>,
     cx: &mut Context<NyaTermApp>,
 ) -> impl IntoElement {
-    let palette = crate::ui::theme::theme_palette("github-dark");
+    let palette = super::cx_theme_palette(cx);
     let Some(details) = details else {
         return div()
             .rounded_md()
@@ -131,14 +131,14 @@ pub(in crate::ui::view::pages::remote) fn docker_details_panel(
     let mut actions = div().flex().items_center().gap_2();
     if let Some(container_id) = container_id.clone() {
         actions = actions
-            .child(small_button(crate::ui::theme::theme_palette("github-dark"), 
+            .child(small_button(super::cx_theme_palette(cx), 
                 format!("docker-details-refresh-{}", compact_id(&container_id)),
                 "Refresh",
                 cx.listener(move |this, _, window, cx| {
                     this.load_docker_details(container_id.clone(), window, cx);
                 }),
             ))
-            .child(small_button(crate::ui::theme::theme_palette("github-dark"), 
+            .child(small_button(super::cx_theme_palette(cx), 
                 "docker-details-close",
                 "Close",
                 cx.listener(|this, _, _, cx| {
@@ -201,7 +201,7 @@ pub(in crate::ui::view::pages::remote) fn docker_details_panel(
                 .grid()
                 .grid_cols(5)
                 .gap_2()
-                .child(metric(crate::ui::theme::theme_palette("github-dark"), 
+                .child(metric(super::cx_theme_palette(cx), 
                     "CPU",
                     details
                         .stats
@@ -209,7 +209,7 @@ pub(in crate::ui::view::pages::remote) fn docker_details_panel(
                         .map(|stats| format!("{:.1}%", stats.cpu_percent))
                         .unwrap_or_else(|| "n/a".to_string()),
                 ))
-                .child(metric(crate::ui::theme::theme_palette("github-dark"), 
+                .child(metric(super::cx_theme_palette(cx), 
                     "Memory",
                     details
                         .stats
@@ -217,7 +217,7 @@ pub(in crate::ui::view::pages::remote) fn docker_details_panel(
                         .map(|stats| format!("{:.1}%", stats.memory_percent))
                         .unwrap_or_else(|| "n/a".to_string()),
                 ))
-                .child(metric(crate::ui::theme::theme_palette("github-dark"), 
+                .child(metric(super::cx_theme_palette(cx), 
                     "Net IO",
                     details
                         .stats
@@ -225,7 +225,7 @@ pub(in crate::ui::view::pages::remote) fn docker_details_panel(
                         .map(|stats| truncate_preview(&stats.net_io, 24))
                         .unwrap_or_else(|| "n/a".to_string()),
                 ))
-                .child(metric(crate::ui::theme::theme_palette("github-dark"), 
+                .child(metric(super::cx_theme_palette(cx), 
                     "Block IO",
                     details
                         .stats
@@ -233,7 +233,7 @@ pub(in crate::ui::view::pages::remote) fn docker_details_panel(
                         .map(|stats| truncate_preview(&stats.block_io, 24))
                         .unwrap_or_else(|| "n/a".to_string()),
                 ))
-                .child(metric(crate::ui::theme::theme_palette("github-dark"), 
+                .child(metric(super::cx_theme_palette(cx), 
                     "PIDs",
                     details
                         .stats
@@ -258,6 +258,7 @@ pub(in crate::ui::view::pages::remote) fn docker_details_panel(
                             .child("Identity"),
                     )
                     .child(docker_detail_line(
+                        palette,
                         "Name",
                         container.name.clone(),
                         truncate_preview(&container.name, 72),
@@ -265,6 +266,7 @@ pub(in crate::ui::view::pages::remote) fn docker_details_panel(
                         cx,
                     ))
                     .child(docker_detail_line(
+                        palette,
                         "ID",
                         container.id.clone(),
                         truncate_preview(&container.id, 72),
@@ -272,6 +274,7 @@ pub(in crate::ui::view::pages::remote) fn docker_details_panel(
                         cx,
                     ))
                     .child(docker_detail_line(
+                        palette,
                         "Image",
                         container.image.clone(),
                         truncate_preview(&container.image, 72),
@@ -279,6 +282,7 @@ pub(in crate::ui::view::pages::remote) fn docker_details_panel(
                         cx,
                     ))
                     .child(docker_detail_line(
+                        palette,
                         "Status",
                         if container.status.trim().is_empty() {
                             container.state.clone()
@@ -297,6 +301,7 @@ pub(in crate::ui::view::pages::remote) fn docker_details_panel(
                         cx,
                     ))
                     .child(docker_detail_line(
+                        palette,
                         "Created",
                         container.created_at.clone(),
                         truncate_preview(&container.created_at, 72),
@@ -304,6 +309,7 @@ pub(in crate::ui::view::pages::remote) fn docker_details_panel(
                         cx,
                     ))
                     .child(docker_detail_line(
+                        palette,
                         "Size",
                         if container.size.trim().is_empty() {
                             "-".to_string()
@@ -319,6 +325,7 @@ pub(in crate::ui::view::pages::remote) fn docker_details_panel(
                         cx,
                     ))
                     .child(docker_detail_line(
+                        palette,
                         "Ports",
                         if container.ports.trim().is_empty() {
                             "-".to_string()
@@ -348,6 +355,7 @@ pub(in crate::ui::view::pages::remote) fn docker_details_panel(
                         .bg(rgb(palette.section_header))
                         .p_2()
                         .child(docker_detail_line(
+                            palette,
                             "Started",
                             details.started_at.clone(),
                             truncate_preview(&details.started_at, 52),
@@ -355,6 +363,7 @@ pub(in crate::ui::view::pages::remote) fn docker_details_panel(
                             cx,
                         ))
                         .child(docker_detail_line(
+                            palette,
                             "Finished",
                             details.finished_at.clone(),
                             truncate_preview(&details.finished_at, 52),
@@ -362,6 +371,7 @@ pub(in crate::ui::view::pages::remote) fn docker_details_panel(
                             cx,
                         ))
                         .child(docker_detail_line(
+                            palette,
                             "Restarts",
                             details.restart_count.to_string(),
                             details.restart_count.to_string(),
@@ -369,6 +379,7 @@ pub(in crate::ui::view::pages::remote) fn docker_details_panel(
                             cx,
                         ))
                         .child(docker_detail_line(
+                            palette,
                             "Entrypoint",
                             details.entrypoint.clone(),
                             truncate_preview(&details.entrypoint, 72),
@@ -376,6 +387,7 @@ pub(in crate::ui::view::pages::remote) fn docker_details_panel(
                             cx,
                         ))
                         .child(docker_detail_line(
+                            palette,
                             "Command",
                             details.command.clone(),
                             truncate_preview(&details.command, 72),
@@ -398,6 +410,7 @@ pub(in crate::ui::view::pages::remote) fn docker_details_panel(
                                 .child("Networks"),
                         )
                         .child(docker_detail_line(
+                            palette,
                             "Networks",
                             networks_value.clone(),
                             truncate_preview(&networks_value, 96),
@@ -422,6 +435,7 @@ pub(in crate::ui::view::pages::remote) fn docker_details_panel(
                         .child("Mounts"),
                 )
                 .child(docker_detail_line(
+                    palette,
                     "Mounts",
                     mounts_value.clone(),
                     truncate_preview(&mounts_value, 120),
@@ -432,15 +446,12 @@ pub(in crate::ui::view::pages::remote) fn docker_details_panel(
         )
 }
 
-fn docker_detail_line(
+fn docker_detail_line(palette: crate::ui::theme::ThemePalette,
     label: &'static str,
     value: String,
     display_value: String,
     copyable: bool,
-    cx: &mut Context<NyaTermApp>,
-) -> gpui::Div {
-    let palette = crate::ui::theme::theme_palette("github-dark");
-    let copy_value = value.clone();
+    cx: &mut Context<NyaTermApp>,) -> gpui::Div {    let copy_value = value.clone();
     div()
         .mt_1()
         .flex()
@@ -466,7 +477,7 @@ fn docker_detail_line(
                 .child(display_value),
         )
         .when(copyable && value.trim() != "-", |this| {
-            this.child(small_button(crate::ui::theme::theme_palette("github-dark"), 
+            this.child(small_button(palette, 
                 format!("docker-details-copy-{label}"),
                 "Copy",
                 cx.listener(move |this, _, _, cx| {

@@ -880,3 +880,8 @@ service boundary first:
 - Process Manager free helpers (`process_table_*`, menus, resource gauge/summary cards, `usage_color`, compact remote SVG buttons) take live palette; Process/Stats views pass `self.theme_palette()`.
 - Connections local icon/menu free helpers themed; stats CPU core rows use live palette tokens.
 - Remaining dark fallbacks concentrated in Transfers/Tunnels/Docker free helpers and some settings/panels.
+
+## 2026-07-11 Transfers Network Docker free helpers live ThemePalette
+- Transfer browser toolbar/footer/entry rows/queue helpers, progress bar, and overlay menus take live `ThemePalette`.
+- Tunnel/proxy section/editor/status free helpers take live palette; residual small_button dark fallbacks cleared in those modules.
+- Docker tab/details/resources/compose/container free helpers use palette params or `cx_theme_palette(cx)`.

@@ -8,8 +8,7 @@ use nyaterm_session::{
 use crate::ui::components::status_pill;
 use crate::ui::models::{TransferJobKind, TransferJobState, TransferJobStatus};
 
-pub(in crate::ui::view) fn compact_transfer_job_row(job: &TransferJobState) -> impl IntoElement {
-    let palette = crate::ui::theme::theme_palette("github-dark");
+pub(in crate::ui::view) fn compact_transfer_job_row(palette: ThemePalette, job: &TransferJobState) -> impl IntoElement  {
     let (status_fg, status_bg) = match job.status {
         TransferJobStatus::Running => (rgb(palette.success), rgb(palette.hover)),
         TransferJobStatus::Paused => (rgb(0xfacc15), rgb(0x3a2f14)),
@@ -58,7 +57,7 @@ pub(in crate::ui::view) fn compact_transfer_job_row(job: &TransferJobState) -> i
         )
 }
 
-pub(in crate::ui::view) fn duplicate_policy_label(policy: SftpDuplicatePolicy) -> &'static str {
+pub(in crate::ui::view) fn duplicate_policy_label(policy: SftpDuplicatePolicy) -> &'static str  {
     match policy {
         SftpDuplicatePolicy::Ask => "ask",
         SftpDuplicatePolicy::Overwrite => "overwrite",
@@ -73,7 +72,7 @@ pub(in crate::ui::view) fn transfer_input(
     value: String,
     active: bool,
     palette: ThemePalette,
-) -> gpui::Stateful<gpui::Div> {
+) -> gpui::Stateful<gpui::Div>  {
     div()
         .id(SharedString::from(id.into()))
         .h(px(36.))
@@ -101,7 +100,7 @@ pub(in crate::ui::view) fn transfer_input(
         )
 }
 
-pub(in crate::ui::view) fn transfer_job_title(kind: &TransferJobKind) -> String {
+pub(in crate::ui::view) fn transfer_job_title(kind: &TransferJobKind) -> String  {
     match kind {
         TransferJobKind::ListDir { remote_path, .. } => format!("List {remote_path}"),
         TransferJobKind::ResolveHome => "Resolve remote home".to_string(),
@@ -148,7 +147,7 @@ pub(in crate::ui::view) fn transfer_job_title(kind: &TransferJobKind) -> String 
     }
 }
 
-pub(in crate::ui::view) fn transfer_status_label(status: TransferJobStatus) -> &'static str {
+pub(in crate::ui::view) fn transfer_status_label(status: TransferJobStatus) -> &'static str  {
     match status {
         TransferJobStatus::Running => "Running",
         TransferJobStatus::Paused => "Paused",
@@ -159,10 +158,7 @@ pub(in crate::ui::view) fn transfer_status_label(status: TransferJobStatus) -> &
     }
 }
 
-pub(in crate::ui::view) fn transfer_progress_bar(
-    progress: &SftpTransferProgress,
-) -> gpui::AnyElement {
-    let palette = crate::ui::theme::theme_palette("github-dark");
+pub(in crate::ui::view) fn transfer_progress_bar(palette: ThemePalette, progress: &SftpTransferProgress,) -> gpui::AnyElement  {
     let percent = progress
         .total_bytes
         .filter(|total| *total > 0)
@@ -199,7 +195,7 @@ pub(in crate::ui::view) fn transfer_progress_bar(
         .into_any_element()
 }
 
-pub(in crate::ui::view) fn format_transfer_progress(progress: &SftpTransferProgress) -> String {
+pub(in crate::ui::view) fn format_transfer_progress(progress: &SftpTransferProgress) -> String  {
     let transferred = format_file_size(Some(progress.bytes_transferred));
     match progress.total_bytes.filter(|total| *total > 0) {
         Some(total) => {
@@ -213,7 +209,7 @@ pub(in crate::ui::view) fn format_transfer_progress(progress: &SftpTransferProgr
     }
 }
 
-pub(in crate::ui::view) fn entry_kind_label(file_type: SftpFileType) -> &'static str {
+pub(in crate::ui::view) fn entry_kind_label(file_type: SftpFileType) -> &'static str  {
     match file_type {
         SftpFileType::Directory => "dir",
         SftpFileType::File => "file",
@@ -222,7 +218,7 @@ pub(in crate::ui::view) fn entry_kind_label(file_type: SftpFileType) -> &'static
     }
 }
 
-pub(in crate::ui::view) fn format_file_size(size: Option<u64>) -> String {
+pub(in crate::ui::view) fn format_file_size(size: Option<u64>) -> String  {
     let Some(size) = size else {
         return String::new();
     };
@@ -237,7 +233,7 @@ pub(in crate::ui::view) fn format_file_size(size: Option<u64>) -> String {
 
 pub(in crate::ui::view) fn duplicate_decision_label(
     decision: SftpDuplicateDecision,
-) -> &'static str {
+) -> &'static str  {
     match decision {
         SftpDuplicateDecision::Overwrite => "overwrite",
         SftpDuplicateDecision::Skip => "skip",

@@ -133,17 +133,17 @@ impl NyaTermApp {
                             .flex()
                             .flex_col()
                             .gap_2()
-                            .child(property_row("Name", truncate_preview(&entry.name, 76)))
-                            .child(property_row("Type", entry_kind_label(entry.file_type)))
-                            .child(property_row("Location", truncate_preview(&location, 76)))
-                            .child(property_row("Path", truncate_preview(&entry.path, 82)))
-                            .child(property_row("Size", format_file_size(size)))
-                            .child(property_row("Modified", format_sftp_modified(modified_at)))
-                            .child(property_row("Accessed", format_sftp_modified(accessed_at)))
-                            .child(property_row("Owner", owner))
-                            .child(property_row("Group", group))
-                            .child(property_row("Permissions", permissions))
-                            .child(property_row("Mode", symbolic)),
+                            .child(property_row(palette, "Name", truncate_preview(&entry.name, 76)))
+                            .child(property_row(palette, "Type", entry_kind_label(entry.file_type)))
+                            .child(property_row(palette, "Location", truncate_preview(&location, 76)))
+                            .child(property_row(palette, "Path", truncate_preview(&entry.path, 82)))
+                            .child(property_row(palette, "Size", format_file_size(size)))
+                            .child(property_row(palette, "Modified", format_sftp_modified(modified_at)))
+                            .child(property_row(palette, "Accessed", format_sftp_modified(accessed_at)))
+                            .child(property_row(palette, "Owner", owner))
+                            .child(property_row(palette, "Group", group))
+                            .child(property_row(palette, "Permissions", permissions))
+                            .child(property_row(palette, "Mode", symbolic)),
                     )
                     .child(
                         div()
@@ -168,6 +168,7 @@ impl NyaTermApp {
                             .flex_col()
                             .gap_2()
                             .child(property_input_row(
+                                palette,
                                 "transfer-properties-mode-input",
                                 "Mode",
                                 &state.mode_value,
@@ -182,6 +183,7 @@ impl NyaTermApp {
                                 }),
                             ))
                             .child(property_input_row(
+                                palette,
                                 "transfer-properties-owner-input",
                                 "Owner",
                                 &state.owner_value,
@@ -196,6 +198,7 @@ impl NyaTermApp {
                                 }),
                             ))
                             .child(property_input_row(
+                                palette,
                                 "transfer-properties-group-input",
                                 "Group",
                                 &state.group_value,

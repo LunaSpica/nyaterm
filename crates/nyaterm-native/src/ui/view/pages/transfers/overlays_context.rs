@@ -4,8 +4,8 @@ impl NyaTermApp {
     pub(in crate::ui::view) fn transfer_browser_context_menu_overlay(
         &mut self,
         cx: &mut Context<Self>,
-    ) -> impl IntoElement {
-        let palette = self.theme_palette();
+    ) -> impl IntoElement  {
+    let palette = self.theme_palette();
         let state =
             self.transfer_browser_context_menu
                 .clone()
@@ -30,6 +30,7 @@ impl NyaTermApp {
             let action_id = action.id.clone();
             let label = truncate_preview(&action.name, 28);
             ai_actions = ai_actions.child(context_menu_button(
+                palette,
                 format!("transfer-context-ai-{action_id}"),
                 label,
                 cx.listener(move |this, _, window, cx| {
@@ -108,8 +109,9 @@ impl NyaTermApp {
                     )
                     .when(state.is_current_directory, |this| {
                         this.child(
-                            context_menu_group()
+                            context_menu_group(palette)
                                 .child(context_menu_button(
+                                    palette,
                                     "transfer-context-current-refresh",
                                     "Refresh",
                                     cx.listener(|this, _, window, cx| {
@@ -118,6 +120,7 @@ impl NyaTermApp {
                                     }),
                                 ))
                                 .child(context_menu_button(
+                                    palette,
                                     "transfer-context-current-upload-file",
                                     "Upload File",
                                     cx.listener(|this, _, _, cx| {
@@ -129,6 +132,7 @@ impl NyaTermApp {
                                     }),
                                 ))
                                 .child(context_menu_button(
+                                    palette,
                                     "transfer-context-current-upload-folder",
                                     "Upload Folder",
                                     cx.listener(|this, _, _, cx| {
@@ -141,8 +145,9 @@ impl NyaTermApp {
                                 )),
                         )
                         .child(
-                            context_menu_group()
+                            context_menu_group(palette)
                                 .child(context_menu_button(
+                                    palette,
                                     "transfer-context-current-new-file",
                                     "New File",
                                     cx.listener(|this, _, window, cx| {
@@ -151,6 +156,7 @@ impl NyaTermApp {
                                     }),
                                 ))
                                 .child(context_menu_button(
+                                    palette,
                                     "transfer-context-current-new-folder",
                                     "New Folder",
                                     cx.listener(|this, _, window, cx| {
@@ -159,6 +165,7 @@ impl NyaTermApp {
                                     }),
                                 ))
                                 .child(context_menu_button(
+                                    palette,
                                     "transfer-context-current-new-symlink",
                                     "New Symlink",
                                     cx.listener(|this, _, window, cx| {
@@ -168,8 +175,9 @@ impl NyaTermApp {
                                 )),
                         )
                         .child(
-                            context_menu_group()
+                            context_menu_group(palette)
                                 .child(context_menu_button(
+                                    palette,
                                     "transfer-context-current-copy-path",
                                     "Copy Directory Path",
                                     cx.listener(|this, _, _, cx| {
@@ -178,6 +186,7 @@ impl NyaTermApp {
                                     }),
                                 ))
                                 .child(context_menu_button(
+                                    palette,
                                     "transfer-context-current-send-path",
                                     "Send Directory Path",
                                     cx.listener(|this, _, _, cx| {
@@ -186,8 +195,9 @@ impl NyaTermApp {
                                     }),
                                 )),
                         )
-                        .child(context_menu_group().child(
+                        .child(context_menu_group(palette).child(
                             context_menu_button(
+                                palette,
                                 "transfer-context-current-properties",
                                 "Properties",
                                 cx.listener(|this, _, window, cx| {
@@ -199,8 +209,9 @@ impl NyaTermApp {
                     })
                     .when(state.is_parent, |this| {
                         this.child(
-                            context_menu_group()
+                            context_menu_group(palette)
                                 .child(context_menu_button(
+                                    palette,
                                     "transfer-context-parent-up",
                                     "Go Up",
                                     cx.listener(|this, _, window, cx| {
@@ -209,6 +220,7 @@ impl NyaTermApp {
                                     }),
                                 ))
                                 .child(context_menu_button(
+                                    palette,
                                     "transfer-context-parent-refresh",
                                     "Refresh",
                                     cx.listener(|this, _, window, cx| {
@@ -220,8 +232,9 @@ impl NyaTermApp {
                     })
                     .when(!state.is_parent && !state.is_current_directory, |this| {
                         this.child(
-                            context_menu_group()
+                            context_menu_group(palette)
                                 .child(context_menu_button(
+                                    palette,
                                     "transfer-context-refresh",
                                     "Refresh",
                                     cx.listener(|this, _, window, cx| {
@@ -230,6 +243,7 @@ impl NyaTermApp {
                                     }),
                                 ))
                                 .child(context_menu_button(
+                                    palette,
                                     "transfer-context-upload-file",
                                     "Upload File",
                                     cx.listener(|this, _, _, cx| {
@@ -241,6 +255,7 @@ impl NyaTermApp {
                                     }),
                                 ))
                                 .child(context_menu_button(
+                                    palette,
                                     "transfer-context-upload-folder",
                                     "Upload Folder",
                                     cx.listener(|this, _, _, cx| {
@@ -252,6 +267,7 @@ impl NyaTermApp {
                                     }),
                                 ))
                                 .child(context_menu_button(
+                                    palette,
                                     "transfer-context-download",
                                     "Download",
                                     cx.listener(|this, _, window, cx| {
@@ -263,8 +279,9 @@ impl NyaTermApp {
                     })
                     .when(!state.is_parent && !state.is_current_directory, |this| {
                         this.child(
-                            context_menu_group()
+                            context_menu_group(palette)
                                 .child(context_menu_button(
+                                    palette,
                                     "transfer-context-open",
                                     "Open",
                                     cx.listener(|this, _, window, cx| {
@@ -274,6 +291,7 @@ impl NyaTermApp {
                                 ))
                                 .when(!state.is_directory, |this| {
                                     this.child(context_menu_button(
+                                        palette,
                                         "transfer-context-open-internal",
                                         "Open Internal",
                                         cx.listener(|this, _, window, cx| {
@@ -283,6 +301,7 @@ impl NyaTermApp {
                                     ))
                                     .child(
                                         context_menu_button(
+                                            palette,
                                             "transfer-context-open-external",
                                             "Open External",
                                             cx.listener(|this, _, window, cx| {
@@ -293,6 +312,7 @@ impl NyaTermApp {
                                     )
                                 })
                                 .child(context_menu_button(
+                                    palette,
                                     "transfer-context-rename",
                                     "Rename",
                                     cx.listener(|this, _, window, cx| {
@@ -301,6 +321,7 @@ impl NyaTermApp {
                                     }),
                                 ))
                                 .child(context_menu_button(
+                                    palette,
                                     "transfer-context-move",
                                     "Move",
                                     cx.listener(|this, _, window, cx| {
@@ -314,6 +335,7 @@ impl NyaTermApp {
                                     }),
                                 ))
                                 .child(context_menu_button(
+                                    palette,
                                     "transfer-context-delete",
                                     "Delete",
                                     cx.listener(|this, _, window, cx| {
@@ -327,7 +349,8 @@ impl NyaTermApp {
                         state.is_directory && !state.is_parent && !state.is_current_directory,
                         |this| {
                             let favorite_path = state.path.clone();
-                            this.child(context_menu_group().child(context_menu_button(
+                            this.child(context_menu_group(palette).child(context_menu_button(
+                                palette,
                                 "transfer-context-favorite",
                                 "Add Favorite",
                                 cx.listener(move |this, _, _, cx| {
@@ -342,8 +365,9 @@ impl NyaTermApp {
                     )
                     .when(!state.is_parent && !state.is_current_directory, |this| {
                         this.child(
-                            context_menu_group()
+                            context_menu_group(palette)
                                 .child(context_menu_button(
+                                    palette,
                                     "transfer-context-copy-path",
                                     "Copy Path",
                                     cx.listener(|this, _, _, cx| {
@@ -355,6 +379,7 @@ impl NyaTermApp {
                                     }),
                                 ))
                                 .child(context_menu_button(
+                                    palette,
                                     "transfer-context-copy-name",
                                     "Copy Name",
                                     cx.listener(|this, _, _, cx| {
@@ -366,6 +391,7 @@ impl NyaTermApp {
                                     }),
                                 ))
                                 .child(context_menu_button(
+                                    palette,
                                     "transfer-context-copy-dir",
                                     "Copy Directory",
                                     cx.listener(|this, _, _, cx| {
@@ -380,8 +406,9 @@ impl NyaTermApp {
                     })
                     .when(!state.is_parent && !state.is_current_directory, |this| {
                         this.child(
-                            context_menu_group()
+                            context_menu_group(palette)
                                 .child(context_menu_button(
+                                    palette,
                                     "transfer-context-send-path",
                                     "Send Path",
                                     cx.listener(|this, _, _, cx| {
@@ -393,6 +420,7 @@ impl NyaTermApp {
                                     }),
                                 ))
                                 .child(context_menu_button(
+                                    palette,
                                     "transfer-context-send-name",
                                     "Send Name",
                                     cx.listener(|this, _, _, cx| {
@@ -404,6 +432,7 @@ impl NyaTermApp {
                                     }),
                                 ))
                                 .child(context_menu_button(
+                                    palette,
                                     "transfer-context-send-dir",
                                     "Send Directory",
                                     cx.listener(|this, _, _, cx| {
@@ -417,7 +446,8 @@ impl NyaTermApp {
                         )
                     })
                     .when(!state.is_parent && !state.is_current_directory, |this| {
-                        this.child(context_menu_group().child(context_menu_button(
+                        this.child(context_menu_group(palette).child(context_menu_button(
+                            palette,
                             "transfer-context-properties",
                             "Properties",
                             cx.listener(|this, _, window, cx| {
@@ -428,7 +458,7 @@ impl NyaTermApp {
                     })
                     .when(has_ai_actions, |this| {
                         this.child(
-                            context_menu_group()
+                            context_menu_group(palette)
                                 .child(
                                     div()
                                         .text_size(px(10.))
@@ -443,8 +473,7 @@ impl NyaTermApp {
     }
 }
 
-fn context_menu_group() -> gpui::Div {
-    let palette = crate::ui::theme::theme_palette("github-dark");
+fn context_menu_group(palette: crate::ui::theme::ThemePalette) -> gpui::Div  {
     div()
         .flex()
         .flex_col()
@@ -454,12 +483,10 @@ fn context_menu_group() -> gpui::Div {
         .pt_2()
 }
 
-fn context_menu_button(
+fn context_menu_button(palette: crate::ui::theme::ThemePalette,
     id: impl Into<String>,
     label: impl Into<SharedString>,
-    on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
-) -> impl IntoElement {
-    let palette = crate::ui::theme::theme_palette("github-dark");
+    on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,) -> impl IntoElement  {
     div()
         .id(SharedString::from(id.into()))
         .h(px(28.))

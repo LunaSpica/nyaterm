@@ -5,8 +5,8 @@ impl NyaTermApp {
         &mut self,
         can_transfer: bool,
         cx: &mut Context<Self>,
-    ) -> impl IntoElement {
-        let palette = self.theme_palette();
+    ) -> impl IntoElement  {
+    let palette = self.theme_palette();
         let _selected = self
             .transfer_selected_remote_path
             .as_deref()
@@ -39,6 +39,7 @@ impl NyaTermApp {
         let mut rows = div().flex().flex_col();
         if can_transfer && current_browser_path != "/" && current_browser_path != "." {
             rows = rows.child(transfer_browser_parent_entry_row(
+                palette,
                 current_browser_path.clone(),
                 column_widths,
                 cx,
@@ -144,6 +145,7 @@ impl NyaTermApp {
             {
                 let ai_actions = self.enabled_transfer_file_ai_actions_for_entry(&entry);
                 rows = rows.child(transfer_browser_entry_row(
+                    palette,
                     entry,
                     self.transfer_selected_remote_path.clone(),
                     &self.transfer_selected_remote_paths,
@@ -183,6 +185,7 @@ impl NyaTermApp {
                         .items_center()
                         .gap(px(2.))
                         .child(compact_transfer_toolbar_button(
+                            palette,
                             "transfer-browser-new-file",
                             "icons/fe/new-file.svg",
                             cx.listener(|this, _, window, cx| {
@@ -190,18 +193,20 @@ impl NyaTermApp {
                             }),
                         ))
                         .child(compact_transfer_toolbar_button(
+                            palette,
                             "transfer-browser-new-folder",
                             "icons/fe/new-folder.svg",
                             cx.listener(|this, _, window, cx| {
                                 this.open_transfer_new_folder_dialog(window, cx);
                             }),
                         ))
-                        .child(transfer_toolbar_divider())
+                        .child(transfer_toolbar_divider(palette))
                         .child(compact_transfer_upload_menu_button(cx))
                         .child(
                             div()
                                 .when(selected_count == 0, |this| this.opacity(0.45))
                                 .child(compact_transfer_toolbar_button(
+                                    palette,
                                     "transfer-browser-download-selected",
                                     "icons/fe/download.svg",
                                     cx.listener(|this, _, window, cx| {
@@ -213,6 +218,7 @@ impl NyaTermApp {
                             div()
                                 .when(selected_count == 0, |this| this.opacity(0.45))
                                 .child(compact_transfer_toolbar_button(
+                                    palette,
                                     "transfer-browser-delete-selected",
                                     "icons/fe/delete.svg",
                                     cx.listener(|this, _, window, cx| {
@@ -220,8 +226,9 @@ impl NyaTermApp {
                                     }),
                                 )),
                         )
-                        .child(transfer_toolbar_divider())
+                        .child(transfer_toolbar_divider(palette))
                         .child(compact_transfer_toolbar_button(
+                            palette,
                             "transfer-browser-go-up",
                             "icons/fe/up.svg",
                             cx.listener(|this, _, window, cx| {
@@ -229,6 +236,7 @@ impl NyaTermApp {
                             }),
                         ))
                         .child(compact_transfer_toolbar_button(
+                            palette,
                             "transfer-browser-refresh",
                             "icons/fe/refresh.svg",
                             cx.listener(|this, _, window, cx| {
@@ -237,6 +245,7 @@ impl NyaTermApp {
                         ))
                         .child(div().flex_1())
                         .child(compact_transfer_toolbar_button_active(
+                            palette,
                             "transfer-browser-expand-search",
                             "icons/fe/search.svg",
                             search_active || search_expanded,
@@ -393,6 +402,7 @@ impl NyaTermApp {
                                     .gap_2()
                                     .px_2()
                                     .child(sort_header_cell(
+                                        palette,
                                         TransferBrowserSortColumn::Name,
                                         column_widths.name,
                                         self.transfer_browser_sort_column,
@@ -401,6 +411,7 @@ impl NyaTermApp {
                                         cx,
                                     ))
                                     .child(sort_header_cell(
+                                        palette,
                                         TransferBrowserSortColumn::Modified,
                                         column_widths.modified,
                                         self.transfer_browser_sort_column,
@@ -409,6 +420,7 @@ impl NyaTermApp {
                                         cx,
                                     ))
                                     .child(sort_header_cell(
+                                        palette,
                                         TransferBrowserSortColumn::Size,
                                         column_widths.size,
                                         self.transfer_browser_sort_column,
@@ -417,6 +429,7 @@ impl NyaTermApp {
                                         cx,
                                     ))
                                     .child(sort_header_cell(
+                                        palette,
                                         TransferBrowserSortColumn::Permissions,
                                         column_widths.permissions,
                                         self.transfer_browser_sort_column,
@@ -425,6 +438,7 @@ impl NyaTermApp {
                                         cx,
                                     ))
                                     .child(sort_header_cell(
+                                        palette,
                                         TransferBrowserSortColumn::Owner,
                                         column_widths.owner,
                                         self.transfer_browser_sort_column,
@@ -433,6 +447,7 @@ impl NyaTermApp {
                                         cx,
                                     ))
                                     .child(sort_header_cell(
+                                        palette,
                                         TransferBrowserSortColumn::Group,
                                         column_widths.group,
                                         self.transfer_browser_sort_column,
@@ -494,6 +509,7 @@ impl NyaTermApp {
                             .items_center()
                             .gap_0()
                             .child(compact_transfer_footer_button(
+                                palette,
                                 "transfer-browser-footer-sync-cwd",
                                 "icons/fe/sync.svg",
                                 cx.listener(|this, _, window, cx| {
@@ -501,6 +517,7 @@ impl NyaTermApp {
                                 }),
                             ))
                             .child(compact_transfer_footer_button_active(
+                                palette,
                                 "transfer-browser-footer-auto-sync",
                                 "icons/fe/sync.svg",
                                 auto_sync_cwd,
@@ -509,6 +526,7 @@ impl NyaTermApp {
                                 }),
                             ))
                             .child(compact_transfer_footer_button(
+                                palette,
                                 "transfer-browser-footer-send-path",
                                 "icons/fe/paste.svg",
                                 cx.listener(|this, _, _, cx| {
@@ -517,6 +535,7 @@ impl NyaTermApp {
                             ))
                             .when(self.transfer_selected_remote_path.is_some(), |this| {
                                 this.child(compact_transfer_footer_button(
+                                    palette,
                                     "transfer-footer-copy-path",
                                     "icons/fe/paste.svg",
                                     cx.listener(|this, _, _, cx| {
@@ -524,6 +543,7 @@ impl NyaTermApp {
                                     }),
                                 ))
                                 .child(compact_transfer_footer_button(
+                                    palette,
                                     "transfer-footer-props",
                                     "icons/fe/search.svg",
                                     cx.listener(|this, _, window, cx| {
@@ -538,13 +558,10 @@ impl NyaTermApp {
 
 
 
-fn compact_transfer_footer_button(
+fn compact_transfer_footer_button(palette: crate::ui::theme::ThemePalette,
     id: impl Into<String>,
     icon_path: &'static str,
-    on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
-) -> impl IntoElement {
-    let palette = crate::ui::theme::theme_palette("github-dark");
-    // Tauri footer icons: h-6 w-6 (24px)
+    on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,) -> impl IntoElement {    // Tauri footer icons: h-6 w-6 (24px)
     div()
         .id(SharedString::from(id.into()))
         .size(px(24.))
@@ -564,13 +581,11 @@ fn compact_transfer_footer_button(
         .on_click(on_click)
 }
 
-fn compact_transfer_footer_button_active(
+fn compact_transfer_footer_button_active(palette: crate::ui::theme::ThemePalette,
     id: impl Into<String>,
     icon_path: &'static str,
     active: bool,
-    on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
-) -> impl IntoElement {
-    let palette = crate::ui::theme::theme_palette("github-dark");
+    on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,) -> impl IntoElement  {
     let color = if active { rgb(palette.accent) } else { rgb(palette.text_muted) };
     div()
         .id(SharedString::from(id.into()))
@@ -595,8 +610,8 @@ fn compact_transfer_footer_button_active(
         .on_click(on_click)
 }
 
-fn compact_transfer_upload_menu_button(cx: &mut Context<NyaTermApp>) -> impl IntoElement {
-        let palette = cx.entity().read(cx).theme_palette();
+fn compact_transfer_upload_menu_button(cx: &mut Context<NyaTermApp>) -> impl IntoElement  {
+    let palette = cx.entity().read(cx).theme_palette();
     // Tauri: single Upload icon opens DropdownMenu (Upload Files / Upload Folder).
     div()
         .id(SharedString::from("transfer-browser-upload"))
@@ -622,13 +637,10 @@ fn compact_transfer_upload_menu_button(cx: &mut Context<NyaTermApp>) -> impl Int
         )
 }
 
-fn compact_transfer_toolbar_button(
+fn compact_transfer_toolbar_button(palette: crate::ui::theme::ThemePalette,
     id: impl Into<String>,
     icon_path: &'static str,
-    on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
-) -> impl IntoElement {
-    let palette = crate::ui::theme::theme_palette("github-dark");
-    // Tauri FileExplorerToolbar: h-7 ghost icon buttons, muted until hover.
+    on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,) -> impl IntoElement {    // Tauri FileExplorerToolbar: h-7 ghost icon buttons, muted until hover.
     div()
         .id(SharedString::from(id.into()))
         .size(px(28.))
@@ -648,13 +660,11 @@ fn compact_transfer_toolbar_button(
         .on_click(on_click)
 }
 
-fn compact_transfer_toolbar_button_active(
+fn compact_transfer_toolbar_button_active(palette: crate::ui::theme::ThemePalette,
     id: impl Into<String>,
     icon_path: &'static str,
     active: bool,
-    on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
-) -> impl IntoElement {
-    let palette = crate::ui::theme::theme_palette("github-dark");
+    on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,) -> impl IntoElement  {
     let color = if active { rgb(palette.accent) } else { rgb(palette.text_muted) };
     div()
         .id(SharedString::from(id.into()))
@@ -676,12 +686,10 @@ fn compact_transfer_toolbar_button_active(
         .on_click(on_click)
 }
 
-fn transfer_dynamic_toolbar_button(
+fn transfer_dynamic_toolbar_button(palette: crate::ui::theme::ThemePalette,
     id: impl Into<String>,
     label: impl Into<String>,
-    on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
-) -> impl IntoElement {
-    let palette = crate::ui::theme::theme_palette("github-dark");
+    on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,) -> impl IntoElement  {
     div()
         .id(SharedString::from(id.into()))
         .h(px(28.))
@@ -702,8 +710,7 @@ fn transfer_dynamic_toolbar_button(
         .on_click(on_click)
 }
 
-fn transfer_toolbar_divider() -> impl IntoElement {
-    let palette = crate::ui::theme::theme_palette("github-dark");
+fn transfer_toolbar_divider(palette: crate::ui::theme::ThemePalette) -> impl IntoElement  {
     div()
         .h(px(16.))
         .w(px(1.))

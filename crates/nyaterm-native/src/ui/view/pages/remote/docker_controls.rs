@@ -5,7 +5,7 @@ pub(in crate::ui::view::pages::remote) fn docker_tab_bar(
     overview: &nyaterm_session::RemoteDockerOverview,
     cx: &mut Context<NyaTermApp>,
 ) -> impl IntoElement {
-    let palette = crate::ui::theme::theme_palette("github-dark");
+    let palette = super::cx_theme_palette(cx);
     // Dense tab strip similar to Tauri Docker manager tabs.
     div()
         .h(px(32.))
@@ -19,6 +19,7 @@ pub(in crate::ui::view::pages::remote) fn docker_tab_bar(
         .gap_1()
         .overflow_hidden()
         .child(docker_tab_button(
+            palette,
             "docker-tab-containers",
             format!(
                 "{} {}",
@@ -31,6 +32,7 @@ pub(in crate::ui::view::pages::remote) fn docker_tab_bar(
             }),
         ))
         .child(docker_tab_button(
+            palette,
             "docker-tab-images",
             format!("{} {}", DockerTab::Images.label(), overview.images.len()),
             active_tab == DockerTab::Images,
@@ -39,6 +41,7 @@ pub(in crate::ui::view::pages::remote) fn docker_tab_bar(
             }),
         ))
         .child(docker_tab_button(
+            palette,
             "docker-tab-volumes",
             format!("{} {}", DockerTab::Volumes.label(), overview.volumes.len()),
             active_tab == DockerTab::Volumes,
@@ -47,6 +50,7 @@ pub(in crate::ui::view::pages::remote) fn docker_tab_bar(
             }),
         ))
         .child(docker_tab_button(
+            palette,
             "docker-tab-networks",
             format!(
                 "{} {}",
@@ -62,6 +66,7 @@ pub(in crate::ui::view::pages::remote) fn docker_tab_bar(
             div()
                 .when(!overview.compose_available, |this| this.opacity(0.45))
                 .child(docker_tab_button(
+                    palette,
                     "docker-tab-compose",
                     if overview.compose_available {
                         format!(
@@ -80,14 +85,11 @@ pub(in crate::ui::view::pages::remote) fn docker_tab_bar(
         )
 }
 
-fn docker_tab_button(
+fn docker_tab_button(palette: crate::ui::theme::ThemePalette,
     id: &'static str,
     label: String,
     active: bool,
-    on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
-) -> impl IntoElement {
-    let palette = crate::ui::theme::theme_palette("github-dark");
-    div()
+    on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,) -> impl IntoElement {    div()
         .id(gpui::SharedString::from(id))
         .h(px(24.))
         .px_2()
@@ -144,14 +146,14 @@ pub(in crate::ui::view::pages::remote) fn docker_confirm_panel(
                 .flex()
                 .items_center()
                 .gap_2()
-                .child(small_button(crate::ui::theme::theme_palette("github-dark"), 
+                .child(small_button(super::cx_theme_palette(cx), 
                     "docker-confirm-cancel",
                     "Cancel",
                     cx.listener(|this, _, _, cx| {
                         this.cancel_docker_confirm(cx);
                     }),
                 ))
-                .child(small_button(crate::ui::theme::theme_palette("github-dark"), 
+                .child(small_button(super::cx_theme_palette(cx), 
                     "docker-confirm-run",
                     "Confirm",
                     cx.listener(|this, _, window, cx| {
@@ -168,7 +170,7 @@ pub(in crate::ui::view::pages::remote) fn docker_container_confirm_button(
     container_name: String,
     cx: &mut Context<NyaTermApp>,
 ) -> impl IntoElement {
-    small_button(crate::ui::theme::theme_palette("github-dark"), 
+    small_button(super::cx_theme_palette(cx), 
         format!("docker-{action}-{}", compact_id(&container_id)),
         label,
         cx.listener(move |this, _, _, cx| {

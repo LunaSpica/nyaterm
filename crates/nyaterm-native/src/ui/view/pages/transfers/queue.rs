@@ -50,6 +50,7 @@ impl NyaTermApp {
         } else {
             for job in ordered_transfer_jobs(&self.transfer_jobs) {
                 list = list.child(transfer_job_row(
+                    palette,
                     job,
                     self.transfer_selected_remote_path.clone(),
                     self.transfer_selected_job_id.clone(),
@@ -91,6 +92,7 @@ div()
                     )
                     .child(div().flex_1())
                     .child(queue_action_button(
+                        palette,
                         "transfer-pause-all",
                         "❚❚",
                         has_running,
@@ -99,6 +101,7 @@ div()
                         }),
                     ))
                     .child(queue_action_button(
+                        palette,
                         "transfer-resume-all",
                         "▶",
                         has_paused,
@@ -107,6 +110,7 @@ div()
                         }),
                     ))
                     .child(queue_action_button(
+                        palette,
                         "transfer-cancel-all",
                         "■",
                         has_active,
@@ -115,6 +119,7 @@ div()
                         }),
                     ))
                     .child(queue_action_button(
+                        palette,
                         "transfer-clear-completed",
                         "✓",
                         has_completed,
@@ -123,6 +128,7 @@ div()
                         }),
                     ))
                     .child(queue_action_button(
+                        palette,
                         "transfer-clear-stopped",
                         "CLR",
                         has_stopped,

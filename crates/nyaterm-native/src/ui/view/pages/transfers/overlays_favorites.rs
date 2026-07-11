@@ -26,8 +26,8 @@ impl NyaTermApp {
     pub(in crate::ui::view) fn transfer_browser_favorites_menu_overlay(
         &mut self,
         cx: &mut Context<Self>,
-    ) -> impl IntoElement {
-        let palette = self.theme_palette();
+    ) -> impl IntoElement  {
+    let palette = self.theme_palette();
         let state =
             self.transfer_browser_favorites_menu
                 .unwrap_or(TransferBrowserFavoritesMenuState {
@@ -172,6 +172,7 @@ impl NyaTermApp {
                             )),
                     )
                     .child(favorite_menu_button(
+                        palette,
                         "transfer-browser-favorite-menu-add-current",
                         if is_current_favorite {
                             "Move Current To Top"
@@ -212,12 +213,10 @@ impl NyaTermApp {
     }
 }
 
-fn favorite_menu_button(
+fn favorite_menu_button(palette: crate::ui::theme::ThemePalette,
     id: impl Into<String>,
     label: impl Into<SharedString>,
-    on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
-) -> impl IntoElement {
-    let palette = crate::ui::theme::theme_palette("github-dark");
+    on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,) -> impl IntoElement  {
     div()
         .id(SharedString::from(id.into()))
         .h(px(30.))

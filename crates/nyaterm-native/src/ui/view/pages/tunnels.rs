@@ -47,7 +47,7 @@ impl NyaTermApp {
             .filter(|tunnel| tunnel_matches(tunnel, &query))
             .cloned()
             .collect::<Vec<_>>();
-        let sections = tunnel_sections(&filtered_tunnels, &self.tunnel_groups);
+        let sections = tunnel_sections(palette, &filtered_tunnels, &self.tunnel_groups);
         let proxy_query = self.proxy_search_draft.trim().to_ascii_lowercase();
         let filtered_proxies = self
             .proxies
@@ -75,7 +75,7 @@ impl NyaTermApp {
             tunnel_list = tunnel_list.child(empty_panel("No tunnels match the current search.", self.theme_palette()));
         } else {
             for section in sections {
-                tunnel_list = tunnel_list.child(tunnel_section(section, &open_tunnels, self, cx));
+                tunnel_list = tunnel_list.child(tunnel_section(palette, section, &open_tunnels, self, cx));
             }
         }
 
@@ -86,7 +86,7 @@ impl NyaTermApp {
             proxy_list = proxy_list.child(empty_panel("No proxies match the current search.", self.theme_palette()));
         } else {
             for section in proxy_sections {
-                proxy_list = proxy_list.child(proxy_section(section, self, cx));
+                proxy_list = proxy_list.child(proxy_section(palette, section, self, cx));
             }
         }
 
@@ -159,6 +159,7 @@ impl NyaTermApp {
                         .px_2()
                         .pt_2()
                         .child(network_tunnel_editor_panel(
+                            palette,
                             editor,
                             self,
                             &self.network_tunnel_editor_focus,
@@ -367,6 +368,7 @@ impl NyaTermApp {
             })
             .when_some(self.network_tunnel_editor.clone(), |this, editor| {
                 this.child(network_tunnel_editor_panel(
+                    palette,
                     editor,
                     self,
                     &self.network_tunnel_editor_focus,

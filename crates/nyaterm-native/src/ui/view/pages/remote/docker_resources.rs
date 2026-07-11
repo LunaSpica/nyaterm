@@ -10,8 +10,9 @@ pub(in crate::ui::view::pages::remote) fn docker_images_panel(
     list_offset: usize,
     cx: &mut Context<NyaTermApp>,
 ) -> impl IntoElement {
+    let palette = super::cx_theme_palette(cx);
     if images.is_empty() {
-        return docker_resource_empty("Images", "No images loaded.");
+        return docker_resource_empty(palette, "Images", "No images loaded.");
     }
 
     let total = images.len();
@@ -26,6 +27,7 @@ pub(in crate::ui::view::pages::remote) fn docker_images_panel(
         let label = docker_image_label(image);
         rows = rows.child(
             docker_resource_row(
+                palette,
                 label.clone(),
                 format!(
                     "{} · {} · {}",
@@ -56,7 +58,7 @@ pub(in crate::ui::view::pages::remote) fn docker_images_panel(
         rows = rows.child(div().h(px(pad_bottom)).w_full().flex_none());
     }
     if total > DOCKER_RESOURCE_VIEWPORT_ROWS {
-        rows = rows.child(docker_resource_range_footer(window_start, window_end, total));
+        rows = rows.child(docker_resource_range_footer(palette, window_start, window_end, total));
     }
 
     docker_resource_panel("Images", total, rows, scroll_offset, cx)
@@ -67,8 +69,9 @@ pub(in crate::ui::view::pages::remote) fn docker_volumes_panel(
     list_offset: usize,
     cx: &mut Context<NyaTermApp>,
 ) -> impl IntoElement {
+    let palette = super::cx_theme_palette(cx);
     if volumes.is_empty() {
-        return docker_resource_empty("Volumes", "No volumes loaded.");
+        return docker_resource_empty(palette, "Volumes", "No volumes loaded.");
     }
 
     let total = volumes.len();
@@ -81,7 +84,7 @@ pub(in crate::ui::view::pages::remote) fn docker_volumes_panel(
     for volume in volumes.get(window_start..window_end).unwrap_or(&[]) {
         let volume_name = volume.name.clone();
         rows = rows.child(
-            docker_resource_row(volume.name.clone(), format!("driver {}", volume.driver)).child(
+            docker_resource_row(palette, volume.name.clone(), format!("driver {}", volume.driver)).child(
                 icon_button(
                     format!("docker-volume-remove-{volume_name}"),
                     "×", super::cx_theme_palette(cx),cx.listener(move |this, _, _, cx| {
@@ -105,7 +108,7 @@ pub(in crate::ui::view::pages::remote) fn docker_volumes_panel(
         rows = rows.child(div().h(px(pad_bottom)).w_full().flex_none());
     }
     if total > DOCKER_RESOURCE_VIEWPORT_ROWS {
-        rows = rows.child(docker_resource_range_footer(window_start, window_end, total));
+        rows = rows.child(docker_resource_range_footer(palette, window_start, window_end, total));
     }
 
     docker_resource_panel("Volumes", total, rows, scroll_offset, cx)
@@ -116,8 +119,9 @@ pub(in crate::ui::view::pages::remote) fn docker_networks_panel(
     list_offset: usize,
     cx: &mut Context<NyaTermApp>,
 ) -> impl IntoElement {
+    let palette = super::cx_theme_palette(cx);
     if networks.is_empty() {
-        return docker_resource_empty("Networks", "No networks loaded.");
+        return docker_resource_empty(palette, "Networks", "No networks loaded.");
     }
 
     let total = networks.len();
@@ -132,6 +136,7 @@ pub(in crate::ui::view::pages::remote) fn docker_networks_panel(
         let name = network.name.clone();
         rows = rows.child(
             docker_resource_row(
+                palette,
                 network.name.clone(),
                 format!(
                     "{} · {} · {}",
@@ -161,7 +166,7 @@ pub(in crate::ui::view::pages::remote) fn docker_networks_panel(
         rows = rows.child(div().h(px(pad_bottom)).w_full().flex_none());
     }
     if total > DOCKER_RESOURCE_VIEWPORT_ROWS {
-        rows = rows.child(docker_resource_range_footer(window_start, window_end, total));
+        rows = rows.child(docker_resource_range_footer(palette, window_start, window_end, total));
     }
 
     docker_resource_panel("Networks", total, rows, scroll_offset, cx)
@@ -181,9 +186,7 @@ fn docker_resource_window(
     (window_start, window_end, pad_top, pad_bottom, scroll_row)
 }
 
-fn docker_resource_range_footer(start: usize, end: usize, total: usize) -> impl IntoElement {
-    let palette = crate::ui::theme::theme_palette("github-dark");
-    div()
+fn docker_resource_range_footer(palette: crate::ui::theme::ThemePalette, start: usize, end: usize, total: usize) -> impl IntoElement {    div()
         .px_2()
         .py_1()
         .rounded_md()
@@ -195,7 +198,7 @@ fn docker_resource_range_footer(start: usize, end: usize, total: usize) -> impl 
         .child(format!("Rows {start}-{end}/{total} · scroll or refine search"))
 }
 
-fn docker_resource_empty(title: &'static str, message: &'static str) -> gpui::AnyElement {
+fn docker_resource_empty(palette: crate::ui::theme::ThemePalette, title: &'static str, message: &'static str) -> gpui::AnyElement {
     div()
         .id(SharedString::from(format!(
             "docker-resource-{}",
@@ -205,7 +208,7 @@ fn docker_resource_empty(title: &'static str, message: &'static str) -> gpui::An
         .flex()
         .items_center()
         .justify_center()
-        .child(empty_panel(message, crate::ui::theme::theme_palette("github-dark")))
+        .child(empty_panel(message, palette))
         .into_any_element()
 }
 
@@ -278,13 +281,10 @@ pub(in crate::ui::view::pages::remote) fn docker_resource_panel(
         .into_any_element()
 }
 
-pub(in crate::ui::view::pages::remote) fn docker_resource_static_panel(
+pub(in crate::ui::view::pages::remote) fn docker_resource_static_panel(palette: crate::ui::theme::ThemePalette,
     title: &'static str,
     count: usize,
-    rows: impl IntoElement,
-) -> impl IntoElement {
-    let palette = crate::ui::theme::theme_palette("github-dark");
-    div()
+    rows: impl IntoElement,) -> impl IntoElement {    div()
         .id(SharedString::from(format!(
             "docker-resource-{}",
             title.to_ascii_lowercase()
@@ -314,12 +314,9 @@ pub(in crate::ui::view::pages::remote) fn docker_resource_static_panel(
         .child(rows)
 }
 
-pub(in crate::ui::view::pages::remote) fn docker_resource_row(
+pub(in crate::ui::view::pages::remote) fn docker_resource_row(palette: crate::ui::theme::ThemePalette,
     title: String,
-    detail: String,
-) -> gpui::Div {
-    let palette = crate::ui::theme::theme_palette("github-dark");
-    // ~64px Tauri SIMPLE_ROW_HEIGHT-ish dense resource row (slightly tighter chrome).
+    detail: String,) -> gpui::Div {    // ~64px Tauri SIMPLE_ROW_HEIGHT-ish dense resource row (slightly tighter chrome).
     div()
         .h(px(64.))
         .rounded_md()

@@ -141,7 +141,7 @@ fn docker_container_row(
     let menu_id = container.id.clone();
     let state = container.state.clone();
     let running = state.trim().eq_ignore_ascii_case("running");
-    let accent = docker_state_border_color(&state);
+    let accent = docker_state_border_color(palette, &state);
     let short = compact_id(&container.id);
 
     div()
@@ -317,6 +317,7 @@ fn docker_container_action_menu(
         .flex_col()
         .on_mouse_down(gpui::MouseButton::Left, |_, _, _| {})
         .child(docker_menu_item(
+            palette,
             format!("docker-menu-logs-{short}"),
             "Logs",
             false,
@@ -326,6 +327,7 @@ fn docker_container_action_menu(
             }),
         ))
         .child(docker_menu_item(
+            palette,
             format!("docker-menu-enter-{short}"),
             "Enter",
             !running,
@@ -334,8 +336,9 @@ fn docker_container_action_menu(
                 this.enter_docker_container_terminal(enter_id.clone(), cx);
             }),
         ))
-        .child(docker_menu_separator())
+        .child(docker_menu_separator(palette))
         .child(docker_menu_item(
+            palette,
             format!("docker-menu-start-{short}"),
             "Start",
             running,
@@ -345,6 +348,7 @@ fn docker_container_action_menu(
             }),
         ))
         .child(docker_menu_item(
+            palette,
             format!("docker-menu-stop-{short}"),
             "Stop",
             !running,
@@ -354,6 +358,7 @@ fn docker_container_action_menu(
             }),
         ))
         .child(docker_menu_item(
+            palette,
             format!("docker-menu-restart-{short}"),
             "Restart",
             false,
@@ -362,8 +367,9 @@ fn docker_container_action_menu(
                 this.docker_container_action(restart_id.clone(), "restart", window, cx);
             }),
         ))
-        .child(docker_menu_separator())
+        .child(docker_menu_separator(palette))
         .child(docker_menu_item(
+            palette,
             format!("docker-menu-kill-{short}"),
             "Kill",
             !running,
@@ -388,6 +394,7 @@ fn docker_container_action_menu(
             }),
         ))
         .child(docker_menu_item(
+            palette,
             format!("docker-menu-remove-{short}"),
             "Remove",
             false,
@@ -413,14 +420,11 @@ fn docker_container_action_menu(
         ))
 }
 
-fn docker_menu_item(
+fn docker_menu_item(palette: crate::ui::theme::ThemePalette,
     id: impl Into<String>,
     label: &'static str,
     disabled: bool,
-    on_click: impl Fn(&gpui::ClickEvent, &mut gpui::Window, &mut gpui::App) + 'static,
-) -> impl IntoElement {
-    let palette = crate::ui::theme::theme_palette("github-dark");
-    div()
+    on_click: impl Fn(&gpui::ClickEvent, &mut gpui::Window, &mut gpui::App) + 'static,) -> impl IntoElement {    div()
         .id(SharedString::from(id.into()))
         .h(px(28.))
         .px_3()
@@ -441,14 +445,10 @@ fn docker_menu_item(
         .child(label)
 }
 
-fn docker_menu_separator() -> impl IntoElement {
-    let palette = crate::ui::theme::theme_palette("github-dark");
-    div().h(px(1.)).mx_2().my_1().bg(rgb(palette.border))
+fn docker_menu_separator(palette: crate::ui::theme::ThemePalette) -> impl IntoElement {    div().h(px(1.)).mx_2().my_1().bg(rgb(palette.border))
 }
 
-fn docker_state_border_color(state: &str) -> gpui::Hsla {
-    let palette = crate::ui::theme::theme_palette("github-dark");
-    match state.trim().to_ascii_lowercase().as_str() {
+fn docker_state_border_color(palette: crate::ui::theme::ThemePalette, state: &str) -> gpui::Hsla {    match state.trim().to_ascii_lowercase().as_str() {
         "running" => rgb(0x22c55e).into(),
         "restarting" | "paused" => rgb(0xf59e0b).into(),
         "exited" | "dead" => rgb(0xef4444).into(),
