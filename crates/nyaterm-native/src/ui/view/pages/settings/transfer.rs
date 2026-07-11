@@ -41,8 +41,8 @@ impl NyaTermApp {
             .flex_col()
             .gap_3()
             .child(settings_form_section(palette, 
-                Some("Paths"),
-                Some("Default download location and save prompts."),
+                Some("Files"),
+                Some("Download location, save prompts, and duplicate strategy."),
                 div()
                     .flex()
                     .flex_col()
@@ -212,43 +212,60 @@ impl NyaTermApp {
                             )),
                     ))
                     .when(editor_type == "external", |this| {
-                        this.child(settings_form_row(palette, 
+                        this.child(settings_form_row(
+                            palette,
                             "External command",
                             Some(SharedString::from(external_cmd)),
-                            transfer_input(
-                                "settings-transfer-default-editor",
-                                "Default editor command",
-                                default_editor_value,
-                                false,
-            self.theme_palette(),
-        )
-                            .track_focus(&self.transfer_default_editor_focus)
-                            .on_click(cx.listener(|this, _, window, cx| {
-                                window.focus(&this.transfer_default_editor_focus);
-                                cx.notify();
-                            }))
-                            .on_key_down(cx.listener(
-                                |this, event: &KeyDownEvent, _, cx| {
-                                    cx.stop_propagation();
-                                    this.handle_transfer_default_editor_key_down(event, cx);
-                                },
-                            )),
+                            div()
+                                .flex()
+                                .flex_col()
+                                .gap_1()
+                                .child(
+                                    transfer_input(
+                                        "settings-transfer-default-editor",
+                                        "Default editor command",
+                                        default_editor_value,
+                                        true,
+                                        palette,
+                                    )
+                                    .track_focus(&self.transfer_default_editor_focus)
+                                    .on_click(cx.listener(|this, _, window, cx| {
+                                        window.focus(&this.transfer_default_editor_focus);
+                                        cx.notify();
+                                    }))
+                                    .on_key_down(cx.listener(
+                                        |this, event: &KeyDownEvent, _, cx| {
+                                            cx.stop_propagation();
+                                            this.handle_transfer_default_editor_key_down(event, cx);
+                                        },
+                                    )),
+                                )
+                                .child(
+                                    div()
+                                        .flex()
+                                        .gap_1()
+                                        .child(small_button(
+                                            palette,
+                                            "settings-transfer-editor-browse",
+                                            "Browse",
+                                            cx.listener(|this, _, _, cx| {
+                                                this.prompt_transfer_default_editor_setting(cx);
+                                            }),
+                                        ))
+                                        .child(small_button(
+                                            palette,
+                                            "settings-transfer-editor-save",
+                                            "Save",
+                                            cx.listener(|this, _, _, cx| {
+                                                this.save_transfer_settings(
+                                                    "transfer editor settings saved",
+                                                    cx,
+                                                );
+                                            }),
+                                        )),
+                                ),
                         ))
-                    })
-                    .child(settings_form_row(palette, 
-                        "Actions",
-                        None,
-                        small_button(palette, 
-                            "settings-transfer-editor-save",
-                            "Save",
-                            cx.listener(|this, _, _, cx| {
-                                this.save_transfer_settings(
-                                    "transfer editor settings saved",
-                                    cx,
-                                );
-                            }),
-                        ),
-                    )),
+                    }),
             ))
     }
 
@@ -507,9 +524,26 @@ impl NyaTermApp {
                         "Path",
                         Some(SharedString::from(truncate_preview(&path, 56))),
                         div()
-                            .text_size(px(11.))
-                            .text_color(rgb(palette.text_muted))
-                            .child("On disk"),
+                            .flex()
+                            .items_center()
+                            .gap_1()
+                            .child(small_button(
+                                palette,
+                                "settings-recording-path-browse",
+                                "Browse",
+                                cx.listener(|this, _, _, cx| {
+                                    this.prompt_recording_path_setting(cx);
+                                }),
+                            ))
+                            .child(small_button(
+                                palette,
+                                "settings-recording-path-clear",
+                                "Clear",
+                                cx.listener(|this, _, _, cx| {
+                                    this.settings.recording_path.clear();
+                                    this.save_recording_settings(cx);
+                                }),
+                            )),
                     ))
                     .child(settings_form_row(palette, 
                         "Memory limit",

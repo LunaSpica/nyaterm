@@ -492,8 +492,8 @@ pub(in crate::ui::view) fn empty_workspace_action(palette: ThemePalette,
                 .min_w(px(160.))
                 .text_sm()
                 .font_weight(FontWeight(500.))
-                .text_color(rgb(palette.text))
-                .hover(|this| this.text_color(rgb(palette.accent)))
+                .text_color(rgb(palette.accent))
+                .hover(|this| this.text_color(rgb(palette.text)))
                 .child(label),
         )
         .child(keys)

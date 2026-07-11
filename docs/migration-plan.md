@@ -1489,3 +1489,10 @@ service boundary first:
   still pending).
 - Transfer settings download path supports Browse directory picker.
 
+## 2026-07-12 Transfer densify + empty workspace polish
+
+- Transfer settings: browse default download path, nested external editor
+  command with Browse/Save, recording directory Browse/Clear.
+- Empty workspace uses terminal background and accent action labels closer to
+  Tauri EmptyWorkspaceState.
+

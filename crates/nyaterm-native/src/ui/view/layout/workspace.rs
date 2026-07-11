@@ -1175,13 +1175,14 @@ impl NyaTermApp {
             None
         };
         let connecting_name = self.pending_session_name.clone();
+        let terminal_palette = self.terminal_theme_palette();
         div()
             .flex_1()
             .min_h_0()
             .flex()
             .items_center()
             .justify_center()
-            .bg(rgb(palette.bg))
+            .bg(rgb(terminal_palette.terminal_bg))
             .px_6()
             .child(
                 div()
@@ -1190,7 +1191,7 @@ impl NyaTermApp {
                     .flex()
                     .flex_col()
                     .items_center()
-                    .child(div().mb_9().child(nyaterm_logo_mark(palette, 256., 0.13)))
+                    .child(div().mb_9().child(nyaterm_logo_mark(terminal_palette, 256., 0.13)))
                     .when_some(connecting_name, |this, name| {
                         this.child(
                             div()

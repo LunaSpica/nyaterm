@@ -38,6 +38,69 @@ impl NyaTermApp {
         cx.notify();
     }
 
+    pub(in crate::ui::view) fn prompt_recording_path_setting(
+        &mut self,
+        cx: &mut Context<Self>,
+    ) {
+        let options = PathPromptOptions {
+            files: false,
+            directories: true,
+            multiple: false,
+            prompt: Some(SharedString::from("Select recording directory")),
+        };
+        let receiver = cx.prompt_for_paths(options);
+        self.terminal_status = "selecting recording directory".to_string();
+        cx.spawn(async move |this, cx| {
+            let path = match receiver.await {
+                Ok(Ok(Some(paths))) => paths.into_iter().next(),
+                _ => None,
+            };
+            let _ = this.update(cx, |this, cx| {
+                if let Some(path) = path {
+                    this.settings.recording_path = path.display().to_string();
+                    this.save_recording_settings(cx);
+                } else {
+                    this.terminal_status = "recording path selection cancelled".to_string();
+                    cx.notify();
+                }
+            });
+        })
+        .detach();
+        cx.notify();
+    }
+
+    pub(in crate::ui::view) fn prompt_transfer_default_editor_setting(
+        &mut self,
+        cx: &mut Context<Self>,
+    ) {
+        let options = PathPromptOptions {
+            files: true,
+            directories: false,
+            multiple: false,
+            prompt: Some(SharedString::from("Select default editor executable")),
+        };
+        let receiver = cx.prompt_for_paths(options);
+        self.terminal_status = "selecting default editor".to_string();
+        cx.spawn(async move |this, cx| {
+            let path = match receiver.await {
+                Ok(Ok(Some(paths))) => paths.into_iter().next(),
+                _ => None,
+            };
+            let _ = this.update(cx, |this, cx| {
+                if let Some(path) = path {
+                    this.settings.transfer_default_editor = path.display().to_string();
+                    this.save_transfer_settings("transfer editor path saved", cx);
+                } else {
+                    this.terminal_status = "editor path selection cancelled".to_string();
+                    cx.notify();
+                }
+            });
+        })
+        .detach();
+        cx.notify();
+    }
+
+
     pub(in crate::ui::view) fn resolved_transfer_download_dir(&self) -> Option<PathBuf> {
         let configured = self.settings.transfer_download_path.trim();
         if configured.is_empty() {
