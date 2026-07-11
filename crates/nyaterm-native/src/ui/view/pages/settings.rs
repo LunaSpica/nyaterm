@@ -53,6 +53,7 @@ impl NyaTermApp {
         backup_snapshot_prompt: Option<SnapshotPasswordPromptState>,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
+        // Tauri SettingsPage shell: compact header + narrow nav + scroll content.
         div()
             .flex()
             .flex_col()
@@ -60,28 +61,39 @@ impl NyaTermApp {
             .bg(rgb(0x0d1117))
             .child(
                 div()
-                    .h(px(44.))
+                    .h(px(36.))
+                    .flex_none()
                     .flex()
                     .items_center()
                     .justify_between()
-                    .px_4()
+                    .px_3()
                     .border_b_1()
                     .border_color(rgb(0x30363d))
-                    .bg(rgb(0x161b22))
+                    .bg(rgb(0x12171f))
                     .child(
                         div()
-                            .text_sm()
-                            .font_weight(FontWeight(800.))
+                            .text_size(px(12.))
+                            .font_weight(FontWeight(700.))
                             .text_color(rgb(0xc9d1d9))
                             .child("Settings"),
                     )
-                    .child(small_button(
-                        "settings-close",
-                        "Back",
-                        cx.listener(|this, _, _, cx| {
-                            this.close_settings(cx);
-                        }),
-                    )),
+                    .child(
+                        div()
+                            .id(SharedString::from("settings-close"))
+                            .h(px(26.))
+                            .px_2()
+                            .flex()
+                            .items_center()
+                            .rounded_md()
+                            .text_size(px(11.))
+                            .text_color(rgb(0x8b949e))
+                            .cursor_pointer()
+                            .hover(|this| this.bg(rgb(0x21262d)).text_color(rgb(0xc9d1d9)))
+                            .child("Back")
+                            .on_click(cx.listener(|this, _, _, cx| {
+                                this.close_settings(cx);
+                            })),
+                    ),
             )
             .child(
                 div()
@@ -96,7 +108,6 @@ impl NyaTermApp {
                             .min_w_0()
                             .min_h_0()
                             .overflow_hidden()
-                            .p_4()
                             .bg(rgb(0x0d1117))
                             .child(self.settings_active_panel(backup_snapshot_prompt, cx)),
                     ),
@@ -105,12 +116,16 @@ impl NyaTermApp {
 
     fn settings_sidebar(&mut self, cx: &mut Context<Self>) -> impl IntoElement {
         div()
-            .w(px(240.))
+            .id(SharedString::from("settings-sidebar-scroll"))
+            .w(px(220.))
             .flex_none()
+            .h_full()
             .border_r_1()
             .border_color(rgb(0x30363d))
             .bg(rgb(0x161b22))
-            .p_3()
+            .px_2()
+            .py_2()
+            .overflow_scroll()
             .child(settings_category_header("Workspace", "WS", rgb(0x58a6ff)))
             .child(self.settings_tab_button(SettingsTab::General, "settings-tab-general", cx))
             .child(self.settings_tab_button(SettingsTab::Appearance, "settings-tab-appearance", cx))
@@ -164,43 +179,58 @@ impl NyaTermApp {
     ) -> impl IntoElement {
         let selected = self.settings_active_tab == tab;
 
+        // Tauri settings nav item: soft primary fill, no permanent green border.
         div()
             .id(id)
-            .mt_1()
-            .h(px(32.))
-            .px_3()
+            .mt_0()
+            .h(px(30.))
+            .px_2()
             .flex()
             .items_center()
-            .justify_between()
-            .rounded_sm()
+            .gap_2()
+            .rounded_md()
             .border_1()
             .border_color(if selected {
-                rgb(0x4ade80)
+                rgb(0x1f6feb)
             } else {
-                rgb(0x172033)
+                rgb(0x00000000)
             })
             .bg(if selected {
-                rgb(0x173823)
+                rgb(0x122033)
             } else {
-                rgb(0x0d1117)
+                rgb(0x00000000)
             })
             .text_color(if selected {
-                rgb(0xbbf7d0)
+                rgb(0xc9d1d9)
             } else {
-                rgb(0xcbd5e1)
+                rgb(0x8b949e)
             })
-            .text_xs()
+            .text_size(px(12.))
             .font_weight(if selected {
-                FontWeight(800.)
+                FontWeight(600.)
             } else {
                 FontWeight(500.)
             })
             .cursor_pointer()
-            .hover(|this| this.bg(rgb(0x1a2230)))
-            .child(tab.label())
-            .when(selected, |this| {
-                this.child(div().size(px(6.)).rounded_full().bg(rgb(0x3fb950)))
-            })
+            .hover(|this| this.bg(rgb(0x1c2128)).text_color(rgb(0xc9d1d9)))
+            .child(
+                div()
+                    .size(px(6.))
+                    .rounded_full()
+                    .flex_none()
+                    .bg(if selected {
+                        rgb(0x58a6ff)
+                    } else {
+                        rgb(0x30363d)
+                    }),
+            )
+            .child(
+                div()
+                    .min_w_0()
+                    .flex_1()
+                    .overflow_hidden()
+                    .child(tab.label()),
+            )
             .on_click(cx.listener(move |this, _, _, cx| {
                 this.settings_active_tab = tab;
                 cx.notify();
@@ -215,18 +245,22 @@ impl NyaTermApp {
         let active_tab = self.settings_active_tab;
         let content = self.settings_tab_content(active_tab, backup_snapshot_prompt, cx);
 
+        // Tauri content pane: no heavy outer card; compact title strip + scroll body.
         div()
+            .size_full()
             .min_w_0()
-            .flex_1()
-            .rounded_md()
-            .border_1()
-            .border_color(rgb(0x30363d))
-            .bg(rgb(0x0f141d))
-            .p_4()
+            .flex()
+            .flex_col()
+            .overflow_hidden()
             .child(
                 div()
+                    .flex_none()
+                    .px_4()
+                    .py_3()
+                    .border_b_1()
+                    .border_color(rgb(0x21262d))
                     .flex()
-                    .items_center()
+                    .items_end()
                     .justify_between()
                     .gap_3()
                     .child(
@@ -234,23 +268,33 @@ impl NyaTermApp {
                             .min_w_0()
                             .flex()
                             .flex_col()
-                            .gap_1()
+                            .gap_0()
                             .child(
                                 div()
-                                    .text_lg()
-                                    .font_weight(FontWeight(800.))
-                                    .child(active_tab.label()),
+                                    .text_size(px(10.))
+                                    .font_weight(FontWeight(600.))
+                                    .text_color(rgb(0x6e7681))
+                                    .child(active_tab.group_label()),
                             )
                             .child(
                                 div()
-                                    .text_xs()
-                                    .text_color(rgb(0x98a3b8))
-                                    .child(active_tab.group_label()),
+                                    .text_size(px(16.))
+                                    .font_weight(FontWeight(700.))
+                                    .text_color(rgb(0xc9d1d9))
+                                    .child(active_tab.label()),
                             ),
-                    )
-                    .child(status_pill("native", rgb(0x58a6ff), rgb(0x17253b))),
+                    ),
             )
-            .child(div().mt_4().flex().flex_col().gap_4().child(content))
+            .child(
+                div()
+                    .id(SharedString::from("settings-content-scroll"))
+                    .flex_1()
+                    .min_h_0()
+                    .overflow_scroll()
+                    .px_4()
+                    .py_3()
+                    .child(div().flex().flex_col().gap_3().child(content)),
+            )
     }
 
     fn settings_tab_content(
@@ -288,32 +332,18 @@ impl NyaTermApp {
 
 fn settings_category_header(
     title: &'static str,
-    badge: &'static str,
-    accent: impl Into<gpui::Hsla>,
+    _badge: &'static str,
+    _accent: impl Into<gpui::Hsla>,
 ) -> impl IntoElement {
-    let accent = accent.into();
     div()
-        .mt_3()
+        .mt_2()
+        .mb_1()
         .px_2()
         .py_1()
         .flex()
         .items_center()
-        .justify_between()
         .text_size(px(10.))
-        .font_weight(FontWeight(800.))
-        .text_color(rgb(0x8f98aa))
-        .child(title)
-        .child(
-            div()
-                .h(px(18.))
-                .min_w(px(24.))
-                .px_2()
-                .flex()
-                .items_center()
-                .justify_center()
-                .rounded_sm()
-                .bg(accent.opacity(0.16))
-                .text_color(accent)
-                .child(badge),
-        )
+        .font_weight(FontWeight(700.))
+        .text_color(rgb(0x6e7681))
+        .child(title.to_uppercase())
 }

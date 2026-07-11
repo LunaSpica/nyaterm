@@ -605,3 +605,8 @@ service boundary first:
 - Bottom Command Send title row matches Tauri (title + session kind + target + Hide).
 - Controls reworked into labeled bordered groups: Data, Mode, Count steppers, Interval steppers, serial EOL cycle.
 - Editor uses mono placeholder; footer denser with Clear / Send / Send ↵.
+
+## 2026-07-11 Settings shell densify
+- Settings header densified to 36px with ghost Back control.
+- Sidebar narrower (220px), uppercase category labels, soft primary nav items (no green borders).
+- Content pane drops heavy outer card; group/title strip + scroll body like Tauri SettingsPage.
