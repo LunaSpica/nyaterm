@@ -11,6 +11,15 @@ impl NyaTermApp {
             return false;
         }
 
+        // Dismiss strip menus with Escape (Tauri dropdown dismiss).
+        if event.keystroke.key.as_str() == "escape"
+            && (self.open_tabs_menu_open || self.new_session_menu_open)
+        {
+            self.close_open_tabs_menu(cx);
+            self.close_new_session_menu(cx);
+            return true;
+        }
+
         let keybindings = self.settings.keybindings.clone();
         if shortcut_matches(event, "terminal.copy", &keybindings) {
             self.copy_terminal_selection_or_visible(cx);
