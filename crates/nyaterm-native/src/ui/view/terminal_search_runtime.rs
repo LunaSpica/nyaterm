@@ -47,10 +47,8 @@ impl NyaTermApp {
             .active_session_id
             .as_deref()
             .and_then(|session_id| self.terminal_views.get(session_id))
-            .map(|view| view.screen.all_lines().join("
-"))
-            .unwrap_or_else(|| self.terminal_screen.all_lines().join("
-"));
+            .map(|view| view.screen.all_lines().join("\n"))
+            .unwrap_or_else(|| self.terminal_screen.all_lines().join("\n"));
         terminal_buffer_matches(&buffer_text, query, &flags, 1000)
     }
 

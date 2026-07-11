@@ -1079,3 +1079,9 @@ service boundary first:
 - Fuzzy suggestion search is debounced 80ms after tracked input changes, with a
   generation counter cancelling stale timers (Tauri searchTimer parity).
 
+## 2026-07-11 Tab actions near-cursor menu + search join fix
+
+- Right-click tab actions open as a compact anchored menu at the pointer
+  (Tauri TabContextMenu-like placement) instead of only a centered modal.
+- Terminal buffer search rejoins lines with real newlines (broken join fixed).
+

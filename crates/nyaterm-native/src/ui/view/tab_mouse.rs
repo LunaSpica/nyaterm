@@ -124,7 +124,12 @@ impl NyaTermApp {
                 cx.stop_propagation();
                 let action = self.settings.interaction_tab_right_click_action.clone();
                 if action == "none" {
-                    self.open_tab_actions(session_id, window, cx);
+                    let anchor = if let ClickEvent::Mouse(mouse) = event {
+                        Some((f32::from(mouse.up.position.x), f32::from(mouse.up.position.y)))
+                    } else {
+                        None
+                    };
+                    self.open_tab_actions_at(session_id, anchor, window, cx);
                 } else {
                     self.run_tab_mouse_action(session_id, action, window, cx);
                 }

@@ -475,6 +475,7 @@ impl NyaTermApp {
             return;
         }
         self.tab_actions_session_id = None;
+            self.tab_actions_anchor = None;
         self.close_all_sessions_confirm_open = true;
         self.terminal_status = "close all sessions confirmation opened".to_string();
         window.focus(&self.close_all_sessions_confirm_focus);

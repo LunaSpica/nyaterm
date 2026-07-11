@@ -16,6 +16,7 @@ impl NyaTermApp {
             .cloned()
         else {
             self.tab_actions_session_id = None;
+            self.tab_actions_anchor = None;
             return div().into_any_element();
         };
 
@@ -67,6 +68,7 @@ impl NyaTermApp {
                         cx.stop_propagation();
                         this.select_session(color_session_id.clone(), cx);
                         this.tab_actions_session_id = None;
+                                                    this.tab_actions_anchor = None;
                         this.set_active_session_tab_color(Some(color), cx);
                     })),
             );
@@ -92,6 +94,14 @@ impl NyaTermApp {
         let explain_session_id = session_id.clone();
         let analyze_session_id = session_id.clone();
 
+        let (viewport_w, viewport_h) = self.last_viewport_size;
+        let compact = self.tab_actions_anchor.is_some();
+        let (menu_x, menu_y) = if let Some((x, y)) = self.tab_actions_anchor {
+            clamp_tab_actions_position(x, y, 280., 520., viewport_w, viewport_h)
+        } else {
+            (((viewport_w - 600.0) * 0.5).max(24.0), 74.0)
+        };
+
         div()
             .id(SharedString::from("tab-actions-overlay"))
             .absolute()
@@ -99,15 +109,11 @@ impl NyaTermApp {
             .bottom_0()
             .left_0()
             .right_0()
-            .bg(rgba(0x030508d8))
-            .flex()
-            .items_start()
-            .justify_center()
-            .pt(px(74.))
+            .when(!compact, |this| this.bg(rgba(0x030508d8)))
+            .when(compact, |this| this.bg(rgba(0x00000000)))
             .track_focus(&self.tab_actions_focus)
-            .on_click(cx.listener(|this, _, window, cx| {
-                window.focus(&this.tab_actions_focus);
-                cx.notify();
+            .on_click(cx.listener(|this, _, _, cx| {
+                this.close_tab_actions(cx);
             }))
             .on_key_down(cx.listener(|this, event: &KeyDownEvent, _, cx| {
                 cx.stop_propagation();
@@ -118,15 +124,18 @@ impl NyaTermApp {
             .child(
                 div()
                     .id(SharedString::from("tab-actions-dialog"))
-                    .w(px(600.))
-                    .max_w_full()
-                    .mx_4()
+                    .absolute()
+                    .left(px(menu_x))
+                    .top(px(menu_y))
+                    .w(px(if compact { 280. } else { 600. }))
+                    .max_h(px(if compact { 520. } else { 640. }))
+                    .overflow_y_scroll()
                     .rounded_md()
                     .border_1()
                     .border_color(rgb(palette.border))
-                    .bg(rgb(palette.bg))
+                    .bg(rgb(palette.surface_elevated))
                     .shadow_lg()
-                    .p_4()
+                    .p_2()
                     .on_click(|_, _, cx| cx.stop_propagation())
                     .child(
                         div()
@@ -191,6 +200,7 @@ impl NyaTermApp {
                                         cx.listener(move |this, _, _, cx| {
                                             this.select_session(reset_color_session_id.clone(), cx);
                                             this.tab_actions_session_id = None;
+                                                    this.tab_actions_anchor = None;
                                             this.set_active_session_tab_color(None, cx);
                                         }),
                                     ))),
@@ -222,6 +232,7 @@ impl NyaTermApp {
                                                 "Edit tab title",
                                                 cx.listener(move |this, _, window, cx| {
                                                     this.tab_actions_session_id = None;
+                                                    this.tab_actions_anchor = None;
                                                     this.open_rename_session(
                                                         rename_session_id.clone(),
                                                         window,
@@ -240,6 +251,7 @@ impl NyaTermApp {
                                                         cx,
                                                     );
                                                     this.tab_actions_session_id = None;
+                                                    this.tab_actions_anchor = None;
                                                     this.copy_active_session_name(cx);
                                                 }),
                                             ))
@@ -254,6 +266,7 @@ impl NyaTermApp {
                                                         cx,
                                                     );
                                                     this.tab_actions_session_id = None;
+                                                    this.tab_actions_anchor = None;
                                                     this.copy_active_session_endpoint(cx);
                                                 }),
                                             ))
@@ -269,6 +282,7 @@ impl NyaTermApp {
                                                             cx,
                                                         );
                                                         this.tab_actions_session_id = None;
+                                                    this.tab_actions_anchor = None;
                                                         this.copy_active_session_ssh_host(cx);
                                                     }),
                                                 ))
@@ -283,6 +297,7 @@ impl NyaTermApp {
                                                             cx,
                                                         );
                                                         this.tab_actions_session_id = None;
+                                                    this.tab_actions_anchor = None;
                                                         this.copy_active_session_ssh_address(cx);
                                                     }),
                                                 ))
@@ -304,6 +319,7 @@ impl NyaTermApp {
                                 cx.listener(move |this, _, window, cx| {
                                     this.select_session(duplicate_session_id.clone(), cx);
                                     this.tab_actions_session_id = None;
+                                                    this.tab_actions_anchor = None;
                                     this.duplicate_active_session(window, cx);
                                 }),
                             ))
@@ -316,6 +332,7 @@ impl NyaTermApp {
                                     cx.listener(move |this, _, window, cx| {
                                         this.select_session(multiplex_session_id.clone(), cx);
                                         this.tab_actions_session_id = None;
+                                                    this.tab_actions_anchor = None;
                                         this.multiplex_active_ssh_session(window, cx);
                                     }),
                                 ))
@@ -328,6 +345,7 @@ impl NyaTermApp {
                                 cx.listener(move |this, _, window, cx| {
                                     this.select_session(startup_session_id.clone(), cx);
                                     this.tab_actions_session_id = None;
+                                                    this.tab_actions_anchor = None;
                                     this.open_startup_command_dialog(window, cx);
                                 }),
                             ))
@@ -340,6 +358,7 @@ impl NyaTermApp {
                                     cx.listener(move |this, _, window, cx| {
                                         this.select_session(multiplex_startup_session_id.clone(), cx);
                                         this.tab_actions_session_id = None;
+                                                    this.tab_actions_anchor = None;
                                         this.open_startup_command_dialog_for(
                                             StartupCommandAction::Multiplex,
                                             window,
@@ -356,6 +375,7 @@ impl NyaTermApp {
                                 cx.listener(move |this, _, window, cx| {
                                     this.select_session(split_horizontal_session_id.clone(), cx);
                                     this.tab_actions_session_id = None;
+                                                    this.tab_actions_anchor = None;
                                     this.split_workspace_with_duplicate(
                                         WorkspaceSplitDirection::Horizontal,
                                         window,
@@ -371,6 +391,7 @@ impl NyaTermApp {
                                 cx.listener(move |this, _, window, cx| {
                                     this.select_session(split_vertical_session_id.clone(), cx);
                                     this.tab_actions_session_id = None;
+                                                    this.tab_actions_anchor = None;
                                     this.split_workspace_with_duplicate(
                                         WorkspaceSplitDirection::Vertical,
                                         window,
@@ -386,6 +407,7 @@ impl NyaTermApp {
                                 cx.listener(move |this, _, window, cx| {
                                     this.select_session(reconnect_session_id.clone(), cx);
                                     this.tab_actions_session_id = None;
+                                                    this.tab_actions_anchor = None;
                                     this.reconnect_active_session(window, cx);
                                 }),
                             ))
@@ -397,6 +419,7 @@ impl NyaTermApp {
                                 cx.listener(move |this, _, window, cx| {
                                     this.select_session(info_session_id.clone(), cx);
                                     this.tab_actions_session_id = None;
+                                                    this.tab_actions_anchor = None;
                                     this.open_active_session_info(window, cx);
                                 }),
                             ))
@@ -408,6 +431,7 @@ impl NyaTermApp {
                                 cx.listener(move |this, _, window, cx| {
                                     this.select_session(explain_session_id.clone(), cx);
                                     this.tab_actions_session_id = None;
+                                                    this.tab_actions_anchor = None;
                                     if visible_for_ai.trim().is_empty() {
                                         this.ai_status =
                                             "terminal visible screen is empty".to_string();
@@ -431,6 +455,7 @@ impl NyaTermApp {
                                 cx.listener(move |this, _, window, cx| {
                                     this.select_session(analyze_session_id.clone(), cx);
                                     this.tab_actions_session_id = None;
+                                                    this.tab_actions_anchor = None;
                                     if buffer_for_ai.trim().is_empty() {
                                         this.ai_status = "terminal buffer is empty".to_string();
                                     } else {
@@ -453,6 +478,7 @@ impl NyaTermApp {
                                     "Close split view",
                                     cx.listener(|this, _, _, cx| {
                                         this.tab_actions_session_id = None;
+                                                    this.tab_actions_anchor = None;
                                         this.unsplit_workspace(cx);
                                     }),
                                 ))
@@ -464,6 +490,7 @@ impl NyaTermApp {
                                 "End this session",
                                 cx.listener(move |this, _, _, cx| {
                                     this.tab_actions_session_id = None;
+                                                    this.tab_actions_anchor = None;
                                     this.close_session(close_session_id.clone(), cx);
                                 }),
                             ))
@@ -475,6 +502,7 @@ impl NyaTermApp {
                                     "Keep this tab",
                                     cx.listener(move |this, _, _, cx| {
                                         this.tab_actions_session_id = None;
+                                                    this.tab_actions_anchor = None;
                                         this.close_inactive_sessions(inactive_anchor.clone(), cx);
                                     }),
                                 ))
@@ -487,6 +515,7 @@ impl NyaTermApp {
                                     "Tabs after this",
                                     cx.listener(move |this, _, _, cx| {
                                         this.tab_actions_session_id = None;
+                                                    this.tab_actions_anchor = None;
                                         this.close_sessions_to_right(right_anchor.clone(), cx);
                                     }),
                                 ))
@@ -499,6 +528,7 @@ impl NyaTermApp {
                                     "End all sessions",
                                     cx.listener(|this, _, window, cx| {
                                         this.tab_actions_session_id = None;
+                                                    this.tab_actions_anchor = None;
                                         this.open_close_all_sessions_confirm(window, cx);
                                     }),
                                 ))
@@ -507,4 +537,17 @@ impl NyaTermApp {
             )
             .into_any_element()
     }
+}
+
+fn clamp_tab_actions_position(
+    x: f32,
+    y: f32,
+    menu_w: f32,
+    menu_h: f32,
+    viewport_w: f32,
+    viewport_h: f32,
+) -> (f32, f32) {
+    let max_x = (viewport_w - menu_w - 8.0).max(8.0);
+    let max_y = (viewport_h - menu_h - 8.0).max(8.0);
+    (x.clamp(8.0, max_x), y.clamp(8.0, max_y))
 }

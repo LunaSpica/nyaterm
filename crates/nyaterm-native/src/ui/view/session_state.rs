@@ -304,11 +304,22 @@ impl NyaTermApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        self.open_tab_actions_at(session_id, None, window, cx);
+    }
+
+    pub(in crate::ui::view) fn open_tab_actions_at(
+        &mut self,
+        session_id: String,
+        anchor: Option<(f32, f32)>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
         self.select_session(session_id.clone(), cx);
         if self.active_session_id.as_deref() != Some(session_id.as_str()) {
             return;
         }
         self.tab_actions_session_id = Some(session_id);
+        self.tab_actions_anchor = anchor;
         self.terminal_status = "tab actions opened".to_string();
         window.focus(&self.tab_actions_focus);
         cx.notify();
@@ -316,6 +327,7 @@ impl NyaTermApp {
 
     pub(in crate::ui::view) fn close_tab_actions(&mut self, cx: &mut Context<Self>) {
         self.tab_actions_session_id = None;
+        self.tab_actions_anchor = None;
         self.terminal_status = "tab actions closed".to_string();
         cx.notify();
     }
