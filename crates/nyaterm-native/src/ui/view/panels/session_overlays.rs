@@ -47,7 +47,7 @@ impl NyaTermApp {
                         div()
                             .text_sm()
                             .font_weight(FontWeight(800.))
-                            .text_color(rgb(0xe5edf7))
+                            .text_color(rgb(palette.text))
                             .child("Rename Tab"),
                     )
                     .child(
@@ -62,16 +62,16 @@ impl NyaTermApp {
                             } else {
                                 rgb(0x7f1d1d)
                             })
-                            .bg(rgb(0x0d1320))
+                            .bg(rgb(palette.input))
                             .px_3()
                             .flex()
                             .items_center()
                             .font_family("JetBrains Mono")
                             .text_sm()
                             .text_color(if self.rename_draft.is_empty() {
-                                rgb(0x64748b)
+                                rgb(palette.text_muted)
                             } else {
-                                rgb(0xe5edf7)
+                                rgb(palette.text)
                             })
                             .child(draft_display),
                     )
@@ -135,7 +135,7 @@ impl NyaTermApp {
                     })
                     .bg(rgb(color))
                     .cursor_pointer()
-                    .hover(|this| this.border_color(rgb(0xe5edf7)))
+                    .hover(|this| this.border_color(rgb(palette.text)))
                     .on_click(cx.listener(move |this, _, _, cx| {
                         this.set_active_session_tab_color(Some(color), cx);
                     })),
@@ -178,7 +178,7 @@ impl NyaTermApp {
                         div()
                             .text_sm()
                             .font_weight(FontWeight(800.))
-                            .text_color(rgb(0xe5edf7))
+                            .text_color(rgb(palette.text))
                             .child("Set Tab Color"),
                     )
                     .child(swatches)
@@ -232,10 +232,10 @@ impl NyaTermApp {
                     .rounded_sm()
                     .border_1()
                     .border_color(rgb(0x303848))
-                    .bg(rgb(0x0d1320))
+                    .bg(rgb(palette.input))
                     .p_3()
                     .text_sm()
-                    .text_color(rgb(0x98a3b8))
+                    .text_color(rgb(palette.text_muted))
                     .child("No active session details."),
             );
         } else {
@@ -290,14 +290,14 @@ impl NyaTermApp {
                                         div()
                                             .text_sm()
                                             .font_weight(FontWeight(800.))
-                                            .text_color(rgb(0xe5edf7))
+                                            .text_color(rgb(palette.text))
                                             .child("Session Info"),
                                     )
                                     .child(
                                         div()
                                             .mt_1()
                                             .text_xs()
-                                            .text_color(rgb(0x98a3b8))
+                                            .text_color(rgb(palette.text_muted))
                                             .child(truncate_preview(&title, 56)),
                                     ),
                             ),
@@ -376,7 +376,7 @@ impl NyaTermApp {
                         div()
                             .text_sm()
                             .font_weight(FontWeight(800.))
-                            .text_color(rgb(0xe5edf7))
+                            .text_color(rgb(palette.text))
                             .child(action.title()),
                     )
                     .child(
@@ -391,16 +391,16 @@ impl NyaTermApp {
                             } else {
                                 rgb(0x7f1d1d)
                             })
-                            .bg(rgb(0x0d1320))
+                            .bg(rgb(palette.input))
                             .px_3()
                             .flex()
                             .items_center()
                             .font_family("JetBrains Mono")
                             .text_sm()
                             .text_color(if self.startup_command_draft.is_empty() {
-                                rgb(0x64748b)
+                                rgb(palette.text_muted)
                             } else {
-                                rgb(0xe5edf7)
+                                rgb(palette.text)
                             })
                             .child(truncate_preview(&command_display, 76)),
                     )
@@ -426,7 +426,7 @@ impl NyaTermApp {
                                         div()
                                             .font_family("JetBrains Mono")
                                             .text_sm()
-                                            .text_color(rgb(0xe5edf7))
+                                            .text_color(rgb(palette.text))
                                             .child(delay_label),
                                     ),
                             )

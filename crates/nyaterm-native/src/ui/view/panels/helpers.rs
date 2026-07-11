@@ -210,6 +210,7 @@ pub(in crate::ui::view::panels) fn quick_command_editor_field(
     active: bool,
     on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
 ) -> impl IntoElement {
+    let palette = crate::ui::theme::theme_palette("github-dark");
     let is_placeholder = value.is_empty();
     let display = if is_placeholder {
         placeholder.to_string()
@@ -220,15 +221,15 @@ pub(in crate::ui::view::panels) fn quick_command_editor_field(
         .id(SharedString::from(id))
         .rounded_sm()
         .border_1()
-        .border_color(if active { rgb(0x4ade80) } else { rgb(0x263142) })
-        .bg(if active { rgb(0x0f1f18) } else { rgb(0x0d1320) })
+        .border_color(if active { rgb(0x4ade80) } else { rgb(palette.border) })
+        .bg(if active { rgb(0x0f1f18) } else { rgb(palette.input) })
         .p_2()
         .cursor_pointer()
         .on_click(on_click)
         .child(
             div()
                 .text_size(px(10.))
-                .text_color(rgb(0x64748b))
+                .text_color(rgb(palette.text_muted))
                 .child(label),
         )
         .child(
@@ -239,9 +240,9 @@ pub(in crate::ui::view::panels) fn quick_command_editor_field(
                 .text_xs()
                 .line_height(px(18.))
                 .text_color(if is_placeholder {
-                    rgb(0x64748b)
+                    rgb(palette.text_muted)
                 } else {
-                    rgb(0xe5edf7)
+                    rgb(palette.text)
                 })
                 .child(truncate_preview(&display, 160)),
         )
@@ -255,6 +256,7 @@ pub(in crate::ui::view::panels) fn quick_command_editor_script_field(
     active: bool,
     on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
 ) -> impl IntoElement {
+    let palette = crate::ui::theme::theme_palette("github-dark");
     let is_placeholder = value.is_empty();
     let display = if is_placeholder {
         placeholder.to_string()
@@ -265,7 +267,7 @@ pub(in crate::ui::view::panels) fn quick_command_editor_script_field(
         .id(SharedString::from(id))
         .rounded_sm()
         .border_1()
-        .border_color(if active { rgb(0x4ade80) } else { rgb(0x263142) })
+        .border_color(if active { rgb(0x4ade80) } else { rgb(palette.border) })
         .bg(if active { rgb(0x0f1f18) } else { rgb(0x101827) })
         .p_2()
         .cursor_pointer()
@@ -279,13 +281,13 @@ pub(in crate::ui::view::panels) fn quick_command_editor_script_field(
                 .child(
                     div()
                         .text_size(px(10.))
-                        .text_color(rgb(0x64748b))
+                        .text_color(rgb(palette.text_muted))
                         .child(label),
                 )
                 .child(
                     div()
                         .text_size(px(10.))
-                        .text_color(rgb(0x98a3b8))
+                        .text_color(rgb(palette.text_muted))
                         .child("Enter inserts newline"),
                 ),
         )
@@ -297,9 +299,9 @@ pub(in crate::ui::view::panels) fn quick_command_editor_script_field(
                 .text_xs()
                 .line_height(px(18.))
                 .text_color(if is_placeholder {
-                    rgb(0x64748b)
+                    rgb(palette.text_muted)
                 } else {
-                    rgb(0xe5edf7)
+                    rgb(palette.text)
                 })
                 .child(truncate_preview(&display, 360)),
         )

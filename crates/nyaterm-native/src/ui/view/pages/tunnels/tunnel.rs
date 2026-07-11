@@ -61,6 +61,7 @@ pub(super) fn tunnel_section(
     app: &NyaTermApp,
     cx: &mut Context<NyaTermApp>,
 ) -> impl IntoElement {
+        let palette = cx.entity().read(cx).theme_palette();
     let item_count = section.tunnels.len();
     let open_count = section
         .tunnels
@@ -79,7 +80,7 @@ pub(super) fn tunnel_section(
                 .px_2()
                 .py_2()
                 .text_size(px(11.))
-                .text_color(rgb(0x98a3b8))
+                .text_color(rgb(palette.text_muted))
                 .child("No tunnels in this group."),
         );
     } else {
@@ -165,8 +166,8 @@ pub(super) fn tunnel_section(
         )))
         .rounded_md()
         .border_1()
-        .border_color(rgb(0x2a3140))
-        .bg(rgb(0x151923))
+        .border_color(rgb(palette.border))
+        .bg(rgb(palette.surface))
         .overflow_hidden()
         .child(
             div()
@@ -177,7 +178,7 @@ pub(super) fn tunnel_section(
                 .items_center()
                 .justify_between()
                 .gap_2()
-                .bg(rgb(0x10151e))
+                .bg(rgb(palette.input))
                 .cursor_pointer()
                 .hover(|this| this.bg(rgb(0x151b24)))
                 .on_click({
@@ -199,14 +200,14 @@ pub(super) fn tunnel_section(
                         .child(
                             div()
                                 .text_size(px(12.))
-                                .text_color(rgb(0x8b949e))
+                                .text_color(rgb(palette.text_muted))
                                 .child(if collapsed { "▸" } else { "▾" }),
                         )
                         .child(
                             div()
                                 .text_xs()
                                 .font_weight(FontWeight(600.))
-                                .text_color(rgb(0xe5edf7))
+                                .text_color(rgb(palette.text))
                                 .child(truncate_preview(&section.label, 48)),
                         )
                         .child(
@@ -214,8 +215,8 @@ pub(super) fn tunnel_section(
                                 .rounded_full()
                                 .px_1()
                                 .text_size(px(10.))
-                                .text_color(rgb(0x8b949e))
-                                .bg(rgb(0x21262d))
+                                .text_color(rgb(palette.text_muted))
+                                .bg(rgb(palette.surface_elevated))
                                 .child(item_count.to_string()),
                         ),
                 )
@@ -228,7 +229,7 @@ pub(super) fn tunnel_section(
                             this.child(
                                 div()
                                     .text_size(px(10.))
-                                    .text_color(rgb(0x3fb950))
+                                    .text_color(rgb(palette.success))
                                     .child(format!("{open_count} open")),
                             )
                         }),
@@ -278,6 +279,7 @@ fn tunnel_move_picker(
     groups: &[TunnelGroup],
     cx: &mut Context<NyaTermApp>,
 ) -> gpui::Div {
+        let palette = cx.entity().read(cx).theme_palette();
     let mut targets = div().flex().flex_wrap().items_center().gap_2();
     if current_group_id.is_none() {
         targets = targets.child(status_pill(
@@ -318,7 +320,7 @@ fn tunnel_move_picker(
             targets = targets.child(
                 div()
                     .text_xs()
-                    .text_color(rgb(0x98a3b8))
+                    .text_color(rgb(palette.text_muted))
                     .child(truncate_preview(&group.name, 36)),
             );
         }
@@ -327,7 +329,7 @@ fn tunnel_move_picker(
     div()
         .border_t_1()
         .border_color(rgb(0x253044))
-        .bg(rgb(0x10151e))
+        .bg(rgb(palette.input))
         .px_3()
         .py_2()
         .flex()
@@ -356,6 +358,7 @@ pub(super) fn tunnel_network_row(
     on_move: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
     on_delete: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
 ) -> impl IntoElement {
+    let palette = crate::ui::theme::theme_palette("github-dark");
     let supported = tunnel_mode(tunnel).is_some();
     let is_open = open_info.is_some();
     let status = if pending {
@@ -401,13 +404,13 @@ pub(super) fn tunnel_network_row(
     // Tauri: px-3 py-2.5; side-panel density uses slightly tighter mono stack.
     div()
         .border_t_1()
-        .border_color(rgb(0x21262d))
+        .border_color(rgb(palette.surface_elevated))
         .px_2()
         .py_2()
         .flex()
         .items_center()
         .gap_2()
-        .hover(|this| this.bg(rgb(0x1c2128)))
+        .hover(|this| this.bg(rgb(palette.hover)))
         .child(
             div()
                 .min_w_0()
@@ -425,7 +428,7 @@ pub(super) fn tunnel_network_row(
                                 .min_w_0()
                                 .text_size(px(12.))
                                 .font_weight(FontWeight(600.))
-                                .text_color(rgb(0xe5edf7))
+                                .text_color(rgb(palette.text))
                                 .overflow_hidden()
                                 .child(truncate_preview(&tunnel_name(tunnel), 52)),
                         )
@@ -434,7 +437,7 @@ pub(super) fn tunnel_network_row(
                             this.child(
                                 div()
                                     .text_size(px(10.))
-                                    .text_color(rgb(0x3fb950))
+                                    .text_color(rgb(palette.success))
                                     .child("auto"),
                             )
                         }),
@@ -443,7 +446,7 @@ pub(super) fn tunnel_network_row(
                     div()
                         .mt(px(1.))
                         .text_size(px(11.))
-                        .text_color(rgb(0x8b949e))
+                        .text_color(rgb(palette.text_muted))
                         .overflow_hidden()
                         .child(format!(
                             "{} · {}",
@@ -456,7 +459,7 @@ pub(super) fn tunnel_network_row(
                         .mt(px(1.))
                         .font_family("JetBrains Mono")
                         .text_size(px(10.))
-                        .text_color(rgb(0x6e7681))
+                        .text_color(rgb(palette.text_dimmed))
                         .overflow_hidden()
                         .child(truncate_preview(&tunnel_endpoint(tunnel, &listen), 88)),
                 ),
@@ -492,6 +495,7 @@ fn network_switch_button(
     on: bool,
     on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
 ) -> impl IntoElement {
+    let palette = crate::ui::theme::theme_palette("github-dark");
     // Compact switch stand-in for Tauri Switch next to tunnel rows.
     div()
         .id(gpui::SharedString::from(id.into()))
@@ -499,8 +503,8 @@ fn network_switch_button(
         .h(px(18.))
         .rounded_full()
         .border_1()
-        .border_color(if on { rgb(0x3fb950) } else { rgb(0x30363d) })
-        .bg(if on { rgb(0x238636) } else { rgb(0x21262d) })
+        .border_color(if on { rgb(palette.success) } else { rgb(palette.border) })
+        .bg(if on { rgb(0x238636) } else { rgb(palette.surface_elevated) })
         .flex()
         .items_center()
         .px(px(2.))
@@ -522,6 +526,7 @@ fn network_icon_action(
     label: &'static str,
     on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
 ) -> impl IntoElement {
+    let palette = crate::ui::theme::theme_palette("github-dark");
     div()
         .id(gpui::SharedString::from(id.into()))
         .size(px(24.))
@@ -530,9 +535,9 @@ fn network_icon_action(
         .justify_center()
         .rounded_md()
         .text_size(px(12.))
-        .text_color(rgb(0x8b949e))
+        .text_color(rgb(palette.text_muted))
         .cursor_pointer()
-        .hover(|this| this.bg(rgb(0x21262d)).text_color(rgb(0xc9d1d9)))
+        .hover(|this| this.bg(rgb(palette.surface_elevated)).text_color(rgb(palette.text)))
         .child(
             svg()
                 .size(px(14.))
@@ -548,6 +553,7 @@ pub(super) fn network_tunnel_editor_panel(
     focus: &gpui::FocusHandle,
     cx: &mut Context<NyaTermApp>,
 ) -> impl IntoElement {
+        let palette = cx.entity().read(cx).theme_palette();
     let connection_label = editor
         .connection_id
         .as_deref()
@@ -596,7 +602,7 @@ pub(super) fn network_tunnel_editor_panel(
                             div()
                                 .text_size(px(15.))
                                 .font_weight(FontWeight(700.))
-                                .text_color(rgb(0xc9d1d9))
+                                .text_color(rgb(palette.text))
                                 .child(if editor.id.is_some() {
                                     "Edit Tunnel"
                                 } else {
@@ -606,7 +612,7 @@ pub(super) fn network_tunnel_editor_panel(
                         .child(
                             div()
                                 .text_size(px(12.))
-                                .text_color(rgb(0x8b949e))
+                                .text_color(rgb(palette.text_muted))
                                 .child("Configure SSH local, remote, or dynamic port forwarding."),
                         ),
                 )
@@ -740,7 +746,7 @@ pub(super) fn network_tunnel_editor_panel(
                 .rounded_sm()
                 .border_1()
                 .border_color(rgb(0x303848))
-                .bg(rgb(0x0d1320))
+                .bg(rgb(palette.input))
                 .p_3()
                 .flex()
                 .flex_col()
@@ -750,7 +756,7 @@ pub(super) fn network_tunnel_editor_panel(
                     div()
                         .font_family("JetBrains Mono")
                         .text_xs()
-                        .text_color(rgb(0xe5edf7))
+                        .text_color(rgb(palette.text))
                         .child(preview),
                 ),
         )
@@ -798,6 +804,7 @@ pub(super) fn tunnel_editor_selector(
     value: String,
     on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
 ) -> impl IntoElement {
+    let palette = crate::ui::theme::theme_palette("github-dark");
     div()
         .id(gpui::SharedString::from(id.into()))
         .h(px(52.))
@@ -808,16 +815,16 @@ pub(super) fn tunnel_editor_selector(
         .gap_1()
         .rounded_md()
         .border_1()
-        .border_color(rgb(0x30363d))
-        .bg(rgb(0x0d1117))
+        .border_color(rgb(palette.border))
+        .bg(rgb(palette.bg))
         .cursor_pointer()
-        .hover(|this| this.bg(rgb(0x161b22)))
-        .child(div().text_size(px(11.)).text_color(rgb(0x8b949e)).child(label))
+        .hover(|this| this.bg(rgb(palette.surface)))
+        .child(div().text_size(px(11.)).text_color(rgb(palette.text_muted)).child(label))
         .child(
             div()
                 .font_family("JetBrains Mono")
                 .text_size(px(12.))
-                .text_color(rgb(0xc9d1d9))
+                .text_color(rgb(palette.text))
                 .child(truncate_preview(&value, 42)),
         )
         .on_click(on_click)
@@ -830,28 +837,29 @@ pub(super) fn tunnel_editor_option(
     active: bool,
     on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
 ) -> impl IntoElement {
+    let palette = crate::ui::theme::theme_palette("github-dark");
     // Tauri-like selectable option cards for bind host / auto open.
     div()
         .id(gpui::SharedString::from(id.into()))
         .rounded_md()
         .border_1()
-        .border_color(if active { rgb(0x388bfd) } else { rgb(0x30363d) })
-        .bg(if active { rgb(0x122033) } else { rgb(0x0d1117) })
+        .border_color(if active { rgb(0x388bfd) } else { rgb(palette.border) })
+        .bg(if active { rgb(palette.hover) } else { rgb(palette.bg) })
         .px_3()
         .py_2()
         .flex()
         .flex_col()
         .gap_1()
         .cursor_pointer()
-        .hover(|this| this.bg(rgb(0x161b22)))
+        .hover(|this| this.bg(rgb(palette.surface)))
         .child(
             div()
                 .text_size(px(12.))
                 .font_weight(FontWeight(600.))
-                .text_color(if active { rgb(0x79b8ff) } else { rgb(0xc9d1d9) })
+                .text_color(if active { rgb(0x79b8ff) } else { rgb(palette.text) })
                 .child(title),
         )
-        .child(div().text_size(px(11.)).text_color(rgb(0x8b949e)).child(detail))
+        .child(div().text_size(px(11.)).text_color(rgb(palette.text_muted)).child(detail))
         .on_click(on_click)
 }
 

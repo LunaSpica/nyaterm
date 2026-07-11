@@ -129,9 +129,9 @@ impl NyaTermApp {
                         "Session",
                         session_status,
                         if self.active_session_id.is_some() {
-                            rgb(0x3fb950)
+                            rgb(palette.success)
                         } else {
-                            rgb(0x8b949e)
+                            rgb(palette.text_muted)
                         },
                         cx.listener(|this, _, _, cx| {
                             this.main_mode = MainMode::Workspace;
@@ -142,16 +142,16 @@ impl NyaTermApp {
                     .child(status_bar_label(palette, 
                         "Tabs",
                         sessions.len().to_string(),
-                        rgb(0x58a6ff),
+                        rgb(palette.accent),
                     ))
                     .child(status_bar_button(palette, 
                         "status-recording",
                         "Recording",
                         recording_status,
                         if recording_count > 0 {
-                            rgb(0xff7b72)
+                            rgb(palette.danger)
                         } else {
-                            rgb(0x8b949e)
+                            rgb(palette.text_muted)
                         },
                         cx.listener(|this, _, _, cx| {
                             this.ensure_panel_open(NavItem::Recording);
@@ -163,11 +163,11 @@ impl NyaTermApp {
                         "Transfer",
                         transfer_status,
                         if running_transfers > 0 {
-                            rgb(0xd29922)
+                            rgb(palette.warning)
                         } else if failed_transfers > 0 {
-                            rgb(0xff7b72)
+                            rgb(palette.danger)
                         } else {
-                            rgb(0x8b949e)
+                            rgb(palette.text_muted)
                         },
                         cx.listener(|this, _, _, cx| {
                             this.ensure_panel_open(NavItem::Transfers);
@@ -188,9 +188,9 @@ impl NyaTermApp {
                         "AI",
                         ai_status,
                         if self.ai_settings.enabled {
-                            rgb(0x58a6ff)
+                            rgb(palette.accent)
                         } else {
-                            rgb(0x8b949e)
+                            rgb(palette.text_muted)
                         },
                         cx.listener(|this, _, _, cx| {
                             this.ensure_panel_open(NavItem::AiAssistant);
@@ -201,7 +201,7 @@ impl NyaTermApp {
                         "status-cpu",
                         "CPU",
                         cpu_status,
-                        rgb(0x58a6ff),
+                        rgb(palette.accent),
                         cx.listener(|this, _, _, cx| {
                             this.ensure_panel_open(NavItem::Stats);
                             cx.notify();
@@ -211,7 +211,7 @@ impl NyaTermApp {
                         "status-memory",
                         "MEM",
                         mem_status,
-                        rgb(0x58a6ff),
+                        rgb(palette.accent),
                         cx.listener(|this, _, _, cx| {
                             this.ensure_panel_open(NavItem::Stats);
                             cx.notify();
@@ -225,9 +225,9 @@ impl NyaTermApp {
                             "offline"
                         },
                         if self.store_status.ready {
-                            rgb(0x3fb950)
+                            rgb(palette.success)
                         } else {
-                            rgb(0xff7b72)
+                            rgb(palette.danger)
                         },
                     ))
                     .child(status_bar_button(palette, 
@@ -235,9 +235,9 @@ impl NyaTermApp {
                         "Lock",
                         lock_status,
                         if self.is_locked {
-                            rgb(0xff7b72)
+                            rgb(palette.danger)
                         } else {
-                            rgb(0x8b949e)
+                            rgb(palette.text_muted)
                         },
                         cx.listener(|this, _, window, cx| {
                             this.lock_app(window, cx);
@@ -280,16 +280,16 @@ impl NyaTermApp {
                     .cursor_pointer()
                     .text_xs()
                     .text_color(if selected {
-                        rgb(0x58a6ff)
+                        rgb(palette.accent)
                     } else {
-                        rgb(0xc9d1d9)
+                        rgb(palette.text)
                     })
                     .bg(if selected {
-                        rgb(0x1c2128)
+                        rgb(palette.hover)
                     } else {
-                        rgb(0x0d1117)
+                        rgb(palette.bg)
                     })
-                    .hover(|this| this.bg(rgb(0x21262d)))
+                    .hover(|this| this.bg(rgb(palette.surface_elevated)))
                     .child(zone.label())
                     .on_click(cx.listener(move |this, _, _, cx| {
                         this.move_activity_entry(id.clone(), target, None, cx);
@@ -315,8 +315,8 @@ impl NyaTermApp {
                     .w(px(240.))
                     .rounded_md()
                     .border_1()
-                    .border_color(rgb(0x30363d))
-                    .bg(rgb(0x161b22))
+                    .border_color(rgb(palette.border))
+                    .bg(rgb(palette.surface))
                     .p_3()
                     .flex()
                     .flex_col()
@@ -326,7 +326,7 @@ impl NyaTermApp {
                         div()
                             .text_xs()
                             .font_weight(FontWeight(800.))
-                            .text_color(rgb(0xc9d1d9))
+                            .text_color(rgb(palette.text))
                             .child(format!("Activity · {entry_label}")),
                     )
                     .child(
@@ -362,7 +362,7 @@ impl NyaTermApp {
                     .child(
                         div()
                             .text_size(px(10.))
-                            .text_color(rgb(0x8b949e))
+                            .text_color(rgb(palette.text_muted))
                             .child("Move to zone"),
                     )
                     .child(zone_buttons)
@@ -408,7 +408,7 @@ impl NyaTermApp {
                                 div()
                                     .text_sm()
                                     .font_weight(FontWeight(800.))
-                                    .text_color(rgb(0xe6edf3))
+                                    .text_color(rgb(palette.text))
                                     .child("NyaTerm"),
                             ),
                     )
@@ -430,7 +430,7 @@ impl NyaTermApp {
                             .max_w(px(520.))
                             .overflow_hidden()
                             .text_xs()
-                            .text_color(rgb(0x8b949e))
+                            .text_color(rgb(palette.text_muted))
                             .child(self.title_context_label()),
                     ),
             )
@@ -717,6 +717,7 @@ impl NyaTermApp {
         tooltip: &'static str,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
+        let palette = self.theme_palette();
         let selected = self.bottom_panel == mode;
         div()
             .id(SharedString::from(format!("bottom-panel-{tooltip}")))
@@ -732,14 +733,14 @@ impl NyaTermApp {
             .text_color(if selected {
                 rgb(0xffffff)
             } else {
-                rgb(0x8b949e)
+                rgb(palette.text_muted)
             })
             .bg(if selected {
-                rgb(0x1c2128)
+                rgb(palette.hover)
             } else {
-                rgb(0x0d1117)
+                rgb(palette.bg)
             })
-            .hover(|hover| hover.bg(rgb(0x1c2128)).text_color(rgb(0xffffff)))
+            .hover(|hover| hover.bg(rgb(palette.hover)).text_color(rgb(0xffffff)))
             .child(
                 div()
                     .absolute()
@@ -749,9 +750,9 @@ impl NyaTermApp {
                     .w(px(2.))
                     .rounded_full()
                     .bg(if selected {
-                        rgb(0x3fb950)
+                        rgb(palette.success)
                     } else {
-                        rgb(0x0d1117)
+                        rgb(palette.bg)
                     }),
             )
             .child(icon)
@@ -766,6 +767,7 @@ impl NyaTermApp {
     }
 
     fn recording_activity_button(&self, cx: &mut Context<Self>) -> impl IntoElement {
+        let palette = self.theme_palette();
         let recording_count = self.recording_manager.list_recording_sessions().len();
         let selected = self.right_focus == RightFocus::Recording || recording_count > 0;
         div()
@@ -782,18 +784,18 @@ impl NyaTermApp {
             .text_color(if selected {
                 rgb(0xffffff)
             } else {
-                rgb(0x8b949e)
+                rgb(palette.text_muted)
             })
             .bg(if selected {
                 if recording_count > 0 {
                     rgb(0x3d1418)
                 } else {
-                    rgb(0x1c2128)
+                    rgb(palette.hover)
                 }
             } else {
-                rgb(0x0d1117)
+                rgb(palette.bg)
             })
-            .hover(|hover| hover.bg(rgb(0x1c2128)).text_color(rgb(0xffffff)))
+            .hover(|hover| hover.bg(rgb(palette.hover)).text_color(rgb(0xffffff)))
             .child(
                 div()
                     .absolute()
@@ -803,22 +805,22 @@ impl NyaTermApp {
                     .w(px(2.))
                     .rounded_full()
                     .bg(if recording_count > 0 {
-                        rgb(0xff7b72)
+                        rgb(palette.danger)
                     } else if selected {
-                        rgb(0x3fb950)
+                        rgb(palette.success)
                     } else {
-                        rgb(0x0d1117)
+                        rgb(palette.bg)
                     }),
             )
             .child(activity_icon(
                 Some("icons/record.svg"),
                 "●",
                 if recording_count > 0 {
-                    rgb(0xff7b72).into()
+                    rgb(palette.danger).into()
                 } else if selected {
                     rgb(0xffffff).into()
                 } else {
-                    rgb(0x8b949e).into()
+                    rgb(palette.text_muted).into()
                 },
                 18.,
             ))
@@ -828,6 +830,7 @@ impl NyaTermApp {
     }
 
     fn lock_activity_button(&self, cx: &mut Context<Self>) -> impl IntoElement {
+        let palette = self.theme_palette();
         div()
             .id(SharedString::from("activity-lock"))
             .relative()
@@ -842,14 +845,14 @@ impl NyaTermApp {
             .text_color(if self.is_locked {
                 rgb(0xffffff)
             } else {
-                rgb(0x8b949e)
+                rgb(palette.text_muted)
             })
             .bg(if self.is_locked {
-                rgb(0x1c2128)
+                rgb(palette.hover)
             } else {
-                rgb(0x0d1117)
+                rgb(palette.bg)
             })
-            .hover(|hover| hover.bg(rgb(0x1c2128)).text_color(rgb(0xffffff)))
+            .hover(|hover| hover.bg(rgb(palette.hover)).text_color(rgb(0xffffff)))
             .child(
                 div()
                     .absolute()
@@ -859,9 +862,9 @@ impl NyaTermApp {
                     .w(px(2.))
                     .rounded_full()
                     .bg(if self.is_locked {
-                        rgb(0x3fb950)
+                        rgb(palette.success)
                     } else {
-                        rgb(0x0d1117)
+                        rgb(palette.bg)
                     }),
             )
             .child(activity_icon(
@@ -870,7 +873,7 @@ impl NyaTermApp {
                 if self.is_locked {
                     rgb(0xffffff).into()
                 } else {
-                    rgb(0x8b949e).into()
+                    rgb(palette.text_muted).into()
                 },
                 18.,
             ))
@@ -1185,6 +1188,7 @@ fn title_menu_item(
     shortcut: Option<String>,
     on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
 ) -> impl IntoElement {
+    let palette = crate::ui::theme::theme_palette("github-dark");
     let label = label.into();
     let mut row = div()
         .id(SharedString::from(id.into()))
@@ -1195,16 +1199,16 @@ fn title_menu_item(
         .justify_between()
         .gap_3()
         .text_size(px(12.))
-        .text_color(rgb(0xc9d1d9))
+        .text_color(rgb(palette.text))
         .cursor_pointer()
-        .hover(|this| this.bg(rgb(0x21262d)))
+        .hover(|this| this.bg(rgb(palette.surface_elevated)))
         .on_click(on_click)
         .child(div().min_w_0().flex_1().child(label));
     if let Some(shortcut) = shortcut {
         row = row.child(
             div()
                 .text_size(px(10.))
-                .text_color(rgb(0x6e7681))
+                .text_color(rgb(palette.text_dimmed))
                 .child(shortcut),
         );
     }
@@ -1212,9 +1216,10 @@ fn title_menu_item(
 }
 
 fn title_menu_separator() -> impl IntoElement {
+    let palette = crate::ui::theme::theme_palette("github-dark");
     div()
         .h(px(1.))
         .mx_2()
         .my_1()
-        .bg(rgb(0x30363d))
+        .bg(rgb(palette.border))
 }

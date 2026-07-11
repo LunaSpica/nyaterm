@@ -490,13 +490,20 @@ pub(super) fn settings_choice_chip(
 ) -> impl IntoElement {
     let selected_border = palette.accent;
     let idle_border = palette.border;
-    // Selected chip bg: accent-tinted surface approximation.
-    let selected_bg = if palette.bg == 0xffffff {
-        0xdff0ff
-    } else if palette.accent == 0xcba6f7 {
-        0x2b2035
-    } else {
-        0x122033
+    // Selected chip bg: light themes tint lightly; dark themes use hover/elevated surface.
+    let selected_bg = {
+        let luminance = {
+            let r = ((palette.bg >> 16) & 0xff) as f32;
+            let g = ((palette.bg >> 8) & 0xff) as f32;
+            let b = (palette.bg & 0xff) as f32;
+            (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255.0
+        };
+        if luminance > 0.6 {
+            // light: soft hover-ish fill
+            palette.hover
+        } else {
+            palette.hover
+        }
     };
     let idle_bg = palette.input;
     let selected_text = palette.accent;

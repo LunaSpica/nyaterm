@@ -1,4 +1,5 @@
 use super::*;
+use crate::ui::theme::{APPEARANCE_THEME_IDS, appearance_theme_label};
 use crate::ui::shortcuts::{
     SHORTCUT_CATEGORIES, SHORTCUT_REGISTRY, ShortcutCategory, ShortcutDefinition,
     ShortcutNativeStatus, format_hotkey_for_display, shortcut_keys_for,
@@ -135,37 +136,31 @@ impl NyaTermApp {
             .flex()
             .flex_col()
             .gap_3()
-            .child(settings_form_section(palette, 
+            .child(settings_form_section(
+                palette,
                 Some("Theme"),
-                Some("Color scheme used by the native shell chrome."),
-                div()
-                    .flex()
-                    .flex_wrap()
-                    .gap_1()
-                    .child(settings_choice_chip(palette, 
-                        "appearance-theme-dark",
-                        "GitHub Dark",
-                        self.settings.theme == "github-dark",
-                        cx.listener(|this, _, _, cx| {
-                            this.update_appearance_theme("github-dark", cx);
-                        }),
-                    ))
-                    .child(settings_choice_chip(palette, 
-                        "appearance-theme-light",
-                        "GitHub Light",
-                        self.settings.theme == "github-light",
-                        cx.listener(|this, _, _, cx| {
-                            this.update_appearance_theme("github-light", cx);
-                        }),
-                    ))
-                    .child(settings_choice_chip(palette, 
-                        "appearance-theme-catppuccin",
-                        "Catppuccin",
-                        self.settings.theme == "catppuccin",
-                        cx.listener(|this, _, _, cx| {
-                            this.update_appearance_theme("catppuccin", cx);
-                        }),
-                    )),
+                Some("Color scheme used by the native shell chrome (Tauri theme list)."),
+                {
+                    let current = self.settings.theme.clone();
+                    let chips = APPEARANCE_THEME_IDS.iter().fold(
+                        div().flex().flex_wrap().gap_1(),
+                        |row, theme_id| {
+                            let theme_id_owned = (*theme_id).to_string();
+                            let selected = current == *theme_id
+                                || (current == "catppuccin" && *theme_id == "catppuccin-mocha");
+                            row.child(settings_choice_chip(
+                                palette,
+                                format!("appearance-theme-{theme_id}"),
+                                appearance_theme_label(theme_id),
+                                selected,
+                                cx.listener(move |this, _, _, cx| {
+                                    this.update_appearance_theme(&theme_id_owned, cx);
+                                }),
+                            ))
+                        },
+                    );
+                    chips
+                },
             ))
             .child(settings_form_section(palette, 
                 Some("Terminal font"),

@@ -14,9 +14,15 @@ impl NyaTermApp {
 
     pub(in crate::ui::view) fn update_appearance_theme(
         &mut self,
-        theme: &'static str,
+        theme: &str,
         cx: &mut Context<Self>,
     ) {
+        // Normalize legacy Settings id "catppuccin" to Tauri mocha id.
+        let theme = if theme == "catppuccin" {
+            "catppuccin-mocha"
+        } else {
+            theme
+        };
         self.settings.theme = theme.to_string();
         self.save_appearance_settings(cx);
     }

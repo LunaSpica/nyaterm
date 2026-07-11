@@ -105,9 +105,9 @@ impl NyaTermApp {
                                             .text_xs()
                                             .font_weight(FontWeight(800.))
                                             .text_color(if is_active {
-                                                rgb(0xe5edf7)
+                                                rgb(palette.text)
                                             } else {
-                                                rgb(0x98a3b8)
+                                                rgb(palette.text_muted)
                                             })
                                             .child(truncate_preview(&pane_title, 42)),
                                     )
@@ -231,7 +231,7 @@ impl NyaTermApp {
                             .child(
                                 div()
                                     .text_xs()
-                                    .text_color(rgb(0x98a3b8))
+                                    .text_color(rgb(palette.text_muted))
                                     .child(self.terminal_status.clone()),
                             ),
                     )
@@ -297,6 +297,7 @@ impl NyaTermApp {
     }
 
     fn terminal_search_bar(&self, cx: &mut Context<Self>) -> impl IntoElement {
+        let palette = self.theme_palette();
         let buffer_matches = self.terminal_buffer_matches();
         let history_results = self.terminal_history_search_results();
         let (status, is_error) = match self.terminal_search_mode {
@@ -366,7 +367,7 @@ impl NyaTermApp {
                                     div()
                                         .text_xs()
                                         .font_weight(FontWeight(800.))
-                                        .text_color(rgb(0xe5edf7))
+                                        .text_color(rgb(palette.text))
                                         .child(format!("line {}", result.line_number)),
                                 )
                                 .child(
@@ -472,15 +473,15 @@ impl NyaTermApp {
                             .rounded_sm()
                             .border_1()
                             .border_color(rgb(0x303848))
-                            .bg(rgb(0x0d1320))
+                            .bg(rgb(palette.input))
                             .px_2()
                             .flex()
                             .items_center()
                             .text_xs()
                             .text_color(if self.terminal_search_query.is_empty() {
-                                rgb(0x64748b)
+                                rgb(palette.text_muted)
                             } else {
-                                rgb(0xe5edf7)
+                                rgb(palette.text)
                             })
                             .child(input_display),
                     )

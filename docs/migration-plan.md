@@ -842,3 +842,9 @@ service boundary first:
 - Connections view: rows, selection strip, editor/delete confirm panels, context menus, kind/toggle chips, and icon actions themed.
 - Shared `view_widgets` connection/tunnel compact rows and tab actions densified; bottom send-command chips themed.
 - Semantic status colors (job state dots, risk pills, close-red) intentionally retained.
+
+## 2026-07-11 Full Tauri theme catalog + Network/shell densify
+- Expand `theme_palette` to all 17 Tauri theme ids from `nyaterm-tauri/src/lib/themes.ts`.
+- Interactive accent uses Tauri `link`/`focusRing` (github-light blue, not green brand accent).
+- Settings Appearance lists every theme via `APPEARANCE_THEME_IDS` chips; legacy `catppuccin` normalizes to `catppuccin-mocha`.
+- Densify Network tunnel/proxy rows/editors, title/status bar extras, terminal search/canvas chrome, session overlays, translation chips, and quick-command helper fields.

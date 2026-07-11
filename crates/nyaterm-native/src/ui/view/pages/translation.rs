@@ -114,8 +114,8 @@ impl NyaTermApp {
                 div()
                     .rounded_md()
                     .border_1()
-                    .border_color(rgb(0x30363d))
-                    .bg(rgb(0x151923))
+                    .border_color(rgb(palette.border))
+                    .bg(rgb(palette.surface))
                     .p_4()
                     .child(
                         div()
@@ -127,13 +127,13 @@ impl NyaTermApp {
                                 div()
                                     .text_sm()
                                     .font_weight(FontWeight(700.))
-                                    .text_color(rgb(0xe5edf7))
+                                    .text_color(rgb(palette.text))
                                     .child("Provider"),
                             )
                             .child(
                                 div()
                                     .text_sm()
-                                    .text_color(rgb(0xe5edf7))
+                                    .text_color(rgb(palette.text))
                                     .child(self.translate_status.clone()),
                             )
                             .child(
@@ -166,8 +166,8 @@ impl NyaTermApp {
                         div()
                             .rounded_md()
                             .border_1()
-                            .border_color(rgb(0x30363d))
-                            .bg(rgb(0x151923))
+                            .border_color(rgb(palette.border))
+                            .bg(rgb(palette.surface))
                             .p_4()
                             .child(
                                 div()
@@ -186,7 +186,7 @@ impl NyaTermApp {
                                     .rounded_sm()
                                     .border_1()
                                     .border_color(rgb(0x303848))
-                                    .bg(rgb(0x10151e))
+                                    .bg(rgb(palette.input))
                                     .font_family("JetBrains Mono")
                                     .text_sm()
                                     .child(target_value)
@@ -210,8 +210,8 @@ impl NyaTermApp {
                             .col_span(2)
                             .rounded_md()
                             .border_1()
-                            .border_color(rgb(0x30363d))
-                            .bg(rgb(0x151923))
+                            .border_color(rgb(palette.border))
+                            .bg(rgb(palette.surface))
                             .p_4()
                             .child(
                                 div()
@@ -228,7 +228,7 @@ impl NyaTermApp {
                                     .rounded_sm()
                                     .border_1()
                                     .border_color(rgb(0x303848))
-                                    .bg(rgb(0x10151e))
+                                    .bg(rgb(palette.input))
                                     .font_family("JetBrains Mono")
                                     .text_sm()
                                     .line_height(px(18.))
@@ -252,8 +252,8 @@ impl NyaTermApp {
                 div()
                     .rounded_md()
                     .border_1()
-                    .border_color(rgb(0x30363d))
-                    .bg(rgb(0x151923))
+                    .border_color(rgb(palette.border))
+                    .bg(rgb(palette.surface))
                     .p_4()
                     .child(
                         div()
@@ -290,10 +290,10 @@ impl NyaTermApp {
                             .rounded_sm()
                             .border_1()
                             .border_color(rgb(0x303848))
-                            .bg(rgb(0x10151e))
+                            .bg(rgb(palette.input))
                             .text_sm()
                             .line_height(px(20.))
-                            .text_color(rgb(0xdbeafe))
+                            .text_color(rgb(palette.text))
                             .child(result_text),
                     ),
             )
@@ -358,6 +358,7 @@ fn translation_provider_button(
     status: &'static str,
     cx: &mut Context<NyaTermApp>,
 ) -> impl IntoElement {
+        let palette = cx.entity().read(cx).theme_palette();
     div()
         .id(SharedString::from(format!("translate-provider-{provider}")))
         .min_h(px(58.))
@@ -371,7 +372,7 @@ fn translation_provider_button(
         .bg(if selected {
             rgb(0x17253b)
         } else {
-            rgb(0x10151e)
+            rgb(palette.input)
         })
         .px_3()
         .py_2()
@@ -385,7 +386,7 @@ fn translation_provider_button(
             div()
                 .text_xs()
                 .font_weight(FontWeight(800.))
-                .text_color(rgb(0xe5edf7))
+                .text_color(rgb(palette.text))
                 .child(provider),
         )
         .child(
@@ -409,6 +410,7 @@ fn language_button(
     selected: bool,
     cx: &mut Context<NyaTermApp>,
 ) -> impl IntoElement {
+        let palette = cx.entity().read(cx).theme_palette();
     div()
         .id(SharedString::from(format!("translate-target-{language}")))
         .h(px(26.))
@@ -425,11 +427,11 @@ fn language_button(
         .bg(if selected {
             rgb(0x17253b)
         } else {
-            rgb(0x10151e)
+            rgb(palette.input)
         })
         .text_size(px(10.))
         .text_color(if selected {
-            rgb(0xdbeafe)
+            rgb(palette.text)
         } else {
             rgb(0xaeb7c8)
         })

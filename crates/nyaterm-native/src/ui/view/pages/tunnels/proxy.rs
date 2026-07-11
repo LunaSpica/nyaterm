@@ -58,6 +58,7 @@ pub(super) fn proxy_section(
     app: &NyaTermApp,
     cx: &mut Context<NyaTermApp>,
 ) -> impl IntoElement {
+        let palette = cx.entity().read(cx).theme_palette();
     let item_count = section.proxies.len();
     let command_count = section
         .proxies
@@ -76,7 +77,7 @@ pub(super) fn proxy_section(
                 .px_2()
                 .py_2()
                 .text_size(px(11.))
-                .text_color(rgb(0x98a3b8))
+                .text_color(rgb(palette.text_muted))
                 .child("No proxies in this group."),
         );
     } else {
@@ -109,8 +110,8 @@ pub(super) fn proxy_section(
         )))
         .rounded_md()
         .border_1()
-        .border_color(rgb(0x2a3140))
-        .bg(rgb(0x151923))
+        .border_color(rgb(palette.border))
+        .bg(rgb(palette.surface))
         .overflow_hidden()
         .child(
             div()
@@ -121,7 +122,7 @@ pub(super) fn proxy_section(
                 .items_center()
                 .justify_between()
                 .gap_2()
-                .bg(rgb(0x10151e))
+                .bg(rgb(palette.input))
                 .cursor_pointer()
                 .hover(|this| this.bg(rgb(0x151b24)))
                 .on_click({
@@ -143,14 +144,14 @@ pub(super) fn proxy_section(
                         .child(
                             div()
                                 .text_size(px(12.))
-                                .text_color(rgb(0x8b949e))
+                                .text_color(rgb(palette.text_muted))
                                 .child(if collapsed { "▸" } else { "▾" }),
                         )
                         .child(
                             div()
                                 .text_xs()
                                 .font_weight(FontWeight(600.))
-                                .text_color(rgb(0xe5edf7))
+                                .text_color(rgb(palette.text))
                                 .child(truncate_preview(&section.label, 48)),
                         )
                         .child(
@@ -158,8 +159,8 @@ pub(super) fn proxy_section(
                                 .rounded_full()
                                 .px_1()
                                 .text_size(px(10.))
-                                .text_color(rgb(0x8b949e))
-                                .bg(rgb(0x21262d))
+                                .text_color(rgb(palette.text_muted))
+                                .bg(rgb(palette.surface_elevated))
                                 .child(item_count.to_string()),
                         ),
                 )
@@ -221,6 +222,7 @@ pub(super) fn proxy_network_row(
     app: &NyaTermApp,
     cx: &mut Context<NyaTermApp>,
 ) -> impl IntoElement {
+        let palette = cx.entity().read(cx).theme_palette();
     let is_command = proxy.protocol == "proxycommand";
     let address = if is_command {
         proxy
@@ -242,13 +244,13 @@ pub(super) fn proxy_network_row(
     // Tauri ProxyRow: name, protocol, address; overflow actions on the right.
     div()
         .border_t_1()
-        .border_color(rgb(0x21262d))
+        .border_color(rgb(palette.surface_elevated))
         .px_2()
         .py_2()
         .flex()
         .items_center()
         .gap_2()
-        .hover(|this| this.bg(rgb(0x1c2128)))
+        .hover(|this| this.bg(rgb(palette.hover)))
         .child(
             div()
                 .min_w_0()
@@ -259,7 +261,7 @@ pub(super) fn proxy_network_row(
                     div()
                         .text_size(px(12.))
                         .font_weight(FontWeight(600.))
-                        .text_color(rgb(0xe5edf7))
+                        .text_color(rgb(palette.text))
                         .overflow_hidden()
                         .child(truncate_preview(&proxy.name, 52)),
                 )
@@ -267,7 +269,7 @@ pub(super) fn proxy_network_row(
                     div()
                         .mt(px(1.))
                         .text_size(px(11.))
-                        .text_color(rgb(0x8b949e))
+                        .text_color(rgb(palette.text_muted))
                         .child(proxy_protocol_label(&proxy.protocol)),
                 )
                 .child(
@@ -275,7 +277,7 @@ pub(super) fn proxy_network_row(
                         .mt(px(1.))
                         .font_family("JetBrains Mono")
                         .text_size(px(10.))
-                        .text_color(rgb(0x6e7681))
+                        .text_color(rgb(palette.text_dimmed))
                         .overflow_hidden()
                         .child(truncate_preview(&address, 92)),
                 ),
@@ -325,6 +327,7 @@ fn proxy_icon_action(
     label: &'static str,
     on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
 ) -> impl IntoElement {
+    let palette = crate::ui::theme::theme_palette("github-dark");
     div()
         .id(gpui::SharedString::from(id.into()))
         .size(px(24.))
@@ -333,9 +336,9 @@ fn proxy_icon_action(
         .justify_center()
         .rounded_md()
         .text_size(px(12.))
-        .text_color(rgb(0x8b949e))
+        .text_color(rgb(palette.text_muted))
         .cursor_pointer()
-        .hover(|this| this.bg(rgb(0x21262d)).text_color(rgb(0xc9d1d9)))
+        .hover(|this| this.bg(rgb(palette.surface_elevated)).text_color(rgb(palette.text)))
         .child(
             svg()
                 .size(px(14.))
@@ -351,6 +354,7 @@ fn proxy_move_picker(
     groups: &[ProxyGroup],
     cx: &mut Context<NyaTermApp>,
 ) -> gpui::Div {
+        let palette = cx.entity().read(cx).theme_palette();
     let mut targets = div().flex().flex_wrap().items_center().gap_2();
     if current_group_id.is_none() {
         targets = targets.child(status_pill(
@@ -391,7 +395,7 @@ fn proxy_move_picker(
             targets = targets.child(
                 div()
                     .text_xs()
-                    .text_color(rgb(0x98a3b8))
+                    .text_color(rgb(palette.text_muted))
                     .child(truncate_preview(&group.name, 36)),
             );
         }
@@ -400,7 +404,7 @@ fn proxy_move_picker(
     div()
         .border_t_1()
         .border_color(rgb(0x253044))
-        .bg(rgb(0x10151e))
+        .bg(rgb(palette.input))
         .px_3()
         .py_2()
         .flex()
@@ -450,6 +454,7 @@ pub(super) fn network_proxy_editor_panel(
     focus: &gpui::FocusHandle,
     cx: &mut Context<NyaTermApp>,
 ) -> impl IntoElement {
+        let palette = cx.entity().read(cx).theme_palette();
     let protocol_label = proxy_protocol_label(&editor.protocol);
     let group_label = editor
         .group_id
@@ -492,7 +497,7 @@ pub(super) fn network_proxy_editor_panel(
                             div()
                                 .text_size(px(15.))
                                 .font_weight(FontWeight(700.))
-                                .text_color(rgb(0xc9d1d9))
+                                .text_color(rgb(palette.text))
                                 .child(if editor.id.is_some() {
                                     "Edit Proxy"
                                 } else {
@@ -502,7 +507,7 @@ pub(super) fn network_proxy_editor_panel(
                         .child(
                             div()
                                 .text_size(px(12.))
-                                .text_color(rgb(0x8b949e))
+                                .text_color(rgb(palette.text_muted))
                                 .child("Configure SOCKS, HTTP, or ProxyCommand routing for SSH connections."),
                         ),
                 )
@@ -552,7 +557,7 @@ pub(super) fn network_proxy_editor_panel(
             .child(
                 div()
                     .text_xs()
-                    .text_color(rgb(0x98a3b8))
+                    .text_color(rgb(palette.text_muted))
                     .child("Use Shift+Enter for a new line. Enter saves the proxy profile."),
             )
         })
@@ -611,7 +616,7 @@ pub(super) fn network_proxy_editor_panel(
                 .rounded_sm()
                 .border_1()
                 .border_color(rgb(0x303848))
-                .bg(rgb(0x0d1320))
+                .bg(rgb(palette.input))
                 .p_3()
                 .flex()
                 .flex_col()
@@ -621,7 +626,7 @@ pub(super) fn network_proxy_editor_panel(
                     div()
                         .font_family("JetBrains Mono")
                         .text_xs()
-                        .text_color(rgb(0xe5edf7))
+                        .text_color(rgb(palette.text))
                         .child(proxy_editor_preview(&editor)),
                 ),
         )
