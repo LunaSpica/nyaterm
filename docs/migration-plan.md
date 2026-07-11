@@ -1496,3 +1496,8 @@ service boundary first:
 - Empty workspace uses terminal background and accent action labels closer to
   Tauri EmptyWorkspaceState.
 
+## 2026-07-12 Search/keyword densify
+
+- Keyword highlights nest wrap + rule preview under Enabled.
+- Online search engines show dashed empty state when catalog is empty.
+

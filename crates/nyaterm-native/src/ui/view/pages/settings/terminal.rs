@@ -574,6 +574,26 @@ impl NyaTermApp {
                             }),
                         )),
                 ))
+                .when(engines.is_empty(), |this| {
+                    this.child(
+                        div()
+                            .rounded_md()
+                            .border_1()
+                            .border_color(rgb(palette.border))
+                            .bg(rgb(palette.input))
+                            .px_4()
+                            .py_6()
+                            .flex()
+                            .items_center()
+                            .justify_center()
+                            .child(
+                                div()
+                                    .text_size(px(12.))
+                                    .text_color(rgb(palette.text_dimmed))
+                                    .child("No custom engines — Add one for selection online search."),
+                            ),
+                    )
+                })
                 .children(engines.into_iter().enumerate().map(|(index, engine)| {
                     let name_active =
                         edit_index == Some(index) && edit_field == SearchEngineEditorField::Name;
@@ -753,9 +773,30 @@ impl NyaTermApp {
             None => "legacy JSON import",
         };
 
+        let rule_preview = self
+            .keyword_highlights
+            .rules
+            .iter()
+            .take(6)
+            .map(|rule| {
+                let name = if rule.name.trim().is_empty() {
+                    "unnamed"
+                } else {
+                    rule.name.as_str()
+                };
+                if rule.enabled {
+                    name.to_string()
+                } else {
+                    format!("({name})")
+                }
+            })
+            .collect::<Vec<_>>()
+            .join(" · ");
+        let more = rules.saturating_sub(6);
+
         settings_form_section(palette, 
             Some("Keyword highlights"),
-            Some("Match terminal output keywords with colored highlights."),
+            Some("Match terminal output keywords with colored highlights (Tauri TerminalTab)."),
             div()
                 .flex()
                 .flex_col()
@@ -773,30 +814,52 @@ impl NyaTermApp {
                         }),
                     ),
                 ))
-                .child(settings_form_row(palette, 
-                    "Across wrapped lines",
-                    Some(SharedString::from(
-                        "Continue matches across soft-wrapped terminal lines.",
-                    )),
-                    settings_switch(palette, 
-                        "settings-keyword-highlights-wrap",
-                        self.keyword_highlights.across_wrapped_lines,
-                        cx.listener(|this, _, _, cx| {
-                            this.toggle_keyword_highlights_wrapped(cx);
-                        }),
-                    ),
-                ))
-                .child(settings_form_row(palette, 
-                    "Import rules",
-                    Some(SharedString::from(prompt)),
-                    small_button(palette, 
-                        "settings-keyword-highlights-import",
-                        "Import",
-                        cx.listener(|this, _, _, cx| {
-                            this.prompt_keyword_highlight_import(cx);
-                        }),
-                    ),
-                )),
+                .when(self.keyword_highlights.enabled, |this| {
+                    this.child(
+                        div()
+                            .pl_3()
+                            .ml_1()
+                            .border_l_1()
+                            .border_color(rgb(palette.border))
+                            .flex()
+                            .flex_col()
+                            .gap_3()
+                            .child(settings_form_row(
+                                palette,
+                                "Across wrapped lines",
+                                Some(SharedString::from(
+                                    "Continue matches across soft-wrapped terminal lines.",
+                                )),
+                                settings_switch(
+                                    palette,
+                                    "settings-keyword-highlights-wrap",
+                                    self.keyword_highlights.across_wrapped_lines,
+                                    cx.listener(|this, _, _, cx| {
+                                        this.toggle_keyword_highlights_wrapped(cx);
+                                    }),
+                                ),
+                            ))
+                            .child(settings_form_row(
+                                palette,
+                                "Rules",
+                                Some(SharedString::from(if rule_preview.is_empty() {
+                                    "No custom rules yet — import a legacy JSON list.".to_string()
+                                } else if more > 0 {
+                                    format!("{rule_preview} · +{more} more")
+                                } else {
+                                    rule_preview
+                                })),
+                                small_button(
+                                    palette,
+                                    "settings-keyword-highlights-import",
+                                    "Import",
+                                    cx.listener(|this, _, _, cx| {
+                                        this.prompt_keyword_highlight_import(cx);
+                                    }),
+                                ),
+                            )),
+                    )
+                }),
         )
     }
 }
