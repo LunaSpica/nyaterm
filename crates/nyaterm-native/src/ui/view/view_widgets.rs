@@ -732,9 +732,10 @@ pub(in crate::ui::view) fn cloud_sync_history_row(
         .map(compact_id);
     let message = entry.message.clone();
 
+    // Tauri SyncBackupHistory list: dense row, compact meta chips.
     div()
-        .px_3()
-        .py_2()
+        .px_2()
+        .py_1()
         .border_b_1()
         .border_color(rgb(0x21262d))
         .child(
@@ -744,7 +745,7 @@ pub(in crate::ui::view) fn cloud_sync_history_row(
                 .gap_2()
                 .child(
                     div()
-                        .mt(px(6.))
+                        .mt(px(5.))
                         .size(px(6.))
                         .rounded_full()
                         .flex_none()
@@ -756,7 +757,7 @@ pub(in crate::ui::view) fn cloud_sync_history_row(
                         .flex_1()
                         .flex()
                         .flex_col()
-                        .gap_1()
+                        .gap(px(2.))
                         .child(
                             div()
                                 .flex()
@@ -764,14 +765,14 @@ pub(in crate::ui::view) fn cloud_sync_history_row(
                                 .gap_2()
                                 .child(
                                     div()
-                                        .text_size(px(11.))
-                                        .font_weight(FontWeight(600.))
+                                        .text_size(px(10.))
+                                        .font_weight(FontWeight(700.))
                                         .text_color(kind_color)
                                         .child(kind_label.to_string()),
                                 )
                                 .child(
                                     div()
-                                        .text_size(px(11.))
+                                        .text_size(px(10.))
                                         .text_color(status_color)
                                         .child(status_label.to_string()),
                                 )
@@ -786,7 +787,7 @@ pub(in crate::ui::view) fn cloud_sync_history_row(
                         )
                         .child(
                             div()
-                                .text_size(px(12.))
+                                .text_size(px(11.))
                                 .font_weight(FontWeight(600.))
                                 .text_color(rgb(0xc9d1d9))
                                 .overflow_hidden()

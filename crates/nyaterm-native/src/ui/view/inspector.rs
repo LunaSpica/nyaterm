@@ -21,18 +21,18 @@ impl NyaTermApp {
         let mut agent_step_rows = div();
         if agent_mode || !self.ai_agent_steps.is_empty() {
             agent_step_rows = agent_step_rows
-                .mt_3()
+                .mt_2()
                 .border_t_1()
-                .border_color(rgb(0x2a3140))
+                .border_color(rgb(0x30363d))
                 .pt_2()
                 .flex()
                 .flex_col()
-                .gap_2()
+                .gap_1()
                 .child(
                     div()
-                        .text_xs()
+                        .text_size(px(10.))
                         .font_weight(FontWeight(700.))
-                        .text_color(rgb(0xe5edf7))
+                        .text_color(rgb(0x8b949e))
                         .child("Agent Steps"),
                 );
             if self.ai_agent_steps.is_empty() {
@@ -72,11 +72,11 @@ impl NyaTermApp {
                             .child(
                                 div()
                                     .px_2()
-                                    .py_2()
+                                    .py_1()
                                     .pl(px(10.))
                                     .flex()
                                     .flex_col()
-                                    .gap_1()
+                                    .gap(px(2.))
                             .child(
                                 div()
                                     .flex()
@@ -88,8 +88,8 @@ impl NyaTermApp {
                                             .min_w_0()
                                             .flex_1()
                                             .text_size(px(11.))
-                                            .font_weight(FontWeight(700.))
-                                            .text_color(rgb(0xe5edf7))
+                                            .font_weight(FontWeight(600.))
+                                            .text_color(rgb(0xc9d1d9))
                                             .overflow_hidden()
                                             .child(format!(
                                                 "#{} {}",
