@@ -69,6 +69,7 @@ impl Render for NyaTermApp {
                     this.finish_workspace_split_resize(event, cx);
                     this.finish_terminal_selection(event, cx);
                     this.finish_terminal_scrollbar_drag(cx);
+                    this.clear_terminal_window_drop(cx);
                 }),
             )
             .on_mouse_up(

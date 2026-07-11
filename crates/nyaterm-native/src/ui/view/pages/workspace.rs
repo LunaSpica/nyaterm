@@ -267,6 +267,24 @@ impl NyaTermApp {
                             ),
                     );
                 }
+                strip = strip.child(
+                    div()
+                        .id(SharedString::from(format!("tw-leaf-add-{id}")))
+                        .size(px(22.))
+                        .flex()
+                        .items_center()
+                        .justify_center()
+                        .rounded_sm()
+                        .text_xs()
+                        .font_weight(FontWeight(700.))
+                        .text_color(rgb(palette.text_muted))
+                        .hover(|this| this.bg(rgb(palette.hover)).text_color(rgb(palette.text)))
+                        .cursor_pointer()
+                        .child("+")
+                        .on_click(cx.listener(|this, _, window, cx| {
+                            this.start_local_session(window, cx);
+                        })),
+                );
                 let canvas = if active.is_empty() {
                     div().flex_1().into_any_element()
                 } else {

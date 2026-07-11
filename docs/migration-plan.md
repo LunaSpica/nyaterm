@@ -1260,3 +1260,8 @@ service boundary first:
 - Workspace split drag handles now resize `TerminalWindowNode` multi-leaf splits as
   well as per-tab `WorkspacePaneNode` splits (same divider chrome).
 
+## 2026-07-11 Multi-leaf leaf strip + and drop cleanup
+
+- Each multi-leaf tab strip has a `+` control to start a local session into the workspace.
+- Clearing `terminal_window_drop` on mouse-up avoids sticky dock overlay chrome after drag cancel.
+
