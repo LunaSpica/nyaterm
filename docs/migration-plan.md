@@ -586,3 +586,7 @@ service boundary first:
 - Bottom Quick Commands panel drops page-like title/metrics cards.
 - Compact header strip: title + count, search field with SVG, denser view/sort mode chips, Add/Import.
 - Category sidebar narrowed; command rows scroll in remaining height.
+
+## 2026-07-11 History + status bar density
+- Command History rows match Tauri mono list more closely (no play glyph; right-click runs, click inserts).
+- Status bar densified to ~22px with 10px chips.
