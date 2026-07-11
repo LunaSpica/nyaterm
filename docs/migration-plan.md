@@ -1254,3 +1254,9 @@ service boundary first:
 - Leaf mini-tabs now mirror global strip chrome: status/color accent, unread/disconnected
   cues, close button, right-click tab actions, and in-strip reorder via
   `place_tab_before` (same leaf) / move-to-before (across leaves).
+
+## 2026-07-11 Multi-leaf window split resize
+
+- Workspace split drag handles now resize `TerminalWindowNode` multi-leaf splits as
+  well as per-tab `WorkspacePaneNode` splits (same divider chrome).
+

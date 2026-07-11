@@ -195,14 +195,37 @@ impl NyaTermApp {
         event: &gpui::MouseDownEvent,
         cx: &mut Context<Self>,
     ) {
-        let Some(root) = self.workspace_split.clone() else {
-            return;
-        };
-        let Some(direction) = root.direction_for_split(&split_id) else {
-            return;
-        };
-        let Some(start_ratio) = root.ratio_for_split(&split_id) else {
-            return;
+        // Prefer multi-leaf tab-window splits when active; otherwise pane splits.
+        let (direction, start_ratio) = if let Some(root) = self.terminal_windows.as_ref() {
+            match (
+                root.direction_for_split(&split_id),
+                root.ratio_for_split(&split_id),
+            ) {
+                (Some(direction), Some(start_ratio)) => (direction, start_ratio),
+                _ => {
+                    let Some(root) = self.workspace_split.as_ref() else {
+                        return;
+                    };
+                    let Some(direction) = root.direction_for_split(&split_id) else {
+                        return;
+                    };
+                    let Some(start_ratio) = root.ratio_for_split(&split_id) else {
+                        return;
+                    };
+                    (direction, start_ratio)
+                }
+            }
+        } else {
+            let Some(root) = self.workspace_split.as_ref() else {
+                return;
+            };
+            let Some(direction) = root.direction_for_split(&split_id) else {
+                return;
+            };
+            let Some(start_ratio) = root.ratio_for_split(&split_id) else {
+                return;
+            };
+            (direction, start_ratio)
         };
         let start_pos = match direction {
             WorkspaceSplitDirection::Horizontal => event.position.y,
@@ -227,9 +250,6 @@ impl NyaTermApp {
         let Some(state) = self.workspace_split_resize.clone() else {
             return;
         };
-        let Some(root) = self.workspace_split.as_mut() else {
-            return;
-        };
         let current = match state.direction {
             WorkspaceSplitDirection::Horizontal => event.position.y,
             WorkspaceSplitDirection::Vertical => event.position.x,
@@ -246,7 +266,20 @@ impl NyaTermApp {
             WorkspacePaneNode::MIN_RATIO_PERCENT as i16,
             WorkspacePaneNode::MAX_RATIO_PERCENT as i16,
         ) as u8;
-        if root.set_ratio_for_split(&state.split_id, next) {
+        let mut applied = false;
+        if let Some(root) = self.terminal_windows.as_mut() {
+            if root.set_ratio_for_split(&state.split_id, next) {
+                applied = true;
+            }
+        }
+        if !applied {
+            if let Some(root) = self.workspace_split.as_mut() {
+                if root.set_ratio_for_split(&state.split_id, next) {
+                    applied = true;
+                }
+            }
+        }
+        if applied {
             self.terminal_status = format!("split ratio {next}%");
             cx.notify();
         }
@@ -258,10 +291,17 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         if let Some(state) = self.workspace_split_resize.take() {
-            if let Some(root) = self.workspace_split.as_ref() {
-                if let Some(ratio) = root.ratio_for_split(&state.split_id) {
-                    self.terminal_status = format!("split ratio set to {ratio}%");
-                }
+            let ratio = self
+                .terminal_windows
+                .as_ref()
+                .and_then(|root| root.ratio_for_split(&state.split_id))
+                .or_else(|| {
+                    self.workspace_split
+                        .as_ref()
+                        .and_then(|root| root.ratio_for_split(&state.split_id))
+                });
+            if let Some(ratio) = ratio {
+                self.terminal_status = format!("split ratio set to {ratio}%");
             }
             cx.notify();
         }

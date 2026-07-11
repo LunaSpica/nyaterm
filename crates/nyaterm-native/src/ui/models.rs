@@ -2105,6 +2105,69 @@ impl TerminalWindowNode {
         }
     }
 
+    pub(super) fn set_ratio_for_split(&mut self, split_id: &str, value: u8) -> bool {
+        match self {
+            Self::Leaf { .. } => false,
+            Self::Split {
+                id,
+                ratio_percent,
+                first,
+                second,
+                ..
+            } => {
+                if id == split_id {
+                    *ratio_percent = WorkspacePaneNode::clamped_ratio_percent(value);
+                    true
+                } else {
+                    first.set_ratio_for_split(split_id, value)
+                        || second.set_ratio_for_split(split_id, value)
+                }
+            }
+        }
+    }
+
+    pub(super) fn direction_for_split(&self, split_id: &str) -> Option<WorkspaceSplitDirection> {
+        match self {
+            Self::Leaf { .. } => None,
+            Self::Split {
+                id,
+                direction,
+                first,
+                second,
+                ..
+            } => {
+                if id == split_id {
+                    Some(*direction)
+                } else {
+                    first
+                        .direction_for_split(split_id)
+                        .or_else(|| second.direction_for_split(split_id))
+                }
+            }
+        }
+    }
+
+    pub(super) fn ratio_for_split(&self, split_id: &str) -> Option<u8> {
+        match self {
+            Self::Leaf { .. } => None,
+            Self::Split {
+                id,
+                ratio_percent,
+                first,
+                second,
+                ..
+            } => {
+                if id == split_id {
+                    Some(*ratio_percent)
+                } else {
+                    first
+                        .ratio_for_split(split_id)
+                        .or_else(|| second.ratio_for_split(split_id))
+                }
+            }
+        }
+    }
+
     /// Place `tab_id` immediately before `before_tab_id` (same or other leaf).
     /// Mirrors Tauri TabBar reorder / move-tab-here within multi-leaf windows.
     pub(super) fn place_tab_before(&mut self, tab_id: &str, before_tab_id: &str) -> bool {
