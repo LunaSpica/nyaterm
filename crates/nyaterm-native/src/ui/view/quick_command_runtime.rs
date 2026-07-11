@@ -153,6 +153,23 @@ impl NyaTermApp {
             cx.notify();
             return;
         };
+        self.save_ai_command_card_value(card, cx);
+    }
+
+    pub(in crate::ui::view) fn save_ai_command_card_by_id(
+        &mut self,
+        card_id: String,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(card) = self.find_ai_command_card(&card_id) else {
+            self.ai_status = "AI command card is no longer available".to_string();
+            cx.notify();
+            return;
+        };
+        self.save_ai_command_card_value(card, cx);
+    }
+
+    fn save_ai_command_card_value(&mut self, card: AiCommandCard, cx: &mut Context<Self>) {
         let command_text = card.command.trim();
         if command_text.is_empty() {
             self.ai_status = "AI command card has no command".to_string();

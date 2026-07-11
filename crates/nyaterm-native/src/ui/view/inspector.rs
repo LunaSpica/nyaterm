@@ -852,7 +852,7 @@ impl NyaTermApp {
             body = body.child(self.ai_empty_transcript(mode_label, enabled, cx));
         } else {
             for message in &self.ai_chat_messages {
-                body = body.child(self.ai_message_bubble(message));
+                body = body.child(self.ai_message_bubble(message, cx));
             }
         }
         body.child(agent_step_rows).child(command_rows)
@@ -1061,6 +1061,7 @@ impl NyaTermApp {
         card: AiCommandCard,
         cx: &mut Context<Self>,
     ) -> gpui::AnyElement {
+        // Keep list-index handlers for the live ai_command_cards strip.
         let risk = risk_label(card.risk_level.as_ref());
         let title = if card.title.trim().is_empty() {
             "Command".to_string()
@@ -1073,13 +1074,93 @@ impl NyaTermApp {
         let expected = card.expected_effect.clone();
         let rollback = card.rollback.clone().unwrap_or_default();
 
+        Self::ai_command_card_shell(
+            format!("idx-{index}"),
+            risk,
+            title,
+            command,
+            command_for_copy,
+            explanation,
+            expected,
+            rollback,
+            cx.listener(move |this, _, _, cx| {
+                this.insert_ai_command_card(index, cx);
+            }),
+            cx.listener(move |this, _, _, cx| {
+                this.save_ai_command_card(index, cx);
+            }),
+            cx.listener(move |this, _, _, cx| {
+                this.run_ai_command_card(index, cx);
+            }),
+            cx,
+        )
+    }
+
+    fn ai_command_card_view_for_card(
+        key: String,
+        card: AiCommandCard,
+        cx: &mut Context<Self>,
+    ) -> gpui::AnyElement {
+        // Tauri AICommandCardView: title, mono command, explanation/effect/rollback, actions.
+        let card_id = card.id.clone();
+        let risk = risk_label(card.risk_level.as_ref());
+        let title = if card.title.trim().is_empty() {
+            "Command".to_string()
+        } else {
+            card.title.clone()
+        };
+        let command = card.command.clone();
+        let command_for_copy = command.clone();
+        let explanation = card.explanation.clone();
+        let expected = card.expected_effect.clone();
+        let rollback = card.rollback.clone().unwrap_or_default();
+        let insert_id = card_id.clone();
+        let save_id = card_id.clone();
+        let run_id = card_id.clone();
+
+        Self::ai_command_card_shell(
+            key,
+            risk,
+            title,
+            command,
+            command_for_copy,
+            explanation,
+            expected,
+            rollback,
+            cx.listener(move |this, _, _, cx| {
+                this.insert_ai_command_card_by_id(insert_id.clone(), cx);
+            }),
+            cx.listener(move |this, _, _, cx| {
+                this.save_ai_command_card_by_id(save_id.clone(), cx);
+            }),
+            cx.listener(move |this, _, _, cx| {
+                this.run_ai_command_card_by_id(run_id.clone(), cx);
+            }),
+            cx,
+        )
+    }
+
+    fn ai_command_card_shell(
+        key: String,
+        risk: &'static str,
+        title: String,
+        command: String,
+        command_for_copy: String,
+        explanation: String,
+        expected: String,
+        rollback: String,
+        on_insert: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
+        on_save: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
+        on_run: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
+        cx: &mut Context<Self>,
+    ) -> gpui::AnyElement {
         div()
-            .id(SharedString::from(format!("ai-command-card-{index}")))
+            .id(SharedString::from(format!("ai-command-card-{key}")))
             .rounded_md()
             .border_1()
             .border_color(rgb(0x30363d))
             .bg(rgb(0x0d1117))
-            .p_3()
+            .p_2()
             .flex()
             .flex_col()
             .gap_2()
@@ -1103,8 +1184,8 @@ impl NyaTermApp {
             )
             .child(
                 div()
-                    .id(SharedString::from(format!("ai-command-body-{index}")))
-                    .max_h(px(96.))
+                    .id(SharedString::from(format!("ai-command-body-{key}")))
+                    .max_h(px(128.))
                     .overflow_hidden()
                     .rounded_md()
                     .border_1()
@@ -1116,7 +1197,7 @@ impl NyaTermApp {
                     .text_size(px(11.))
                     .text_color(rgb(0xc9d1d9))
                     .line_height(px(16.))
-                    .child(truncate_preview(&command, 800)),
+                    .child(truncate_preview(&command, 1600)),
             )
             .child(
                 div()
@@ -1128,7 +1209,7 @@ impl NyaTermApp {
                             .text_size(px(11.))
                             .text_color(rgb(0x8b949e))
                             .line_height(px(16.))
-                            .child(truncate_preview(&explanation, 220)),
+                            .child(truncate_preview(&explanation, 320)),
                     )
                     .when(!expected.trim().is_empty(), |this| {
                         this.child(
@@ -1136,7 +1217,7 @@ impl NyaTermApp {
                                 .text_size(px(11.))
                                 .text_color(rgb(0x6e7681))
                                 .line_height(px(16.))
-                                .child(truncate_preview(&expected, 160)),
+                                .child(truncate_preview(&expected, 220)),
                         )
                     })
                     .when(!rollback.trim().is_empty(), |this| {
@@ -1145,7 +1226,7 @@ impl NyaTermApp {
                                 .text_size(px(11.))
                                 .text_color(rgb(0x6e7681))
                                 .line_height(px(16.))
-                                .child(format!("Rollback: {}", truncate_preview(&rollback, 120))),
+                                .child(format!("Rollback: {}", truncate_preview(&rollback, 160))),
                         )
                     }),
             )
@@ -1156,14 +1237,12 @@ impl NyaTermApp {
                     .items_center()
                     .gap_1()
                     .child(small_button(
-                        format!("ai-command-insert-{index}"),
+                        format!("ai-command-insert-{key}"),
                         "Insert",
-                        cx.listener(move |this, _, _, cx| {
-                            this.insert_ai_command_card(index, cx);
-                        }),
+                        on_insert,
                     ))
                     .child(small_button(
-                        format!("ai-command-copy-{index}"),
+                        format!("ai-command-copy-{key}"),
                         "Copy",
                         cx.listener(move |this, _, _, cx| {
                             cx.write_to_clipboard(ClipboardItem::new_string(
@@ -1174,18 +1253,14 @@ impl NyaTermApp {
                         }),
                     ))
                     .child(small_button(
-                        format!("ai-command-save-{index}"),
+                        format!("ai-command-save-{key}"),
                         "Save",
-                        cx.listener(move |this, _, _, cx| {
-                            this.save_ai_command_card(index, cx);
-                        }),
+                        on_save,
                     ))
                     .child(small_button(
-                        format!("ai-command-run-{index}"),
+                        format!("ai-command-run-{key}"),
                         "Run",
-                        cx.listener(move |this, _, _, cx| {
-                            this.run_ai_command_card(index, cx);
-                        }),
+                        on_run,
                     )),
             )
             .into_any_element()
@@ -1545,7 +1620,7 @@ impl NyaTermApp {
     }
 
 
-    fn ai_message_bubble(&self, message: &AiMessage) -> impl IntoElement {
+    fn ai_message_bubble(&self, message: &AiMessage, cx: &mut Context<Self>) -> impl IntoElement {
         let is_user = matches!(message.role, AiMessageRole::User);
         let streaming = self
             .ai_streaming_assistant_id
@@ -1644,7 +1719,10 @@ impl NyaTermApp {
                             .text_size(px(11.))
                             .text_color(rgb(0x8b949e))
                             .line_height(px(16.))
-                            .child(truncate_preview(&reasoning, 1200)),
+                            .child(markdown_content_view(&truncate_preview(
+                                &reasoning,
+                                1200,
+                            ))),
                     ),
             );
         } else if streaming && display.trim().is_empty() {
@@ -1679,41 +1757,14 @@ impl NyaTermApp {
         }
 
         if !message.command_cards.is_empty() {
-            let preview = message
-                .command_cards
-                .first()
-                .map(|card| card.command.as_str())
-                .unwrap_or("");
-            bubble = bubble.child(
-                div()
-                    .rounded_sm()
-                    .border_1()
-                    .border_color(rgb(0x30363d))
-                    .bg(rgb(0x0d1117))
-                    .px_2()
-                    .py_1()
-                    .flex()
-                    .flex_col()
-                    .gap_1()
-                    .child(
-                        div()
-                            .text_size(px(10.))
-                            .font_weight(FontWeight(700.))
-                            .text_color(rgb(0x8b949e))
-                            .child(format!(
-                                "{} command card(s)",
-                                message.command_cards.len()
-                            )),
-                    )
-                    .child(
-                        div()
-                            .font_family("JetBrains Mono")
-                            .text_size(px(11.))
-                            .text_color(rgb(0xc9d1d9))
-                            .line_height(px(16.))
-                            .child(truncate_preview(preview, 160)),
-                    ),
-            );
+            // Tauri renders AICommandCardView inside assistant responses.
+            for (card_index, card) in message.command_cards.iter().cloned().enumerate() {
+                bubble = bubble.child(Self::ai_command_card_view_for_card(
+                    format!("{}-{}", message.id, card_index),
+                    card,
+                    cx,
+                ));
+            }
         }
         if streaming && has_display {
             bubble = bubble.child(

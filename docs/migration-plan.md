@@ -767,3 +767,8 @@ service boundary first:
 ## 2026-07-11 Network tunnel/proxy row densify
 - Tunnel/Proxy rows: px_2, gap_2, 12/11/10px type stack with overflow clip (Tauri side-panel density).
 - Empty group states and config label use compact 11–12px chrome.
+
+## 2026-07-11 AI command cards in transcript bubbles
+- Assistant message bubbles render full `AICommandCardView`-like cards (title, risk, mono command, explanation/effect/rollback, Insert/Copy/Save/Run).
+- Card actions resolve by card id across live `ai_command_cards` and historical message cards.
+- Thought/reasoning content uses the shared markdown renderer; card chrome densified (`p_2`, taller command body).

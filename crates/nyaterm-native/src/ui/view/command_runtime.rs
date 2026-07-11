@@ -17,6 +17,36 @@ impl NyaTermApp {
         self.apply_ai_command_card(index, true, cx);
     }
 
+    pub(in crate::ui::view) fn insert_ai_command_card_by_id(
+        &mut self,
+        card_id: String,
+        cx: &mut Context<Self>,
+    ) {
+        self.apply_ai_command_card_by_id(card_id, false, cx);
+    }
+
+    pub(in crate::ui::view) fn run_ai_command_card_by_id(
+        &mut self,
+        card_id: String,
+        cx: &mut Context<Self>,
+    ) {
+        self.apply_ai_command_card_by_id(card_id, true, cx);
+    }
+
+    pub(in crate::ui::view) fn find_ai_command_card(&self, card_id: &str) -> Option<AiCommandCard> {
+        self.ai_command_cards
+            .iter()
+            .find(|card| card.id == card_id)
+            .cloned()
+            .or_else(|| {
+                self.ai_chat_messages
+                    .iter()
+                    .flat_map(|message| message.command_cards.iter())
+                    .find(|card| card.id == card_id)
+                    .cloned()
+            })
+    }
+
     pub(in crate::ui::view) fn active_session_history_commands(&self) -> Vec<String> {
         self.active_session_id
             .as_deref()
@@ -125,16 +155,39 @@ impl NyaTermApp {
     }
 
     fn apply_ai_command_card(&mut self, index: usize, execute: bool, cx: &mut Context<Self>) {
-        if self.active_session_id.is_none() {
-            self.ai_status = "Start a terminal session before using an AI command".to_string();
-            cx.notify();
-            return;
-        }
         let Some(card) = self.ai_command_cards.get(index).cloned() else {
             self.ai_status = "AI command card is no longer available".to_string();
             cx.notify();
             return;
         };
+        self.apply_ai_command_card_value(card, execute, cx);
+    }
+
+    fn apply_ai_command_card_by_id(
+        &mut self,
+        card_id: String,
+        execute: bool,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(card) = self.find_ai_command_card(&card_id) else {
+            self.ai_status = "AI command card is no longer available".to_string();
+            cx.notify();
+            return;
+        };
+        self.apply_ai_command_card_value(card, execute, cx);
+    }
+
+    fn apply_ai_command_card_value(
+        &mut self,
+        card: AiCommandCard,
+        execute: bool,
+        cx: &mut Context<Self>,
+    ) {
+        if self.active_session_id.is_none() {
+            self.ai_status = "Start a terminal session before using an AI command".to_string();
+            cx.notify();
+            return;
+        }
         let mut command = card.command.trim().to_string();
         if command.is_empty() {
             self.ai_status = "AI command card has no command".to_string();
