@@ -857,3 +857,9 @@ service boundary first:
 - `ThemePalette` gains `terminal_bg` / `terminal_fg` from Tauri terminal colors; terminal canvas uses them.
 - `terminal_line_element` search/active match chrome takes palette; keyword highlight span bg uses surface.
 - Broad residual densify: Settings terminal/transfer forms, overlays, Docker resource rows, transfer widgets, formatting status colors mapped where chrome-like, sidebar/session chrome.
+
+## 2026-07-11 Sidebar helpers semantic chrome densify
+- Quick command color tags map danger/success/accent/warning via palette (dark fallback for free helpers).
+- Generic quick-command icons (terminal/code/server/folder/AI/bolt) use palette status colors; brand icons remain brand-colored.
+- Sidebar residual security/session chrome (banners, unlock, nav hover) densified.
+- Formatting docker/cloud-sync status colors prefer palette tokens (free helpers still dark-fallback until caller-themed).

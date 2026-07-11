@@ -113,9 +113,9 @@ pub(in crate::ui::view) fn docker_state_color(state: &str) -> gpui::Hsla {
     let palette = crate::ui::theme::theme_palette("github-dark");
     match state.trim().to_ascii_lowercase().as_str() {
         "running" => rgb(palette.success).into(),
-        "restarting" | "paused" => rgb(0xfbbf24).into(),
-        "created" => rgb(0x93c5fd).into(),
-        "exited" | "dead" => rgb(0xfca5a5).into(),
+        "restarting" | "paused" => rgb(palette.warning).into(),
+        "created" => rgb(palette.accent).into(),
+        "exited" | "dead" => rgb(palette.danger).into(),
         _ => rgb(palette.text_muted).into(),
     }
 }
@@ -247,10 +247,10 @@ pub(in crate::ui::view) fn format_duration_ms(duration_ms: Option<u64>) -> Optio
 pub(in crate::ui::view) fn cloud_sync_status_dot_color(status: &str) -> gpui::Rgba {
     let palette = crate::ui::theme::theme_palette("github-dark");
     match status {
-        "running" => rgb(0x3b82f6),
-        "success" => rgb(0x22c55e),
-        "failed" => rgb(0xef4444),
-        "conflict" => rgb(0xf59e0b),
+        "running" => rgb(palette.accent),
+        "success" => rgb(palette.success),
+        "failed" => rgb(palette.danger),
+        "conflict" => rgb(palette.warning),
         "disabled" => rgb(palette.text_dimmed),
         _ => rgb(palette.text_muted),
     }
@@ -272,7 +272,7 @@ pub(in crate::ui::view) fn cloud_sync_kind_text_color(kind: &str) -> gpui::Rgba 
     let palette = crate::ui::theme::theme_palette("github-dark");
     match kind {
         "sync" => rgb(palette.accent),
-        "backup" => rgb(0xa371f7),
+        "backup" => rgb(palette.accent),
         _ => rgb(palette.text_muted),
     }
 }

@@ -296,7 +296,7 @@ impl NyaTermApp {
                             )
                             .child(status_pill(
                                 status_label(&self.terminal_status),
-                                rgb(0x93c5fd),
+                                rgb(palette.accent),
                                 rgb(palette.hover),
                             )),
                     )
@@ -325,8 +325,8 @@ impl NyaTermApp {
                 div()
                     .rounded_md()
                     .border_1()
-                    .border_color(rgb(0x2d3442))
-                    .bg(rgb(0x10131a))
+                    .border_color(rgb(palette.border))
+                    .bg(rgb(palette.input))
                     .p_3()
                     .child(div().text_xs().text_color(rgb(palette.text_muted)).child("Runtime"))
                     .child(div().mt_1().text_sm().child(match self.runtime.mode() {
@@ -346,11 +346,11 @@ impl NyaTermApp {
                     .rounded_md()
                     .border_1()
                     .border_color(if self.store_status.ready {
-                        rgb(0x244638)
+                        rgb(palette.hover)
                     } else {
-                        rgb(0x4a2525)
+                        rgb(palette.hover)
                     })
-                    .bg(rgb(0x10131a))
+                    .bg(rgb(palette.input))
                     .p_3()
                     .child(
                         div()
@@ -365,7 +365,7 @@ impl NyaTermApp {
                             .text_color(if self.store_status.ready {
                                 rgb(palette.success)
                             } else {
-                                rgb(0xfca5a5)
+                                rgb(palette.danger)
                             })
                             .child(self.store_status.message.clone()),
                     )
@@ -401,14 +401,14 @@ impl NyaTermApp {
         } else if is_active {
             rgb(palette.success)
         } else if has_unread {
-            rgb(0xfacc15)
+            rgb(palette.warning)
         } else {
             rgb(palette.text_muted)
         };
         let row_bg = if let Some(custom_color) = custom_color {
             rgba((custom_color << 8) | if is_active { 0x22 } else { 0x12 })
         } else if is_active {
-            rgb(0x172033)
+            rgb(palette.hover)
         } else {
             rgb(palette.input)
         };
@@ -567,7 +567,7 @@ impl NyaTermApp {
                             )
                             .child(status_pill(
                                 status_label(&self.terminal_status),
-                                rgb(0x93c5fd),
+                                rgb(palette.accent),
                                 rgb(palette.hover),
                             )),
                     )
@@ -779,11 +779,11 @@ impl NyaTermApp {
                     .rounded_md()
                     .border_1()
                     .border_color(if self.store_status.ready {
-                        rgb(0x244638)
+                        rgb(palette.hover)
                     } else {
-                        rgb(0x4a2525)
+                        rgb(palette.hover)
                     })
-                    .bg(rgb(0x10131a))
+                    .bg(rgb(palette.input))
                     .p_3()
                     .child(
                         div()
@@ -799,7 +799,7 @@ impl NyaTermApp {
                             .text_color(if self.store_status.ready {
                                 rgb(palette.success)
                             } else {
-                                rgb(0xfca5a5)
+                                rgb(palette.danger)
                             })
                             .child(self.store_status.message.clone()),
                     )
@@ -834,11 +834,11 @@ impl NyaTermApp {
             .justify_between()
             .gap_2()
             .when(selected, |this| {
-                this.bg(rgb(0x243044)).text_color(rgb(0xffffff))
+                this.bg(rgb(palette.hover)).text_color(rgb(0xffffff))
             })
             .when(!selected, |this| {
                 this.text_color(rgb(palette.text_muted))
-                    .hover(|hover| hover.bg(rgb(0x202632)).text_color(rgb(0xffffff)))
+                    .hover(|hover| hover.bg(rgb(palette.hover)).text_color(rgb(0xffffff)))
             })
             .child(div().min_w_0().overflow_hidden().child(label))
             .child(
@@ -846,7 +846,7 @@ impl NyaTermApp {
                     .flex_none()
                     .rounded_sm()
                     .bg(if selected {
-                        rgb(0x162235)
+                        rgb(palette.hover)
                     } else {
                         rgb(palette.input)
                     })
@@ -855,7 +855,7 @@ impl NyaTermApp {
                     .font_family("JetBrains Mono")
                     .text_size(px(10.))
                     .text_color(if selected {
-                        rgb(0x93c5fd)
+                        rgb(palette.accent)
                     } else {
                         rgb(palette.text_muted)
                     })
@@ -1349,7 +1349,7 @@ impl NyaTermApp {
                     .rounded_md()
                     .border_1()
                     .border_color(rgb(palette.danger))
-                    .bg(rgb(0x2d1214))
+                    .bg(rgb(palette.hover))
                     .p_3()
                     .flex()
                     .flex_col()
@@ -1596,7 +1596,7 @@ impl NyaTermApp {
                             .items_center()
                             .rounded_sm()
                             .border_1()
-                            .border_color(rgb(0x4b6f97))
+                            .border_color(rgb(palette.accent))
                             .bg(rgb(palette.input))
                             .font_family("JetBrains Mono")
                             .text_xs()
@@ -1772,7 +1772,7 @@ impl NyaTermApp {
                                     .border_color(if editor.focused_field
                                         == SecurityKeyEditorField::KeyPath
                                     {
-                                        rgb(0x4b6f97)
+                                        rgb(palette.accent)
                                     } else {
                                         rgb(palette.border)
                                     })
@@ -1828,7 +1828,7 @@ impl NyaTermApp {
                                     .border_color(if editor.focused_field
                                         == SecurityKeyEditorField::CertPath
                                     {
-                                        rgb(0x4b6f97)
+                                        rgb(palette.accent)
                                     } else {
                                         rgb(palette.border)
                                     })
@@ -2247,14 +2247,14 @@ impl NyaTermApp {
                         .m_2()
                         .rounded_md()
                         .border_1()
-                        .border_color(rgb(0x8a5f1c))
-                        .bg(rgb(0x1f1a10))
+                        .border_color(rgb(palette.warning))
+                        .bg(rgb(palette.input))
                         .child(
                             div()
                                 .px_3()
                                 .py_2()
                                 .border_b_1()
-                                .border_color(rgb(0x8a5f1c))
+                                .border_color(rgb(palette.warning))
                                 .flex()
                                 .items_center()
                                 .gap_2()
@@ -2285,8 +2285,8 @@ impl NyaTermApp {
                                     div()
                                         .rounded_md()
                                         .border_1()
-                                        .border_color(rgb(0x3d3418))
-                                        .bg(rgb(0x16130c))
+                                        .border_color(rgb(palette.border))
+                                        .bg(rgb(palette.input))
                                         .px_2()
                                         .py_1()
                                         .child(

@@ -150,13 +150,14 @@ pub(in crate::ui::view::panels) fn quick_command_icon_mark(
 }
 
 pub(in crate::ui::view::panels) fn quick_command_color(color_tag: Option<&str>) -> gpui::Rgba {
+    let palette = crate::ui::theme::theme_palette("github-dark");
     match color_tag.unwrap_or_default() {
-        "red" => rgb(0xef4444),
-        "green" => rgb(0x22c55e),
-        "blue" => rgb(0x3b82f6),
-        "yellow" => rgb(0xeab308),
-        "purple" => rgb(0xa855f7),
-        _ => rgb(0x94a3b8),
+        "red" => rgb(palette.danger),
+        "green" => rgb(palette.success),
+        "blue" => rgb(palette.accent),
+        "yellow" => rgb(palette.warning),
+        "purple" => rgb(palette.accent),
+        _ => rgb(palette.text_muted),
     }
 }
 
@@ -195,11 +196,11 @@ fn quick_command_icon_def(icon_tag: &str) -> Option<(&'static str, gpui::Rgba)> 
         "aws" => Some(("AWS", rgb(0xff9900))),
         "gcp" => Some(("GC", rgb(0x4285f4))),
         "terminal" => Some((">$", rgb(palette.success))),
-        "code" => Some(("</>", rgb(0x93c5fd))),
-        "server" => Some(("SR", rgb(0xc4b5fd))),
-        "folder" => Some(("FD", rgb(0xfacc15))),
-        "sparkles" => Some(("AI", rgb(0xf0abfc))),
-        "bolt" => Some(("BT", rgb(0xfbbf24))),
+        "code" => Some(("</>", rgb(palette.accent))),
+        "server" => Some(("SR", rgb(palette.accent))),
+        "folder" => Some(("FD", rgb(palette.warning))),
+        "sparkles" => Some(("AI", rgb(palette.accent))),
+        "bolt" => Some(("BT", rgb(palette.warning))),
         _ => None,
     }
 }
@@ -223,8 +224,8 @@ pub(in crate::ui::view::panels) fn quick_command_editor_field(
         .id(SharedString::from(id))
         .rounded_sm()
         .border_1()
-        .border_color(if active { rgb(0x4ade80) } else { rgb(palette.border) })
-        .bg(if active { rgb(0x0f1f18) } else { rgb(palette.input) })
+        .border_color(if active { rgb(palette.success) } else { rgb(palette.border) })
+        .bg(if active { rgb(palette.hover) } else { rgb(palette.input) })
         .p_2()
         .cursor_pointer()
         .on_click(on_click)
@@ -269,8 +270,8 @@ pub(in crate::ui::view::panels) fn quick_command_editor_script_field(
         .id(SharedString::from(id))
         .rounded_sm()
         .border_1()
-        .border_color(if active { rgb(0x4ade80) } else { rgb(palette.border) })
-        .bg(if active { rgb(0x0f1f18) } else { rgb(palette.input) })
+        .border_color(if active { rgb(palette.success) } else { rgb(palette.border) })
+        .bg(if active { rgb(palette.hover) } else { rgb(palette.input) })
         .p_2()
         .cursor_pointer()
         .on_click(on_click)
