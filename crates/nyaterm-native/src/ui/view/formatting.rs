@@ -357,3 +357,415 @@ pub(in crate::ui::view) fn format_last_used_ms(last_used_at_ms: Option<u64>) -> 
         format!("{}mo ago", secs / (86_400 * 30))
     }
 }
+
+
+
+/// Tauri AI history date buckets (`groupSessionsByDate`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(in crate::ui::view) enum AiHistoryDateGroup {
+    Today,
+    Yesterday,
+    Last7Days,
+    Earlier,
+}
+
+impl AiHistoryDateGroup {
+    pub(in crate::ui::view) fn label(self) -> &'static str {
+        match self {
+            Self::Today => "Today",
+            Self::Yesterday => "Yesterday",
+            Self::Last7Days => "Last 7 Days",
+            Self::Earlier => "Earlier",
+        }
+    }
+}
+
+fn civil_day_number(year: i32, month: u32, day: u32) -> i64 {
+    let y = if month <= 2 { year - 1 } else { year };
+    let era = y.div_euclid(400);
+    let yoe = (y - era * 400) as i64;
+    let mp = if month > 2 { month - 3 } else { month + 9 };
+    let doy = ((153 * mp + 2) / 5 + day - 1) as i64;
+    era as i64 * 146_097 + yoe * 365 + yoe / 4 - yoe / 100 + doy
+}
+
+fn utc_today_day_number() -> i64 {
+    let secs = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|duration| duration.as_secs() as i64)
+        .unwrap_or(0);
+    // Unix epoch day 0 is 1970-01-01.
+    719_468 + secs.div_euclid(86_400)
+}
+
+fn parse_rfc3339_day_number(value: &str) -> Option<i64> {
+    let date = value.trim().get(..10)?;
+    let mut parts = date.split('-');
+    let year: i32 = parts.next()?.parse().ok()?;
+    let month: u32 = parts.next()?.parse().ok()?;
+    let day: u32 = parts.next()?.parse().ok()?;
+    if !(1..=12).contains(&month) || !(1..=31).contains(&day) {
+        return None;
+    }
+    Some(civil_day_number(year, month, day))
+}
+
+pub(in crate::ui::view) fn ai_history_date_group(updated_at: &str) -> AiHistoryDateGroup {
+    let today = utc_today_day_number();
+    let Some(day) = parse_rfc3339_day_number(updated_at) else {
+        return AiHistoryDateGroup::Earlier;
+    };
+    if day >= today {
+        AiHistoryDateGroup::Today
+    } else if day == today - 1 {
+        AiHistoryDateGroup::Yesterday
+    } else if day >= today - 6 {
+        AiHistoryDateGroup::Last7Days
+    } else {
+        AiHistoryDateGroup::Earlier
+    }
+}
+
+pub(in crate::ui::view) fn group_ai_sessions_by_date(
+    sessions: &[nyaterm_domain::AiSession],
+) -> [(AiHistoryDateGroup, Vec<nyaterm_domain::AiSession>); 4] {
+    let mut groups: [(AiHistoryDateGroup, Vec<nyaterm_domain::AiSession>); 4] = [
+        (AiHistoryDateGroup::Today, Vec::new()),
+        (AiHistoryDateGroup::Yesterday, Vec::new()),
+        (AiHistoryDateGroup::Last7Days, Vec::new()),
+        (AiHistoryDateGroup::Earlier, Vec::new()),
+    ];
+    for session in sessions {
+        let group = ai_history_date_group(&session.updated_at);
+        let index = match group {
+            AiHistoryDateGroup::Today => 0,
+            AiHistoryDateGroup::Yesterday => 1,
+            AiHistoryDateGroup::Last7Days => 2,
+            AiHistoryDateGroup::Earlier => 3,
+        };
+        groups[index].1.push(session.clone());
+    }
+    groups
+}
+
+
+/// Tauri `resolveConnectionIcon`: map stored icon key / connection kind to SVG path + color.
+#[derive(Debug, Clone, Copy)]
+pub(in crate::ui::view) struct ConnectionIconDef {
+    pub path: &'static str,
+    pub color: u32,
+    pub glyph: &'static str,
+}
+
+pub(in crate::ui::view) fn resolve_connection_icon(
+    icon_key: Option<&str>,
+    kind: &str,
+) -> ConnectionIconDef {
+    if let Some(key) = icon_key.map(str::trim).filter(|value| !value.is_empty()) {
+        if let Some(def) = connection_icon_by_key(key) {
+            return def;
+        }
+    }
+    default_connection_icon_for_kind(kind)
+}
+
+fn connection_icon_by_key(key: &str) -> Option<ConnectionIconDef> {
+    let key = key.to_ascii_lowercase();
+    // Server palette (Tauri SERVER_ICONS colors).
+    let server = match key.as_str() {
+        "server" => Some(0x60a5fa),
+        "server-emerald" => Some(0x34d399),
+        "server-amber" => Some(0xfbbf24),
+        "server-rose" => Some(0xfb7185),
+        "server-violet" => Some(0xa78bfa),
+        "server-cyan" => Some(0x22d3ee),
+        "server-slate" => Some(0x94a3b8),
+        _ => None,
+    };
+    if let Some(color) = server {
+        return Some(ConnectionIconDef {
+            path: "icons/conn/server.svg",
+            color,
+            glyph: "☰",
+        });
+    }
+    Some(match key.as_str() {
+        "linux" => ConnectionIconDef {
+            path: "icons/conn/linux.svg",
+            color: 0xfcc624,
+            glyph: "🐧",
+        },
+        "ubuntu" => ConnectionIconDef {
+            path: "icons/conn/ubuntu.svg",
+            color: 0xe95420,
+            glyph: "U",
+        },
+        "debian" => ConnectionIconDef {
+            path: "icons/conn/debian.svg",
+            color: 0xa81d33,
+            glyph: "D",
+        },
+        "centos" | "fedora" | "arch" | "manjaro" | "opensuse" | "rocky" | "alma" | "alpine"
+        | "kali" | "mint" | "nixos" | "gentoo" | "freebsd" | "raspberrypi" => ConnectionIconDef {
+            path: "icons/conn/linux.svg",
+            color: match key.as_str() {
+                "centos" => 0xa14f8c,
+                "fedora" => 0x3c4fb1,
+                "arch" => 0x1793d1,
+                "manjaro" => 0x35bf5c,
+                "opensuse" => 0x73ba25,
+                "rocky" => 0x10b981,
+                "alma" => 0xff4649,
+                "alpine" => 0x0d597f,
+                "kali" => 0x268bee,
+                "mint" => 0x87cf3e,
+                "nixos" => 0x5277c3,
+                "gentoo" => 0x54487a,
+                "freebsd" => 0xab2b28,
+                "raspberrypi" => 0xa22846,
+                _ => 0xfcc624,
+            },
+            glyph: "🐧",
+        },
+        "apple" => ConnectionIconDef {
+            path: "icons/conn/apple.svg",
+            color: 0xa2aaad,
+            glyph: "",
+        },
+        "windows" => ConnectionIconDef {
+            path: "icons/conn/windows.svg",
+            color: 0x0078d4,
+            glyph: "▣",
+        },
+        "android" => ConnectionIconDef {
+            path: "icons/conn/linux.svg",
+            color: 0x3ddc84,
+            glyph: "A",
+        },
+        "docker" => ConnectionIconDef {
+            path: "icons/conn/docker.svg",
+            color: 0x2496ed,
+            glyph: "🐋",
+        },
+        "python" => ConnectionIconDef {
+            path: "icons/conn/python.svg",
+            color: 0x3776ab,
+            glyph: "Py",
+        },
+        "github" => ConnectionIconDef {
+            path: "icons/conn/github.svg",
+            color: 0xc9d1d9,
+            glyph: "GH",
+        },
+        "k8s" | "kubernetes" => ConnectionIconDef {
+            path: "icons/conn/docker.svg",
+            color: 0x326ce5,
+            glyph: "K",
+        },
+        "local" | "terminal" => ConnectionIconDef {
+            path: "icons/conn/terminal.svg",
+            color: 0x4ade80,
+            glyph: ">_",
+        },
+        "telnet" => ConnectionIconDef {
+            path: "icons/conn/telnet.svg",
+            color: 0xd29922,
+            glyph: "⇄",
+        },
+        "serial" => ConnectionIconDef {
+            path: "icons/conn/serial.svg",
+            color: 0xbc8cff,
+            glyph: "⌁",
+        },
+        "folder" | "group" => ConnectionIconDef {
+            path: "icons/conn/folder.svg",
+            color: 0xfbbf24,
+            glyph: "📁",
+        },
+        // Other QUICK_ICONS keys fall back to colored server glyph.
+        "nginx" | "redis" | "postgres" | "mysql" | "mongodb" | "js" | "ts" | "rust" | "go"
+        | "node" | "php" | "aws" | "gcp" | "gitlab" => ConnectionIconDef {
+            path: "icons/conn/server.svg",
+            color: match key.as_str() {
+                "nginx" => 0x009639,
+                "redis" => 0xdc382d,
+                "postgres" => 0x4169e1,
+                "mysql" => 0x4479a1,
+                "mongodb" => 0x47a248,
+                "js" => 0xf7df1e,
+                "ts" => 0x3178c6,
+                "rust" => 0xdea584,
+                "go" => 0x00add8,
+                "node" => 0x339933,
+                "php" => 0x777bb4,
+                "aws" => 0xff9900,
+                "gcp" => 0x4285f4,
+                "gitlab" => 0xfc6d26,
+                _ => 0x60a5fa,
+            },
+            glyph: "☰",
+        },
+        _ => return None,
+    })
+}
+
+fn default_connection_icon_for_kind(kind: &str) -> ConnectionIconDef {
+    match kind {
+        "Local" => ConnectionIconDef {
+            path: "icons/conn/terminal.svg",
+            color: 0x4ade80,
+            glyph: ">_",
+        },
+        "Telnet" => ConnectionIconDef {
+            path: "icons/conn/telnet.svg",
+            color: 0xd29922,
+            glyph: "⇄",
+        },
+        "Serial" => ConnectionIconDef {
+            path: "icons/conn/serial.svg",
+            color: 0xbc8cff,
+            glyph: "⌁",
+        },
+        _ => ConnectionIconDef {
+            path: "icons/conn/server.svg",
+            color: 0x60a5fa,
+            glyph: "☰",
+        },
+    }
+}
+
+
+/// Lightweight markdown-ish blocks for AI transcript (subset of Tauri MarkdownContent).
+#[derive(Debug, Clone)]
+pub(in crate::ui::view) enum MarkdownBlock {
+    Paragraph(String),
+    Bullet(String),
+    Numbered { index: u32, text: String },
+    Code { language: String, code: String },
+    Quote(String),
+    Heading { level: u8, text: String },
+}
+
+/// Strip `<think>…</think>` segments (Tauri `extractThinkContent`).
+pub(in crate::ui::view) fn extract_think_content(content: &str) -> (String, Option<String>) {
+    let mut reasoning_parts: Vec<String> = Vec::new();
+    let mut visible = String::new();
+    let mut rest = content;
+    while let Some(start) = rest.find("<think>") {
+        visible.push_str(&rest[..start]);
+        let after = &rest[start + 7..];
+        if let Some(end) = after.find("</think>") {
+            let part = after[..end].trim();
+            if !part.is_empty() {
+                reasoning_parts.push(part.to_string());
+            }
+            rest = &after[end + 8..];
+        } else {
+            let trailing = after.trim();
+            if !trailing.is_empty() {
+                reasoning_parts.push(trailing.to_string());
+            }
+            rest = "";
+            break;
+        }
+    }
+    visible.push_str(rest);
+    // Drop incomplete trailing open-tag prefix fragments.
+    if let Some(idx) = visible.rfind('<') {
+        let tail = &visible[idx..];
+        if "<think>".starts_with(tail) || tail == "<" || tail.starts_with("<t") {
+            visible.truncate(idx);
+        }
+    }
+    let visible = visible.trim().to_string();
+    let reasoning = if reasoning_parts.is_empty() {
+        None
+    } else {
+        Some(reasoning_parts.join("\n\n"))
+    };
+    (visible, reasoning)
+}
+
+pub(in crate::ui::view) fn parse_markdown_blocks(content: &str) -> Vec<MarkdownBlock> {
+    let mut blocks = Vec::new();
+    let mut lines = content.lines().peekable();
+    let mut paragraph: Vec<String> = Vec::new();
+
+    let flush_paragraph = |paragraph: &mut Vec<String>, blocks: &mut Vec<MarkdownBlock>| {
+        if paragraph.is_empty() {
+            return;
+        }
+        let text = paragraph.join(" ").trim().to_string();
+        paragraph.clear();
+        if !text.is_empty() {
+            blocks.push(MarkdownBlock::Paragraph(text));
+        }
+    };
+
+    while let Some(line) = lines.next() {
+        let trimmed = line.trim_end();
+        if trimmed.trim().is_empty() {
+            flush_paragraph(&mut paragraph, &mut blocks);
+            continue;
+        }
+        if let Some(rest) = trimmed.strip_prefix("```") {
+            flush_paragraph(&mut paragraph, &mut blocks);
+            let language = rest.trim().to_string();
+            let mut code_lines = Vec::new();
+            while let Some(code_line) = lines.next() {
+                if code_line.trim_start().starts_with("```") {
+                    break;
+                }
+                code_lines.push(code_line.to_string());
+            }
+            blocks.push(MarkdownBlock::Code {
+                language,
+                code: code_lines.join("\n"),
+            });
+            continue;
+        }
+        if let Some(rest) = trimmed.trim_start().strip_prefix('>') {
+            flush_paragraph(&mut paragraph, &mut blocks);
+            blocks.push(MarkdownBlock::Quote(rest.trim().to_string()));
+            continue;
+        }
+        let heading_level = trimmed
+            .chars()
+            .take_while(|ch| *ch == '#')
+            .count()
+            .min(6) as u8;
+        if heading_level > 0 && trimmed.as_bytes().get(heading_level as usize) == Some(&b' ') {
+            flush_paragraph(&mut paragraph, &mut blocks);
+            blocks.push(MarkdownBlock::Heading {
+                level: heading_level,
+                text: trimmed[heading_level as usize + 1..].trim().to_string(),
+            });
+            continue;
+        }
+        let bullet = trimmed.trim_start();
+        if let Some(rest) = bullet
+            .strip_prefix("- ")
+            .or_else(|| bullet.strip_prefix("* "))
+        {
+            flush_paragraph(&mut paragraph, &mut blocks);
+            blocks.push(MarkdownBlock::Bullet(rest.to_string()));
+            continue;
+        }
+        if let Some((num, rest)) = bullet.split_once(". ") {
+            if !num.is_empty() && num.chars().all(|ch| ch.is_ascii_digit()) {
+                flush_paragraph(&mut paragraph, &mut blocks);
+                blocks.push(MarkdownBlock::Numbered {
+                    index: num.parse().unwrap_or(1),
+                    text: rest.to_string(),
+                });
+                continue;
+            }
+        }
+        paragraph.push(trimmed.trim().to_string());
+    }
+    flush_paragraph(&mut paragraph, &mut blocks);
+    if blocks.is_empty() && !content.trim().is_empty() {
+        blocks.push(MarkdownBlock::Paragraph(content.trim().to_string()));
+    }
+    blocks
+}

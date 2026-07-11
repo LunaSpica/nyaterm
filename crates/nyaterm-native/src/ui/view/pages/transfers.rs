@@ -27,8 +27,8 @@ use crate::ui::models::{
 use nyaterm_domain::{AiCustomActionConfig, ConnectionStore};
 
 use super::super::{
-    NyaTermApp, entry_kind_label, format_file_size, transfer_job_title, transfer_progress_bar,
-    transfer_status_label, truncate_preview,
+    NyaTermApp, entry_kind_label, format_file_size, transfer_entry_icon, transfer_job_title,
+    transfer_progress_bar, transfer_status_label, truncate_preview,
 };
 
 #[path = "transfers/browser.rs"]

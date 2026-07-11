@@ -194,7 +194,7 @@ pub(super) fn process_table_row(
                 )))
                 .grid_cols(6)
                 .gap_1()
-                .h(px(40.))
+                .h(px(34.))
                 .px_2()
                 .items_center()
                 .cursor_pointer()
@@ -204,13 +204,14 @@ pub(super) fn process_table_row(
                         .min_w_0()
                         .flex()
                         .flex_col()
+                        .justify_center()
                         .child(
                             div()
                                 .text_size(px(12.))
-                                .font_weight(FontWeight(700.))
+                                .font_weight(FontWeight(600.))
                                 .text_color(rgb(0xe5edf7))
                                 .overflow_hidden()
-                                .child(truncate_preview(&process.command, 36)),
+                                .child(truncate_preview(&process.command, 40)),
                         )
                         .child(
                             div()
@@ -218,7 +219,7 @@ pub(super) fn process_table_row(
                                 .text_size(px(10.))
                                 .text_color(rgb(0x6e7681))
                                 .overflow_hidden()
-                                .child(truncate_preview(&process.command_line, 48)),
+                                .child(truncate_preview(&process.command_line, 52)),
                         ),
                 )
                 .child(process_table_cell(process.pid.to_string(), None))

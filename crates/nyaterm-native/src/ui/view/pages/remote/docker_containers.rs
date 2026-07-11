@@ -88,7 +88,7 @@ fn docker_container_row(
     div()
         .id(SharedString::from(format!("docker-container-{short}")))
         .relative()
-        .h(px(66.))
+        .h(px(52.))
         .rounded_md()
         .border_1()
         .border_color(rgb(0x30363d))
@@ -117,7 +117,7 @@ fn docker_container_row(
                 .flex()
                 .flex_col()
                 .justify_center()
-                .gap_1()
+                .gap(px(2.))
                 .child(
                     div()
                         .flex()

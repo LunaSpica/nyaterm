@@ -497,7 +497,8 @@ impl NyaTermApp {
         let bottom_len = bottom_entries.len();
         let show_labels = self.activity_bar_layout.show_labels;
 
-        let mut top = div().flex().flex_col().items_center().gap_1().pt_1();
+        // Tauri DropZone: gap-0.5 pt-1
+        let mut top = div().flex().flex_col().items_center().gap(px(2.)).pt_1();
         for (index, entry) in top_entries.into_iter().enumerate() {
             top = top.child(self.activity_entry_button(entry, side, top_zone, index, show_labels, cx));
         }
@@ -509,7 +510,7 @@ impl NyaTermApp {
             .flex()
             .flex_col()
             .items_center()
-            .gap_1()
+            .gap(px(2.))
             .pb_1();
         for (index, entry) in bottom_entries.into_iter().enumerate() {
             bottom =
@@ -612,7 +613,8 @@ impl NyaTermApp {
                     .gap_1()
             })
             .when(!show_labels, |this| {
-                this.size(px(36.))
+                this.w_full()
+                    .h(px(36.))
                     .flex()
                     .items_center()
                     .justify_center()

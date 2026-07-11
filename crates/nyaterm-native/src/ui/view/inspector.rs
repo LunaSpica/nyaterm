@@ -17,87 +17,7 @@ impl NyaTermApp {
         } else {
             "Ask"
         };
-        let mut command_rows = div().mt_3().flex().flex_col().gap_2();
-        for (index, card) in self.ai_command_cards.iter().cloned().take(8).enumerate() {
-            let risk = risk_label(card.risk_level.as_ref());
-            let title = if card.title.trim().is_empty() {
-                "Command".to_string()
-            } else {
-                card.title.clone()
-            };
-            command_rows = command_rows.child(
-                div()
-                    .border_t_1()
-                    .border_color(rgb(0x2a3140))
-                    .pt_2()
-                    .flex()
-                    .flex_col()
-                    .gap_2()
-                    .child(
-                        div()
-                            .flex()
-                            .items_center()
-                            .justify_between()
-                            .gap_2()
-                            .child(
-                                div()
-                                    .min_w_0()
-                                    .text_xs()
-                                    .font_weight(FontWeight(700.))
-                                    .text_color(rgb(0xe5edf7))
-                                    .child(title),
-                            )
-                            .child(status_pill(risk, rgb(0xfacc15), rgb(0x3a2f14))),
-                    )
-                    .child(
-                        div()
-                            .text_xs()
-                            .text_color(rgb(0xaeb7c8))
-                            .line_height(px(18.))
-                            .child(truncate_preview(&card.command, 120)),
-                    )
-                    .child(
-                        div()
-                            .flex()
-                            .items_center()
-                            .justify_between()
-                            .gap_2()
-                            .child(
-                                div()
-                                    .text_xs()
-                                    .text_color(rgb(0x64748b))
-                                    .child(truncate_preview(&card.explanation, 80)),
-                            )
-                            .child(
-                                div()
-                                    .flex()
-                                    .items_center()
-                                    .gap_1()
-                                    .child(small_button(
-                                        format!("ai-command-save-{index}"),
-                                        "Save",
-                                        cx.listener(move |this, _, _, cx| {
-                                            this.save_ai_command_card(index, cx);
-                                        }),
-                                    ))
-                                    .child(small_button(
-                                        format!("ai-command-insert-{index}"),
-                                        "Insert",
-                                        cx.listener(move |this, _, _, cx| {
-                                            this.insert_ai_command_card(index, cx);
-                                        }),
-                                    ))
-                                    .child(small_button(
-                                        format!("ai-command-run-{index}"),
-                                        "Run",
-                                        cx.listener(move |this, _, _, cx| {
-                                            this.run_ai_command_card(index, cx);
-                                        }),
-                                    )),
-                            ),
-                    ),
-            );
-        }
+        let command_rows = self.ai_command_card_list(cx);
         let mut agent_step_rows = div();
         if agent_mode || !self.ai_agent_steps.is_empty() {
             agent_step_rows = agent_step_rows
@@ -125,38 +45,71 @@ impl NyaTermApp {
             } else {
                 for step in self.ai_agent_steps.iter().cloned().rev().take(16).rev() {
                     let (label, fg, bg) = ai_agent_step_status_style(step.status);
+                    let border = match step.status {
+                        AiAgentStepStatus::Completed => rgb(0x3fb950),
+                        AiAgentStepStatus::Failed | AiAgentStepStatus::Cancelled => rgb(0xf85149),
+                        AiAgentStepStatus::Running | AiAgentStepStatus::Tool => rgb(0x58a6ff),
+                        AiAgentStepStatus::NeedsApproval => rgb(0xd29922),
+                        AiAgentStepStatus::Planning => rgb(0x8b949e),
+                    };
                     agent_step_rows = agent_step_rows.child(
                         div()
-                            .flex()
-                            .items_start()
-                            .justify_between()
-                            .gap_2()
+                            .relative()
+                            .rounded_md()
+                            .border_1()
+                            .border_color(rgb(0x30363d))
+                            .bg(rgb(0x0d1117))
+                            .overflow_hidden()
                             .child(
                                 div()
-                                    .min_w_0()
+                                    .absolute()
+                                    .left_0()
+                                    .top_0()
+                                    .bottom_0()
+                                    .w(px(3.))
+                                    .bg(border),
+                            )
+                            .child(
+                                div()
+                                    .px_2()
+                                    .py_2()
+                                    .pl(px(10.))
                                     .flex()
                                     .flex_col()
                                     .gap_1()
+                            .child(
+                                div()
+                                    .flex()
+                                    .items_center()
+                                    .justify_between()
+                                    .gap_2()
                                     .child(
                                         div()
-                                            .text_xs()
+                                            .min_w_0()
+                                            .flex_1()
+                                            .text_size(px(11.))
                                             .font_weight(FontWeight(700.))
                                             .text_color(rgb(0xe5edf7))
+                                            .overflow_hidden()
                                             .child(format!(
-                                                "{}. {}",
+                                                "#{} {}",
                                                 step.step_index.saturating_add(1),
-                                                truncate_preview(&step.title, 40)
+                                                truncate_preview(&step.title, 42)
                                             )),
                                     )
-                                    .child(
-                                        div()
-                                            .text_xs()
-                                            .text_color(rgb(0x98a3b8))
-                                            .line_height(px(18.))
-                                            .child(truncate_preview(&step.detail, 120)),
-                                    ),
+                                    .child(status_pill(label, rgb(fg), rgb(bg))),
                             )
-                            .child(status_pill(label, rgb(fg), rgb(bg))),
+                            .when(!step.detail.trim().is_empty(), |this| {
+                                this.child(
+                                    div()
+                                        .font_family("JetBrains Mono")
+                                        .text_size(px(11.))
+                                        .text_color(rgb(0x8b949e))
+                                        .line_height(px(16.))
+                                        .child(truncate_preview(&step.detail, 220)),
+                                )
+                            }),
+                            ),
                     );
                 }
             }
@@ -228,11 +181,14 @@ impl NyaTermApp {
                     .child(icon_button(
                         "ai-history-toggle",
                         "⌛",
-                        cx.listener(|this, _, _, cx| {
+                        cx.listener(|this, _, window, cx| {
                             this.ai_execution_menu_open = false;
                             this.ai_history_open = !this.ai_history_open;
                             if this.ai_history_open {
                                 this.refresh_ai_session_list(cx);
+                                window.focus(&this.ai_history_search_focus);
+                            } else {
+                                this.ai_history_query.clear();
                             }
                             cx.notify();
                         }),
@@ -315,7 +271,7 @@ impl NyaTermApp {
                             self.ai_prompt_draft.clone(),
                             true,
                         )
-                        .h(px(56.))
+                        .h(px(64.))
                         .track_focus(&self.ai_chat_focus)
                         .on_click(cx.listener(|this, _, window, cx| {
                             window.focus(&this.ai_chat_focus);
@@ -857,10 +813,9 @@ impl NyaTermApp {
         command_rows: impl IntoElement,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
-        let _ = cx;
         let mut body = div().flex().flex_col().gap_2();
         if self.ai_chat_messages.is_empty() {
-            body = body.child(self.ai_empty_transcript(mode_label, enabled));
+            body = body.child(self.ai_empty_transcript(mode_label, enabled, cx));
         } else {
             for message in &self.ai_chat_messages {
                 body = body.child(self.ai_message_bubble(message));
@@ -869,20 +824,26 @@ impl NyaTermApp {
         body.child(agent_step_rows).child(command_rows)
     }
 
-    fn ai_empty_transcript(&self, mode_label: &'static str, enabled: bool) -> gpui::AnyElement {
-        let has_model = self
-            .ai_settings
-            .default_model_id
-            .as_ref()
-            .is_some_and(|id| !id.trim().is_empty());
+    fn ai_empty_transcript(
+        &self,
+        mode_label: &'static str,
+        enabled: bool,
+        cx: &mut Context<Self>,
+    ) -> gpui::AnyElement {
+        let has_model = !self.ai_model_draft.trim().is_empty()
+            || self
+                .ai_settings
+                .default_model_id
+                .as_ref()
+                .is_some_and(|id| !id.trim().is_empty());
         if !enabled {
             return div()
-                .min_h(px(180.))
+                .min_h(px(192.))
                 .flex()
                 .flex_col()
                 .items_center()
                 .justify_center()
-                .gap_2()
+                .gap_3()
                 .px_3()
                 .child(
                     div()
@@ -894,13 +855,33 @@ impl NyaTermApp {
                     div()
                         .text_size(px(12.))
                         .text_color(rgb(0x8b949e))
-                        .child("Enable in Settings"),
+                        .child("Go to Settings to enable AI"),
+                )
+                .child(
+                    div()
+                        .id(SharedString::from("ai-empty-open-settings-disabled"))
+                        .h(px(28.))
+                        .px_3()
+                        .rounded_md()
+                        .bg(rgb(0x21262d))
+                        .flex()
+                        .items_center()
+                        .text_size(px(11.))
+                        .font_weight(FontWeight(600.))
+                        .text_color(rgb(0xc9d1d9))
+                        .cursor_pointer()
+                        .hover(|this| this.bg(rgb(0x30363d)))
+                        .on_click(cx.listener(|this, _, _, cx| {
+                            this.settings_active_tab = SettingsTab::AiGeneral;
+                            this.open_page(NavItem::Settings, cx);
+                        }))
+                        .child("Open AI Settings"),
                 )
                 .into_any_element();
         }
         if !has_model {
             return div()
-                .min_h(px(220.))
+                .min_h(px(240.))
                 .flex()
                 .flex_col()
                 .items_center()
@@ -926,14 +907,36 @@ impl NyaTermApp {
                         .text_size(px(13.))
                         .font_weight(FontWeight(700.))
                         .text_color(rgb(0xe5edf7))
-                        .child("AI Not Configured"),
+                        .child("Set up AI Assistant"),
                 )
                 .child(self.ai_setup_step("1", "Add an API key credential"))
-                .child(self.ai_setup_step("2", "Enable a model"))
+                .child(self.ai_setup_step("2", "Choose and enable a model"))
+                .child(
+                    div()
+                        .id(SharedString::from("ai-empty-open-settings-setup"))
+                        .mt_1()
+                        .h(px(30.))
+                        .px_3()
+                        .rounded_md()
+                        .bg(rgb(0x238636))
+                        .flex()
+                        .items_center()
+                        .gap_1()
+                        .text_size(px(12.))
+                        .font_weight(FontWeight(600.))
+                        .text_color(rgb(0xffffff))
+                        .cursor_pointer()
+                        .hover(|this| this.bg(rgb(0x2ea043)))
+                        .on_click(cx.listener(|this, _, _, cx| {
+                            this.settings_active_tab = SettingsTab::AiGeneral;
+                            this.open_page(NavItem::Settings, cx);
+                        }))
+                        .child("Open AI Settings"),
+                )
                 .into_any_element();
         }
         div()
-            .min_h(px(160.))
+            .min_h(px(180.))
             .flex()
             .flex_col()
             .items_center()
@@ -950,14 +953,20 @@ impl NyaTermApp {
                 div()
                     .text_size(px(12.))
                     .text_color(rgb(0x8b949e))
-                    .child("Ask AI to explain output or generate commands."),
+                    .child("Start a conversation"),
+            )
+            .child(
+                div()
+                    .text_size(px(11.))
+                    .text_color(rgb(0x6e7681))
+                    .child("Ask AI to explain terminal output or generate commands."),
             )
             .child(
                 div()
                     .text_size(px(10.))
-                    .text_color(rgb(0x6e7681))
+                    .text_color(rgb(0x484f58))
                     .child(format!(
-                        "{mode_label} · session {}",
+                        "{mode_label} · {}",
                         compact_id(&self.ai_chat_session_id)
                     )),
             )
@@ -998,6 +1007,155 @@ impl NyaTermApp {
             )
     }
 
+
+
+    fn ai_command_card_list(&self, cx: &mut Context<Self>) -> gpui::AnyElement {
+        // Tauri AICommandCardView list under transcript.
+        // Return AnyElement so listeners do not pin cx/self lifetimes across the panel tree.
+        let mut rows = div().mt_2().flex().flex_col().gap_2();
+        if self.ai_command_cards.is_empty() {
+            return rows.into_any_element();
+        }
+        for (index, card) in self.ai_command_cards.iter().cloned().take(8).enumerate() {
+            rows = rows.child(Self::ai_command_card_view(index, card, cx));
+        }
+        rows.into_any_element()
+    }
+
+    fn ai_command_card_view(
+        index: usize,
+        card: AiCommandCard,
+        cx: &mut Context<Self>,
+    ) -> gpui::AnyElement {
+        let risk = risk_label(card.risk_level.as_ref());
+        let title = if card.title.trim().is_empty() {
+            "Command".to_string()
+        } else {
+            card.title.clone()
+        };
+        let command = card.command.clone();
+        let command_for_copy = command.clone();
+        let explanation = card.explanation.clone();
+        let expected = card.expected_effect.clone();
+        let rollback = card.rollback.clone().unwrap_or_default();
+
+        div()
+            .id(SharedString::from(format!("ai-command-card-{index}")))
+            .rounded_md()
+            .border_1()
+            .border_color(rgb(0x30363d))
+            .bg(rgb(0x0d1117))
+            .p_3()
+            .flex()
+            .flex_col()
+            .gap_2()
+            .child(
+                div()
+                    .flex()
+                    .items_center()
+                    .justify_between()
+                    .gap_2()
+                    .child(
+                        div()
+                            .min_w_0()
+                            .flex_1()
+                            .text_size(px(12.))
+                            .font_weight(FontWeight(700.))
+                            .text_color(rgb(0xe5edf7))
+                            .overflow_hidden()
+                            .child(truncate_preview(&title, 48)),
+                    )
+                    .child(status_pill(risk, rgb(0xfacc15), rgb(0x3a2f14))),
+            )
+            .child(
+                div()
+                    .id(SharedString::from(format!("ai-command-body-{index}")))
+                    .max_h(px(96.))
+                    .overflow_hidden()
+                    .rounded_md()
+                    .border_1()
+                    .border_color(rgb(0x30363d))
+                    .bg(rgb(0x161b22))
+                    .px_2()
+                    .py_1()
+                    .font_family("JetBrains Mono")
+                    .text_size(px(11.))
+                    .text_color(rgb(0xc9d1d9))
+                    .line_height(px(16.))
+                    .child(truncate_preview(&command, 800)),
+            )
+            .child(
+                div()
+                    .flex()
+                    .flex_col()
+                    .gap_1()
+                    .child(
+                        div()
+                            .text_size(px(11.))
+                            .text_color(rgb(0x8b949e))
+                            .line_height(px(16.))
+                            .child(truncate_preview(&explanation, 220)),
+                    )
+                    .when(!expected.trim().is_empty(), |this| {
+                        this.child(
+                            div()
+                                .text_size(px(11.))
+                                .text_color(rgb(0x6e7681))
+                                .line_height(px(16.))
+                                .child(truncate_preview(&expected, 160)),
+                        )
+                    })
+                    .when(!rollback.trim().is_empty(), |this| {
+                        this.child(
+                            div()
+                                .text_size(px(11.))
+                                .text_color(rgb(0x6e7681))
+                                .line_height(px(16.))
+                                .child(format!("Rollback: {}", truncate_preview(&rollback, 120))),
+                        )
+                    }),
+            )
+            .child(
+                div()
+                    .flex()
+                    .flex_wrap()
+                    .items_center()
+                    .gap_1()
+                    .child(small_button(
+                        format!("ai-command-insert-{index}"),
+                        "Insert",
+                        cx.listener(move |this, _, _, cx| {
+                            this.insert_ai_command_card(index, cx);
+                        }),
+                    ))
+                    .child(small_button(
+                        format!("ai-command-copy-{index}"),
+                        "Copy",
+                        cx.listener(move |this, _, _, cx| {
+                            cx.write_to_clipboard(ClipboardItem::new_string(
+                                command_for_copy.clone(),
+                            ));
+                            this.ai_status = "command copied".to_string();
+                            cx.notify();
+                        }),
+                    ))
+                    .child(small_button(
+                        format!("ai-command-save-{index}"),
+                        "Save",
+                        cx.listener(move |this, _, _, cx| {
+                            this.save_ai_command_card(index, cx);
+                        }),
+                    ))
+                    .child(small_button(
+                        format!("ai-command-run-{index}"),
+                        "Run",
+                        cx.listener(move |this, _, _, cx| {
+                            this.run_ai_command_card(index, cx);
+                        }),
+                    )),
+            )
+            .into_any_element()
+    }
 
     fn ai_execution_mode_menu(&mut self, cx: &mut Context<Self>) -> impl IntoElement {
         let current = self.ai_settings.agent_command_execution_mode.clone();
@@ -1117,64 +1275,108 @@ impl NyaTermApp {
     }
 
     fn ai_history_popover(&mut self, cx: &mut Context<Self>) -> impl IntoElement {
+        // Tauri AIAssistantPanel history card: search + Clear All + date-grouped sessions.
+        let query = self.ai_history_query.trim().to_ascii_lowercase();
+        let filtered: Vec<_> = self
+            .ai_sessions
+            .iter()
+            .filter(|session| {
+                if query.is_empty() {
+                    return true;
+                }
+                session.title.to_ascii_lowercase().contains(&query)
+                    || session.id.to_ascii_lowercase().contains(&query)
+            })
+            .cloned()
+            .collect();
+        let total_count = self.ai_sessions.len();
+        let filtered_count = filtered.len();
+        let grouped = group_ai_sessions_by_date(&filtered);
+        let search_display = if self.ai_history_query.is_empty() {
+            "Search history...".to_string()
+        } else {
+            self.ai_history_query.clone()
+        };
+
         let mut rows = div().flex().flex_col().gap_1().p_2();
-        if self.ai_sessions.is_empty() {
+        if filtered_count == 0 {
             rows = rows.child(
                 div()
                     .py_4()
                     .text_center()
                     .text_size(px(11.))
                     .text_color(rgb(0x6e7681))
-                    .child("No chat history yet"),
+                    .child(if total_count == 0 {
+                        "No chat history yet"
+                    } else {
+                        "No matching history"
+                    }),
             );
         } else {
-            for session in self.ai_sessions.iter().cloned().take(24) {
-                let session_id = session.id.clone();
-                let delete_id = session.id.clone();
+            for (group, sessions) in grouped {
+                if sessions.is_empty() {
+                    continue;
+                }
                 rows = rows.child(
                     div()
-                        .id(SharedString::from(format!("ai-session-{}", session.id)))
-                        .h(px(32.))
                         .px_2()
-                        .rounded_md()
-                        .flex()
-                        .items_center()
-                        .gap_1()
-                        .hover(|this| this.bg(rgb(0x21262d)))
-                        .child(
-                            div()
-                                .id(SharedString::from(format!(
-                                    "ai-session-open-{}",
-                                    session.id
-                                )))
-                                .min_w_0()
-                                .flex_1()
-                                .text_size(px(12.))
-                                .text_color(rgb(0xc9d1d9))
-                                .overflow_hidden()
-                                .cursor_pointer()
-                                .child(truncate_preview(&session.title, 36))
-                                .on_click(cx.listener(move |this, _, _, cx| {
-                                    this.load_ai_session_messages(session_id.clone(), cx);
-                                })),
-                        )
-                        .child(icon_button(
-                            format!("ai-session-delete-{}", session.id),
-                            "×",
-                            cx.listener(move |this, _, _, cx| {
-                                this.delete_ai_session(delete_id.clone(), cx);
-                            }),
-                        )),
+                        .py_1()
+                        .text_size(px(10.))
+                        .font_weight(FontWeight(700.))
+                        .text_color(rgb(0x6e7681))
+                        .child(group.label()),
                 );
+                for session in sessions.into_iter().take(48) {
+                    let session_id = session.id.clone();
+                    let delete_id = session.id.clone();
+                    let active = self.ai_chat_session_id == session.id;
+                    rows = rows.child(
+                        div()
+                            .id(SharedString::from(format!("ai-session-{}", session.id)))
+                            .h(px(32.))
+                            .px_2()
+                            .rounded_md()
+                            .flex()
+                            .items_center()
+                            .gap_1()
+                            .bg(if active { rgb(0x122033) } else { rgb(0x161b22) })
+                            .hover(|this| this.bg(rgb(0x21262d)))
+                            .child(
+                                div()
+                                    .id(SharedString::from(format!(
+                                        "ai-session-open-{}",
+                                        session.id
+                                    )))
+                                    .min_w_0()
+                                    .flex_1()
+                                    .text_size(px(12.))
+                                    .text_color(rgb(0xc9d1d9))
+                                    .overflow_hidden()
+                                    .cursor_pointer()
+                                    .child(truncate_preview(&session.title, 36))
+                                    .on_click(cx.listener(move |this, _, _, cx| {
+                                        this.load_ai_session_messages(session_id.clone(), cx);
+                                    })),
+                            )
+                            .child(icon_button(
+                                format!("ai-session-delete-{}", session.id),
+                                "×",
+                                cx.listener(move |this, _, _, cx| {
+                                    this.delete_ai_session(delete_id.clone(), cx);
+                                }),
+                            )),
+                    );
+                }
             }
         }
+
         div()
             .id(SharedString::from("ai-history-popover"))
             .absolute()
             .top(px(36.))
+            .left(px(8.))
             .right(px(8.))
-            .w(px(260.))
-            .max_h(px(320.))
+            .max_h(px(352.))
             .rounded_md()
             .border_1()
             .border_color(rgb(0x30363d))
@@ -1186,8 +1388,78 @@ impl NyaTermApp {
             .on_mouse_down(MouseButton::Left, |_, _, _| {})
             .child(
                 div()
+                    .p_2()
+                    .border_b_1()
+                    .border_color(rgb(0x30363d))
+                    .child(
+                        div()
+                            .id(SharedString::from("ai-history-search"))
+                            .h(px(32.))
+                            .px_2()
+                            .rounded_md()
+                            .border_1()
+                            .border_color(rgb(0x30363d))
+                            .bg(rgb(0x0d1117))
+                            .flex()
+                            .items_center()
+                            .gap_2()
+                            .cursor_pointer()
+                            .track_focus(&self.ai_history_search_focus)
+                            .on_click(cx.listener(|this, _, window, cx| {
+                                window.focus(&this.ai_history_search_focus);
+                                cx.notify();
+                            }))
+                            .on_key_down(cx.listener(|this, event: &KeyDownEvent, _, cx| {
+                                cx.stop_propagation();
+                                this.handle_ai_history_search_key_down(event, cx);
+                            }))
+                            .child(
+                                div()
+                                    .text_size(px(11.))
+                                    .text_color(rgb(0x6e7681))
+                                    .child("⌕"),
+                            )
+                            .child(
+                                div()
+                                    .min_w_0()
+                                    .flex_1()
+                                    .text_size(px(12.))
+                                    .text_color(if self.ai_history_query.is_empty() {
+                                        rgb(0x6e7681)
+                                    } else {
+                                        rgb(0xc9d1d9)
+                                    })
+                                    .child(search_display),
+                            )
+                            .when(!self.ai_history_query.is_empty(), |this| {
+                                this.child(
+                                    div()
+                                        .id(SharedString::from("ai-history-search-clear"))
+                                        .size(px(18.))
+                                        .flex()
+                                        .items_center()
+                                        .justify_center()
+                                        .rounded_sm()
+                                        .text_size(px(10.))
+                                        .text_color(rgb(0x8b949e))
+                                        .cursor_pointer()
+                                        .hover(|this| {
+                                            this.bg(rgb(0x21262d)).text_color(rgb(0xc9d1d9))
+                                        })
+                                        .on_click(cx.listener(|this, _, window, cx| {
+                                            this.ai_history_query.clear();
+                                            window.focus(&this.ai_history_search_focus);
+                                            cx.notify();
+                                        }))
+                                        .child("×"),
+                                )
+                            }),
+                    ),
+            )
+            .child(
+                div()
                     .h(px(32.))
-                    .px_3()
+                    .px_2()
                     .border_b_1()
                     .border_color(rgb(0x30363d))
                     .flex()
@@ -1200,25 +1472,43 @@ impl NyaTermApp {
                             .text_color(rgb(0xc9d1d9))
                             .child("History"),
                     )
-                    .child(icon_button(
-                        "ai-history-close",
-                        "×",
-                        cx.listener(|this, _, _, cx| {
-                            this.ai_history_open = false;
-                            cx.notify();
-                        }),
-                    )),
+                    .child(
+                        div()
+                            .id(SharedString::from("ai-history-clear-all"))
+                            .h(px(22.))
+                            .px_2()
+                            .rounded_sm()
+                            .flex()
+                            .items_center()
+                            .text_size(px(11.))
+                            .text_color(if total_count == 0 {
+                                rgb(0x484f58)
+                            } else {
+                                rgb(0x8b949e)
+                            })
+                            .cursor_pointer()
+                            .hover(|this| this.bg(rgb(0x21262d)).text_color(rgb(0xc9d1d9)))
+                            .on_click(cx.listener(move |this, _, _, cx| {
+                                if this.ai_sessions.is_empty() {
+                                    return;
+                                }
+                                this.clear_all_ai_history(cx);
+                            }))
+                            .child("Clear All"),
+                    ),
             )
             .child(
                 div()
                     .id(SharedString::from("ai-history-scroll"))
                     .flex_1()
                     .min_h_0()
+                    .max_h(px(280.))
                     .overflow_scroll()
                     .scrollbar_width(px(6.))
                     .child(rows),
             )
     }
+
 
     fn ai_message_bubble(&self, message: &AiMessage) -> impl IntoElement {
         let is_user = matches!(message.role, AiMessageRole::User);
@@ -1226,16 +1516,31 @@ impl NyaTermApp {
             .ai_streaming_assistant_id
             .as_deref()
             .is_some_and(|id| id == message.id);
-        let role_label = if is_user { "USER" } else { "AI" };
-        let content = if message.content.trim().is_empty() {
-            if streaming {
-                "…".to_string()
-            } else {
-                String::new()
-            }
+        let role_label = if is_user { "User" } else { "AI" };
+        let raw = if message.content.trim().is_empty() {
+            String::new()
         } else {
             message.content.clone()
         };
+        let (visible, think_reasoning) = extract_think_content(&raw);
+        let mut reasoning = message
+            .reasoning_content
+            .as_ref()
+            .map(|value| value.trim().to_string())
+            .filter(|value| !value.is_empty());
+        if reasoning.is_none() {
+            reasoning = think_reasoning;
+        }
+        let display = if visible.trim().is_empty() {
+            if streaming {
+                String::new()
+            } else {
+                visible
+            }
+        } else {
+            visible
+        };
+
         let mut bubble = div()
             .id(SharedString::from(format!("ai-msg-{}", message.id)))
             .rounded_md()
@@ -1248,31 +1553,107 @@ impl NyaTermApp {
             .bg(if is_user {
                 rgb(0x122033)
             } else {
-                rgb(0x0d1117)
+                rgb(0x161b22)
             })
             .px_3()
             .py_2()
             .flex()
             .flex_col()
-            .gap_1()
+            .gap_2()
             .child(
                 div()
                     .text_size(px(10.))
-                    .font_weight(FontWeight(800.))
+                    .font_weight(FontWeight(700.))
                     .text_color(rgb(0x8b949e))
                     .child(role_label),
             );
-        if let Some(reasoning) = message
-            .reasoning_content
-            .as_ref()
-            .filter(|value| !value.trim().is_empty())
-        {
+
+        if let Some(reasoning) = reasoning {
+            bubble = bubble.child(
+                div()
+                    .rounded_md()
+                    .border_1()
+                    .border_color(if streaming {
+                        rgb(0x1f6feb)
+                    } else {
+                        rgb(0x30363d)
+                    })
+                    .bg(if streaming {
+                        rgb(0x122033)
+                    } else {
+                        rgb(0x0d1117)
+                    })
+                    .px_2()
+                    .py_2()
+                    .flex()
+                    .flex_col()
+                    .gap_1()
+                    .child(
+                        div()
+                            .text_size(px(10.))
+                            .font_weight(FontWeight(700.))
+                            .text_color(if streaming {
+                                rgb(0x58a6ff)
+                            } else {
+                                rgb(0x8b949e)
+                            })
+                            .child(if streaming {
+                                "Thinking…"
+                            } else {
+                                "Thought"
+                            }),
+                    )
+                    .child(
+                        div()
+                            .text_size(px(11.))
+                            .text_color(rgb(0x8b949e))
+                            .line_height(px(16.))
+                            .child(truncate_preview(&reasoning, 1200)),
+                    ),
+            );
+        } else if streaming && display.trim().is_empty() {
+            bubble = bubble.child(
+                div()
+                    .rounded_md()
+                    .border_1()
+                    .border_color(rgb(0x1f6feb))
+                    .bg(rgb(0x122033))
+                    .px_2()
+                    .py_2()
+                    .text_size(px(11.))
+                    .text_color(rgb(0x58a6ff))
+                    .child("Thinking…"),
+            );
+        }
+
+        let has_display = !display.trim().is_empty();
+        if has_display {
+            if is_user {
+                bubble = bubble.child(
+                    div()
+                        .text_size(px(12.))
+                        .text_color(rgb(0xc9d1d9))
+                        .line_height(px(18.))
+                        .child(display.clone()),
+                );
+            } else {
+                let rendered = truncate_preview(&display, 8000);
+                bubble = bubble.child(markdown_content_view(&rendered));
+            }
+        }
+
+        if !message.command_cards.is_empty() {
+            let preview = message
+                .command_cards
+                .first()
+                .map(|card| card.command.as_str())
+                .unwrap_or("");
             bubble = bubble.child(
                 div()
                     .rounded_sm()
                     .border_1()
                     .border_color(rgb(0x30363d))
-                    .bg(rgb(0x12171f))
+                    .bg(rgb(0x0d1117))
                     .px_2()
                     .py_1()
                     .flex()
@@ -1283,46 +1664,22 @@ impl NyaTermApp {
                             .text_size(px(10.))
                             .font_weight(FontWeight(700.))
                             .text_color(rgb(0x8b949e))
-                            .child("REASONING"),
+                            .child(format!(
+                                "{} command card(s)",
+                                message.command_cards.len()
+                            )),
                     )
                     .child(
                         div()
+                            .font_family("JetBrains Mono")
                             .text_size(px(11.))
-                            .text_color(rgb(0x8b949e))
+                            .text_color(rgb(0xc9d1d9))
                             .line_height(px(16.))
-                            .child(truncate_preview(reasoning, 480)),
+                            .child(truncate_preview(preview, 160)),
                     ),
             );
         }
-        bubble = bubble.child(
-            div()
-                .text_xs()
-                .text_color(rgb(0xc9d1d9))
-                .line_height(px(18.))
-                .child(if content.is_empty() {
-                    if streaming {
-                        "Thinking…".to_string()
-                    } else {
-                        String::new()
-                    }
-                } else {
-                    // Keep more content than the old 320-char status preview.
-                    truncate_preview(&content, 4000)
-                }),
-        );
-        if !message.command_cards.is_empty() {
-            bubble = bubble.child(
-                div()
-                    .mt_1()
-                    .text_size(px(10.))
-                    .text_color(rgb(0x8b949e))
-                    .child(format!(
-                        "{} command card(s)",
-                        message.command_cards.len()
-                    )),
-            );
-        }
-        if streaming {
+        if streaming && has_display {
             bubble = bubble.child(
                 div()
                     .text_size(px(10.))
@@ -1332,6 +1689,7 @@ impl NyaTermApp {
         }
         bubble
     }
+
 
     fn ai_assistant_panel(&mut self, cx: &mut Context<Self>) -> impl IntoElement {
         // Tauri AIAssistantPanel: toolbar + scroll transcript + bottom composer.

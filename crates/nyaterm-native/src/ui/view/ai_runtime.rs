@@ -1054,6 +1054,70 @@ impl NyaTermApp {
         cx.notify();
     }
 
+    pub(in crate::ui::view) fn clear_all_ai_history(&mut self, cx: &mut Context<Self>) {
+        let Ok(store) = ConnectionStore::open_with_portable_key_path(
+            self.runtime.config_dir(),
+            self.runtime.portable_key_path().map(ToOwned::to_owned),
+        ) else {
+            self.ai_status = "failed to open store for AI history".to_string();
+            cx.notify();
+            return;
+        };
+        match store.clear_ai_history() {
+            Ok(()) => {
+                self.ai_sessions.clear();
+                self.ai_history_query.clear();
+                self.ai_chat_messages.clear();
+                self.ai_command_cards.clear();
+                self.ai_streaming_assistant_id = None;
+                self.ai_chat_session_id = format!("ai-session-{}", uuid());
+                self.ai_response_preview = if self.ai_settings.default_mode == AiMode::Agent {
+                    "Agent mode ready".to_string()
+                } else {
+                    "Ask mode ready".to_string()
+                };
+                self.ai_status = "AI history cleared".to_string();
+            }
+            Err(error) => {
+                self.ai_status = format!("failed to clear AI history: {error}");
+            }
+        }
+        cx.notify();
+    }
+
+    pub(in crate::ui::view) fn handle_ai_history_search_key_down(
+        &mut self,
+        event: &KeyDownEvent,
+        cx: &mut Context<Self>,
+    ) {
+        let keystroke = &event.keystroke;
+        if keystroke.modifiers.platform || keystroke.modifiers.alt || keystroke.modifiers.control {
+            return;
+        }
+        match keystroke.key.as_str() {
+            "escape" => {
+                self.ai_history_open = false;
+                self.ai_history_query.clear();
+                cx.notify();
+            }
+            "backspace" => {
+                self.ai_history_query.pop();
+                cx.notify();
+            }
+            _ => {
+                if let Some(input) = keystroke
+                    .key_char
+                    .as_deref()
+                    .filter(|input| !input.is_empty())
+                {
+                    self.ai_history_query.push_str(input);
+                    cx.notify();
+                }
+            }
+        }
+    }
+
+
     pub(in crate::ui::view) fn refresh_ai_usage_counts(&mut self) {
         if let Ok(store) = ConnectionStore::open_with_portable_key_path(
             self.runtime.config_dir(),

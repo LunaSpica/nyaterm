@@ -14,7 +14,8 @@ use crate::ui::models::{
 
 use super::super::{
     ConnectionDragKind, ConnectionDragPayload, ConnectionDragPreview, ConnectionDropPosition,
-    ConnectionDropTarget, ConnectionEditorToggle, NyaTermApp, format_last_used_ms, transfer_input,
+    ConnectionDropTarget, ConnectionEditorToggle, NyaTermApp, connection_type_icon,
+    format_last_used_ms, resolve_connection_icon, transfer_input,
 };
 
 impl NyaTermApp {
@@ -41,8 +42,19 @@ impl NyaTermApp {
             .min_h_0()
             .overflow_scroll()
             .scrollbar_width(px(6.))
+            .p_1()
             .flex()
             .flex_col()
+            .gap(px(2.))
+            .on_mouse_down(
+                MouseButton::Left,
+                cx.listener(|this, _, _, cx| {
+                    // Click empty background clears multi-select (Tauri list onMouseDown).
+                    if !this.selected_connection_ids.is_empty() {
+                        this.clear_selected_connections(cx);
+                    }
+                }),
+            )
             .on_drop(cx.listener(|this, payload: &ConnectionDragPayload, _, cx| {
                 this.connection_drop_target = None;
                 match payload.kind {
@@ -87,14 +99,23 @@ impl NyaTermApp {
                     .child("No connections match the current search."),
             );
         } else {
+            let has_groups = sections.iter().any(|section| !section.is_root);
             for section in sections {
+                if section.is_root && has_groups && !section.connections.is_empty() {
+                    list = list.child(
+                        div()
+                            .mx_2()
+                            .my_1()
+                            .h(px(1.))
+                            .bg(rgb(0x30363d)),
+                    );
+                }
                 list = list.child(self.connection_section(section, cx));
             }
         }
 
         // Tauri: PanelHeader (shared stack) + search/action strip + flat tree list.
         // Count is shown in the shared panel header via meta; strip hosts search + icons.
-        let _ = selected_count;
         div()
             .relative()
             .flex()
@@ -103,6 +124,9 @@ impl NyaTermApp {
             .overflow_hidden()
             .bg(rgb(0x161b22))
             .child(self.connections_search_bar(visible_count, cx))
+            .when(selected_count > 0, |this| {
+                this.child(self.connections_selection_strip(selected_count, cx))
+            })
             .child(list)
             .when_some(self.connection_editor.clone(), |this, editor| {
                 this.child(self.connection_editor_panel(editor, cx))
@@ -133,6 +157,7 @@ impl NyaTermApp {
         visible_count: usize,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
+        let _ = visible_count;
         let search_value = if self.connection_search_draft.is_empty() {
             "Filter connections".to_string()
         } else {
@@ -147,7 +172,7 @@ impl NyaTermApp {
         let more_open = self.connections_more_menu_open;
 
         div()
-            .h(px(36.))
+            .h(px(34.))
             .px_2()
             .flex()
             .items_center()
@@ -219,12 +244,7 @@ impl NyaTermApp {
                         )
                     }),
             )
-            .child(
-                div()
-                    .text_size(px(10.))
-                    .text_color(rgb(0x6e7681))
-                    .child(visible_count.to_string()),
-            )
+            // Count lives in PanelHeader (Tauri).
             .child(icon_action_button(
                 "connections-sort",
                 sort_label,
@@ -352,6 +372,11 @@ impl NyaTermApp {
             }
         }
 
+        // Tauri: ungrouped has no section header — just rows (optionally after a separator).
+        if section.is_root {
+            return div().flex().flex_col().child(body);
+        }
+
         div()
             .flex()
             .flex_col()
@@ -413,6 +438,10 @@ impl NyaTermApp {
                             }
                         })
                     })
+                    .on_mouse_down(
+                        MouseButton::Left,
+                        cx.listener(|_, _, _, cx| cx.stop_propagation()),
+                    )
                     .on_mouse_down(
                         MouseButton::Right,
                         {
@@ -504,6 +533,7 @@ impl NyaTermApp {
                             }))
                     })
                     .on_click(cx.listener(move |this, _, _, cx| {
+                        cx.stop_propagation();
                         if let Some(group_id) = group_id.clone() {
                             this.toggle_connection_group_expanded(group_id, cx);
                         }
@@ -519,18 +549,17 @@ impl NyaTermApp {
                                     .text_xs()
                                     .font_weight(FontWeight(800.))
                                     .text_color(rgb(0x8b949e))
-                                    .child(if section.is_root {
-                                        "·".to_string()
-                                    } else if expanded {
-                                        "▾".to_string()
-                                    } else {
-                                        "▸".to_string()
-                                    }),
+                                    .child(if expanded { "▾" } else { "▸" }),
                             )
+                            .child(connection_type_icon(
+                                resolve_connection_icon(Some("folder"), "SSH"),
+                                false,
+                                13.,
+                            ))
                             .child(
                                 div()
                                     .text_xs()
-                                    .font_weight(FontWeight(800.))
+                                    .font_weight(FontWeight(700.))
                                     .text_color(rgb(0xc9d1d9))
                                     .child(truncate_preview(&group_label, 28)),
                             )
@@ -589,6 +618,101 @@ impl NyaTermApp {
             .child(body)
     }
 
+    fn connections_selection_strip(
+        &mut self,
+        selected_count: usize,
+        cx: &mut Context<Self>,
+    ) -> impl IntoElement {
+        div()
+            .h(px(32.))
+            .px_2()
+            .flex()
+            .items_center()
+            .gap_2()
+            .border_b_1()
+            .border_color(rgb(0x1f6feb))
+            .bg(rgb(0x122033))
+            .child(
+                div()
+                    .min_w_0()
+                    .flex_1()
+                    .text_size(px(11.))
+                    .font_weight(FontWeight(600.))
+                    .text_color(rgb(0x79b8ff))
+                    .child(format!("{selected_count} selected")),
+            )
+            .child(
+                div()
+                    .id(SharedString::from("connections-selection-open"))
+                    .h(px(22.))
+                    .px_2()
+                    .rounded_sm()
+                    .flex()
+                    .items_center()
+                    .text_size(px(11.))
+                    .font_weight(FontWeight(600.))
+                    .text_color(rgb(0xc9d1d9))
+                    .bg(rgb(0x21262d))
+                    .cursor_pointer()
+                    .hover(|this| this.bg(rgb(0x30363d)))
+                    .on_click(cx.listener(|this, _, window, cx| {
+                        this.start_selected_saved_connections(window, cx);
+                    }))
+                    .child("Open"),
+            )
+            .child(
+                div()
+                    .id(SharedString::from("connections-selection-copy"))
+                    .h(px(22.))
+                    .px_2()
+                    .rounded_sm()
+                    .flex()
+                    .items_center()
+                    .text_size(px(11.))
+                    .text_color(rgb(0xc9d1d9))
+                    .cursor_pointer()
+                    .hover(|this| this.bg(rgb(0x21262d)))
+                    .on_click(cx.listener(|this, _, _, cx| {
+                        this.copy_selected_connections(cx);
+                    }))
+                    .child("Copy"),
+            )
+            .child(
+                div()
+                    .id(SharedString::from("connections-selection-delete"))
+                    .h(px(22.))
+                    .px_2()
+                    .rounded_sm()
+                    .flex()
+                    .items_center()
+                    .text_size(px(11.))
+                    .text_color(rgb(0xf85149))
+                    .cursor_pointer()
+                    .hover(|this| this.bg(rgb(0x3a1717)))
+                    .on_click(cx.listener(|this, _, _, cx| {
+                        this.delete_selected_connections(cx);
+                    }))
+                    .child("Delete"),
+            )
+            .child(
+                div()
+                    .id(SharedString::from("connections-selection-clear"))
+                    .h(px(22.))
+                    .px_2()
+                    .rounded_sm()
+                    .flex()
+                    .items_center()
+                    .text_size(px(11.))
+                    .text_color(rgb(0x8b949e))
+                    .cursor_pointer()
+                    .hover(|this| this.bg(rgb(0x21262d)).text_color(rgb(0xc9d1d9)))
+                    .on_click(cx.listener(|this, _, _, cx| {
+                        this.clear_selected_connections(cx);
+                    }))
+                    .child("Clear"),
+            )
+    }
+
     fn saved_connection_row(
         &mut self,
         connection: SavedConnection,
@@ -605,15 +729,10 @@ impl NyaTermApp {
         let hover_id = connection.id.clone();
         let menu_id = connection.id.clone();
         let kind = connection.kind_label();
-        let kind_glyph = match kind {
-            "SSH" => "⌂",
-            "Local" => "▣",
-            "Telnet" => "⇄",
-            _ => "☰",
-        };
+        let icon_def = resolve_connection_icon(connection.icon.as_deref(), kind);
         let show_actions = hovered || selected;
-        let endpoint = connection.endpoint();
-        let last_used = format_last_used_ms(connection.last_used_at_ms);
+        let _endpoint = connection.endpoint();
+        let _last_used = format_last_used_ms(connection.last_used_at_ms);
         let drop_target = self.connection_drop_target.as_ref().filter(|target| {
             target.kind == ConnectionDragKind::Connection
                 && target.id.as_deref() == Some(connection.id.as_str())
@@ -736,6 +855,12 @@ impl NyaTermApp {
                 cx.notify();
             }))
             .on_mouse_down(
+                MouseButton::Left,
+                cx.listener(|_, _, _, cx| {
+                    cx.stop_propagation();
+                }),
+            )
+            .on_mouse_down(
                 MouseButton::Right,
                 cx.listener(move |this, event: &MouseDownEvent, _, cx| {
                     cx.stop_propagation();
@@ -743,71 +868,39 @@ impl NyaTermApp {
                 }),
             )
             .on_click(cx.listener(move |this, event: &gpui::ClickEvent, window, cx| {
+                cx.stop_propagation();
                 if event.click_count() >= 2 {
                     this.start_saved_connection(connect_connection_dbl.clone(), window, cx);
                     return;
                 }
-                this.toggle_connection_selected(select_id.clone(), cx);
+                let modifiers = event.modifiers();
+                let additive = modifiers.control || modifiers.platform;
+                let range = modifiers.shift;
+                this.select_connection(select_id.clone(), additive, range, cx);
             }))
-            .child(
-                div()
-                    .text_size(px(12.))
-                    .text_color(match kind {
-                        "SSH" => rgb(0x3fb950),
-                        "Local" => rgb(0x58a6ff),
-                        "Telnet" => rgb(0xd29922),
-                        _ => rgb(0xbc8cff),
-                    })
-                    .child(kind_glyph),
-            )
+            // Single-line name row (endpoint/last-used live in hover tooltip, like Tauri).
+            .child(connection_type_icon(icon_def, selected, 14.))
             .child(
                 div()
                     .min_w_0()
                     .flex_1()
-                    .flex()
-                    .flex_col()
-                    .justify_center()
-                    .gap_0()
-                    .child(
-                        div()
-                            .text_size(px(12.))
-                            .font_weight(FontWeight(600.))
-                            .text_color(if selected {
-                                rgb(0x58a6ff)
-                            } else {
-                                rgb(0xc9d1d9)
-                            })
-                            .overflow_hidden()
-                            .child(truncate_preview(&connection.name, 36)),
-                    )
-                    .child(
-                        div()
-                            .flex()
-                            .items_center()
-                            .gap_2()
-                            .font_family("JetBrains Mono")
-                            .text_size(px(10.))
-                            .text_color(rgb(0x6e7681))
-                            .child(
-                                div()
-                                    .min_w_0()
-                                    .flex_1()
-                                    .overflow_hidden()
-                                    .child(truncate_preview(&endpoint, 42)),
-                            )
-                            .child(
-                                div()
-                                    .flex_none()
-                                    .text_color(rgb(0x8b949e))
-                                    .child(last_used),
-                            ),
-                    ),
+                    .text_size(px(12.))
+                    .font_weight(FontWeight(500.))
+                    .text_color(if selected {
+                        rgb(0x58a6ff)
+                    } else {
+                        rgb(0xc9d1d9)
+                    })
+                    .overflow_hidden()
+                    .child(truncate_preview(&connection.name, 48)),
             )
             .child(
                 div()
                     .flex()
                     .items_center()
                     .gap_0()
+                    .rounded_sm()
+                    .bg(if show_actions { rgb(0x1c2128) } else { rgb(0x161b22) })
                     .opacity(if show_actions { 1. } else { 0. })
                     .child(icon_action_button(
                         format!("connection-connect-{}", connection.id),
@@ -1709,19 +1802,30 @@ impl NyaTermApp {
                     ))
                     .child(menu_item(
                         "connection-context-copy",
-                        "Copy",
+                        if selected_count > 1 { "Copy selected" } else { "Copy" },
                         cx.listener(move |this, _, _, cx| {
                             this.close_connection_context_menus(cx);
-                            this.copy_connection_by_id(connection_for_copy.clone(), cx);
+                            if this.selected_connections().len() > 1 {
+                                this.copy_selected_connections(cx);
+                            } else {
+                                this.copy_connection_by_id(connection_for_copy.clone(), cx);
+                            }
                         }),
                     ))
                     .child(menu_separator())
                     .child(menu_item(
                         "connection-context-delete",
-                        "Delete",
+                        if selected_count > 1 { "Delete selected" } else { "Delete" },
                         cx.listener(move |this, _, _, cx| {
                             this.close_connection_context_menus(cx);
-                            this.open_connection_delete_confirm(connection_for_delete.clone(), cx);
+                            if this.selected_connections().len() > 1 {
+                                this.delete_selected_connections(cx);
+                            } else {
+                                this.open_connection_delete_confirm(
+                                    connection_for_delete.clone(),
+                                    cx,
+                                );
+                            }
                         }),
                     )),
             )
@@ -1905,16 +2009,14 @@ fn connection_sections(
         });
     }
     let root = by_group.remove(&None).unwrap_or_default();
+    // Tauri: folders first, then ungrouped connections (no "Ungrouped" header).
     if !root.is_empty() || sections.is_empty() {
-        sections.insert(
-            0,
-            ConnectionSection {
-                group_id: None,
-                label: "Ungrouped".to_string(),
-                is_root: true,
-                connections: root,
-            },
-        );
+        sections.push(ConnectionSection {
+            group_id: None,
+            label: "Ungrouped".to_string(),
+            is_root: true,
+            connections: root,
+        });
     }
     sections
 }

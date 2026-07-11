@@ -485,3 +485,29 @@ service boundary first:
 - Drop supports before/after reorder (`move_connection_after`) and group inside highlight ring.
 - AI toolbar adds agent command execution menu (Confirm each / Smart / Auto) with immediate persist.
 - Title bar window controls use cleaner glyphs (– □ ×).
+
+## 2026-07-11 AI history groups + connection multi-select
+- AI history popover mirrors Tauri: search field, Clear All, date groups (Today/Yesterday/Last 7 Days/Earlier).
+- Connection multi-select chrome: selection strip (Open/Copy/Delete/Clear) when selected_count > 0.
+- Connection click modifiers: plain replace, Ctrl/Cmd toggle, Shift range across visible list order.
+- Empty workspace action rows align label column + shortcut chips (grid-like).
+
+## 2026-07-11 Shell chrome density
+- PanelHeader meta is dynamic: Connections count, AI model label, Active Sessions count.
+- Connection rows match Tauri single-line icon+name (~34px) with hover actions; details stay in tooltip.
+- AI empty states: disabled / setup steps with Open AI Settings / start conversation.
+- Activity bar uses tighter gap and refreshed monochrome SVG icons.
+
+## 2026-07-11 Connections tree order
+- Folders first, ungrouped connections after a thin separator (no "Ungrouped" header).
+- Background click clears selection; row/group mousedown stops propagation.
+
+## 2026-07-11 Connection icons + AI command cards
+- Connection rows resolve Tauri-like icon keys (`server*`, distros, docker, …) via SVG assets under `assets/icons/conn/`.
+- Group headers use folder icon + chevron (no "Ungrouped" label).
+- AI command cards match Tauri layout: title/risk, mono command block, explanation/effect/rollback, Insert/Copy/Save/Run.
+
+## 2026-07-11 AI markdown + remote density
+- AI transcript: strip `<think>` tags, collapsible-like thought block, lightweight markdown (headings/lists/code/quotes).
+- Agent steps: left accent status bar + mono detail.
+- Process rows densified to ~34px; Docker container rows to ~52px.

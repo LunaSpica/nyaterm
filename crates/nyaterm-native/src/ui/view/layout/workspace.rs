@@ -354,8 +354,9 @@ impl NyaTermApp {
                     .items_center()
                     .child(div().mb_9().child(nyaterm_logo_mark(256., 0.13)))
                     .child(
+                        // Tauri EmptyWorkspaceState: grid w-fit max-w-[30rem] gap-x-4 gap-y-3
                         div()
-                            .w(px(420.))
+                            .w(px(480.))
                             .max_w_full()
                             .flex()
                             .flex_col()

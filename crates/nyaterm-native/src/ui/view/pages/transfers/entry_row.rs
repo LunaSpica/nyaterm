@@ -46,7 +46,7 @@ pub(super) fn transfer_browser_parent_entry_row(
                 .text_sm()
                 .font_weight(FontWeight(700.))
                 .text_color(rgb(0xdbeafe))
-                .child("dir")
+                .child(transfer_entry_icon(true, false, false))
                 .child(".."),
         )
         .child(transfer_browser_text_cell(column_widths.modified, ""))
@@ -212,8 +212,20 @@ pub(super) fn transfer_browser_entry_row(
                 } else {
                     rgb(0xc9d1d9)
                 })
-                .child(if is_directory { "dir" } else { "file" })
-                .child(if is_marked { "mark" } else { "" })
+                .child(transfer_entry_icon(
+                    is_directory,
+                    entry.file_type == SftpFileType::Symlink,
+                    is_selected || is_marked,
+                ))
+                .when(is_marked, |this| {
+                    this.child(
+                        div()
+                            .text_size(px(9.))
+                            .font_weight(FontWeight(700.))
+                            .text_color(rgb(0x3fb950))
+                            .child("●"),
+                    )
+                })
                 .when(is_renaming, |this| {
                     this.child(
                         div()

@@ -104,36 +104,23 @@ impl NyaTermApp {
             }
         }
 
+        // PanelHeader already shows "NETWORK"; body starts with tabs + actions.
         div()
             .flex()
             .flex_col()
             .size_full()
-            .p_3()
-            .gap_4()
+            .overflow_hidden()
+            .bg(rgb(0x161b22))
             .child(
                 div()
+                    .h(px(34.))
+                    .px_2()
                     .flex()
                     .items_center()
-                    .justify_between()
-                    .child(
-                        div()
-                            .text_xs()
-                            .font_weight(FontWeight(800.))
-                            .text_color(rgb(0x8b949e))
-                            .child("NETWORK"),
-                    )
-                    .child(
-                        div()
-                            .text_xs()
-                            .text_color(rgb(0x6e7681))
-                            .child("tunnels / proxies"),
-                    ),
-            )
-            .child(
-                div()
-                    .flex()
-                    .items_center()
-                    .gap_2()
+                    .gap_1()
+                    .border_b_1()
+                    .border_color(rgb(0x30363d))
+                    .bg(rgb(0x12171f))
                     .child(network_tab_button(
                         "network-tab-tunnels",
                         "Tunnels",
@@ -178,10 +165,15 @@ impl NyaTermApp {
             )
             .child(
                 div()
-                    .grid()
-                    .grid_cols(5)
+                    .h(px(28.))
+                    .px_2()
+                    .flex()
+                    .items_center()
                     .gap_3()
-                    .child(metric(
+                    .border_b_1()
+                    .border_color(rgb(0x30363d))
+                    .bg(rgb(0x0d1117))
+                    .child(network_meta_chip(
                         "Profiles",
                         match self.network_tab {
                             NetworkTab::Tunnels => self.tunnels.len(),
@@ -189,7 +181,7 @@ impl NyaTermApp {
                         }
                         .to_string(),
                     ))
-                    .child(metric(
+                    .child(network_meta_chip(
                         "Visible",
                         match self.network_tab {
                             NetworkTab::Tunnels => filtered_tunnels.len(),
@@ -197,7 +189,7 @@ impl NyaTermApp {
                         }
                         .to_string(),
                     ))
-                    .child(metric(
+                    .child(network_meta_chip(
                         "Groups",
                         match self.network_tab {
                             NetworkTab::Tunnels => self.tunnel_groups.len(),
@@ -205,11 +197,11 @@ impl NyaTermApp {
                         }
                         .to_string(),
                     ))
-                    .child(metric(
+                    .child(network_meta_chip(
                         if self.network_tab == NetworkTab::Tunnels {
                             "Open"
                         } else {
-                            "SOCKS/HTTP"
+                            "SOCKS"
                         },
                         if self.network_tab == NetworkTab::Tunnels {
                             open_tunnels.len().to_string()
@@ -221,11 +213,11 @@ impl NyaTermApp {
                                 .to_string()
                         },
                     ))
-                    .child(metric(
+                    .child(network_meta_chip(
                         if self.network_tab == NetworkTab::Tunnels {
                             "Auto"
                         } else {
-                            "Command"
+                            "Cmd"
                         },
                         if self.network_tab == NetworkTab::Tunnels {
                             auto_open_count.to_string()
@@ -282,11 +274,11 @@ impl NyaTermApp {
             })
             .child(
                 div()
-                    .rounded_md()
-                    .border_1()
+                    .h(px(34.))
+                    .px_2()
+                    .border_b_1()
                     .border_color(rgb(0x30363d))
-                    .bg(rgb(0x151923))
-                    .p_3()
+                    .bg(rgb(0x12171f))
                     .flex()
                     .items_center()
                     .gap_2()

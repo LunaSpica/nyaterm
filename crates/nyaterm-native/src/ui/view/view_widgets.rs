@@ -12,8 +12,8 @@ use crate::ui::components::{mode_button, small_button, status_pill};
 use crate::ui::models::WorkspaceSplitDirection;
 
 use super::{
-    compact_id, docker_state_color, docker_state_label, format_rate, tunnel_endpoint,
-    tunnel_mode_label, tunnel_name,
+    MarkdownBlock, compact_id, docker_state_color, docker_state_label, format_rate,
+    parse_markdown_blocks, tunnel_endpoint, tunnel_mode_label, tunnel_name,
 };
 
 pub(in crate::ui::view) fn logo_mark() -> impl IntoElement {
@@ -135,10 +135,13 @@ pub(in crate::ui::view) fn window_control_button(
 }
 
 pub(in crate::ui::view) fn panel_header(
-    title: &'static str,
-    meta: &'static str,
+    title: impl Into<SharedString>,
+    meta: impl Into<SharedString>,
 ) -> impl IntoElement {
-    // Tauri PanelHeader: min-h-9, uppercase tracking title + dimmed meta, optional actions slot.
+    // Tauri PanelHeader: min-h-9, uppercase tracked title + dimmed meta/actions.
+    let title = title.into();
+    let meta = meta.into();
+    let show_meta = !meta.is_empty();
     div()
         .h(px(36.))
         .flex_none()
@@ -164,14 +167,16 @@ pub(in crate::ui::view) fn panel_header(
                         .text_color(rgb(0x8b949e))
                         .child(title.to_uppercase()),
                 )
-                .child(
-                    div()
-                        .min_w_0()
-                        .text_size(px(11.))
-                        .text_color(rgb(0x6e7681))
-                        .overflow_hidden()
-                        .child(meta),
-                ),
+                .when(show_meta, |this| {
+                    this.child(
+                        div()
+                            .min_w_0()
+                            .text_size(px(11.))
+                            .text_color(rgb(0x6e7681))
+                            .overflow_hidden()
+                            .child(meta),
+                    )
+                }),
         )
 }
 
@@ -416,14 +421,14 @@ pub(in crate::ui::view) fn empty_workspace_action(
         .id(SharedString::from(format!("empty-action-{label}")))
         .flex()
         .items_center()
-        .justify_between()
         .gap_4()
         .w_full()
         .cursor_pointer()
         .child(
             div()
+                .min_w(px(168.))
                 .text_sm()
-                .font_weight(FontWeight(600.))
+                .font_weight(FontWeight(500.))
                 .text_color(rgb(0x58a6ff))
                 .hover(|this| this.text_color(rgb(0x79b8ff)))
                 .child(label),
@@ -995,4 +1000,174 @@ pub(in crate::ui::view) fn nyaterm_logo_mark(size_px: f32, opacity: f32) -> impl
                 .path("icons/logo.svg")
                 .text_color(rgb(0x8b949e)),
         )
+}
+
+
+/// Colored connection/OS icon for saved connection rows (Tauri resolveConnectionIcon).
+pub(in crate::ui::view) fn connection_type_icon(
+    def: super::ConnectionIconDef,
+    selected: bool,
+    size_px: f32,
+) -> gpui::AnyElement {
+    let size = px(size_px);
+    let color = if selected {
+        rgb(0x58a6ff)
+    } else {
+        rgb(def.color)
+    };
+    svg()
+        .size(size)
+        .flex_none()
+        .path(def.path)
+        .text_color(color)
+        .into_any_element()
+}
+
+
+/// Lightweight markdown renderer for AI transcript (paragraphs, lists, fenced code, quotes).
+pub(in crate::ui::view) fn markdown_content_view(content: &str) -> impl IntoElement {
+    let blocks = parse_markdown_blocks(content);
+    let mut root = div().flex().flex_col().gap_1();
+    if blocks.is_empty() {
+        return root;
+    }
+    for (index, block) in blocks.into_iter().enumerate() {
+        root = root.child(markdown_block_view(index, block));
+    }
+    root
+}
+
+fn markdown_block_view(index: usize, block: MarkdownBlock) -> gpui::AnyElement {
+    match block {
+        MarkdownBlock::Paragraph(text) => div()
+            .id(SharedString::from(format!("md-p-{index}")))
+            .text_size(px(12.))
+            .text_color(rgb(0xc9d1d9))
+            .line_height(px(18.))
+            .child(text)
+            .into_any_element(),
+        MarkdownBlock::Bullet(text) => div()
+            .id(SharedString::from(format!("md-ul-{index}")))
+            .flex()
+            .items_start()
+            .gap_2()
+            .child(
+                div()
+                    .text_size(px(12.))
+                    .text_color(rgb(0x8b949e))
+                    .child("•"),
+            )
+            .child(
+                div()
+                    .min_w_0()
+                    .flex_1()
+                    .text_size(px(12.))
+                    .text_color(rgb(0xc9d1d9))
+                    .line_height(px(18.))
+                    .child(text),
+            )
+            .into_any_element(),
+        MarkdownBlock::Numbered { index: n, text } => div()
+            .id(SharedString::from(format!("md-ol-{index}")))
+            .flex()
+            .items_start()
+            .gap_2()
+            .child(
+                div()
+                    .text_size(px(12.))
+                    .text_color(rgb(0x8b949e))
+                    .child(format!("{n}.")),
+            )
+            .child(
+                div()
+                    .min_w_0()
+                    .flex_1()
+                    .text_size(px(12.))
+                    .text_color(rgb(0xc9d1d9))
+                    .line_height(px(18.))
+                    .child(text),
+            )
+            .into_any_element(),
+        MarkdownBlock::Code { language, code } => div()
+            .id(SharedString::from(format!("md-code-{index}")))
+            .rounded_md()
+            .border_1()
+            .border_color(rgb(0x30363d))
+            .bg(rgb(0x0d1117))
+            .overflow_hidden()
+            .child(
+                div()
+                    .px_2()
+                    .py_1()
+                    .border_b_1()
+                    .border_color(rgb(0x30363d))
+                    .text_size(px(10.))
+                    .font_weight(FontWeight(700.))
+                    .text_color(rgb(0x6e7681))
+                    .child(if language.trim().is_empty() {
+                        "code".to_string()
+                    } else {
+                        language
+                    }),
+            )
+            .child(
+                div()
+                    .px_2()
+                    .py_2()
+                    .font_family("JetBrains Mono")
+                    .text_size(px(11.))
+                    .text_color(rgb(0xc9d1d9))
+                    .line_height(px(16.))
+                    .child(code),
+            )
+            .into_any_element(),
+        MarkdownBlock::Quote(text) => div()
+            .id(SharedString::from(format!("md-q-{index}")))
+            .pl_3()
+            .border_l_1()
+            .border_color(rgb(0x30363d))
+            .text_size(px(12.))
+            .text_color(rgb(0x8b949e))
+            .line_height(px(18.))
+            .child(text)
+            .into_any_element(),
+        MarkdownBlock::Heading { level, text } => {
+            let size = match level {
+                1 => 16.,
+                2 => 14.,
+                _ => 13.,
+            };
+            div()
+                .id(SharedString::from(format!("md-h-{index}")))
+                .text_size(px(size))
+                .font_weight(FontWeight(800.))
+                .text_color(rgb(0xe5edf7))
+                .line_height(px(size + 4.))
+                .child(text)
+                .into_any_element()
+        }
+    }
+}
+
+
+/// Tauri file explorer entry icon (folder / symlink / file).
+pub(in crate::ui::view) fn transfer_entry_icon(
+    is_directory: bool,
+    is_symlink: bool,
+    selected: bool,
+) -> gpui::AnyElement {
+    let (path, color) = if is_symlink {
+        ("icons/conn/symlink.svg", 0x67e8f9u32)
+    } else if is_directory {
+        ("icons/conn/folder.svg", 0xfbbf24u32)
+    } else {
+        ("icons/conn/file.svg", 0x94a3b8u32)
+    };
+    let color = if selected { 0x58a6ffu32 } else { color };
+    svg()
+        .size(px(14.))
+        .flex_none()
+        .path(path)
+        .text_color(rgb(color))
+        .into_any_element()
 }

@@ -477,28 +477,48 @@ impl NyaTermApp {
             .child(div().flex_1().min_h_0().overflow_hidden().child(body))
     }
 
-    fn side_panel_meta(&self, side: PanelSide, panel: NavItem) -> &'static str {
-        match side {
-            PanelSide::Left => match panel {
-                NavItem::Transfers => "file explorer",
-                NavItem::Tunnels => "network",
-                NavItem::SecurityAuth => "security / auth",
-                NavItem::SyncBackupHistory => "sync / backup",
-                NavItem::Migration => "migration",
-                other => other.label(),
-            },
-            PanelSide::Right => match panel {
-                NavItem::Connections => "saved",
-                NavItem::AiAssistant => "assistant",
-                NavItem::ActiveSessions => "open",
-                NavItem::CommandHistory => "recent",
-                NavItem::Stats => "host",
-                NavItem::Processes => "live",
-                NavItem::Docker => "containers",
-                NavItem::Translation => "i18n",
-                NavItem::Recording => "capture",
-                other => other.panel_title(),
-            },
+    /// Tauri PanelHeader meta/actions: Connections shows total count; AI shows model name.
+    fn side_panel_meta(&self, _side: PanelSide, panel: NavItem) -> SharedString {
+        match panel {
+            NavItem::Connections => {
+                let count = self.connections.len();
+                if count == 0 {
+                    SharedString::from("")
+                } else {
+                    SharedString::from(count.to_string())
+                }
+            }
+            NavItem::AiAssistant => {
+                let label = if !self.ai_model_draft.trim().is_empty() {
+                    truncate_preview(self.ai_model_draft.trim(), 28)
+                } else if let Some(id) = self
+                    .ai_settings
+                    .default_model_id
+                    .as_deref()
+                    .map(str::trim)
+                    .filter(|value| !value.is_empty())
+                {
+                    truncate_preview(id, 28)
+                } else if !self.ai_settings.enabled {
+                    "disabled".to_string()
+                } else {
+                    "not configured".to_string()
+                };
+                SharedString::from(label)
+            }
+            NavItem::ActiveSessions => {
+                let count = self
+                    .session_manager
+                    .list_sessions()
+                    .map(|sessions| sessions.len())
+                    .unwrap_or(0);
+                if count == 0 {
+                    SharedString::from("")
+                } else {
+                    SharedString::from(count.to_string())
+                }
+            }
+            _ => SharedString::from(""),
         }
     }
 

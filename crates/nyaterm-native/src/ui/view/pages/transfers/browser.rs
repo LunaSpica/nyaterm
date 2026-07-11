@@ -156,14 +156,14 @@ impl NyaTermApp {
             .when(can_transfer, |this| {
                 this.child(
                     div()
-                        .h(px(32.))
-                        .px_2()
+                        .h(px(30.))
+                        .px_1()
                         .border_b_1()
                         .border_color(rgb(0x30363d))
                         .bg(rgb(0x12171f))
                         .flex()
                         .items_center()
-                        .gap_1()
+                        .gap(px(2.))
                         .child(compact_transfer_toolbar_button(
                             "transfer-browser-new-file",
                             "＋F",
@@ -702,23 +702,18 @@ fn compact_transfer_toolbar_button(
     label: &'static str,
     on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
 ) -> impl IntoElement {
+    // Tauri FileExplorerToolbar: h-7 icon buttons, muted until hover.
     div()
         .id(SharedString::from(id.into()))
-        .h(px(24.))
-        .min_w(px(28.))
-        .px_1()
+        .size(px(26.))
         .flex()
         .items_center()
         .justify_center()
-        .rounded_sm()
-        .border_1()
-        .border_color(rgb(0x303848))
-        .bg(rgb(0x0f1724))
-        .font_family("JetBrains Mono")
-        .text_size(px(10.))
-        .text_color(rgb(0xdbeafe))
+        .rounded_md()
+        .text_size(px(12.))
+        .text_color(rgb(0x8b949e))
         .cursor_pointer()
-        .hover(|this| this.bg(rgb(0x223047)).text_color(rgb(0xffffff)))
+        .hover(|this| this.bg(rgb(0x21262d)).text_color(rgb(0xc9d1d9)))
         .child(label)
         .on_click(on_click)
 }
