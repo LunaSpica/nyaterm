@@ -968,3 +968,7 @@ service boundary first:
 
 - Terminal line timestamps: VTE screen stamps first write per row (unix ms),
   scrollback retains stamps; GPUI gutter renders `[HH:MM:SS(.mmm)]` beside line numbers.
+
+- Bracketed paste: track DECSET/DECRST `?2004` in the VTE screen and wrap
+  clipboard paste with `ESC[200~` / `ESC[201~` when enabled.
+- Context menu Open Link for selected http(s) or dotted host URLs.

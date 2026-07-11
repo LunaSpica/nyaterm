@@ -185,8 +185,35 @@ impl NyaTermApp {
             cx.notify();
             return;
         }
-        self.send_terminal_input(normalize_paste_newlines(&text).into_bytes(), cx);
+        let payload = normalize_paste_newlines(&text);
+        self.send_terminal_input(self.wrap_terminal_paste_bytes(&payload), cx);
     }
+
+
+    fn active_terminal_bracketed_paste(&self) -> bool {
+        if let Some(session_id) = self.active_session_id.as_deref() {
+            self.terminal_views
+                .get(session_id)
+                .map(|view| view.screen.bracketed_paste())
+                .unwrap_or(false)
+        } else {
+            self.terminal_screen.bracketed_paste()
+        }
+    }
+
+    fn wrap_terminal_paste_bytes(&self, text: &str) -> Vec<u8> {
+        let body = text.as_bytes();
+        if self.active_terminal_bracketed_paste() {
+            let mut out = Vec::with_capacity(body.len() + 12);
+            out.extend_from_slice(b"\x1b[200~");
+            out.extend_from_slice(body);
+            out.extend_from_slice(b"\x1b[201~");
+            out
+        } else {
+            body.to_vec()
+        }
+    }
+
 
     pub(in crate::ui::view) fn close_multi_line_paste(&mut self, cx: &mut Context<Self>) {
         self.multi_line_paste = None;
@@ -202,7 +229,7 @@ impl NyaTermApp {
         };
         let text = draft.normalized_text();
         let byte_count = text.len();
-        self.send_terminal_input(text.into_bytes(), cx);
+        self.send_terminal_input(self.wrap_terminal_paste_bytes(&text), cx);
         self.terminal_status = format!("direct pasted {byte_count} byte(s)");
         cx.notify();
     }
@@ -221,6 +248,7 @@ impl NyaTermApp {
             bytes.extend_from_slice(line.as_bytes());
             bytes.push(b'\n');
         }
+        // Line-by-line send intentionally skips bracketed paste framing.
         self.send_terminal_input(bytes, cx);
         self.terminal_status = format!("sent {line_count} pasted line(s)");
         cx.notify();

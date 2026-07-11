@@ -97,6 +97,27 @@ impl NyaTermApp {
                         let _ = this.copy_terminal_selection(cx);
                     }),
                 ))
+                .when_some(selection_as_openable_url(&selected), |this, url| {
+                    let open_url = url.clone();
+                    this.child(terminal_ctx_item(
+                        palette,
+                        "term-ctx-open-url",
+                        "Open Link",
+                        None,
+                        cx.listener(move |this, _, _, cx| {
+                            this.close_terminal_context_menu(cx);
+                            match open_external_url(&open_url) {
+                                Ok(()) => {
+                                    this.terminal_status = format!("opened link: {open_url}");
+                                }
+                                Err(error) => {
+                                    this.terminal_status = format!("open link failed: {error}");
+                                }
+                            }
+                            cx.notify();
+                        }),
+                    ))
+                })
                 .child(terminal_ctx_item(
                     palette,
                     "term-ctx-find-selection",
@@ -457,3 +478,27 @@ fn available_translation_providers(
     providers
 }
 
+fn selection_as_openable_url(selected: &str) -> Option<String> {
+    let trimmed = selected.trim();
+    if trimmed.is_empty() || trimmed.chars().any(|ch| ch.is_whitespace()) {
+        return None;
+    }
+    let lower = trimmed.to_ascii_lowercase();
+    if lower.starts_with("https://") || lower.starts_with("http://") {
+        return Some(trimmed.to_string());
+    }
+    // Bare domains like example.com/path — require a dotted host and no path spaces.
+    if trimmed.contains('.')
+        && !trimmed.contains("://")
+        && trimmed.chars().all(|ch| {
+            ch.is_ascii_alphanumeric() || matches!(ch, '.' | '/' | ':' | '-' | '_' | '?' | '=' | '&' | '%' | '#' | '+')
+        })
+    {
+        // Prefer not to open single-token words without a TLD-ish shape.
+        let host = trimmed.split('/').next().unwrap_or(trimmed);
+        if host.contains('.') && host.split('.').all(|part| !part.is_empty()) {
+            return Some(format!("https://{trimmed}"));
+        }
+    }
+    None
+}

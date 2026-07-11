@@ -70,6 +70,8 @@ pub struct TerminalScreen {
     scrollback_timestamps_ms: Vec<Option<u64>>,
     scrollback_limit: usize,
     pen: CellStyle,
+    /// DECSET 2004 bracketed paste mode.
+    bracketed_paste: bool,
 }
 
 impl Default for TerminalScreen {
@@ -94,6 +96,7 @@ impl TerminalScreen {
             scrollback_timestamps_ms: Vec::new(),
             scrollback_limit: 5_000,
             pen: CellStyle::default(),
+            bracketed_paste: false,
         }
     }
 
@@ -128,6 +131,10 @@ impl TerminalScreen {
         self.scrollback.len()
     }
 
+    pub fn bracketed_paste(&self) -> bool {
+        self.bracketed_paste
+    }
+
     pub fn total_rows(&self) -> usize {
         self.scrollback.len() + self.rows
     }
@@ -142,6 +149,7 @@ impl TerminalScreen {
         self.cursor_row = 0;
         self.cursor_col = 0;
         self.pen = CellStyle::default();
+        self.bracketed_paste = false;
     }
 
     pub fn advance(&mut self, bytes: &[u8]) {
@@ -582,8 +590,20 @@ impl Perform for TerminalScreen {
         }
     }
 
-    fn csi_dispatch(&mut self, params: &Params, _intermediates: &[u8], ignore: bool, action: char) {
+    fn csi_dispatch(&mut self, params: &Params, intermediates: &[u8], ignore: bool, action: char) {
         if ignore {
+            return;
+        }
+        // DEC private modes: CSI ? <n> h/l (e.g. bracketed paste 2004).
+        if intermediates == [b'?'] && matches!(action, 'h' | 'l') {
+            let enable = action == 'h';
+            for param in params.iter() {
+                for value in param.iter() {
+                    if *value == 2004 {
+                        self.bracketed_paste = enable;
+                    }
+                }
+            }
             return;
         }
         match action {
@@ -704,6 +724,16 @@ mod tests {
             "expected history viewport to include earlier lines: {:?}",
             history.lines
         );
+    }
+
+    #[test]
+    fn bracketed_paste_mode_tracks_decset() {
+        let mut screen = TerminalScreen::new(20, 2);
+        assert!(!screen.bracketed_paste());
+        screen.advance(b"\x1b[?2004h");
+        assert!(screen.bracketed_paste());
+        screen.advance(b"\x1b[?2004l");
+        assert!(!screen.bracketed_paste());
     }
 
     #[test]
