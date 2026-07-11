@@ -979,6 +979,16 @@ impl NyaTermApp {
                             this.start_local_session(window, cx);
                         }),
                     ))
+                    .child(title_menu_item(
+                        palette,
+                        "title-file-temp-ssh",
+                        "Temporary SSH Link",
+                        Some(shortcut("tab.temporarySshLink", "Ctrl+Alt+N")),
+                        cx.listener(|this, _, window, cx| {
+                            this.close_title_menu(cx);
+                            this.open_temporary_ssh_link_dialog(window, cx);
+                        }),
+                    ))
                     .child(title_menu_separator(palette))
                     .child(title_menu_item(
                         palette,

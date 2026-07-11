@@ -358,6 +358,13 @@ impl NyaTermApp {
                             cx,
                         );
                     }),
+                ))
+                .child(small_button(palette,
+                    "workspace-smart-split",
+                    "Tile",
+                    cx.listener(|this, _, _, cx| {
+                        this.apply_smart_split(SmartSplitMode::Auto, cx);
+                    }),
                 ));
         }
         if self.terminal_windows_is_multi_leaf() {

@@ -1311,3 +1311,8 @@ service boundary first:
 - Global and multi-leaf tab strips show a Tauri-style sync/broadcast tower icon
   when the session is in an enabled sync group or Broadcast to All is on;
   paused members render at reduced opacity with the group color.
+
+## 2026-07-11 File menu temporary SSH + tab strip Tile
+
+- File menu: Temporary SSH Link (Ctrl+Alt+N).
+- Workspace tab action strip: **Tile** applies smart-split multi-leaf layout.
