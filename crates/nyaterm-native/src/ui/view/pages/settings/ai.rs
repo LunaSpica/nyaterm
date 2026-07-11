@@ -446,12 +446,14 @@ impl NyaTermApp {
         &mut self,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
+        // Tauri AiModelsTab density: compact model rows + credential sections.
         let enabled_models = self
             .ai_settings
             .models
             .iter()
             .filter(|model| model.enabled)
             .count();
+        let total_models = self.ai_settings.models.len();
         let enabled_credentials = self
             .ai_settings
             .provider_credentials
@@ -464,6 +466,10 @@ impl NyaTermApp {
             .as_deref()
             .map(compact_id)
             .unwrap_or_else(|| "none".to_string());
+        let models_summary = format!(
+            "{enabled_models} enabled · {total_models} total · default {ai_default_model}"
+        );
+        let credentials_summary = format!("{enabled_credentials} enabled profiles");
         let active_ai_profile_id = self.ai_settings.active_profile_id.clone();
         let active_ai_api_key = ai_active_profile_api_key(&self.ai_settings);
         let ai_key_value = cloud_secret_display(&self.ai_secret_draft, &active_ai_api_key);
@@ -472,238 +478,220 @@ impl NyaTermApp {
         } else {
             "Discover"
         };
+
         let model_rows = self
             .ai_settings
             .models
             .iter()
             .cloned()
-            .take(10)
+            .take(12)
             .enumerate()
             .fold(
-                div().mt_3().flex().flex_col().gap_2(),
+                div().flex().flex_col().gap_1(),
                 |rows, (index, model)| {
                     let model_id = model.id.clone();
                     let default =
                         self.ai_settings.default_model_id.as_deref() == Some(model.id.as_str());
+                    let provider = model
+                        .provider_kind
+                        .as_ref()
+                        .map(ai_provider_kind_label)
+                        .unwrap_or("unknown");
                     rows.child(
                         div()
-                            .rounded_sm()
+                            .rounded_md()
+                            .px_2()
+                            .py_1()
                             .border_1()
                             .border_color(if default {
-                                rgb(0x4ade80)
+                                rgb(0x1f6feb)
                             } else {
-                                rgb(0x263142)
+                                rgb(0x21262d)
                             })
-                            .bg(rgb(0x0d1320))
-                            .p_3()
+                            .bg(if default {
+                                rgb(0x122033)
+                            } else {
+                                rgb(0x0d1117)
+                            })
+                            .flex()
+                            .items_center()
+                            .gap_2()
                             .child(
                                 div()
-                                    .flex()
-                                    .items_center()
-                                    .justify_between()
-                                    .gap_3()
-                                    .child(
-                                        div()
-                                            .min_w_0()
-                                            .flex()
-                                            .flex_col()
-                                            .gap_1()
-                                            .child(
-                                                div()
-                                                    .text_xs()
-                                                    .font_weight(FontWeight(800.))
-                                                    .text_color(rgb(0xe5edf7))
-                                                    .child(truncate_preview(&model.name, 48)),
-                                            )
-                                            .child(
-                                                div()
-                                                    .text_size(px(10.))
-                                                    .text_color(rgb(0x8f98aa))
-                                                    .child(format!(
-                                                        "{} / {}",
-                                                        model
-                                                            .provider_kind
-                                                            .as_ref()
-                                                            .map(ai_provider_kind_label)
-                                                            .unwrap_or("unknown"),
-                                                        ai_model_source_label(&model.source)
-                                                    )),
-                                            ),
-                                    )
-                                    .child(status_pill(
-                                        if default {
-                                            "default"
-                                        } else if model.enabled {
-                                            "enabled"
-                                        } else {
-                                            "off"
-                                        },
-                                        if model.enabled {
-                                            rgb(0x6ee7b7)
-                                        } else {
-                                            rgb(0x98a3b8)
-                                        },
-                                        if model.enabled {
-                                            rgb(0x12342a)
-                                        } else {
-                                            rgb(0x202633)
-                                        },
-                                    )),
+                                    .size(px(8.))
+                                    .rounded_full()
+                                    .flex_none()
+                                    .bg(if model.enabled {
+                                        rgb(0x3fb950)
+                                    } else {
+                                        rgb(0x484f58)
+                                    }),
                             )
                             .child(
                                 div()
-                                    .mt_2()
+                                    .min_w_0()
+                                    .flex_1()
                                     .flex()
-                                    .items_center()
-                                    .gap_2()
-                                    .child(small_button(
-                                        format!("ai-model-toggle-{index}"),
-                                        if model.enabled { "Disable" } else { "Enable" },
-                                        cx.listener({
-                                            let model_id = model_id.clone();
-                                            move |this, _, _, cx| {
-                                                this.toggle_ai_model_enabled(model_id.clone(), cx);
-                                            }
-                                        }),
-                                    ))
-                                    .child(small_button(
-                                        format!("ai-model-default-{index}"),
-                                        "Default",
-                                        cx.listener(move |this, _, _, cx| {
-                                            this.set_ai_default_model(model_id.clone(), cx);
-                                        }),
-                                    )),
-                            ),
+                                    .flex_col()
+                                    .child(
+                                        div()
+                                            .text_size(px(12.))
+                                            .font_weight(FontWeight(600.))
+                                            .text_color(rgb(0xc9d1d9))
+                                            .overflow_hidden()
+                                            .child(truncate_preview(&model.name, 42)),
+                                    )
+                                    .child(
+                                        div()
+                                            .text_size(px(10.))
+                                            .text_color(rgb(0x6e7681))
+                                            .child(format!(
+                                                "{provider} · {}",
+                                                ai_model_source_label(&model.source)
+                                            )),
+                                    ),
+                            )
+                            .when(default, |this| {
+                                this.child(
+                                    div()
+                                        .text_size(px(10.))
+                                        .font_weight(FontWeight(600.))
+                                        .text_color(rgb(0x58a6ff))
+                                        .child("default"),
+                                )
+                            })
+                            .child(settings_switch(
+                                format!("ai-model-toggle-{index}"),
+                                model.enabled,
+                                cx.listener({
+                                    let model_id = model_id.clone();
+                                    move |this, _, _, cx| {
+                                        this.toggle_ai_model_enabled(model_id.clone(), cx);
+                                    }
+                                }),
+                            ))
+                            .child(small_button(
+                                format!("ai-model-default-{index}"),
+                                "Default",
+                                cx.listener(move |this, _, _, cx| {
+                                    this.set_ai_default_model(model_id.clone(), cx);
+                                }),
+                            )),
                     )
                 },
             );
+
         let credential_rows = self
             .ai_settings
             .provider_credentials
             .iter()
             .cloned()
             .take(8)
-            .fold(
-                div().mt_3().grid().grid_cols(2).gap_2(),
-                |rows, credential| {
-                    rows.child(
-                        div()
-                            .rounded_sm()
-                            .border_1()
-                            .border_color(rgb(0x263142))
-                            .bg(rgb(0x0d1320))
-                            .p_3()
-                            .child(
-                                div()
-                                    .flex()
-                                    .items_center()
-                                    .justify_between()
-                                    .gap_2()
-                                    .child(
-                                        div()
-                                            .min_w_0()
-                                            .text_xs()
-                                            .font_weight(FontWeight(800.))
-                                            .child(truncate_preview(&credential.name, 34)),
-                                    )
-                                    .child(status_pill(
-                                        if credential.enabled { "enabled" } else { "off" },
-                                        if credential.enabled {
-                                            rgb(0x6ee7b7)
-                                        } else {
-                                            rgb(0x98a3b8)
-                                        },
-                                        if credential.enabled {
-                                            rgb(0x12342a)
-                                        } else {
-                                            rgb(0x202633)
-                                        },
-                                    )),
-                            )
-                            .child(
-                                div()
-                                    .mt_1()
-                                    .text_size(px(10.))
-                                    .text_color(rgb(0x8f98aa))
-                                    .child(format!(
-                                        "{} / {}",
-                                        ai_provider_kind_label(&credential.provider_kind),
-                                        if credential.api_key.as_deref().unwrap_or("").is_empty() {
-                                            "missing key"
-                                        } else {
-                                            "key set"
-                                        }
-                                    )),
-                            ),
-                    )
-                },
-            );
+            .fold(div().flex().flex_col().gap_1(), |rows, credential| {
+                rows.child(
+                    div()
+                        .rounded_md()
+                        .px_2()
+                        .py_1()
+                        .border_1()
+                        .border_color(rgb(0x21262d))
+                        .bg(rgb(0x0d1117))
+                        .flex()
+                        .items_center()
+                        .gap_2()
+                        .child(
+                            div()
+                                .size(px(8.))
+                                .rounded_full()
+                                .flex_none()
+                                .bg(if credential.enabled {
+                                    rgb(0x3fb950)
+                                } else {
+                                    rgb(0x484f58)
+                                }),
+                        )
+                        .child(
+                            div()
+                                .min_w_0()
+                                .flex_1()
+                                .flex()
+                                .flex_col()
+                                .child(
+                                    div()
+                                        .text_size(px(12.))
+                                        .font_weight(FontWeight(600.))
+                                        .text_color(rgb(0xc9d1d9))
+                                        .overflow_hidden()
+                                        .child(truncate_preview(&credential.name, 36)),
+                                )
+                                .child(
+                                    div()
+                                        .text_size(px(10.))
+                                        .text_color(rgb(0x6e7681))
+                                        .child(format!(
+                                            "{} · {}",
+                                            ai_provider_kind_label(&credential.provider_kind),
+                                            if credential
+                                                .api_key
+                                                .as_deref()
+                                                .unwrap_or("")
+                                                .is_empty()
+                                            {
+                                                "missing key"
+                                            } else {
+                                                "key set"
+                                            }
+                                        )),
+                                ),
+                        ),
+                )
+            });
 
         div()
             .flex()
             .flex_col()
-            .gap_4()
-            .child(
+            .gap_3()
+            .child(settings_form_section(
+                Some("Models"),
+                None,
                 div()
-                    .rounded_md()
-                    .border_1()
-                    .border_color(rgb(0x2a3140))
-                    .bg(rgb(0x151923))
-                    .p_4()
-                    .child(
-                        div()
-                            .flex()
-                            .items_center()
-                            .justify_between()
-                            .gap_3()
-                            .child(
-                                div()
-                                    .text_sm()
-                                    .font_weight(FontWeight(700.))
-                                    .child("Model List"),
-                            )
-                            .child(small_button(
-                                "ai-models-discover",
-                                ai_discovery_label,
-                                cx.listener(|this, _, _, cx| {
-                                    this.discover_ai_models(cx);
-                                }),
-                            )),
-                    )
-                    .child(
-                        div()
-                            .mt_3()
-                            .grid()
-                            .grid_cols(4)
-                            .gap_3()
-                            .child(metric("Enabled", enabled_models.to_string()))
-                            .child(metric("Total", self.ai_settings.models.len().to_string()))
-                            .child(metric("Providers", enabled_credentials.to_string()))
-                            .child(metric("Default", ai_default_model)),
-                    )
+                    .flex()
+                    .flex_col()
+                    .gap_2()
+                    .child(settings_form_row(
+                        "Catalog",
+                        Some(SharedString::from(models_summary)),
+                        small_button(
+                            "ai-models-discover",
+                            ai_discovery_label,
+                            cx.listener(|this, _, _, cx| {
+                                this.discover_ai_models(cx);
+                            }),
+                        ),
+                    ))
                     .child(model_rows),
-            )
-            .child(
+            ))
+            .child(settings_form_section(
+                Some("Provider credentials"),
+                None,
                 div()
-                    .rounded_md()
-                    .border_1()
-                    .border_color(rgb(0x2a3140))
-                    .bg(rgb(0x151923))
-                    .p_4()
+                    .flex()
+                    .flex_col()
+                    .gap_3()
+                    .child(settings_form_row(
+                        "Profiles",
+                        Some(SharedString::from(credentials_summary)),
+                        div()
+                            .text_size(px(11.))
+                            .text_color(rgb(0x8b949e))
+                            .child("Stored"),
+                    ))
                     .child(
                         div()
-                            .text_sm()
-                            .font_weight(FontWeight(700.))
-                            .child("Provider Credentials"),
-                    )
-                    .child(
-                        div()
-                            .mt_3()
                             .flex()
-                            .items_center()
-                            .gap_2()
                             .flex_wrap()
-                            .child(policy_button(
+                            .gap_1()
+                            .child(settings_choice_chip(
                                 "ai-model-provider-openai",
                                 "OpenAI",
                                 active_ai_profile_id == "openai",
@@ -711,7 +699,7 @@ impl NyaTermApp {
                                     this.update_ai_profile("openai", cx);
                                 }),
                             ))
-                            .child(policy_button(
+                            .child(settings_choice_chip(
                                 "ai-model-provider-anthropic",
                                 "Anthropic",
                                 active_ai_profile_id == "anthropic",
@@ -719,7 +707,7 @@ impl NyaTermApp {
                                     this.update_ai_profile("anthropic", cx);
                                 }),
                             ))
-                            .child(policy_button(
+                            .child(settings_choice_chip(
                                 "ai-model-provider-gemini",
                                 "Gemini",
                                 active_ai_profile_id == "gemini",
@@ -727,7 +715,7 @@ impl NyaTermApp {
                                     this.update_ai_profile("gemini", cx);
                                 }),
                             ))
-                            .child(policy_button(
+                            .child(settings_choice_chip(
                                 "ai-model-provider-deepseek",
                                 "DeepSeek",
                                 active_ai_profile_id == "deepseek",
@@ -735,7 +723,7 @@ impl NyaTermApp {
                                     this.update_ai_profile("deepseek", cx);
                                 }),
                             ))
-                            .child(policy_button(
+                            .child(settings_choice_chip(
                                 "ai-model-provider-ollama",
                                 "Ollama",
                                 active_ai_profile_id == "ollama",
@@ -743,7 +731,7 @@ impl NyaTermApp {
                                     this.update_ai_profile("ollama", cx);
                                 }),
                             ))
-                            .child(policy_button(
+                            .child(settings_choice_chip(
                                 "ai-model-provider-xai",
                                 "xAI",
                                 active_ai_profile_id == "xai",
@@ -754,7 +742,6 @@ impl NyaTermApp {
                     )
                     .child(
                         div()
-                            .mt_3()
                             .grid()
                             .grid_cols(3)
                             .gap_2()
@@ -781,27 +768,18 @@ impl NyaTermApp {
                             )),
                     )
                     .child(credential_rows)
-                    .child(
-                        div()
-                            .mt_3()
-                            .flex()
-                            .items_center()
-                            .gap_2()
-                            .child(small_button(
-                                "ai-model-tab-save",
-                                "Save",
-                                cx.listener(|this, _, _, cx| {
-                                    this.save_ai_settings(cx);
-                                }),
-                            ))
-                            .child(
-                                div()
-                                    .text_xs()
-                                    .text_color(rgb(0x98a3b8))
-                                    .child(self.ai_status.clone()),
-                            ),
-                    ),
-            )
+                    .child(settings_form_row(
+                        "Actions",
+                        Some(SharedString::from(self.ai_status.clone())),
+                        small_button(
+                            "ai-model-tab-save",
+                            "Save",
+                            cx.listener(|this, _, _, cx| {
+                                this.save_ai_settings(cx);
+                            }),
+                        ),
+                    )),
+            ))
     }
 
     pub(in crate::ui::view) fn ai_rules_settings_section(

@@ -475,169 +475,128 @@ impl NyaTermApp {
             &self.cloud_sync_settings.github_gist.access_token,
         );
 
+        // Tauri SyncBackupTab density: section/switch rows + provider chips.
         div()
-            .rounded_md()
-            .border_1()
-            .border_color(rgb(0x2a3140))
-            .bg(rgb(0x151923))
-            .p_4()
-            .child(
+            .flex()
+            .flex_col()
+            .gap_3()
+            .child(settings_form_section(
+                Some("Cloud sync"),
+                Some("Mirror encrypted configuration snapshots to a remote provider."),
                 div()
                     .flex()
-                    .items_center()
-                    .justify_between()
+                    .flex_col()
                     .gap_3()
-                    .child(
+                    .child(settings_form_row(
+                        "Enable cloud sync",
+                        Some(SharedString::from(self.cloud_sync_status.clone())),
+                        settings_switch(
+                            "cloud-sync-enabled",
+                            self.cloud_sync_settings.enabled,
+                            cx.listener(|this, _, _, cx| {
+                                this.toggle_cloud_sync_enabled(cx);
+                            }),
+                        ),
+                    ))
+                    .child(settings_form_row(
+                        "Snapshot state",
+                        Some(SharedString::from(format!(
+                            "provider {cloud_provider_label} · rev {cloud_last_revision} · hash {cloud_last_hash}"
+                        ))),
+                        small_button(
+                            "cloud-sync-save",
+                            "Save",
+                            cx.listener(|this, _, _, cx| {
+                                this.save_cloud_sync_settings(cx);
+                            }),
+                        ),
+                    ))
+                    .child(settings_form_row(
+                        "Provider",
+                        Some(SharedString::from(
+                            "Local mirror, WebDAV/S3, cloud drives, or snippet backends.",
+                        )),
                         div()
-                            .text_sm()
-                            .font_weight(FontWeight(700.))
-                            .child("Cloud Sync"),
-                    )
-                    .child(status_pill(
-                        if self.cloud_sync_settings.enabled {
-                            "enabled"
-                        } else {
-                            "disabled"
-                        },
-                        if self.cloud_sync_settings.enabled {
-                            rgb(0x6ee7b7)
-                        } else {
-                            rgb(0x98a3b8)
-                        },
-                        if self.cloud_sync_settings.enabled {
-                            rgb(0x12342a)
-                        } else {
-                            rgb(0x202633)
-                        },
+                            .flex()
+                            .flex_wrap()
+                            .gap_1()
+                            .child(settings_choice_chip(
+                                "cloud-provider-local",
+                                "Local",
+                                active_cloud_provider == "local_directory",
+                                cx.listener(|this, _, _, cx| {
+                                    this.update_cloud_sync_provider("local_directory", cx);
+                                }),
+                            ))
+                            .child(settings_choice_chip(
+                                "cloud-provider-webdav",
+                                "WebDAV",
+                                active_cloud_provider == "webdav",
+                                cx.listener(|this, _, _, cx| {
+                                    this.update_cloud_sync_provider("webdav", cx);
+                                }),
+                            ))
+                            .child(settings_choice_chip(
+                                "cloud-provider-s3",
+                                "S3",
+                                active_cloud_provider == "s3",
+                                cx.listener(|this, _, _, cx| {
+                                    this.update_cloud_sync_provider("s3", cx);
+                                }),
+                            ))
+                            .child(settings_choice_chip(
+                                "cloud-provider-google-drive",
+                                "Drive",
+                                active_cloud_provider == "google_drive",
+                                cx.listener(|this, _, _, cx| {
+                                    this.update_cloud_sync_provider("google_drive", cx);
+                                }),
+                            ))
+                            .child(settings_choice_chip(
+                                "cloud-provider-onedrive",
+                                "OneDrive",
+                                active_cloud_provider == "onedrive",
+                                cx.listener(|this, _, _, cx| {
+                                    this.update_cloud_sync_provider("onedrive", cx);
+                                }),
+                            ))
+                            .child(settings_choice_chip(
+                                "cloud-provider-aliyun-drive",
+                                "Aliyun",
+                                active_cloud_provider == "aliyun_drive",
+                                cx.listener(|this, _, _, cx| {
+                                    this.update_cloud_sync_provider("aliyun_drive", cx);
+                                }),
+                            ))
+                            .child(settings_choice_chip(
+                                "cloud-provider-gitee",
+                                "Gitee",
+                                active_cloud_provider == "gitee_snippet",
+                                cx.listener(|this, _, _, cx| {
+                                    this.update_cloud_sync_provider("gitee_snippet", cx);
+                                }),
+                            ))
+                            .child(settings_choice_chip(
+                                "cloud-provider-github",
+                                "GitHub",
+                                active_cloud_provider == "github_gist",
+                                cx.listener(|this, _, _, cx| {
+                                    this.update_cloud_sync_provider("github_gist", cx);
+                                }),
+                            )),
                     ))
-                    .child(
-                        div()
-                            .text_xs()
-                            .text_color(rgb(0x98a3b8))
-                            .child(self.cloud_sync_status.clone()),
-                    ),
-            )
-            .child(
-                div()
-                    .mt_3()
-                    .grid()
-                    .grid_cols(3)
-                    .gap_2()
-                    .child(compact_setting_state("Provider", cloud_provider_label))
-                    .child(compact_setting_state("Revision", cloud_last_revision))
-                    .child(compact_setting_state("Hash", cloud_last_hash)),
-            )
-            .child(
-                div()
-                    .mt_3()
-                    .grid()
-                    .grid_cols(4)
-                    .gap_2()
-                    .child(sync_provider_hint("Local", "Encrypted local mirror"))
-                    .child(sync_provider_hint(
-                        "WebDAV / S3",
-                        "Self-hosted object stores",
-                    ))
-                    .child(sync_provider_hint("Drive", "Google, OneDrive, Aliyun"))
-                    .child(sync_provider_hint("Snippet", "Gitee or GitHub Gist")),
-            )
-            .child(
-                div()
-                    .mt_3()
-                    .flex()
-                    .items_center()
-                    .gap_2()
-                    .flex_wrap()
-                    .child(policy_button(
-                        "cloud-provider-local",
-                        "Local",
-                        active_cloud_provider == "local_directory",
-                        cx.listener(|this, _, _, cx| {
-                            this.update_cloud_sync_provider("local_directory", cx);
-                        }),
-                    ))
-                    .child(policy_button(
-                        "cloud-provider-webdav",
-                        "WebDAV",
-                        active_cloud_provider == "webdav",
-                        cx.listener(|this, _, _, cx| {
-                            this.update_cloud_sync_provider("webdav", cx);
-                        }),
-                    ))
-                    .child(policy_button(
-                        "cloud-provider-s3",
-                        "S3",
-                        active_cloud_provider == "s3",
-                        cx.listener(|this, _, _, cx| {
-                            this.update_cloud_sync_provider("s3", cx);
-                        }),
-                    ))
-                    .child(policy_button(
-                        "cloud-provider-google-drive",
-                        "Drive",
-                        active_cloud_provider == "google_drive",
-                        cx.listener(|this, _, _, cx| {
-                            this.update_cloud_sync_provider("google_drive", cx);
-                        }),
-                    ))
-                    .child(policy_button(
-                        "cloud-provider-onedrive",
-                        "OneDrive",
-                        active_cloud_provider == "onedrive",
-                        cx.listener(|this, _, _, cx| {
-                            this.update_cloud_sync_provider("onedrive", cx);
-                        }),
-                    ))
-                    .child(policy_button(
-                        "cloud-provider-aliyun-drive",
-                        "Aliyun",
-                        active_cloud_provider == "aliyun_drive",
-                        cx.listener(|this, _, _, cx| {
-                            this.update_cloud_sync_provider("aliyun_drive", cx);
-                        }),
-                    ))
-                    .child(policy_button(
-                        "cloud-provider-gitee",
-                        "Gitee",
-                        active_cloud_provider == "gitee_snippet",
-                        cx.listener(|this, _, _, cx| {
-                            this.update_cloud_sync_provider("gitee_snippet", cx);
-                        }),
-                    ))
-                    .child(policy_button(
-                        "cloud-provider-github",
-                        "GitHub",
-                        active_cloud_provider == "github_gist",
-                        cx.listener(|this, _, _, cx| {
-                            this.update_cloud_sync_provider("github_gist", cx);
-                        }),
-                    ))
-                    .child(small_button(
-                        "cloud-sync-enabled",
-                        if self.cloud_sync_settings.enabled {
-                            "Enabled"
-                        } else {
-                            "Disabled"
-                        },
-                        cx.listener(|this, _, _, cx| {
-                            this.toggle_cloud_sync_enabled(cx);
-                        }),
-                    ))
-                    .child(small_button(
-                        "cloud-sync-save",
-                        "Save",
-                        cx.listener(|this, _, _, cx| {
-                            this.save_cloud_sync_settings(cx);
-                        }),
+                    .child(settings_form_row(
+                        "Remote root",
+                        Some(SharedString::from(truncate_preview(&cloud_remote_path, 48))),
+                        self.cloud_sync_input(
+                            "cloud-sync-remote-root",
+                            "Remote Root",
+                            self.cloud_sync_settings.remote_root.clone(),
+                            CloudSyncInputField::RemoteRoot,
+                            cx,
+                        ),
                     )),
-            )
-            .child(div().mt_3().child(self.cloud_sync_input(
-                "cloud-sync-remote-root",
-                "Remote Root",
-                self.cloud_sync_settings.remote_root.clone(),
-                CloudSyncInputField::RemoteRoot,
-                cx,
-            )))
+            ))
             .when(active_cloud_provider == "webdav", |this| {
                 this.child(
                     div()
@@ -1027,10 +986,10 @@ impl NyaTermApp {
                     .gap_2()
                     .child(
                         div()
-                            .text_xs()
+                            .text_size(px(10.))
                             .font_weight(FontWeight(700.))
-                            .text_color(rgb(0xcbd5e1))
-                            .child("Recent History"),
+                            .text_color(rgb(0x6e7681))
+                            .child("RECENT HISTORY"),
                     )
                     .when(cloud_history_empty, |this| {
                         this.child(
