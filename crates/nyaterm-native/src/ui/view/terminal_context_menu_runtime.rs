@@ -47,12 +47,18 @@ impl NyaTermApp {
         let selected_for_paste = selected.clone();
         let selected_for_translate = selected.clone();
         let selected_for_ai = selected.clone();
-        let search_engines: Vec<(String, String)> = self
+        let search_engines: Vec<(String, String, Option<String>)> = self
             .settings
             .search_custom_engines
             .iter()
             .filter(|engine| engine.show_in_menu && !engine.name.trim().is_empty() && !engine.url_template.trim().is_empty())
-            .map(|engine| (engine.name.clone(), engine.url_template.clone()))
+            .map(|engine| {
+                (
+                    engine.name.clone(),
+                    engine.url_template.clone(),
+                    engine.icon.clone(),
+                )
+            })
             .collect();
         let terminal_ai_actions: Vec<(String, String, String)> = if self.ai_settings.enabled {
             self.ai_settings
@@ -195,12 +201,13 @@ impl NyaTermApp {
                         this.open_terminal_search(window, cx);
                     }),
                 ))
-                .children(search_engines.into_iter().map(|(name, template)| {
+                .children(search_engines.into_iter().map(|(name, template, icon)| {
                     let query = selected.clone();
+                    let icon_prefix = search_engine_menu_icon_prefix(icon.as_deref());
                     terminal_ctx_item(
                         palette,
                         format!("term-ctx-search-{name}"),
-                        format!("Search Online · {name}"),
+                        format!("{icon_prefix}Search Online · {name}"),
                         None,
                         cx.listener(move |this, _, _, cx| {
                             this.close_terminal_context_menu(cx);
@@ -822,4 +829,24 @@ fn selection_as_openable_url(selected: &str) -> Option<String> {
         }
     }
     None
+}
+
+fn search_engine_menu_icon_prefix(icon: Option<&str>) -> String {
+    let label = match icon.unwrap_or("default") {
+        "google" => "G",
+        "bing" => "B",
+        "duckduckgo" => "D",
+        "github" => "GH",
+        "gitlab" => "GL",
+        "baidu" => "Bd",
+        "yahoo" => "Y!",
+        "youtube" => "YT",
+        "bilibili" => "Bi",
+        "zhihu" => "Zh",
+        "openai" => "AI",
+        "claude" => "Cl",
+        "gemini" => "Ge",
+        _ => "·",
+    };
+    format!("[{label}] ")
 }

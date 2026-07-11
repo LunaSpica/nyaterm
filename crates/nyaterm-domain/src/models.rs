@@ -535,6 +535,9 @@ impl Default for ActionLinksMatcherSettings {
 pub struct SearchEngineConfig {
     pub name: String,
     pub url_template: String,
+    /// Optional icon key (Tauri SEARCH_ICONS: google/bing/github/...).
+    #[serde(default)]
+    pub icon: Option<String>,
     #[serde(default = "default_true_search_menu")]
     pub show_in_menu: bool,
 }
@@ -548,16 +551,19 @@ pub fn default_search_engines() -> Vec<SearchEngineConfig> {
         SearchEngineConfig {
             name: "Google".to_string(),
             url_template: "https://www.google.com/search?q=%s".to_string(),
+            icon: Some("google".to_string()),
             show_in_menu: true,
         },
         SearchEngineConfig {
             name: "Bing".to_string(),
             url_template: "https://www.bing.com/search?q=%s".to_string(),
+            icon: Some("bing".to_string()),
             show_in_menu: true,
         },
         SearchEngineConfig {
             name: "GitHub".to_string(),
             url_template: "https://github.com/search?q=%s".to_string(),
+            icon: Some("github".to_string()),
             show_in_menu: true,
         },
     ]

@@ -360,6 +360,10 @@ impl NyaTermApp {
                             .relative()
                             .flex_1()
                             .min_h_0()
+                            .when(
+                                is_active && self.action_link_tooltip.is_some(),
+                                |this| this.cursor_pointer(),
+                            )
                             .p(if self.settings.terminal_show_workspace_padding {
                                 px(16.)
                             } else {

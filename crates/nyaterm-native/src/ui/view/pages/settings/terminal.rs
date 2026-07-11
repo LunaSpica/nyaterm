@@ -482,16 +482,51 @@ impl NyaTermApp {
                                 .gap_2()
                                 .child(
                                     div()
+                                        .flex()
+                                        .items_center()
+                                        .gap_2()
                                         .min_w_0()
                                         .flex_1()
-                                        .text_size(px(12.))
-                                        .font_weight(FontWeight(700.))
-                                        .text_color(rgb(palette.text))
-                                        .child(if engine.name.trim().is_empty() {
-                                            "Unnamed engine".to_string()
-                                        } else {
-                                            engine.name.clone()
-                                        }),
+                                        .child(
+                                            div()
+                                                .id(SharedString::from(format!(
+                                                    "settings-search-engine-icon-{index}"
+                                                )))
+                                                .h(px(28.))
+                                                .w(px(28.))
+                                                .rounded_md()
+                                                .border_1()
+                                                .border_color(rgb(palette.border))
+                                                .bg(rgb(palette.surface))
+                                                .flex()
+                                                .items_center()
+                                                .justify_center()
+                                                .text_size(px(10.))
+                                                .font_weight(FontWeight(800.))
+                                                .text_color(rgb(search_engine_icon_color(
+                                                    engine.icon.as_deref(),
+                                                )))
+                                                .cursor_pointer()
+                                                .child(search_engine_icon_label(
+                                                    engine.icon.as_deref(),
+                                                ))
+                                                .on_click(cx.listener(move |this, _, _, cx| {
+                                                    this.cycle_search_engine_icon(index, cx);
+                                                })),
+                                        )
+                                        .child(
+                                            div()
+                                                .min_w_0()
+                                                .flex_1()
+                                                .text_size(px(12.))
+                                                .font_weight(FontWeight(700.))
+                                                .text_color(rgb(palette.text))
+                                                .child(if engine.name.trim().is_empty() {
+                                                    "Unnamed engine".to_string()
+                                                } else {
+                                                    engine.name.clone()
+                                                }),
+                                        ),
                                 )
                                 .child(
                                     div()
@@ -758,4 +793,43 @@ fn settings_toggle_button(palette: crate::ui::theme::ThemePalette,
             },
         ))
         .on_click(on_click)
+}
+
+
+fn search_engine_icon_label(icon: Option<&str>) -> String {
+    match icon.unwrap_or("default") {
+        "google" => "G".into(),
+        "bing" => "B".into(),
+        "duckduckgo" => "D".into(),
+        "github" => "GH".into(),
+        "gitlab" => "GL".into(),
+        "baidu" => "Bd".into(),
+        "yahoo" => "Y!".into(),
+        "youtube" => "YT".into(),
+        "bilibili" => "Bi".into(),
+        "zhihu" => "Zh".into(),
+        "openai" => "AI".into(),
+        "claude" => "Cl".into(),
+        "gemini" => "Ge".into(),
+        _ => "?".into(),
+    }
+}
+
+fn search_engine_icon_color(icon: Option<&str>) -> u32 {
+    match icon.unwrap_or("default") {
+        "google" => 0x4285f4,
+        "bing" => 0x008373,
+        "duckduckgo" => 0xde5833,
+        "github" => 0x8b949e,
+        "gitlab" => 0xfc6d26,
+        "baidu" => 0x2932e1,
+        "yahoo" => 0x410093,
+        "youtube" => 0xff0000,
+        "bilibili" => 0x00a1d6,
+        "zhihu" => 0x0084ff,
+        "openai" => 0x10a37f,
+        "claude" => 0xd97757,
+        "gemini" => 0x4285f4,
+        _ => 0x8b949e,
+    }
 }

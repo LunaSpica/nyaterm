@@ -4476,9 +4476,16 @@ fn load_search_engines(value: &serde_json::Value) -> Vec<SearchEngineConfig> {
             .get("show_in_menu")
             .and_then(|v| v.as_bool())
             .unwrap_or(true);
+        let icon = item
+            .get("icon")
+            .and_then(|v| v.as_str())
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+            .map(ToString::to_string);
         engines.push(SearchEngineConfig {
             name,
             url_template,
+            icon,
             show_in_menu,
         });
     }
@@ -4497,6 +4504,7 @@ fn search_engines_to_json(engines: &[SearchEngineConfig]) -> serde_json::Value {
                 serde_json::json!({
                     "name": engine.name,
                     "url_template": engine.url_template,
+                    "icon": engine.icon,
                     "show_in_menu": engine.show_in_menu,
                 })
             })

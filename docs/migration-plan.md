@@ -994,3 +994,11 @@ service boundary first:
   from the terminal workspace to the Translation settings page.
 - Context menu and action-link multi-action menu positions clamp to the last
   known window viewport size so they stay on-screen near edges.
+
+## 2026-07-11 Search engine icons + action-link pointer
+
+- Domain `SearchEngineConfig` gains optional `icon` (Tauri SEARCH_ICONS keys),
+  load/save under `search.custom_engines[].icon`, defaults for Google/Bing/GitHub.
+- Settings Search rows show a clickable icon chip (cycles icon keys); context-menu
+  online-search items include a short icon prefix.
+- Terminal surface uses pointer cursor while an action-link hover tooltip is active.

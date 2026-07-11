@@ -582,6 +582,7 @@ impl NyaTermApp {
             SearchEngineConfig {
                 name: "New Engine".to_string(),
                 url_template: "https://example.com/search?q=%s".to_string(),
+                icon: Some("default".to_string()),
                 show_in_menu: true,
             },
         );
@@ -612,6 +613,42 @@ impl NyaTermApp {
         }
         self.save_terminal_settings(cx);
         self.terminal_status = "search engine removed".to_string();
+    }
+
+
+    pub(in crate::ui::view) fn cycle_search_engine_icon(
+        &mut self,
+        index: usize,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(engine) = self.settings.search_custom_engines.get_mut(index) else {
+            return;
+        };
+        const ICONS: &[&str] = &[
+            "google",
+            "bing",
+            "duckduckgo",
+            "github",
+            "gitlab",
+            "baidu",
+            "yahoo",
+            "youtube",
+            "bilibili",
+            "zhihu",
+            "openai",
+            "claude",
+            "gemini",
+            "default",
+        ];
+        let current = engine.icon.as_deref().unwrap_or("default");
+        let next = ICONS
+            .iter()
+            .position(|icon| *icon == current)
+            .map(|i| ICONS[(i + 1) % ICONS.len()])
+            .unwrap_or("google");
+        engine.icon = Some(next.to_string());
+        self.save_terminal_settings(cx);
+        self.terminal_status = format!("search engine icon: {next}");
     }
 
     pub(in crate::ui::view) fn toggle_search_engine_in_menu(
