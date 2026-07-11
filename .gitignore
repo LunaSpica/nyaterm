@@ -42,3 +42,4 @@ nyaterm-tauri/
 target/
 data/
 nyaterm-portable
+/gen/schemas
