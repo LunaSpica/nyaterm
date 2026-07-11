@@ -381,8 +381,8 @@ impl NyaTermApp {
 
     pub(in crate::ui::view) fn clear_command_suggestion_draft(&mut self, cx: &mut Context<Self>) {
         let mut changed = false;
-        if !self.command_suggestion_draft.is_empty() {
-            self.command_suggestion_draft.clear();
+        if self.command_input_tracker != TerminalInputState::new() {
+            self.command_input_tracker = TerminalInputState::new();
             changed = true;
         }
         if self.command_suggestions.take().is_some() {
@@ -409,7 +409,6 @@ impl NyaTermApp {
             self.clear_command_suggestion_draft(cx);
             return;
         }
-        // Only track plain UTF-8 keystroke/paste bytes for the local draft.
         let Ok(text) = std::str::from_utf8(bytes) else {
             self.clear_command_suggestion_draft(cx);
             return;
@@ -417,53 +416,12 @@ impl NyaTermApp {
         if text.is_empty() {
             return;
         }
-        // Control sequences / navigation invalidate simple tracking.
-        if text.chars().any(|ch| ch == '\u{1b}' || (ch.is_control() && ch != '\n' && ch != '\r' && ch != '\t' && ch != '\u{7f}')) {
-            // Allow backspace (DEL 0x7f) handled below; other controls reset.
-            if !(text.len() == 1 && text.as_bytes()[0] == 0x7f) {
-                self.clear_command_suggestion_draft(cx);
-                return;
+        self.command_input_tracker = apply_terminal_input_data(&self.command_input_tracker, text);
+        if !can_suggest_from_tracker(&self.command_input_tracker) {
+            if self.command_suggestions.take().is_some() {
+                cx.notify();
             }
-        }
-        if text.contains('\n') || text.contains('\r') {
-            // Submit resets draft after history capture.
-            self.command_suggestion_draft.clear();
-            self.command_suggestions = None;
-            cx.notify();
             return;
-        }
-        if text == "\t" {
-            // Tab completion desyncs simple draft tracking (Tauri marks desynced).
-            self.clear_command_suggestion_draft(cx);
-            return;
-        }
-        if text.len() == 1 && text.as_bytes()[0] == 0x7f {
-            self.command_suggestion_draft.pop();
-            self.refresh_command_suggestions(cx);
-            return;
-        }
-        // Printable insert only (paste multi-char is OK if no controls).
-        if text.chars().any(|ch| ch.is_control()) {
-            self.clear_command_suggestion_draft(cx);
-            return;
-        }
-        self.command_suggestion_draft.push_str(text);
-        // Cap draft length for safety.
-        let max_chars = self
-            .settings
-            .interaction_command_suggestion_max_chars
-            .max(8) as usize;
-        if self.command_suggestion_draft.chars().count() > max_chars.saturating_mul(4) {
-            let clipped: String = self
-                .command_suggestion_draft
-                .chars()
-                .rev()
-                .take(max_chars.saturating_mul(2))
-                .collect::<String>()
-                .chars()
-                .rev()
-                .collect();
-            self.command_suggestion_draft = clipped;
         }
         self.refresh_command_suggestions(cx);
     }
@@ -478,7 +436,7 @@ impl NyaTermApp {
             cx.notify();
             return;
         }
-        let pattern = self.command_suggestion_draft.trim().to_string();
+        let pattern = get_tracked_command(&self.command_input_tracker);
         let min_chars = self.settings.interaction_command_suggestion_min_chars.max(1) as usize;
         let max_chars = self
             .settings
@@ -621,12 +579,12 @@ impl NyaTermApp {
         if execute {
             payload.push('\n');
         }
-        self.command_suggestion_draft.clear();
+        self.command_input_tracker = TerminalInputState::new();
         self.command_suggestions = None;
         self.send_terminal_input_without_suggestion_track(payload.into_bytes(), cx);
         if !execute {
-            // After fill, draft becomes the filled command for continued typing.
-            self.command_suggestion_draft = command;
+            // After fill, tracker becomes the filled command for continued typing.
+            self.command_input_tracker = apply_terminal_input_data(&TerminalInputState::new(), &command);
             self.refresh_command_suggestions(cx);
         }
         self.terminal_status = if execute {

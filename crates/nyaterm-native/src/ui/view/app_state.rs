@@ -77,8 +77,8 @@ pub struct NyaTermApp {
     pub(in crate::ui::view) command_search_draft: String,
     /// Inline terminal command suggestions (Tauri CommandSuggestions).
     pub(in crate::ui::view) command_suggestions: Option<CommandSuggestionState>,
-    /// Local keystroke draft used for inline suggestions (not full OSC133 tracker).
-    pub(in crate::ui::view) command_suggestion_draft: String,
+    /// Local terminal input tracker for inline suggestions (Tauri terminalInputTracker).
+    pub(in crate::ui::view) command_input_tracker: TerminalInputState,
     /// Terminal-output credential autofill panel (Tauri CredentialSuggestions).
     pub(in crate::ui::view) credential_suggestions: Option<CredentialSuggestionState>,
     pub(in crate::ui::view) credential_autofill_buffer: String,
@@ -740,7 +740,7 @@ impl NyaTermApp {
             quick_command_categories,
             quick_command_search_draft: String::new(),
             command_suggestions: None,
-            command_suggestion_draft: String::new(),
+            command_input_tracker: TerminalInputState::new(),
             credential_suggestions: None,
             credential_autofill_buffer: String::new(),
             credential_autofill_recent: HashMap::new(),

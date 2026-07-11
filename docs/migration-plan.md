@@ -1056,3 +1056,11 @@ service boundary first:
 - Suggestion rows paint fuzzy match indices in accent/semibold spans, matching
   Tauri HighlightedCommand presentation for history and quick-command hits.
 
+## 2026-07-11 Terminal input tracker for suggestions
+
+- Domain `terminal_input_tracker` ports Tauri `terminalInputTracker` basics:
+  insert/backspace/word-delete, cursor moves, tab desync, paste mode, and
+  shell-prompt sanitization.
+- Inline command suggestions now key off the tracker (`can_suggest_from_tracker`)
+  instead of a simplified keystroke draft string.
+

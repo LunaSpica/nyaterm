@@ -3,6 +3,7 @@ pub mod ai;
 pub mod cloud_sync;
 pub mod command_search;
 pub mod credential_autofill;
+pub mod terminal_input_tracker;
 pub mod credentials_crypto;
 pub mod diagnostics;
 pub mod models;
@@ -73,6 +74,10 @@ pub use credential_autofill::{
     strip_terminal_control_sequences, validate_prompt_regex,
 };
 pub use credentials_crypto::{CredentialCrypto, CredentialCryptoError};
+pub use terminal_input_tracker::{
+    TerminalInputState, apply_terminal_input_data, can_suggest_from_tracker, get_tracked_command,
+    sanitize_terminal_command, strip_terminal_command_prompt,
+};
 pub use diagnostics::{
     DiagnosticsError, DiagnosticsExportInfo, DiagnosticsExportOptions, DiagnosticsRuntimeSnapshot,
     LOG_FILE_PREFIX, LOG_FILE_SUFFIX, export_diagnostics_archive,

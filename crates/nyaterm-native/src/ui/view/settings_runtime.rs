@@ -449,7 +449,7 @@ impl NyaTermApp {
             !self.settings.interaction_command_suggestions_enabled;
         if !self.settings.interaction_command_suggestions_enabled {
             self.command_suggestions = None;
-            self.command_suggestion_draft.clear();
+            self.command_input_tracker = TerminalInputState::new();
         }
         self.save_interaction_settings(cx);
     }

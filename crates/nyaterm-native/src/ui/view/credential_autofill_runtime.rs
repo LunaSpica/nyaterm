@@ -126,7 +126,7 @@ impl NyaTermApp {
                 Self::now_unix_ms().saturating_add(CREDENTIAL_PROMPT_INPUT_TTL_MS);
             // Suppress command suggestions while a credential prompt is live.
             self.command_suggestions = None;
-            self.command_suggestion_draft.clear();
+            self.command_input_tracker = TerminalInputState::new();
         } else if visible.contains('\r') || visible.contains('\n') {
             self.credential_prompt_input_until_ms = 0;
         }

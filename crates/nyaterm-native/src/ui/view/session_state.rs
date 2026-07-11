@@ -190,6 +190,8 @@ impl NyaTermApp {
         self.credential_autofill_pending = None;
         self.credential_autofill_sending = false;
         self.credential_prompt_input_until_ms = 0;
+        self.command_input_tracker = TerminalInputState::new();
+        self.command_suggestions = None;
         let previous_session_id = self.active_session_id.clone();
         if previous_session_id.as_deref() != Some(session_id)
             && let Some(previous_session_id) = previous_session_id.as_deref()
