@@ -1026,3 +1026,11 @@ service boundary first:
 - Timestamp/line-number gutter column widths scale from measured cell metrics
   (0.85x gutter font) with the previous fixed 96/72/40 floors as minimums so
   hit-testing and paint stay aligned.
+
+## 2026-07-11 Inline command suggestions
+
+- Local keystroke draft tracks plain terminal input for fuzzy suggestions from
+  command history + quick commands (`search_command_sources`).
+- Popup near terminal cursor with history/quick badges, ↑↓/Enter/Tab/Esc, and
+  click-to-run; respects min/max suggestion length settings and dismisses on
+  menus/submit/tab-desync/control sequences.

@@ -282,6 +282,9 @@ impl NyaTermApp {
                         if this.handle_global_shortcut(event, window, cx) {
                             return;
                         }
+                        if this.handle_command_suggestion_key(event, cx) {
+                            return;
+                        }
                         if this.handle_terminal_scroll_key(event, cx) {
                             return;
                         }

@@ -75,6 +75,23 @@ impl NyaTermApp {
         bytes: Vec<u8>,
         cx: &mut Context<Self>,
     ) {
+        self.send_terminal_input_with_options(bytes, true, cx);
+    }
+
+    pub(in crate::ui::view) fn send_terminal_input_without_suggestion_track(
+        &mut self,
+        bytes: Vec<u8>,
+        cx: &mut Context<Self>,
+    ) {
+        self.send_terminal_input_with_options(bytes, false, cx);
+    }
+
+    fn send_terminal_input_with_options(
+        &mut self,
+        bytes: Vec<u8>,
+        track_suggestions: bool,
+        cx: &mut Context<Self>,
+    ) {
         if bytes.is_empty() {
             return;
         }
@@ -93,6 +110,9 @@ impl NyaTermApp {
         }
         let peers = self.sync_peer_session_ids(&session_id);
         let byte_count = bytes.len();
+        if track_suggestions {
+            self.note_command_suggestion_input(&bytes, cx);
+        }
         self.send_terminal_input_to_session(session_id, bytes.clone(), cx);
         let mut synced = 0usize;
         let mut failed = 0usize;

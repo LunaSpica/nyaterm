@@ -1115,6 +1115,24 @@ pub(super) struct TranslationDialogState {
 }
 
 #[derive(Debug, Clone, PartialEq)]
+pub(super) struct CommandSuggestionItem {
+    pub(super) command: String,
+    pub(super) display: String,
+    pub(super) source: String,
+    pub(super) score: u32,
+    pub(super) indices: Vec<u32>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub(super) struct CommandSuggestionState {
+    pub(super) draft: String,
+    pub(super) items: Vec<CommandSuggestionItem>,
+    pub(super) selected_index: usize,
+    pub(super) cursor_row: usize,
+    pub(super) cursor_col: usize,
+}
+
+#[derive(Debug, Clone, PartialEq)]
 pub(super) struct TerminalContextMenuState {
     pub(super) x: Pixels,
     pub(super) y: Pixels,

@@ -75,6 +75,11 @@ pub struct NyaTermApp {
     pub(in crate::ui::view) command_history: Vec<CommandHistoryEntry>,
     pub(in crate::ui::view) session_command_history: HashMap<String, Vec<String>>,
     pub(in crate::ui::view) command_search_draft: String,
+    /// Inline terminal command suggestions (Tauri CommandSuggestions).
+    pub(in crate::ui::view) command_suggestions: Option<CommandSuggestionState>,
+    /// Local keystroke draft used for inline suggestions (not full OSC133 tracker).
+    pub(in crate::ui::view) command_suggestion_draft: String,
+
     pub(in crate::ui::view) command_search_focus: FocusHandle,
     pub(in crate::ui::view) active_sessions_search_draft: String,
     pub(in crate::ui::view) active_sessions_search_focus: FocusHandle,
@@ -726,6 +731,9 @@ impl NyaTermApp {
             quick_commands,
             quick_command_categories,
             quick_command_search_draft: String::new(),
+            command_suggestions: None,
+            command_suggestion_draft: String::new(),
+
             quick_command_search_focus: cx.focus_handle(),
             quick_command_selected_category: "all".to_string(),
             quick_command_sort_mode: quick_command_sort_mode_from_setting(

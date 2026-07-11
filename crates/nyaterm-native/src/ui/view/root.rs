@@ -229,6 +229,9 @@ impl Render for NyaTermApp {
             .when(self.translation_dialog.is_some(), |this| {
                 this.child(self.translation_dialog_overlay(cx))
             })
+            .when(self.command_suggestions.is_some(), |this| {
+                this.child(self.command_suggestions_overlay(cx))
+            })
             .when(self.sync_groups_open, |this| {
                 this.child(self.sync_groups_overlay(cx))
             })
