@@ -111,10 +111,10 @@ impl NyaTermApp {
                         .items_center()
                         .child(
                             div()
-                                .w(px(44.))
+                                .w(px(52.))
                                 .flex_none()
                                 .text_color(rgb(palette.text_dimmed))
-                                .child(format!("{:>5}  ", line_index + 1)),
+                                .child(format!("{:>5}  ", abs_start + line_index + 1)),
                         )
                         .child(content),
                 );
