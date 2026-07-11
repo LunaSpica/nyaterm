@@ -17,12 +17,25 @@ impl NyaTermApp {
                 self.send_bottom_command(true, cx);
             }
             "backspace" if !keystroke.modifiers.platform && !keystroke.modifiers.control => {
-                self.send_command_draft.pop();
+                if self.send_command_data_type == SendCommandDataType::Hex {
+                    // Delete last hex digit (ignore spacing), then reformat pairs.
+                    let mut cleaned: String = self
+                        .send_command_draft
+                        .chars()
+                        .filter(|ch| ch.is_ascii_hexdigit())
+                        .collect();
+                    cleaned.pop();
+                    self.send_command_draft = format_send_command_hex_display(&cleaned);
+                } else {
+                    self.send_command_draft.pop();
+                }
                 cx.notify();
             }
             "tab" if !keystroke.modifiers.platform && !keystroke.modifiers.control => {
-                self.send_command_draft.push('\t');
-                cx.notify();
+                if self.send_command_data_type != SendCommandDataType::Hex {
+                    self.send_command_draft.push_str("\t");
+                    cx.notify();
+                }
             }
             "escape" => {
                 self.send_command_draft.clear();
@@ -35,7 +48,20 @@ impl NyaTermApp {
                     .as_deref()
                     .filter(|input| !input.is_empty())
                 {
-                    self.send_command_draft.push_str(input);
+                    if self.send_command_data_type == SendCommandDataType::Hex {
+                        let filtered: String = input
+                            .chars()
+                            .filter(|ch| ch.is_ascii_hexdigit() || ch.is_whitespace())
+                            .collect();
+                        if filtered.is_empty() {
+                            return;
+                        }
+                        self.send_command_draft.push_str(&filtered);
+                        self.send_command_draft =
+                            format_send_command_hex_display(&self.send_command_draft);
+                    } else {
+                        self.send_command_draft.push_str(input);
+                    }
                     cx.notify();
                 }
             }

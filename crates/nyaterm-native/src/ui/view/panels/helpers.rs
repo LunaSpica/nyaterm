@@ -328,41 +328,6 @@ pub(in crate::ui::view::panels) fn send_command_hex_byte_count(draft: &str) -> O
 }
 
 /// Format hex draft like Tauri: uppercase pairs spaced, double-space every 4 bytes.
-pub(in crate::ui::view::panels) fn format_send_command_hex_display(draft: &str) -> String {
-    let normalized = draft.replace("\r\n", "\n").replace("\r", "\n");
-    normalized
-        .split('\n')
-        .map(|line| {
-            let cleaned: String = line
-                .chars()
-                .filter(|ch| ch.is_ascii_hexdigit())
-                .map(|ch| ch.to_ascii_uppercase())
-                .collect();
-            let mut formatted = String::new();
-            let mut byte_index = 0usize;
-            let mut i = 0usize;
-            while i < cleaned.len() {
-                let end = (i + 2).min(cleaned.len());
-                let byte = &cleaned[i..end];
-                formatted.push_str(byte);
-                if byte.len() == 2 {
-                    byte_index += 1;
-                    if i + 2 < cleaned.len() {
-                        if byte_index % 4 == 0 {
-                            formatted.push_str("  ");
-                        } else {
-                            formatted.push(' ');
-                        }
-                    }
-                }
-                i = end;
-            }
-            formatted
-        })
-        .collect::<Vec<_>>()
-        .join("\n")
-}
-
 pub(in crate::ui::view::panels) fn send_command_hex_guide_count(draft: &str) -> usize {
     let normalized = draft.replace("\r\n", "\n").replace("\r", "\n");
     normalized
@@ -376,7 +341,7 @@ pub(in crate::ui::view::panels) fn send_command_hex_guide_count(draft: &str) -> 
 
 /// Character offsets (approx mono columns) for 4-byte group boundaries on first line.
 pub(in crate::ui::view::panels) fn send_command_hex_guide_marks(draft: &str) -> Vec<u32> {
-    let display = format_send_command_hex_display(draft);
+    let display = crate::ui::send_command::format_send_command_hex_display(draft);
     let first_line = display.split('\n').next().unwrap_or("");
     // After each complete 4-byte group Tauri inserts an extra space: "AA BB CC DD  "
     // Count completed groups from cleaned hex.

@@ -67,6 +67,41 @@ pub(super) fn parse_send_command_hex(value: &str) -> Result<Vec<u8>, String> {
     Ok(bytes)
 }
 
+pub(super) fn format_send_command_hex_display(draft: &str) -> String {
+    let normalized = draft.replace("\r\n", "\n").replace("\r", "\n");
+    normalized
+        .split('\n')
+        .map(|line| {
+            let cleaned: String = line
+                .chars()
+                .filter(|ch| ch.is_ascii_hexdigit())
+                .map(|ch| ch.to_ascii_uppercase())
+                .collect();
+            let mut formatted = String::new();
+            let mut byte_index = 0usize;
+            let mut i = 0usize;
+            while i < cleaned.len() {
+                let end = (i + 2).min(cleaned.len());
+                let byte = &cleaned[i..end];
+                formatted.push_str(byte);
+                if byte.len() == 2 {
+                    byte_index += 1;
+                    if i + 2 < cleaned.len() {
+                        if byte_index % 4 == 0 {
+                            formatted.push_str("  ");
+                        } else {
+                            formatted.push(' ');
+                        }
+                    }
+                }
+                i = end;
+            }
+            formatted
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
 pub(super) fn build_send_command_units_for(
     draft: &str,
     data_type: SendCommandDataType,
@@ -215,5 +250,17 @@ mod tests {
         )
         .unwrap();
         assert_eq!(hex_units, vec![vec![0x0a], vec![0xff]]);
+    }
+
+    #[test]
+    fn formats_hex_pairs_with_quad_spacing() {
+        assert_eq!(
+            format_send_command_hex_display("48656c6c6f20"),
+            "48 65 6C 6C  6F 20"
+        );
+        assert_eq!(
+            format_send_command_hex_display("48 65\n6c6c"),
+            "48 65\n6C 6C"
+        );
     }
 }

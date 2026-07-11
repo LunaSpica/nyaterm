@@ -114,6 +114,7 @@ impl NyaTermApp {
                 | RemoteProcessSortKey::Command => RemoteProcessSortDirection::Ascending,
             };
         }
+        self.process_list_offset = 0;
         self.process_status = format!(
             "sorted processes by {} {}",
             self.process_sort_key.label(),

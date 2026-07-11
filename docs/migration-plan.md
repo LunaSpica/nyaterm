@@ -685,3 +685,7 @@ service boundary first:
 ## 2026-07-11 Process/Docker virtual windows
 - Process list renders 80-row windows with Page up/down and hidden counts (Tauri virtual-list step).
 - Search resets list offset; Docker containers cap first 60 with refine-search hint.
+
+## 2026-07-11 Hex typing auto-format + process sort offset
+- Shared `format_send_command_hex_display` in `send_command` crate module; hex key entry/backspace reformats pairs.
+- Process sort toggles reset virtual list offset to top.

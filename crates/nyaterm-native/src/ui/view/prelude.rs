@@ -101,7 +101,7 @@ pub(super) use super::super::models::{
 };
 pub(super) use super::super::send_command::{
     SendCommandDataType, SendCommandTarget, SendCommandLineEnding, SendCommandMode, bottom_send_field,
-    build_send_command_units_for, parse_send_command_hex,
+    build_send_command_units_for, format_send_command_hex_display, parse_send_command_hex,
 };
 pub(super) use super::super::shortcuts::{event_to_hotkey_string, shortcut_matches};
 pub(super) use super::super::terminal::{
