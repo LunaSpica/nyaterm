@@ -1501,6 +1501,11 @@ impl ConnectionStore {
                 7,
             )),
             startup_restore: json_bool(&value, &["general", "startup_restore"], false),
+            startup_restore_window_layout: json_bool(
+                &value,
+                &["general", "startup_restore_window_layout"],
+                true,
+            ),
             confirm_on_close: json_bool(&value, &["general", "confirm_on_close"], true),
             enable_screen_lock: json_bool(&value, &["security", "enable_screen_lock"], false),
             idle_lock_minutes: u32::from(json_u16(&value, &["security", "idle_lock_minutes"], 0)),
@@ -2052,11 +2057,46 @@ impl ConnectionStore {
         );
         set_nested_json_value(
             &mut value,
+            &["general", "startup_restore_window_layout"],
+            serde_json::Value::Bool(settings.startup_restore_window_layout),
+        );
+        set_nested_json_value(
+            &mut value,
             &["general", "confirm_on_close"],
             serde_json::Value::Bool(settings.confirm_on_close),
         );
         self.save_settings_value(&value)?;
         self.load_app_settings_summary()
+    }
+
+    pub fn load_terminal_window_layout(
+        &self,
+    ) -> Result<Option<crate::models::RestorableTerminalWindowNode>, StorageError> {
+        let value = self.load_settings_value()?;
+        let Some(raw) = json_path(&value, &["ui", "terminal_window_layout"]) else {
+            return Ok(None);
+        };
+        if raw.is_null() {
+            return Ok(None);
+        }
+        match serde_json::from_value(raw.clone()) {
+            Ok(node) => Ok(Some(node)),
+            Err(_) => Ok(None),
+        }
+    }
+
+    pub fn save_terminal_window_layout(
+        &self,
+        layout: Option<&crate::models::RestorableTerminalWindowNode>,
+    ) -> Result<(), StorageError> {
+        let mut value = self.load_settings_value()?;
+        let encoded = match layout {
+            Some(node) => serde_json::to_value(node)?,
+            None => serde_json::Value::Null,
+        };
+        set_nested_json_value(&mut value, &["ui", "terminal_window_layout"], encoded);
+        self.save_settings_value(&value)?;
+        Ok(())
     }
 
     pub fn save_screen_lock_settings(
@@ -6090,6 +6130,35 @@ mod tests {
             Some("encrypted")
         );
 
+        std::fs::remove_dir_all(dir).ok();
+    }
+
+    #[test]
+    fn terminal_window_layout_roundtrip() {
+        let dir = unique_temp_dir("terminal-window-layout");
+        let store = ConnectionStore::open(&dir).expect("store");
+        let layout = crate::models::RestorableTerminalWindowNode::Split {
+            direction: "vertical".to_string(),
+            ratio: 0.45,
+            first: Box::new(crate::models::RestorableTerminalWindowNode::Leaf {
+                tab_indexes: vec![0, 1],
+                active_tab_index: Some(0),
+            }),
+            second: Box::new(crate::models::RestorableTerminalWindowNode::Leaf {
+                tab_indexes: vec![2],
+                active_tab_index: Some(2),
+            }),
+        };
+        store
+            .save_terminal_window_layout(Some(&layout))
+            .expect("save layout");
+        let loaded = store
+            .load_terminal_window_layout()
+            .expect("load layout")
+            .expect("some layout");
+        assert_eq!(loaded, layout);
+        store.save_terminal_window_layout(None).expect("clear");
+        assert!(store.load_terminal_window_layout().expect("load").is_none());
         std::fs::remove_dir_all(dir).ok();
     }
 

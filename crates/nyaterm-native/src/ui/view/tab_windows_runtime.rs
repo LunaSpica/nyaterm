@@ -29,8 +29,12 @@ impl NyaTermApp {
         }
 
         if self.terminal_windows.is_none() {
-            // Flat mode: no multi-leaf layout until user splits a tab out.
-            return;
+            // Attempt one-shot restore of multi-leaf layout from settings.
+            self.try_restore_terminal_window_layout();
+            if self.terminal_windows.is_none() {
+                // Flat mode: no multi-leaf layout until user splits a tab out.
+                return;
+            }
         }
 
         if let Some(root) = self.terminal_windows.as_mut() {
@@ -104,6 +108,7 @@ impl NyaTermApp {
             short_id(&session_id),
             direction.label().to_ascii_lowercase()
         );
+        self.persist_terminal_window_layout();
         cx.notify();
     }
 
@@ -140,6 +145,7 @@ impl NyaTermApp {
             self.focused_terminal_window_leaf_id = Some(target_leaf_id);
             let _ = root.set_active_tab(&session_id);
             self.terminal_status = format!("moved tab {} to window leaf", short_id(&session_id));
+            self.persist_terminal_window_layout();
         }
         cx.notify();
     }
@@ -149,6 +155,7 @@ impl NyaTermApp {
         self.focused_terminal_window_leaf_id = None;
         self.terminal_window_drop = None;
         self.terminal_status = "restored flat tab strip".to_string();
+        self.persist_terminal_window_layout();
         cx.notify();
     }
 
@@ -186,6 +193,7 @@ impl NyaTermApp {
                 short_id(&tab_id),
                 short_id(&before_tab_id)
             );
+            self.persist_terminal_window_layout();
         }
         cx.notify();
     }
@@ -248,12 +256,84 @@ impl NyaTermApp {
             short_id(&tab_id),
             zone_label
         );
-        // Collapse back to flat strip if only one leaf remains.
-        if matches!(self.terminal_windows, Some(TerminalWindowNode::Leaf { .. })) {
-            // Keep multi-leaf structure only when still split; leaf-only can stay for active tabs.
-        }
+        self.persist_terminal_window_layout();
         cx.notify();
     }
+
+    pub(in crate::ui::view) fn persist_terminal_window_layout(&mut self) {
+        if !self.settings.startup_restore || !self.settings.startup_restore_window_layout {
+            return;
+        }
+        // Only multi-leaf layouts are worth persisting; flat strip stores null.
+        let ordered = self
+            .ordered_sessions()
+            .into_iter()
+            .map(|session| session.id)
+            .collect::<Vec<_>>();
+        let layout = self
+            .terminal_windows
+            .as_ref()
+            .filter(|_| self.terminal_windows_is_multi_leaf())
+            .and_then(|root| root.serialize_layout(&ordered));
+        match ConnectionStore::open_with_portable_key_path(
+            self.runtime.config_dir(),
+            self.runtime.portable_key_path().map(ToOwned::to_owned),
+        )
+        .and_then(|store| store.save_terminal_window_layout(layout.as_ref()))
+        {
+            Ok(()) => {}
+            Err(error) => {
+                self.terminal_status = format!("failed to save window layout: {error}");
+            }
+        }
+    }
+
+    pub(in crate::ui::view) fn try_restore_terminal_window_layout(&mut self) {
+        if self.terminal_windows_restored {
+            return;
+        }
+        if !self.settings.startup_restore || !self.settings.startup_restore_window_layout {
+            self.terminal_windows_restored = true;
+            return;
+        }
+        let ordered = self
+            .ordered_sessions()
+            .into_iter()
+            .map(|session| session.id)
+            .collect::<Vec<_>>();
+        // Wait until sessions exist so tab indexes can map correctly.
+        if ordered.is_empty() {
+            return;
+        }
+        self.terminal_windows_restored = true;
+        let Ok(store) = ConnectionStore::open_with_portable_key_path(
+            self.runtime.config_dir(),
+            self.runtime.portable_key_path().map(ToOwned::to_owned),
+        ) else {
+            return;
+        };
+        let Ok(Some(layout)) = store.load_terminal_window_layout() else {
+            return;
+        };
+        let Some(restored) = TerminalWindowNode::restore_layout(&layout, &ordered) else {
+            return;
+        };
+        if !matches!(restored, TerminalWindowNode::Split { .. }) {
+            return;
+        }
+        self.focused_terminal_window_leaf_id = restored.first_leaf_id();
+        if let Some(active) = self.active_session_id.clone() {
+            let mut root = restored;
+            let _ = root.set_active_tab(&active);
+            self.focused_terminal_window_leaf_id =
+                find_leaf_with_tab(&root, &active).or_else(|| root.first_leaf_id());
+            self.terminal_windows = Some(root);
+        } else {
+            self.terminal_windows = Some(restored);
+        }
+        self.terminal_status = "restored multi-leaf window layout".to_string();
+    }
+
 
 }
 

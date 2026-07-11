@@ -482,6 +482,8 @@ pub struct NyaTermApp {
     pub(in crate::ui::view) focused_terminal_window_leaf_id: Option<String>,
     /// Active tab-dock drop target while dragging a session tab over a multi-leaf window.
     pub(in crate::ui::view) terminal_window_drop: Option<(String, TabDockZone)>,
+    /// Whether we already attempted startup restore of multi-leaf layout.
+    pub(in crate::ui::view) terminal_windows_restored: bool,
     pub(in crate::ui::view) is_locked: bool,
     pub(in crate::ui::view) last_user_activity_at: Instant,
 }
@@ -1163,6 +1165,7 @@ impl NyaTermApp {
             terminal_windows: None,
             focused_terminal_window_leaf_id: None,
             terminal_window_drop: None,
+            terminal_windows_restored: false,
             is_locked: false,
             last_user_activity_at: Instant::now(),
         }

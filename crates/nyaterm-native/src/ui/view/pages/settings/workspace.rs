@@ -75,6 +75,19 @@ impl NyaTermApp {
                         ),
                     ))
                     .child(settings_form_row(palette, 
+                        "Restore window layout",
+                        Some(SharedString::from(
+                            "Restore multi-leaf tab window splits with the workspace (Tauri terminal_window_layout).",
+                        )),
+                        settings_switch(palette, 
+                            "general-startup-restore-window-layout",
+                            self.settings.startup_restore_window_layout,
+                            cx.listener(|this, _, _, cx| {
+                                this.toggle_startup_restore_window_layout(cx);
+                            }),
+                        ),
+                    ))
+                    .child(settings_form_row(palette, 
                         "Confirm on close",
                         Some(SharedString::from("Ask before quitting when sessions are still open.")),
                         settings_switch(palette, 

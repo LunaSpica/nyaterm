@@ -569,8 +569,34 @@ pub fn default_search_engines() -> Vec<SearchEngineConfig> {
     ]
 }
 
+/// Tauri `ui.terminal_window_layout` node (indexes into ordered open tabs).
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(tag = "kind")]
+pub enum RestorableTerminalWindowNode {
+    #[serde(rename = "leaf")]
+    Leaf {
+        #[serde(default)]
+        tab_indexes: Vec<usize>,
+        #[serde(default)]
+        active_tab_index: Option<usize>,
+    },
+    #[serde(rename = "split")]
+    Split {
+        direction: String,
+        #[serde(default = "default_restorable_split_ratio")]
+        ratio: f64,
+        first: Box<RestorableTerminalWindowNode>,
+        second: Box<RestorableTerminalWindowNode>,
+    },
+}
+
+fn default_restorable_split_ratio() -> f64 {
+    0.5
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct AppSettingsSummary {
+
     pub theme: String,
     #[serde(default)]
     pub background_image_path: Option<String>,
@@ -689,6 +715,9 @@ pub struct AppSettingsSummary {
     pub diagnostics_level: String,
     pub diagnostics_retention_days: u32,
     pub startup_restore: bool,
+    /// When true (default), restore multi-leaf tab window layout with sessions.
+    #[serde(default = "default_true")]
+    pub startup_restore_window_layout: bool,
     pub confirm_on_close: bool,
     pub enable_screen_lock: bool,
     pub idle_lock_minutes: u32,
@@ -828,6 +857,7 @@ impl Default for AppSettingsSummary {
             diagnostics_level: "info".to_string(),
             diagnostics_retention_days: 7,
             startup_restore: false,
+            startup_restore_window_layout: true,
             confirm_on_close: true,
             enable_screen_lock: false,
             idle_lock_minutes: 0,

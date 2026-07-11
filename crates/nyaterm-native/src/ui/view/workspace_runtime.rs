@@ -303,6 +303,9 @@ impl NyaTermApp {
             if let Some(ratio) = ratio {
                 self.terminal_status = format!("split ratio set to {ratio}%");
             }
+            if self.terminal_windows_is_multi_leaf() {
+                self.persist_terminal_window_layout();
+            }
             cx.notify();
         }
     }

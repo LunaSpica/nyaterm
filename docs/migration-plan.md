@@ -1265,3 +1265,10 @@ service boundary first:
 - Each multi-leaf tab strip has a `+` control to start a local session into the workspace.
 - Clearing `terminal_window_drop` on mouse-up avoids sticky dock overlay chrome after drag cancel.
 
+## 2026-07-11 Multi-leaf terminal_window_layout persistence
+
+- Domain stores Tauri-compatible `ui.terminal_window_layout` via
+  `RestorableTerminalWindowNode` (tab indexes + split ratios).
+- Settings flag `general.startup_restore_window_layout` (default true) gates restore/save.
+- Native multi-leaf mutations serialize layout; reconcile restores once sessions exist.
+
