@@ -831,3 +831,8 @@ service boundary first:
 - Right-side command center/search panels and disabled inspector panel themed.
 - Left sidebar panels (connections/network/transfers/security auth/session rows/nav buttons) densify palette borders/text/surfaces.
 - Quick Commands panel interior surfaces follow live theme.
+
+## 2026-07-11 Remote Process/Docker/Stats interior palette densify
+- Process table/menu/summary/detail chrome, resource gauge cards, and compact SVG action buttons use ThemePalette.
+- Docker details lines/panels and tab bar/chips follow live theme.
+- Stats view system cards and CPU core rows replace github-dark hardcodes.
