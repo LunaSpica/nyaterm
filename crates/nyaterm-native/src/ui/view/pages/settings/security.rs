@@ -63,8 +63,8 @@ impl NyaTermApp {
                     )),
             ))
             .child(settings_form_section(palette, 
-                Some("Screen lock"),
-                Some("Lock the window after idle time or on demand."),
+                Some("Session security"),
+                Some("Lock the window after idle time or on demand (Tauri SecurityTab)."),
                 div()
                     .flex()
                     .flex_col()
@@ -82,39 +82,51 @@ impl NyaTermApp {
                             }),
                         ),
                     ))
-                    .child(settings_form_row(palette, 
-                        "Idle lock",
-                        Some(SharedString::from(
-                            "Automatically lock after this many minutes of inactivity (0 = manual).",
-                        )),
-                        div()
-                            .flex()
-                            .items_center()
-                            .gap_1()
-                            .child(
-                                div()
-                                    .min_w(px(72.))
-                                    .font_family("JetBrains Mono")
-                                    .text_size(px(12.))
-                                    .font_weight(FontWeight(600.))
-                                    .text_color(rgb(palette.text))
-                                    .child(idle_label),
-                            )
-                            .child(small_button(palette, 
-                                "settings-idle-lock-minus",
-                                "−5",
-                                cx.listener(|this, _, _, cx| {
-                                    this.adjust_idle_lock_minutes(-5, cx);
-                                }),
-                            ))
-                            .child(small_button(palette, 
-                                "settings-idle-lock-plus",
-                                "+5",
-                                cx.listener(|this, _, _, cx| {
-                                    this.adjust_idle_lock_minutes(5, cx);
-                                }),
-                            )),
-                    ))
+                    .when(self.settings.enable_screen_lock, |this| {
+                        this.child(
+                            div()
+                                .pl_3()
+                                .ml_1()
+                                .border_l_1()
+                                .border_color(rgb(palette.border))
+                                .child(settings_form_row(
+                                    palette,
+                                    "Idle lock",
+                                    Some(SharedString::from(
+                                        "Automatically lock after this many minutes of inactivity (0 = manual).",
+                                    )),
+                                    div()
+                                        .flex()
+                                        .items_center()
+                                        .gap_1()
+                                        .child(
+                                            div()
+                                                .min_w(px(72.))
+                                                .font_family("JetBrains Mono")
+                                                .text_size(px(12.))
+                                                .font_weight(FontWeight(600.))
+                                                .text_color(rgb(palette.text))
+                                                .child(idle_label.clone()),
+                                        )
+                                        .child(small_button(
+                                            palette,
+                                            "settings-idle-lock-minus",
+                                            "−5",
+                                            cx.listener(|this, _, _, cx| {
+                                                this.adjust_idle_lock_minutes(-5, cx);
+                                            }),
+                                        ))
+                                        .child(small_button(
+                                            palette,
+                                            "settings-idle-lock-plus",
+                                            "+5",
+                                            cx.listener(|this, _, _, cx| {
+                                                this.adjust_idle_lock_minutes(5, cx);
+                                            }),
+                                        )),
+                                )),
+                        )
+                    })
                     .child(settings_form_row(palette, 
                         "Window state",
                         Some(SharedString::from(format!(
@@ -137,34 +149,47 @@ impl NyaTermApp {
                 Some("How SSH host key changes are handled."),
                 div()
                     .flex()
-                    .flex_wrap()
-                    .gap_1()
-                    .child(settings_choice_chip(palette, 
-                        "security-host-ask",
-                        "Ask",
-                        self.settings.host_key_policy == "ask"
-                            || self.settings.host_key_policy == "prompt",
-                        cx.listener(|this, _, _, cx| {
-                            this.update_host_key_policy("ask", cx);
-                        }),
-                    ))
-                    .child(settings_choice_chip(palette, 
-                        "security-host-accept",
-                        "Accept new",
-                        self.settings.host_key_policy == "accept_new",
-                        cx.listener(|this, _, _, cx| {
-                            this.update_host_key_policy("accept_new", cx);
-                        }),
-                    ))
-                    .child(settings_choice_chip(palette, 
-                        "security-host-strict",
-                        "Strict",
-                        self.settings.host_key_policy == "strict"
-                            || self.settings.host_key_policy == "reject",
-                        cx.listener(|this, _, _, cx| {
-                            this.update_host_key_policy("strict", cx);
-                        }),
-                    )),
+                    .flex_col()
+                    .gap_3()
+                    .child(
+                        div()
+                            .flex()
+                            .flex_wrap()
+                            .gap_1()
+                            .child(settings_choice_chip(palette, 
+                                "security-host-ask",
+                                "Ask",
+                                self.settings.host_key_policy == "ask"
+                                    || self.settings.host_key_policy == "prompt",
+                                cx.listener(|this, _, _, cx| {
+                                    this.update_host_key_policy("ask", cx);
+                                }),
+                            ))
+                            .child(settings_choice_chip(palette, 
+                                "security-host-accept",
+                                "Accept new",
+                                self.settings.host_key_policy == "accept_new"
+                                    || self.settings.host_key_policy == "accept",
+                                cx.listener(|this, _, _, cx| {
+                                    this.update_host_key_policy("accept_new", cx);
+                                }),
+                            ))
+                            .child(settings_choice_chip(palette, 
+                                "security-host-strict",
+                                "Strict",
+                                self.settings.host_key_policy == "strict"
+                                    || self.settings.host_key_policy == "reject",
+                                cx.listener(|this, _, _, cx| {
+                                    this.update_host_key_policy("strict", cx);
+                                }),
+                            )),
+                    )
+                    .child(
+                        div()
+                            .text_size(px(11.))
+                            .text_color(rgb(palette.text_dimmed))
+                            .child(host_key_policy_detail(&self.settings.host_key_policy)),
+                    ),
             ))
     }
 }
@@ -202,8 +227,12 @@ fn host_key_policy_label(policy: &str) -> &'static str {
 
 fn host_key_policy_detail(policy: &str) -> &'static str {
     match policy {
-        "strict" => "Current policy: strict. Unknown or changed host keys are rejected.",
-        "accept" => "Current policy: accept. New or changed host keys are saved automatically.",
-        _ => "Current policy: prompt. New or changed host keys require confirmation.",
+        "strict" | "reject" => {
+            "Current policy: strict. Unknown or changed host keys are rejected."
+        }
+        "accept_new" | "accept" => {
+            "Current policy: accept new. New host keys are saved automatically; changes still prompt."
+        }
+        _ => "Current policy: ask. New or changed host keys require confirmation.",
     }
 }

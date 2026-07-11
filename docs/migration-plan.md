@@ -1466,3 +1466,8 @@ service boundary first:
   remote/process/docker interval steppers under parent toggles, action-link
   matchers nested under Enabled.
 
+## 2026-07-12 Security settings densify
+
+- Idle lock nested under Enable screen lock; host-key chips show live policy
+  detail; accept/accept_new aliases recognized.
+
