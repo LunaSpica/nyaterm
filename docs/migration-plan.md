@@ -672,3 +672,7 @@ service boundary first:
 
 ## 2026-07-11 Docker Compose row densify
 - Project rows 74→60px, service rows 58→48px.
+
+## 2026-07-11 Resource Monitor densify
+- Gauge/summary cards compact: 44px ring value, dense mono, thinner padding.
+- Stats body grids gap_2; system/load cards use compact dark chrome.

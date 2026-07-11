@@ -143,7 +143,7 @@ impl NyaTermApp {
                 div()
                     .grid()
                     .grid_cols(4)
-                    .gap_3()
+                    .gap_2()
                     .child(resource_gauge_card(
                         "CPU",
                         format!("{:.0}%", stats.cpu.usage.clamp(0., 100.)),
@@ -195,14 +195,14 @@ impl NyaTermApp {
                 div()
                     .grid()
                     .grid_cols(3)
-                    .gap_3()
+                    .gap_2()
                     .child(
                         div()
                             .rounded_md()
                             .border_1()
                             .border_color(rgb(0x30363d))
-                            .bg(rgb(0x151923))
-                            .p_4()
+                            .bg(rgb(0x0d1117))
+                            .p_2()
                             .child(
                                 div()
                                     .text_sm()
@@ -229,8 +229,8 @@ impl NyaTermApp {
                             .rounded_md()
                             .border_1()
                             .border_color(rgb(0x30363d))
-                            .bg(rgb(0x151923))
-                            .p_4()
+                            .bg(rgb(0x0d1117))
+                            .p_2()
                             .child(div().text_sm().font_weight(FontWeight(700.)).child("Load"))
                             .child(capability_line("1 min", format!("{:.2}", stats.load.load1)))
                             .child(capability_line("5 min", format!("{:.2}", stats.load.load5)))
@@ -251,8 +251,8 @@ impl NyaTermApp {
                             .rounded_md()
                             .border_1()
                             .border_color(rgb(0x30363d))
-                            .bg(rgb(0x151923))
-                            .p_4()
+                            .bg(rgb(0x0d1117))
+                            .p_2()
                             .child(
                                 div()
                                     .text_sm()
@@ -288,8 +288,8 @@ impl NyaTermApp {
                             .rounded_md()
                             .border_1()
                             .border_color(rgb(0x30363d))
-                            .bg(rgb(0x151923))
-                            .p_4()
+                            .bg(rgb(0x0d1117))
+                            .p_2()
                             .child(
                                 div()
                                     .text_sm()
@@ -303,8 +303,8 @@ impl NyaTermApp {
                             .rounded_md()
                             .border_1()
                             .border_color(rgb(0x30363d))
-                            .bg(rgb(0x151923))
-                            .p_4()
+                            .bg(rgb(0x0d1117))
+                            .p_2()
                             .child(div().text_sm().font_weight(FontWeight(700.)).child("Disks"))
                             .when(busiest_disk.is_some(), |this| {
                                 let disk = busiest_disk.cloned().expect("checked is_some");

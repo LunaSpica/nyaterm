@@ -609,30 +609,33 @@ pub(super) fn resource_gauge_card(
     detail: String,
     ratio: f64,
 ) -> impl IntoElement {
+    // Tauri ResourceMonitor ring-ish card: compact height, dense mono value.
     let ratio = ratio.clamp(0., 1.);
     div()
         .rounded_md()
         .border_1()
-        .border_color(usage_color(ratio))
-        .bg(rgb(0x10151e))
-        .p_4()
+        .border_color(rgb(0x30363d))
+        .bg(rgb(0x0d1117))
+        .px_2()
+        .py_2()
         .flex()
         .items_center()
-        .gap_3()
+        .gap_2()
         .child(
             div()
-                .size(px(64.))
+                .size(px(44.))
                 .rounded_full()
                 .border_1()
                 .border_color(usage_color(ratio))
-                .bg(rgb(0x151923))
+                .bg(rgb(0x161b22))
                 .flex()
                 .items_center()
                 .justify_center()
                 .child(
                     div()
-                        .text_sm()
-                        .font_weight(FontWeight(800.))
+                        .font_family("JetBrains Mono")
+                        .text_size(px(11.))
+                        .font_weight(FontWeight(700.))
                         .text_color(usage_color(ratio))
                         .child(value),
                 ),
@@ -643,20 +646,20 @@ pub(super) fn resource_gauge_card(
                 .flex_1()
                 .flex()
                 .flex_col()
-                .gap_2()
+                .gap_1()
                 .child(
                     div()
-                        .text_sm()
-                        .font_weight(FontWeight(800.))
-                        .text_color(rgb(0xe5edf7))
+                        .text_size(px(11.))
+                        .font_weight(FontWeight(600.))
+                        .text_color(rgb(0xc9d1d9))
                         .child(title),
                 )
                 .child(
                     div()
-                        .text_xs()
-                        .line_height(px(17.))
-                        .text_color(rgb(0x98a3b8))
-                        .child(truncate_preview(&detail, 74)),
+                        .text_size(px(10.))
+                        .line_height(px(13.))
+                        .text_color(rgb(0x6e7681))
+                        .child(truncate_preview(&detail, 48)),
                 )
                 .child(stats_progress_bar(ratio)),
         )
@@ -672,33 +675,34 @@ pub(super) fn resource_summary_card(
     div()
         .rounded_md()
         .border_1()
-        .border_color(rgb(0x2a3140))
-        .bg(rgb(0x151923))
-        .p_4()
+        .border_color(rgb(0x30363d))
+        .bg(rgb(0x0d1117))
+        .px_2()
+        .py_2()
         .flex()
         .flex_col()
-        .gap_2()
+        .gap_1()
         .child(
             div()
-                .text_xs()
-                .font_weight(FontWeight(800.))
-                .text_color(rgb(0x8f98aa))
+                .text_size(px(10.))
+                .font_weight(FontWeight(700.))
+                .text_color(rgb(0x6e7681))
                 .child(title),
         )
         .child(
             div()
                 .font_family("JetBrains Mono")
-                .text_sm()
-                .font_weight(FontWeight(800.))
+                .text_size(px(12.))
+                .font_weight(FontWeight(700.))
                 .text_color(usage_color(ratio))
                 .child(value),
         )
         .child(
             div()
-                .text_xs()
-                .line_height(px(17.))
-                .text_color(rgb(0x98a3b8))
-                .child(truncate_preview(&detail, 80)),
+                .text_size(px(10.))
+                .line_height(px(13.))
+                .text_color(rgb(0x8b949e))
+                .child(truncate_preview(&detail, 56)),
         )
         .child(stats_progress_bar(ratio))
 }
