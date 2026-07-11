@@ -101,6 +101,7 @@ pub(super) fn symlink_input_row(
     invalid: bool,
     on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
 ) -> impl IntoElement {
+    let palette = crate::ui::theme::theme_palette("github-dark");
     div()
         .mt_3()
         .flex()
@@ -110,7 +111,7 @@ pub(super) fn symlink_input_row(
             div()
                 .w(px(72.))
                 .text_xs()
-                .text_color(rgb(0x98a3b8))
+                .text_color(rgb(palette.text_muted))
                 .child(label),
         )
         .child(
@@ -126,9 +127,9 @@ pub(super) fn symlink_input_row(
                 } else if focused {
                     rgb(0x256d3f)
                 } else {
-                    rgb(0x334155)
+                    rgb(palette.border)
                 })
-                .bg(rgb(0x0d1320))
+                .bg(rgb(palette.input))
                 .px_3()
                 .flex()
                 .items_center()
@@ -136,9 +137,9 @@ pub(super) fn symlink_input_row(
                 .text_sm()
                 .text_color(
                     if value.is_empty() || value == "Symlink name" || value == "/path/to/target" {
-                        rgb(0x64748b)
+                        rgb(palette.text_muted)
                     } else {
-                        rgb(0xe5edf7)
+                        rgb(palette.text)
                     },
                 )
                 .cursor_pointer()
@@ -180,6 +181,7 @@ pub(super) fn property_input_row(
     disabled: bool,
     on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
 ) -> impl IntoElement {
+    let palette = crate::ui::theme::theme_palette("github-dark");
     div()
         .flex()
         .items_center()
@@ -188,7 +190,7 @@ pub(super) fn property_input_row(
             div()
                 .w(px(72.))
                 .text_xs()
-                .text_color(rgb(0x98a3b8))
+                .text_color(rgb(palette.text_muted))
                 .child(label),
         )
         .child(
@@ -202,12 +204,12 @@ pub(super) fn property_input_row(
                 .border_color(if focused {
                     rgb(0x256d3f)
                 } else {
-                    rgb(0x334155)
+                    rgb(palette.border)
                 })
                 .bg(if disabled {
-                    rgb(0x151923)
+                    rgb(palette.surface)
                 } else {
-                    rgb(0x0d1320)
+                    rgb(palette.input)
                 })
                 .px_3()
                 .flex()
@@ -215,9 +217,9 @@ pub(super) fn property_input_row(
                 .font_family("JetBrains Mono")
                 .text_xs()
                 .text_color(if value.is_empty() {
-                    rgb(0x64748b)
+                    rgb(palette.text_muted)
                 } else {
-                    rgb(0xe5edf7)
+                    rgb(palette.text)
                 })
                 .cursor_pointer()
                 .on_click(on_click)
@@ -340,11 +342,12 @@ pub(super) fn transfer_job_row(
     selected_job_id: Option<String>,
     cx: &mut Context<NyaTermApp>,
 ) -> impl IntoElement {
+        let palette = cx.entity().read(cx).theme_palette();
     let status_color = match job.status {
         TransferJobStatus::Running => rgb(0xfacc15),
         TransferJobStatus::Paused => rgb(0x93c5fd),
         TransferJobStatus::Cancelling => rgb(0xfbbf24),
-        TransferJobStatus::Cancelled => rgb(0x94a3b8),
+        TransferJobStatus::Cancelled => rgb(palette.text_muted),
         TransferJobStatus::Completed => rgb(0x34d399),
         TransferJobStatus::Failed => rgb(0xfb7185),
     };
@@ -440,7 +443,7 @@ pub(super) fn transfer_job_row(
                 .bg(if is_selected {
                     rgb(0x15351f)
                 } else {
-                    rgb(0x10151e)
+                    rgb(palette.input)
                 })
                 .text_xs()
                 .text_color(if is_selected {
@@ -496,12 +499,12 @@ pub(super) fn transfer_job_row(
         .border_color(if job_selected {
             rgb(0x256d3f)
         } else {
-            rgb(0x21262d)
+            rgb(palette.surface_elevated)
         })
         .bg(if job_selected {
             rgb(0x10251d)
         } else {
-            rgb(0x161b22)
+            rgb(palette.surface)
         })
         .px_2()
         .py_2()
@@ -529,12 +532,12 @@ pub(super) fn transfer_job_row(
                                 .flex()
                                 .items_center()
                                 .gap_2()
-                                .child(status_pill(direction, rgb(0x93c5fd), rgb(0x17253b)))
+                                .child(status_pill(direction, rgb(0x93c5fd), rgb(palette.hover)))
                                 .child(
                                     div()
                                         .text_sm()
                                         .font_weight(FontWeight(700.))
-                                        .text_color(rgb(0xe5edf7))
+                                        .text_color(rgb(palette.text))
                                         .child(transfer_job_title(&job.kind)),
                                 ),
                         )
@@ -585,6 +588,7 @@ pub(super) fn sort_header_cell(
     resizing_column: Option<TransferBrowserSortColumn>,
     cx: &mut Context<NyaTermApp>,
 ) -> impl IntoElement {
+        let palette = cx.entity().read(cx).theme_palette();
     let is_active = column == active_column;
     let is_resizing = resizing_column == Some(column);
     let label = if is_active {
@@ -606,21 +610,21 @@ pub(super) fn sort_header_cell(
         .items_center()
         .px_2()
         .border_r_1()
-        .border_color(rgb(0x21262d))
+        .border_color(rgb(palette.surface_elevated))
         .cursor_pointer()
         .bg(if is_active {
-            rgb(0x17253b)
+            rgb(palette.hover)
         } else {
-            rgb(0x12171f)
+            rgb(palette.section_header)
         })
         .text_size(px(10.))
         .font_weight(FontWeight(800.))
         .text_color(if is_active {
             rgb(0x93c5fd)
         } else {
-            rgb(0x64748b)
+            rgb(palette.text_muted)
         })
-        .hover(|this| this.bg(rgb(0x18202b)).text_color(rgb(0xdbeafe)))
+        .hover(|this| this.bg(rgb(palette.hover)).text_color(rgb(palette.text)))
         .on_click(cx.listener(move |this, _, _, cx| {
             this.toggle_transfer_browser_sort(column, cx);
         }))
@@ -826,6 +830,7 @@ pub(super) fn queue_action_button(
     enabled: bool,
     on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
 ) -> impl IntoElement {
+    let palette = crate::ui::theme::theme_palette("github-dark");
     div()
         .id(SharedString::from(id.into()))
         .h(px(22.))
@@ -837,12 +842,12 @@ pub(super) fn queue_action_button(
         .rounded_sm()
         .text_size(px(10.))
         .text_color(if enabled {
-            rgb(0x8b949e)
+            rgb(palette.text_muted)
         } else {
-            rgb(0x484f58)
+            rgb(palette.border)
         })
         .cursor_pointer()
-        .hover(|this| this.bg(rgb(0x21262d)).text_color(rgb(0xc9d1d9)))
+        .hover(|this| this.bg(rgb(palette.surface_elevated)).text_color(rgb(palette.text)))
         .opacity(if enabled { 1. } else { 0.4 })
         .when(enabled, |this| this.on_click(on_click))
         .child(label)

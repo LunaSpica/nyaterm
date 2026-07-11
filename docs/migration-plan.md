@@ -836,3 +836,9 @@ service boundary first:
 - Process table/menu/summary/detail chrome, resource gauge cards, and compact SVG action buttons use ThemePalette.
 - Docker details lines/panels and tab bar/chips follow live theme.
 - Stats view system cards and CPU core rows replace github-dark hardcodes.
+
+## 2026-07-11 Transfers + Connections interior palette densify
+- Transfer browser toolbar/footer buttons, path bar/history/favorites, entry rows, queue, and overlays (create/delete/move/editor/properties/context) map chrome hardcodes to ThemePalette.
+- Connections view: rows, selection strip, editor/delete confirm panels, context menus, kind/toggle chips, and icon actions themed.
+- Shared `view_widgets` connection/tunnel compact rows and tab actions densified; bottom send-command chips themed.
+- Semantic status colors (job state dots, risk pills, close-red) intentionally retained.

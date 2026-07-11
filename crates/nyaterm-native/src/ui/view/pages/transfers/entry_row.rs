@@ -5,6 +5,7 @@ pub(super) fn transfer_browser_parent_entry_row(
     column_widths: TransferBrowserColumnWidths,
     cx: &mut Context<NyaTermApp>,
 ) -> impl IntoElement {
+        let palette = cx.entity().read(cx).theme_palette();
     let parent_path = remote_parent_path(&current_path);
     let context_path = current_path.clone();
     div()
@@ -14,12 +15,12 @@ pub(super) fn transfer_browser_parent_entry_row(
         .items_center()
         .rounded_sm()
         .border_1()
-        .border_color(rgb(0x263142))
+        .border_color(rgb(palette.border))
         .bg(rgb(0x0f1724))
         .px_2()
         .py_2()
         .cursor_pointer()
-        .hover(|this| this.bg(rgb(0x18202b)))
+        .hover(|this| this.bg(rgb(palette.hover)))
         .on_click(cx.listener(|this, _: &ClickEvent, window, cx| {
             this.open_transfer_parent_directory(window, cx);
         }))
@@ -45,7 +46,7 @@ pub(super) fn transfer_browser_parent_entry_row(
                 .gap_2()
                 .text_sm()
                 .font_weight(FontWeight(700.))
-                .text_color(rgb(0xdbeafe))
+                .text_color(rgb(palette.text))
                 .child(transfer_entry_icon(true, false, false))
                 .child(".."),
         )
@@ -73,7 +74,7 @@ pub(super) fn transfer_browser_parent_entry_row(
                         .min_w_0()
                         .font_family("JetBrains Mono")
                         .text_xs()
-                        .text_color(rgb(0x64748b))
+                        .text_color(rgb(palette.text_muted))
                         .child(truncate_preview(&parent_path, 32)),
                 ),
         )
@@ -99,6 +100,7 @@ pub(super) fn transfer_browser_entry_row(
     ai_actions: Vec<AiCustomActionConfig>,
     cx: &mut Context<NyaTermApp>,
 ) -> impl IntoElement {
+        let palette = cx.entity().read(cx).theme_palette();
     let entry_path = entry.path.clone();
     let mouse_down_path = entry.path.clone();
     let mouse_move_path = entry.path.clone();
@@ -145,17 +147,17 @@ pub(super) fn transfer_browser_entry_row(
         .gap_1()
         .items_center()
         .border_b_1()
-        .border_color(rgb(0x21262d))
+        .border_color(rgb(palette.surface_elevated))
         .bg(if is_selected {
             rgb(0x10251d)
         } else if is_marked {
             rgb(0x0f1f18)
         } else {
-            rgb(0x161b22)
+            rgb(palette.surface)
         })
         .px_2()
         .cursor_pointer()
-        .hover(|this| this.bg(rgb(0x18202b)))
+        .hover(|this| this.bg(rgb(palette.hover)))
         .on_mouse_down(
             MouseButton::Left,
             cx.listener(move |this, event: &MouseDownEvent, window, cx| {
@@ -210,7 +212,7 @@ pub(super) fn transfer_browser_entry_row(
                 .text_color(if is_selected {
                     rgb(0xdcfce7)
                 } else {
-                    rgb(0xc9d1d9)
+                    rgb(palette.text)
                 })
                 .child(transfer_entry_icon(
                     is_directory,
@@ -222,7 +224,7 @@ pub(super) fn transfer_browser_entry_row(
                         div()
                             .text_size(px(9.))
                             .font_weight(FontWeight(700.))
-                            .text_color(rgb(0x3fb950))
+                            .text_color(rgb(palette.success))
                             .child("●"),
                     )
                 })
@@ -243,16 +245,16 @@ pub(super) fn transfer_browser_entry_row(
                             } else {
                                 rgb(0x256d3f)
                             })
-                            .bg(rgb(0x0d1320))
+                            .bg(rgb(palette.input))
                             .px_2()
                             .flex()
                             .items_center()
                             .font_family("JetBrains Mono")
                             .text_xs()
                             .text_color(if rename_value.is_empty() {
-                                rgb(0x64748b)
+                                rgb(palette.text_muted)
                             } else {
-                                rgb(0xe5edf7)
+                                rgb(palette.text)
                             })
                             .track_focus(&rename_focus)
                             .on_click(cx.listener(|this, _: &ClickEvent, window, cx| {
@@ -294,7 +296,7 @@ pub(super) fn transfer_browser_entry_row(
                 .flex_none()
                 .truncate()
                 .text_xs()
-                .text_color(rgb(0x8f98aa))
+                .text_color(rgb(palette.text_muted))
                 .child(format_sftp_modified(entry.modified_at)),
         )
         .child(
@@ -314,7 +316,7 @@ pub(super) fn transfer_browser_entry_row(
                 .truncate()
                 .text_xs()
                 .font_family("JetBrains Mono")
-                .text_color(rgb(0x8f98aa))
+                .text_color(rgb(palette.text_muted))
                 .child(
                     entry
                         .permissions
@@ -329,7 +331,7 @@ pub(super) fn transfer_browser_entry_row(
                 .truncate()
                 .text_xs()
                 .font_family("JetBrains Mono")
-                .text_color(rgb(0x8f98aa))
+                .text_color(rgb(palette.text_muted))
                 .child(if entry.owner.is_empty() {
                     "-".to_string()
                 } else {
@@ -343,7 +345,7 @@ pub(super) fn transfer_browser_entry_row(
                 .truncate()
                 .text_xs()
                 .font_family("JetBrains Mono")
-                .text_color(rgb(0x8f98aa))
+                .text_color(rgb(palette.text_muted))
                 .child(if entry.group.is_empty() {
                     "-".to_string()
                 } else {

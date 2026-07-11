@@ -45,8 +45,8 @@ impl NyaTermApp {
                     .w(px(520.))
                     .rounded_md()
                     .border_1()
-                    .border_color(rgb(0x303848))
-                    .bg(rgb(0x0b0f16))
+                    .border_color(rgb(palette.border))
+                    .bg(rgb(palette.bg))
                     .shadow_lg()
                     .p_4()
                     .flex()
@@ -69,7 +69,7 @@ impl NyaTermApp {
                     .child(
                         div()
                             .text_xs()
-                            .text_color(rgb(0x98a3b8))
+                            .text_color(rgb(palette.text_muted))
                             .child("The externally opened file changed locally."),
                     )
                     .child(metric(palette, "Remote", truncate_preview(&prompt.remote_path, 58)))
@@ -182,8 +182,8 @@ impl NyaTermApp {
                     .h(px(620.))
                     .rounded_md()
                     .border_1()
-                    .border_color(rgb(0x303848))
-                    .bg(rgb(0x0b0f16))
+                    .border_color(rgb(palette.border))
+                    .bg(rgb(palette.bg))
                     .shadow_lg()
                     .p_4()
                     .flex()
@@ -205,7 +205,7 @@ impl NyaTermApp {
                                         div()
                                             .text_sm()
                                             .font_weight(FontWeight(800.))
-                                            .text_color(rgb(0xe5edf7))
+                                            .text_color(rgb(palette.text))
                                             .child(format!(
                                                 "Remote Editor: {}",
                                                 truncate_preview(&state.name, 52)
@@ -215,11 +215,11 @@ impl NyaTermApp {
                                         div()
                                             .font_family("JetBrains Mono")
                                             .text_xs()
-                                            .text_color(rgb(0x8f98aa))
+                                            .text_color(rgb(palette.text_muted))
                                             .child(truncate_preview(&state.remote_path, 96)),
                                     ),
                             )
-                            .child(status_pill(status, rgb(0x93c5fd), rgb(0x17253b))),
+                            .child(status_pill(status, rgb(0x93c5fd), rgb(palette.hover))),
                     )
                     .when_some(state.error.clone(), |this, error| {
                         this.child(
@@ -285,18 +285,18 @@ impl NyaTermApp {
                                     .border_color(if state.focused_field == TransferEditorField::Search {
                                         rgb(0x256d3f)
                                     } else {
-                                        rgb(0x303848)
+                                        rgb(palette.border)
                                     })
-                                    .bg(rgb(0x10151e))
+                                    .bg(rgb(palette.input))
                                     .px_3()
                                     .flex()
                                     .items_center()
                                     .font_family("JetBrains Mono")
                                     .text_xs()
                                     .text_color(if state.search_query.is_empty() {
-                                        rgb(0x64748b)
+                                        rgb(palette.text_muted)
                                     } else {
-                                        rgb(0xe5edf7)
+                                        rgb(palette.text)
                                     })
                                     .cursor_pointer()
                                     .on_click(cx.listener(|this, _, window, cx| {
@@ -311,7 +311,7 @@ impl NyaTermApp {
                             .child(
                                 div()
                                     .text_xs()
-                                    .text_color(rgb(0x8f98aa))
+                                    .text_color(rgb(palette.text_muted))
                                     .child(if state.search_query.is_empty() {
                                         "0 / 0".to_string()
                                     } else if search_matches.is_empty() {
@@ -354,14 +354,14 @@ impl NyaTermApp {
                             .rounded_md()
                             .border_1()
                             .border_color(rgb(0x202633))
-                            .bg(rgb(0x10151e))
+                            .bg(rgb(palette.input))
                             .p_3()
                             .font_family("JetBrains Mono")
                             .text_xs()
                             .text_color(if state.loading {
-                                rgb(0x64748b)
+                                rgb(palette.text_muted)
                             } else {
-                                rgb(0xdbeafe)
+                                rgb(palette.text)
                             })
                             .overflow_hidden()
                             .child(if state.loading {
@@ -381,7 +381,7 @@ impl NyaTermApp {
                             .child(
                                 div()
                                     .text_xs()
-                                    .text_color(rgb(0x8f98aa))
+                                    .text_color(rgb(palette.text_muted))
                                     .child(format!(
                                         "{line_count} line(s) · {byte_count} byte(s) · Ctrl/Cmd+F search · Ctrl/Cmd+S saves"
                                     )),

@@ -125,13 +125,13 @@ impl NyaTermApp {
                     .child(
                         div()
                             .text_size(px(12.))
-                            .text_color(rgb(0x8b949e))
+                            .text_color(rgb(palette.text_muted))
                             .child("No saved connections"),
                     )
                     .child(
                         div()
                             .text_size(px(11.))
-                            .text_color(rgb(0x6e7681))
+                            .text_color(rgb(palette.text_dimmed))
                             .child("Create one or open a temporary SSH link."),
                     ),
             );
@@ -141,7 +141,7 @@ impl NyaTermApp {
                     .px_4()
                     .py_8()
                     .text_size(px(11.))
-                    .text_color(rgb(0x6e7681))
+                    .text_color(rgb(palette.text_dimmed))
                     .child("No connections match the current search."),
             );
         } else {
@@ -157,7 +157,7 @@ impl NyaTermApp {
                                 .mx_2()
                                 .my_1()
                                 .h(px(1.))
-                                .bg(rgb(0x30363d)),
+                                .bg(rgb(palette.border)),
                         );
                     }
                     ConnectionListRow::GroupHeader(section) => {
@@ -171,7 +171,7 @@ impl NyaTermApp {
                                 .pl(px(28.))
                                 .h(px(28.))
                                 .text_size(px(11.))
-                                .text_color(rgb(0x6e7681))
+                                .text_color(rgb(palette.text_dimmed))
                                 .child("Empty group"),
                         );
                     }
@@ -422,6 +422,7 @@ impl NyaTermApp {
         header_only: bool,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
+        let palette = self.theme_palette();
         let expanded = section
             .group_id
             .as_ref()
@@ -442,7 +443,7 @@ impl NyaTermApp {
                         .py_1()
                         .pl(px(28.))
                         .text_size(px(11.))
-                        .text_color(rgb(0x6e7681))
+                        .text_color(rgb(palette.text_dimmed))
                         .child("Empty group"),
                 );
             } else {
@@ -482,7 +483,7 @@ impl NyaTermApp {
                                     == section.group_id.as_deref()
                         });
                         if drop_inside {
-                            rgb(0x122033)
+                            rgb(palette.hover)
                         } else if section
                             .group_id
                             .as_ref()
@@ -490,9 +491,9 @@ impl NyaTermApp {
                                 self.hovered_connection_group_id.as_deref() == Some(id.as_str())
                             })
                         {
-                            rgb(0x1c2128)
+                            rgb(palette.hover)
                         } else {
-                            rgb(0x161b22)
+                            rgb(palette.surface)
                         }
                     })
                     .when(
@@ -628,7 +629,7 @@ impl NyaTermApp {
                                 div()
                                     .text_xs()
                                     .font_weight(FontWeight(800.))
-                                    .text_color(rgb(0x8b949e))
+                                    .text_color(rgb(palette.text_muted))
                                     .child(if expanded { "▾" } else { "▸" }),
                             )
                             .child(connection_type_icon(
@@ -640,13 +641,13 @@ impl NyaTermApp {
                                 div()
                                     .text_xs()
                                     .font_weight(FontWeight(700.))
-                                    .text_color(rgb(0xc9d1d9))
+                                    .text_color(rgb(palette.text))
                                     .child(truncate_preview(&group_label, 28)),
                             )
                             .child(
                                 div()
                                     .text_xs()
-                                    .text_color(rgb(0x6e7681))
+                                    .text_color(rgb(palette.text_dimmed))
                                     .child(count.to_string()),
                             ),
                     )
@@ -734,7 +735,7 @@ impl NyaTermApp {
                     .text_size(px(11.))
                     .font_weight(FontWeight(600.))
                     .text_color(rgb(palette.text))
-                    .bg(rgb(0x21262d))
+                    .bg(rgb(palette.surface_elevated))
                     .cursor_pointer()
                     .hover(|this| this.bg(rgb(palette.border)))
                     .on_click(cx.listener(|this, _, window, cx| {
@@ -753,7 +754,7 @@ impl NyaTermApp {
                     .text_size(px(11.))
                     .text_color(rgb(palette.text))
                     .cursor_pointer()
-                    .hover(|this| this.bg(rgb(0x21262d)))
+                    .hover(|this| this.bg(rgb(palette.surface_elevated)))
                     .on_click(cx.listener(|this, _, _, cx| {
                         this.copy_selected_connections(cx);
                     }))
@@ -768,7 +769,7 @@ impl NyaTermApp {
                     .flex()
                     .items_center()
                     .text_size(px(11.))
-                    .text_color(rgb(0xf85149))
+                    .text_color(rgb(palette.danger))
                     .cursor_pointer()
                     .hover(|this| this.bg(rgb(0x3a1717)))
                     .on_click(cx.listener(|this, _, _, cx| {
@@ -787,7 +788,7 @@ impl NyaTermApp {
                     .text_size(px(11.))
                     .text_color(rgb(palette.text_muted))
                     .cursor_pointer()
-                    .hover(|this| this.bg(rgb(0x21262d)).text_color(rgb(palette.text)))
+                    .hover(|this| this.bg(rgb(palette.surface_elevated)).text_color(rgb(palette.text)))
                     .on_click(cx.listener(|this, _, _, cx| {
                         this.clear_selected_connections(cx);
                     }))
@@ -971,9 +972,9 @@ impl NyaTermApp {
                     .text_size(px(12.))
                     .font_weight(FontWeight(500.))
                     .text_color(if selected {
-                        rgb(0x58a6ff)
+                        rgb(palette.accent)
                     } else {
-                        rgb(0xc9d1d9)
+                        rgb(palette.text)
                     })
                     .overflow_hidden()
                     .child(truncate_preview(&connection.name, 48)),
@@ -1023,7 +1024,7 @@ impl NyaTermApp {
                         .top_0()
                         .h(px(2.))
                         .rounded_full()
-                        .bg(rgb(0x58a6ff)),
+                        .bg(rgb(palette.accent)),
                 )
             })
             .when(show_after, |this| {
@@ -1035,7 +1036,7 @@ impl NyaTermApp {
                         .bottom_0()
                         .h(px(2.))
                         .rounded_full()
-                        .bg(rgb(0x58a6ff)),
+                        .bg(rgb(palette.accent)),
                 )
             })
     }
@@ -1046,6 +1047,7 @@ impl NyaTermApp {
         connection_id: String,
         _cx: &mut Context<Self>,
     ) -> gpui::AnyElement {
+        let palette = self.theme_palette();
         let Some(connection) = self
             .connections
             .iter()
@@ -1066,7 +1068,7 @@ impl NyaTermApp {
                             .w(px(64.))
                             .flex_none()
                             .text_size(px(11.))
-                            .text_color(rgb(0x6e7681))
+                            .text_color(rgb(palette.text_dimmed))
                             .child(label),
                     )
                     .child(
@@ -1074,7 +1076,7 @@ impl NyaTermApp {
                             .min_w_0()
                             .flex_1()
                             .text_size(px(11.))
-                            .text_color(rgb(0xc9d1d9))
+                            .text_color(rgb(palette.text))
                             .child(value),
                     ),
             );
@@ -1090,8 +1092,8 @@ impl NyaTermApp {
                         .w(px(220.))
             .rounded_md()
             .border_1()
-            .border_color(rgb(0x30363d))
-            .bg(rgb(0x161b22))
+            .border_color(rgb(palette.border))
+            .bg(rgb(palette.surface))
             .shadow_lg()
             .px_2()
             .py_2()
@@ -1189,13 +1191,13 @@ impl NyaTermApp {
                         div()
                             .text_size(px(15.))
                             .font_weight(FontWeight(700.))
-                            .text_color(rgb(0xc9d1d9))
+                            .text_color(rgb(palette.text))
                             .child(title),
                     )
                     .child(
                         div()
                             .text_size(px(12.))
-                            .text_color(rgb(0x8b949e))
+                            .text_color(rgb(palette.text_muted))
                             .child("Create or edit a saved session profile."),
                     ),
             )
@@ -1269,7 +1271,7 @@ impl NyaTermApp {
                             .child(
                                 div()
                                     .text_xs()
-                                    .text_color(rgb(0x8b949e))
+                                    .text_color(rgb(palette.text_muted))
                                     .child(format!("Group · {group_label}")),
                             )
                             .child(small_button(palette, 
@@ -1335,7 +1337,7 @@ impl NyaTermApp {
                                 .child(
                                     div()
                                         .text_xs()
-                                        .text_color(rgb(0x8b949e))
+                                        .text_color(rgb(palette.text_muted))
                                         .child(format!("Auth · {}", editor.auth_mode)),
                                 )
                                 .child(small_button(palette, 
@@ -1371,7 +1373,7 @@ impl NyaTermApp {
                                     .child(
                                         div()
                                             .text_xs()
-                                            .text_color(rgb(0x8b949e))
+                                            .text_color(rgb(palette.text_muted))
                                             .child(format!("Key · {}", truncate_preview(&key_label, 24))),
                                     )
                                     .child(small_button(palette, 
@@ -1392,7 +1394,7 @@ impl NyaTermApp {
                                 .child(
                                     div()
                                         .text_xs()
-                                        .text_color(rgb(0x8b949e))
+                                        .text_color(rgb(palette.text_muted))
                                         .child(format!("OTP · {}", truncate_preview(&otp_label, 24))),
                                 )
                                 .child(small_button(palette, 
@@ -1561,7 +1563,7 @@ impl NyaTermApp {
                                 .child(
                                     div()
                                         .text_xs()
-                                        .text_color(rgb(0x8b949e))
+                                        .text_color(rgb(palette.text_muted))
                                         .child(format!(
                                             "Port · {}",
                                             if editor.serial_port.is_empty() {
@@ -1598,7 +1600,7 @@ impl NyaTermApp {
                 this.child(
                     div()
                         .text_size(px(12.))
-                        .text_color(rgb(0xff7b72))
+                        .text_color(rgb(palette.danger))
                         .child(error),
                 )
             })
@@ -1607,7 +1609,7 @@ impl NyaTermApp {
                     .mt_1()
                     .pt_3()
                     .border_t_1()
-                    .border_color(rgb(0x30363d))
+                    .border_color(rgb(palette.border))
                     .flex()
                     .items_center()
                     .justify_end()
@@ -1660,7 +1662,7 @@ impl NyaTermApp {
                 div()
                     .text_size(px(15.))
                     .font_weight(FontWeight(700.))
-                    .text_color(rgb(0xc9d1d9))
+                    .text_color(rgb(palette.text))
                     .child(title),
             )
             .child(editor_field(
@@ -1674,7 +1676,7 @@ impl NyaTermApp {
                 }),
             ))
             .when_some(editor.error.clone(), |this, error| {
-                this.child(div().text_size(px(12.)).text_color(rgb(0xff7b72)).child(error))
+                this.child(div().text_size(px(12.)).text_color(rgb(palette.danger)).child(error))
             })
             .child(modal_dialog_footer(palette, 
                 "connection-group-close",
@@ -1710,7 +1712,7 @@ impl NyaTermApp {
             .child(
                 div()
                     .text_size(px(12.))
-                    .text_color(rgb(0xc9d1d9))
+                    .text_color(rgb(palette.text))
                     .child(format!("Delete \"{}\"?", confirm.label)),
             )
             .child(modal_dialog_footer(palette, 
@@ -1747,7 +1749,7 @@ impl NyaTermApp {
             .child(
                 div()
                     .text_size(px(12.))
-                    .text_color(rgb(0xc9d1d9))
+                    .text_color(rgb(palette.text))
                     .child(format!(
                         "Delete \"{}\" ({} connections, {} child groups)?",
                         confirm.label, confirm.connection_count, confirm.child_group_count
@@ -1767,6 +1769,7 @@ impl NyaTermApp {
         modal_dialog_shell(palette, "connection-group-delete-modal", 440., card)
     }
     fn connection_context_menu_overlay(&mut self, cx: &mut Context<Self>) -> impl IntoElement {
+        let palette = self.theme_palette();
         let state = self.connection_context_menu.clone().unwrap_or(ConnectionContextMenuState {
             connection_id: String::new(),
             x: px(24.),
@@ -1813,8 +1816,8 @@ impl NyaTermApp {
                     .w(px(180.))
                     .rounded_md()
                     .border_1()
-                    .border_color(rgb(0x30363d))
-                    .bg(rgb(0x0b0f16))
+                    .border_color(rgb(palette.border))
+                    .bg(rgb(palette.bg))
                     .shadow_lg()
                     .py_1()
                     .on_click(|_, _, cx| cx.stop_propagation())
@@ -1891,6 +1894,7 @@ impl NyaTermApp {
         &mut self,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
+        let palette = self.theme_palette();
         let state = self
             .connection_group_context_menu
             .clone()
@@ -1948,8 +1952,8 @@ impl NyaTermApp {
                     .w(px(180.))
                     .rounded_md()
                     .border_1()
-                    .border_color(rgb(0x30363d))
-                    .bg(rgb(0x0b0f16))
+                    .border_color(rgb(palette.border))
+                    .bg(rgb(palette.bg))
                     .shadow_lg()
                     .py_1()
                     .on_click(|_, _, cx| cx.stop_propagation())
@@ -2183,6 +2187,7 @@ fn kind_chip(
     selected: bool,
     on_click: impl Fn(&gpui::ClickEvent, &mut gpui::Window, &mut gpui::App) + 'static,
 ) -> impl IntoElement {
+    let palette = crate::ui::theme::theme_palette("github-dark");
     div()
         .id(SharedString::from(format!("connection-kind-{label}")))
         .h(px(24.))
@@ -2196,14 +2201,14 @@ fn kind_chip(
         .text_color(if selected {
             rgb(0xffffff)
         } else {
-            rgb(0x8b949e)
+            rgb(palette.text_muted)
         })
         .bg(if selected {
             rgb(0x238636)
         } else {
-            rgb(0x21262d)
+            rgb(palette.surface_elevated)
         })
-        .hover(|this| this.bg(rgb(0x30363d)))
+        .hover(|this| this.bg(rgb(palette.border)))
         .child(label)
         .on_click(on_click)
 }
@@ -2213,6 +2218,7 @@ fn toggle_chip(
     selected: bool,
     on_click: impl Fn(&gpui::ClickEvent, &mut gpui::Window, &mut gpui::App) + 'static,
 ) -> impl IntoElement {
+    let palette = crate::ui::theme::theme_palette("github-dark");
     div()
         .id(SharedString::from(format!("connection-toggle-{label}")))
         .h(px(22.))
@@ -2224,16 +2230,16 @@ fn toggle_chip(
         .font_weight(FontWeight(700.))
         .cursor_pointer()
         .text_color(if selected {
-            rgb(0x3fb950)
+            rgb(palette.success)
         } else {
-            rgb(0x8b949e)
+            rgb(palette.text_muted)
         })
         .bg(if selected {
             rgb(0x12261a)
         } else {
-            rgb(0x21262d)
+            rgb(palette.surface_elevated)
         })
-        .hover(|this| this.bg(rgb(0x30363d)))
+        .hover(|this| this.bg(rgb(palette.border)))
         .child(label)
         .on_click(on_click)
 }
@@ -2253,6 +2259,7 @@ fn icon_action_button(
     label: &'static str,
     on_click: impl Fn(&gpui::ClickEvent, &mut gpui::Window, &mut gpui::App) + 'static,
 ) -> impl IntoElement {
+    let palette = crate::ui::theme::theme_palette("github-dark");
     // label may be a glyph fallback or an icons/*.svg path.
     let is_svg = label.starts_with("icons/") && label.ends_with(".svg");
     div()
@@ -2263,9 +2270,9 @@ fn icon_action_button(
         .justify_center()
         .rounded_md()
         .text_size(px(11.))
-        .text_color(rgb(0x8b949e))
+        .text_color(rgb(palette.text_muted))
         .cursor_pointer()
-        .hover(|this| this.bg(rgb(0x21262d)).text_color(rgb(0xc9d1d9)))
+        .hover(|this| this.bg(rgb(palette.surface_elevated)).text_color(rgb(palette.text)))
         .on_click(on_click)
         .when(is_svg, |this| {
             this.child(
@@ -2279,11 +2286,12 @@ fn icon_action_button(
 }
 
 fn menu_separator() -> impl IntoElement {
+    let palette = crate::ui::theme::theme_palette("github-dark");
     div()
         .h(px(1.))
         .mx_2()
         .my_1()
-        .bg(rgb(0x30363d))
+        .bg(rgb(palette.border))
 }
 
 fn menu_item(
@@ -2291,6 +2299,7 @@ fn menu_item(
     label: &'static str,
     on_click: impl Fn(&gpui::ClickEvent, &mut gpui::Window, &mut gpui::App) + 'static,
 ) -> impl IntoElement {
+    let palette = crate::ui::theme::theme_palette("github-dark");
     div()
         .id(SharedString::from(id.into()))
         .h(px(28.))
@@ -2298,9 +2307,9 @@ fn menu_item(
         .flex()
         .items_center()
         .text_size(px(12.))
-        .text_color(rgb(0xc9d1d9))
+        .text_color(rgb(palette.text))
         .cursor_pointer()
-        .hover(|this| this.bg(rgb(0x21262d)))
+        .hover(|this| this.bg(rgb(palette.surface_elevated)))
         .on_click(on_click)
         .child(label)
 }
@@ -2310,6 +2319,7 @@ fn menu_item_owned(
     label: String,
     on_click: impl Fn(&gpui::ClickEvent, &mut gpui::Window, &mut gpui::App) + 'static,
 ) -> impl IntoElement {
+    let palette = crate::ui::theme::theme_palette("github-dark");
     div()
         .id(SharedString::from(id.into()))
         .h(px(28.))
@@ -2317,9 +2327,9 @@ fn menu_item_owned(
         .flex()
         .items_center()
         .text_size(px(12.))
-        .text_color(rgb(0xc9d1d9))
+        .text_color(rgb(palette.text))
         .cursor_pointer()
-        .hover(|this| this.bg(rgb(0x21262d)))
+        .hover(|this| this.bg(rgb(palette.surface_elevated)))
         .on_click(on_click)
         .child(label)
 }

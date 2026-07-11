@@ -28,6 +28,7 @@ impl NyaTermApp {
         &mut self,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
+        let palette = self.theme_palette();
         let state = self
             .transfer_browser_upload_menu
             .unwrap_or(TransferBrowserUploadMenuState {
@@ -54,8 +55,8 @@ impl NyaTermApp {
                     .w(px(176.))
                     .rounded_md()
                     .border_1()
-                    .border_color(rgb(0x30363d))
-                    .bg(rgb(0x161b22))
+                    .border_color(rgb(palette.border))
+                    .bg(rgb(palette.surface))
                     .shadow_lg()
                     .py_1()
                     .flex()
@@ -97,6 +98,7 @@ fn upload_menu_item(
     label: &'static str,
     on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
 ) -> impl IntoElement {
+    let palette = crate::ui::theme::theme_palette("github-dark");
     div()
         .id(SharedString::from(id.into()))
         .h(px(30.))
@@ -108,14 +110,14 @@ fn upload_menu_item(
         .gap_2()
         .cursor_pointer()
         .text_size(px(12.))
-        .text_color(rgb(0xc9d1d9))
-        .hover(|this| this.bg(rgb(0x21262d)).text_color(rgb(0xffffff)))
+        .text_color(rgb(palette.text))
+        .hover(|this| this.bg(rgb(palette.surface_elevated)).text_color(rgb(0xffffff)))
         .child(
             svg()
                 .size(px(16.))
                 .flex_none()
                 .path(icon_path)
-                .text_color(rgb(0x8b949e)),
+                .text_color(rgb(palette.text_muted)),
         )
         .child(label)
         .on_click(on_click)

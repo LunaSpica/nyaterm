@@ -5,6 +5,7 @@ impl NyaTermApp {
         &mut self,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
+        let palette = self.theme_palette();
         let state =
             self.transfer_browser_context_menu
                 .clone()
@@ -62,8 +63,8 @@ impl NyaTermApp {
                     .w(px(268.))
                     .rounded_md()
                     .border_1()
-                    .border_color(rgb(0x303848))
-                    .bg(rgb(0x0b0f16))
+                    .border_color(rgb(palette.border))
+                    .bg(rgb(palette.bg))
                     .shadow_lg()
                     .p_3()
                     .flex()
@@ -84,7 +85,7 @@ impl NyaTermApp {
                                     .min_w_0()
                                     .font_family("JetBrains Mono")
                                     .text_xs()
-                                    .text_color(rgb(0xe5edf7))
+                                    .text_color(rgb(palette.text))
                                     .child(truncate_preview(&state.name, 34)),
                             )
                             .child(status_pill(
@@ -102,7 +103,7 @@ impl NyaTermApp {
                                 } else {
                                     rgb(0x34d399)
                                 },
-                                rgb(0x17253b),
+                                rgb(palette.hover),
                             )),
                     )
                     .when(state.is_current_directory, |this| {

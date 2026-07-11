@@ -59,7 +59,7 @@ impl NyaTermApp {
                             .size(px(28.))
                             .flex_none()
                             .path("icons/conn/folder.svg")
-                            .text_color(rgb(0x484f58)),
+                            .text_color(rgb(palette.border)),
                     )
                     .child(
                         div()
@@ -259,7 +259,7 @@ impl NyaTermApp {
                                     .rounded_md()
                                     .border_1()
                                     .border_color(rgb(0x388bfd))
-                                    .bg(rgb(0x12171f))
+                                    .bg(rgb(palette.section_header))
                                     .px_1()
                                     .flex()
                                     .items_center()
@@ -269,7 +269,7 @@ impl NyaTermApp {
                                             .size(px(16.))
                                             .flex_none()
                                             .path("icons/fe/search.svg")
-                                            .text_color(rgb(0x58a6ff)),
+                                            .text_color(rgb(palette.accent)),
                                     )
                                     .child(
                                         div()
@@ -301,9 +301,9 @@ impl NyaTermApp {
                                                     .font_family("JetBrains Mono")
                                                     .text_size(px(12.))
                                                     .text_color(if search_active {
-                                                        rgb(0xe5edf7)
+                                                        rgb(palette.text)
                                                     } else {
-                                                        rgb(0x6e7681)
+                                                        rgb(palette.text_dimmed)
                                                     })
                                                     .child(truncate_preview(&search_value, 96)),
                                             ),
@@ -319,10 +319,10 @@ impl NyaTermApp {
                                             .justify_center()
                                             .rounded_sm()
                                             .text_size(px(12.))
-                                            .text_color(rgb(0x8b949e))
+                                            .text_color(rgb(palette.text_muted))
                                             .cursor_pointer()
                                             .hover(|this| {
-                                                this.bg(rgb(0x21262d)).text_color(rgb(0xc9d1d9))
+                                                this.bg(rgb(palette.surface_elevated)).text_color(rgb(palette.text))
                                             })
                                             .child("×")
                                             .on_click(cx.listener(|this, _, _, cx| {
@@ -448,11 +448,11 @@ impl NyaTermApp {
                                             .flex()
                                             .items_center()
                                             .rounded_sm()
-                                            .bg(rgb(0x10151e))
+                                            .bg(rgb(palette.input))
                                             .px_2()
                                             .text_size(px(10.))
                                             .font_weight(FontWeight(800.))
-                                            .text_color(rgb(0x64748b))
+                                            .text_color(rgb(palette.text_muted))
                                             .child("ACTIONS"),
                                     ),
                             )
@@ -466,8 +466,8 @@ impl NyaTermApp {
                     .flex_none()
                     .px_2()
                     .border_t_1()
-                    .border_color(rgb(0x30363d))
-                    .bg(rgb(0x161b22))
+                    .border_color(rgb(palette.border))
+                    .bg(rgb(palette.surface))
                     .flex()
                     .items_center()
                     .justify_between()
@@ -479,7 +479,7 @@ impl NyaTermApp {
                             .items_center()
                             .gap_3()
                             .text_size(px(11.))
-                            .text_color(rgb(0x8b949e))
+                            .text_color(rgb(palette.text_muted))
                             .child(format!("{total_count} item(s)"))
                             .when(files_total_size > 0, |this| {
                                 this.child(format_file_size(Some(files_total_size)))
@@ -543,6 +543,7 @@ fn compact_transfer_footer_button(
     icon_path: &'static str,
     on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
 ) -> impl IntoElement {
+    let palette = crate::ui::theme::theme_palette("github-dark");
     // Tauri footer icons: h-6 w-6 (24px)
     div()
         .id(SharedString::from(id.into()))
@@ -551,9 +552,9 @@ fn compact_transfer_footer_button(
         .items_center()
         .justify_center()
         .rounded_md()
-        .text_color(rgb(0x8b949e))
+        .text_color(rgb(palette.text_muted))
         .cursor_pointer()
-        .hover(|this| this.bg(rgb(0x21262d)).text_color(rgb(0xc9d1d9)))
+        .hover(|this| this.bg(rgb(palette.surface_elevated)).text_color(rgb(palette.text)))
         .child(
             svg()
                 .size(px(14.))
@@ -569,7 +570,8 @@ fn compact_transfer_footer_button_active(
     active: bool,
     on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
 ) -> impl IntoElement {
-    let color = if active { rgb(0x58a6ff) } else { rgb(0x8b949e) };
+    let palette = crate::ui::theme::theme_palette("github-dark");
+    let color = if active { rgb(palette.accent) } else { rgb(palette.text_muted) };
     div()
         .id(SharedString::from(id.into()))
         .size(px(24.))
@@ -577,12 +579,12 @@ fn compact_transfer_footer_button_active(
         .items_center()
         .justify_center()
         .rounded_md()
-        .bg(if active { rgb(0x122033) } else { rgb(0x161b22) })
+        .bg(if active { rgb(palette.hover) } else { rgb(palette.surface) })
         .text_color(color)
         .cursor_pointer()
         .hover(|this| {
-            this.bg(rgb(0x21262d))
-                .text_color(if active { rgb(0x79b8ff) } else { rgb(0xc9d1d9) })
+            this.bg(rgb(palette.surface_elevated))
+                .text_color(if active { rgb(0x79b8ff) } else { rgb(palette.text) })
         })
         .child(
             svg()
@@ -594,6 +596,7 @@ fn compact_transfer_footer_button_active(
 }
 
 fn compact_transfer_upload_menu_button(cx: &mut Context<NyaTermApp>) -> impl IntoElement {
+        let palette = cx.entity().read(cx).theme_palette();
     // Tauri: single Upload icon opens DropdownMenu (Upload Files / Upload Folder).
     div()
         .id(SharedString::from("transfer-browser-upload"))
@@ -602,9 +605,9 @@ fn compact_transfer_upload_menu_button(cx: &mut Context<NyaTermApp>) -> impl Int
         .items_center()
         .justify_center()
         .rounded_md()
-        .text_color(rgb(0x8b949e))
+        .text_color(rgb(palette.text_muted))
         .cursor_pointer()
-        .hover(|this| this.bg(rgb(0x21262d)).text_color(rgb(0xc9d1d9)))
+        .hover(|this| this.bg(rgb(palette.surface_elevated)).text_color(rgb(palette.text)))
         .child(
             svg()
                 .size(px(16.))
@@ -624,6 +627,7 @@ fn compact_transfer_toolbar_button(
     icon_path: &'static str,
     on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
 ) -> impl IntoElement {
+    let palette = crate::ui::theme::theme_palette("github-dark");
     // Tauri FileExplorerToolbar: h-7 ghost icon buttons, muted until hover.
     div()
         .id(SharedString::from(id.into()))
@@ -632,9 +636,9 @@ fn compact_transfer_toolbar_button(
         .items_center()
         .justify_center()
         .rounded_md()
-        .text_color(rgb(0x8b949e))
+        .text_color(rgb(palette.text_muted))
         .cursor_pointer()
-        .hover(|this| this.bg(rgb(0x21262d)).text_color(rgb(0xc9d1d9)))
+        .hover(|this| this.bg(rgb(palette.surface_elevated)).text_color(rgb(palette.text)))
         .child(
             svg()
                 .size(px(16.))
@@ -650,7 +654,8 @@ fn compact_transfer_toolbar_button_active(
     active: bool,
     on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
 ) -> impl IntoElement {
-    let color = if active { rgb(0x58a6ff) } else { rgb(0x8b949e) };
+    let palette = crate::ui::theme::theme_palette("github-dark");
+    let color = if active { rgb(palette.accent) } else { rgb(palette.text_muted) };
     div()
         .id(SharedString::from(id.into()))
         .size(px(28.))
@@ -658,10 +663,10 @@ fn compact_transfer_toolbar_button_active(
         .items_center()
         .justify_center()
         .rounded_md()
-        .bg(if active { rgb(0x122033) } else { rgb(0x161b22) })
+        .bg(if active { rgb(palette.hover) } else { rgb(palette.surface) })
         .text_color(color)
         .cursor_pointer()
-        .hover(|this| this.bg(rgb(0x21262d)).text_color(if active { rgb(0x79b8ff) } else { rgb(0xc9d1d9) }))
+        .hover(|this| this.bg(rgb(palette.surface_elevated)).text_color(if active { rgb(0x79b8ff) } else { rgb(palette.text) }))
         .child(
             svg()
                 .size(px(16.))

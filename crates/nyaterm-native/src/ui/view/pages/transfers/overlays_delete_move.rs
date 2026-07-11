@@ -51,7 +51,7 @@ impl NyaTermApp {
                     .rounded_md()
                     .border_1()
                     .border_color(rgb(0x7f1d1d))
-                    .bg(rgb(0x0b0f16))
+                    .bg(rgb(palette.bg))
                     .shadow_lg()
                     .p_4()
                     .child(
@@ -70,7 +70,7 @@ impl NyaTermApp {
                             .mt_2()
                             .text_sm()
                             .font_weight(FontWeight(700.))
-                            .text_color(rgb(0xe5edf7))
+                            .text_color(rgb(palette.text))
                             .child(truncate_preview(&state.name, 72)),
                     )
                     .child(
@@ -78,7 +78,7 @@ impl NyaTermApp {
                             .mt_2()
                             .font_family("JetBrains Mono")
                             .text_xs()
-                            .text_color(rgb(0x8f98aa))
+                            .text_color(rgb(palette.text_muted))
                             .child(truncate_preview(&preview, 160)),
                     )
                     .child(
@@ -160,15 +160,15 @@ impl NyaTermApp {
                     .w(px(430.))
                     .rounded_md()
                     .border_1()
-                    .border_color(rgb(0x303848))
-                    .bg(rgb(0x0b0f16))
+                    .border_color(rgb(palette.border))
+                    .bg(rgb(palette.bg))
                     .shadow_lg()
                     .p_4()
                     .child(
                         div()
                             .text_sm()
                             .font_weight(FontWeight(800.))
-                            .text_color(rgb(0xe5edf7))
+                            .text_color(rgb(palette.text))
                             .child(format!("Move {}", truncate_preview(&state.name, 48))),
                     )
                     .child(
@@ -176,7 +176,7 @@ impl NyaTermApp {
                             .mt_2()
                             .font_family("JetBrains Mono")
                             .text_xs()
-                            .text_color(rgb(0x8f98aa))
+                            .text_color(rgb(palette.text_muted))
                             .child(truncate_preview(&state.old_path, 92)),
                     )
                     .child(
@@ -189,20 +189,20 @@ impl NyaTermApp {
                             .border_color(if has_error {
                                 rgb(0x7f1d1d)
                             } else if unchanged {
-                                rgb(0x334155)
+                                rgb(palette.border)
                             } else {
                                 rgb(0x256d3f)
                             })
-                            .bg(rgb(0x0d1320))
+                            .bg(rgb(palette.input))
                             .px_3()
                             .flex()
                             .items_center()
                             .font_family("JetBrains Mono")
                             .text_sm()
                             .text_color(if state.value.is_empty() {
-                                rgb(0x64748b)
+                                rgb(palette.text_muted)
                             } else {
-                                rgb(0xe5edf7)
+                                rgb(palette.text)
                             })
                             .child(truncate_preview(&input_display, 92)),
                     )
@@ -213,7 +213,7 @@ impl NyaTermApp {
                             .text_color(if has_error {
                                 rgb(0xfca5a5)
                             } else {
-                                rgb(0x8f98aa)
+                                rgb(palette.text_muted)
                             })
                             .child(if has_error {
                                 "Target path is required."

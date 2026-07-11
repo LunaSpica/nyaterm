@@ -2,6 +2,8 @@ use super::*;
 
 impl NyaTermApp {
     pub(super) fn transfer_queue_view(&mut self, cx: &mut Context<Self>) -> impl IntoElement {
+        let palette = self.theme_palette();
+
         let has_running = self
             .transfer_jobs
             .iter()
@@ -42,7 +44,7 @@ impl NyaTermApp {
                     .px_3()
                     .py_6()
                     .text_size(px(11.))
-                    .text_color(rgb(0x6e7681))
+                    .text_color(rgb(palette.text_dimmed))
                     .child("No transfers"),
             );
         } else {
@@ -55,9 +57,7 @@ impl NyaTermApp {
                 ));
             }
         }
-
-        let palette = self.theme_palette();
-        div()
+div()
             .id(SharedString::from("transfer-queue-panel"))
             .size_full()
             .flex()
@@ -77,8 +77,8 @@ impl NyaTermApp {
                     .h(px(32.))
                     .px_2()
                     .border_b_1()
-                    .border_color(rgb(0x30363d))
-                    .bg(rgb(0x12171f))
+                    .border_color(rgb(palette.border))
+                    .bg(rgb(palette.section_header))
                     .flex()
                     .items_center()
                     .gap_1()
@@ -86,7 +86,7 @@ impl NyaTermApp {
                         div()
                             .text_size(px(10.))
                             .font_weight(FontWeight(800.))
-                            .text_color(rgb(0x8b949e))
+                            .text_color(rgb(palette.text_muted))
                             .child("FILE TRANSFER"),
                     )
                     .child(div().flex_1())
@@ -145,15 +145,15 @@ impl NyaTermApp {
                     .h(px(24.))
                     .px_2()
                     .border_t_1()
-                    .border_color(rgb(0x30363d))
-                    .bg(rgb(0x12171f))
+                    .border_color(rgb(palette.border))
+                    .bg(rgb(palette.section_header))
                     .flex()
                     .items_center()
                     .gap_2()
                     .child(
                         div()
                             .text_size(px(10.))
-                            .text_color(rgb(0x6e7681))
+                            .text_color(rgb(palette.text_dimmed))
                             .child("↓"),
                     )
                     .child(
@@ -163,9 +163,9 @@ impl NyaTermApp {
                             .flex_1()
                             .font_family("JetBrains Mono")
                             .text_size(px(10.))
-                            .text_color(rgb(0x8b949e))
+                            .text_color(rgb(palette.text_muted))
                             .cursor_pointer()
-                            .hover(|this| this.text_color(rgb(0xc9d1d9)))
+                            .hover(|this| this.text_color(rgb(palette.text)))
                             .child(download_path)
                             .on_click(cx.listener(|this, _, _, cx| {
                                 this.reveal_transfer_download_dir(cx);

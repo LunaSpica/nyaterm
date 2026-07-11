@@ -68,16 +68,16 @@ impl NyaTermApp {
                                 .rounded_sm()
                                 .border_1()
                                 .border_color(rgb(0x256d3f))
-                                .bg(rgb(0x0d1320))
+                                .bg(rgb(palette.input))
                                 .px_2()
                                 .flex()
                                 .items_center()
                                 .font_family("JetBrains Mono")
                                 .text_xs()
                                 .text_color(if self.transfer_browser_path_draft.is_empty() {
-                                    rgb(0x64748b)
+                                    rgb(palette.text_muted)
                                 } else {
-                                    rgb(0xdbeafe)
+                                    rgb(palette.text)
                                 })
                                 .track_focus(&self.transfer_browser_path_focus)
                                 .on_click(cx.listener(|this, _, window, cx| {
@@ -110,9 +110,9 @@ impl NyaTermApp {
                                 .py_1()
                                 .font_family("JetBrains Mono")
                                 .text_size(px(10.))
-                                .text_color(rgb(0x94a3b8))
+                                .text_color(rgb(palette.text_muted))
                                 .cursor_pointer()
-                                .hover(|this| this.bg(rgb(0x18202b)).text_color(rgb(0xdbeafe)))
+                                .hover(|this| this.bg(rgb(palette.hover)).text_color(rgb(palette.text)))
                                 .on_click(cx.listener(|this, _, window, cx| {
                                     this.begin_transfer_browser_path_edit(window, cx);
                                 }))
@@ -132,21 +132,21 @@ impl NyaTermApp {
                             .border_color(if is_current_favorite {
                                 rgb(0x2f7d4f)
                             } else {
-                                rgb(0x303848)
+                                rgb(palette.border)
                             })
                             .bg(if is_current_favorite {
                                 rgb(0x123024)
                             } else {
-                                rgb(0x10151e)
+                                rgb(palette.input)
                             })
                             .text_sm()
                             .text_color(if is_current_favorite {
                                 rgb(0x86efac)
                             } else {
-                                rgb(0x64748b)
+                                rgb(palette.text_muted)
                             })
                             .cursor_pointer()
-                            .hover(|this| this.bg(rgb(0x18202b)).text_color(rgb(0xd1fae5)))
+                            .hover(|this| this.bg(rgb(palette.hover)).text_color(rgb(0xd1fae5)))
                             .on_mouse_down(
                                 MouseButton::Left,
                                 cx.listener(|this, event: &MouseDownEvent, _window, cx| {
@@ -328,6 +328,7 @@ fn transfer_browser_path_quick_lists(
     favorite_paths: Vec<String>,
     cx: &mut Context<NyaTermApp>,
 ) -> impl IntoElement {
+        let palette = cx.entity().read(cx).theme_palette();
     div()
         .ml(px(40.))
         .flex()
@@ -335,8 +336,8 @@ fn transfer_browser_path_quick_lists(
         .gap_2()
         .rounded_sm()
         .border_1()
-        .border_color(rgb(0x263142))
-        .bg(rgb(0x0d1320))
+        .border_color(rgb(palette.border))
+        .bg(rgb(palette.input))
         .p_2()
         .when(!history_paths.is_empty(), |this| {
             this.child(transfer_browser_path_history_list(
@@ -364,11 +365,12 @@ fn transfer_browser_path_history_list(
     paths: Vec<String>,
     cx: &mut Context<NyaTermApp>,
 ) -> impl IntoElement {
+        let palette = cx.entity().read(cx).theme_palette();
     let mut list = div().flex().flex_col().gap_1().child(
         div()
             .text_size(px(10.))
             .font_weight(FontWeight(800.))
-            .text_color(rgb(0x64748b))
+            .text_color(rgb(palette.text_muted))
             .child("History"),
     );
 
@@ -388,12 +390,12 @@ fn transfer_browser_path_history_list(
                 .border_color(if is_current {
                     rgb(0x256d3f)
                 } else {
-                    rgb(0x303848)
+                    rgb(palette.border)
                 })
                 .bg(if is_current {
-                    rgb(0x17253b)
+                    rgb(palette.hover)
                 } else {
-                    rgb(0x10151e)
+                    rgb(palette.input)
                 })
                 .px_2()
                 .flex()
@@ -403,10 +405,10 @@ fn transfer_browser_path_history_list(
                 .text_color(if is_current {
                     rgb(0x93c5fd)
                 } else {
-                    rgb(0xdbeafe)
+                    rgb(palette.text)
                 })
                 .cursor_pointer()
-                .hover(|this| this.bg(rgb(0x18202b)))
+                .hover(|this| this.bg(rgb(palette.hover)))
                 .on_click(cx.listener(move |this, _, window, cx| {
                     this.transfer_browser_path_editing = false;
                     this.open_transfer_browser_directory(open_path.clone(), window, cx);
@@ -426,13 +428,14 @@ fn transfer_browser_path_quick_list(
     allow_remove: bool,
     cx: &mut Context<NyaTermApp>,
 ) -> impl IntoElement {
+        let palette = cx.entity().read(cx).theme_palette();
     let mut row = div().flex().items_center().gap_1().min_w_0().child(
         div()
             .w(px(58.))
             .flex_none()
             .text_size(px(10.))
             .font_weight(FontWeight(800.))
-            .text_color(rgb(0x64748b))
+            .text_color(rgb(palette.text_muted))
             .child(label),
     );
 
@@ -453,12 +456,12 @@ fn transfer_browser_path_quick_list(
                 .border_color(if is_current {
                     rgb(0x256d3f)
                 } else {
-                    rgb(0x303848)
+                    rgb(palette.border)
                 })
                 .bg(if is_current {
-                    rgb(0x17253b)
+                    rgb(palette.hover)
                 } else {
-                    rgb(0x10151e)
+                    rgb(palette.input)
                 })
                 .px_1()
                 .flex()
@@ -466,9 +469,9 @@ fn transfer_browser_path_quick_list(
                 .gap_1()
                 .font_family("JetBrains Mono")
                 .text_size(px(10.))
-                .text_color(rgb(0xdbeafe))
+                .text_color(rgb(palette.text))
                 .cursor_pointer()
-                .hover(|this| this.bg(rgb(0x18202b)))
+                .hover(|this| this.bg(rgb(palette.hover)))
                 .on_click(cx.listener(move |this, _, window, cx| {
                     this.transfer_browser_path_editing = false;
                     this.open_transfer_browser_directory(open_path.clone(), window, cx);
@@ -490,7 +493,7 @@ fn transfer_browser_path_quick_list(
                             .justify_center()
                             .rounded_sm()
                             .text_color(rgb(0x86efac))
-                            .hover(|this| this.bg(rgb(0x263142)).text_color(rgb(0xfca5a5)))
+                            .hover(|this| this.bg(rgb(palette.border)).text_color(rgb(0xfca5a5)))
                             .on_click(cx.listener(move |this, _: &ClickEvent, _window, cx| {
                                 cx.stop_propagation();
                                 this.remove_transfer_browser_favorite_path(remove_path.clone(), cx);
@@ -540,6 +543,7 @@ fn transfer_browser_path_breadcrumbs(
     raw_browser_path: String,
     cx: &mut Context<NyaTermApp>,
 ) -> gpui::AnyElement {
+        let palette = cx.entity().read(cx).theme_palette();
     let mut row = div()
         .min_w_0()
         .flex_1()
@@ -554,7 +558,7 @@ fn transfer_browser_path_breadcrumbs(
                 div()
                     .font_family("JetBrains Mono")
                     .text_xs()
-                    .text_color(rgb(0x64748b))
+                    .text_color(rgb(palette.text_muted))
                     .child(truncate_preview(&raw_browser_path, 72)),
             )
             .into_any_element();
@@ -586,12 +590,12 @@ fn transfer_browser_path_breadcrumbs(
                 .border_color(if is_current {
                     rgb(0x2f7d4f)
                 } else {
-                    rgb(0x303848)
+                    rgb(palette.border)
                 })
                 .bg(if is_current {
                     rgb(0x123024)
                 } else {
-                    rgb(0x10151e)
+                    rgb(palette.input)
                 })
                 .px_2()
                 .flex()
@@ -601,10 +605,10 @@ fn transfer_browser_path_breadcrumbs(
                 .text_color(if is_current {
                     rgb(0xd1fae5)
                 } else {
-                    rgb(0xdbeafe)
+                    rgb(palette.text)
                 })
                 .cursor_pointer()
-                .hover(|this| this.bg(rgb(0x18202b)))
+                .hover(|this| this.bg(rgb(palette.hover)))
                 .on_click(cx.listener(move |this, _, window, cx| {
                     this.open_transfer_browser_directory(button_path.clone(), window, cx);
                 }))

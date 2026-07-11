@@ -95,8 +95,8 @@ impl NyaTermApp {
                     .w(px(500.))
                     .rounded_md()
                     .border_1()
-                    .border_color(rgb(0x303848))
-                    .bg(rgb(0x0b0f16))
+                    .border_color(rgb(palette.border))
+                    .bg(rgb(palette.bg))
                     .shadow_lg()
                     .p_4()
                     .child(
@@ -110,7 +110,7 @@ impl NyaTermApp {
                                     .min_w_0()
                                     .text_sm()
                                     .font_weight(FontWeight(800.))
-                                    .text_color(rgb(0xe5edf7))
+                                    .text_color(rgb(palette.text))
                                     .child(format!(
                                         "Properties: {}",
                                         truncate_preview(&entry.name, 42)
@@ -119,7 +119,7 @@ impl NyaTermApp {
                             .child(status_pill(
                                 entry_kind_label(entry.file_type),
                                 rgb(0x93c5fd),
-                                rgb(0x17253b),
+                                rgb(palette.hover),
                             )),
                     )
                     .child(
@@ -128,7 +128,7 @@ impl NyaTermApp {
                             .rounded_md()
                             .border_1()
                             .border_color(rgb(0x202633))
-                            .bg(rgb(0x10151e))
+                            .bg(rgb(palette.input))
                             .p_3()
                             .flex()
                             .flex_col()
@@ -149,7 +149,7 @@ impl NyaTermApp {
                         div()
                             .mt_3()
                             .text_xs()
-                            .text_color(rgb(0x8f98aa))
+                            .text_color(rgb(palette.text_muted))
                             .child(if loading {
                                 "Loading full remote metadata..."
                             } else {
@@ -162,7 +162,7 @@ impl NyaTermApp {
                             .rounded_md()
                             .border_1()
                             .border_color(rgb(0x202633))
-                            .bg(rgb(0x10151e))
+                            .bg(rgb(palette.input))
                             .p_3()
                             .flex()
                             .flex_col()

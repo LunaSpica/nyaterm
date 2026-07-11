@@ -57,8 +57,8 @@ impl NyaTermApp {
                     .w(px(460.))
                     .rounded_md()
                     .border_1()
-                    .border_color(rgb(0x303848))
-                    .bg(rgb(0x0b0f16))
+                    .border_color(rgb(palette.border))
+                    .bg(rgb(palette.bg))
                     .shadow_lg()
                     .p_4()
                     .flex()
@@ -77,10 +77,10 @@ impl NyaTermApp {
                                 div()
                                     .text_sm()
                                     .font_weight(FontWeight(800.))
-                                    .text_color(rgb(0xe5edf7))
+                                    .text_color(rgb(palette.text))
                                     .child("Unknown File Type"),
                             )
-                            .child(status_pill("choose", rgb(0x93c5fd), rgb(0x17253b))),
+                            .child(status_pill("choose", rgb(0x93c5fd), rgb(palette.hover))),
                     )
                     .child(div().text_xs().text_color(rgb(0xaeb7c8)).child(
                         "This file type is not known as text or binary. Choose how to open it.",
@@ -88,11 +88,11 @@ impl NyaTermApp {
                     .child(
                         div()
                             .rounded_sm()
-                            .bg(rgb(0x10151e))
+                            .bg(rgb(palette.input))
                             .p_3()
                             .font_family("JetBrains Mono")
                             .text_xs()
-                            .text_color(rgb(0xe5edf7))
+                            .text_color(rgb(palette.text))
                             .child(truncate_preview(&name, 72)),
                     )
                     .child(

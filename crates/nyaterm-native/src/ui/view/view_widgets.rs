@@ -21,6 +21,7 @@ use super::{
 };
 
 pub(in crate::ui::view) fn logo_mark() -> impl IntoElement {
+    let palette = crate::ui::theme::theme_palette("github-dark");
     div()
         .size(px(22.))
         .flex_none()
@@ -31,7 +32,7 @@ pub(in crate::ui::view) fn logo_mark() -> impl IntoElement {
             svg()
                 .size(px(18.))
                 .path("icons/logo.svg")
-                .text_color(rgb(0x58a6ff)),
+                .text_color(rgb(palette.accent)),
         )
 }
 
@@ -39,6 +40,7 @@ pub(in crate::ui::view) fn menu_bar_button(
     label: &'static str,
     on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
 ) -> impl IntoElement {
+    let palette = crate::ui::theme::theme_palette("github-dark");
     div()
         .id(SharedString::from(format!("menu-{label}")))
         .h(px(26.))
@@ -47,9 +49,9 @@ pub(in crate::ui::view) fn menu_bar_button(
         .items_center()
         .rounded_sm()
         .text_size(px(12.))
-        .text_color(rgb(0x8b949e))
+        .text_color(rgb(palette.text_muted))
         .cursor_pointer()
-        .hover(|this| this.bg(rgb(0x1c2128)).text_color(rgb(0xc9d1d9)))
+        .hover(|this| this.bg(rgb(palette.hover)).text_color(rgb(palette.text)))
         .child(label)
         .on_click(on_click)
 }
@@ -120,6 +122,7 @@ pub(in crate::ui::view) fn window_control_button(
     area: WindowControlArea,
     on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
 ) -> impl IntoElement {
+    let palette = crate::ui::theme::theme_palette("github-dark");
     div()
         .id(SharedString::from(id))
         .w(px(46.))
@@ -128,14 +131,14 @@ pub(in crate::ui::view) fn window_control_button(
         .items_center()
         .justify_center()
         .text_xs()
-        .text_color(rgb(0x8b949e))
+        .text_color(rgb(palette.text_muted))
         .window_control_area(area)
         .cursor_pointer()
         .hover(|this| {
             if matches!(area, WindowControlArea::Close) {
                 this.bg(rgb(0xe81123)).text_color(rgb(0xffffff))
             } else {
-                this.bg(rgb(0x1c2128)).text_color(rgb(0xffffff))
+                this.bg(rgb(palette.hover)).text_color(rgb(0xffffff))
             }
         })
         .child(label)
@@ -263,25 +266,27 @@ pub(in crate::ui::view) fn inspector_card(palette: ThemePalette, title: &'static
 }
 
 pub(in crate::ui::view) fn inspector_status_line(text: String) -> impl IntoElement {
+    let palette = crate::ui::theme::theme_palette("github-dark");
     div()
         .rounded_md()
         .border_1()
         .border_color(rgb(0x273244))
-        .bg(rgb(0x10151e))
+        .bg(rgb(palette.input))
         .p_3()
         .text_xs()
         .line_height(px(18.))
-        .text_color(rgb(0x98a3b8))
+        .text_color(rgb(palette.text_muted))
         .child(text)
 }
 
 pub(in crate::ui::view) fn compact_network_rows(networks: &[NetworkInfo]) -> impl IntoElement {
+    let palette = crate::ui::theme::theme_palette("github-dark");
     let mut rows = div().mt_3().flex().flex_col().gap_2();
     if networks.is_empty() {
         rows = rows.child(
             div()
                 .text_xs()
-                .text_color(rgb(0x98a3b8))
+                .text_color(rgb(palette.text_muted))
                 .child("No network snapshot loaded."),
         );
     } else {
@@ -289,7 +294,7 @@ pub(in crate::ui::view) fn compact_network_rows(networks: &[NetworkInfo]) -> imp
             rows = rows.child(
                 div()
                     .border_t_1()
-                    .border_color(rgb(0x2a3140))
+                    .border_color(rgb(palette.border))
                     .pt_2()
                     .child(
                         div()
@@ -301,13 +306,13 @@ pub(in crate::ui::view) fn compact_network_rows(networks: &[NetworkInfo]) -> imp
                                 div()
                                     .text_xs()
                                     .font_weight(FontWeight(800.))
-                                    .text_color(rgb(0xc9d1d9))
+                                    .text_color(rgb(palette.text))
                                     .child(network.nic.clone()),
                             )
                             .child(
                                 div()
                                     .text_xs()
-                                    .text_color(rgb(0x64748b))
+                                    .text_color(rgb(palette.text_muted))
                                     .child(network.state.clone()),
                             ),
                     )
@@ -315,7 +320,7 @@ pub(in crate::ui::view) fn compact_network_rows(networks: &[NetworkInfo]) -> imp
                         div()
                             .mt_1()
                             .text_xs()
-                            .text_color(rgb(0x98a3b8))
+                            .text_color(rgb(palette.text_muted))
                             .child(format!(
                                 "rx {} / tx {}",
                                 format_rate(network.rx_bytes_per_sec),
@@ -329,12 +334,13 @@ pub(in crate::ui::view) fn compact_network_rows(networks: &[NetworkInfo]) -> imp
 }
 
 pub(in crate::ui::view) fn compact_process_rows(processes: &[RemoteProcess]) -> impl IntoElement {
+    let palette = crate::ui::theme::theme_palette("github-dark");
     let mut rows = div().mt_3().flex().flex_col().gap_2();
     if processes.is_empty() {
         rows = rows.child(
             div()
                 .text_xs()
-                .text_color(rgb(0x98a3b8))
+                .text_color(rgb(palette.text_muted))
                 .child("No process snapshot loaded."),
         );
     } else {
@@ -350,7 +356,7 @@ pub(in crate::ui::view) fn compact_process_rows(processes: &[RemoteProcess]) -> 
             rows = rows.child(
                 div()
                     .border_t_1()
-                    .border_color(rgb(0x2a3140))
+                    .border_color(rgb(palette.border))
                     .pt_2()
                     .child(
                         div()
@@ -363,7 +369,7 @@ pub(in crate::ui::view) fn compact_process_rows(processes: &[RemoteProcess]) -> 
                                     .min_w_0()
                                     .text_xs()
                                     .font_weight(FontWeight(800.))
-                                    .text_color(rgb(0xc9d1d9))
+                                    .text_color(rgb(palette.text))
                                     .child(truncate_preview(&process.command, 24)),
                             )
                             .child(
@@ -377,7 +383,7 @@ pub(in crate::ui::view) fn compact_process_rows(processes: &[RemoteProcess]) -> 
                         div()
                             .mt_1()
                             .text_xs()
-                            .text_color(rgb(0x98a3b8))
+                            .text_color(rgb(palette.text_muted))
                             .child(format!(
                                 "pid {} / mem {:.1}% / {}",
                                 process.pid, process.memory_percent, process.user
@@ -392,12 +398,13 @@ pub(in crate::ui::view) fn compact_process_rows(processes: &[RemoteProcess]) -> 
 pub(in crate::ui::view) fn compact_docker_container_rows(
     containers: &[DockerContainer],
 ) -> impl IntoElement {
+    let palette = crate::ui::theme::theme_palette("github-dark");
     let mut rows = div().mt_3().flex().flex_col().gap_2();
     if containers.is_empty() {
         rows = rows.child(
             div()
                 .text_xs()
-                .text_color(rgb(0x98a3b8))
+                .text_color(rgb(palette.text_muted))
                 .child("No containers loaded."),
         );
     } else {
@@ -405,7 +412,7 @@ pub(in crate::ui::view) fn compact_docker_container_rows(
             rows = rows.child(
                 div()
                     .border_t_1()
-                    .border_color(rgb(0x2a3140))
+                    .border_color(rgb(palette.border))
                     .pt_2()
                     .child(
                         div()
@@ -418,20 +425,20 @@ pub(in crate::ui::view) fn compact_docker_container_rows(
                                     .min_w_0()
                                     .text_xs()
                                     .font_weight(FontWeight(800.))
-                                    .text_color(rgb(0xc9d1d9))
+                                    .text_color(rgb(palette.text))
                                     .child(truncate_preview(&container.name, 24)),
                             )
                             .child(status_pill(
                                 docker_state_label(&container.state),
                                 docker_state_color(&container.state),
-                                rgb(0x17253b),
+                                rgb(palette.hover),
                             )),
                     )
                     .child(
                         div()
                             .mt_1()
                             .text_xs()
-                            .text_color(rgb(0x98a3b8))
+                            .text_color(rgb(palette.text_muted))
                             .child(truncate_preview(&container.image, 42)),
                     ),
             );
@@ -446,6 +453,7 @@ pub(in crate::ui::view) fn empty_workspace_action(
     shortcut: impl Into<String>,
     on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
 ) -> impl IntoElement {
+    let palette = crate::ui::theme::theme_palette("github-dark");
     // Tauri EmptyWorkspaceState: primary label left, Kbd chips right with "+" separators.
     let shortcut = shortcut.into();
     let parts: Vec<String> = shortcut
@@ -460,7 +468,7 @@ pub(in crate::ui::view) fn empty_workspace_action(
             keys = keys.child(
                 div()
                     .text_size(px(11.))
-                    .text_color(rgb(0x6e7681))
+                    .text_color(rgb(palette.text_dimmed))
                     .child("+"),
             );
         }
@@ -474,11 +482,11 @@ pub(in crate::ui::view) fn empty_workspace_action(
                 .justify_center()
                 .rounded_sm()
                 .border_1()
-                .border_color(rgb(0x30363d))
-                .bg(rgb(0x21262d))
+                .border_color(rgb(palette.border))
+                .bg(rgb(palette.surface_elevated))
                 .text_size(px(12.))
                 .font_weight(FontWeight(600.))
-                .text_color(rgb(0xc9d1d9))
+                .text_color(rgb(palette.text))
                 .child(part),
         );
     }
@@ -498,8 +506,8 @@ pub(in crate::ui::view) fn empty_workspace_action(
                 .min_w(px(160.))
                 .text_sm()
                 .font_weight(FontWeight(500.))
-                .text_color(rgb(0xc9d1d9))
-                .hover(|this| this.text_color(rgb(0x58a6ff)))
+                .text_color(rgb(palette.text))
+                .hover(|this| this.text_color(rgb(palette.accent)))
                 .child(label),
         )
         .child(keys)
@@ -513,13 +521,14 @@ pub(in crate::ui::view) fn tab_action_button(
     detail: &'static str,
     on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
 ) -> impl IntoElement {
+    let palette = crate::ui::theme::theme_palette("github-dark");
     div()
         .id(SharedString::from(id.into()))
         .min_h(px(46.))
         .rounded_sm()
         .border_1()
-        .border_color(rgb(0x303848))
-        .bg(rgb(0x151b27))
+        .border_color(rgb(palette.border))
+        .bg(rgb(palette.surface))
         .px_3()
         .py_2()
         .flex()
@@ -532,13 +541,13 @@ pub(in crate::ui::view) fn tab_action_button(
             div()
                 .text_xs()
                 .font_weight(FontWeight(800.))
-                .text_color(rgb(0xc9d1d9))
+                .text_color(rgb(palette.text))
                 .child(label),
         )
         .child(
             div()
                 .text_size(px(10.))
-                .text_color(rgb(0x8b949e))
+                .text_color(rgb(palette.text_muted))
                 .child(detail),
         )
         .on_click(on_click)
@@ -566,11 +575,12 @@ pub(in crate::ui::view) fn stats_resource_row(
     detail: &str,
     ratio: f64,
 ) -> impl IntoElement {
+    let palette = crate::ui::theme::theme_palette("github-dark");
     div()
         .rounded_md()
         .border_1()
-        .border_color(rgb(0x2a3140))
-        .bg(rgb(0x10151e))
+        .border_color(rgb(palette.border))
+        .bg(rgb(palette.input))
         .p_3()
         .child(
             div()
@@ -583,13 +593,13 @@ pub(in crate::ui::view) fn stats_resource_row(
                         .min_w_0()
                         .text_sm()
                         .font_weight(FontWeight(700.))
-                        .text_color(rgb(0xc9d1d9))
+                        .text_color(rgb(palette.text))
                         .child(truncate_preview(label, 36)),
                 )
                 .child(
                     div()
                         .text_xs()
-                        .text_color(rgb(0x98a3b8))
+                        .text_color(rgb(palette.text_muted))
                         .child(format!("{:.0}%", ratio.clamp(0., 1.) * 100.)),
                 ),
         )
@@ -597,7 +607,7 @@ pub(in crate::ui::view) fn stats_resource_row(
             div()
                 .mt_1()
                 .text_xs()
-                .text_color(rgb(0x98a3b8))
+                .text_color(rgb(palette.text_muted))
                 .child(truncate_preview(detail, 96)),
         )
         .child(stats_progress_bar(ratio))
@@ -667,13 +677,14 @@ pub(in crate::ui::view) fn setting_state(
     label: &'static str,
     value: &'static str,
 ) -> impl IntoElement {
+    let palette = crate::ui::theme::theme_palette("github-dark");
     div()
         .rounded_md()
         .border_1()
-        .border_color(rgb(0x2a3140))
-        .bg(rgb(0x151923))
+        .border_color(rgb(palette.border))
+        .bg(rgb(palette.surface))
         .p_4()
-        .child(div().text_xs().text_color(rgb(0x98a3b8)).child(label))
+        .child(div().text_xs().text_color(rgb(palette.text_muted)).child(label))
         .child(
             div()
                 .mt_2()
@@ -687,13 +698,14 @@ pub(in crate::ui::view) fn compact_setting_state(
     label: &'static str,
     value: String,
 ) -> impl IntoElement {
+    let palette = crate::ui::theme::theme_palette("github-dark");
     div()
         .rounded_md()
         .border_1()
-        .border_color(rgb(0x2a3140))
-        .bg(rgb(0x111722))
+        .border_color(rgb(palette.border))
+        .bg(rgb(palette.input))
         .p_3()
-        .child(div().text_xs().text_color(rgb(0x98a3b8)).child(label))
+        .child(div().text_xs().text_color(rgb(palette.text_muted)).child(label))
         .child(
             div()
                 .mt_1()
@@ -708,6 +720,7 @@ pub(in crate::ui::view) fn cloud_sync_history_row(
     expanded: bool,
     on_toggle: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
 ) -> impl IntoElement {
+    let palette = crate::ui::theme::theme_palette("github-dark");
     let summary = cloud_sync_history_summary(&entry);
     let normalized = entry.message.split_whitespace().collect::<Vec<_>>().join(" ");
     let is_problem = matches!(entry.status.as_str(), "failed" | "conflict");
@@ -749,7 +762,7 @@ pub(in crate::ui::view) fn cloud_sync_history_row(
         .px_2()
         .py_1()
         .border_b_1()
-        .border_color(rgb(0x21262d))
+        .border_color(rgb(palette.surface_elevated))
         .child(
             div()
                 .flex()
@@ -793,7 +806,7 @@ pub(in crate::ui::view) fn cloud_sync_history_row(
                                         .ml_auto()
                                         .flex_none()
                                         .text_size(px(10.))
-                                        .text_color(rgb(0x6e7681))
+                                        .text_color(rgb(palette.text_dimmed))
                                         .child(timestamp),
                                 ),
                         )
@@ -801,7 +814,7 @@ pub(in crate::ui::view) fn cloud_sync_history_row(
                             div()
                                 .text_size(px(11.))
                                 .font_weight(FontWeight(600.))
-                                .text_color(rgb(0xc9d1d9))
+                                .text_color(rgb(palette.text))
                                 .overflow_hidden()
                                 .child(truncate_preview(&summary, 96)),
                         )
@@ -812,7 +825,7 @@ pub(in crate::ui::view) fn cloud_sync_history_row(
                                 .gap_x_3()
                                 .gap_y_1()
                                 .text_size(px(10.))
-                                .text_color(rgb(0x6e7681))
+                                .text_color(rgb(palette.text_dimmed))
                                 .child(format!("Trigger {}", entry.trigger))
                                 .child(format!("Provider {provider}"))
                                 .child(format!("Duration {duration}")),
@@ -834,9 +847,9 @@ pub(in crate::ui::view) fn cloud_sync_history_row(
                                             .flex()
                                             .items_center()
                                             .text_size(px(10.))
-                                            .text_color(rgb(0x8b949e))
+                                            .text_color(rgb(palette.text_muted))
                                             .cursor_pointer()
-                                            .hover(|style| style.text_color(rgb(0xc9d1d9)))
+                                            .hover(|style| style.text_color(rgb(palette.text)))
                                             .child(if expanded {
                                                 "Hide details"
                                             } else {
@@ -855,14 +868,14 @@ pub(in crate::ui::view) fn cloud_sync_history_row(
                                     .bg(if is_problem {
                                         rgb(0x2a1215)
                                     } else {
-                                        rgb(0x161b22)
+                                        rgb(palette.surface)
                                     })
                                     .font_family("JetBrains Mono")
                                     .text_size(px(10.))
                                     .text_color(if is_problem {
                                         rgb(0xffa198)
                                     } else {
-                                        rgb(0x8b949e)
+                                        rgb(palette.text_muted)
                                     })
                                     .child(message),
                             )
@@ -873,14 +886,14 @@ pub(in crate::ui::view) fn cloud_sync_history_row(
                                     .mt_1()
                                     .rounded_md()
                                     .border_1()
-                                    .border_color(rgb(0x30363d))
-                                    .bg(rgb(0x0d1117))
+                                    .border_color(rgb(palette.border))
+                                    .bg(rgb(palette.bg))
                                     .px_2()
                                     .py_1()
                                     .child(
                                         div()
                                             .text_size(px(10.))
-                                            .text_color(rgb(0x6e7681))
+                                            .text_color(rgb(palette.text_dimmed))
                                             .child("Revision"),
                                     )
                                     .child(
@@ -888,7 +901,7 @@ pub(in crate::ui::view) fn cloud_sync_history_row(
                                             .mt_0()
                                             .font_family("JetBrains Mono")
                                             .text_size(px(11.))
-                                            .text_color(rgb(0xc9d1d9))
+                                            .text_color(rgb(palette.text))
                                             .child(revision.unwrap_or_default()),
                                     ),
                             )
@@ -939,6 +952,7 @@ pub(in crate::ui::view) fn connection_row(
     on_select: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
     on_connect: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
 ) -> impl IntoElement {
+    let palette = crate::ui::theme::theme_palette("github-dark");
     let can_connect = matches!(
         connection.config,
         ConnectionType::Ssh { .. }
@@ -961,12 +975,12 @@ pub(in crate::ui::view) fn connection_row(
         .border_color(if selected {
             rgb(0x3b82f6)
         } else {
-            rgb(0x2a3140)
+            rgb(palette.border)
         })
         .bg(if selected {
             rgb(0x101b2d)
         } else {
-            rgb(0x151923)
+            rgb(palette.surface)
         })
         .p_3()
         .hover(|this| this.bg(rgb(0x1c2230)))
@@ -998,7 +1012,7 @@ pub(in crate::ui::view) fn connection_row(
                         .child(
                             div()
                                 .text_xs()
-                                .text_color(rgb(0x98a3b8))
+                                .text_color(rgb(palette.text_muted))
                                 .child(connection.endpoint()),
                         ),
                 ),
@@ -1011,7 +1025,7 @@ pub(in crate::ui::view) fn connection_row(
                 .child(status_pill(
                     connection.kind_label(),
                     rgb(0x93c5fd),
-                    rgb(0x17253b),
+                    rgb(palette.hover),
                 ))
                 .child(action),
         )
@@ -1021,11 +1035,12 @@ pub(in crate::ui::view) fn compact_connection_row(
     connection: &SavedConnection,
     on_connect: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
 ) -> impl IntoElement {
+    let palette = crate::ui::theme::theme_palette("github-dark");
     div()
         .rounded_md()
         .border_1()
-        .border_color(rgb(0x2a3140))
-        .bg(rgb(0x111722))
+        .border_color(rgb(palette.border))
+        .bg(rgb(palette.input))
         .p_3()
         .hover(|this| this.bg(rgb(0x1a2230)))
         .child(
@@ -1049,14 +1064,14 @@ pub(in crate::ui::view) fn compact_connection_row(
                         .child(
                             div()
                                 .text_xs()
-                                .text_color(rgb(0x98a3b8))
+                                .text_color(rgb(palette.text_muted))
                                 .child(truncate_preview(&connection.endpoint(), 36)),
                         ),
                 )
                 .child(status_pill(
                     connection.kind_label(),
                     rgb(0x93c5fd),
-                    rgb(0x17253b),
+                    rgb(palette.hover),
                 )),
         )
         .child(
@@ -1066,7 +1081,7 @@ pub(in crate::ui::view) fn compact_connection_row(
                 .items_center()
                 .justify_between()
                 .gap_2()
-                .child(div().text_xs().text_color(rgb(0x64748b)).child(
+                .child(div().text_xs().text_color(rgb(palette.text_muted)).child(
                     connection.description.clone().unwrap_or_else(|| {
                         match connection.group_id.as_deref() {
                             Some(group) if !group.trim().is_empty() => {
@@ -1091,6 +1106,7 @@ pub(in crate::ui::view) fn compact_tunnel_row(
     on_open: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
     on_close: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
 ) -> impl IntoElement {
+    let palette = crate::ui::theme::theme_palette("github-dark");
     let status = if is_pending {
         "pending"
     } else if is_open {
@@ -1103,14 +1119,14 @@ pub(in crate::ui::view) fn compact_tunnel_row(
     } else if is_open {
         (rgb(0x6ee7b7), rgb(0x12342a))
     } else {
-        (rgb(0x98a3b8), rgb(0x202633))
+        (rgb(palette.text_muted), rgb(0x202633))
     };
 
     div()
         .rounded_md()
         .border_1()
-        .border_color(rgb(0x2a3140))
-        .bg(rgb(0x111722))
+        .border_color(rgb(palette.border))
+        .bg(rgb(palette.input))
         .p_3()
         .hover(|this| this.bg(rgb(0x1a2230)))
         .child(
@@ -1132,7 +1148,7 @@ pub(in crate::ui::view) fn compact_tunnel_row(
             div()
                 .mt_1()
                 .text_xs()
-                .text_color(rgb(0x98a3b8))
+                .text_color(rgb(palette.text_muted))
                 .child(truncate_preview(
                     &tunnel_endpoint(tunnel, &tunnel.listen_port.to_string()),
                     42,
@@ -1148,7 +1164,7 @@ pub(in crate::ui::view) fn compact_tunnel_row(
                 .child(status_pill(
                     tunnel_mode_label(tunnel),
                     rgb(0x93c5fd),
-                    rgb(0x17253b),
+                    rgb(palette.hover),
                 ))
                 .child(if is_open {
                     small_button(crate::ui::theme::theme_palette("github-dark"), 
@@ -1201,6 +1217,7 @@ pub(in crate::ui::view) fn toolbar_svg_button(
     icon_path: &'static str,
     on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
 ) -> impl IntoElement {
+    let palette = crate::ui::theme::theme_palette("github-dark");
     div()
         .id(id.into())
         .size(px(28.))
@@ -1208,21 +1225,22 @@ pub(in crate::ui::view) fn toolbar_svg_button(
         .items_center()
         .justify_center()
         .rounded_md()
-        .text_color(rgb(0x8b949e))
+        .text_color(rgb(palette.text_muted))
         .cursor_pointer()
-        .hover(|this| this.bg(rgb(0x21262d)).text_color(rgb(0xc9d1d9)))
+        .hover(|this| this.bg(rgb(palette.surface_elevated)).text_color(rgb(palette.text)))
         .child(
             svg()
                 .size(px(16.))
                 .flex_none()
                 .path(icon_path)
-                .text_color(rgb(0x8b949e)),
+                .text_color(rgb(palette.text_muted)),
         )
         .on_click(on_click)
 }
 
 /// Faded NyaTerm logo used by empty workspace (Tauri EmptyWorkspaceState).
 pub(in crate::ui::view) fn nyaterm_logo_mark(size_px: f32, opacity: f32) -> impl IntoElement {
+    let palette = crate::ui::theme::theme_palette("github-dark");
     let size = px(size_px);
     div()
         .size(size)
@@ -1235,7 +1253,7 @@ pub(in crate::ui::view) fn nyaterm_logo_mark(size_px: f32, opacity: f32) -> impl
             svg()
                 .size(size)
                 .path("icons/logo.svg")
-                .text_color(rgb(0x8b949e)),
+                .text_color(rgb(palette.text_muted)),
         )
 }
 
@@ -1246,9 +1264,10 @@ pub(in crate::ui::view) fn connection_type_icon(
     selected: bool,
     size_px: f32,
 ) -> gpui::AnyElement {
+    let palette = crate::ui::theme::theme_palette("github-dark");
     let size = px(size_px);
     let color = if selected {
-        rgb(0x58a6ff)
+        rgb(palette.accent)
     } else {
         rgb(def.color)
     };
@@ -1280,6 +1299,7 @@ pub(in crate::ui::view) fn markdown_content_view(content: &str) -> impl IntoElem
 }
 
 fn markdown_inline_text(raw: &str) -> gpui::AnyElement {
+    let palette = crate::ui::theme::theme_palette("github-dark");
     let parsed = parse_inline_markdown(raw);
     if parsed.highlights.is_empty() {
         return div().child(parsed.text).into_any_element();
@@ -1300,16 +1320,16 @@ fn markdown_inline_text(raw: &str) -> gpui::AnyElement {
                 ..Default::default()
             },
             InlineMdStyle::Code => HighlightStyle {
-                color: Some(rgb(0xe6edf3).into()),
-                background_color: Some(rgb(0x21262d).into()),
+                color: Some(rgb(palette.text).into()),
+                background_color: Some(rgb(palette.surface_elevated).into()),
                 font_weight: Some(FontWeight(500.)),
                 ..Default::default()
             },
             InlineMdStyle::Link => HighlightStyle {
-                color: Some(rgb(0x58a6ff).into()),
+                color: Some(rgb(palette.accent).into()),
                 underline: Some(UnderlineStyle {
                     thickness: px(1.),
-                    color: Some(rgb(0x58a6ff).into()),
+                    color: Some(rgb(palette.accent).into()),
                     wavy: false,
                 }),
                 ..Default::default()
@@ -1317,9 +1337,9 @@ fn markdown_inline_text(raw: &str) -> gpui::AnyElement {
             InlineMdStyle::Strike => HighlightStyle {
                 strikethrough: Some(StrikethroughStyle {
                     thickness: px(1.),
-                    color: Some(rgb(0x8b949e).into()),
+                    color: Some(rgb(palette.text_muted).into()),
                 }),
-                color: Some(rgb(0x8b949e).into()),
+                color: Some(rgb(palette.text_muted).into()),
                 ..Default::default()
             },
         };
@@ -1331,11 +1351,12 @@ fn markdown_inline_text(raw: &str) -> gpui::AnyElement {
 }
 
 fn markdown_block_view(index: usize, block: MarkdownBlock) -> gpui::AnyElement {
+    let palette = crate::ui::theme::theme_palette("github-dark");
     match block {
         MarkdownBlock::Paragraph(text) => div()
             .id(SharedString::from(format!("md-p-{index}")))
             .text_size(px(12.))
-            .text_color(rgb(0xc9d1d9))
+            .text_color(rgb(palette.text))
             .line_height(px(18.))
             .child(markdown_inline_text(&text))
             .into_any_element(),
@@ -1348,7 +1369,7 @@ fn markdown_block_view(index: usize, block: MarkdownBlock) -> gpui::AnyElement {
             .child(
                 div()
                     .text_size(px(12.))
-                    .text_color(rgb(0x8b949e))
+                    .text_color(rgb(palette.text_muted))
                     .child("•"),
             )
             .child(
@@ -1356,7 +1377,7 @@ fn markdown_block_view(index: usize, block: MarkdownBlock) -> gpui::AnyElement {
                     .min_w_0()
                     .flex_1()
                     .text_size(px(12.))
-                    .text_color(rgb(0xc9d1d9))
+                    .text_color(rgb(palette.text))
                     .line_height(px(18.))
                     .child(markdown_inline_text(&text)),
             )
@@ -1370,7 +1391,7 @@ fn markdown_block_view(index: usize, block: MarkdownBlock) -> gpui::AnyElement {
             .child(
                 div()
                     .text_size(px(12.))
-                    .text_color(rgb(0x8b949e))
+                    .text_color(rgb(palette.text_muted))
                     .child(format!("{n}.")),
             )
             .child(
@@ -1378,7 +1399,7 @@ fn markdown_block_view(index: usize, block: MarkdownBlock) -> gpui::AnyElement {
                     .min_w_0()
                     .flex_1()
                     .text_size(px(12.))
-                    .text_color(rgb(0xc9d1d9))
+                    .text_color(rgb(palette.text))
                     .line_height(px(18.))
                     .child(markdown_inline_text(&text)),
             )
@@ -1387,8 +1408,8 @@ fn markdown_block_view(index: usize, block: MarkdownBlock) -> gpui::AnyElement {
             .id(SharedString::from(format!("md-code-{index}")))
             .rounded_md()
             .border_1()
-            .border_color(rgb(0x30363d))
-            .bg(rgb(0x0d1117))
+            .border_color(rgb(palette.border))
+            .bg(rgb(palette.bg))
             .overflow_hidden()
             .max_h(px(256.))
             .child(
@@ -1396,10 +1417,10 @@ fn markdown_block_view(index: usize, block: MarkdownBlock) -> gpui::AnyElement {
                     .px_2()
                     .py_1()
                     .border_b_1()
-                    .border_color(rgb(0x30363d))
+                    .border_color(rgb(palette.border))
                     .text_size(px(10.))
                     .font_weight(FontWeight(700.))
-                    .text_color(rgb(0x6e7681))
+                    .text_color(rgb(palette.text_dimmed))
                     .child(if language.trim().is_empty() {
                         "code".to_string()
                     } else {
@@ -1412,7 +1433,7 @@ fn markdown_block_view(index: usize, block: MarkdownBlock) -> gpui::AnyElement {
                     .py_2()
                     .font_family("JetBrains Mono")
                     .text_size(px(11.))
-                    .text_color(rgb(0xc9d1d9))
+                    .text_color(rgb(palette.text))
                     .line_height(px(16.))
                     .child(code),
             )
@@ -1430,9 +1451,9 @@ fn markdown_block_view(index: usize, block: MarkdownBlock) -> gpui::AnyElement {
                 .id(SharedString::from(format!("md-q-{index}")))
                 .pl_3()
                 .border_l_2()
-                .border_color(rgb(0x30363d))
+                .border_color(rgb(palette.border))
                 .text_size(px(12.))
-                .text_color(rgb(0x8b949e))
+                .text_color(rgb(palette.text_muted))
                 .line_height(px(18.))
                 .child(body)
                 .into_any_element()
@@ -1447,7 +1468,7 @@ fn markdown_block_view(index: usize, block: MarkdownBlock) -> gpui::AnyElement {
                 .id(SharedString::from(format!("md-h-{index}")))
                 .text_size(px(size))
                 .font_weight(FontWeight(800.))
-                .text_color(rgb(0xe5edf7))
+                .text_color(rgb(palette.text))
                 .line_height(px(size + 4.))
                 .child(markdown_inline_text(&text))
                 .into_any_element()
@@ -1462,15 +1483,15 @@ fn markdown_block_view(index: usize, block: MarkdownBlock) -> gpui::AnyElement {
                 .flex()
                 .flex_col()
                 .border_1()
-                .border_color(rgb(0x30363d))
+                .border_color(rgb(palette.border))
                 .rounded_md()
                 .overflow_hidden();
 
             let mut header_row = div()
                 .flex()
-                .bg(rgb(0x161b22))
+                .bg(rgb(palette.surface))
                 .border_b_1()
-                .border_color(rgb(0x30363d));
+                .border_color(rgb(palette.border));
             for col in 0..col_count {
                 let cell = headers.get(col).cloned().unwrap_or_default();
                 header_row = header_row.child(
@@ -1480,10 +1501,10 @@ fn markdown_block_view(index: usize, block: MarkdownBlock) -> gpui::AnyElement {
                         .px_2()
                         .py_1()
                         .border_r_1()
-                        .border_color(rgb(0x30363d))
+                        .border_color(rgb(palette.border))
                         .text_size(px(11.))
                         .font_weight(FontWeight(700.))
-                        .text_color(rgb(0xe5edf7))
+                        .text_color(rgb(palette.text))
                         .child(markdown_inline_text(&cell)),
                 );
             }
@@ -1493,11 +1514,11 @@ fn markdown_block_view(index: usize, block: MarkdownBlock) -> gpui::AnyElement {
                 let mut body_row = div()
                     .flex()
                     .border_b_1()
-                    .border_color(rgb(0x21262d))
+                    .border_color(rgb(palette.surface_elevated))
                     .bg(if ri % 2 == 0 {
-                        rgb(0x0d1117)
+                        rgb(palette.bg)
                     } else {
-                        rgb(0x12171f)
+                        rgb(palette.section_header)
                     });
                 for col in 0..col_count {
                     let cell = row.get(col).cloned().unwrap_or_default();
@@ -1508,9 +1529,9 @@ fn markdown_block_view(index: usize, block: MarkdownBlock) -> gpui::AnyElement {
                             .px_2()
                             .py_1()
                             .border_r_1()
-                            .border_color(rgb(0x21262d))
+                            .border_color(rgb(palette.surface_elevated))
                             .text_size(px(11.))
-                            .text_color(rgb(0xc9d1d9))
+                            .text_color(rgb(palette.text))
                             .child(markdown_inline_text(&cell)),
                     );
                 }
@@ -1523,7 +1544,7 @@ fn markdown_block_view(index: usize, block: MarkdownBlock) -> gpui::AnyElement {
             .my_1()
             .h(px(1.))
             .w_full()
-            .bg(rgb(0x30363d))
+            .bg(rgb(palette.border))
             .into_any_element(),
     }
 }

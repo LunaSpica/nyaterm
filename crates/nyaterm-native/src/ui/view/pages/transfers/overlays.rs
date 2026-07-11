@@ -44,8 +44,8 @@ impl NyaTermApp {
                     .w(px(460.))
                     .rounded_md()
                     .border_1()
-                    .border_color(rgb(0x303848))
-                    .bg(rgb(0x0b0f16))
+                    .border_color(rgb(palette.border))
+                    .bg(rgb(palette.bg))
                     .shadow_lg()
                     .p_4()
                     .flex()
@@ -74,11 +74,11 @@ impl NyaTermApp {
                     .child(
                         div()
                             .rounded_sm()
-                            .bg(rgb(0x10151e))
+                            .bg(rgb(palette.input))
                             .p_3()
                             .font_family("JetBrains Mono")
                             .text_xs()
-                            .text_color(rgb(0xe5edf7))
+                            .text_color(rgb(palette.text))
                             .child(truncate_preview(&state.title, 64)),
                     )
                     .child(

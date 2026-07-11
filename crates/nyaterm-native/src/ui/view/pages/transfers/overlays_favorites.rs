@@ -27,6 +27,7 @@ impl NyaTermApp {
         &mut self,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
+        let palette = self.theme_palette();
         let state =
             self.transfer_browser_favorites_menu
                 .unwrap_or(TransferBrowserFavoritesMenuState {
@@ -60,12 +61,12 @@ impl NyaTermApp {
                     .border_color(if is_current {
                         rgb(0x256d3f)
                     } else {
-                        rgb(0x303848)
+                        rgb(palette.border)
                     })
                     .bg(if is_current {
-                        rgb(0x17253b)
+                        rgb(palette.hover)
                     } else {
-                        rgb(0x151b27)
+                        rgb(palette.surface)
                     })
                     .px_2()
                     .flex()
@@ -86,7 +87,7 @@ impl NyaTermApp {
                             .text_color(if is_current {
                                 rgb(0x93c5fd)
                             } else {
-                                rgb(0xdbeafe)
+                                rgb(palette.text)
                             })
                             .child(truncate_preview(&path, 46)),
                     )
@@ -102,7 +103,7 @@ impl NyaTermApp {
                             .justify_center()
                             .rounded_sm()
                             .text_color(rgb(0x86efac))
-                            .hover(|this| this.bg(rgb(0x263142)).text_color(rgb(0xfca5a5)))
+                            .hover(|this| this.bg(rgb(palette.border)).text_color(rgb(0xfca5a5)))
                             .on_click(cx.listener(move |this, _: &ClickEvent, _window, cx| {
                                 cx.stop_propagation();
                                 this.remove_transfer_browser_favorite_path(remove_path.clone(), cx);
@@ -133,8 +134,8 @@ impl NyaTermApp {
                     .w(px(300.))
                     .rounded_md()
                     .border_1()
-                    .border_color(rgb(0x303848))
-                    .bg(rgb(0x0b0f16))
+                    .border_color(rgb(palette.border))
+                    .bg(rgb(palette.bg))
                     .shadow_lg()
                     .p_3()
                     .flex()
@@ -153,7 +154,7 @@ impl NyaTermApp {
                                 div()
                                     .text_xs()
                                     .font_weight(FontWeight(800.))
-                                    .text_color(rgb(0xe5edf7))
+                                    .text_color(rgb(palette.text))
                                     .child("Favorite Directories"),
                             )
                             .child(status_pill(
@@ -167,7 +168,7 @@ impl NyaTermApp {
                                 } else {
                                     rgb(0x93c5fd)
                                 },
-                                rgb(0x17253b),
+                                rgb(palette.hover),
                             )),
                     )
                     .child(favorite_menu_button(
@@ -195,11 +196,11 @@ impl NyaTermApp {
                                         .rounded_sm()
                                         .border_1()
                                         .border_color(rgb(0x202633))
-                                        .bg(rgb(0x10151e))
+                                        .bg(rgb(palette.input))
                                         .px_2()
                                         .py_2()
                                         .text_xs()
-                                        .text_color(rgb(0x64748b))
+                                        .text_color(rgb(palette.text_muted))
                                         .child("No favorite directories yet."),
                                 )
                             })

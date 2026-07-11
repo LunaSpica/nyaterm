@@ -181,16 +181,16 @@ impl NyaTermApp {
             .flex()
             .flex_col()
             .border_t_1()
-            .border_color(rgb(0x30363d))
-            .bg(rgb(0x161b22))
+            .border_color(rgb(palette.border))
+            .bg(rgb(palette.surface))
             .child(
                 div()
                     .h(px(28.))
                     .flex_none()
                     .px_2()
                     .border_b_1()
-                    .border_color(rgb(0x30363d))
-                    .bg(rgb(0x12171f))
+                    .border_color(rgb(palette.border))
+                    .bg(rgb(palette.section_header))
                     .flex()
                     .items_center()
                     .gap_2()
@@ -198,14 +198,14 @@ impl NyaTermApp {
                         div()
                             .text_size(px(11.))
                             .font_weight(FontWeight(600.))
-                            .text_color(rgb(0xc9d1d9))
+                            .text_color(rgb(palette.text))
                             .child("Command Send"),
                     )
                     .child(
                         div()
                             .ml_auto()
                             .text_size(px(10.))
-                            .text_color(rgb(0x6e7681))
+                            .text_color(rgb(palette.text_dimmed))
                             .child(target_kind),
                     )
                     .child(
@@ -215,9 +215,9 @@ impl NyaTermApp {
                             .font_family("JetBrains Mono")
                             .text_size(px(10.))
                             .text_color(if target_available {
-                                rgb(0x8b949e)
+                                rgb(palette.text_muted)
                             } else {
-                                rgb(0xff7b72)
+                                rgb(palette.danger)
                             })
                             .overflow_hidden()
                             .child(truncate_preview(&target_scope_label, 28)),
@@ -411,7 +411,7 @@ impl NyaTermApp {
                                             .font_family("JetBrains Mono")
                                             .text_size(px(11.))
                                             .font_weight(FontWeight(600.))
-                                            .text_color(rgb(0xc9d1d9))
+                                            .text_color(rgb(palette.text))
                                             .child(count_label),
                                     )
                                     .child(send_command_stepper_button(
@@ -445,13 +445,13 @@ impl NyaTermApp {
                                             .font_family("JetBrains Mono")
                                             .text_size(px(11.))
                                             .font_weight(FontWeight(600.))
-                                            .text_color(rgb(0xc9d1d9))
+                                            .text_color(rgb(palette.text))
                                             .child(interval_label)
                                             .child(
                                                 div()
                                                     .text_size(px(10.))
                                                     .font_weight(FontWeight(500.))
-                                                    .text_color(rgb(0x6e7681))
+                                                    .text_color(rgb(palette.text_dimmed))
                                                     .child("s"),
                                             ),
                                     )
@@ -585,22 +585,22 @@ impl NyaTermApp {
                                                     .items_center()
                                                     .justify_between()
                                                     .border_b_1()
-                                                    .border_color(rgb(0x21262d))
-                                                    .bg(rgb(0x0d1117))
+                                                    .border_color(rgb(palette.surface_elevated))
+                                                    .bg(rgb(palette.bg))
                                                     .child(
                                                         div()
                                                             .text_size(px(10.))
                                                             .font_weight(FontWeight(600.))
-                                                            .text_color(rgb(0x6e7681))
+                                                            .text_color(rgb(palette.text_dimmed))
                                                             .child("HEX Editor"),
                                                     )
                                                     .child(
                                                         div()
                                                             .text_size(px(10.))
                                                             .text_color(if validation_error {
-                                                                rgb(0xff7b72)
+                                                                rgb(palette.danger)
                                                             } else {
-                                                                rgb(0x6e7681)
+                                                                rgb(palette.text_dimmed)
                                                             })
                                                             .child(if validation_error {
                                                                 "Invalid hex"
@@ -712,8 +712,8 @@ impl NyaTermApp {
                                             .min_h(px(72.))
                                             .rounded_md()
                                             .border_1()
-                                            .border_color(rgb(0x30363d))
-                                            .bg(rgb(0x0d1117))
+                                            .border_color(rgb(palette.border))
+                                            .bg(rgb(palette.bg))
                                             .px_2()
                                             .py_1()
                                             .flex()
@@ -729,13 +729,13 @@ impl NyaTermApp {
                                                         div()
                                                             .text_size(px(10.))
                                                             .font_weight(FontWeight(600.))
-                                                            .text_color(rgb(0x6e7681))
+                                                            .text_color(rgb(palette.text_dimmed))
                                                             .child("Preview"),
                                                     )
                                                     .child(
                                                         div()
                                                             .text_size(px(10.))
-                                                            .text_color(rgb(0x6e7681))
+                                                            .text_color(rgb(palette.text_dimmed))
                                                             .child(match byte_count {
                                                                 Some(n) => format!("{n} B"),
                                                                 None => "invalid".to_string(),
@@ -759,9 +759,9 @@ impl NyaTermApp {
                                                     .text_size(px(11.))
                                                     .line_height(px(15.))
                                                     .text_color(if validation_error {
-                                                        rgb(0xff7b72)
+                                                        rgb(palette.danger)
                                                     } else {
-                                                        rgb(0xc9d1d9)
+                                                        rgb(palette.text)
                                                     })
                                                     .child(if preview.trim().is_empty() {
                                                         "·".to_string()
@@ -783,7 +783,7 @@ impl NyaTermApp {
                                         .rounded_md()
                                         .border_1()
                                         .border_color(rgb(0x1f6feb))
-                                        .bg(rgb(0x0d1117))
+                                        .bg(rgb(palette.bg))
                                         .px_2()
                                         .py_1()
                                         .flex()
@@ -799,13 +799,13 @@ impl NyaTermApp {
                                                     div()
                                                         .text_size(px(10.))
                                                         .font_weight(FontWeight(600.))
-                                                        .text_color(rgb(0xc9d1d9))
+                                                        .text_color(rgb(palette.text))
                                                         .child(progress_label.clone()),
                                                 )
                                                 .child(
                                                     div()
                                                         .text_size(px(10.))
-                                                        .text_color(rgb(0x6e7681))
+                                                        .text_color(rgb(palette.text_dimmed))
                                                         .child(format!(
                                                             "{:.0}%",
                                                             progress_ratio * 100.0
@@ -817,7 +817,7 @@ impl NyaTermApp {
                                                 .h(px(6.))
                                                 .w_full()
                                                 .rounded_full()
-                                                .bg(rgb(0x21262d))
+                                                .bg(rgb(palette.surface_elevated))
                                                 .overflow_hidden()
                                                 .child(
                                                     div()
@@ -836,7 +836,7 @@ impl NyaTermApp {
                             .h(px(34.))
                             .pt_1()
                             .border_t_1()
-                            .border_color(rgb(0x30363d))
+                            .border_color(rgb(palette.border))
                             .flex()
                             .items_center()
                             .justify_between()
@@ -852,11 +852,11 @@ impl NyaTermApp {
                                         div()
                                             .text_size(px(10.))
                                             .text_color(if validation_error && !is_sending {
-                                                rgb(0xff7b72)
+                                                rgb(palette.danger)
                                             } else if is_sending {
-                                                rgb(0x58a6ff)
+                                                rgb(palette.accent)
                                             } else {
-                                                rgb(0x8b949e)
+                                                rgb(palette.text_muted)
                                             })
                                             .overflow_hidden()
                                             .child(if is_sending {
@@ -869,7 +869,7 @@ impl NyaTermApp {
                                         div()
                                             .font_family("JetBrains Mono")
                                             .text_size(px(10.))
-                                            .text_color(rgb(0x6e7681))
+                                            .text_color(rgb(palette.text_dimmed))
                                             .overflow_hidden()
                                             .child(if preview.trim().is_empty() {
                                                 "preview empty".to_string()
@@ -923,6 +923,7 @@ fn send_command_control_group(
     label: &'static str,
     content: impl IntoElement,
 ) -> impl IntoElement {
+    let palette = crate::ui::theme::theme_palette("github-dark");
     // Tauri labeled control: h-8 bordered group with muted label prefix.
     div()
         .h(px(30.))
@@ -931,14 +932,14 @@ fn send_command_control_group(
         .overflow_hidden()
         .rounded_md()
         .border_1()
-        .border_color(rgb(0x30363d))
-        .bg(rgb(0x0d1117))
+        .border_color(rgb(palette.border))
+        .bg(rgb(palette.bg))
         .child(
             div()
                 .flex_none()
                 .px_2()
                 .text_size(px(10.))
-                .text_color(rgb(0x6e7681))
+                .text_color(rgb(palette.text_dimmed))
                 .child(label),
         )
         .child(
@@ -949,7 +950,7 @@ fn send_command_control_group(
                 .flex()
                 .items_center()
                 .border_l_1()
-                .border_color(rgb(0x30363d))
+                .border_color(rgb(palette.border))
                 .child(content),
         )
 }
@@ -960,6 +961,7 @@ fn send_command_chip(
     active: bool,
     on_click: impl Fn(&gpui::ClickEvent, &mut gpui::Window, &mut gpui::App) + 'static,
 ) -> impl IntoElement {
+    let palette = crate::ui::theme::theme_palette("github-dark");
     div()
         .id(SharedString::from(id.into()))
         .h(px(28.))
@@ -973,17 +975,17 @@ fn send_command_chip(
             FontWeight(500.)
         })
         .text_color(if active {
-            rgb(0x58a6ff)
+            rgb(palette.accent)
         } else {
-            rgb(0x8b949e)
+            rgb(palette.text_muted)
         })
         .bg(if active {
-            rgb(0x122033)
+            rgb(palette.hover)
         } else {
             rgb(0x00000000)
         })
         .cursor_pointer()
-        .hover(|this| this.bg(rgb(0x21262d)).text_color(rgb(0xc9d1d9)))
+        .hover(|this| this.bg(rgb(palette.surface_elevated)).text_color(rgb(palette.text)))
         .child(label)
         .on_click(on_click)
 }
@@ -994,6 +996,7 @@ fn send_command_target_chip(
     active: bool,
     on_click: impl Fn(&gpui::ClickEvent, &mut gpui::Window, &mut gpui::App) + 'static,
 ) -> impl IntoElement {
+    let palette = crate::ui::theme::theme_palette("github-dark");
     div()
         .id(SharedString::from(id.into()))
         .h(px(28.))
@@ -1007,17 +1010,17 @@ fn send_command_target_chip(
             FontWeight(500.)
         })
         .text_color(if active {
-            rgb(0x58a6ff)
+            rgb(palette.accent)
         } else {
-            rgb(0x8b949e)
+            rgb(palette.text_muted)
         })
         .bg(if active {
-            rgb(0x122033)
+            rgb(palette.hover)
         } else {
             rgb(0x00000000)
         })
         .cursor_pointer()
-        .hover(|this| this.bg(rgb(0x21262d)).text_color(rgb(0xc9d1d9)))
+        .hover(|this| this.bg(rgb(palette.surface_elevated)).text_color(rgb(palette.text)))
         .child(label.into())
         .on_click(on_click)
 }
@@ -1028,6 +1031,7 @@ fn send_command_stepper_button(
     label: &'static str,
     on_click: impl Fn(&gpui::ClickEvent, &mut gpui::Window, &mut gpui::App) + 'static,
 ) -> impl IntoElement {
+    let palette = crate::ui::theme::theme_palette("github-dark");
     div()
         .id(SharedString::from(id.into()))
         .size(px(28.))
@@ -1035,9 +1039,9 @@ fn send_command_stepper_button(
         .items_center()
         .justify_center()
         .text_size(px(12.))
-        .text_color(rgb(0x8b949e))
+        .text_color(rgb(palette.text_muted))
         .cursor_pointer()
-        .hover(|this| this.bg(rgb(0x21262d)).text_color(rgb(0xc9d1d9)))
+        .hover(|this| this.bg(rgb(palette.surface_elevated)).text_color(rgb(palette.text)))
         .child(label)
         .on_click(on_click)
 }

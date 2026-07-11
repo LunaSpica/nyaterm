@@ -49,15 +49,15 @@ impl NyaTermApp {
                     .w(px(420.))
                     .rounded_md()
                     .border_1()
-                    .border_color(rgb(0x303848))
-                    .bg(rgb(0x0b0f16))
+                    .border_color(rgb(palette.border))
+                    .bg(rgb(palette.bg))
                     .shadow_lg()
                     .p_4()
                     .child(
                         div()
                             .text_sm()
                             .font_weight(FontWeight(800.))
-                            .text_color(rgb(0xe5edf7))
+                            .text_color(rgb(palette.text))
                             .child("New Remote Folder"),
                     )
                     .child(
@@ -65,7 +65,7 @@ impl NyaTermApp {
                             .mt_2()
                             .font_family("JetBrains Mono")
                             .text_xs()
-                            .text_color(rgb(0x8f98aa))
+                            .text_color(rgb(palette.text_muted))
                             .child(truncate_preview(&state.parent_path, 92)),
                     )
                     .child(
@@ -80,16 +80,16 @@ impl NyaTermApp {
                             } else {
                                 rgb(0x256d3f)
                             })
-                            .bg(rgb(0x0d1320))
+                            .bg(rgb(palette.input))
                             .px_3()
                             .flex()
                             .items_center()
                             .font_family("JetBrains Mono")
                             .text_sm()
                             .text_color(if state.value.is_empty() {
-                                rgb(0x64748b)
+                                rgb(palette.text_muted)
                             } else {
-                                rgb(0xe5edf7)
+                                rgb(palette.text)
                             })
                             .child(truncate_preview(&input_display, 80)),
                     )
@@ -128,7 +128,7 @@ impl NyaTermApp {
                                     .child(status_pill(
                                         if state.mode == 0o700 { "0700" } else { "0755" },
                                         rgb(0x93c5fd),
-                                        rgb(0x17253b),
+                                        rgb(palette.hover),
                                     )),
                             )
                             .child(small_button(palette, 
@@ -153,7 +153,7 @@ impl NyaTermApp {
                             .text_color(if has_error {
                                 rgb(0xfca5a5)
                             } else {
-                                rgb(0x8f98aa)
+                                rgb(palette.text_muted)
                             })
                             .child(if has_error {
                                 "Use a non-empty single folder name."
@@ -235,15 +235,15 @@ impl NyaTermApp {
                     .w(px(420.))
                     .rounded_md()
                     .border_1()
-                    .border_color(rgb(0x303848))
-                    .bg(rgb(0x0b0f16))
+                    .border_color(rgb(palette.border))
+                    .bg(rgb(palette.bg))
                     .shadow_lg()
                     .p_4()
                     .child(
                         div()
                             .text_sm()
                             .font_weight(FontWeight(800.))
-                            .text_color(rgb(0xe5edf7))
+                            .text_color(rgb(palette.text))
                             .child("New Remote File"),
                     )
                     .child(
@@ -251,7 +251,7 @@ impl NyaTermApp {
                             .mt_2()
                             .font_family("JetBrains Mono")
                             .text_xs()
-                            .text_color(rgb(0x8f98aa))
+                            .text_color(rgb(palette.text_muted))
                             .child(truncate_preview(&state.parent_path, 92)),
                     )
                     .child(
@@ -266,16 +266,16 @@ impl NyaTermApp {
                             } else {
                                 rgb(0x256d3f)
                             })
-                            .bg(rgb(0x0d1320))
+                            .bg(rgb(palette.input))
                             .px_3()
                             .flex()
                             .items_center()
                             .font_family("JetBrains Mono")
                             .text_sm()
                             .text_color(if state.value.is_empty() {
-                                rgb(0x64748b)
+                                rgb(palette.text_muted)
                             } else {
-                                rgb(0xe5edf7)
+                                rgb(palette.text)
                             })
                             .child(truncate_preview(&input_display, 80)),
                     )
@@ -314,13 +314,13 @@ impl NyaTermApp {
                                     .child(status_pill(
                                         if state.mode == 0o600 { "0600" } else { "0644" },
                                         rgb(0x93c5fd),
-                                        rgb(0x17253b),
+                                        rgb(palette.hover),
                                     )),
                             )
                             .child(
                                 div()
                                     .text_xs()
-                                    .text_color(rgb(0x8f98aa))
+                                    .text_color(rgb(palette.text_muted))
                                     .child("Creates an empty remote file."),
                             ),
                     )
@@ -331,7 +331,7 @@ impl NyaTermApp {
                             .text_color(if has_error {
                                 rgb(0xfca5a5)
                             } else {
-                                rgb(0x8f98aa)
+                                rgb(palette.text_muted)
                             })
                             .child(if has_error {
                                 "Use a non-empty single file name."
@@ -410,15 +410,15 @@ impl NyaTermApp {
                     .w(px(460.))
                     .rounded_md()
                     .border_1()
-                    .border_color(rgb(0x303848))
-                    .bg(rgb(0x0b0f16))
+                    .border_color(rgb(palette.border))
+                    .bg(rgb(palette.bg))
                     .shadow_lg()
                     .p_4()
                     .child(
                         div()
                             .text_sm()
                             .font_weight(FontWeight(800.))
-                            .text_color(rgb(0xe5edf7))
+                            .text_color(rgb(palette.text))
                             .child("New Remote Symlink"),
                     )
                     .child(
@@ -426,7 +426,7 @@ impl NyaTermApp {
                             .mt_2()
                             .font_family("JetBrains Mono")
                             .text_xs()
-                            .text_color(rgb(0x8f98aa))
+                            .text_color(rgb(palette.text_muted))
                             .child(truncate_preview(&state.parent_path, 92)),
                     )
                     .child(symlink_input_row(
@@ -472,7 +472,7 @@ impl NyaTermApp {
                             .text_color(if has_error {
                                 rgb(0xfca5a5)
                             } else {
-                                rgb(0x8f98aa)
+                                rgb(palette.text_muted)
                             })
                             .child(if has_error {
                                 "Name and target are required; name must not contain '/'."
