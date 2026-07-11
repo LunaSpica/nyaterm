@@ -6,122 +6,115 @@ impl NyaTermApp {
         backup_snapshot_prompt: Option<SnapshotPasswordPromptState>,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
+        let prompt_label = match self.config_path_prompt {
+            Some(ConfigPathPromptKind::Export) => "selecting export path",
+            Some(ConfigPathPromptKind::Import) => "selecting import path",
+            Some(ConfigPathPromptKind::PortableExport) => "selecting .nya export path",
+            Some(ConfigPathPromptKind::PortableImport) => "selecting .nya import path",
+            Some(ConfigPathPromptKind::EncryptedPortableExport) => {
+                "selecting encrypted .nya export path"
+            }
+            Some(ConfigPathPromptKind::EncryptedPortableImport) => {
+                "selecting encrypted .nya import path"
+            }
+            None => "native redb backup",
+        };
+
         div()
-            .rounded_md()
-            .border_1()
-            .border_color(rgb(0x2a3140))
-            .bg(rgb(0x151923))
-            .p_4()
-            .child(
+            .flex()
+            .flex_col()
+            .gap_3()
+            .child(settings_form_section(
+                Some("Config backup"),
+                Some("Export or import the native redb configuration store."),
                 div()
-                    .text_sm()
-                    .font_weight(FontWeight(700.))
-                    .child("Config Backup"),
-            )
-            .child(
-                div()
-                    .mt_3()
                     .flex()
-                    .items_center()
-                    .gap_2()
-                    .child(small_button(
-                        "settings-config-export",
-                        "Export",
-                        cx.listener(|this, _, _, cx| {
-                            this.prompt_config_export(cx);
-                        }),
-                    ))
-                    .child(small_button(
-                        "settings-config-import",
-                        "Import",
-                        cx.listener(|this, _, _, cx| {
-                            this.prompt_config_import(cx);
-                        }),
-                    ))
-                    .child(div().text_xs().text_color(rgb(0x98a3b8)).child(
-                        match self.config_path_prompt {
-                            Some(ConfigPathPromptKind::Export) => "selecting export path",
-                            Some(ConfigPathPromptKind::Import) => "selecting import path",
-                            Some(ConfigPathPromptKind::PortableExport) => {
-                                "selecting .nya export path"
-                            }
-                            Some(ConfigPathPromptKind::PortableImport) => {
-                                "selecting .nya import path"
-                            }
-                            Some(ConfigPathPromptKind::EncryptedPortableExport) => {
-                                "selecting encrypted .nya export path"
-                            }
-                            Some(ConfigPathPromptKind::EncryptedPortableImport) => {
-                                "selecting encrypted .nya import path"
-                            }
-                            None => "native redb backup",
-                        },
-                    )),
-            )
-            .child(
-                div()
-                    .mt_2()
-                    .flex()
-                    .items_center()
-                    .gap_2()
-                    .child(small_button(
-                        "settings-portable-export",
-                        "Export .nya",
-                        cx.listener(|this, _, _, cx| {
-                            this.prompt_portable_snapshot_export(cx);
-                        }),
-                    ))
-                    .child(small_button(
-                        "settings-portable-import",
-                        "Import .nya",
-                        cx.listener(|this, _, _, cx| {
-                            this.prompt_portable_snapshot_import(cx);
-                        }),
-                    ))
-                    .child(
+                    .flex_col()
+                    .gap_3()
+                    .child(settings_form_row(
+                        "Store path",
+                        Some(SharedString::from(truncate_preview(
+                            &self.store_status.path,
+                            64,
+                        ))),
                         div()
-                            .text_xs()
-                            .text_color(rgb(0x98a3b8))
-                            .child("legacy portable snapshot"),
-                    ),
-            )
-            .child(
-                div()
-                    .mt_2()
-                    .flex()
-                    .items_center()
-                    .gap_2()
-                    .child(small_button(
-                        "settings-encrypted-portable-export",
-                        "Encrypt .nya",
-                        cx.listener(|this, _, _, cx| {
-                            this.prompt_encrypted_portable_snapshot_export(cx);
-                        }),
+                            .text_size(px(11.))
+                            .text_color(rgb(0x8b949e))
+                            .child(prompt_label),
                     ))
-                    .child(small_button(
-                        "settings-encrypted-portable-import",
-                        "Decrypt .nya",
-                        cx.listener(|this, _, _, cx| {
-                            this.prompt_encrypted_portable_snapshot_import(cx);
-                        }),
-                    ))
-                    .child(
+                    .child(settings_form_row(
+                        "JSON backup",
+                        Some(SharedString::from(
+                            "Portable JSON export/import of connections and settings.",
+                        )),
                         div()
-                            .text_xs()
-                            .text_color(rgb(0x98a3b8))
-                            .child("AES-GCM master password"),
-                    ),
-            )
-            .when_some(backup_snapshot_prompt, |this, prompt| {
-                this.child(self.snapshot_password_prompt_banner(prompt, cx))
-            })
-            .child(
-                div()
-                    .mt_3()
-                    .text_xs()
-                    .text_color(rgb(0x98a3b8))
-                    .child(self.store_status.path.clone()),
-            )
+                            .flex()
+                            .gap_1()
+                            .child(small_button(
+                                "settings-config-export",
+                                "Export",
+                                cx.listener(|this, _, _, cx| {
+                                    this.prompt_config_export(cx);
+                                }),
+                            ))
+                            .child(small_button(
+                                "settings-config-import",
+                                "Import",
+                                cx.listener(|this, _, _, cx| {
+                                    this.prompt_config_import(cx);
+                                }),
+                            )),
+                    ))
+                    .child(settings_form_row(
+                        "Portable .nya",
+                        Some(SharedString::from(
+                            "Legacy portable snapshot package used by NyaTerm migration.",
+                        )),
+                        div()
+                            .flex()
+                            .gap_1()
+                            .child(small_button(
+                                "settings-portable-export",
+                                "Export .nya",
+                                cx.listener(|this, _, _, cx| {
+                                    this.prompt_portable_snapshot_export(cx);
+                                }),
+                            ))
+                            .child(small_button(
+                                "settings-portable-import",
+                                "Import .nya",
+                                cx.listener(|this, _, _, cx| {
+                                    this.prompt_portable_snapshot_import(cx);
+                                }),
+                            )),
+                    ))
+                    .child(settings_form_row(
+                        "Encrypted .nya",
+                        Some(SharedString::from(
+                            "AES-GCM package sealed with the master password.",
+                        )),
+                        div()
+                            .flex()
+                            .gap_1()
+                            .child(small_button(
+                                "settings-encrypted-portable-export",
+                                "Encrypt .nya",
+                                cx.listener(|this, _, _, cx| {
+                                    this.prompt_encrypted_portable_snapshot_export(cx);
+                                }),
+                            ))
+                            .child(small_button(
+                                "settings-encrypted-portable-import",
+                                "Decrypt .nya",
+                                cx.listener(|this, _, _, cx| {
+                                    this.prompt_encrypted_portable_snapshot_import(cx);
+                                }),
+                            )),
+                    ))
+                    .when_some(backup_snapshot_prompt, |this, prompt| {
+                        this.child(self.snapshot_password_prompt_banner(prompt, cx))
+                    }),
+            ))
     }
 
     pub(in crate::ui::view) fn diagnostics_settings_section(

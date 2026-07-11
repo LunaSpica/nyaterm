@@ -35,6 +35,7 @@ impl NyaTermApp {
         &mut self,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
+        // Tauri AiGeneralTab: section/switch rows instead of metric grids.
         let active_ai_profile_id = self.ai_settings.active_profile_id.clone();
         let active_ai_api_key = ai_active_profile_api_key(&self.ai_settings);
         let ai_key_value = cloud_secret_display(&self.ai_secret_draft, &active_ai_api_key);
@@ -61,369 +62,323 @@ impl NyaTermApp {
         } else {
             "Discover"
         };
-        let ai_state_label = if self.ai_settings.enabled {
-            "enabled"
-        } else {
-            "disabled"
-        };
 
         div()
-            .rounded_md()
-            .border_1()
-            .border_color(rgb(0x2a3140))
-            .bg(rgb(0x151923))
-            .p_4()
-            .child(
+            .flex()
+            .flex_col()
+            .gap_3()
+            .child(settings_form_section(
+                Some("General"),
+                Some("Assistant availability and safety preferences."),
                 div()
                     .flex()
-                    .items_center()
-                    .justify_between()
+                    .flex_col()
                     .gap_3()
-                    .child(div().text_sm().font_weight(FontWeight(700.)).child("AI"))
-                    .child(status_pill(
-                        ai_state_label,
-                        if self.ai_settings.enabled {
-                            rgb(0x6ee7b7)
-                        } else {
-                            rgb(0x98a3b8)
-                        },
-                        if self.ai_settings.enabled {
-                            rgb(0x12342a)
-                        } else {
-                            rgb(0x202633)
-                        },
+                    .child(settings_form_row(
+                        "Enable AI",
+                        Some(SharedString::from(self.ai_status.clone())),
+                        settings_switch(
+                            "ai-enabled",
+                            self.ai_settings.enabled,
+                            cx.listener(|this, _, _, cx| {
+                                this.toggle_ai_enabled(cx);
+                            }),
+                        ),
                     ))
-                    .child(
-                        div()
-                            .text_xs()
-                            .text_color(rgb(0x98a3b8))
-                            .child(self.ai_status.clone()),
-                    ),
-            )
-            .child(
-                div()
-                    .mt_3()
-                    .grid()
-                    .grid_cols(7)
-                    .gap_3()
-                    .child(metric("State", ai_state_label.to_string()))
-                    .child(metric("Providers", enabled_credentials.to_string()))
-                    .child(metric("Models", enabled_ai_models.to_string()))
-                    .child(metric("Default", ai_default_model))
-                    .child(metric("Sessions", self.ai_session_count.to_string()))
-                    .child(metric("Messages", self.ai_message_count.to_string()))
-                    .child(metric("Audit", self.ai_audit_count.to_string())),
-            )
-            .child(
-                div()
-                    .mt_3()
-                    .grid()
-                    .grid_cols(4)
-                    .gap_3()
-                    .child(ai_boolean_state(
+                    .child(settings_form_row(
                         "Redaction",
-                        self.ai_settings.redaction_enabled,
+                        Some(SharedString::from(
+                            "Strip secrets from prompts and observations before they leave the device.",
+                        )),
+                        settings_switch(
+                            "ai-redaction-toggle",
+                            self.ai_settings.redaction_enabled,
+                            cx.listener(|this, _, _, cx| {
+                                this.toggle_ai_redaction(cx);
+                            }),
+                        ),
                     ))
-                    .child(ai_boolean_state(
-                        "Save Commands",
-                        self.ai_settings.allow_save_command,
+                    .child(settings_form_row(
+                        "Allow save command",
+                        Some(SharedString::from(
+                            "Let the assistant persist generated commands into Quick Commands.",
+                        )),
+                        settings_switch(
+                            "ai-save-command-toggle",
+                            self.ai_settings.allow_save_command,
+                            cx.listener(|this, _, _, cx| {
+                                this.toggle_ai_allow_save_command(cx);
+                            }),
+                        ),
                     ))
-                    .child(ai_boolean_state("History", self.ai_settings.record_history))
-                    .child(compact_setting_state(
-                        "User Agent",
-                        truncate_preview(&self.ai_settings.request_user_agent, 34),
+                    .child(settings_form_row(
+                        "Record history",
+                        Some(SharedString::from(
+                            "Keep AI chat transcripts for later review.",
+                        )),
+                        settings_switch(
+                            "ai-history-toggle",
+                            self.ai_settings.record_history,
+                            cx.listener(|this, _, _, cx| {
+                                this.toggle_ai_record_history(cx);
+                            }),
+                        ),
+                    ))
+                    .child(settings_form_row(
+                        "Usage snapshot",
+                        Some(SharedString::from(format!(
+                            "{} providers · {} models · default {} · {} sessions / {} messages / {} audits",
+                            enabled_credentials,
+                            enabled_ai_models,
+                            ai_default_model,
+                            self.ai_session_count,
+                            self.ai_message_count,
+                            self.ai_audit_count
+                        ))),
+                        div()
+                            .text_size(px(11.))
+                            .text_color(rgb(0x8b949e))
+                            .child("Live"),
                     )),
-            )
-            .child(
+            ))
+            .child(settings_form_section(
+                Some("Active provider"),
+                Some("Profile used for chat, discovery, and agent steps."),
                 div()
-                    .mt_3()
                     .flex()
-                    .items_center()
-                    .gap_2()
-                    .flex_wrap()
-                    .child(small_button(
-                        "ai-redaction-toggle",
-                        if self.ai_settings.redaction_enabled {
-                            "Redact On"
-                        } else {
-                            "Redact Off"
-                        },
-                        cx.listener(|this, _, _, cx| {
-                            this.toggle_ai_redaction(cx);
-                        }),
-                    ))
-                    .child(small_button(
-                        "ai-save-command-toggle",
-                        if self.ai_settings.allow_save_command {
-                            "Save On"
-                        } else {
-                            "Save Off"
-                        },
-                        cx.listener(|this, _, _, cx| {
-                            this.toggle_ai_allow_save_command(cx);
-                        }),
-                    ))
-                    .child(small_button(
-                        "ai-history-toggle",
-                        if self.ai_settings.record_history {
-                            "History On"
-                        } else {
-                            "History Off"
-                        },
-                        cx.listener(|this, _, _, cx| {
-                            this.toggle_ai_record_history(cx);
-                        }),
-                    )),
-            )
-            .child(
-                div()
-                    .mt_3()
-                    .flex()
-                    .items_center()
-                    .gap_2()
-                    .flex_wrap()
-                    .child(policy_button(
-                        "ai-provider-openai",
-                        "OpenAI",
-                        active_ai_profile_id == "openai",
-                        cx.listener(|this, _, _, cx| {
-                            this.update_ai_profile("openai", cx);
-                        }),
-                    ))
-                    .child(policy_button(
-                        "ai-provider-anthropic",
-                        "Anthropic",
-                        active_ai_profile_id == "anthropic",
-                        cx.listener(|this, _, _, cx| {
-                            this.update_ai_profile("anthropic", cx);
-                        }),
-                    ))
-                    .child(policy_button(
-                        "ai-provider-gemini",
-                        "Gemini",
-                        active_ai_profile_id == "gemini",
-                        cx.listener(|this, _, _, cx| {
-                            this.update_ai_profile("gemini", cx);
-                        }),
-                    ))
-                    .child(policy_button(
-                        "ai-provider-deepseek",
-                        "DeepSeek",
-                        active_ai_profile_id == "deepseek",
-                        cx.listener(|this, _, _, cx| {
-                            this.update_ai_profile("deepseek", cx);
-                        }),
-                    ))
-                    .child(policy_button(
-                        "ai-provider-ollama",
-                        "Ollama",
-                        active_ai_profile_id == "ollama",
-                        cx.listener(|this, _, _, cx| {
-                            this.update_ai_profile("ollama", cx);
-                        }),
-                    ))
-                    .child(policy_button(
-                        "ai-provider-xai",
-                        "xAI",
-                        active_ai_profile_id == "xai",
-                        cx.listener(|this, _, _, cx| {
-                            this.update_ai_profile("xai", cx);
-                        }),
-                    )),
-            )
-            .child(
-                div()
-                    .mt_2()
-                    .flex()
-                    .items_center()
-                    .gap_2()
-                    .flex_wrap()
-                    .child(policy_button(
-                        "ai-mode-ask",
-                        "Ask",
-                        self.ai_settings.default_mode == AiMode::Ask,
-                        cx.listener(|this, _, _, cx| {
-                            this.set_ai_mode(AiMode::Ask, cx);
-                        }),
-                    ))
-                    .child(policy_button(
-                        "ai-mode-agent",
-                        "Agent",
-                        self.ai_settings.default_mode == AiMode::Agent,
-                        cx.listener(|this, _, _, cx| {
-                            this.set_ai_mode(AiMode::Agent, cx);
-                        }),
-                    ))
-                    .child(policy_button(
-                        "ai-command-confirm",
-                        "Confirm",
-                        self.ai_settings.agent_command_execution_mode
-                            == AgentCommandExecutionMode::ConfirmEach,
-                        cx.listener(|this, _, _, cx| {
-                            this.set_ai_command_mode(AgentCommandExecutionMode::ConfirmEach, cx);
-                        }),
-                    ))
-                    .child(policy_button(
-                        "ai-command-smart",
-                        "Smart",
-                        self.ai_settings.agent_command_execution_mode
-                            == AgentCommandExecutionMode::Smart,
-                        cx.listener(|this, _, _, cx| {
-                            this.set_ai_command_mode(AgentCommandExecutionMode::Smart, cx);
-                        }),
-                    ))
-                    .child(policy_button(
-                        "ai-command-auto",
-                        "Auto",
-                        self.ai_settings.agent_command_execution_mode
-                            == AgentCommandExecutionMode::Auto,
-                        cx.listener(|this, _, _, cx| {
-                            this.set_ai_command_mode(AgentCommandExecutionMode::Auto, cx);
-                        }),
-                    ))
-                    .child(policy_button(
-                        "ai-agent-bg-exec",
-                        "BG Exec",
-                        self.ai_settings.agent_background_execution_enabled,
-                        cx.listener(|this, _, _, cx| {
-                            this.toggle_ai_background_execution(cx);
-                        }),
-                    ))
-                    .child(small_button(
-                        "ai-enabled",
-                        if self.ai_settings.enabled {
-                            "Enabled"
-                        } else {
-                            "Disabled"
-                        },
-                        cx.listener(|this, _, _, cx| {
-                            this.toggle_ai_enabled(cx);
-                        }),
-                    ))
-                    .child(small_button(
-                        "ai-save",
-                        "Save",
-                        cx.listener(|this, _, _, cx| {
-                            this.save_ai_settings(cx);
-                        }),
-                    ))
-                    .child(small_button(
-                        "ai-discover",
-                        ai_discovery_label,
-                        cx.listener(|this, _, _, cx| {
-                            this.discover_ai_models(cx);
-                        }),
-                    )),
-            )
-            .child(
-                div()
-                    .mt_3()
-                    .grid()
-                    .grid_cols(3)
-                    .gap_2()
-                    .child(self.ai_input(
-                        "ai-model",
-                        "Model",
-                        self.ai_model_draft.clone(),
-                        AiInputField::Model,
-                        cx,
-                    ))
-                    .child(self.ai_input(
-                        "ai-base-url",
-                        "Base URL",
-                        self.ai_base_url_draft.clone(),
-                        AiInputField::BaseUrl,
-                        cx,
-                    ))
-                    .child(self.ai_input(
-                        "ai-api-key",
-                        "API Key",
-                        ai_key_value,
-                        AiInputField::ApiKey,
-                        cx,
-                    )),
-            )
-            .child(
-                div()
-                    .mt_3()
-                    .grid()
-                    .grid_cols(3)
-                    .gap_2()
-                    .child(ai_setting_hint(
-                        "General",
-                        "Enable AI, redaction, history, and context limits.",
-                    ))
-                    .child(ai_setting_hint(
-                        "Models",
-                        "Discover provider models and choose a default.",
-                    ))
-                    .child(ai_setting_hint(
-                        "Agent",
-                        "Execution mode, risk gate, and background command policy.",
-                    )),
-            )
-            .child(
-                div()
-                    .mt_3()
-                    .rounded_sm()
-                    .border_1()
-                    .border_color(rgb(0x263142))
-                    .bg(rgb(0x0d1320))
-                    .p_3()
+                    .flex_col()
+                    .gap_3()
                     .child(
                         div()
-                            .text_xs()
-                            .font_weight(FontWeight(800.))
-                            .text_color(rgb(0xe5edf7))
-                            .child("Agent Limits"),
-                    )
-                    .child(
-                        div()
-                            .mt_3()
-                            .grid()
-                            .grid_cols(4)
-                            .gap_3()
-                            .child(metric(
-                                "Context Lines",
-                                self.ai_settings.context_line_limit.to_string(),
+                            .flex()
+                            .flex_wrap()
+                            .gap_1()
+                            .child(settings_choice_chip(
+                                "ai-provider-openai",
+                                "OpenAI",
+                                active_ai_profile_id == "openai",
+                                cx.listener(|this, _, _, cx| {
+                                    this.update_ai_profile("openai", cx);
+                                }),
                             ))
-                            .child(metric(
-                                "Timeout",
-                                format!("{} ms", self.ai_settings.timeout_ms),
+                            .child(settings_choice_chip(
+                                "ai-provider-anthropic",
+                                "Anthropic",
+                                active_ai_profile_id == "anthropic",
+                                cx.listener(|this, _, _, cx| {
+                                    this.update_ai_profile("anthropic", cx);
+                                }),
                             ))
-                            .child(metric(
-                                "Steps",
-                                self.ai_settings.max_agent_steps.unwrap_or(10).to_string(),
+                            .child(settings_choice_chip(
+                                "ai-provider-gemini",
+                                "Gemini",
+                                active_ai_profile_id == "gemini",
+                                cx.listener(|this, _, _, cx| {
+                                    this.update_ai_profile("gemini", cx);
+                                }),
                             ))
-                            .child(metric(
-                                "Output Lines",
-                                self.ai_settings.terminal_output_lines.to_string(),
+                            .child(settings_choice_chip(
+                                "ai-provider-deepseek",
+                                "DeepSeek",
+                                active_ai_profile_id == "deepseek",
+                                cx.listener(|this, _, _, cx| {
+                                    this.update_ai_profile("deepseek", cx);
+                                }),
+                            ))
+                            .child(settings_choice_chip(
+                                "ai-provider-ollama",
+                                "Ollama",
+                                active_ai_profile_id == "ollama",
+                                cx.listener(|this, _, _, cx| {
+                                    this.update_ai_profile("ollama", cx);
+                                }),
+                            ))
+                            .child(settings_choice_chip(
+                                "ai-provider-xai",
+                                "xAI",
+                                active_ai_profile_id == "xai",
+                                cx.listener(|this, _, _, cx| {
+                                    this.update_ai_profile("xai", cx);
+                                }),
                             )),
                     )
                     .child(
                         div()
-                            .mt_3()
+                            .grid()
+                            .grid_cols(3)
+                            .gap_2()
+                            .child(self.ai_input(
+                                "ai-model",
+                                "Model",
+                                self.ai_model_draft.clone(),
+                                AiInputField::Model,
+                                cx,
+                            ))
+                            .child(self.ai_input(
+                                "ai-base-url",
+                                "Base URL",
+                                self.ai_base_url_draft.clone(),
+                                AiInputField::BaseUrl,
+                                cx,
+                            ))
+                            .child(self.ai_input(
+                                "ai-api-key",
+                                "API Key",
+                                ai_key_value,
+                                AiInputField::ApiKey,
+                                cx,
+                            )),
+                    )
+                    .child(settings_form_row(
+                        "Provider actions",
+                        None,
+                        div()
                             .flex()
                             .items_center()
-                            .gap_2()
+                            .gap_1()
+                            .child(small_button(
+                                "ai-discover",
+                                ai_discovery_label,
+                                cx.listener(|this, _, _, cx| {
+                                    this.discover_ai_models(cx);
+                                }),
+                            ))
+                            .child(small_button(
+                                "ai-save",
+                                "Save",
+                                cx.listener(|this, _, _, cx| {
+                                    this.save_ai_settings(cx);
+                                }),
+                            )),
+                    )),
+            ))
+            .child(settings_form_section(
+                Some("Agent defaults"),
+                Some("How the assistant proposes and runs terminal commands."),
+                div()
+                    .flex()
+                    .flex_col()
+                    .gap_3()
+                    .child(settings_form_row(
+                        "Default mode",
+                        Some(SharedString::from("Ask answers questions; Agent can run tools.")),
+                        div()
+                            .flex()
+                            .gap_1()
+                            .child(settings_choice_chip(
+                                "ai-mode-ask",
+                                "Ask",
+                                self.ai_settings.default_mode == AiMode::Ask,
+                                cx.listener(|this, _, _, cx| {
+                                    this.set_ai_mode(AiMode::Ask, cx);
+                                }),
+                            ))
+                            .child(settings_choice_chip(
+                                "ai-mode-agent",
+                                "Agent",
+                                self.ai_settings.default_mode == AiMode::Agent,
+                                cx.listener(|this, _, _, cx| {
+                                    this.set_ai_mode(AiMode::Agent, cx);
+                                }),
+                            )),
+                    ))
+                    .child(settings_form_row(
+                        "Command execution",
+                        Some(SharedString::from(
+                            "Confirm each, smart risk gate, or auto-run low-risk commands.",
+                        )),
+                        div()
+                            .flex()
                             .flex_wrap()
+                            .gap_1()
+                            .child(settings_choice_chip(
+                                "ai-command-confirm",
+                                "Confirm",
+                                self.ai_settings.agent_command_execution_mode
+                                    == AgentCommandExecutionMode::ConfirmEach,
+                                cx.listener(|this, _, _, cx| {
+                                    this.set_ai_command_mode(
+                                        AgentCommandExecutionMode::ConfirmEach,
+                                        cx,
+                                    );
+                                }),
+                            ))
+                            .child(settings_choice_chip(
+                                "ai-command-smart",
+                                "Smart",
+                                self.ai_settings.agent_command_execution_mode
+                                    == AgentCommandExecutionMode::Smart,
+                                cx.listener(|this, _, _, cx| {
+                                    this.set_ai_command_mode(AgentCommandExecutionMode::Smart, cx);
+                                }),
+                            ))
+                            .child(settings_choice_chip(
+                                "ai-command-auto",
+                                "Auto",
+                                self.ai_settings.agent_command_execution_mode
+                                    == AgentCommandExecutionMode::Auto,
+                                cx.listener(|this, _, _, cx| {
+                                    this.set_ai_command_mode(AgentCommandExecutionMode::Auto, cx);
+                                }),
+                            )),
+                    ))
+                    .child(settings_form_row(
+                        "Background execution",
+                        Some(SharedString::from(
+                            "Allow the agent to continue command work while the UI stays interactive.",
+                        )),
+                        settings_switch(
+                            "ai-agent-bg-exec",
+                            self.ai_settings.agent_background_execution_enabled,
+                            cx.listener(|this, _, _, cx| {
+                                this.toggle_ai_background_execution(cx);
+                            }),
+                        ),
+                    )),
+            ))
+            .child(settings_form_section(
+                Some("Limits"),
+                Some("Context window, timeouts, and agent step caps."),
+                div()
+                    .flex()
+                    .flex_col()
+                    .gap_3()
+                    .child(settings_form_row(
+                        "Context lines",
+                        Some(SharedString::from(format!(
+                            "{} lines of terminal context",
+                            self.ai_settings.context_line_limit
+                        ))),
+                        div()
+                            .flex()
+                            .gap_1()
                             .child(small_button(
                                 "ai-context-minus",
-                                "-50 Lines",
+                                "−50",
                                 cx.listener(|this, _, _, cx| {
                                     this.adjust_ai_context_line_limit(-50, cx);
                                 }),
                             ))
                             .child(small_button(
                                 "ai-context-plus",
-                                "+50 Lines",
+                                "+50",
                                 cx.listener(|this, _, _, cx| {
                                     this.adjust_ai_context_line_limit(50, cx);
                                 }),
-                            ))
+                            )),
+                    ))
+                    .child(settings_form_row(
+                        "Request timeout",
+                        Some(SharedString::from(format!(
+                            "{} ms",
+                            self.ai_settings.timeout_ms
+                        ))),
+                        div()
+                            .flex()
+                            .gap_1()
                             .child(small_button(
                                 "ai-timeout-minus",
-                                "-1s",
+                                "−1s",
                                 cx.listener(|this, _, _, cx| {
                                     this.adjust_ai_timeout_ms(-1_000, cx);
                                 }),
@@ -434,37 +389,57 @@ impl NyaTermApp {
                                 cx.listener(|this, _, _, cx| {
                                     this.adjust_ai_timeout_ms(1_000, cx);
                                 }),
-                            ))
+                            )),
+                    ))
+                    .child(settings_form_row(
+                        "Max agent steps",
+                        Some(SharedString::from(format!(
+                            "{} steps",
+                            self.ai_settings.max_agent_steps.unwrap_or(10)
+                        ))),
+                        div()
+                            .flex()
+                            .gap_1()
                             .child(small_button(
                                 "ai-agent-steps-minus",
-                                "-1 Step",
+                                "−1",
                                 cx.listener(|this, _, _, cx| {
                                     this.adjust_ai_agent_steps(-1, cx);
                                 }),
                             ))
                             .child(small_button(
                                 "ai-agent-steps-plus",
-                                "+1 Step",
+                                "+1",
                                 cx.listener(|this, _, _, cx| {
                                     this.adjust_ai_agent_steps(1, cx);
                                 }),
-                            ))
+                            )),
+                    ))
+                    .child(settings_form_row(
+                        "Terminal output lines",
+                        Some(SharedString::from(format!(
+                            "{} captured lines per observation",
+                            self.ai_settings.terminal_output_lines
+                        ))),
+                        div()
+                            .flex()
+                            .gap_1()
                             .child(small_button(
                                 "ai-output-lines-minus",
-                                "-1 Out",
+                                "−1",
                                 cx.listener(|this, _, _, cx| {
                                     this.adjust_ai_terminal_output_lines(-1, cx);
                                 }),
                             ))
                             .child(small_button(
                                 "ai-output-lines-plus",
-                                "+1 Out",
+                                "+1",
                                 cx.listener(|this, _, _, cx| {
                                     this.adjust_ai_terminal_output_lines(1, cx);
                                 }),
                             )),
-                    ),
-            )
+                    )),
+            ))
     }
 
     pub(in crate::ui::view) fn ai_models_settings_section(

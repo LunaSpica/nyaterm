@@ -624,3 +624,8 @@ service boundary first:
 ## 2026-07-11 Security + Search settings form density
 - Security: master password status, screen lock switch/idle steppers, host-key policy chips.
 - Search: buffer/history mode chips + case/regex/word switches; command-search catalog summary.
+
+## 2026-07-11 AI / Translation / Config Backup form density
+- AI General: enable/redaction/history switches, provider chips, credential inputs, agent mode chips, limit steppers.
+- Translation: provider chips + per-vendor credential sections.
+- Config Backup: export/import rows for JSON, .nya, encrypted .nya.
