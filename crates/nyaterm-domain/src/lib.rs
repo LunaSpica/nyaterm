@@ -2,6 +2,7 @@ pub mod agent_capture;
 pub mod ai;
 pub mod cloud_sync;
 pub mod command_search;
+pub mod command_suggestion_suppression;
 pub mod credential_autofill;
 pub mod terminal_input_tracker;
 pub mod credentials_crypto;
@@ -66,6 +67,10 @@ pub use cloud_sync::{
     snippet_remote_path,
 };
 pub use command_search::{fuzzy_search_items, search_command_sources};
+pub use command_suggestion_suppression::{
+    command_starts_suggestion_suppressing_program, is_pager_search_or_command_input,
+    is_pager_single_key_input,
+};
 pub use credential_autofill::{
     CredentialPromptKind, compile_prompt_regex, credential_matches_prompt,
     detect_credential_prompt_kind, extract_credential_prompt_text,
@@ -75,8 +80,9 @@ pub use credential_autofill::{
 };
 pub use credentials_crypto::{CredentialCrypto, CredentialCryptoError};
 pub use terminal_input_tracker::{
-    TerminalInputState, apply_terminal_input_data, can_suggest_from_tracker, get_tracked_command,
-    sanitize_terminal_command, strip_terminal_command_prompt,
+    TerminalInputState, apply_terminal_input_data, can_register_command_from_tracker,
+    can_suggest_from_tracker, get_tracked_command, get_tracked_submission_command,
+    resync_from_terminal_line, sanitize_terminal_command, strip_terminal_command_prompt,
 };
 pub use diagnostics::{
     DiagnosticsError, DiagnosticsExportInfo, DiagnosticsExportOptions, DiagnosticsRuntimeSnapshot,

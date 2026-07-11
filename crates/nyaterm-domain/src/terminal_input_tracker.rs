@@ -378,6 +378,83 @@ pub fn can_suggest_from_tracker(state: &TerminalInputState) -> bool {
         && !get_tracked_command(state).is_empty()
 }
 
+
+pub fn can_register_command_from_tracker(state: &TerminalInputState) -> bool {
+    !state.desynced && !state.multiline && !state.line_rewrite_required
+}
+
+pub fn get_tracked_submission_command(state: &TerminalInputState) -> String {
+    if !can_register_command_from_tracker(state) {
+        return String::new();
+    }
+    sanitize_terminal_command(&state.value)
+}
+
+fn normalize_line_content(value: &str) -> String {
+    value.replace("\r\n", "").replace('\n', "").replace('\r', "")
+}
+
+fn choose_terminal_line_command(previous_value: &str, line_content: &str) -> Option<String> {
+    let previous_command = sanitize_terminal_command(previous_value);
+    let sanitized_line = sanitize_terminal_command(line_content);
+    let mut candidates: Vec<(String, u32)> = Vec::new();
+
+    let mut push_candidate = |raw: &str| {
+        let normalized = strip_terminal_command_prompt(&normalize_line_content(raw));
+        let command = sanitize_terminal_command(&normalized);
+        if command.is_empty() {
+            return;
+        }
+        let score = if !previous_command.is_empty() && command.starts_with(&previous_command) {
+            command.len() as u32
+        } else if previous_command.is_empty() {
+            command.len() as u32
+        } else {
+            0
+        };
+        if !previous_command.is_empty() && score == 0 {
+            return;
+        }
+        candidates.push((command, score));
+    };
+
+    push_candidate(&sanitized_line);
+    push_candidate(line_content);
+
+    // Suffix candidates: line after previous prefix
+    for prefix in [&previous_value.to_string(), &previous_command, &sanitized_line] {
+        let source = normalize_line_content(line_content);
+        let source_cmd = sanitize_terminal_command(&source);
+        let prefix_cmd = sanitize_terminal_command(prefix);
+        if !prefix_cmd.is_empty() {
+            if let Some(pos) = source_cmd.find(&prefix_cmd) {
+                let suffix = &source_cmd[pos..];
+                push_candidate(suffix);
+            }
+        }
+    }
+
+    candidates.sort_by(|a, b| b.1.cmp(&a.1).then(b.0.len().cmp(&a.0.len())));
+    candidates.into_iter().map(|(cmd, _)| cmd).next()
+}
+
+/// Recover tracker value from the terminal buffer line after tab completion desync.
+pub fn resync_from_terminal_line(
+    current: &TerminalInputState,
+    line_content: &str,
+) -> Option<TerminalInputState> {
+    let value = choose_terminal_line_command(&current.value, line_content)?;
+    Some(TerminalInputState {
+        value: value.clone(),
+        cursor: value.len(),
+        desynced: false,
+        desync_reason: None,
+        line_rewrite_required: false,
+        multiline: false,
+        paste_mode: false,
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -411,5 +488,26 @@ mod tests {
             "ls -la"
         );
         assert_eq!(sanitize_terminal_command("PS C:\\Users> dir"), "dir");
+    }
+
+    #[test]
+    fn resyncs_after_tab_desync_from_terminal_line() {
+        let mut state = TerminalInputState::new();
+        state = apply_terminal_input_data(&state, "doc");
+        state = apply_terminal_input_data(&state, "\t");
+        assert!(state.desynced);
+        let recovered = resync_from_terminal_line(&state, "user@host:~$ docker compose ps")
+            .expect("recover");
+        assert_eq!(get_tracked_command(&recovered), "docker compose ps");
+        assert!(!recovered.desynced);
+    }
+
+    #[test]
+    fn submission_requires_synced_state() {
+        let mut state = TerminalInputState::new();
+        state = apply_terminal_input_data(&state, "ls");
+        assert_eq!(get_tracked_submission_command(&state), "ls");
+        state = apply_terminal_input_data(&state, "\t");
+        assert!(get_tracked_submission_command(&state).is_empty());
     }
 }

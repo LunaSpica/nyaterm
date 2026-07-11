@@ -1064,3 +1064,13 @@ service boundary first:
 - Inline command suggestions now key off the tracker (`can_suggest_from_tracker`)
   instead of a simplified keystroke draft string.
 
+## 2026-07-11 Command suggestion suppression + tab resync
+
+- Domain `command_suggestion_suppression` ports Tauri interactive-program
+  detection (vim/htop/less/sudo wrappers, `tail -f`, journalctl pager).
+- Submitting a suppressing command hides suggestions until Ctrl+C or `q`.
+- Tab-completion desync recovers via `resync_from_terminal_line` from the live
+  terminal cursor line before the next non-tab keystroke.
+- Enter records history from the tracker submission snapshot (pending entry)
+  instead of only raw input bytes.
+

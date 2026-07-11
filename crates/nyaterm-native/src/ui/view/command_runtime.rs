@@ -285,12 +285,16 @@ impl NyaTermApp {
         if !text.contains('\n') && !text.contains('\r') {
             return;
         }
-        let submitted: Vec<String> = text
-            .split(['\r', '\n'])
-            .map(str::trim)
-            .filter(|command| !command.is_empty())
-            .map(ToOwned::to_owned)
-            .collect();
+        let submitted: Vec<String> = if let Some(command) = self.pending_command_history_entry.take()
+        {
+            vec![command]
+        } else {
+            text.split(['\r', '\n'])
+                .map(str::trim)
+                .filter(|command| !command.is_empty())
+                .map(ToOwned::to_owned)
+                .collect()
+        };
         if submitted.is_empty() {
             return;
         }
@@ -304,8 +308,8 @@ impl NyaTermApp {
             self.runtime.portable_key_path().map(ToOwned::to_owned),
         ) {
             Ok(store) => {
-                for command in submitted {
-                    if let Err(error) = store.append_command_history(&command) {
+                for command in &submitted {
+                    if let Err(error) = store.append_command_history(command) {
                         self.store_status.message = format!("command history save failed: {error}");
                         self.store_status.ready = false;
                         return;
@@ -416,7 +420,57 @@ impl NyaTermApp {
         if text.is_empty() {
             return;
         }
+
+        // Exit interactive suppression on Ctrl+C or q (Tauri resetCommandSuggestionSuppression).
+        if self.command_suggestions_suppressed && (text == "\u{0003}" || text == "q") {
+            self.command_suggestions_suppressed = false;
+            self.command_input_tracker = TerminalInputState::new();
+            self.command_suggestions = None;
+            cx.notify();
+            return;
+        }
+
+        // Capture submission command before tracker reset on Enter.
+        if text.contains('\r') || text.contains('\n') {
+            let submitted = get_tracked_submission_command(&self.command_input_tracker);
+            if !submitted.is_empty() {
+                self.pending_command_history_entry = Some(submitted.clone());
+                if command_starts_suggestion_suppressing_program(&submitted) {
+                    self.command_suggestions_suppressed = true;
+                }
+            }
+        }
+
+        // Tab-desync recovery: before applying non-tab input, resync from terminal line.
+        if text != "\t"
+            && self.command_input_tracker.desynced
+            && self.command_input_tracker.desync_reason == Some("tab")
+        {
+            if let Some(line) = self.read_active_terminal_input_line() {
+                if let Some(recovered) =
+                    resync_from_terminal_line(&self.command_input_tracker, &line)
+                {
+                    self.command_input_tracker = recovered;
+                }
+            }
+        }
+
         self.command_input_tracker = apply_terminal_input_data(&self.command_input_tracker, text);
+
+        if self.command_suggestions_suppressed {
+            if self.command_suggestions.take().is_some() {
+                cx.notify();
+            }
+            return;
+        }
+
+        if is_pager_search_or_command_input(&get_tracked_command(&self.command_input_tracker)) {
+            if self.command_suggestions.take().is_some() {
+                cx.notify();
+            }
+            return;
+        }
+
         if !can_suggest_from_tracker(&self.command_input_tracker) {
             if self.command_suggestions.take().is_some() {
                 cx.notify();
@@ -426,8 +480,27 @@ impl NyaTermApp {
         self.refresh_command_suggestions(cx);
     }
 
+    fn read_active_terminal_input_line(&self) -> Option<String> {
+        let offset = self.active_terminal_scroll_offset();
+        let snapshot = self
+            .active_session_id
+            .as_deref()
+            .and_then(|session_id| self.terminal_views.get(session_id))
+            .map(|view| view.screen.viewport_snapshot(offset))
+            .unwrap_or_else(|| self.terminal_screen.viewport_snapshot(offset));
+        if snapshot.cursor_row == usize::MAX {
+            return None;
+        }
+        let line = snapshot.lines.get(snapshot.cursor_row)?;
+        let end = snapshot.cursor_col.min(line.chars().count());
+        Some(line.chars().take(end).collect())
+    }
+
     pub(in crate::ui::view) fn refresh_command_suggestions(&mut self, cx: &mut Context<Self>) {
-        if self.credential_suggestions.is_some() || self.is_credential_prompt_input_mode() {
+        if self.credential_suggestions.is_some()
+            || self.is_credential_prompt_input_mode()
+            || self.command_suggestions_suppressed
+        {
             self.command_suggestions = None;
             return;
         }
