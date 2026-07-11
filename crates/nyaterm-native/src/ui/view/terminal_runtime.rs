@@ -506,11 +506,77 @@ impl NyaTermApp {
         self.append_terminal_log_for_session(session_id.as_deref(), text.as_ref(), false);
     }
 
+
+    pub(in crate::ui::view) fn active_terminal_scroll_offset(&self) -> usize {
+        if let Some(session_id) = self.active_session_id.as_deref() {
+            self.terminal_views
+                .get(session_id)
+                .map(|view| view.scroll_offset)
+                .unwrap_or(0)
+        } else {
+            self.terminal_scroll_offset
+        }
+    }
+
+    pub(in crate::ui::view) fn scroll_terminal_by(
+        &mut self,
+        delta_lines: i32,
+        cx: &mut Context<Self>,
+    ) {
+        if delta_lines == 0 {
+            return;
+        }
+        if let Some(session_id) = self.active_session_id.clone() {
+            if let Some(view) = self.terminal_views.get_mut(&session_id) {
+                let max = view.screen.scrollback_len();
+                let next = if delta_lines > 0 {
+                    view.scroll_offset.saturating_add(delta_lines as usize)
+                } else {
+                    view.scroll_offset.saturating_sub((-delta_lines) as usize)
+                };
+                view.scroll_offset = next.min(max);
+            }
+        } else {
+            let max = self.terminal_screen.scrollback_len();
+            let next = if delta_lines > 0 {
+                self.terminal_scroll_offset.saturating_add(delta_lines as usize)
+            } else {
+                self.terminal_scroll_offset.saturating_sub((-delta_lines) as usize)
+            };
+            self.terminal_scroll_offset = next.min(max);
+        }
+        cx.notify();
+    }
+
+    pub(in crate::ui::view) fn scroll_terminal_to_bottom(&mut self, cx: &mut Context<Self>) {
+        if let Some(session_id) = self.active_session_id.clone() {
+            if let Some(view) = self.terminal_views.get_mut(&session_id) {
+                view.scroll_offset = 0;
+            }
+        } else {
+            self.terminal_scroll_offset = 0;
+        }
+        cx.notify();
+    }
+
+    pub(in crate::ui::view) fn sync_terminal_scrollback_limits(&mut self) {
+        let limit = self.settings.terminal_scrollback_lines.clamp(100, 100_000) as usize;
+        self.terminal_screen.set_scrollback_limit(limit);
+        for view in self.terminal_views.values_mut() {
+            view.screen.set_scrollback_limit(limit);
+            view.clamp_scroll_offset();
+        }
+        if self.terminal_scroll_offset > self.terminal_screen.scrollback_len() {
+            self.terminal_scroll_offset = self.terminal_screen.scrollback_len();
+        }
+    }
+
     pub(in crate::ui::view) fn terminal_scrollback_max_bytes(&self) -> usize {
         (self.settings.terminal_scrollback_lines.clamp(100, 100_000) as usize).saturating_mul(96)
     }
 
     pub(in crate::ui::view) fn enforce_terminal_scrollback_limit(&mut self) {
+        self.sync_terminal_scrollback_limits();
         let max_bytes = self.terminal_scrollback_max_bytes();
         trim_terminal_output_to(&mut self.terminal_output, max_bytes);
         for view in self.terminal_views.values_mut() {

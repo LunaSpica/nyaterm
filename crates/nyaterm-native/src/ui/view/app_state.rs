@@ -374,6 +374,8 @@ pub struct NyaTermApp {
     pub(in crate::ui::view) lock_status: String,
     pub(in crate::ui::view) terminal_output: String,
     pub(in crate::ui::view) terminal_screen: TerminalScreen,
+    /// Scroll offset for the fallback/global terminal screen (no session view).
+    pub(in crate::ui::view) terminal_scroll_offset: usize,
     pub(in crate::ui::view) terminal_status: String,
     pub(in crate::ui::view) event_pump_started: bool,
     /// Toggles on the event pump when cursor blink is enabled.
@@ -1026,6 +1028,7 @@ impl NyaTermApp {
             lock_status: String::new(),
             terminal_output: String::from(INITIAL_TERMINAL_BANNER),
             terminal_screen: initial_terminal_screen(),
+            terminal_scroll_offset: 0,
             terminal_status: "idle".to_string(),
             event_pump_started: false,
             cursor_blink_on: true,

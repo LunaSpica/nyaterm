@@ -18,6 +18,8 @@ pub(super) struct TerminalViewState {
     pub(super) output: String,
     pub(super) screen: TerminalScreen,
     pub(super) has_unread: bool,
+    /// Viewport offset from the live bottom (0 = follow output).
+    pub(super) scroll_offset: usize,
 }
 
 impl TerminalViewState {
@@ -26,6 +28,7 @@ impl TerminalViewState {
             output: String::new(),
             screen: TerminalScreen::default(),
             has_unread: false,
+            scroll_offset: 0,
         }
     }
 
@@ -35,6 +38,7 @@ impl TerminalViewState {
             output,
             screen,
             has_unread: false,
+            scroll_offset: 0,
         }
     }
 
@@ -42,18 +46,32 @@ impl TerminalViewState {
         self.output.push_str(text);
         self.screen.advance(text.as_bytes());
         trim_terminal_output(&mut self.output);
+        // Keep following the bottom while pinned.
+        if self.scroll_offset == 0 {
+            // no-op
+        }
+        self.clamp_scroll_offset();
     }
 
     pub(super) fn append_bytes(&mut self, data: &[u8]) {
         self.screen.advance(data);
         self.output.push_str(&String::from_utf8_lossy(data));
         trim_terminal_output(&mut self.output);
+        self.clamp_scroll_offset();
     }
 
     pub(super) fn clear(&mut self) {
         self.output.clear();
         self.screen.clear();
         self.has_unread = false;
+        self.scroll_offset = 0;
+    }
+
+    pub(super) fn clamp_scroll_offset(&mut self) {
+        let max = self.screen.scrollback_len();
+        if self.scroll_offset > max {
+            self.scroll_offset = max;
+        }
     }
 }
 

@@ -938,3 +938,9 @@ service boundary first:
 - When `interaction_right_click_paste` is enabled, right-click pastes instead of opening the menu.
 - Selection-aware items: Copy, Find (prefill), Translate, Ask AI, Paste Selected.
 - Always available: Paste, Find, Clear Screen, Clear All, Select All, More Actions.
+
+## Terminal scrollback viewport
+
+- VTE screen keeps scrolled-off rows up to `terminal.scrollback_lines`.
+- Mouse wheel adjusts per-session `scroll_offset` (0 follows live output).
+- Snapshots/paint/selection/cursor use `viewport_snapshot(offset)`; cursor hides when scrolled away.

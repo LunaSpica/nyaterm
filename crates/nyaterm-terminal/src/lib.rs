@@ -46,6 +46,10 @@ pub struct TerminalSnapshot {
     pub styled_lines: Vec<Vec<StyledSpan>>,
     pub cursor_row: usize,
     pub cursor_col: usize,
+    /// Rows available above the live screen (scrollback).
+    pub scrollback_len: usize,
+    /// Total rows in scrollback + live screen.
+    pub total_rows: usize,
 }
 
 pub struct TerminalScreen {
@@ -55,6 +59,9 @@ pub struct TerminalScreen {
     cursor_row: usize,
     cursor_col: usize,
     cells: Vec<Vec<Cell>>,
+    /// Lines scrolled off the top of the live screen (oldest first).
+    scrollback: Vec<Vec<Cell>>,
+    scrollback_limit: usize,
     pen: CellStyle,
 }
 
@@ -75,6 +82,8 @@ impl TerminalScreen {
             cursor_row: 0,
             cursor_col: 0,
             cells: vec![vec![Cell::default(); cols]; rows],
+            scrollback: Vec::new(),
+            scrollback_limit: 5_000,
             pen: CellStyle::default(),
         }
     }
@@ -86,16 +95,34 @@ impl TerminalScreen {
         for row in &mut self.cells {
             row.resize(cols, Cell::default());
         }
+        // Keep scrollback column width aligned when possible.
+        for row in &mut self.scrollback {
+            row.resize(cols, Cell::default());
+        }
         self.cols = cols;
         self.rows = rows;
         self.cursor_row = self.cursor_row.min(self.rows - 1);
         self.cursor_col = self.cursor_col.min(self.cols - 1);
     }
 
+    pub fn set_scrollback_limit(&mut self, limit: usize) {
+        self.scrollback_limit = limit.max(0);
+        self.trim_scrollback();
+    }
+
+    pub fn scrollback_len(&self) -> usize {
+        self.scrollback.len()
+    }
+
+    pub fn total_rows(&self) -> usize {
+        self.scrollback.len() + self.rows
+    }
+
     pub fn clear(&mut self) {
         for row in &mut self.cells {
             row.fill(Cell::default());
         }
+        self.scrollback.clear();
         self.cursor_row = 0;
         self.cursor_col = 0;
         self.pen = CellStyle::default();
@@ -108,18 +135,52 @@ impl TerminalScreen {
     }
 
     pub fn snapshot(&self) -> TerminalSnapshot {
+        self.viewport_snapshot(0)
+    }
+
+    /// Snapshot a viewport of the live screen height ending `offset` rows above the bottom.
+    /// `offset == 0` is the live screen; larger offsets scroll into history.
+    pub fn viewport_snapshot(&self, offset: usize) -> TerminalSnapshot {
+        let total = self.total_rows();
+        let max_offset = total.saturating_sub(self.rows);
+        let offset = offset.min(max_offset);
+        let end = total.saturating_sub(offset);
+        let start = end.saturating_sub(self.rows);
+
         let mut lines = Vec::with_capacity(self.rows);
         let mut styled_lines = Vec::with_capacity(self.rows);
-        for row in &self.cells {
+        for abs_row in start..end {
+            let row = self.row_at(abs_row);
             let text: String = row.iter().map(|cell| cell.ch).collect();
             lines.push(text.trim_end().to_string());
             styled_lines.push(compress_row(row));
         }
+        // Pad if history shorter than a full viewport (should be rare after clamp).
+        while lines.len() < self.rows {
+            lines.push(String::new());
+            styled_lines.push(vec![StyledSpan {
+                text: String::new(),
+                style: CellStyle::default(),
+            }]);
+        }
+
+        let cursor_abs = self.scrollback.len() + self.cursor_row;
+        let cursor_row = if offset == 0 && cursor_abs >= start && cursor_abs < end {
+            cursor_abs - start
+        } else if offset == 0 {
+            self.cursor_row.min(self.rows.saturating_sub(1))
+        } else {
+            // Hide cursor when scrolled away from live bottom.
+            usize::MAX
+        };
+
         TerminalSnapshot {
             lines,
             styled_lines,
-            cursor_row: self.cursor_row,
+            cursor_row,
             cursor_col: self.cursor_col,
+            scrollback_len: self.scrollback.len(),
+            total_rows: total,
         }
     }
 
@@ -129,6 +190,22 @@ impl TerminalScreen {
 
     pub fn styled_lines(&self) -> Vec<Vec<StyledSpan>> {
         self.snapshot().styled_lines
+    }
+
+    fn row_at(&self, abs_row: usize) -> &[Cell] {
+        if abs_row < self.scrollback.len() {
+            &self.scrollback[abs_row]
+        } else {
+            let live = abs_row - self.scrollback.len();
+            &self.cells[live.min(self.rows.saturating_sub(1))]
+        }
+    }
+
+    fn trim_scrollback(&mut self) {
+        if self.scrollback.len() > self.scrollback_limit {
+            let excess = self.scrollback.len() - self.scrollback_limit;
+            self.scrollback.drain(0..excess);
+        }
     }
 
 
@@ -168,9 +245,12 @@ impl TerminalScreen {
     fn scroll_up(&mut self, count: usize) {
         let count = count.min(self.rows);
         for _ in 0..count {
-            self.cells.remove(0);
+            let row = self.cells.remove(0);
+            // Only keep non-empty/styled rows to reduce noise? Keep all for fidelity.
+            self.scrollback.push(row);
             self.cells.push(vec![Cell::default(); self.cols]);
         }
+        self.trim_scrollback();
     }
 
     fn erase_display(&mut self, mode: u16) {
@@ -512,5 +592,21 @@ mod tests {
         assert!(styled[0][0].style.underline);
         assert_eq!(styled[0][0].style.fg_rgb, Some(0xff8000));
         assert_eq!(styled[0][0].style.fg, None);
+    }
+
+    #[test]
+    fn scrollback_preserves_scrolled_lines() {
+        let mut screen = TerminalScreen::new(8, 2);
+        screen.set_scrollback_limit(100);
+        screen.advance(b"line1\nline2\nline3");
+        assert!(screen.scrollback_len() >= 1);
+        let live = screen.snapshot();
+        assert!(live.lines.iter().any(|l| l.contains("line3") || l.contains("line2")));
+        let history = screen.viewport_snapshot(1);
+        assert!(
+            history.lines.iter().any(|l| l.contains("line1") || l.contains("line2")),
+            "expected history viewport to include earlier lines: {:?}",
+            history.lines
+        );
     }
 }

@@ -15,17 +15,24 @@ impl NyaTermApp {
         let palette = self.theme_palette();
         let is_active = self.active_session_id.as_deref() == Some(session_id.as_str());
         let mut output = div().flex().flex_col();
+        let scroll_offset = self
+            .terminal_views
+            .get(&session_id)
+            .map(|view| view.scroll_offset)
+            .unwrap_or(self.terminal_scroll_offset);
         let snapshot = self
             .terminal_views
             .get(&session_id)
-            .map(|view| view.screen.snapshot())
-            .unwrap_or_else(|| self.terminal_screen.snapshot());
+            .map(|view| view.screen.viewport_snapshot(scroll_offset))
+            .unwrap_or_else(|| self.terminal_screen.viewport_snapshot(scroll_offset));
         let lines = snapshot.lines;
         let styled_lines = snapshot.styled_lines;
         let cursor_row = snapshot.cursor_row;
         let cursor_col = snapshot.cursor_col;
         let show_cursor = is_active
             && !session_id.is_empty()
+            && scroll_offset == 0
+            && cursor_row != usize::MAX
             && (!self.settings.cursor_blink || self.cursor_blink_on);
         let cursor_style = self.settings.cursor_style.as_str();
         let search_matches = if is_active
@@ -268,6 +275,23 @@ impl NyaTermApp {
                                 px(8.)
                             })
                             .overflow_hidden()
+                            .on_scroll_wheel(cx.listener(
+                                move |this, event: &ScrollWheelEvent, _, cx| {
+                                    // Positive wheel delta.y scrolls into history (larger offset).
+                                    let delta = match event.delta {
+                                        ScrollDelta::Lines(delta) => delta.y.round() as i32,
+                                        ScrollDelta::Pixels(delta) => {
+                                            let py = f32::from(delta.y);
+                                            // ~18px per terminal line.
+                                            (py / 18.).round() as i32
+                                        }
+                                    };
+                                    if delta != 0 {
+                                        this.scroll_terminal_by(delta, cx);
+                                        cx.stop_propagation();
+                                    }
+                                },
+                            ))
                             .on_mouse_down(
                                 MouseButton::Left,
                                 {

@@ -30,12 +30,13 @@ impl NyaTermApp {
     }
 
     pub(in crate::ui::view) fn active_terminal_grid_size(&self) -> (usize, usize) {
+        let offset = self.active_terminal_scroll_offset();
         let snapshot = self
             .active_session_id
             .as_deref()
             .and_then(|session_id| self.terminal_views.get(session_id))
-            .map(|view| view.screen.snapshot())
-            .unwrap_or_else(|| self.terminal_screen.snapshot());
+            .map(|view| view.screen.viewport_snapshot(offset))
+            .unwrap_or_else(|| self.terminal_screen.viewport_snapshot(offset));
         let rows = snapshot.lines.len().max(1);
         let cols = snapshot
             .lines
@@ -98,12 +99,13 @@ impl NyaTermApp {
         if selection.is_empty() {
             return None;
         }
+        let offset = self.active_terminal_scroll_offset();
         let snapshot = self
             .active_session_id
             .as_deref()
             .and_then(|session_id| self.terminal_views.get(session_id))
-            .map(|view| view.screen.snapshot())
-            .unwrap_or_else(|| self.terminal_screen.snapshot());
+            .map(|view| view.screen.viewport_snapshot(offset))
+            .unwrap_or_else(|| self.terminal_screen.viewport_snapshot(offset));
         let (start, end) = selection.ordered();
         let mut parts = Vec::new();
         for row in start.row..=end.row {
@@ -235,12 +237,13 @@ impl NyaTermApp {
     }
 
     fn word_bounds_at(&self, cell: TerminalCellPos) -> (usize, usize) {
+        let offset = self.active_terminal_scroll_offset();
         let snapshot = self
             .active_session_id
             .as_deref()
             .and_then(|session_id| self.terminal_views.get(session_id))
-            .map(|view| view.screen.snapshot())
-            .unwrap_or_else(|| self.terminal_screen.snapshot());
+            .map(|view| view.screen.viewport_snapshot(offset))
+            .unwrap_or_else(|| self.terminal_screen.viewport_snapshot(offset));
         let line = snapshot
             .lines
             .get(cell.row)
