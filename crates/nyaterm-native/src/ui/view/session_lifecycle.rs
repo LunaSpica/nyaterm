@@ -340,6 +340,18 @@ impl NyaTermApp {
             .unwrap_or_default();
         let was_active = self.active_session_id.as_deref() == Some(session_id.as_str());
 
+        // Tauri: write cyan reconnecting line into the buffer before recreating.
+        if let Some(view) = self.terminal_views.get_mut(&session_id) {
+            view.append_text("
+[36m[Reconnecting…][0m
+");
+        }
+        let seed_output = self
+            .terminal_views
+            .get(&session_id)
+            .map(|view| view.output.clone())
+            .unwrap_or(seed_output);
+
         // Close live backend if still present.
         let _ = self.session_manager.close(&session_id);
         self.recording_manager.cleanup_session(&session_id);

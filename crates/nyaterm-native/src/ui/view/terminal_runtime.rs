@@ -95,8 +95,10 @@ impl NyaTermApp {
         if bytes.is_empty() {
             return;
         }
-        // Typing/paste input dismisses the visible selection (xterm-like).
-        if self.terminal_selection.take().is_some() || self.terminal_selection_dragging {
+        // Tauri/xterm custom key path: non-smart buffer selections stay painted while
+        // typing. Smart input selections are handled earlier and clear themselves.
+        // Only drop an in-progress drag so a stuck drag cannot block further input.
+        if self.terminal_selection_dragging {
             self.terminal_selection_dragging = false;
         }
         let Some(session_id) = self.active_session_id.clone() else {

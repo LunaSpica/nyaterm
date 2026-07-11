@@ -14,6 +14,7 @@ impl NyaTermApp {
     ) -> impl IntoElement {
         let palette = self.theme_palette();
         let is_active = self.active_session_id.as_deref() == Some(session_id.as_str());
+        let is_disconnected = !session_id.is_empty() && self.is_session_disconnected(&session_id);
         let mut output = div().flex().flex_col();
         let scroll_offset = self
             .terminal_views
@@ -36,6 +37,7 @@ impl NyaTermApp {
         let gutter_enabled = show_line_numbers || show_timestamps;
         let show_cursor = is_active
             && !session_id.is_empty()
+            && !is_disconnected
             && scroll_offset == 0
             && cursor_row != usize::MAX
             && (!self.settings.cursor_blink || self.cursor_blink_on);
@@ -347,9 +349,45 @@ impl NyaTermApp {
                             return;
                         }
                         if let Some(bytes) = this.terminal_key_bytes_for_event(event) {
-                            this.send_terminal_input(bytes, cx);
+                            // When a non-smart buffer selection is painted, still send
+                            // keystrokes but skip suggestion tracking so the selection
+                            // edit path stays isolated (Tauri preserves selection).
+                            let has_buffer_selection = this.terminal_selection.is_some()
+                                && this.smart_cursor_selected_input_range().is_none();
+                            if has_buffer_selection {
+                                this.send_terminal_input_without_suggestion_track(bytes, cx);
+                            } else {
+                                this.send_terminal_input(bytes, cx);
+                            }
                         }
                     }))
+                    .when(is_disconnected, |this| {
+                        this.child(
+                            div()
+                                .h(px(26.))
+                                .flex()
+                                .items_center()
+                                .justify_between()
+                                .gap_2()
+                                .px_3()
+                                .border_b_1()
+                                .border_color(rgb(palette.border))
+                                .bg(rgb(palette.input))
+                                .child(
+                                    div()
+                                        .text_xs()
+                                        .font_weight(FontWeight(700.))
+                                        .text_color(rgb(palette.danger))
+                                        .child("Session disconnected"),
+                                )
+                                .child(
+                                    div()
+                                        .text_size(px(11.))
+                                        .text_color(rgb(palette.warning))
+                                        .child("Enter reconnect · Ctrl+D close"),
+                                ),
+                        )
+                    })
                     .when(!session_id.is_empty() && !self.terminal_status.trim().is_empty() && !is_active, |this| {
                         this.child(
                             div()

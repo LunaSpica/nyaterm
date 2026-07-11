@@ -82,6 +82,11 @@ impl NyaTermApp {
                 let custom_color = self.session_tab_colors.get(&session.id).copied();
                 let is_active = self.active_session_id.as_deref() == Some(session.id.as_str());
                 let is_disconnected = self.is_session_disconnected(&session.id);
+                let tab_title = if is_disconnected {
+                    format!("{} · disconnected", truncate_preview(&display_name, 20))
+                } else {
+                    truncate_preview(&display_name, 28)
+                };
                 let has_unread = self
                     .terminal_views
                     .get(&session.id)
@@ -138,6 +143,7 @@ impl NyaTermApp {
                             rgb(palette.border)
                         })
                         .bg(bg)
+                        .when(is_disconnected, |this| this.opacity(0.78))
                         .cursor_pointer()
                         .hover(move |this| this.bg(hover_bg))
                         .cursor_move()
@@ -187,13 +193,15 @@ impl NyaTermApp {
                                 } else {
                                     FontWeight(500.)
                                 })
-                                .text_color(if is_active {
+                                .text_color(if is_disconnected {
+                                    rgb(palette.text_dimmed)
+                                } else if is_active {
                                     rgb(palette.text)
                                 } else {
                                     rgb(palette.text_muted)
                                 })
                                 .overflow_hidden()
-                                .child(truncate_preview(&display_name, 28)),
+                                .child(tab_title.clone()),
                         )
                         .child(
                             div()

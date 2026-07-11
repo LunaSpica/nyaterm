@@ -1132,3 +1132,12 @@ service boundary first:
 - Tab strip uses danger accent for disconnected sessions; ordered_sessions
   synthesizes `SessionInfo` for disconnected ids.
 
+## 2026-07-11 Selection preserve + disconnected chrome polish
+
+- Non-smart terminal selections are no longer cleared on ordinary typing (Tauri
+  custom key handler parity); smart input selections still clear themselves.
+- Disconnected tabs show muted title (`· disconnected`), reduced opacity, danger
+  accent, hide the live cursor, and a compact reconnect status strip.
+- Reconnect writes a cyan `[Reconnecting…]` buffer line before recreating the
+  backend session.
+

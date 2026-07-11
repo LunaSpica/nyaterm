@@ -392,12 +392,15 @@ impl NyaTermApp {
         let close_session_id = session.id.clone();
         let custom_color = self.session_tab_colors.get(&session.id).copied();
         let is_active = self.active_session_id.as_deref() == Some(session.id.as_str());
+        let is_disconnected = self.is_session_disconnected(&session.id);
         let has_unread = self
             .terminal_views
             .get(&session.id)
             .is_some_and(|view| view.has_unread);
         let accent = if let Some(custom_color) = custom_color {
             rgb(custom_color)
+        } else if is_disconnected {
+            rgb(palette.danger)
         } else if is_active {
             rgb(palette.success)
         } else if has_unread {
@@ -417,12 +420,19 @@ impl NyaTermApp {
         } else {
             rgb(palette.hover)
         };
-        let status_label = if is_active {
+        let status_label = if is_disconnected {
+            "disconnected"
+        } else if is_active {
             "active"
         } else if has_unread {
             "unread"
         } else {
             "open"
+        };
+        let row_title = if is_disconnected {
+            format!("{} · disconnected", truncate_preview(&display_name, 22))
+        } else {
+            truncate_preview(&display_name, 28)
         };
 
         // Tauri ActiveSessions row: compact list item with type badge + icon actions.
@@ -437,6 +447,7 @@ impl NyaTermApp {
             .rounded_md()
             .px_2()
             .bg(if is_active { row_bg } else { rgb(palette.surface) })
+            .when(is_disconnected, |this| this.opacity(0.78))
             .cursor_pointer()
             .hover(move |this| this.bg(hover_bg))
             .child(
@@ -465,7 +476,7 @@ impl NyaTermApp {
                                             .font_weight(FontWeight(700.))
                                             .text_color(rgb(palette.text))
                                             .overflow_hidden()
-                                            .child(truncate_preview(&display_name, 28)),
+                                            .child(row_title.clone()),
                                     )
                                     .child(
                                         div()
