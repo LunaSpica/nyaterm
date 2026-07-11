@@ -1395,3 +1395,10 @@ service boundary first:
 - Closing a strip tab closes all leaves in that tab's pane tree; unsplit and
   resize write back into the active tab root. open_tabs serialization attaches
   RestorablePaneNode trees on split tabs.
+
+
+## 2026-07-12 Pane leaf chrome densify
+
+- Split leaves show a compact title strip (status pip + name) and accent border
+  when focused, closer to Tauri PaneWorkspace leaf chrome.
+- Multi-leaf mini-tabs also annotate split tab-roots with pane count.

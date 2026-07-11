@@ -171,8 +171,19 @@ impl NyaTermApp {
                         display_name: title.clone(),
                         kind_label,
                     };
+                    let is_split_tab = self
+                        .session_pane_roots
+                        .get(tab_id)
+                        .is_some_and(|root| root.is_split());
+                    let pane_count = self
+                        .session_pane_roots
+                        .get(tab_id)
+                        .map(|root| root.session_ids().len())
+                        .unwrap_or(1);
                     let tab_title = if is_disconnected {
                         format!("{} · disconnected", truncate_preview(&title, 14))
+                    } else if is_split_tab {
+                        format!("{} · {pane_count}p", truncate_preview(&title, 12))
                     } else {
                         truncate_preview(&title, 18)
                     };
@@ -528,22 +539,30 @@ impl NyaTermApp {
         match node {
             WorkspacePaneNode::Leaf { session_id } => {
                 let is_active = self.active_session_id.as_deref() == Some(session_id.as_str());
+                let is_disconnected = self.is_session_disconnected(&session_id);
+                let title = self
+                    .session_display_name(&session_id)
+                    .unwrap_or_else(|| short_id(&session_id).to_string());
                 let canvas = self
                     .terminal_canvas_for(session_id.clone(), true, cx)
                     .into_any_element();
+                let focus_id = session_id.clone();
                 let mut pane = div()
                     .id(SharedString::from(format!("workspace-leaf-{session_id}")))
                     .size_full()
                     .min_h_0()
                     .min_w_0()
                     .overflow_hidden()
+                    .flex()
+                    .flex_col()
                     .cursor_pointer()
                     .on_click(cx.listener(move |this, _, window, cx| {
-                        this.activate_workspace_pane(session_id.clone(), cx);
+                        this.activate_workspace_pane(focus_id.clone(), cx);
                         window.focus(&this.terminal_focus);
                         cx.notify();
                     }));
                 if show_chrome {
+                    // Tauri PaneWorkspace leaf chrome: accent border + compact title strip.
                     pane = pane
                         .rounded_sm()
                         .border_1()
@@ -551,9 +570,56 @@ impl NyaTermApp {
                             rgb(palette.accent)
                         } else {
                             rgb(palette.border)
-                        });
+                        })
+                        .child(
+                            div()
+                                .h(px(22.))
+                                .flex_none()
+                                .px_2()
+                                .flex()
+                                .items_center()
+                                .gap_1()
+                                .border_b_1()
+                                .border_color(rgb(palette.border))
+                                .bg(if is_active {
+                                    rgb(palette.hover)
+                                } else {
+                                    rgb(palette.surface)
+                                })
+                                .child(
+                                    div()
+                                        .size(px(7.))
+                                        .rounded_full()
+                                        .bg(if is_disconnected {
+                                            rgb(palette.danger)
+                                        } else if is_active {
+                                            rgb(palette.success)
+                                        } else {
+                                            rgb(palette.text_dimmed)
+                                        }),
+                                )
+                                .child(
+                                    div()
+                                        .min_w_0()
+                                        .flex_1()
+                                        .text_size(px(11.))
+                                        .font_weight(if is_active {
+                                            FontWeight(700.)
+                                        } else {
+                                            FontWeight(500.)
+                                        })
+                                        .text_color(if is_disconnected {
+                                            rgb(palette.text_dimmed)
+                                        } else {
+                                            rgb(palette.text)
+                                        })
+                                        .overflow_hidden()
+                                        .child(truncate_preview(&title, 36)),
+                                ),
+                        );
                 }
-                pane.child(canvas).into_any_element()
+                pane.child(div().flex_1().min_h_0().overflow_hidden().child(canvas))
+                    .into_any_element()
             }
             WorkspacePaneNode::Split {
                 id,
