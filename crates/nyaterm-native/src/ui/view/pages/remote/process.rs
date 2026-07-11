@@ -469,13 +469,14 @@ pub(super) fn process_table_cell(
     color: Option<gpui::Hsla>,
     numeric: bool,
 ) -> impl IntoElement {
+    let palette = crate::ui::theme::theme_palette("github-dark");
     // Tauri ProcessManager numeric columns are mono + right-aligned.
     div()
         .min_w_0()
         .font_family("JetBrains Mono")
         .text_xs()
         .when(numeric, |this| this.text_right())
-        .text_color(color.unwrap_or_else(|| rgb(0xcbd5e1).into()))
+        .text_color(color.unwrap_or_else(|| rgb(palette.text).into()))
         .overflow_hidden()
         .child(value)
 }
@@ -687,6 +688,7 @@ pub(super) fn process_signal_confirm_panel(
     confirm: RemoteProcessSignalConfirmState,
     cx: &mut Context<NyaTermApp>,
 ) -> impl IntoElement {
+        let palette = cx.entity().read(cx).theme_palette();
     div()
         .rounded_md()
         .border_1()
@@ -707,7 +709,7 @@ pub(super) fn process_signal_confirm_panel(
                     div()
                         .text_sm()
                         .font_weight(FontWeight(800.))
-                        .text_color(rgb(0xfda4af))
+                        .text_color(rgb(palette.danger))
                         .child(format!(
                             "Confirm {} for PID {}",
                             confirm.signal, confirm.pid
@@ -885,10 +887,11 @@ pub(super) fn resource_summary_card(
 }
 
 pub(super) fn usage_color(ratio: f64) -> gpui::Hsla {
+    let palette = crate::ui::theme::theme_palette("github-dark");
     if ratio >= 0.9 {
         rgb(0xfb7185).into()
     } else if ratio >= 0.7 {
-        rgb(0xfacc15).into()
+        rgb(palette.warning).into()
     } else {
         rgb(0x38bdf8).into()
     }

@@ -42,16 +42,16 @@ impl NyaTermApp {
                         if *active {
                             status_pill("active", rgb(palette.success), rgb(palette.hover)).into_any_element()
                         } else if *unread {
-                            status_pill("unread", rgb(0xfacc15), rgb(0x3a2f14)).into_any_element()
+                            status_pill("unread", rgb(palette.warning), rgb(palette.hover)).into_any_element()
                         } else {
-                            status_pill("open", rgb(0x93c5fd), rgb(0x17233a)).into_any_element()
+                            status_pill("open", rgb(palette.accent), rgb(palette.hover)).into_any_element()
                         }
                     }
                     QuickSwitchItem::Connection { .. } => {
                         status_pill("saved", rgb(0xc4b5fd), rgb(0x2b2142)).into_any_element()
                     }
                     QuickSwitchItem::Pending { .. } => {
-                        status_pill("connecting", rgb(0xfacc15), rgb(0x3a2f14)).into_any_element()
+                        status_pill("connecting", rgb(palette.warning), rgb(palette.hover)).into_any_element()
                     }
                 };
 
@@ -70,12 +70,12 @@ impl NyaTermApp {
                         .border_b_1()
                         .border_color(rgb(palette.border))
                         .bg(if selected {
-                            rgb(0x17233a)
+                            rgb(palette.hover)
                         } else {
                             rgb(palette.input)
                         })
                         .cursor_pointer()
-                        .hover(|this| this.bg(rgb(0x151b24)))
+                        .hover(|this| this.bg(rgb(palette.hover)))
                         .child(
                             div()
                                 .min_w_0()
@@ -161,7 +161,7 @@ impl NyaTermApp {
                                     .items_center()
                                     .justify_center()
                                     .text_xs()
-                                    .text_color(rgb(0x93c5fd))
+                                    .text_color(rgb(palette.accent))
                                     .child("/"),
                             )
                             .child(

@@ -60,7 +60,7 @@ impl NyaTermApp {
                             .border_color(if can_save {
                                 rgb(palette.border)
                             } else {
-                                rgb(0x7f1d1d)
+                                rgb(palette.danger)
                             })
                             .bg(rgb(palette.input))
                             .px_3()
@@ -389,7 +389,7 @@ impl NyaTermApp {
                             .border_color(if can_submit {
                                 rgb(palette.border)
                             } else {
-                                rgb(0x7f1d1d)
+                                rgb(palette.danger)
                             })
                             .bg(rgb(palette.input))
                             .px_3()

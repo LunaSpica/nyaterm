@@ -632,7 +632,7 @@ pub(in crate::ui::view) fn stats_progress_bar(ratio: f64) -> impl IntoElement {
                 .bg(if ratio >= 0.9 {
                     rgb(0xfb7185)
                 } else if ratio >= 0.75 {
-                    rgb(0xfacc15)
+                    rgb(palette.warning)
                 } else {
                     rgb(0x38bdf8)
                 }),
@@ -646,10 +646,10 @@ pub(in crate::ui::view) fn service_status(status: NativeServiceStatus) -> impl I
             status_pill("ready", rgb(palette.success), rgb(palette.hover)).into_any_element()
         }
         NativeServiceStatus::Porting => {
-            status_pill("porting", rgb(0xfbbf24), rgb(0x3a2f14)).into_any_element()
+            status_pill("porting", rgb(palette.warning), rgb(palette.hover)).into_any_element()
         }
         NativeServiceStatus::Blocked => {
-            status_pill("replace", rgb(0xfca5a5), rgb(0x3a1717)).into_any_element()
+            status_pill("replace", rgb(palette.danger), rgb(0x3a1717)).into_any_element()
         }
     }
 }
@@ -967,7 +967,7 @@ pub(in crate::ui::view) fn connection_row(
     let action = if can_connect {
         small_button(crate::ui::theme::theme_palette("github-dark"), format!("connect-{}", connection.id), "Connect", on_connect).into_any_element()
     } else {
-        status_pill("porting", rgb(0xfbbf24), rgb(0x3a2f14)).into_any_element()
+        status_pill("porting", rgb(palette.warning), rgb(palette.hover)).into_any_element()
     };
 
     div()
@@ -1028,7 +1028,7 @@ pub(in crate::ui::view) fn connection_row(
                 .gap_2()
                 .child(status_pill(
                     connection.kind_label(),
-                    rgb(0x93c5fd),
+                    rgb(palette.accent),
                     rgb(palette.hover),
                 ))
                 .child(action),
@@ -1074,7 +1074,7 @@ pub(in crate::ui::view) fn compact_connection_row(
                 )
                 .child(status_pill(
                     connection.kind_label(),
-                    rgb(0x93c5fd),
+                    rgb(palette.accent),
                     rgb(palette.hover),
                 )),
         )
@@ -1119,7 +1119,7 @@ pub(in crate::ui::view) fn compact_tunnel_row(
         "closed"
     };
     let (status_fg, status_bg) = if is_pending {
-        (rgb(0xfacc15), rgb(0x3a2f14))
+        (rgb(palette.warning), rgb(palette.hover))
     } else if is_open {
         (rgb(palette.success), rgb(palette.hover))
     } else {
@@ -1167,7 +1167,7 @@ pub(in crate::ui::view) fn compact_tunnel_row(
                 .gap_2()
                 .child(status_pill(
                     tunnel_mode_label(tunnel),
-                    rgb(0x93c5fd),
+                    rgb(palette.accent),
                     rgb(palette.hover),
                 ))
                 .child(if is_open {

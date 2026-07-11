@@ -350,12 +350,12 @@ impl NyaTermApp {
                             if is_active {
                                 rgb(palette.success)
                             } else {
-                                rgb(0x93c5fd)
+                                rgb(palette.accent)
                             },
                             if is_active {
                                 rgb(palette.hover)
                             } else {
-                                rgb(0x17233a)
+                                rgb(palette.hover)
                             },
                         )),
                 );
@@ -584,8 +584,8 @@ impl NyaTermApp {
                         } else {
                             "matched"
                         },
-                        rgb(0x93c5fd),
-                        rgb(0x17233a),
+                        rgb(palette.accent),
+                        rgb(palette.hover),
                     )),
             )
             .child(
@@ -891,7 +891,7 @@ impl NyaTermApp {
                         .h(px(30.))
                         .px_3()
                         .rounded_md()
-                        .bg(rgb(0x238636))
+                        .bg(rgb(palette.success))
                         .flex()
                         .items_center()
                         .gap_1()
@@ -1372,7 +1372,7 @@ impl NyaTermApp {
                             .overflow_hidden()
                             .child(truncate_preview(&title, 48)),
                     )
-                    .child(status_pill(risk, rgb(0xfacc15), rgb(0x3a2f14))),
+                    .child(status_pill(risk, rgb(palette.warning), rgb(palette.hover))),
             )
             .child(
                 div()
@@ -2192,7 +2192,7 @@ impl NyaTermApp {
                             .mt_3()
                             .text_xs()
                             .line_height(px(18.))
-                            .text_color(rgb(0xcbd5e1))
+                            .text_color(rgb(palette.text))
                             .child(translated),
                     )
                     .child(

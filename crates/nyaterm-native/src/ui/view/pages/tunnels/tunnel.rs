@@ -76,7 +76,7 @@ pub(super) fn tunnel_section(
         rows = rows.child(
             div()
                 .border_t_1()
-                .border_color(rgb(0x253044))
+                .border_color(rgb(palette.border))
                 .px_2()
                 .py_2()
                 .text_size(px(11.))
@@ -180,7 +180,7 @@ pub(super) fn tunnel_section(
                 .gap_2()
                 .bg(rgb(palette.input))
                 .cursor_pointer()
-                .hover(|this| this.bg(rgb(0x151b24)))
+                .hover(|this| this.bg(rgb(palette.hover)))
                 .on_click({
                     let section_id_for_toggle = section_id_for_toggle.clone();
                     cx.listener(move |this, _, _, cx| {
@@ -284,8 +284,8 @@ fn tunnel_move_picker(
     if current_group_id.is_none() {
         targets = targets.child(status_pill(
             "Ungrouped · current",
-            rgb(0x93c5fd),
-            rgb(0x17233a),
+            rgb(palette.accent),
+            rgb(palette.hover),
         ));
     } else {
         let target_id = tunnel_id.clone();
@@ -304,7 +304,7 @@ fn tunnel_move_picker(
             targets = targets.child(
                 div()
                     .text_xs()
-                    .text_color(rgb(0xcbd5e1))
+                    .text_color(rgb(palette.text))
                     .child(truncate_preview(&group.name, 36)),
             );
         } else {
@@ -328,7 +328,7 @@ fn tunnel_move_picker(
 
     div()
         .border_t_1()
-        .border_color(rgb(0x253044))
+        .border_color(rgb(palette.border))
         .bg(rgb(palette.input))
         .px_3()
         .py_2()
@@ -340,7 +340,7 @@ fn tunnel_move_picker(
                 .flex_none()
                 .text_xs()
                 .font_weight(FontWeight(700.))
-                .text_color(rgb(0xcbd5e1))
+                .text_color(rgb(palette.text))
                 .child("Move to"),
         )
         .child(targets)
@@ -382,7 +382,7 @@ pub(super) fn tunnel_network_row(
         .unwrap_or_else(|| format!("{bind}:{}", tunnel.listen_port));
     // Tauri TunnelRow: 3-line left stack, StatusBadge, Switch, overflow actions.
     let toggle = if pending {
-        status_pill("…", rgb(0xfacc15), rgb(0x3a2f14)).into_any_element()
+        status_pill("…", rgb(palette.warning), rgb(palette.hover)).into_any_element()
     } else if is_open {
         network_switch_button(
             format!("network-tunnel-close-{}", tunnel.id),
@@ -398,7 +398,7 @@ pub(super) fn tunnel_network_row(
         )
         .into_any_element()
     } else {
-        status_pill("porting", rgb(0xfbbf24), rgb(0x3a2f14)).into_any_element()
+        status_pill("porting", rgb(palette.warning), rgb(palette.hover)).into_any_element()
     };
 
     // Tauri: px-3 py-2.5; side-panel density uses slightly tighter mono stack.
@@ -504,7 +504,7 @@ fn network_switch_button(
         .rounded_full()
         .border_1()
         .border_color(if on { rgb(palette.success) } else { rgb(palette.border) })
-        .bg(if on { rgb(0x238636) } else { rgb(palette.surface_elevated) })
+        .bg(if on { rgb(palette.success) } else { rgb(palette.surface_elevated) })
         .flex()
         .items_center()
         .px(px(2.))
@@ -616,7 +616,7 @@ pub(super) fn network_tunnel_editor_panel(
                                 .child("Configure SSH local, remote, or dynamic port forwarding."),
                         ),
                 )
-                .child(status_pill(mode_label, rgb(0x93c5fd), rgb(0x17233a))),
+                .child(status_pill(mode_label, rgb(palette.accent), rgb(palette.hover))),
         )
         .child(
             div()
@@ -761,7 +761,7 @@ pub(super) fn network_tunnel_editor_panel(
                 ),
         )
         .when_some(editor.error.clone(), |this, error| {
-            this.child(div().text_xs().text_color(rgb(0xfda4af)).child(error))
+            this.child(div().text_xs().text_color(rgb(palette.danger)).child(error))
         })
         .child(network_dialog_footer(
             "network-tunnel-editor-cancel",
@@ -843,7 +843,7 @@ pub(super) fn tunnel_editor_option(
         .id(gpui::SharedString::from(id.into()))
         .rounded_md()
         .border_1()
-        .border_color(if active { rgb(0x388bfd) } else { rgb(palette.border) })
+        .border_color(if active { rgb(palette.accent) } else { rgb(palette.border) })
         .bg(if active { rgb(palette.hover) } else { rgb(palette.bg) })
         .px_3()
         .py_2()
@@ -856,7 +856,7 @@ pub(super) fn tunnel_editor_option(
             div()
                 .text_size(px(12.))
                 .font_weight(FontWeight(600.))
-                .text_color(if active { rgb(0x79b8ff) } else { rgb(palette.text) })
+                .text_color(if active { rgb(palette.accent) } else { rgb(palette.text) })
                 .child(title),
         )
         .child(div().text_size(px(11.)).text_color(rgb(palette.text_muted)).child(detail))
@@ -901,13 +901,13 @@ pub(super) fn tunnel_editor_preview(editor: &NetworkTunnelEditorState) -> String
 pub(super) fn tunnel_status_style(pending: bool, is_open: bool, supported: bool) -> (Hsla, Hsla) {
     let palette = crate::ui::theme::theme_palette("github-dark");
     if pending {
-        (rgb(0xfacc15).into(), rgb(0x3a2f14).into())
+        (rgb(palette.warning).into(), rgb(palette.hover).into())
     } else if is_open {
         (rgb(palette.success).into(), rgb(palette.hover).into())
     } else if supported {
-        (rgb(0x93c5fd).into(), rgb(palette.hover).into())
+        (rgb(palette.accent).into(), rgb(palette.hover).into())
     } else {
-        (rgb(0xfbbf24).into(), rgb(0x3a2f14).into())
+        (rgb(palette.warning).into(), rgb(palette.hover).into())
     }
 }
 

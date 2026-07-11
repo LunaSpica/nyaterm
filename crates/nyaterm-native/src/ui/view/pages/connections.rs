@@ -713,7 +713,7 @@ impl NyaTermApp {
             .items_center()
             .gap_1()
             .border_b_1()
-            .border_color(rgb(0x388bfd))
+            .border_color(rgb(palette.accent))
             .bg(rgb(0x0d2137))
             .child(
                 div()
@@ -721,7 +721,7 @@ impl NyaTermApp {
                     .flex_1()
                     .text_size(px(11.))
                     .font_weight(FontWeight(600.))
-                    .text_color(rgb(0x79b8ff))
+                    .text_color(rgb(palette.accent))
                     .child(format!("{selected_count} selected")),
             )
             .child(
@@ -1706,7 +1706,7 @@ impl NyaTermApp {
                 div()
                     .text_size(px(15.))
                     .font_weight(FontWeight(700.))
-                    .text_color(rgb(0xfda4af))
+                    .text_color(rgb(palette.danger))
                     .child("Delete Connection"),
             )
             .child(
@@ -1743,7 +1743,7 @@ impl NyaTermApp {
                 div()
                     .text_size(px(15.))
                     .font_weight(FontWeight(700.))
-                    .text_color(rgb(0xfda4af))
+                    .text_color(rgb(palette.danger))
                     .child("Delete Group"),
             )
             .child(
@@ -2204,7 +2204,7 @@ fn kind_chip(
             rgb(palette.text_muted)
         })
         .bg(if selected {
-            rgb(0x238636)
+            rgb(palette.success)
         } else {
             rgb(palette.surface_elevated)
         })

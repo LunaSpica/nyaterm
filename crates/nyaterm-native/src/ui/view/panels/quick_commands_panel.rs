@@ -250,7 +250,7 @@ impl NyaTermApp {
                                             this.child(
                                                 div()
                                                     .text_size(px(9.))
-                                                    .text_color(rgb(0xfacc15))
+                                                    .text_color(rgb(palette.warning))
                                                     .child("PIN"),
                                             )
                                         }),
@@ -259,7 +259,7 @@ impl NyaTermApp {
                         .child(status_pill(
                             if execution_mode == "append" { "+" } else { ">" },
                             if execution_mode == "append" {
-                                rgb(0xfacc15)
+                                rgb(palette.warning)
                             } else {
                                 rgb(palette.success)
                             },
@@ -379,7 +379,7 @@ impl NyaTermApp {
                                         this.child(
                                             div()
                                                 .text_size(px(9.))
-                                                .text_color(rgb(0xfacc15))
+                                                .text_color(rgb(palette.warning))
                                                 .child("📌"),
                                         )
                                     })
@@ -413,7 +413,7 @@ impl NyaTermApp {
                         actions = actions.child(status_pill(
                             if execution_mode == "append" { "+" } else { ">" },
                             if execution_mode == "append" {
-                                rgb(0xfacc15)
+                                rgb(palette.warning)
                             } else {
                                 rgb(palette.success)
                             },
@@ -537,7 +537,7 @@ impl NyaTermApp {
                                                             this.child(
                                                                 div()
                                                                     .text_size(px(9.))
-                                                                    .text_color(rgb(0xfacc15))
+                                                                    .text_color(rgb(palette.warning))
                                                                     .child("📌"),
                                                             )
                                                         },

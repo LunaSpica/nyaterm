@@ -403,7 +403,7 @@ fn transfer_browser_path_history_list(
                 .font_family("JetBrains Mono")
                 .text_size(px(10.))
                 .text_color(if is_current {
-                    rgb(0x93c5fd)
+                    rgb(palette.accent)
                 } else {
                     rgb(palette.text)
                 })
@@ -493,7 +493,7 @@ fn transfer_browser_path_quick_list(
                             .justify_center()
                             .rounded_sm()
                             .text_color(rgb(0x86efac))
-                            .hover(|this| this.bg(rgb(palette.border)).text_color(rgb(0xfca5a5)))
+                            .hover(|this| this.bg(rgb(palette.border)).text_color(rgb(palette.danger)))
                             .on_click(cx.listener(move |this, _: &ClickEvent, _window, cx| {
                                 cx.stop_propagation();
                                 this.remove_transfer_browser_favorite_path(remove_path.clone(), cx);

@@ -123,7 +123,7 @@ pub(super) fn symlink_input_row(
                 .rounded_sm()
                 .border_1()
                 .border_color(if invalid {
-                    rgb(0x7f1d1d)
+                    rgb(palette.danger)
                 } else if focused {
                     rgb(palette.success)
                 } else {
@@ -345,9 +345,9 @@ pub(super) fn transfer_job_row(
 ) -> impl IntoElement {
         let palette = cx.entity().read(cx).theme_palette();
     let status_color = match job.status {
-        TransferJobStatus::Running => rgb(0xfacc15),
-        TransferJobStatus::Paused => rgb(0x93c5fd),
-        TransferJobStatus::Cancelling => rgb(0xfbbf24),
+        TransferJobStatus::Running => rgb(palette.warning),
+        TransferJobStatus::Paused => rgb(palette.accent),
+        TransferJobStatus::Cancelling => rgb(palette.warning),
         TransferJobStatus::Cancelled => rgb(palette.text_muted),
         TransferJobStatus::Completed => rgb(0x34d399),
         TransferJobStatus::Failed => rgb(0xfb7185),
@@ -533,7 +533,7 @@ pub(super) fn transfer_job_row(
                                 .flex()
                                 .items_center()
                                 .gap_2()
-                                .child(status_pill(direction, rgb(0x93c5fd), rgb(palette.hover)))
+                                .child(status_pill(direction, rgb(palette.accent), rgb(palette.hover)))
                                 .child(
                                     div()
                                         .text_sm()
@@ -621,7 +621,7 @@ pub(super) fn sort_header_cell(
         .text_size(px(10.))
         .font_weight(FontWeight(800.))
         .text_color(if is_active {
-            rgb(0x93c5fd)
+            rgb(palette.accent)
         } else {
             rgb(palette.text_muted)
         })

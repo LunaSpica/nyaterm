@@ -64,7 +64,7 @@ impl NyaTermApp {
                                     .font_weight(FontWeight(800.))
                                     .child("External File Modified"),
                             )
-                            .child(status_pill("sync pending", rgb(0xfacc15), rgb(0x3a2d10))),
+                            .child(status_pill("sync pending", rgb(palette.warning), rgb(0x3a2d10))),
                     )
                     .child(
                         div()
@@ -219,7 +219,7 @@ impl NyaTermApp {
                                             .child(truncate_preview(&state.remote_path, 96)),
                                     ),
                             )
-                            .child(status_pill(status, rgb(0x93c5fd), rgb(palette.hover))),
+                            .child(status_pill(status, rgb(palette.accent), rgb(palette.hover))),
                     )
                     .when_some(state.error.clone(), |this, error| {
                         this.child(
@@ -229,7 +229,7 @@ impl NyaTermApp {
                                 .px_3()
                                 .py_2()
                                 .text_xs()
-                                .text_color(rgb(0xfca5a5))
+                                .text_color(rgb(palette.danger))
                                 .child(error),
                         )
                     })
@@ -241,7 +241,7 @@ impl NyaTermApp {
                                 .px_3()
                                 .py_2()
                                 .text_xs()
-                                .text_color(rgb(0xfacc15))
+                                .text_color(rgb(palette.warning))
                                 .child("Remote file changed since it was loaded. Use Force Save to overwrite it."),
                         )
                     })
@@ -253,7 +253,7 @@ impl NyaTermApp {
                                 .px_3()
                                 .py_2()
                                 .text_xs()
-                                .text_color(rgb(0xfacc15))
+                                .text_color(rgb(palette.warning))
                                 .child("Unsaved changes are still in memory. Save or discard them."),
                         )
                     })
@@ -265,7 +265,7 @@ impl NyaTermApp {
                                 .px_3()
                                 .py_2()
                                 .text_xs()
-                                .text_color(rgb(0xfacc15))
+                                .text_color(rgb(palette.warning))
                                 .child("Reload will discard unsaved changes. Press Reload again to continue."),
                         )
                     })

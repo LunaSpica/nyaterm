@@ -165,7 +165,7 @@ impl NyaTermApp {
                                 if can_save {
                                     rgb(palette.success)
                                 } else {
-                                    rgb(0xfca5a5)
+                                    rgb(palette.danger)
                                 },
                                 if can_save {
                                     rgb(palette.hover)
@@ -180,11 +180,11 @@ impl NyaTermApp {
                                 .mt_3()
                                 .rounded_sm()
                                 .border_1()
-                                .border_color(rgb(0x7f1d1d))
+                                .border_color(rgb(palette.danger))
                                 .bg(rgb(0x1f0b0b))
                                 .p_2()
                                 .text_xs()
-                                .text_color(rgb(0xfca5a5))
+                                .text_color(rgb(palette.danger))
                                 .child(editor.error.clone().unwrap_or_default()),
                         )
                     })
@@ -487,9 +487,9 @@ fn quick_command_category_choice(
         .text_color(if selected {
             rgb(palette.success)
         } else {
-            rgb(0xcbd5e1)
+            rgb(palette.text)
         })
-        .hover(|style| style.border_color(rgb(0x93c5fd)).bg(rgb(0x17233a)))
+        .hover(|style| style.border_color(rgb(palette.accent)).bg(rgb(palette.hover)))
         .child(label)
         .on_click(on_click)
 }
@@ -517,7 +517,7 @@ fn quick_command_color_swatch(
         .bg(quick_command_color(color_tag))
         .cursor_pointer()
         .on_click(on_click)
-        .hover(|style| style.border_color(rgb(0x93c5fd)))
+        .hover(|style| style.border_color(rgb(palette.accent)))
 }
 
 fn quick_command_icon_option(
@@ -540,7 +540,7 @@ fn quick_command_icon_option(
             rgb(palette.border)
         })
         .bg(if selected {
-            rgb(0x17233a)
+            rgb(palette.hover)
         } else {
             rgb(palette.input)
         })
@@ -549,6 +549,6 @@ fn quick_command_icon_option(
         .items_center()
         .justify_center()
         .on_click(on_click)
-        .hover(|style| style.border_color(rgb(0x93c5fd)))
+        .hover(|style| style.border_color(rgb(palette.accent)))
         .child(quick_command_icon_mark(Some(icon_tag), color_tag))
 }

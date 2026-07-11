@@ -76,7 +76,7 @@ impl NyaTermApp {
                             .rounded_sm()
                             .border_1()
                             .border_color(if has_error {
-                                rgb(0x7f1d1d)
+                                rgb(palette.danger)
                             } else {
                                 rgb(0x256d3f)
                             })
@@ -127,7 +127,7 @@ impl NyaTermApp {
                                     ))
                                     .child(status_pill(
                                         if state.mode == 0o700 { "0700" } else { "0755" },
-                                        rgb(0x93c5fd),
+                                        rgb(palette.accent),
                                         rgb(palette.hover),
                                     )),
                             )
@@ -151,7 +151,7 @@ impl NyaTermApp {
                             .mt_2()
                             .text_xs()
                             .text_color(if has_error {
-                                rgb(0xfca5a5)
+                                rgb(palette.danger)
                             } else {
                                 rgb(palette.text_muted)
                             })
@@ -262,7 +262,7 @@ impl NyaTermApp {
                             .rounded_sm()
                             .border_1()
                             .border_color(if has_error {
-                                rgb(0x7f1d1d)
+                                rgb(palette.danger)
                             } else {
                                 rgb(0x256d3f)
                             })
@@ -313,7 +313,7 @@ impl NyaTermApp {
                                     ))
                                     .child(status_pill(
                                         if state.mode == 0o600 { "0600" } else { "0644" },
-                                        rgb(0x93c5fd),
+                                        rgb(palette.accent),
                                         rgb(palette.hover),
                                     )),
                             )
@@ -329,7 +329,7 @@ impl NyaTermApp {
                             .mt_2()
                             .text_xs()
                             .text_color(if has_error {
-                                rgb(0xfca5a5)
+                                rgb(palette.danger)
                             } else {
                                 rgb(palette.text_muted)
                             })
@@ -470,7 +470,7 @@ impl NyaTermApp {
                             .mt_2()
                             .text_xs()
                             .text_color(if has_error {
-                                rgb(0xfca5a5)
+                                rgb(palette.danger)
                             } else {
                                 rgb(palette.text_muted)
                             })

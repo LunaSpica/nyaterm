@@ -175,7 +175,7 @@ impl NyaTermApp {
                                                 .text_center()
                                                 .text_xs()
                                                 .text_color(if status_is_error {
-                                                    rgb(0xfca5a5)
+                                                    rgb(palette.danger)
                                                 } else {
                                                     rgb(palette.text_muted)
                                                 })

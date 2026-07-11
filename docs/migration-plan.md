@@ -863,3 +863,8 @@ service boundary first:
 - Generic quick-command icons (terminal/code/server/folder/AI/bolt) use palette status colors; brand icons remain brand-colored.
 - Sidebar residual security/session chrome (banners, unlock, nav hover) densified.
 - Formatting docker/cloud-sync status colors prefer palette tokens (free helpers still dark-fallback until caller-themed).
+
+## 2026-07-11 Prompt banners + Network status semantic densify
+- Host-key/credential/snapshot prompt banners use warning/danger/input palette tokens.
+- Tunnel/proxy status pills, switches, editor options, and section chrome densified.
+- Process usage colors, transfer job status helpers, lock screen residual, and connection kind chips mapped.

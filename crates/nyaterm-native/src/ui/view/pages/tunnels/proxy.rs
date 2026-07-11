@@ -73,7 +73,7 @@ pub(super) fn proxy_section(
         rows = rows.child(
             div()
                 .border_t_1()
-                .border_color(rgb(0x253044))
+                .border_color(rgb(palette.border))
                 .px_2()
                 .py_2()
                 .text_size(px(11.))
@@ -124,7 +124,7 @@ pub(super) fn proxy_section(
                 .gap_2()
                 .bg(rgb(palette.input))
                 .cursor_pointer()
-                .hover(|this| this.bg(rgb(0x151b24)))
+                .hover(|this| this.bg(rgb(palette.hover)))
                 .on_click({
                     let section_id_for_toggle = section_id_for_toggle.clone();
                     cx.listener(move |this, _, _, cx| {
@@ -359,8 +359,8 @@ fn proxy_move_picker(
     if current_group_id.is_none() {
         targets = targets.child(status_pill(
             "Ungrouped · current",
-            rgb(0x93c5fd),
-            rgb(0x17233a),
+            rgb(palette.accent),
+            rgb(palette.hover),
         ));
     } else {
         let target_id = proxy_id.clone();
@@ -379,7 +379,7 @@ fn proxy_move_picker(
             targets = targets.child(
                 div()
                     .text_xs()
-                    .text_color(rgb(0xcbd5e1))
+                    .text_color(rgb(palette.text))
                     .child(truncate_preview(&group.name, 36)),
             );
         } else {
@@ -403,7 +403,7 @@ fn proxy_move_picker(
 
     div()
         .border_t_1()
-        .border_color(rgb(0x253044))
+        .border_color(rgb(palette.border))
         .bg(rgb(palette.input))
         .px_3()
         .py_2()
@@ -415,7 +415,7 @@ fn proxy_move_picker(
                 .flex_none()
                 .text_xs()
                 .font_weight(FontWeight(700.))
-                .text_color(rgb(0xcbd5e1))
+                .text_color(rgb(palette.text))
                 .child("Move to"),
         )
         .child(targets)
@@ -511,7 +511,7 @@ pub(super) fn network_proxy_editor_panel(
                                 .child("Configure SOCKS, HTTP, or ProxyCommand routing for SSH connections."),
                         ),
                 )
-                .child(status_pill(protocol_label, rgb(0x93c5fd), rgb(0x17233a))),
+                .child(status_pill(protocol_label, rgb(palette.accent), rgb(palette.hover))),
         )
         .child(
             div()
@@ -631,7 +631,7 @@ pub(super) fn network_proxy_editor_panel(
                 ),
         )
         .when_some(editor.error.clone(), |this, error| {
-            this.child(div().text_xs().text_color(rgb(0xfda4af)).child(error))
+            this.child(div().text_xs().text_color(rgb(palette.danger)).child(error))
         })
         .child(network_dialog_footer(
             "network-proxy-editor-cancel",

@@ -24,8 +24,8 @@ impl NyaTermApp {
             .mt_4()
             .rounded_md()
             .border_1()
-            .border_color(rgb(0x7c5d1f))
-            .bg(rgb(0x201a0c))
+            .border_color(rgb(palette.warning))
+            .bg(rgb(palette.input))
             .p_3()
             .child(
                 div()
@@ -45,7 +45,7 @@ impl NyaTermApp {
                                     .child(direction),
                             )
                             .child(
-                                div().text_xs().text_color(rgb(0xcbd5e1)).child(format!(
+                                div().text_xs().text_color(rgb(palette.text)).child(format!(
                                     "Target {kind}: {}",
                                     prompt.request.target_path
                                 )),
@@ -122,12 +122,12 @@ impl NyaTermApp {
             .rounded_md()
             .border_1()
             .border_color(match prompt.issue {
-                HostKeyPromptIssue::Unknown => rgb(0x7c5d1f),
-                HostKeyPromptIssue::Changed => rgb(0x7f1d1d),
+                HostKeyPromptIssue::Unknown => rgb(palette.warning),
+                HostKeyPromptIssue::Changed => rgb(palette.danger),
             })
             .bg(match prompt.issue {
-                HostKeyPromptIssue::Unknown => rgb(0x201a0c),
-                HostKeyPromptIssue::Changed => rgb(0x211111),
+                HostKeyPromptIssue::Unknown => rgb(palette.input),
+                HostKeyPromptIssue::Changed => rgb(palette.input),
             })
             .p_3()
             .child(
@@ -145,7 +145,7 @@ impl NyaTermApp {
                             .child(
                                 div()
                                     .text_xs()
-                                    .text_color(rgb(0xcbd5e1))
+                                    .text_color(rgb(palette.text))
                                     .child(prompt.host_key.host_identifier.clone()),
                             )
                             .child(div().text_xs().text_color(rgb(palette.text_muted)).child(format!(
@@ -221,7 +221,7 @@ impl NyaTermApp {
             .child(
                 div()
                     .text_xs()
-                    .text_color(rgb(0xcbd5e1))
+                    .text_color(rgb(palette.text))
                     .child(credential_prompt_target(&prompt.prompt)),
             )
             .child(div().text_xs().text_color(rgb(palette.text_muted)).child(reason));
@@ -235,7 +235,7 @@ impl NyaTermApp {
                 div()
                     .mt_1()
                     .text_xs()
-                    .text_color(rgb(0xe2e8f0))
+                    .text_color(rgb(palette.text))
                     .child(prompt_text.to_string()),
             );
         }
@@ -245,8 +245,8 @@ impl NyaTermApp {
             .mt_3()
             .rounded_md()
             .border_1()
-            .border_color(rgb(0x365f87))
-            .bg(rgb(0x101a26))
+            .border_color(rgb(palette.accent))
+            .bg(rgb(palette.input))
             .p_3()
             .child(
                 div()
@@ -268,8 +268,8 @@ impl NyaTermApp {
                             .items_center()
                             .rounded_sm()
                             .border_1()
-                            .border_color(rgb(0x4b6f97))
-                            .bg(rgb(0x07111d))
+                            .border_color(rgb(palette.accent))
+                            .bg(rgb(palette.bg))
                             .font_family("JetBrains Mono")
                             .text_sm()
                             .track_focus(&self.credential_focus)
@@ -335,8 +335,8 @@ impl NyaTermApp {
             .mt_3()
             .rounded_md()
             .border_1()
-            .border_color(rgb(0x365f87))
-            .bg(rgb(0x101a26))
+            .border_color(rgb(palette.accent))
+            .bg(rgb(palette.input))
             .p_3()
             .child(
                 div()
@@ -376,8 +376,8 @@ impl NyaTermApp {
                             .items_center()
                             .rounded_sm()
                             .border_1()
-                            .border_color(rgb(0x4b6f97))
-                            .bg(rgb(0x07111d))
+                            .border_color(rgb(palette.accent))
+                            .bg(rgb(palette.bg))
                             .font_family("JetBrains Mono")
                             .text_sm()
                             .track_focus(&self.snapshot_password_focus)
