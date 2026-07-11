@@ -2140,14 +2140,18 @@ impl NyaTermApp {
             .child(
                 div()
                     .flex_none()
-                    .px_3()
-                    .py_2()
+                    .h(px(36.))
+                    .px_2()
                     .border_b_1()
                     .border_color(rgb(0x30363d))
+                    .bg(rgb(0x12171f))
+                    .flex()
+                    .items_center()
                     .child(
                         div()
                             .flex()
                             .min_w_0()
+                            .flex_1()
                             .items_center()
                             .gap_2()
                             .child(

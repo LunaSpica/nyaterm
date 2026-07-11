@@ -14,13 +14,7 @@ impl NyaTermApp {
             .filter(|process| process_matches(process, &normalized_query))
             .cloned()
             .collect::<Vec<_>>();
-        sort_processes(
-            &mut filtered_processes,
-            self.process_sort_key,
-            self.process_sort_direction,
-        );
-
-        // Tauri-like virtual list + responsive display mode from right panel width.
+        // Responsive mode first so hidden columns do not keep invalid sort keys.
         let mode = process_display_mode(self.right_panel_width);
         if mode != ProcessDisplayMode::Wide
             && self.process_sort_key == RemoteProcessSortKey::User
@@ -32,6 +26,13 @@ impl NyaTermApp {
         {
             self.process_sort_key = RemoteProcessSortKey::Cpu;
         }
+        sort_processes(
+            &mut filtered_processes,
+            self.process_sort_key,
+            self.process_sort_direction,
+        );
+
+        // Tauri-like virtual list: base row + expanded details height, spacer padding.
         let process_row_px = process_row_height_px(mode);
         let process_details_px = process_details_height_px(mode);
         const PROCESS_VIEWPORT_ROWS: usize = 28;

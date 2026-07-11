@@ -744,3 +744,7 @@ service boundary first:
 - Compact: 62px rows (command + PID/CPU), no table header.
 - Narrow hides Mem; non-wide hides User; sort keys coerce when columns hidden.
 - Details height scales by mode; virtual list row math follows mode.
+
+## 2026-07-11 Process mode sort order + Sync history strip
+- Apply ProcessDisplayMode sort-key coercion before sorting the filtered list.
+- Sync Backup History status strip densified to 36px toolbar chrome.
