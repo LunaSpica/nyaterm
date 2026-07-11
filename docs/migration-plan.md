@@ -575,3 +575,9 @@ service boundary first:
 - Tunnel/Proxy editors, group editor, and delete confirms moved from inline banners to Tauri-like modal shells (`network_modal_shell` dimmed backdrop + centered card).
 - Dialog footer uses Cancel/Save action row with top border (ActionFooter-like).
 - Network panel root is `relative` so modals cover the full panel body.
+
+## 2026-07-11 Connection dialogs + shared modal chrome
+- Extracted shared `modal_dialog_shell` / `modal_dialog_footer` for Tauri Dialog-like overlays.
+- Network modals now wrap the shared helpers.
+- Connections: New/Edit connection, group editor, and delete confirms use centered modal shells instead of bottom-of-panel banners.
+- Security list rows densified (tighter gap); tab strip padding matches Tauri `px-3 pt-3`.

@@ -1,6 +1,6 @@
 use gpui::{
     App, ClickEvent, FontWeight, IntoElement, SharedString, Window, WindowControlArea, div,
-    prelude::*, px, rgb, svg,
+    prelude::*, px, rgb, rgba, svg,
 };
 use nyaterm_domain::{
     CloudSyncHistoryEntry, ConnectionType, NativeServiceStatus, SavedConnection, TunnelConfig,
@@ -178,6 +178,60 @@ pub(in crate::ui::view) fn panel_header(
                     )
                 }),
         )
+}
+
+
+/// Dimmed full-area modal shell (Tauri Dialog backdrop + centered card).
+pub(in crate::ui::view) fn modal_dialog_shell(
+    id: impl Into<String>,
+    width: f32,
+    content: impl IntoElement,
+) -> impl IntoElement {
+    div()
+        .id(SharedString::from(id.into()))
+        .absolute()
+        .top_0()
+        .bottom_0()
+        .left_0()
+        .right_0()
+        .bg(rgba(0x030508d8))
+        .flex()
+        .items_center()
+        .justify_center()
+        .p_3()
+        .child(
+            div()
+                .w(px(width))
+                .max_w_full()
+                .max_h_full()
+                .rounded_md()
+                .border_1()
+                .border_color(rgb(0x30363d))
+                .bg(rgb(0x0d1117))
+                .shadow_lg()
+                .child(content),
+        )
+}
+
+/// Tauri ActionFooter-like Cancel/Save row.
+pub(in crate::ui::view) fn modal_dialog_footer(
+    cancel_id: impl Into<String>,
+    save_id: impl Into<String>,
+    save_label: &'static str,
+    on_cancel: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
+    on_save: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
+) -> impl IntoElement {
+    div()
+        .mt_1()
+        .pt_3()
+        .border_t_1()
+        .border_color(rgb(0x30363d))
+        .flex()
+        .items_center()
+        .justify_end()
+        .gap_2()
+        .child(small_button(cancel_id, "Cancel", on_cancel))
+        .child(small_button(save_id, save_label, on_save))
 }
 
 pub(in crate::ui::view) fn inspector_card(title: &'static str) -> gpui::Div {

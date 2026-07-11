@@ -173,36 +173,13 @@ pub(super) fn network_group_delete_confirm_panel(
     network_modal_shell("network-group-delete-modal", 420., card)
 }
 
-/// Full-panel modal chrome matching Tauri Dialog (dimmed backdrop + centered card).
+
 pub(super) fn network_modal_shell(
     id: impl Into<String>,
     width: f32,
     content: impl IntoElement,
 ) -> impl IntoElement {
-    div()
-        .id(gpui::SharedString::from(id.into()))
-        .absolute()
-        .top_0()
-        .bottom_0()
-        .left_0()
-        .right_0()
-        .bg(rgba(0x030508d8))
-        .flex()
-        .items_center()
-        .justify_center()
-        .p_3()
-        .child(
-            div()
-                .w(px(width))
-                .max_w_full()
-                .max_h_full()
-                .rounded_md()
-                .border_1()
-                .border_color(rgb(0x30363d))
-                .bg(rgb(0x0d1117))
-                .shadow_lg()
-                .child(content),
-        )
+    modal_dialog_shell(id, width, content)
 }
 
 pub(super) fn network_dialog_footer(
@@ -212,16 +189,6 @@ pub(super) fn network_dialog_footer(
     on_cancel: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
     on_save: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
 ) -> impl IntoElement {
-    div()
-        .mt_1()
-        .pt_3()
-        .border_t_1()
-        .border_color(rgb(0x30363d))
-        .flex()
-        .items_center()
-        .justify_end()
-        .gap_2()
-        .child(small_button(cancel_id, "Cancel", on_cancel))
-        .child(small_button(save_id, save_label, on_save))
+    modal_dialog_footer(cancel_id, save_id, save_label, on_cancel, on_save)
 }
 

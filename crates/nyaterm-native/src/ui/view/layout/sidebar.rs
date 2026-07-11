@@ -484,26 +484,26 @@ impl NyaTermApp {
                             .flex()
                             .items_center()
                             .gap_0()
-                            .child(icon_button(
+                            .child(session_action_svg_button(
                                 format!("active-session-rename-{rename_session_id}"),
-                                "✎",
+                                "icons/session/rename.svg",
                                 cx.listener(move |this, _, window, cx| {
                                     cx.stop_propagation();
                                     this.open_rename_session(rename_session_id.clone(), window, cx);
                                 }),
                             ))
-                            .child(icon_button(
+                            .child(session_action_svg_button(
                                 format!("active-session-reconnect-{reconnect_session_id}"),
-                                "↻",
+                                "icons/session/reconnect.svg",
                                 cx.listener(move |this, _, window, cx| {
                                     cx.stop_propagation();
                                     this.select_session(reconnect_session_id.clone(), cx);
                                     this.reconnect_active_session(window, cx);
                                 }),
                             ))
-                            .child(icon_button(
+                            .child(session_action_svg_button(
                                 format!("active-session-close-{close_session_id}"),
-                                "×",
+                                "icons/session/disconnect.svg",
                                 cx.listener(move |this, _, _, cx| {
                                     cx.stop_propagation();
                                     this.close_session(close_session_id.clone(), cx);
@@ -870,7 +870,7 @@ impl NyaTermApp {
             "not set"
         };
 
-        let mut body = div().flex_1().min_h_0().overflow_hidden().flex().flex_col().gap_2().p_2();
+        let mut body = div().flex_1().min_h_0().overflow_hidden().flex().flex_col().gap_1().p_2();
 
         match active_tab {
             SecurityAuthTab::Keys => {
@@ -893,7 +893,7 @@ impl NyaTermApp {
                                 .py_1()
                                 .flex()
                                 .flex_col()
-                                .gap_2()
+                                .gap_1()
                                 .child(
                                     div()
                                         .flex()
@@ -990,7 +990,7 @@ impl NyaTermApp {
                                 .py_1()
                                 .flex()
                                 .flex_col()
-                                .gap_2()
+                                .gap_1()
                                 .child(
                                     div()
                                         .flex()
@@ -1088,7 +1088,7 @@ impl NyaTermApp {
                                 .py_1()
                                 .flex()
                                 .flex_col()
-                                .gap_2()
+                                .gap_1()
                                 .child(
                                     div()
                                         .flex()
@@ -1209,7 +1209,7 @@ impl NyaTermApp {
                                 .py_1()
                                 .flex()
                                 .flex_col()
-                                .gap_2()
+                                .gap_1()
                                 .child(
                                     div()
                                         .flex()
@@ -1335,8 +1335,9 @@ impl NyaTermApp {
             .bg(rgb(0x161b22))
             .child(
                 div()
-                    .px_2()
-                    .py_2()
+                    .px_3()
+                    .pt_3()
+                    .pb_2()
                     .border_b_1()
                     .border_color(rgb(0x30363d))
                     .bg(rgb(0x12171f))
@@ -2443,6 +2444,31 @@ fn security_type_chip(
         })
         .hover(|this| this.bg(rgb(0x30363d)))
         .child(label)
+        .on_click(on_click)
+}
+
+fn session_action_svg_button(
+    id: impl Into<String>,
+    icon_path: &'static str,
+    on_click: impl Fn(&gpui::ClickEvent, &mut gpui::Window, &mut gpui::App) + 'static,
+) -> impl IntoElement {
+    // Tauri ActiveSessions action icons: h-7 ghost.
+    div()
+        .id(SharedString::from(id.into()))
+        .size(px(28.))
+        .flex()
+        .items_center()
+        .justify_center()
+        .rounded_md()
+        .text_color(rgb(0x8b949e))
+        .cursor_pointer()
+        .hover(|this| this.bg(rgb(0x21262d)).text_color(rgb(0xc9d1d9)))
+        .child(
+            svg()
+                .size(px(16.))
+                .flex_none()
+                .path(icon_path),
+        )
         .on_click(on_click)
 }
 
