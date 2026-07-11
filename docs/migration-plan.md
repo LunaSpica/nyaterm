@@ -1566,3 +1566,11 @@ service boundary first:
 
 - Telnet form adds Backspace mode cycle and Open After Save toggle; details
   tooltip shows BS mode, raw TCP, and local echo flags.
+
+## 2026-07-12 Local terminal editor + OTP panel densify
+
+- Local connection editor: shell preset chips (bash/zsh/fish/sh/PowerShell/CMD/WSL),
+  Browse for shell executable and working directory, Open After Save toggle;
+  detail tooltip shows args when present.
+- Security Auth OTP list: spaced code display, TOTP remaining-seconds cue,
+  Gen/Next + Copy actions, Refresh-all for unlocked secrets; lock clears codes.
