@@ -373,8 +373,8 @@ impl NyaTermApp {
                                 .w(px(148.))
                                 .rounded_md()
                                 .border_1()
-                                .border_color(rgb(0x30363d))
-                                .bg(rgb(0x161b22))
+                                .border_color(rgb(palette.border))
+                                .bg(rgb(palette.surface))
                                 .shadow_sm()
                                 .py_1()
                                                                 .child(menu_item(
@@ -501,7 +501,7 @@ impl NyaTermApp {
                                 && target.position == ConnectionDropPosition::Inside
                                 && target.id.as_deref() == section.group_id.as_deref()
                         }),
-                        |this| this.border_1().border_color(rgb(0x388bfd)),
+                        |this| this.border_1().border_color(rgb(self.theme_palette().accent)),
                     )
                     .on_hover({
                         let hover_group = section.group_id.clone();

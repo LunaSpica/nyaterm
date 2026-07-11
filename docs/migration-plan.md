@@ -800,3 +800,7 @@ service boundary first:
 ## 2026-07-11 Activity chrome + Connections palette pass
 - Activity bar entry buttons and title menus use live ThemePalette (accent/success/hover/muted).
 - Saved Connections search strip, root surface, selection strip, and row hover/selected states use palette tokens (Tauri toolbar + ConnectionItem density preserved).
+
+## 2026-07-11 AI Assistant shell palette + Connections extras
+- AI panel root/action strip/composer borders and muted text follow ThemePalette.
+- Connections more-menu and group-header hover/drop accents use palette tokens.

@@ -2,6 +2,7 @@ use super::*;
 
 impl NyaTermApp {
     fn ai_ask_panel(&mut self, cx: &mut Context<Self>) -> impl IntoElement {
+        let palette = self.theme_palette();
         let agent_mode = self.ai_settings.default_mode == AiMode::Agent;
         let file_action_ready = self
             .ai_prepared_request
@@ -23,7 +24,7 @@ impl NyaTermApp {
             agent_step_rows = agent_step_rows
                 .mt_2()
                 .border_t_1()
-                .border_color(rgb(0x30363d))
+                .border_color(rgb(palette.border))
                 .pt_2()
                 .flex()
                 .flex_col()
@@ -32,14 +33,14 @@ impl NyaTermApp {
                     div()
                         .text_size(px(10.))
                         .font_weight(FontWeight(700.))
-                        .text_color(rgb(0x8b949e))
+                        .text_color(rgb(palette.text_muted))
                         .child("Agent Steps"),
                 );
             if self.ai_agent_steps.is_empty() {
                 agent_step_rows = agent_step_rows.child(
                     div()
                         .text_xs()
-                        .text_color(rgb(0x98a3b8))
+                        .text_color(rgb(palette.text_dimmed))
                         .child("No Agent steps yet."),
                 );
             } else {
@@ -57,6 +58,7 @@ impl NyaTermApp {
         let mode_label = if agent_mode { "Agent" } else { "Ask" };
         let enabled = self.ai_settings.enabled;
 
+        
         // Tauri AIAssistantPanel: PanelHeader(title+model meta + history/settings/new) already
         // provided by side stack; body keeps optional in-panel action strip when not stacked header.
         // Here we only add a compact action strip under shared header for history toggle + shortcuts.
@@ -71,7 +73,7 @@ impl NyaTermApp {
             .flex()
             .flex_col()
             .overflow_hidden()
-            .bg(rgb(0x161b22))
+            .bg(rgb(palette.surface))
             .relative()
             .child(
                 div()
@@ -80,8 +82,8 @@ impl NyaTermApp {
                     .flex_none()
                     .px_2()
                     .border_b_1()
-                    .border_color(rgb(0x30363d))
-                    .bg(rgb(0x12171f))
+                    .border_color(rgb(palette.border))
+                    .bg(rgb(palette.section_header))
                     .flex()
                     .items_center()
                     .gap_1()
@@ -90,7 +92,7 @@ impl NyaTermApp {
                             .min_w_0()
                             .flex_1()
                             .text_size(px(11.))
-                            .text_color(rgb(0x8b949e))
+                            .text_color(rgb(palette.text_muted))
                             .overflow_hidden()
                             .child(truncate_preview(
                                 &if enabled {
@@ -192,8 +194,8 @@ impl NyaTermApp {
                 div()
                     .flex_none()
                     .border_t_1()
-                    .border_color(rgb(0x30363d))
-                    .bg(rgb(0x12171f))
+                    .border_color(rgb(palette.border))
+                    .bg(rgb(palette.section_header))
                     .p_2()
                     .flex()
                     .flex_col()
@@ -240,8 +242,8 @@ impl NyaTermApp {
                                             .items_center()
                                             .rounded_md()
                                             .border_1()
-                                            .border_color(rgb(0x30363d))
-                                            .bg(rgb(0x0d1117))
+                                            .border_color(rgb(palette.border))
+                                            .bg(rgb(palette.input))
                                             .p(px(1.))
                                             .gap_0()
                                             .child(mode_button(
@@ -266,7 +268,7 @@ impl NyaTermApp {
                                             .min_w_0()
                                             .flex_1()
                                             .text_size(px(11.))
-                                            .text_color(rgb(0x8b949e))
+                                            .text_color(rgb(palette.text_muted))
                                             .overflow_hidden()
                                             .child(truncate_preview(&model_label, 24)),
                                     ),
