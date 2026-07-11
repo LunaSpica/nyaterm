@@ -652,3 +652,6 @@ service boundary first:
 ## 2026-07-11 Command Send multi-target
 - Target chips: Current vs All compatible sessions (shell vs serial compatibility).
 - Runtime fan-out writes each unit to resolved target session ids; header shows scope label.
+
+## 2026-07-11 Command Send hex ASCII side pane
+- Hex data mode shows mono editor + compact ASCII preview column (Tauri dual-pane step).

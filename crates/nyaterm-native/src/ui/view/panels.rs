@@ -430,24 +430,74 @@ impl NyaTermApp {
                             }),
                     )
                     .child(
-                        transfer_input(
-                            "bottom-command-send-input",
-                            input_hint,
-                            self.send_command_draft.clone(),
-                            true,
-                        )
-                        .flex_1()
-                        .min_h(px(72.))
-                        .font_family("JetBrains Mono")
-                        .track_focus(&self.send_command_focus)
-                        .on_click(cx.listener(|this, _, window, cx| {
-                            window.focus(&this.send_command_focus);
-                            cx.notify();
-                        }))
-                        .on_key_down(cx.listener(|this, event: &KeyDownEvent, _, cx| {
-                            cx.stop_propagation();
-                            this.handle_send_command_key_down(event, cx);
-                        })),
+                        div()
+                            .flex_1()
+                            .min_h(px(72.))
+                            .flex()
+                            .gap_1()
+                            .child(
+                                transfer_input(
+                                    "bottom-command-send-input",
+                                    input_hint,
+                                    self.send_command_draft.clone(),
+                                    true,
+                                )
+                                .flex_1()
+                                .min_h(px(72.))
+                                .font_family("JetBrains Mono")
+                                .track_focus(&self.send_command_focus)
+                                .on_click(cx.listener(|this, _, window, cx| {
+                                    window.focus(&this.send_command_focus);
+                                    cx.notify();
+                                }))
+                                .on_key_down(cx.listener(|this, event: &KeyDownEvent, _, cx| {
+                                    cx.stop_propagation();
+                                    this.handle_send_command_key_down(event, cx);
+                                })),
+                            )
+                            .when(
+                                self.send_command_data_type == SendCommandDataType::Hex,
+                                |this| {
+                                    this.child(
+                                        div()
+                                            .w(px(160.))
+                                            .flex_none()
+                                            .min_h(px(72.))
+                                            .rounded_md()
+                                            .border_1()
+                                            .border_color(rgb(0x30363d))
+                                            .bg(rgb(0x0d1117))
+                                            .px_2()
+                                            .py_1()
+                                            .flex()
+                                            .flex_col()
+                                            .gap_1()
+                                            .child(
+                                                div()
+                                                    .text_size(px(10.))
+                                                    .font_weight(FontWeight(600.))
+                                                    .text_color(rgb(0x6e7681))
+                                                    .child("ASCII"),
+                                            )
+                                            .child(
+                                                div()
+                                                    .flex_1()
+                                                    .font_family("JetBrains Mono")
+                                                    .text_size(px(11.))
+                                                    .text_color(if validation_error {
+                                                        rgb(0xff7b72)
+                                                    } else {
+                                                        rgb(0xc9d1d9)
+                                                    })
+                                                    .child(if preview.trim().is_empty() {
+                                                        "·".to_string()
+                                                    } else {
+                                                        preview.clone()
+                                                    }),
+                                            ),
+                                    )
+                                },
+                            ),
                     )
                     .when(is_sending, |this| {
                         this.child(
