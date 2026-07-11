@@ -1589,3 +1589,9 @@ service boundary first:
   editor Show/Hide for password field.
 - Credential list Show/Hide toggle; secret only when revealed.
 - Command History: click runs command (Tauri double-click send parity).
+
+## 2026-07-12 Recording panel + quick-command badge densify
+
+- Recording panel: busy-state for record/stop/save actions, uppercase type badge,
+  denser 44px rows, disabled opacity while busy (Tauri busyActions parity).
+- Quick Commands execution badges use append/exec labels instead of +/>.
