@@ -9,21 +9,47 @@ mod workspace;
 
 impl NyaTermApp {
     pub(in crate::ui::view) fn status_bar(&mut self, cx: &mut Context<Self>) -> impl IntoElement {
-        let sessions = self.session_manager.list_sessions().unwrap_or_default();
+        let tab_count = self.ordered_tab_sessions().len();
+        let pane_count = self.ordered_sessions().len();
         let session_status = if let Some(pending) = self.pending_session_name.as_ref() {
             format!("connecting {pending}")
         } else if let Some(session_id) = self.active_session_id.as_deref() {
-            let name = self
+            let tab_root = self.tab_root_for_session(session_id);
+            let leaf_name = self
                 .session_display_name(session_id)
                 .unwrap_or_else(|| short_id(session_id).to_string());
-            let mut status = name;
+            let mut status = if tab_root != session_id {
+                let tab_name = self
+                    .session_display_name(&tab_root)
+                    .unwrap_or_else(|| short_id(&tab_root).to_string());
+                if tab_name == leaf_name {
+                    leaf_name
+                } else {
+                    format!("{tab_name} › {leaf_name}")
+                }
+            } else {
+                leaf_name
+            };
             if let Some(endpoint) = self.session_endpoint(session_id) {
                 status = format!("{status} · {endpoint}");
             }
             if self.is_session_disconnected(session_id) {
                 status = format!("{status} · disconnected");
+            } else if self
+                .session_pane_roots
+                .get(&tab_root)
+                .is_some_and(|root| root.is_split())
+            {
+                let count = self
+                    .session_pane_roots
+                    .get(&tab_root)
+                    .map(|root| root.session_ids().len())
+                    .unwrap_or(1);
+                status = format!("{status} · {count}p");
             }
             status
+        } else if self.last_connect_failure_name.is_some() {
+            "failed".to_string()
         } else {
             "idle".to_string()
         };
@@ -150,7 +176,11 @@ impl NyaTermApp {
                     ))
                     .child(status_bar_label(palette, 
                         "Tabs",
-                        sessions.len().to_string(),
+                        if pane_count > tab_count {
+                            format!("{tab_count} ({pane_count}p)")
+                        } else {
+                            tab_count.to_string()
+                        },
                         rgb(palette.accent),
                     ))
                     .child(status_bar_button(palette, 

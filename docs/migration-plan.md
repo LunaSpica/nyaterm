@@ -1436,3 +1436,9 @@ service boundary first:
   count; failed connect shows in the title when idle.
 - Settings header shows active category/tab path; View menu groups Theme and
   Language sections.
+
+
+## 2026-07-12 Status bar multi-pane densify
+
+- Session chip mirrors title densify (tab › leaf, endpoint, disconnect, pane count).
+- Tabs chip shows strip tab count and total pane leaves when they differ.
