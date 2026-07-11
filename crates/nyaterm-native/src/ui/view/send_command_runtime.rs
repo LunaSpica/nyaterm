@@ -71,7 +71,8 @@ impl NyaTermApp {
             cx.notify();
             return;
         }
-        if self.active_session_id.is_none() {
+        let target_session_ids = self.send_command_target_session_ids();
+        if target_session_ids.is_empty() {
             self.terminal_status = "start a session before sending".to_string();
             cx.notify();
             return;
@@ -113,8 +114,15 @@ impl NyaTermApp {
                     }
                     first = false;
                     let unit = unit.clone();
+                    let targets = target_session_ids.clone();
                     let _ = this.update(cx, |this, cx| {
-                        this.send_terminal_input(unit, cx);
+                        for session_id in &targets {
+                            this.send_terminal_input_to_session(
+                                session_id.clone(),
+                                unit.clone(),
+                                cx,
+                            );
+                        }
                         this.send_command_progress_completed =
                             this.send_command_progress_completed.saturating_add(1);
                         cx.notify();
@@ -144,6 +152,39 @@ impl NyaTermApp {
             cancel.store(true, Ordering::SeqCst);
             self.terminal_status = "stopping command send…".to_string();
             cx.notify();
+        }
+    }
+
+
+    pub(in crate::ui::view) fn send_command_target_session_ids(&self) -> Vec<String> {
+        let sessions = self
+            .session_manager
+            .list_sessions()
+            .unwrap_or_default();
+        let active_kind = self.active_session_kind();
+        match self.send_command_target {
+            SendCommandTarget::Current => self
+                .active_session_id
+                .clone()
+                .into_iter()
+                .collect(),
+            SendCommandTarget::AllCompatible => {
+                let Some(active_kind) = active_kind else {
+                    return Vec::new();
+                };
+                let serial = matches!(active_kind, SessionKind::Serial);
+                sessions
+                    .into_iter()
+                    .filter(|session| {
+                        if serial {
+                            matches!(session.kind, SessionKind::Serial)
+                        } else {
+                            !matches!(session.kind, SessionKind::Serial)
+                        }
+                    })
+                    .map(|session| session.id)
+                    .collect()
+            }
         }
     }
 

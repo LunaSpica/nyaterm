@@ -54,6 +54,17 @@ impl NyaTermApp {
             })
             .unwrap_or_else(|| "No active session".to_string());
         let target_available = self.active_session_id.is_some();
+        let target_scope_label = match self.send_command_target {
+            SendCommandTarget::Current => active_target.clone(),
+            SendCommandTarget::AllCompatible => {
+                let n = self.send_command_target_session_ids().len();
+                if n == 0 {
+                    "No compatible sessions".to_string()
+                } else {
+                    format!("All compatible ({n})")
+                }
+            }
+        };
         let target_kind = match active_kind {
             Some(SessionKind::Serial) => "Serial Data",
             Some(SessionKind::RawTcp) => "Raw TCP",
@@ -165,7 +176,7 @@ impl NyaTermApp {
                                 rgb(0xff7b72)
                             })
                             .overflow_hidden()
-                            .child(truncate_preview(&active_target, 28)),
+                            .child(truncate_preview(&target_scope_label, 28)),
                     )
                     .child(small_button(
                         "bottom-command-send-hide",
@@ -228,6 +239,36 @@ impl NyaTermApp {
                                             }
                                             this.terminal_status =
                                                 "command send data: Hex".to_string();
+                                            cx.notify();
+                                        }),
+                                    )),
+                            ))
+                            .child(send_command_control_group(
+                                "Target",
+                                div()
+                                    .flex()
+                                    .items_center()
+                                    .child(send_command_chip(
+                                        "bottom-command-target-current",
+                                        "Current",
+                                        self.send_command_target == SendCommandTarget::Current,
+                                        cx.listener(|this, _, _, cx| {
+                                            this.send_command_target = SendCommandTarget::Current;
+                                            this.terminal_status =
+                                                "command send target: Current".to_string();
+                                            cx.notify();
+                                        }),
+                                    ))
+                                    .child(send_command_chip(
+                                        "bottom-command-target-all",
+                                        "All",
+                                        self.send_command_target
+                                            == SendCommandTarget::AllCompatible,
+                                        cx.listener(|this, _, _, cx| {
+                                            this.send_command_target =
+                                                SendCommandTarget::AllCompatible;
+                                            this.terminal_status =
+                                                "command send target: All compatible".to_string();
                                             cx.notify();
                                         }),
                                     )),

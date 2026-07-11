@@ -1,6 +1,13 @@
 use gpui::{FontWeight, IntoElement, div, prelude::*, px, rgb};
 use nyaterm_session::SessionKind;
 
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum SendCommandTarget {
+    Current,
+    AllCompatible,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) enum SendCommandDataType {
     Text,

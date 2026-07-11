@@ -644,3 +644,11 @@ service boundary first:
 - Diagnostics/Updates rewritten to form rows (export, logs, update check).
 - AI Rules: max file size, agent step timeout, smart risk chips, dense action lists.
 - Transfer Editor/Advanced/Recording rewritten to SettingSection/Row switches + steppers.
+
+## 2026-07-11 Keybindings + Keyword Highlights densify
+- Keyboard shortcuts: registry summary form section + per-category dense rows (key mono chip, status, Record/Save).
+- Keyword highlights: enable/wrap switches + import row (no metric cards).
+
+## 2026-07-11 Command Send multi-target
+- Target chips: Current vs All compatible sessions (shell vs serial compatibility).
+- Runtime fan-out writes each unit to resolved target session ids; header shows scope label.

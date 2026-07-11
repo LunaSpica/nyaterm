@@ -100,7 +100,7 @@ pub(super) use super::super::models::{
     WorkspacePaneNode, WorkspaceSplitResizeState, WorkspaceSplitState, is_multi_line_paste, normalize_paste_newlines,
 };
 pub(super) use super::super::send_command::{
-    SendCommandDataType, SendCommandLineEnding, SendCommandMode, bottom_send_field,
+    SendCommandDataType, SendCommandTarget, SendCommandLineEnding, SendCommandMode, bottom_send_field,
     build_send_command_units_for, parse_send_command_hex,
 };
 pub(super) use super::super::shortcuts::{event_to_hotkey_string, shortcut_matches};

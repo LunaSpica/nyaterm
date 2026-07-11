@@ -567,6 +567,7 @@ impl NyaTermApp {
         &mut self,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
+        // Tauri KeyboardShortcutsTab: section per category + dense shortcut rows.
         let supported = SHORTCUT_REGISTRY
             .iter()
             .filter(|shortcut| shortcut.native_status == ShortcutNativeStatus::Supported)
@@ -576,7 +577,7 @@ impl NyaTermApp {
             .filter(|shortcut| shortcut.native_status == ShortcutNativeStatus::Pending)
             .count();
         let overrides = self.settings.keybindings.len();
-        let mut groups = div().mt_4().flex().flex_col().gap_3();
+        let mut groups = div().flex().flex_col().gap_3();
         for category in SHORTCUT_CATEGORIES {
             groups = groups.child(self.shortcut_category_group(category, cx));
         }
@@ -585,7 +586,7 @@ impl NyaTermApp {
             .id("settings-keybindings-panel")
             .flex()
             .flex_col()
-            .gap_4()
+            .gap_3()
             .track_focus(&self.keybindings_focus)
             .on_click(cx.listener(|this, _, window, cx| {
                 window.focus(&this.keybindings_focus);
@@ -594,60 +595,53 @@ impl NyaTermApp {
             .on_key_down(cx.listener(|this, event: &KeyDownEvent, _, cx| {
                 this.handle_keybinding_key_down(event, cx);
             }))
-            .child(
+            .child(settings_form_section(
+                Some("Keyboard shortcuts"),
+                Some("Record overrides stored in the same keybindings map as the Tauri app."),
                 div()
-                    .rounded_md()
-                    .border_1()
-                    .border_color(rgb(0x2a3140))
-                    .bg(rgb(0x151923))
-                    .p_4()
-                    .child(
-                        div()
-                            .text_sm()
-                            .font_weight(FontWeight(700.))
-                            .child("Keyboard Shortcuts"),
-                    )
-                    .child(
-                        div()
-                            .mt_3()
-                            .grid()
-                            .grid_cols(4)
-                            .gap_3()
-                            .child(metric("Registry", SHORTCUT_REGISTRY.len().to_string()))
-                            .child(metric("Native", supported.to_string()))
-                            .child(metric("Pending", pending.to_string()))
-                            .child(metric("Overrides", overrides.to_string())),
-                    )
-                    .child(
-                        div()
-                            .mt_3()
-                            .rounded_sm()
-                            .border_1()
-                            .border_color(rgb(0x263142))
-                            .bg(rgb(0x0d1320))
-                            .p_3()
-                            .text_xs()
-                            .line_height(px(18.))
-                            .text_color(rgb(0x98a3b8))
-                            .child("Press Record, type a shortcut, then Save or Enter. Overrides are stored in the same keybindings object used by the Tauri app."),
-                    )
-                    .when(overrides > 0, |this| {
-                        this.child(
+                    .flex()
+                    .flex_col()
+                    .gap_3()
+                    .child(settings_form_row(
+                        "Registry",
+                        Some(SharedString::from(format!(
+                            "{} total · {supported} native · {pending} pending · {overrides} overrides",
+                            SHORTCUT_REGISTRY.len()
+                        ))),
+                        if overrides > 0 {
+                            small_button(
+                                "keybindings-reset-all",
+                                "Reset All",
+                                cx.listener(|this, _, _, cx| {
+                                    this.reset_all_keybindings(cx);
+                                }),
+                            )
+                            .into_any_element()
+                        } else {
                             div()
-                                .mt_3()
-                                .flex()
-                                .justify_end()
-                                .child(small_button(
-                                    "keybindings-reset-all",
-                                    "Reset All",
-                                    cx.listener(|this, _, _, cx| {
-                                        this.reset_all_keybindings(cx);
-                                    }),
-                                )),
-                        )
-                    })
-                    .child(groups),
-            )
+                                .text_size(px(11.))
+                                .text_color(rgb(0x8b949e))
+                                .child("Defaults")
+                                .into_any_element()
+                        },
+                    ))
+                    .child(
+                        div()
+                            .rounded_md()
+                            .border_1()
+                            .border_color(rgb(0x21262d))
+                            .bg(rgb(0x0d1117))
+                            .px_3()
+                            .py_2()
+                            .text_size(px(11.))
+                            .line_height(px(16.))
+                            .text_color(rgb(0x8b949e))
+                            .child(
+                                "Press Record, type a shortcut, then Save or Enter. Esc cancels recording.",
+                            ),
+                    ),
+            ))
+            .child(groups)
     }
 
     fn shortcut_category_group(
@@ -655,7 +649,11 @@ impl NyaTermApp {
         category: ShortcutCategory,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
-        let mut rows = div().mt_2().flex().flex_col().gap_2();
+        let count = SHORTCUT_REGISTRY
+            .iter()
+            .filter(|shortcut| shortcut.category == category)
+            .count();
+        let mut rows = div().flex().flex_col().gap_1();
         for shortcut in SHORTCUT_REGISTRY
             .iter()
             .filter(|shortcut| shortcut.category == category)
@@ -663,39 +661,23 @@ impl NyaTermApp {
             rows = rows.child(self.shortcut_registry_row(shortcut, cx));
         }
 
-        div()
-            .rounded_md()
-            .border_1()
-            .border_color(rgb(0x263142))
-            .bg(rgb(0x10151e))
-            .p_3()
-            .child(
-                div()
-                    .flex()
-                    .items_center()
-                    .justify_between()
-                    .gap_3()
-                    .child(
-                        div()
-                            .text_xs()
-                            .font_weight(FontWeight(800.))
-                            .text_color(rgb(0xe5edf7))
-                            .child(category.label()),
-                    )
-                    .child(
-                        div()
-                            .text_size(px(10.))
-                            .text_color(rgb(0x64748b))
-                            .child(format!(
-                                "{} shortcut(s)",
-                                SHORTCUT_REGISTRY
-                                    .iter()
-                                    .filter(|shortcut| shortcut.category == category)
-                                    .count()
-                            )),
-                    ),
-            )
-            .child(rows)
+        settings_form_section(
+            Some(category.label()),
+            None,
+            div()
+                .flex()
+                .flex_col()
+                .gap_2()
+                .child(settings_form_row(
+                    "Shortcuts",
+                    Some(SharedString::from(format!("{count} in category"))),
+                    div()
+                        .text_size(px(11.))
+                        .text_color(rgb(0x8b949e))
+                        .child("Native"),
+                ))
+                .child(rows),
+        )
     }
 
     fn shortcut_registry_row(
@@ -704,10 +686,10 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
         let (badge_fg, badge_bg) = match shortcut.native_status {
-            ShortcutNativeStatus::Supported => (rgb(0x6ee7b7), rgb(0x12342a)),
-            ShortcutNativeStatus::Partial => (rgb(0x93c5fd), rgb(0x17253b)),
-            ShortcutNativeStatus::Pending => (rgb(0xfca5a5), rgb(0x3b1518)),
-            ShortcutNativeStatus::Contextual => (rgb(0xfacc15), rgb(0x33270c)),
+            ShortcutNativeStatus::Supported => (rgb(0x3fb950), rgb(0x12261c)),
+            ShortcutNativeStatus::Partial => (rgb(0x58a6ff), rgb(0x122033)),
+            ShortcutNativeStatus::Pending => (rgb(0xf85149), rgb(0x2d1215)),
+            ShortcutNativeStatus::Contextual => (rgb(0xd29922), rgb(0x2a2111)),
         };
         let is_custom = self.settings.keybindings.contains_key(shortcut.id);
         let is_recording = self.keybinding_recording_id.as_deref() == Some(shortcut.id);
@@ -717,7 +699,7 @@ impl NyaTermApp {
             self.keybinding_pending_keys
                 .as_deref()
                 .map(format_hotkey_for_display)
-                .unwrap_or_else(|| "Press key combination...".to_string())
+                .unwrap_or_else(|| "Press keys...".to_string())
         } else {
             format_hotkey_for_display(&effective_keys)
         };
@@ -725,111 +707,96 @@ impl NyaTermApp {
         let reset_shortcut_id = shortcut.id.to_string();
 
         div()
-            .rounded_sm()
+            .rounded_md()
+            .px_2()
+            .py_1()
             .border_1()
             .border_color(if is_recording {
-                rgb(0x3b82f6)
+                rgb(0x1f6feb)
             } else {
-                rgb(0x202633)
+                rgb(0x21262d)
             })
             .bg(if is_recording {
-                rgb(0x0f1b2d)
+                rgb(0x122033)
             } else {
-                rgb(0x0d1320)
+                rgb(0x0d1117)
             })
-            .p_3()
+            .flex()
+            .items_center()
+            .gap_2()
             .child(
                 div()
+                    .min_w_0()
+                    .flex_1()
                     .flex()
-                    .items_center()
-                    .justify_between()
-                    .gap_3()
+                    .flex_col()
                     .child(
                         div()
-                            .min_w_0()
                             .flex()
-                            .flex_col()
-                            .gap_1()
+                            .items_center()
+                            .gap_2()
                             .child(
                                 div()
-                                    .flex()
-                                    .items_center()
-                                    .gap_2()
-                                    .child(
-                                        div()
-                                            .text_xs()
-                                            .font_weight(FontWeight(800.))
-                                            .text_color(rgb(0xe5edf7))
-                                            .child(shortcut.label),
-                                    )
-                                    .when(is_custom, |this| {
-                                        this.child(status_pill(
-                                            "custom",
-                                            rgb(0xc4b5fd),
-                                            rgb(0x2b1b45),
-                                        ))
-                                    }),
+                                    .text_size(px(12.))
+                                    .font_weight(FontWeight(600.))
+                                    .text_color(rgb(0xc9d1d9))
+                                    .overflow_hidden()
+                                    .child(shortcut.label),
                             )
-                            .child(
-                                div()
-                                    .text_size(px(10.))
-                                    .text_color(rgb(0x64748b))
-                                    .child(shortcut.id),
-                            ),
-                    )
-                    .child(status_pill(
-                        shortcut.native_status.label(),
-                        badge_fg,
-                        badge_bg,
-                    )),
-            )
-            .child(
-                div()
-                    .mt_2()
-                    .flex()
-                    .items_center()
-                    .justify_between()
-                    .gap_3()
-                    .child(
-                        div()
-                            .min_w_0()
-                            .rounded_sm()
-                            .border_1()
-                            .border_color(if is_recording {
-                                rgb(0x60a5fa)
-                            } else {
-                                rgb(0x303848)
-                            })
-                            .bg(rgb(0x151b27))
-                            .px_2()
-                            .py_1()
-                            .font_family("JetBrains Mono")
-                            .text_size(px(10.))
-                            .font_weight(FontWeight(800.))
-                            .text_color(if is_recording {
-                                rgb(0xbfdbfe)
-                            } else {
-                                rgb(0xdbeafe)
-                            })
-                            .child(key_display),
+                            .when(is_custom, |this| {
+                                this.child(
+                                    div()
+                                        .text_size(px(10.))
+                                        .font_weight(FontWeight(600.))
+                                        .text_color(rgb(0xbc8cff))
+                                        .child("custom"),
+                                )
+                            }),
                     )
                     .child(
                         div()
-                            .min_w(px(180.))
-                            .max_w(px(300.))
                             .text_size(px(10.))
-                            .text_color(rgb(0x8f98aa))
-                            .line_height(px(14.))
-                            .child(shortcut.note),
+                            .text_color(rgb(0x6e7681))
+                            .overflow_hidden()
+                            .child(format!("{} · {}", shortcut.id, shortcut.note)),
                     ),
             )
             .child(
                 div()
-                    .mt_3()
+                    .flex_none()
+                    .rounded_md()
+                    .border_1()
+                    .border_color(if is_recording {
+                        rgb(0x388bfd)
+                    } else {
+                        rgb(0x30363d)
+                    })
+                    .bg(rgb(0x161b22))
+                    .px_2()
+                    .py_0()
+                    .h(px(24.))
                     .flex()
                     .items_center()
-                    .justify_end()
-                    .gap_2()
+                    .font_family("JetBrains Mono")
+                    .text_size(px(10.))
+                    .font_weight(FontWeight(700.))
+                    .text_color(if is_recording {
+                        rgb(0x58a6ff)
+                    } else {
+                        rgb(0xc9d1d9)
+                    })
+                    .child(key_display),
+            )
+            .child(status_pill(
+                shortcut.native_status.label(),
+                badge_fg,
+                badge_bg,
+            ))
+            .child(
+                div()
+                    .flex()
+                    .items_center()
+                    .gap_1()
                     .when(is_recording, |this| {
                         this.child(small_button(
                             format!("keybinding-save-{}", shortcut.id),

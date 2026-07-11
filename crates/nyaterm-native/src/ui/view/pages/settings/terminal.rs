@@ -346,90 +346,66 @@ impl NyaTermApp {
     }
 
     fn keyword_highlights_settings_section(&mut self, cx: &mut Context<Self>) -> impl IntoElement {
-        div()
-            .rounded_md()
-            .border_1()
-            .border_color(rgb(0x2a3140))
-            .bg(rgb(0x151923))
-            .p_4()
-            .child(
-                div()
-                    .text_sm()
-                    .font_weight(FontWeight(700.))
-                    .child("Keyword Highlights"),
-            )
-            .child(
-                div()
-                    .mt_3()
-                    .grid()
-                    .grid_cols(3)
-                    .gap_3()
-                    .child(metric(
-                        "State",
-                        if self.keyword_highlights.enabled {
-                            "enabled".to_string()
-                        } else {
-                            "disabled".to_string()
-                        },
-                    ))
-                    .child(metric(
-                        "Rules",
-                        self.keyword_highlights.rules.len().to_string(),
-                    ))
-                    .child(metric(
-                        "Active",
-                        self.keyword_highlights
-                            .rules
-                            .iter()
-                            .filter(|rule| rule.enabled)
-                            .count()
-                            .to_string(),
-                    )),
-            )
-            .child(
-                div()
-                    .mt_3()
-                    .flex()
-                    .items_center()
-                    .gap_2()
-                    .child(small_button(
+        let rules = self.keyword_highlights.rules.len();
+        let active = self
+            .keyword_highlights
+            .rules
+            .iter()
+            .filter(|rule| rule.enabled)
+            .count();
+        let prompt = match self.keyword_highlight_path_prompt {
+            Some(KeywordHighlightPathPromptKind::Import) => "selecting import file",
+            None => "legacy JSON import",
+        };
+
+        settings_form_section(
+            Some("Keyword highlights"),
+            Some("Match terminal output keywords with colored highlights."),
+            div()
+                .flex()
+                .flex_col()
+                .gap_3()
+                .child(settings_form_row(
+                    "Enabled",
+                    Some(SharedString::from(format!(
+                        "{active}/{rules} rules active · {prompt}"
+                    ))),
+                    settings_switch(
                         "settings-keyword-highlights-enabled",
-                        if self.keyword_highlights.enabled {
-                            "Enabled"
-                        } else {
-                            "Disabled"
-                        },
+                        self.keyword_highlights.enabled,
                         cx.listener(|this, _, _, cx| {
                             this.toggle_keyword_highlights(cx);
                         }),
-                    ))
-                    .child(small_button(
+                    ),
+                ))
+                .child(settings_form_row(
+                    "Across wrapped lines",
+                    Some(SharedString::from(
+                        "Continue matches across soft-wrapped terminal lines.",
+                    )),
+                    settings_switch(
                         "settings-keyword-highlights-wrap",
-                        if self.keyword_highlights.across_wrapped_lines {
-                            "Wrap On"
-                        } else {
-                            "Wrap Off"
-                        },
+                        self.keyword_highlights.across_wrapped_lines,
                         cx.listener(|this, _, _, cx| {
                             this.toggle_keyword_highlights_wrapped(cx);
                         }),
-                    ))
-                    .child(small_button(
+                    ),
+                ))
+                .child(settings_form_row(
+                    "Import rules",
+                    Some(SharedString::from(prompt)),
+                    small_button(
                         "settings-keyword-highlights-import",
                         "Import",
                         cx.listener(|this, _, _, cx| {
                             this.prompt_keyword_highlight_import(cx);
                         }),
-                    ))
-                    .child(div().text_xs().text_color(rgb(0x98a3b8)).child(
-                        match self.keyword_highlight_path_prompt {
-                            Some(KeywordHighlightPathPromptKind::Import) => "selecting import file",
-                            None => "legacy JSON import",
-                        },
-                    )),
-            )
+                    ),
+                )),
+        )
     }
 }
+
 
 fn terminal_feature_card(
     title: &'static str,
