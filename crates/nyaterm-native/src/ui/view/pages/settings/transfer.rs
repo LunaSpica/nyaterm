@@ -5,6 +5,7 @@ impl NyaTermApp {
         &mut self,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
+        // Tauri TransferTab top: path/duplicate switches + queue summary (dense rows).
         let running = self
             .transfer_jobs
             .iter()
@@ -27,196 +28,127 @@ impl NyaTermApp {
             .iter()
             .filter(|job| job.status == TransferJobStatus::Failed)
             .count();
-        let prompt_state = self
-            .transfer_path_prompt
-            .map(transfer_path_prompt_label)
-            .unwrap_or("idle");
+        let download_path = if self.settings.transfer_download_path.trim().is_empty() {
+            "default download dir".to_string()
+        } else {
+            truncate_preview(&self.settings.transfer_download_path, 42)
+        };
+        let policy = self.transfer_duplicate_policy;
 
         div()
             .flex()
             .flex_col()
-            .gap_4()
-            .child(
+            .gap_3()
+            .child(settings_form_section(
+                Some("Paths"),
+                Some("Default download location and save prompts."),
                 div()
-                    .rounded_md()
-                    .border_1()
-                    .border_color(rgb(0x2a3140))
-                    .bg(rgb(0x151923))
-                    .p_4()
-                    .child(
+                    .flex()
+                    .flex_col()
+                    .gap_3()
+                    .child(settings_form_row(
+                        "Download path",
+                        Some(SharedString::from(download_path)),
                         div()
                             .flex()
                             .items_center()
-                            .justify_between()
-                            .gap_3()
-                            .child(
-                                div()
-                                    .text_sm()
-                                    .font_weight(FontWeight(700.))
-                                    .child("Paths & Queue"),
-                            )
-                            .child(status_pill(
-                                if running > 0 { "active" } else { "idle" },
-                                if running > 0 {
-                                    rgb(0x6ee7b7)
-                                } else {
-                                    rgb(0x98a3b8)
-                                },
-                                if running > 0 {
-                                    rgb(0x12342a)
-                                } else {
-                                    rgb(0x202633)
-                                },
+                            .gap_1()
+                            .child(small_button(
+                                "transfer-use-local-draft",
+                                "Use Draft",
+                                cx.listener(|this, _, _, cx| {
+                                    let local_draft = this.transfer_local_path.clone();
+                                    if local_draft.trim().is_empty() {
+                                        this.terminal_status =
+                                            "set a local path draft in Files first".to_string();
+                                        cx.notify();
+                                        return;
+                                    }
+                                    this.settings.transfer_download_path = local_draft;
+                                    this.save_transfer_settings("transfer download path saved", cx);
+                                }),
+                            ))
+                            .child(small_button(
+                                "transfer-clear-download",
+                                "Clear",
+                                cx.listener(|this, _, _, cx| {
+                                    this.settings.transfer_download_path.clear();
+                                    this.save_transfer_settings("transfer download path cleared", cx);
+                                }),
                             )),
-                    )
-                    .child(
-                        div()
-                            .mt_3()
-                            .grid()
-                            .grid_cols(4)
-                            .gap_3()
-                            .child(metric("Queue", self.transfer_jobs.len().to_string()))
-                            .child(metric("Running", running.to_string()))
-                            .child(metric("Completed", completed.to_string()))
-                            .child(metric("Failed", failed.to_string())),
-                    )
-                    .child(
-                        div()
-                            .mt_3()
-                            .grid()
-                            .grid_cols(3)
-                            .gap_3()
-                            .child(metric(
-                                "Remote Draft",
-                                truncate_preview(&self.transfer_remote_path, 38),
-                            ))
-                            .child(metric(
-                                "Local Draft",
-                                truncate_preview(&self.transfer_local_path, 38),
-                            ))
-                            .child(metric("Path Picker", prompt_state.to_string())),
-                    )
-                    .child(
-                        div()
-                            .mt_3()
-                            .grid()
-                            .grid_cols(3)
-                            .gap_2()
-                            .child(transfer_capability_card(
-                                "Download Path",
-                                "Native uses the transfer panel's local path draft and directory picker.",
-                            ))
-                            .child(transfer_capability_card(
-                                "Save Location",
-                                "Ask-before-save is represented by the download directory picker workflow.",
-                            ))
-                            .child(transfer_capability_card(
-                                "Throughput",
-                                "Per-job pause, resume, cancel and progress are available in Transfers.",
-                            )),
-                    ),
-            )
-            .child(
+                    ))
+                    .child(settings_form_row(
+                        "Ask save location",
+                        Some(SharedString::from(
+                            "Prompt for a folder before each download when enabled.",
+                        )),
+                        settings_switch(
+                            "transfer-ask-save",
+                            self.settings.transfer_ask_save_location,
+                            cx.listener(|this, _, _, cx| {
+                                this.toggle_transfer_ask_save_location(cx);
+                            }),
+                        ),
+                    )),
+            ))
+            .child(settings_form_section(
+                Some("Duplicate files"),
+                Some("What to do when a remote or local file already exists."),
                 div()
-                    .rounded_md()
-                    .border_1()
-                    .border_color(rgb(0x2a3140))
-                    .bg(rgb(0x151923))
-                    .p_4()
-                    .child(
-                        div()
-                            .flex()
-                            .items_center()
-                            .justify_between()
-                            .gap_3()
-                            .child(
-                                div()
-                                    .text_sm()
-                                    .font_weight(FontWeight(700.))
-                                    .child("Duplicate Strategy"),
-                            )
-                            .child(status_pill(
-                                transfer_duplicate_policy_status(self.transfer_duplicate_policy),
-                                rgb(0x93c5fd),
-                                rgb(0x17253b),
-                            )),
-                    )
-                    .child(
-                        div()
-                            .mt_3()
-                            .grid()
-                            .grid_cols(3)
-                            .gap_3()
-                            .child(metric(
-                                "Saved Policy",
-                                self.settings.transfer_duplicate_strategy.clone(),
-                            ))
-                            .child(metric(
-                                "Prompt",
-                                if self.transfer_duplicate_policy == SftpDuplicatePolicy::Ask {
-                                    "enabled".to_string()
-                                } else {
-                                    "bypassed".to_string()
-                                },
-                            ))
-                            .child(metric(
-                                "Legacy Key",
-                                "transfer.duplicate_strategy".to_string(),
-                            )),
-                    )
-                    .child(
-                        div()
-                            .mt_3()
-                            .flex()
-                            .items_center()
-                            .gap_2()
-                            .flex_wrap()
-                            .child(policy_button(
-                                "settings-transfer-policy-ask",
-                                "Ask",
-                                self.transfer_duplicate_policy == SftpDuplicatePolicy::Ask,
-                                cx.listener(|this, _, _, cx| {
-                                    this.update_transfer_duplicate_policy(
-                                        SftpDuplicatePolicy::Ask,
-                                        cx,
-                                    );
-                                }),
-                            ))
-                            .child(policy_button(
-                                "settings-transfer-policy-overwrite",
-                                "Overwrite",
-                                self.transfer_duplicate_policy == SftpDuplicatePolicy::Overwrite,
-                                cx.listener(|this, _, _, cx| {
-                                    this.update_transfer_duplicate_policy(
-                                        SftpDuplicatePolicy::Overwrite,
-                                        cx,
-                                    );
-                                }),
-                            ))
-                            .child(policy_button(
-                                "settings-transfer-policy-skip",
-                                "Skip",
-                                self.transfer_duplicate_policy == SftpDuplicatePolicy::Skip,
-                                cx.listener(|this, _, _, cx| {
-                                    this.update_transfer_duplicate_policy(
-                                        SftpDuplicatePolicy::Skip,
-                                        cx,
-                                    );
-                                }),
-                            ))
-                            .child(policy_button(
-                                "settings-transfer-policy-rename",
-                                "Rename",
-                                self.transfer_duplicate_policy == SftpDuplicatePolicy::Rename,
-                                cx.listener(|this, _, _, cx| {
-                                    this.update_transfer_duplicate_policy(
-                                        SftpDuplicatePolicy::Rename,
-                                        cx,
-                                    );
-                                }),
-                            )),
-                    )
-            )
+                    .flex()
+                    .flex_wrap()
+                    .gap_1()
+                    .child(settings_choice_chip(
+                        "transfer-dup-ask",
+                        "Ask",
+                        policy == SftpDuplicatePolicy::Ask,
+                        cx.listener(|this, _, _, cx| {
+                            this.update_transfer_duplicate_policy(SftpDuplicatePolicy::Ask, cx);
+                        }),
+                    ))
+                    .child(settings_choice_chip(
+                        "transfer-dup-overwrite",
+                        "Overwrite",
+                        policy == SftpDuplicatePolicy::Overwrite,
+                        cx.listener(|this, _, _, cx| {
+                            this.update_transfer_duplicate_policy(
+                                SftpDuplicatePolicy::Overwrite,
+                                cx,
+                            );
+                        }),
+                    ))
+                    .child(settings_choice_chip(
+                        "transfer-dup-skip",
+                        "Skip",
+                        policy == SftpDuplicatePolicy::Skip,
+                        cx.listener(|this, _, _, cx| {
+                            this.update_transfer_duplicate_policy(SftpDuplicatePolicy::Skip, cx);
+                        }),
+                    ))
+                    .child(settings_choice_chip(
+                        "transfer-dup-rename",
+                        "Rename",
+                        policy == SftpDuplicatePolicy::Rename,
+                        cx.listener(|this, _, _, cx| {
+                            this.update_transfer_duplicate_policy(SftpDuplicatePolicy::Rename, cx);
+                        }),
+                    )),
+            ))
+            .child(settings_form_section(
+                Some("Queue snapshot"),
+                None,
+                settings_form_row(
+                    "Jobs",
+                    Some(SharedString::from(format!(
+                        "{running} running · {completed} done · {failed} failed · {} total",
+                        self.transfer_jobs.len()
+                    ))),
+                    div()
+                        .text_size(px(11.))
+                        .text_color(rgb(0x8b949e))
+                        .child("Live queue"),
+                ),
+            ))
             .child(self.transfer_editor_settings_section(cx))
             .child(self.transfer_advanced_settings_section(cx))
             .child(self.recording_settings_section(cx))

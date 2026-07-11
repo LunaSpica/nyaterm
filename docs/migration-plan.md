@@ -616,3 +616,7 @@ service boundary first:
 - General: language chips + switch rows (startup restore / confirm close) instead of metric cards.
 - Appearance: theme/font/X11 as form sections with chips and font-size steppers.
 - Interaction: multi-open, clipboard/mouse switches, suggestions, encoding, word separators, tab mouse actions as dense rows.
+
+## 2026-07-11 Terminal + Transfer settings form density
+- Terminal General rewritten to SettingSection/Row switches + scrollback/keepalive steppers (no feature cards).
+- Transfer top section: download path actions, ask-save switch, duplicate policy chips, queue snapshot row.

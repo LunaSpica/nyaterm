@@ -6,351 +6,230 @@ impl NyaTermApp {
         &mut self,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
-        let multi_line_paste = self.settings.terminal_show_multi_line_paste_dialog;
-        let remote_stats = self.settings.ui_show_remote_stats;
-        let process_manager = self.settings.ui_show_process_manager;
-        let docker_manager = self.settings.ui_show_docker_manager;
+        // Tauri TerminalTab general: number rows + feature switches (no metric cards).
+        let scrollback = self.settings.terminal_scrollback_lines.to_string();
+        let keep_alive = self.settings.terminal_keep_alive_interval.to_string();
+        let remote_stats_interval = self.settings.ui_remote_stats_interval.to_string();
+        let process_interval = self.settings.ui_process_manager_interval.to_string();
+        let docker_interval = self.settings.ui_docker_manager_interval.to_string();
 
         div()
             .flex()
             .flex_col()
-            .gap_4()
-            .child(
+            .gap_3()
+            .child(settings_form_section(
+                Some("Session"),
+                Some("Scrollback depth and SSH keep-alive cadence."),
                 div()
-                    .rounded_md()
-                    .border_1()
-                    .border_color(rgb(0x2a3140))
-                    .bg(rgb(0x151923))
-                    .p_4()
-                    .child(
+                    .flex()
+                    .flex_col()
+                    .gap_3()
+                    .child(settings_form_row(
+                        "Scrollback lines",
+                        Some(SharedString::from("How many terminal lines to retain for scrollback.")),
                         div()
-                            .text_sm()
-                            .font_weight(FontWeight(700.))
-                            .child("Terminal General"),
-                    )
-                    .child(
-                        div()
-                            .mt_3()
-                            .grid()
-                            .grid_cols(5)
-                            .gap_3()
-                            .child(metric(
-                                "Font",
-                                format!(
-                                    "{} {}",
-                                    self.settings.terminal_font_family,
-                                    self.settings.terminal_font_size
-                                ),
-                            ))
-                            .child(metric(
-                                "Scrollback",
-                                format!("{} lines", self.settings.terminal_scrollback_lines),
-                            ))
-                            .child(metric(
-                                "Keep Alive",
-                                format!("{} sec", self.settings.terminal_keep_alive_interval),
-                            ))
-                            .child(metric(
-                                "X11 Display",
-                                if self.settings.x11_display.trim().is_empty() {
-                                    "auto".to_string()
-                                } else {
-                                    self.settings.x11_display.clone()
-                                },
-                            ))
-                            .child(metric(
-                                "Paste Guard",
-                                if multi_line_paste {
-                                    "confirm".to_string()
-                                } else {
-                                    "direct".to_string()
-                                },
-                            )),
-                    )
-                    .child(
-                        div()
-                            .mt_3()
-                            .grid()
-                            .grid_cols(4)
-                            .gap_2()
-                            .child(terminal_feature_card(
-                                "Multi-line Paste",
-                                "dialog + direct + line-by-line",
-                                multi_line_paste,
-                            ))
-                            .child(terminal_feature_card(
-                                "Line Numbers",
-                                "prefix rendered terminal rows",
-                                self.settings.terminal_show_line_numbers,
-                            ))
-                            .child(terminal_feature_card(
-                                "Timestamps",
-                                "setting persisted; per-line metadata pending",
-                                self.settings.terminal_show_timestamps,
-                            ))
-                            .child(terminal_feature_card(
-                                "Remote Stats",
-                                "dedicated GPUI page",
-                                remote_stats,
-                            )),
-                    )
-                    .child(
-                        div()
-                            .mt_3()
-                            .grid()
-                            .grid_cols(3)
-                            .gap_2()
-                            .child(terminal_feature_card(
-                                "Process Manager",
-                                "SSH-backed process inspector",
-                                process_manager,
-                            ))
-                            .child(terminal_feature_card(
-                                "Docker Manager",
-                                "SSH-backed container inspector",
-                                docker_manager,
-                            ))
-                            .child(terminal_feature_card(
-                                "Hardware Acceleration",
-                                "stored native rendering preference",
-                                self.settings.terminal_hardware_acceleration,
-                            )),
-                    )
-                    .child(
-                        div()
-                            .mt_3()
                             .flex()
                             .items_center()
-                            .gap_2()
-                            .flex_wrap()
+                            .gap_1()
+                            .child(
+                                div()
+                                    .min_w(px(72.))
+                                    .font_family("JetBrains Mono")
+                                    .text_size(px(12.))
+                                    .font_weight(FontWeight(600.))
+                                    .text_color(rgb(0xc9d1d9))
+                                    .child(scrollback),
+                            )
                             .child(small_button(
                                 "terminal-scrollback-minus",
-                                "-100 lines",
+                                "−100",
                                 cx.listener(|this, _, _, cx| {
                                     this.adjust_terminal_scrollback_lines(-100, cx);
                                 }),
                             ))
                             .child(small_button(
                                 "terminal-scrollback-plus",
-                                "+100 lines",
+                                "+100",
                                 cx.listener(|this, _, _, cx| {
                                     this.adjust_terminal_scrollback_lines(100, cx);
                                 }),
-                            ))
+                            )),
+                    ))
+                    .child(settings_form_row(
+                        "Keep-alive interval",
+                        Some(SharedString::from("Seconds between keep-alive packets (0 disables).")),
+                        div()
+                            .flex()
+                            .items_center()
+                            .gap_1()
+                            .child(
+                                div()
+                                    .min_w(px(56.))
+                                    .font_family("JetBrains Mono")
+                                    .text_size(px(12.))
+                                    .font_weight(FontWeight(600.))
+                                    .text_color(rgb(0xc9d1d9))
+                                    .child(format!("{keep_alive}s")),
+                            )
                             .child(small_button(
                                 "terminal-keepalive-minus",
-                                "-5 sec",
+                                "−5",
                                 cx.listener(|this, _, _, cx| {
                                     this.adjust_terminal_keep_alive_interval(-5, cx);
                                 }),
                             ))
                             .child(small_button(
                                 "terminal-keepalive-plus",
-                                "+5 sec",
+                                "+5",
                                 cx.listener(|this, _, _, cx| {
                                     this.adjust_terminal_keep_alive_interval(5, cx);
                                 }),
-                            ))
-                            .child(small_button(
-                                "terminal-font-size-minus",
-                                "-1 px",
-                                cx.listener(|this, _, _, cx| {
-                                    this.adjust_terminal_font_size(-1, cx);
-                                }),
-                            ))
-                            .child(small_button(
-                                "terminal-font-size-plus",
-                                "+1 px",
-                                cx.listener(|this, _, _, cx| {
-                                    this.adjust_terminal_font_size(1, cx);
-                                }),
-                            ))
-                            .child(small_button(
-                                "terminal-open-search",
-                                "Open Search",
-                                cx.listener(|this, _, window, cx| {
-                                    this.open_terminal_search(window, cx);
-                                }),
                             )),
-                    ),
-            )
-            .child(
+                    )),
+            ))
+            .child(settings_form_section(
+                Some("Display"),
+                None,
                 div()
-                    .rounded_md()
-                    .border_1()
-                    .border_color(rgb(0x2a3140))
-                    .bg(rgb(0x151923))
-                    .p_4()
-                    .child(
-                        div()
-                            .text_sm()
-                            .font_weight(FontWeight(700.))
-                            .child("Terminal Display and Panels"),
-                    )
-                    .child(
-                        div()
-                            .mt_3()
-                            .grid()
-                            .grid_cols(3)
-                            .gap_2()
-                            .child(settings_toggle_button(
-                                "terminal-toggle-padding",
-                                "Workspace Padding",
-                                self.settings.terminal_show_workspace_padding,
-                                cx.listener(|this, _, _, cx| {
-                                    this.toggle_terminal_workspace_padding(cx);
-                                }),
-                            ))
-                            .child(settings_toggle_button(
-                                "terminal-toggle-line-numbers",
-                                "Line Numbers",
-                                self.settings.terminal_show_line_numbers,
-                                cx.listener(|this, _, _, cx| {
-                                    this.toggle_terminal_line_numbers(cx);
-                                }),
-                            ))
-                            .child(settings_toggle_button(
-                                "terminal-toggle-timestamps",
-                                "Timestamps",
-                                self.settings.terminal_show_timestamps,
-                                cx.listener(|this, _, _, cx| {
-                                    this.toggle_terminal_timestamps(cx);
-                                }),
-                            ))
-                            .child(settings_toggle_button(
-                                "terminal-toggle-ms",
-                                "Milliseconds",
-                                self.settings.terminal_show_timestamp_milliseconds,
-                                cx.listener(|this, _, _, cx| {
-                                    this.toggle_terminal_timestamp_milliseconds(cx);
-                                }),
-                            ))
-                            .child(settings_toggle_button(
-                                "terminal-toggle-paste-dialog",
-                                "Paste Dialog",
-                                self.settings.terminal_show_multi_line_paste_dialog,
-                                cx.listener(|this, _, _, cx| {
-                                    this.toggle_multi_line_paste_dialog(cx);
-                                }),
-                            ))
-                            .child(settings_toggle_button(
-                                "terminal-toggle-image-path",
-                                "Image As Path",
-                                self.settings.terminal_paste_image_as_path,
-                                cx.listener(|this, _, _, cx| {
-                                    this.toggle_paste_image_as_path(cx);
-                                }),
-                            ))
-                            .child(settings_toggle_button(
-                                "terminal-toggle-hardware",
-                                "Hardware Accel",
-                                self.settings.terminal_hardware_acceleration,
-                                cx.listener(|this, _, _, cx| {
-                                    this.toggle_terminal_hardware_acceleration(cx);
-                                }),
-                            )),
-                    )
-                    .child(
-                        div()
-                            .mt_3()
-                            .grid()
-                            .grid_cols(3)
-                            .gap_2()
-                            .child(settings_toggle_button(
-                                "terminal-toggle-remote-stats",
-                                "Remote Stats",
-                                self.settings.ui_show_remote_stats,
-                                cx.listener(|this, _, _, cx| {
-                                    this.toggle_remote_stats_panel(cx);
-                                }),
-                            ))
-                            .child(settings_toggle_button(
-                                "terminal-toggle-process-manager",
-                                "Process Manager",
-                                self.settings.ui_show_process_manager,
-                                cx.listener(|this, _, _, cx| {
-                                    this.toggle_process_manager_panel(cx);
-                                }),
-                            ))
-                            .child(settings_toggle_button(
-                                "terminal-toggle-docker-manager",
-                                "Docker Manager",
-                                self.settings.ui_show_docker_manager,
-                                cx.listener(|this, _, _, cx| {
-                                    this.toggle_docker_manager_panel(cx);
-                                }),
-                            )),
-                    )
-                    .child(
-                        div()
-                            .mt_3()
-                            .flex()
-                            .items_center()
-                            .gap_2()
-                            .flex_wrap()
-                            .when(self.settings.ui_show_remote_stats, |this| {
-                                this.child(metric(
-                                    "Stats Interval",
-                                    format!("{} sec", self.settings.ui_remote_stats_interval),
-                                ))
-                                .child(small_button(
-                                    "terminal-stats-interval-minus",
-                                    "-1",
-                                    cx.listener(|this, _, _, cx| {
-                                        this.adjust_remote_stats_interval(-1, cx);
-                                    }),
-                                ))
-                                .child(small_button(
-                                    "terminal-stats-interval-plus",
-                                    "+1",
-                                    cx.listener(|this, _, _, cx| {
-                                        this.adjust_remote_stats_interval(1, cx);
-                                    }),
-                                ))
-                            })
-                            .when(self.settings.ui_show_process_manager, |this| {
-                                this.child(metric(
-                                    "Process Interval",
-                                    format!("{} sec", self.settings.ui_process_manager_interval),
-                                ))
-                                .child(small_button(
-                                    "terminal-process-interval-minus",
-                                    "-1",
-                                    cx.listener(|this, _, _, cx| {
-                                        this.adjust_process_manager_interval(-1, cx);
-                                    }),
-                                ))
-                                .child(small_button(
-                                    "terminal-process-interval-plus",
-                                    "+1",
-                                    cx.listener(|this, _, _, cx| {
-                                        this.adjust_process_manager_interval(1, cx);
-                                    }),
-                                ))
-                            })
-                            .when(self.settings.ui_show_docker_manager, |this| {
-                                this.child(metric(
-                                    "Docker Interval",
-                                    format!("{} sec", self.settings.ui_docker_manager_interval),
-                                ))
-                                .child(small_button(
-                                    "terminal-docker-interval-minus",
-                                    "-1",
-                                    cx.listener(|this, _, _, cx| {
-                                        this.adjust_docker_manager_interval(-1, cx);
-                                    }),
-                                ))
-                                .child(small_button(
-                                    "terminal-docker-interval-plus",
-                                    "+1",
-                                    cx.listener(|this, _, _, cx| {
-                                        this.adjust_docker_manager_interval(1, cx);
-                                    }),
-                                ))
+                    .flex()
+                    .flex_col()
+                    .gap_3()
+                    .child(settings_form_row(
+                        "Line numbers",
+                        Some(SharedString::from("Prefix rendered terminal rows with line numbers.")),
+                        settings_switch(
+                            "terminal-line-numbers",
+                            self.settings.terminal_show_line_numbers,
+                            cx.listener(|this, _, _, cx| {
+                                this.toggle_terminal_line_numbers(cx);
                             }),
-                    ),
-            )
-            .child(self.recording_settings_section(cx))
+                        ),
+                    ))
+                    .child(settings_form_row(
+                        "Timestamps",
+                        Some(SharedString::from("Show per-line timestamps when metadata is available.")),
+                        settings_switch(
+                            "terminal-timestamps",
+                            self.settings.terminal_show_timestamps,
+                            cx.listener(|this, _, _, cx| {
+                                this.toggle_terminal_timestamps(cx);
+                            }),
+                        ),
+                    ))
+                    .child(settings_form_row(
+                        "Timestamp milliseconds",
+                        Some(SharedString::from("Include millisecond precision on timestamps.")),
+                        settings_switch(
+                            "terminal-timestamp-ms",
+                            self.settings.terminal_show_timestamp_milliseconds,
+                            cx.listener(|this, _, _, cx| {
+                                this.toggle_terminal_timestamp_milliseconds(cx);
+                            }),
+                        ),
+                    ))
+                    .child(settings_form_row(
+                        "Workspace padding",
+                        Some(SharedString::from("Add breathing room around the terminal surface.")),
+                        settings_switch(
+                            "terminal-workspace-padding",
+                            self.settings.terminal_show_workspace_padding,
+                            cx.listener(|this, _, _, cx| {
+                                this.toggle_terminal_workspace_padding(cx);
+                            }),
+                        ),
+                    ))
+                    .child(settings_form_row(
+                        "Hardware acceleration",
+                        Some(SharedString::from("Prefer GPU-accelerated terminal rendering when available.")),
+                        settings_switch(
+                            "terminal-hw-accel",
+                            self.settings.terminal_hardware_acceleration,
+                            cx.listener(|this, _, _, cx| {
+                                this.toggle_terminal_hardware_acceleration(cx);
+                            }),
+                        ),
+                    )),
+            ))
+            .child(settings_form_section(
+                Some("Paste & input"),
+                None,
+                div()
+                    .flex()
+                    .flex_col()
+                    .gap_3()
+                    .child(settings_form_row(
+                        "Multi-line paste dialog",
+                        Some(SharedString::from("Confirm multi-line pastes before sending them to the session.")),
+                        settings_switch(
+                            "terminal-multi-line-paste",
+                            self.settings.terminal_show_multi_line_paste_dialog,
+                            cx.listener(|this, _, _, cx| {
+                                this.toggle_multi_line_paste_dialog(cx);
+                            }),
+                        ),
+                    ))
+                    .child(settings_form_row(
+                        "Paste image as path",
+                        Some(SharedString::from("When pasting an image, insert a temp file path instead of binary data.")),
+                        settings_switch(
+                            "terminal-paste-image-path",
+                            self.settings.terminal_paste_image_as_path,
+                            cx.listener(|this, _, _, cx| {
+                                this.toggle_paste_image_as_path(cx);
+                            }),
+                        ),
+                    )),
+            ))
+            .child(settings_form_section(
+                Some("Remote tooling"),
+                Some("SSH-backed inspectors shown in the activity bar."),
+                div()
+                    .flex()
+                    .flex_col()
+                    .gap_3()
+                    .child(settings_form_row(
+                        "Remote stats",
+                        Some(SharedString::from(format!(
+                            "Refresh every {}s when enabled.",
+                            remote_stats_interval
+                        ))),
+                        settings_switch(
+                            "terminal-remote-stats",
+                            self.settings.ui_show_remote_stats,
+                            cx.listener(|this, _, _, cx| {
+                                this.toggle_remote_stats_panel(cx);
+                            }),
+                        ),
+                    ))
+                    .child(settings_form_row(
+                        "Process manager",
+                        Some(SharedString::from(format!(
+                            "Refresh every {}s when enabled.",
+                            process_interval
+                        ))),
+                        settings_switch(
+                            "terminal-process-manager",
+                            self.settings.ui_show_process_manager,
+                            cx.listener(|this, _, _, cx| {
+                                this.toggle_process_manager_panel(cx);
+                            }),
+                        ),
+                    ))
+                    .child(settings_form_row(
+                        "Docker manager",
+                        Some(SharedString::from(format!(
+                            "Refresh every {}s when enabled.",
+                            docker_interval
+                        ))),
+                        settings_switch(
+                            "terminal-docker-manager",
+                            self.settings.ui_show_docker_manager,
+                            cx.listener(|this, _, _, cx| {
+                                this.toggle_docker_manager_panel(cx);
+                            }),
+                        ),
+                    )),
+            ))
     }
 
     pub(super) fn terminal_search_settings_section(
