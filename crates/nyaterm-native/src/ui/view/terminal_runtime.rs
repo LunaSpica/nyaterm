@@ -171,6 +171,11 @@ impl NyaTermApp {
         &self,
         event: &KeyDownEvent,
     ) -> Option<Vec<u8>> {
+        // Prefer structured CSI for modified arrows (Ctrl/Alt) from terminal_key_bytes.
+        if let Some(bytes) = terminal_key_bytes(event) {
+            return Some(bytes);
+        }
+        // Alt-as-meta: ESC + character for shell word ops (Alt+b/f/d, etc.).
         if self.settings.interaction_alt_as_meta
             && event.keystroke.modifiers.alt
             && !event.keystroke.modifiers.control
@@ -184,7 +189,28 @@ impl NyaTermApp {
             bytes.extend_from_slice(input.as_bytes());
             return Some(bytes);
         }
-        terminal_key_bytes(event)
+        // Even when alt-as-meta is off, still emit ESC+letter for Alt+b/f/d word ops
+        // that shells commonly expect (Tauri XTerminal parity).
+        if event.keystroke.modifiers.alt
+            && !event.keystroke.modifiers.control
+            && !event.keystroke.modifiers.platform
+            && !event.keystroke.modifiers.function
+            && !event.keystroke.modifiers.shift
+        {
+            let key = event.keystroke.key.as_str();
+            if matches!(key, "b" | "B" | "f" | "F" | "d" | "D") {
+                return Some(vec![0x1b, key.as_bytes()[0].to_ascii_lowercase()]);
+            }
+            if let Some(input) = event.keystroke.key_char.as_deref() {
+                if input.len() == 1 {
+                    let ch = input.chars().next().unwrap();
+                    if matches!(ch, 'b' | 'B' | 'f' | 'F' | 'd' | 'D') {
+                        return Some(vec![0x1b, ch.to_ascii_lowercase() as u8]);
+                    }
+                }
+            }
+        }
+        None
     }
 
     pub(in crate::ui::view) fn paste_from_clipboard(

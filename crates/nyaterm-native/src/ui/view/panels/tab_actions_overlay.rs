@@ -546,6 +546,7 @@ impl NyaTermApp {
         let reconnect_session_id = session_id.clone();
         let info_session_id = session_id.clone();
         let close_session_id = session_id.clone();
+        let disconnect_session_id = session_id.clone();
         let inactive_anchor = session_id.clone();
         let right_anchor = session_id.clone();
         let reset_color_session_id = session_id.clone();
@@ -860,6 +861,16 @@ impl NyaTermApp {
                                     this.select_session(reconnect_session_id.clone(), cx);
                                     this.close_tab_actions(cx);
                                     this.reconnect_active_session(window, cx);
+                                }),
+                            ))
+                            .child(tab_action_button(
+                                palette,
+                                "tab-actions-disconnect",
+                                "Disconnect",
+                                "Keep tab, drop backend",
+                                cx.listener(move |this, _, _, cx| {
+                                    this.close_tab_actions(cx);
+                                    this.disconnect_session(disconnect_session_id.clone(), cx);
                                 }),
                             ))
                             .child(tab_action_button(

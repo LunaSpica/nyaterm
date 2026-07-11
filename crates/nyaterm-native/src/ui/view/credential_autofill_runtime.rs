@@ -429,8 +429,8 @@ impl NyaTermApp {
         }
 
         let title = match state.kind {
-            CredentialPromptKind::Password => "Password Autofill",
-            CredentialPromptKind::Username => "Username Autofill",
+            CredentialPromptKind::Password => "PASSWORD",
+            CredentialPromptKind::Username => "USERNAME",
         };
         let kind_icon = match state.kind {
             CredentialPromptKind::Password => "🔑",
@@ -450,7 +450,7 @@ impl NyaTermApp {
             list = list.child(
                 div()
                     .id(SharedString::from(format!("credential-suggestion-{index}")))
-                    .h(px(36.))
+                    .h(px(32.))
                     .px_3()
                     .flex()
                     .items_center()
@@ -540,8 +540,9 @@ impl NyaTermApp {
                     .gap_1()
                     .child(
                         div()
-                            .text_size(px(11.))
-                            .text_color(rgb(palette.text_muted))
+                            .text_size(px(10.))
+                            .font_weight(FontWeight(600.))
+                            .text_color(rgb(palette.text_dimmed))
                             .child(format!("{kind_icon} {title}")),
                     )
                     .child(

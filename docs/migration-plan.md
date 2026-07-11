@@ -1141,3 +1141,10 @@ service boundary first:
 - Reconnect writes a cyan `[Reconnecting…]` buffer line before recreating the
   backend session.
 
+## 2026-07-11 Ctrl/Alt arrow CSI + expanded Disconnect
+
+- Terminal input maps Ctrl+Arrow to CSI `1;5` and Alt+Arrow to CSI `1;3`, matching
+  Tauri XTerminal word-navigation sequences; Alt+b/f/d emit ESC-letter word ops.
+- Expanded (centered) Tab Actions dialog gains Disconnect (keep tab) alongside
+  Reconnect/Close.
+
