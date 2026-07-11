@@ -15,11 +15,17 @@ impl NyaTermApp {
         let palette = self.theme_palette();
         let is_active = self.active_session_id.as_deref() == Some(session_id.as_str());
         let mut output = div().flex().flex_col().gap_1();
-        let lines = self
+        let (lines, styled_lines) = self
             .terminal_views
             .get(&session_id)
-            .map(|view| view.screen.lines())
-            .unwrap_or_else(|| self.terminal_screen.lines());
+            .map(|view| {
+                let snap = view.screen.snapshot();
+                (snap.lines, snap.styled_lines)
+            })
+            .unwrap_or_else(|| {
+                let snap = self.terminal_screen.snapshot();
+                (snap.lines, snap.styled_lines)
+            });
         let search_matches = if is_active
             && self.terminal_search_open
             && self.terminal_search_mode == TerminalSearchMode::Buffer
@@ -44,18 +50,33 @@ impl NyaTermApp {
             } else {
                 line
             };
-            let line = if self.settings.terminal_show_line_numbers {
-                format!("{:>5}  {line}", line_index + 1)
-            } else {
-                line
-            };
-            output = output.child(terminal_line_element(
+            let ansi = styled_lines.get(line_index).map(|s| s.as_slice());
+            let content = terminal_line_element(
                 &line,
+                ansi,
                 &self.keyword_highlights,
                 matched_lines.contains(&line_index),
                 active_match_line == Some(line_index),
                 palette,
-            ));
+            );
+            if self.settings.terminal_show_line_numbers {
+                output = output.child(
+                    div()
+                        .flex()
+                        .flex_row()
+                        .items_center()
+                        .child(
+                            div()
+                                .w(px(44.))
+                                .flex_none()
+                                .text_color(rgb(palette.text_dimmed))
+                                .child(format!("{:>5}  ", line_index + 1)),
+                        )
+                        .child(content),
+                );
+            } else {
+                output = output.child(content);
+            }
         }
         let pane_title = self
             .session_display_name(&session_id)

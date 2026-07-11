@@ -19,16 +19,28 @@ pub(super) struct TerminalSearchFlags {
 struct TerminalHighlightSpan {
     text: String,
     color: Option<u32>,
+    bg: Option<u32>,
+    keyword: bool,
 }
 
 pub(super) fn terminal_line_element(
     line: &str,
+    ansi_spans: Option<&[nyaterm_terminal::StyledSpan]>,
     config: &KeywordHighlightConfig,
     search_match: bool,
     active_search_match: bool,
     palette: crate::ui::theme::ThemePalette,
 ) -> impl IntoElement {
-    let spans = keyword_highlight_spans(line, config);
+    let spans = if let Some(ansi) = ansi_spans {
+        if ansi.is_empty() || (ansi.len() == 1 && ansi[0].text.is_empty()) {
+            keyword_highlight_spans(line, config)
+        } else {
+            // Prefer ANSI cell styles; overlay keyword colors on matching substrings later if needed.
+            ansi_to_highlight_spans(ansi, palette, config)
+        }
+    } else {
+        keyword_highlight_spans(line, config)
+    };
     let mut row = div()
         .flex()
         .flex_row()
@@ -51,12 +63,85 @@ pub(super) fn terminal_line_element(
             .whitespace_nowrap()
             .child(span.text);
         if let Some(color) = span.color {
-            child = child.text_color(rgb(color)).bg(rgb(palette.surface));
+            child = child.text_color(rgb(color));
+        }
+        if let Some(bg) = span.bg {
+            child = child.bg(rgb(bg));
+        } else if span.keyword {
+            child = child.bg(rgb(palette.surface));
         }
         row = row.child(child);
     }
 
     row
+}
+
+fn ansi_to_highlight_spans(
+    ansi: &[nyaterm_terminal::StyledSpan],
+    palette: crate::ui::theme::ThemePalette,
+    config: &KeywordHighlightConfig,
+) -> Vec<TerminalHighlightSpan> {
+    // Build plain line for keyword overlay.
+    let line: String = ansi.iter().map(|s| s.text.as_str()).collect();
+    let keyword = keyword_highlight_spans(&line, config);
+    // If no keyword colors, map ANSI styles directly.
+    if keyword.iter().all(|s| s.color.is_none()) {
+        return ansi
+            .iter()
+            .filter(|s| !s.text.is_empty())
+            .map(|s| TerminalHighlightSpan {
+                text: s.text.clone(),
+                color: Some(palette.resolve_cell_fg(s.style)),
+                bg: palette.resolve_cell_bg(s.style),
+                keyword: false,
+            })
+            .collect();
+    }
+    // Merge: walk ANSI with resolved colors, then apply keyword fg where spans overlap keywords.
+    // Simpler approach: render ANSI colors; keyword rules only apply when no ANSI fg set.
+    let mut out = Vec::new();
+    let mut cursor = 0usize;
+    let lowered = line.to_ascii_lowercase();
+    for s in ansi {
+        if s.text.is_empty() {
+            continue;
+        }
+        let start = cursor;
+        let end = cursor + s.text.len();
+        cursor = end;
+        let mut color = palette.resolve_cell_fg(s.style);
+        let bg = palette.resolve_cell_bg(s.style);
+        let mut keyword = false;
+        if s.style.fg.is_none() && config.enabled {
+            // If any keyword rule covers this whole span substring, use keyword color.
+            for rule in config.rules.iter().filter(|r| r.enabled) {
+                let rule_color = parse_hex_rgb(&rule.color_dark).unwrap_or(0x79c0ff);
+                for pattern in rule.patterns.iter().map(|p| p.trim()) {
+                    if pattern.is_empty() { continue; }
+                    let needle = pattern.to_ascii_lowercase();
+                    if lowered[start..end].contains(&needle) {
+                        color = rule_color;
+                        keyword = true;
+                    }
+                }
+            }
+        }
+        out.push(TerminalHighlightSpan {
+            text: s.text.clone(),
+            color: Some(color),
+            bg,
+            keyword,
+        });
+    }
+    if out.is_empty() {
+        out.push(TerminalHighlightSpan {
+            text: " ".to_string(),
+            color: None,
+            bg: None,
+            keyword: false,
+        });
+    }
+    out
 }
 
 fn keyword_highlight_spans(
@@ -67,6 +152,8 @@ fn keyword_highlight_spans(
         return vec![TerminalHighlightSpan {
             text: line.to_string(),
             color: None,
+            bg: None,
+            keyword: false,
         }];
     }
 
@@ -101,6 +188,8 @@ fn keyword_highlight_spans(
             spans.push(TerminalHighlightSpan {
                 text: line[cursor..].to_string(),
                 color: None,
+                bg: None,
+                keyword: false,
             });
             break;
         };
@@ -108,11 +197,15 @@ fn keyword_highlight_spans(
             spans.push(TerminalHighlightSpan {
                 text: line[cursor..start].to_string(),
                 color: None,
+                bg: None,
+                keyword: false,
             });
         }
         spans.push(TerminalHighlightSpan {
             text: line[start..end].to_string(),
             color: Some(color),
+            bg: None,
+            keyword: true,
         });
         cursor = end;
     }
@@ -121,6 +214,8 @@ fn keyword_highlight_spans(
         spans.push(TerminalHighlightSpan {
             text: " ".to_string(),
             color: None,
+            bg: None,
+            keyword: false,
         });
     }
     spans

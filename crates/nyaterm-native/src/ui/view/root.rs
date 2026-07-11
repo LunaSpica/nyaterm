@@ -1,7 +1,7 @@
 use super::*;
 use gpui::{
     Context, IntoElement, KeyDownEvent, MouseButton, MouseMoveEvent, MouseUpEvent,
-    ImageSource, NavigationDirection, Render, SharedString, Window, div, img, rgb,
+    ImageSource, NavigationDirection, ObjectFit, Render, SharedString, Window, div, img, rgb,
 };
 
 impl Render for NyaTermApp {
@@ -86,14 +86,19 @@ impl Render for NyaTermApp {
                     std::path::PathBuf::from(path).into_boxed_path(),
                 )
                 .into();
-                let mut image = img(source)
+                let object_fit = match wallpaper_fit {
+                    "contain" => ObjectFit::Contain,
+                    "stretch" | "fill" => ObjectFit::Fill,
+                    "tile" => ObjectFit::None, // native tile is approximate (no CSS repeat)
+                    _ => ObjectFit::Cover,
+                };
+                let image = img(source)
                     .absolute()
                     .top_0()
                     .left_0()
                     .size_full()
+                    .object_fit(object_fit)
                     .opacity(wallpaper_opacity);
-                // GPUI img object-fit is limited; cover-ish fill is the common wallpaper path.
-                let _ = wallpaper_fit;
                 this.child(image)
             })
             .child(

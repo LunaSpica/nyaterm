@@ -107,8 +107,15 @@ impl NyaTermApp {
         fit: &'static str,
         cx: &mut Context<Self>,
     ) {
-        self.settings.background_image_fit = fit.to_string();
+        let normalized = match fit {
+            "contain" => "contain",
+            "stretch" | "fill" => "stretch",
+            "tile" => "tile",
+            _ => "cover",
+        };
+        self.settings.background_image_fit = normalized.to_string();
         self.save_appearance_settings(cx);
+        self.terminal_status = format!("wallpaper fit → {normalized}");
     }
 
     pub(in crate::ui::view) fn adjust_background_image_opacity(

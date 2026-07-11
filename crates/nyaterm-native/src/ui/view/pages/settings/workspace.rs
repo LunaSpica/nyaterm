@@ -242,11 +242,20 @@ impl NyaTermApp {
                                 ))
                                 .child(settings_choice_chip(
                                     palette,
-                                    "appearance-wallpaper-fit-fill",
-                                    "Fill",
-                                    fit == "fill",
+                                    "appearance-wallpaper-fit-stretch",
+                                    "Stretch",
+                                    fit == "stretch" || fit == "fill",
                                     cx.listener(|this, _, _, cx| {
-                                        this.set_background_image_fit("fill", cx);
+                                        this.set_background_image_fit("stretch", cx);
+                                    }),
+                                ))
+                                .child(settings_choice_chip(
+                                    palette,
+                                    "appearance-wallpaper-fit-tile",
+                                    "Tile",
+                                    fit == "tile",
+                                    cx.listener(|this, _, _, cx| {
+                                        this.set_background_image_fit("tile", cx);
                                     }),
                                 )),
                         ))

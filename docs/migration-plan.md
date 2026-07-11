@@ -894,3 +894,9 @@ service boundary first:
 
 ## 2026-07-11 Residual chrome hardcode cleanup
 - Map remaining github-dark shell tokens (border/bg/muted) in migration, process/workspace views, panel resize handles, terminal actions, tunnels residual hover, and bottom send field to live ThemePalette.
+
+## 2026-07-11 Terminal ANSI SGR + wallpaper ObjectFit
+- `nyaterm-terminal` cells store SGR style (fg/bg 0..=15, bold, reverse); CSI `m` applies ANSI/bright and 256-index 0..=15.
+- `ThemePalette` gains `terminal_cursor`, `terminal_selection`, and full Tauri 16-color `terminal_ansi` for all 17 themes.
+- Terminal canvas paints styled spans with palette-resolved ANSI colors (bold promotes 0..=7 to bright).
+- Wallpaper layer uses GPUI `ObjectFit` (`cover`/`contain`/`fill`/`none`); Settings chips match Tauri cover/contain/stretch/tile (`fill` aliases stretch).
