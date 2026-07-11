@@ -900,3 +900,9 @@ service boundary first:
 - `ThemePalette` gains `terminal_cursor`, `terminal_selection`, and full Tauri 16-color `terminal_ansi` for all 17 themes.
 - Terminal canvas paints styled spans with palette-resolved ANSI colors (bold promotes 0..=7 to bright).
 - Wallpaper layer uses GPUI `ObjectFit` (`cover`/`contain`/`fill`/`none`); Settings chips match Tauri cover/contain/stretch/tile (`fill` aliases stretch).
+
+## 2026-07-11 Terminal cursor + chrome densify
+- Terminal line painter draws block cursor from screen cursor_row/col using `terminal_cursor`/`terminal_bg`.
+- Search match rows use `terminal_selection` instead of surface/hover chrome.
+- Remove non-Tauri debug toolbar (Start Local/Probe/Dup/etc) from active session terminal surface; keep empty-session bootstrap actions.
+- Drop bottom timestamps/gpu debug pills; tighter line stacking (no inter-line gap); search bar docks at top-right.

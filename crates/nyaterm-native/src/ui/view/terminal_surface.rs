@@ -14,18 +14,17 @@ impl NyaTermApp {
     ) -> impl IntoElement {
         let palette = self.theme_palette();
         let is_active = self.active_session_id.as_deref() == Some(session_id.as_str());
-        let mut output = div().flex().flex_col().gap_1();
-        let (lines, styled_lines) = self
+        let mut output = div().flex().flex_col();
+        let snapshot = self
             .terminal_views
             .get(&session_id)
-            .map(|view| {
-                let snap = view.screen.snapshot();
-                (snap.lines, snap.styled_lines)
-            })
-            .unwrap_or_else(|| {
-                let snap = self.terminal_screen.snapshot();
-                (snap.lines, snap.styled_lines)
-            });
+            .map(|view| view.screen.snapshot())
+            .unwrap_or_else(|| self.terminal_screen.snapshot());
+        let lines = snapshot.lines;
+        let styled_lines = snapshot.styled_lines;
+        let cursor_row = snapshot.cursor_row;
+        let cursor_col = snapshot.cursor_col;
+        let show_cursor = is_active && !session_id.is_empty();
         let search_matches = if is_active
             && self.terminal_search_open
             && self.terminal_search_mode == TerminalSearchMode::Buffer
@@ -57,6 +56,11 @@ impl NyaTermApp {
                 &self.keyword_highlights,
                 matched_lines.contains(&line_index),
                 active_match_line == Some(line_index),
+                if show_cursor && line_index == cursor_row {
+                    Some(cursor_col)
+                } else {
+                    None
+                },
                 palette,
             );
             if self.settings.terminal_show_line_numbers {
@@ -183,80 +187,61 @@ impl NyaTermApp {
                             this.send_terminal_input(bytes, cx);
                         }
                     }))
-                    .child(
-                        div()
-                            .h(px(36.))
-                            .flex()
-                            .items_center()
-                            .gap_2()
-                            .px_3()
-                            .border_b_1()
-                            .border_color(rgb(palette.border))
-                            .bg(rgb(palette.input))
-                            .child(small_button(palette, 
-                                "terminal-start-local",
-                                "Start Local",
-                                cx.listener(|this, _, window, cx| {
-                                    this.start_local_session(window, cx);
-                                }),
-                            ))
-                            .child(small_button(palette, 
-                                "terminal-probe",
-                                "Probe",
-                                cx.listener(|this, _, _, cx| {
-                                    this.send_probe_command(cx);
-                                }),
-                            ))
-                            .child(small_button(palette, 
-                                "terminal-paste",
-                                "Paste",
-                                cx.listener(|this, _, window, cx| {
-                                    this.paste_from_clipboard(window, cx);
-                                }),
-                            ))
-                            .child(small_button(palette, 
-                                "terminal-actions",
-                                "Actions",
-                                cx.listener(|this, _, window, cx| {
-                                    this.open_terminal_actions(window, cx);
-                                }),
-                            ))
-                            .child(small_button(palette, 
-                                "terminal-reconnect",
-                                "Reconnect",
-                                cx.listener(|this, _, window, cx| {
-                                    this.reconnect_active_session(window, cx);
-                                }),
-                            ))
-                            .child(small_button(palette, 
-                                "terminal-duplicate-run",
-                                "Dup+Run",
-                                cx.listener(|this, _, window, cx| {
-                                    this.open_startup_command_dialog(window, cx);
-                                }),
-                            ))
-                            .child(small_button(palette, 
-                                "terminal-close",
-                                "Close",
-                                cx.listener(|this, _, _, cx| {
-                                    this.close_active_session(cx);
-                                }),
-                            ))
-                            .child(small_button(palette, 
-                                "terminal-clear",
-                                "Clear",
-                                cx.listener(|this, _, _, cx| {
-                                    this.clear_terminal(cx);
-                                }),
-                            ))
-                            .child(div().flex_1())
-                            .child(
-                                div()
-                                    .text_xs()
-                                    .text_color(rgb(palette.text_muted))
-                                    .child(self.terminal_status.clone()),
-                            ),
-                    )
+                    .when(!session_id.is_empty() && !self.terminal_status.trim().is_empty() && !is_active, |this| {
+                        this.child(
+                            div()
+                                .h(px(22.))
+                                .flex()
+                                .items_center()
+                                .px_3()
+                                .border_b_1()
+                                .border_color(rgb(palette.border))
+                                .bg(rgb(palette.input))
+                                .child(
+                                    div()
+                                        .text_xs()
+                                        .text_color(rgb(palette.text_muted))
+                                        .child(self.terminal_status.clone()),
+                                ),
+                        )
+                    })
+                    // Empty-workspace bootstrap actions stay available when no session is selected.
+                    .when(session_id.is_empty(), |this| {
+                        this.child(
+                            div()
+                                .h(px(36.))
+                                .flex()
+                                .items_center()
+                                .gap_2()
+                                .px_3()
+                                .border_b_1()
+                                .border_color(rgb(palette.border))
+                                .bg(rgb(palette.input))
+                                .child(small_button(
+                                    palette,
+                                    "terminal-start-local",
+                                    "Start Local",
+                                    cx.listener(|this, _, window, cx| {
+                                        this.start_local_session(window, cx);
+                                    }),
+                                ))
+                                .child(small_button(
+                                    palette,
+                                    "terminal-actions",
+                                    "Actions",
+                                    cx.listener(|this, _, window, cx| {
+                                        this.open_terminal_actions(window, cx);
+                                    }),
+                                ))
+                                .child(div().flex_1())
+                                .child(
+                                    div()
+                                        .text_xs()
+                                        .text_color(rgb(palette.text_muted))
+                                        .child(self.terminal_status.clone()),
+                                ),
+                        )
+                    })
                     .child(
                         div()
                             .id(SharedString::from("terminal-output"))
@@ -284,33 +269,6 @@ impl NyaTermApp {
                                 cx.notify();
                             }))
                             .child(output),
-                    )
-                    .child(
-                        div()
-                            .absolute()
-                            .bottom(px(8.))
-                            .left(px(10.))
-                            .flex()
-                            .items_center()
-                            .gap_2()
-                            .child(status_pill(
-                                if self.settings.terminal_show_timestamps {
-                                    "timestamps"
-                                } else {
-                                    "plain"
-                                },
-                                rgb(palette.accent),
-                                rgb(palette.hover),
-                            ))
-                            .child(status_pill(
-                                if self.settings.terminal_hardware_acceleration {
-                                    "gpu"
-                                } else {
-                                    "cpu"
-                                },
-                                rgb(palette.success),
-                                rgb(palette.hover),
-                            )),
                     )
                     .when(is_active && self.terminal_search_open, |this| {
                         this.child(self.terminal_search_bar(cx))
@@ -420,7 +378,7 @@ impl NyaTermApp {
         div()
             .id(SharedString::from("terminal-search-bar"))
             .absolute()
-            .top(px(44.))
+            .top(px(8.))
             .right(px(8.))
             .w(px(420.))
             .max_w_full()

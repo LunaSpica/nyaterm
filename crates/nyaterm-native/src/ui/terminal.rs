@@ -29,18 +29,21 @@ pub(super) fn terminal_line_element(
     config: &KeywordHighlightConfig,
     search_match: bool,
     active_search_match: bool,
+    cursor_col: Option<usize>,
     palette: crate::ui::theme::ThemePalette,
 ) -> impl IntoElement {
-    let spans = if let Some(ansi) = ansi_spans {
+    let mut spans = if let Some(ansi) = ansi_spans {
         if ansi.is_empty() || (ansi.len() == 1 && ansi[0].text.is_empty()) {
             keyword_highlight_spans(line, config)
         } else {
-            // Prefer ANSI cell styles; overlay keyword colors on matching substrings later if needed.
             ansi_to_highlight_spans(ansi, palette, config)
         }
     } else {
         keyword_highlight_spans(line, config)
     };
+    if let Some(col) = cursor_col {
+        spans = apply_block_cursor(spans, col, palette);
+    }
     let mut row = div()
         .flex()
         .flex_row()
@@ -48,20 +51,25 @@ pub(super) fn terminal_line_element(
         .min_h(px(18.))
         .line_height(px(18.))
         .whitespace_nowrap();
+    // Search match chrome: use terminal selection/find colors (Tauri TerminalColors).
     if active_search_match {
         row = row
-            .bg(rgb(palette.hover))
+            .bg(rgb(palette.terminal_selection))
             .border_l_2()
             .border_color(rgb(palette.warning));
     } else if search_match {
-        row = row.bg(rgb(palette.surface));
+        row = row.bg(rgb(palette.terminal_selection));
     }
 
     for span in spans {
         let mut child = div()
             .line_height(px(18.))
             .whitespace_nowrap()
-            .child(span.text);
+            .child(if span.text.is_empty() {
+                " ".to_string()
+            } else {
+                span.text
+            });
         if let Some(color) = span.color {
             child = child.text_color(rgb(color));
         }
@@ -74,6 +82,63 @@ pub(super) fn terminal_line_element(
     }
 
     row
+}
+
+/// Paint a block cursor by restyling the cell at `cursor_col` (char index).
+fn apply_block_cursor(
+    spans: Vec<TerminalHighlightSpan>,
+    cursor_col: usize,
+    palette: crate::ui::theme::ThemePalette,
+) -> Vec<TerminalHighlightSpan> {
+    let mut flat: Vec<(char, Option<u32>, Option<u32>, bool)> = Vec::new();
+    for span in spans {
+        let color = span.color;
+        let bg = span.bg;
+        let keyword = span.keyword;
+        if span.text.is_empty() {
+            continue;
+        }
+        for ch in span.text.chars() {
+            flat.push((ch, color, bg, keyword));
+        }
+    }
+    // Ensure the cursor column exists even on a short/empty line.
+    while flat.len() <= cursor_col {
+        flat.push((' ', None, None, false));
+    }
+    if let Some(cell) = flat.get_mut(cursor_col) {
+        // Block cursor: invert with theme cursor color (Tauri xterm cursor).
+        cell.1 = Some(palette.terminal_bg);
+        cell.2 = Some(palette.terminal_cursor);
+        cell.3 = false;
+    }
+
+    // Re-compress adjacent cells with identical style.
+    let mut out = Vec::new();
+    let mut i = 0;
+    while i < flat.len() {
+        let (ch, color, bg, keyword) = flat[i];
+        let mut text = String::new();
+        text.push(ch);
+        let mut j = i + 1;
+        while j < flat.len() {
+            let (ch2, c2, b2, k2) = flat[j];
+            if c2 == color && b2 == bg && k2 == keyword {
+                text.push(ch2);
+                j += 1;
+            } else {
+                break;
+            }
+        }
+        out.push(TerminalHighlightSpan {
+            text,
+            color,
+            bg,
+            keyword,
+        });
+        i = j;
+    }
+    out
 }
 
 fn ansi_to_highlight_spans(
