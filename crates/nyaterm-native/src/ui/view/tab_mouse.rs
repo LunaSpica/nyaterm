@@ -65,6 +65,52 @@ impl Render for SessionTabDragPreview {
     }
 }
 
+/// Hover tooltip for session tabs (Tauri TabBar host / SSH address).
+pub(in crate::ui::view) struct SessionTabTooltip {
+    pub title: String,
+    pub lines: Vec<String>,
+}
+
+impl SessionTabTooltip {
+    pub(in crate::ui::view) fn new(title: String, lines: Vec<String>) -> Self {
+        Self { title, lines }
+    }
+}
+
+impl Render for SessionTabTooltip {
+    fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
+        let mut body = div()
+            .flex()
+            .flex_col()
+            .gap_1()
+            .child(
+                div()
+                    .text_size(px(12.))
+                    .font_weight(FontWeight(700.))
+                    .text_color(rgb(0xe5edf7))
+                    .child(self.title.clone()),
+            );
+        for line in &self.lines {
+            body = body.child(
+                div()
+                    .text_size(px(11.))
+                    .text_color(rgb(0x8f98aa))
+                    .child(line.clone()),
+            );
+        }
+        div()
+            .px_3()
+            .py_2()
+            .max_w(px(280.))
+            .rounded_md()
+            .border_1()
+            .border_color(rgb(0x334155))
+            .bg(rgba(0x151b24f2))
+            .shadow_lg()
+            .child(body)
+    }
+}
+
 #[derive(Debug, Clone, Copy)]
 pub(in crate::ui::view) enum TabMouseActionTarget {
     Double,

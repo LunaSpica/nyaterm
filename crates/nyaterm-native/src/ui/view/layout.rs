@@ -10,20 +10,20 @@ mod workspace;
 impl NyaTermApp {
     pub(in crate::ui::view) fn status_bar(&mut self, cx: &mut Context<Self>) -> impl IntoElement {
         let sessions = self.session_manager.list_sessions().unwrap_or_default();
-        let active_session = self
-            .pending_session_name
-            .clone()
-            .or_else(|| self.active_session_name())
-            .or_else(|| {
-                self.active_session_id
-                    .as_ref()
-                    .map(|session_id| format!("Session {}", short_id(session_id)))
-            })
-            .unwrap_or_else(|| "no session".to_string());
-        let session_status = if self.pending_session_name.is_some() {
-            "connecting".to_string()
-        } else if self.active_session_id.is_some() {
-            active_session
+        let session_status = if let Some(pending) = self.pending_session_name.as_ref() {
+            format!("connecting {pending}")
+        } else if let Some(session_id) = self.active_session_id.as_deref() {
+            let name = self
+                .session_display_name(session_id)
+                .unwrap_or_else(|| short_id(session_id).to_string());
+            let mut status = name;
+            if let Some(endpoint) = self.session_endpoint(session_id) {
+                status = format!("{status} · {endpoint}");
+            }
+            if self.is_session_disconnected(session_id) {
+                status = format!("{status} · disconnected");
+            }
+            status
         } else {
             "idle".to_string()
         };
@@ -486,7 +486,18 @@ impl NyaTermApp {
     }
 
     fn title_context_label(&self) -> String {
-        if let Some(name) = self.active_session_name() {
+        if let Some(session_id) = self.active_session_id.as_deref() {
+            let name = self
+                .session_display_name(session_id)
+                .unwrap_or_else(|| short_id(session_id).to_string());
+            if let Some(endpoint) = self.session_endpoint(session_id) {
+                let status = if self.is_session_disconnected(session_id) {
+                    " · disconnected"
+                } else {
+                    ""
+                };
+                return format!("{name} — {endpoint}{status}");
+            }
             return name;
         }
         if let Some(pending) = self.pending_session_name.as_ref() {

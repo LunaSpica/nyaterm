@@ -100,7 +100,7 @@ pub(in crate::ui::view) use connections::{
     ConnectionDragKind, ConnectionDragPayload, ConnectionDragPreview, ConnectionDropPosition, ConnectionDropTarget,
 };
 pub(in crate::ui::view) use tab_mouse::{
-    SessionTabDragPayload, SessionTabDragPreview, TabMouseActionTarget, tab_mouse_action_label,
+    SessionTabDragPayload, SessionTabDragPreview, SessionTabTooltip, TabMouseActionTarget, tab_mouse_action_label,
 };
 pub(in crate::ui::view) use transfer_widgets::{
     compact_transfer_job_row, duplicate_decision_label, duplicate_policy_label, entry_kind_label,

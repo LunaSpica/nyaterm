@@ -1341,3 +1341,9 @@ service boundary first:
   panel, and quick-pick of recent saved connections.
 - Connecting placeholder tab uses connect icon + warning top accent (Tauri connecting chrome).
 - Global session tab strip uses horizontal overflow scroll (Tauri tab-strip-scroll).
+
+## 2026-07-11 Tab hover tooltips + title/status endpoint
+
+- Session tabs (global + multi-leaf) show GPUI hover tooltips with endpoint,
+  SSH address, cwd, and disconnected hint (Tauri TabBar tooltip content).
+- Title bar center label and status bar session chip include endpoint/disconnect state.

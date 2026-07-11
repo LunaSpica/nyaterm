@@ -107,6 +107,8 @@ impl NyaTermApp {
                 let close_session_id = session.id.clone();
                 let tab_number = tab_index + 1;
                 let kind_icon = session_kind_icon_path(session.kind);
+                let tooltip_title = display_name.clone();
+                let tooltip_lines = self.session_tab_tooltip_lines(&session.id);
                 let drag_payload = SessionTabDragPayload {
                     session_id: session.id.clone(),
                     display_name: display_name.clone(),
@@ -340,6 +342,12 @@ impl NyaTermApp {
                                     this.close_session(close_session_id.clone(), cx);
                                 })),
                         )
+                        .tooltip(move |_, cx| {
+                            cx.new(|_| {
+                                SessionTabTooltip::new(tooltip_title.clone(), tooltip_lines.clone())
+                            })
+                            .into()
+                        })
                         .on_click(cx.listener(move |this, event: &ClickEvent, window, cx| {
                             this.handle_session_tab_click(session_id.clone(), event, window, cx);
                         })),

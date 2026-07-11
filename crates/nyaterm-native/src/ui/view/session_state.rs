@@ -106,6 +106,31 @@ impl NyaTermApp {
         }
     }
 
+    /// Lines for tab hover tooltip (endpoint + SSH address when available).
+    pub(in crate::ui::view) fn session_tab_tooltip_lines(
+        &self,
+        session_id: &str,
+    ) -> Vec<String> {
+        let mut lines = Vec::new();
+        if let Some(endpoint) = self.session_endpoint(session_id) {
+            lines.push(endpoint);
+        }
+        if let Some(address) = self.session_ssh_address(session_id) {
+            if lines.first().map(String::as_str) != Some(address.as_str()) {
+                lines.push(address);
+            }
+        }
+        if self.is_session_disconnected(session_id) {
+            lines.push("Disconnected — press Enter to reconnect".to_string());
+        }
+        if let Some(cwd) = self.session_cwds.get(session_id) {
+            if !cwd.trim().is_empty() {
+                lines.push(format!("cwd {cwd}"));
+            }
+        }
+        lines
+    }
+
     fn active_session_info_line(&self) -> Option<String> {
         let session_id = self.active_session_id.as_deref()?;
         let name = self.session_display_name(session_id)?;

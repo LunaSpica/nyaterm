@@ -6,8 +6,8 @@ use crate::ui::models::{
     TabDockEdge, TabDockZone, TerminalWindowNode, WorkspacePaneNode, WorkspaceSplitDirection,
 };
 use super::super::{
-    NyaTermApp, SessionTabDragPayload, SessionTabDragPreview, ThemePalette, session_kind_label,
-    short_id, truncate_preview,
+    NyaTermApp, SessionTabDragPayload, SessionTabDragPreview, SessionTabTooltip, ThemePalette,
+    session_kind_label, short_id, truncate_preview,
 };
 
 impl NyaTermApp {
@@ -176,6 +176,8 @@ impl NyaTermApp {
                     } else {
                         truncate_preview(&title, 18)
                     };
+                    let tooltip_title = title.clone();
+                    let tooltip_lines = self.session_tab_tooltip_lines(tab_id);
                     strip = strip.child(
                         div()
                             .id(SharedString::from(format!("tw-tab-{leaf_id}-{select_id}")))
@@ -227,6 +229,15 @@ impl NyaTermApp {
                                         .w(px(3.))
                                         .bg(accent),
                                 )
+                            })
+                            .tooltip(move |_, cx| {
+                                cx.new(|_| {
+                                    SessionTabTooltip::new(
+                                        tooltip_title.clone(),
+                                        tooltip_lines.clone(),
+                                    )
+                                })
+                                .into()
                             })
                             .on_click(cx.listener(move |this, _, window, cx| {
                                 this.activate_terminal_window_tab(
