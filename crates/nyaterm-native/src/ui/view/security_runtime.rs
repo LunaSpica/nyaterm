@@ -47,6 +47,7 @@ impl NyaTermApp {
         self.security_secrets_unlocked = false;
         self.security_revealed_passwords.clear();
         self.security_revealed_credentials.clear();
+        self.security_otp_codes.clear();
         self.security_unlock_prompt_open = false;
         self.security_unlock_draft.clear();
         self.security_unlock_error = None;
@@ -691,6 +692,55 @@ impl NyaTermApp {
             }
         }
         cx.notify();
+    }
+
+    pub(in crate::ui::view) fn refresh_visible_security_otp_codes(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if self.security_secrets_locked() {
+            return;
+        }
+        let ids = self
+            .connection_otp_entries
+            .iter()
+            .filter(|entry| entry.has_secret || entry.otp_type.eq_ignore_ascii_case("totp"))
+            .map(|entry| entry.id.clone())
+            .collect::<Vec<_>>();
+        let mut refreshed = 0usize;
+        for otp_id in ids {
+            match self.otp_provider.request_otp_code(&otp_id) {
+                Ok(Some(code)) => {
+                    self.security_otp_codes.insert(otp_id, code);
+                    refreshed += 1;
+                }
+                Ok(None) | Err(_) => {}
+            }
+        }
+        if refreshed > 0 {
+            self.security_status = format!("refreshed {refreshed} OTP code(s)");
+        }
+        let _ = window;
+        cx.notify();
+    }
+
+    pub(in crate::ui::view) fn copy_security_otp_code(
+        &mut self,
+        otp_id: String,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if let Some(code) = self.security_otp_codes.get(&otp_id).cloned() {
+            if code != "------" && !code.trim().is_empty() {
+                cx.write_to_clipboard(ClipboardItem::new_string(code));
+                self.security_status = format!("OTP code copied ({})", compact_id(&otp_id));
+                self.terminal_status = "OTP code copied".to_string();
+                cx.notify();
+                return;
+            }
+        }
+        self.generate_security_otp_code(otp_id, window, cx);
     }
 
     pub(in crate::ui::view) fn pick_security_key_file(

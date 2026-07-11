@@ -323,6 +323,87 @@ impl NyaTermApp {
         cx.notify();
     }
 
+    pub(in crate::ui::view) fn set_connection_editor_shell_path(
+        &mut self,
+        shell_path: &str,
+        cx: &mut Context<Self>,
+    ) {
+        if let Some(editor) = self.connection_editor.as_mut() {
+            editor.shell_path = shell_path.to_string();
+            editor.error = None;
+            self.terminal_status = format!("shell path: {shell_path}");
+        }
+        cx.notify();
+    }
+
+    pub(in crate::ui::view) fn prompt_connection_editor_shell_path(
+        &mut self,
+        cx: &mut Context<Self>,
+    ) {
+        let options = PathPromptOptions {
+            files: true,
+            directories: false,
+            multiple: false,
+            prompt: Some(SharedString::from("Select shell executable")),
+        };
+        let receiver = cx.prompt_for_paths(options);
+        self.terminal_status = "selecting shell executable".to_string();
+        cx.spawn(async move |this, cx| {
+            let selected = match receiver.await {
+                Ok(Ok(Some(paths))) => paths.into_iter().next(),
+                _ => None,
+            };
+            let _ = this.update(cx, |this, cx| {
+                if let Some(path) = selected {
+                    if let Some(editor) = this.connection_editor.as_mut() {
+                        editor.shell_path = path.display().to_string();
+                        editor.error = None;
+                    }
+                    this.terminal_status = format!("shell path: {}", path.display());
+                } else {
+                    this.terminal_status = "shell path selection cancelled".to_string();
+                }
+                cx.notify();
+            });
+        })
+        .detach();
+        cx.notify();
+    }
+
+    pub(in crate::ui::view) fn prompt_connection_editor_working_dir(
+        &mut self,
+        cx: &mut Context<Self>,
+    ) {
+        let options = PathPromptOptions {
+            files: false,
+            directories: true,
+            multiple: false,
+            prompt: Some(SharedString::from("Select working directory")),
+        };
+        let receiver = cx.prompt_for_paths(options);
+        self.terminal_status = "selecting working directory".to_string();
+        cx.spawn(async move |this, cx| {
+            let selected = match receiver.await {
+                Ok(Ok(Some(paths))) => paths.into_iter().next(),
+                _ => None,
+            };
+            let _ = this.update(cx, |this, cx| {
+                if let Some(path) = selected {
+                    if let Some(editor) = this.connection_editor.as_mut() {
+                        editor.working_dir = path.display().to_string();
+                        editor.error = None;
+                    }
+                    this.terminal_status = format!("working dir: {}", path.display());
+                } else {
+                    this.terminal_status = "working directory selection cancelled".to_string();
+                }
+                cx.notify();
+            });
+        })
+        .detach();
+        cx.notify();
+    }
+
     pub(in crate::ui::view) fn toggle_connection_editor_flag(
         &mut self,
         flag: ConnectionEditorToggle,
