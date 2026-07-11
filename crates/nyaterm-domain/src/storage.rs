@@ -2094,7 +2094,7 @@ impl ConnectionStore {
         Ok(())
     }
 
-        pub fn load_terminal_window_layout(
+    pub fn load_terminal_window_layout(
         &self,
     ) -> Result<Option<crate::models::RestorableTerminalWindowNode>, StorageError> {
         let value = self.load_settings_value()?;
@@ -2120,6 +2120,36 @@ impl ConnectionStore {
             None => serde_json::Value::Null,
         };
         set_nested_json_value(&mut value, &["ui", "terminal_window_layout"], encoded);
+        self.save_settings_value(&value)?;
+        Ok(())
+    }
+
+    pub fn load_workspace_pane_layout(
+        &self,
+    ) -> Result<Option<crate::models::RestorableWorkspacePaneNode>, StorageError> {
+        let value = self.load_settings_value()?;
+        let Some(raw) = json_path(&value, &["ui", "workspace_pane_layout"]) else {
+            return Ok(None);
+        };
+        if raw.is_null() {
+            return Ok(None);
+        }
+        match serde_json::from_value(raw.clone()) {
+            Ok(node) => Ok(Some(node)),
+            Err(_) => Ok(None),
+        }
+    }
+
+    pub fn save_workspace_pane_layout(
+        &self,
+        layout: Option<&crate::models::RestorableWorkspacePaneNode>,
+    ) -> Result<(), StorageError> {
+        let mut value = self.load_settings_value()?;
+        let encoded = match layout {
+            Some(node) => serde_json::to_value(node)?,
+            None => serde_json::Value::Null,
+        };
+        set_nested_json_value(&mut value, &["ui", "workspace_pane_layout"], encoded);
         self.save_settings_value(&value)?;
         Ok(())
     }
@@ -6155,6 +6185,30 @@ mod tests {
             Some("encrypted")
         );
 
+        std::fs::remove_dir_all(dir).ok();
+    }
+
+    #[test]
+    fn workspace_pane_layout_roundtrip() {
+        let dir = unique_temp_dir("workspace-pane-layout");
+        let store = ConnectionStore::open(&dir).expect("store");
+        let layout = crate::models::RestorableWorkspacePaneNode::Split {
+            id: "split-1".to_string(),
+            direction: "vertical".to_string(),
+            ratio: 0.4,
+            first: Box::new(crate::models::RestorableWorkspacePaneNode::Leaf { tab_index: 0 }),
+            second: Box::new(crate::models::RestorableWorkspacePaneNode::Leaf { tab_index: 1 }),
+        };
+        store
+            .save_workspace_pane_layout(Some(&layout))
+            .expect("save");
+        let loaded = store
+            .load_workspace_pane_layout()
+            .expect("load")
+            .expect("some");
+        assert_eq!(loaded, layout);
+        store.save_workspace_pane_layout(None).expect("clear");
+        assert!(store.load_workspace_pane_layout().expect("load").is_none());
         std::fs::remove_dir_all(dir).ok();
     }
 

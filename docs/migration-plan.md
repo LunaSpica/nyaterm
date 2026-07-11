@@ -1279,3 +1279,12 @@ service boundary first:
 - When `startup_restore` is enabled, native sequentially reconnects saved tabs on
   launch, then restores multi-leaf `terminal_window_layout` if enabled.
 
+## 2026-07-11 workspace_pane_layout persistence
+
+- Domain stores native global pane splits as `ui.workspace_pane_layout`
+  (`RestorableWorkspacePaneNode` with ordered open-tab indexes).
+- Distinct from Tauri per-tab `RestorablePaneNode` trees and from multi-leaf
+  `terminal_window_layout`.
+- Native split/unsplit/resize/prune persist when startup restore + window layout
+  restore are enabled; startup restores panes after open_tabs (and after multi-leaf
+  if that wins and skips panes).

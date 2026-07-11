@@ -409,12 +409,15 @@ impl NyaTermApp {
             !self.settings.startup_restore_window_layout;
         self.save_general_settings(cx);
         if !self.settings.startup_restore_window_layout {
-            // Clear stored layout when the user disables restore.
+            // Clear stored layouts when the user disables restore.
             let _ = ConnectionStore::open_with_portable_key_path(
                 self.runtime.config_dir(),
                 self.runtime.portable_key_path().map(ToOwned::to_owned),
             )
-            .and_then(|store| store.save_terminal_window_layout(None));
+            .and_then(|store| {
+                store.save_terminal_window_layout(None)?;
+                store.save_workspace_pane_layout(None)
+            });
         }
     }
 

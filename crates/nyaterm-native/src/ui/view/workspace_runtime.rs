@@ -14,6 +14,7 @@ impl NyaTermApp {
         let Some(root) = self.workspace_split.take() else {
             return;
         };
+        let before = Some(root.clone());
         let live_ids = self.live_session_ids();
         match root.prune(&live_ids) {
             Some(node) if node.is_split() => {
@@ -29,6 +30,9 @@ impl NyaTermApp {
             _ => {
                 self.workspace_split = None;
             }
+        }
+        if self.workspace_split != before {
+            self.persist_workspace_pane_layout();
         }
     }
 
@@ -48,6 +52,7 @@ impl NyaTermApp {
             ) {
                 self.selected_nav = NavItem::Workspace;
                 self.main_mode = MainMode::Workspace;
+                self.persist_workspace_pane_layout();
                 return;
             }
         }
@@ -61,6 +66,7 @@ impl NyaTermApp {
         });
         self.selected_nav = NavItem::Workspace;
         self.main_mode = MainMode::Workspace;
+        self.persist_workspace_pane_layout();
     }
 
     pub(in crate::ui::view) fn activate_workspace_pane(
@@ -102,6 +108,7 @@ impl NyaTermApp {
         if root.adjust_ratio_for_split(&split_id, delta) {
             let ratio = root.ratio_for_split(&split_id).unwrap_or(50);
             self.terminal_status = format!("split ratio {ratio}%");
+            self.persist_workspace_pane_layout();
         } else {
             self.terminal_status = "workspace is not split".to_string();
         }
@@ -169,6 +176,7 @@ impl NyaTermApp {
                         self.terminal_status = "workspace split closed".to_string();
                     }
                 }
+                self.persist_workspace_pane_layout();
                 cx.notify();
                 return;
             }
@@ -178,6 +186,7 @@ impl NyaTermApp {
         let _ = root;
         self.workspace_split = None;
         self.terminal_status = "workspace split closed".to_string();
+        self.persist_workspace_pane_layout();
         cx.notify();
     }
 
@@ -305,6 +314,8 @@ impl NyaTermApp {
             }
             if self.terminal_windows_is_multi_leaf() {
                 self.persist_terminal_window_layout();
+            } else if self.workspace_split.as_ref().is_some_and(|root| root.is_split()) {
+                self.persist_workspace_pane_layout();
             }
             cx.notify();
         }
@@ -353,6 +364,92 @@ impl NyaTermApp {
                 )
                 .into_any_element(),
         }
+    }
+    pub(in crate::ui::view) fn persist_workspace_pane_layout(&mut self) {
+        if !self.settings.startup_restore || !self.settings.startup_restore_window_layout {
+            return;
+        }
+        if !self.startup_restore_complete {
+            return;
+        }
+        let ordered = self
+            .ordered_sessions()
+            .into_iter()
+            .map(|session| session.id)
+            .collect::<Vec<_>>();
+        let layout = self
+            .workspace_split
+            .as_ref()
+            .filter(|root| root.is_split())
+            .and_then(|root| root.serialize_layout(&ordered));
+        match ConnectionStore::open_with_portable_key_path(
+            self.runtime.config_dir(),
+            self.runtime.portable_key_path().map(ToOwned::to_owned),
+        )
+        .and_then(|store| store.save_workspace_pane_layout(layout.as_ref()))
+        {
+            Ok(()) => {}
+            Err(error) => {
+                self.terminal_status = format!("failed to save pane layout: {error}");
+            }
+        }
+    }
+
+    pub(in crate::ui::view) fn try_restore_workspace_pane_layout(&mut self) {
+        if self.workspace_pane_layout_restored {
+            return;
+        }
+        if !self.settings.startup_restore || !self.settings.startup_restore_window_layout {
+            self.workspace_pane_layout_restored = true;
+            return;
+        }
+        // Multi-leaf tab windows take visual precedence; skip pane restore when active.
+        if self.terminal_windows_is_multi_leaf() {
+            self.workspace_pane_layout_restored = true;
+            return;
+        }
+        let ordered = self
+            .ordered_sessions()
+            .into_iter()
+            .map(|session| session.id)
+            .collect::<Vec<_>>();
+        if ordered.len() < 2 {
+            // After startup finishes, don't keep waiting forever for a second tab.
+            if self.startup_restore_complete {
+                self.workspace_pane_layout_restored = true;
+            }
+            return;
+        }
+        self.workspace_pane_layout_restored = true;
+        let Ok(store) = ConnectionStore::open_with_portable_key_path(
+            self.runtime.config_dir(),
+            self.runtime.portable_key_path().map(ToOwned::to_owned),
+        ) else {
+            return;
+        };
+        let Ok(Some(layout)) = store.load_workspace_pane_layout() else {
+            return;
+        };
+        let Some(restored) = WorkspacePaneNode::restore_layout(&layout, &ordered) else {
+            return;
+        };
+        if !restored.is_split() {
+            return;
+        }
+        // Prefer active session still present in the restored tree.
+        if let Some(active) = self.active_session_id.clone() {
+            if !restored.contains_session(&active) {
+                if let Some(first) = restored.session_ids().into_iter().next() {
+                    self.active_session_id = Some(first);
+                }
+            }
+        } else if let Some(first) = restored.session_ids().into_iter().next() {
+            self.active_session_id = Some(first);
+        }
+        self.workspace_split = Some(restored);
+        self.selected_nav = NavItem::Workspace;
+        self.main_mode = MainMode::Workspace;
+        self.terminal_status = "restored workspace pane layout".to_string();
     }
 }
 

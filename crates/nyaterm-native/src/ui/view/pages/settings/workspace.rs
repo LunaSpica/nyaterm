@@ -77,7 +77,7 @@ impl NyaTermApp {
                     .child(settings_form_row(palette, 
                         "Restore window layout",
                         Some(SharedString::from(
-                            "Restore multi-leaf tab window splits with the workspace (Tauri terminal_window_layout).",
+                            "Restore multi-leaf tab windows and global pane splits with the workspace.",
                         )),
                         settings_switch(palette, 
                             "general-startup-restore-window-layout",

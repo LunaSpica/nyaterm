@@ -121,11 +121,15 @@ impl NyaTermApp {
             return;
         }
         self.startup_restore_complete = true;
-        // After all tabs reconnect, attempt multi-leaf layout restore.
+        // After all tabs reconnect, attempt multi-leaf then global pane layout restore.
         self.terminal_windows_restored = false;
+        self.workspace_pane_layout_restored = false;
         self.try_restore_terminal_window_layout();
+        self.try_restore_workspace_pane_layout();
         if self.terminal_windows_is_multi_leaf() {
             self.terminal_status = "restored workspace tabs and window layout".to_string();
+        } else if self.workspace_split.as_ref().is_some_and(|root| root.is_split()) {
+            self.terminal_status = "restored workspace tabs and pane layout".to_string();
         } else if !self.ordered_sessions().is_empty() {
             self.terminal_status = "restored workspace tabs".to_string();
         }

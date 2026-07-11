@@ -584,6 +584,28 @@ pub struct RestorableOpenTab {
     pub tab_color: Option<String>,
 }
 
+/// Native workspace pane split tree (indexes into ordered open tabs).
+/// Distinct from Tauri per-tab pane trees: native H/V splits arrange sessions globally.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(tag = "kind")]
+pub enum RestorableWorkspacePaneNode {
+    #[serde(rename = "leaf")]
+    Leaf {
+        #[serde(default)]
+        tab_index: usize,
+    },
+    #[serde(rename = "split")]
+    Split {
+        #[serde(default)]
+        id: String,
+        direction: String,
+        #[serde(default = "default_restorable_split_ratio")]
+        ratio: f64,
+        first: Box<RestorableWorkspacePaneNode>,
+        second: Box<RestorableWorkspacePaneNode>,
+    },
+}
+
 /// Tauri `ui.terminal_window_layout` node (indexes into ordered open tabs).
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(tag = "kind")]

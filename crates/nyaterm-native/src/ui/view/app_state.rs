@@ -484,6 +484,8 @@ pub struct NyaTermApp {
     pub(in crate::ui::view) terminal_window_drop: Option<(String, TabDockZone)>,
     /// Whether we already attempted startup restore of multi-leaf layout.
     pub(in crate::ui::view) terminal_windows_restored: bool,
+    /// Whether we already attempted startup restore of global workspace pane splits.
+    pub(in crate::ui::view) workspace_pane_layout_restored: bool,
     pub(in crate::ui::view) open_tabs_restored: bool,
     pub(in crate::ui::view) startup_restore_complete: bool,
     pub(in crate::ui::view) startup_restore_queue: Vec<nyaterm_domain::RestorableOpenTab>,
@@ -1169,6 +1171,7 @@ impl NyaTermApp {
             focused_terminal_window_leaf_id: None,
             terminal_window_drop: None,
             terminal_windows_restored: false,
+            workspace_pane_layout_restored: false,
             open_tabs_restored: false,
             startup_restore_complete: false,
             startup_restore_queue: Vec::new(),

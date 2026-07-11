@@ -1,8 +1,8 @@
 use gpui::{Pixels, px};
 use nyaterm_domain::{
     AiAction, AiContext, AiExecutionProfile, ConfigBackupInfo, ConnectionType, CredentialPromptKind,
-    DiagnosticsExportInfo, QuickCommand, RestorableTerminalWindowNode, SavedConnection,
-    SavedCredential,
+    DiagnosticsExportInfo, QuickCommand, RestorableTerminalWindowNode, RestorableWorkspacePaneNode,
+    SavedConnection, SavedCredential,
 };
 use nyaterm_session::{
     LocalSessionConfig, SerialSessionConfig, SftpFileEntry, SftpFileProperties, SftpRemoteTextFile,
@@ -1798,6 +1798,129 @@ impl WorkspacePaneNode {
             }
         }
     }
+
+    /// Serialize global workspace pane splits using ordered open-tab indexes.
+    pub(super) fn serialize_layout(
+        &self,
+        ordered_tab_ids: &[String],
+    ) -> Option<RestorableWorkspacePaneNode> {
+        if ordered_tab_ids.is_empty() {
+            return None;
+        }
+        let index_by_id: std::collections::HashMap<&str, usize> = ordered_tab_ids
+            .iter()
+            .enumerate()
+            .map(|(index, id)| (id.as_str(), index))
+            .collect();
+        self.serialize_layout_with(&index_by_id)
+    }
+
+    fn serialize_layout_with(
+        &self,
+        index_by_id: &std::collections::HashMap<&str, usize>,
+    ) -> Option<RestorableWorkspacePaneNode> {
+        match self {
+            Self::Leaf { session_id } => {
+                let tab_index = *index_by_id.get(session_id.as_str())?;
+                Some(RestorableWorkspacePaneNode::Leaf { tab_index })
+            }
+            Self::Split {
+                id,
+                direction,
+                ratio_percent,
+                first,
+                second,
+            } => {
+                let first = first.serialize_layout_with(index_by_id);
+                let second = second.serialize_layout_with(index_by_id);
+                match (first, second) {
+                    (None, None) => None,
+                    (Some(only), None) | (None, Some(only)) => Some(only),
+                    (Some(first), Some(second)) => {
+                        let ratio = (Self::clamped_ratio_percent(*ratio_percent) as f64) / 100.0;
+                        Some(RestorableWorkspacePaneNode::Split {
+                            id: id.clone(),
+                            direction: match direction {
+                                WorkspaceSplitDirection::Horizontal => "horizontal".to_string(),
+                                WorkspaceSplitDirection::Vertical => "vertical".to_string(),
+                            },
+                            ratio: ratio.clamp(0.2, 0.8),
+                            first: Box::new(first),
+                            second: Box::new(second),
+                        })
+                    }
+                }
+            }
+        }
+    }
+
+    /// Restore a global workspace pane tree from ordered open-tab ids.
+    pub(super) fn restore_layout(
+        layout: &RestorableWorkspacePaneNode,
+        ordered_tab_ids: &[String],
+    ) -> Option<Self> {
+        if ordered_tab_ids.is_empty() {
+            return None;
+        }
+        let mut used = std::collections::HashSet::new();
+        let restored = Self::restore_layout_inner(layout, ordered_tab_ids, &mut used)?;
+        if !restored.is_split() {
+            return None;
+        }
+        Some(restored)
+    }
+
+    fn restore_layout_inner(
+        layout: &RestorableWorkspacePaneNode,
+        ordered_tab_ids: &[String],
+        used: &mut std::collections::HashSet<String>,
+    ) -> Option<Self> {
+        match layout {
+            RestorableWorkspacePaneNode::Leaf { tab_index } => {
+                let session_id = ordered_tab_ids.get(*tab_index)?.clone();
+                if !used.insert(session_id.clone()) {
+                    return None;
+                }
+                Some(Self::leaf(session_id))
+            }
+            RestorableWorkspacePaneNode::Split {
+                id,
+                direction,
+                ratio,
+                first,
+                second,
+            } => {
+                let first = Self::restore_layout_inner(first, ordered_tab_ids, used);
+                let second = Self::restore_layout_inner(second, ordered_tab_ids, used);
+                match (first, second) {
+                    (None, None) => None,
+                    (Some(only), None) | (None, Some(only)) => Some(only),
+                    (Some(first), Some(second)) => {
+                        let direction = match direction.to_ascii_lowercase().as_str() {
+                            "horizontal" | "row" => WorkspaceSplitDirection::Horizontal,
+                            _ => WorkspaceSplitDirection::Vertical,
+                        };
+                        let ratio_percent = ((*ratio * 100.0).round() as u8).clamp(
+                            Self::MIN_RATIO_PERCENT,
+                            Self::MAX_RATIO_PERCENT,
+                        );
+                        let split_id = if id.trim().is_empty() {
+                            format!("pane-split-{}", uuid_v4_like())
+                        } else {
+                            id.clone()
+                        };
+                        Some(Self::Split {
+                            id: split_id,
+                            direction,
+                            ratio_percent,
+                            first: Box::new(first),
+                            second: Box::new(second),
+                        })
+                    }
+                }
+            }
+        }
+    }
 }
 
 /// Compatibility alias used by older dual-pane helpers.
@@ -3586,6 +3709,43 @@ pub(super) enum QuickCommandImportPathPromptResult {
     Failed(String),
     Closed,
 }
+
+#[cfg(test)]
+mod workspace_pane_tests {
+    use super::{WorkspacePaneNode, WorkspaceSplitDirection};
+    use nyaterm_domain::RestorableWorkspacePaneNode;
+
+    #[test]
+    fn workspace_pane_serialize_restore_roundtrip() {
+        let ordered = vec!["a".into(), "b".into(), "c".into()];
+        let mut root = WorkspacePaneNode::leaf("a");
+        assert!(root.split_leaf(
+            "a",
+            "b".into(),
+            WorkspaceSplitDirection::Vertical,
+            "s1".into(),
+        ));
+        assert!(root.split_leaf(
+            "b",
+            "c".into(),
+            WorkspaceSplitDirection::Horizontal,
+            "s2".into(),
+        ));
+        let layout = root.serialize_layout(&ordered).expect("layout");
+        match &layout {
+            RestorableWorkspacePaneNode::Split { .. } => {}
+            _ => panic!("expected split"),
+        }
+        let restored = WorkspacePaneNode::restore_layout(&layout, &ordered).expect("restore");
+        assert!(restored.is_split());
+        let mut ids = restored.session_ids();
+        ids.sort();
+        let mut expected = ordered.clone();
+        expected.sort();
+        assert_eq!(ids, expected);
+    }
+}
+
 
 #[cfg(test)]
 mod terminal_window_tests {
