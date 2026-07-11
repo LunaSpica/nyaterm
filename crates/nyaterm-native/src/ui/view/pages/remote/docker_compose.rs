@@ -74,7 +74,7 @@ fn docker_compose_project_row(
         .child(
             div()
                 .relative()
-                .h(px(74.))
+                .h(px(60.))
                 .px_2()
                 .flex()
                 .items_start()
@@ -350,7 +350,7 @@ pub(in crate::ui::view::pages::remote) fn docker_compose_service_row(
     div()
         .id(SharedString::from(row_id.clone()))
         .relative()
-        .h(px(58.))
+        .h(px(48.))
         .rounded_md()
         .bg(rgb(0x0d1117))
         .hover(|this| this.bg(rgb(0x151b24)))

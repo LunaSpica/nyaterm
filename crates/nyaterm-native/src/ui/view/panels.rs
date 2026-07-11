@@ -493,7 +493,11 @@ impl NyaTermApp {
                                 transfer_input(
                                     "bottom-command-send-input",
                                     input_hint,
-                                    self.send_command_draft.clone(),
+                                    if self.send_command_data_type == SendCommandDataType::Hex {
+                                        format_send_command_hex_display(&self.send_command_draft)
+                                    } else {
+                                        self.send_command_draft.clone()
+                                    },
                                     true,
                                 )
                                 .flex_1()
@@ -512,9 +516,13 @@ impl NyaTermApp {
                             .when(
                                 self.send_command_data_type == SendCommandDataType::Hex,
                                 |this| {
+                                    let byte_count =
+                                        send_command_hex_byte_count(&self.send_command_draft);
+                                    let guide_count =
+                                        send_command_hex_guide_count(&self.send_command_draft);
                                     this.child(
                                         div()
-                                            .w(px(160.))
+                                            .w(px(180.))
                                             .flex_none()
                                             .min_h(px(72.))
                                             .rounded_md()
@@ -528,16 +536,43 @@ impl NyaTermApp {
                                             .gap_1()
                                             .child(
                                                 div()
-                                                    .text_size(px(10.))
-                                                    .font_weight(FontWeight(600.))
-                                                    .text_color(rgb(0x6e7681))
-                                                    .child("ASCII"),
+                                                    .flex()
+                                                    .items_center()
+                                                    .justify_between()
+                                                    .gap_1()
+                                                    .child(
+                                                        div()
+                                                            .text_size(px(10.))
+                                                            .font_weight(FontWeight(600.))
+                                                            .text_color(rgb(0x6e7681))
+                                                            .child("Preview"),
+                                                    )
+                                                    .child(
+                                                        div()
+                                                            .text_size(px(10.))
+                                                            .text_color(rgb(0x6e7681))
+                                                            .child(match byte_count {
+                                                                Some(n) => format!("{n} B"),
+                                                                None => "invalid".to_string(),
+                                                            }),
+                                                    ),
                                             )
+                                            .when(guide_count > 0, |this| {
+                                                this.child(
+                                                    div()
+                                                        .text_size(px(10.))
+                                                        .text_color(rgb(0x388bfd))
+                                                        .child(format!(
+                                                            "guides ×{guide_count} (4-byte)"
+                                                        )),
+                                                )
+                                            })
                                             .child(
                                                 div()
                                                     .flex_1()
                                                     .font_family("JetBrains Mono")
                                                     .text_size(px(11.))
+                                                    .line_height(px(15.))
                                                     .text_color(if validation_error {
                                                         rgb(0xff7b72)
                                                     } else {

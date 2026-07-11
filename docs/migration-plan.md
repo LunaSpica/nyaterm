@@ -665,3 +665,10 @@ service boundary first:
 - Process toolbar shows filtered/total/users + top CPU/MEM mono summary.
 - Expanded process details compacted: inline chips, nice steppers, SIG buttons on one dense strip.
 - Docker container rows tightened (48px, softer title weights).
+
+## 2026-07-11 Command Send hex dual-pane polish
+- Hex editor shows Tauri-style spaced uppercase pairs (double space every 4 bytes).
+- Preview column: byte count, 4-byte guide marker summary, ASCII preview.
+
+## 2026-07-11 Docker Compose row densify
+- Project rows 74→60px, service rows 58→48px.

@@ -310,7 +310,7 @@ pub(in crate::ui::view::panels) fn send_command_hex_preview(draft: &str) -> Stri
         Ok(bytes) if bytes.is_empty() => String::new(),
         Ok(bytes) => bytes
             .iter()
-            .take(48)
+            .take(96)
             .map(|byte| {
                 if (0x20..=0x7e).contains(byte) {
                     char::from(*byte)
@@ -321,6 +321,57 @@ pub(in crate::ui::view::panels) fn send_command_hex_preview(draft: &str) -> Stri
             .collect(),
         Err(error) => error,
     }
+}
+
+pub(in crate::ui::view::panels) fn send_command_hex_byte_count(draft: &str) -> Option<usize> {
+    parse_send_command_hex(draft).ok().map(|bytes| bytes.len())
+}
+
+/// Format hex draft like Tauri: uppercase pairs spaced, double-space every 4 bytes.
+pub(in crate::ui::view::panels) fn format_send_command_hex_display(draft: &str) -> String {
+    let normalized = draft.replace("\r\n", "\n").replace("\r", "\n");
+    normalized
+        .split('\n')
+        .map(|line| {
+            let cleaned: String = line
+                .chars()
+                .filter(|ch| ch.is_ascii_hexdigit())
+                .map(|ch| ch.to_ascii_uppercase())
+                .collect();
+            let mut formatted = String::new();
+            let mut byte_index = 0usize;
+            let mut i = 0usize;
+            while i < cleaned.len() {
+                let end = (i + 2).min(cleaned.len());
+                let byte = &cleaned[i..end];
+                formatted.push_str(byte);
+                if byte.len() == 2 {
+                    byte_index += 1;
+                    if i + 2 < cleaned.len() {
+                        if byte_index % 4 == 0 {
+                            formatted.push_str("  ");
+                        } else {
+                            formatted.push(' ');
+                        }
+                    }
+                }
+                i = end;
+            }
+            formatted
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+pub(in crate::ui::view::panels) fn send_command_hex_guide_count(draft: &str) -> usize {
+    let normalized = draft.replace("\r\n", "\n").replace("\r", "\n");
+    normalized
+        .split('\n')
+        .map(|line| {
+            let hex_chars = line.chars().filter(|ch| ch.is_ascii_hexdigit()).count();
+            (hex_chars / 2) / 4
+        })
+        .sum()
 }
 
 pub(in crate::ui::view::panels) fn terminal_action_prompt_text(
