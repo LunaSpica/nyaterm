@@ -1419,3 +1419,10 @@ service boundary first:
 
 - In-tab split leaf chrome includes an `x` control that closes only that leaf
   session (secondary leaves collapse the parent split via prune).
+
+
+## 2026-07-12 Tab strip aggregates per-tab pane leaves
+
+- Global/multi-leaf strip marks a tab active when any of its pane leaves is focused.
+- Unread/disconnected/sync indicators aggregate across leaves under the tab root.
+- Multi-leaf `set_active_tab` maps secondary pane focus to the owning tab root.

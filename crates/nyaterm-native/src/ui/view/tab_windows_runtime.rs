@@ -164,11 +164,16 @@ impl NyaTermApp {
     }
 
     pub(in crate::ui::view) fn sync_terminal_windows_active_tab(&mut self, session_id: &str) {
+        if self.terminal_windows.is_none() {
+            return;
+        }
+        // Multi-leaf tab ids are tab roots; map secondary pane focus to its strip tab.
+        let tab_id = self.tab_root_for_session(session_id);
         let Some(root) = self.terminal_windows.as_mut() else {
             return;
         };
-        let _ = root.set_active_tab(session_id);
-        if let Some(leaf_id) = find_leaf_with_tab(root, session_id) {
+        let _ = root.set_active_tab(&tab_id);
+        if let Some(leaf_id) = find_leaf_with_tab(root, &tab_id) {
             self.focused_terminal_window_leaf_id = Some(leaf_id);
         }
     }

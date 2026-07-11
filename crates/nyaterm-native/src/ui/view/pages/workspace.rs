@@ -115,7 +115,11 @@ impl NyaTermApp {
                     .map(|(index, session)| (session.id, index + 1))
                     .collect();
                 for tab_id in &tab_ids {
-                    let is_active_tab = active.as_str() == tab_id.as_str();
+                    let is_active_tab = active.as_str() == tab_id.as_str()
+                        || self
+                            .active_session_id
+                            .as_deref()
+                            .is_some_and(|id| self.tab_root_for_session(id) == *tab_id);
                     let tab_number = global_index.get(tab_id).copied().unwrap_or(0);
                     let title = self
                         .session_display_name(tab_id)
@@ -137,11 +141,19 @@ impl NyaTermApp {
                         })
                         .unwrap_or(("Session", "icons/conn/terminal.svg"));
                     let custom_color = self.session_tab_colors.get(tab_id).copied();
-                    let is_disconnected = self.is_session_disconnected(tab_id);
-                    let has_unread = self
-                        .terminal_views
+                    let leaf_ids = self
+                        .session_pane_roots
                         .get(tab_id)
-                        .is_some_and(|view| view.has_unread);
+                        .map(|root| root.session_ids())
+                        .unwrap_or_else(|| vec![tab_id.clone()]);
+                    let is_disconnected = leaf_ids
+                        .iter()
+                        .any(|id| self.is_session_disconnected(id));
+                    let has_unread = leaf_ids.iter().any(|id| {
+                        self.terminal_views
+                            .get(id)
+                            .is_some_and(|view| view.has_unread)
+                    });
                     let sync_group = self.active_sync_group_for_session(tab_id);
                     let sync_paused = self.is_session_paused_in_active_sync_group(tab_id);
                     let show_sync_indicator = self.broadcast_to_all || sync_group.is_some();

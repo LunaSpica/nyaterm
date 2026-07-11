@@ -136,8 +136,19 @@ impl NyaTermApp {
                 };
                 let drop_target_session_id = session.id.clone();
                 let custom_color = self.session_tab_colors.get(&session.id).copied();
-                let is_active = self.active_session_id.as_deref() == Some(session.id.as_str());
-                let is_disconnected = self.is_session_disconnected(&session.id);
+                // Active when any leaf under this tab root is focused.
+                let is_active = self
+                    .active_session_id
+                    .as_deref()
+                    .is_some_and(|id| self.tab_root_for_session(id) == session.id);
+                let leaf_ids = self
+                    .session_pane_roots
+                    .get(&session.id)
+                    .map(|root| root.session_ids())
+                    .unwrap_or_else(|| vec![session.id.clone()]);
+                let is_disconnected = leaf_ids
+                    .iter()
+                    .any(|id| self.is_session_disconnected(id));
                 let is_split_tab = self
                     .session_pane_roots
                     .get(&session.id)
@@ -154,12 +165,17 @@ impl NyaTermApp {
                 } else {
                     truncate_preview(&display_name, 28)
                 };
-                let has_unread = self
-                    .terminal_views
-                    .get(&session.id)
-                    .is_some_and(|view| view.has_unread);
-                let sync_group = self.active_sync_group_for_session(&session.id);
-                let sync_paused = self.is_session_paused_in_active_sync_group(&session.id);
+                let has_unread = leaf_ids.iter().any(|id| {
+                    self.terminal_views
+                        .get(id)
+                        .is_some_and(|view| view.has_unread)
+                });
+                let sync_group = leaf_ids
+                    .iter()
+                    .find_map(|id| self.active_sync_group_for_session(id));
+                let sync_paused = leaf_ids
+                    .iter()
+                    .any(|id| self.is_session_paused_in_active_sync_group(id));
                 let show_sync_indicator = self.broadcast_to_all || sync_group.is_some();
                 let sync_indicator_color = sync_group
                     .map(|group| group.color)
