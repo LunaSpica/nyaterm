@@ -575,6 +575,154 @@ impl NyaTermApp {
         }
         cx.notify();
     }
+
+    pub(in crate::ui::view) fn add_search_engine(&mut self, cx: &mut Context<Self>) {
+        self.settings.search_custom_engines.insert(
+            0,
+            SearchEngineConfig {
+                name: "New Engine".to_string(),
+                url_template: "https://example.com/search?q=%s".to_string(),
+                show_in_menu: true,
+            },
+        );
+        self.search_engine_edit_index = Some(0);
+        self.search_engine_edit_field = SearchEngineEditorField::Name;
+        self.save_terminal_settings(cx);
+        self.terminal_status = "search engine added".to_string();
+    }
+
+    pub(in crate::ui::view) fn remove_search_engine(
+        &mut self,
+        index: usize,
+        cx: &mut Context<Self>,
+    ) {
+        if index >= self.settings.search_custom_engines.len() {
+            return;
+        }
+        self.settings.search_custom_engines.remove(index);
+        if self.settings.search_custom_engines.is_empty() {
+            self.settings.search_custom_engines = default_search_engines();
+        }
+        if let Some(edit) = self.search_engine_edit_index {
+            if edit == index {
+                self.search_engine_edit_index = None;
+            } else if edit > index {
+                self.search_engine_edit_index = Some(edit - 1);
+            }
+        }
+        self.save_terminal_settings(cx);
+        self.terminal_status = "search engine removed".to_string();
+    }
+
+    pub(in crate::ui::view) fn toggle_search_engine_in_menu(
+        &mut self,
+        index: usize,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(engine) = self.settings.search_custom_engines.get_mut(index) else {
+            return;
+        };
+        engine.show_in_menu = !engine.show_in_menu;
+        self.save_terminal_settings(cx);
+    }
+
+    pub(in crate::ui::view) fn focus_search_engine_field(
+        &mut self,
+        index: usize,
+        field: SearchEngineEditorField,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if index >= self.settings.search_custom_engines.len() {
+            return;
+        }
+        self.search_engine_edit_index = Some(index);
+        self.search_engine_edit_field = field;
+        window.focus(&self.search_engine_focus);
+        cx.notify();
+    }
+
+    pub(in crate::ui::view) fn handle_search_engine_key_down(
+        &mut self,
+        event: &KeyDownEvent,
+        cx: &mut Context<Self>,
+    ) {
+        self.mark_user_activity();
+        let Some(index) = self.search_engine_edit_index else {
+            return;
+        };
+        if index >= self.settings.search_custom_engines.len() {
+            return;
+        }
+        let keystroke = &event.keystroke;
+        if keystroke.modifiers.platform || keystroke.modifiers.alt || keystroke.modifiers.control {
+            return;
+        }
+        match keystroke.key.as_str() {
+            "backspace" => {
+                let engine = &mut self.settings.search_custom_engines[index];
+                match self.search_engine_edit_field {
+                    SearchEngineEditorField::Name => {
+                        engine.name.pop();
+                    }
+                    SearchEngineEditorField::Url => {
+                        engine.url_template.pop();
+                    }
+                }
+                self.terminal_status = "search engine edited".to_string();
+                cx.notify();
+            }
+            "tab" => {
+                self.search_engine_edit_field = self.search_engine_edit_field.next();
+                cx.notify();
+            }
+            "enter" => {
+                self.normalize_search_engines();
+                self.save_terminal_settings(cx);
+                self.terminal_status = "search engines saved".to_string();
+            }
+            "escape" => {
+                self.search_engine_edit_index = None;
+                self.terminal_status = "search engine input blurred".to_string();
+                cx.notify();
+            }
+            _ => {
+                if let Some(input) = keystroke
+                    .key_char
+                    .as_deref()
+                    .filter(|input| !input.is_empty())
+                {
+                    let engine = &mut self.settings.search_custom_engines[index];
+                    match self.search_engine_edit_field {
+                        SearchEngineEditorField::Name => engine.name.push_str(input),
+                        SearchEngineEditorField::Url => engine.url_template.push_str(input),
+                    }
+                    self.terminal_status = "search engine edited".to_string();
+                    cx.notify();
+                }
+            }
+        }
+    }
+
+    pub(in crate::ui::view) fn reset_search_engines(&mut self, cx: &mut Context<Self>) {
+        self.settings.search_custom_engines = default_search_engines();
+        self.search_engine_edit_index = None;
+        self.save_terminal_settings(cx);
+        self.terminal_status = "search engines reset to defaults".to_string();
+    }
+
+    fn normalize_search_engines(&mut self) {
+        self.settings.search_custom_engines.retain(|engine| {
+            !engine.name.trim().is_empty() && !engine.url_template.trim().is_empty()
+        });
+        if self.settings.search_custom_engines.is_empty() {
+            self.settings.search_custom_engines = default_search_engines();
+        }
+        for engine in &mut self.settings.search_custom_engines {
+            engine.name = engine.name.trim().to_string();
+            engine.url_template = engine.url_template.trim().to_string();
+        }
+    }
 }
 
 fn adjust_u32_setting(current: u32, delta: i32, min: u32, max: u32) -> u32 {
@@ -585,3 +733,4 @@ fn adjust_u32_setting(current: u32, delta: i32, min: u32, max: u32) -> u32 {
     };
     next.clamp(min, max)
 }
+

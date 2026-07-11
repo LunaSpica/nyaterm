@@ -344,7 +344,186 @@ impl NyaTermApp {
                         .child("Native fuzzy"),
                 ),
             ))
+            .child(self.online_search_engines_settings_section(cx))
             .child(self.keyword_highlights_settings_section(cx))
+    }
+
+    fn online_search_engines_settings_section(
+        &mut self,
+        cx: &mut Context<Self>,
+    ) -> impl IntoElement {
+        let palette = self.theme_palette();
+        let engines = self.settings.search_custom_engines.clone();
+        let menu_count = engines.iter().filter(|engine| engine.show_in_menu).count();
+        let edit_index = self.search_engine_edit_index;
+        let edit_field = self.search_engine_edit_field;
+
+        settings_form_section(
+            palette,
+            Some("Online search engines"),
+            Some("Engines shown on the terminal selection context menu (Tauri Search tab)."),
+            div()
+                .flex()
+                .flex_col()
+                .gap_3()
+                .child(settings_form_row(
+                    palette,
+                    "Catalog",
+                    Some(SharedString::from(format!(
+                        "{} engines · {} in menu",
+                        engines.len(),
+                        menu_count
+                    ))),
+                    div()
+                        .flex()
+                        .items_center()
+                        .gap_1()
+                        .child(small_button(
+                            palette,
+                            "settings-search-engine-add",
+                            "Add",
+                            cx.listener(|this, _, window, cx| {
+                                this.add_search_engine(cx);
+                                window.focus(&this.search_engine_focus);
+                            }),
+                        ))
+                        .child(small_button(
+                            palette,
+                            "settings-search-engine-reset",
+                            "Reset",
+                            cx.listener(|this, _, _, cx| {
+                                this.reset_search_engines(cx);
+                            }),
+                        )),
+                ))
+                .children(engines.into_iter().enumerate().map(|(index, engine)| {
+                    let name_active =
+                        edit_index == Some(index) && edit_field == SearchEngineEditorField::Name;
+                    let url_active =
+                        edit_index == Some(index) && edit_field == SearchEngineEditorField::Url;
+                    let name_value = if engine.name.is_empty() {
+                        " ".to_string()
+                    } else {
+                        engine.name.clone()
+                    };
+                    let url_value = if engine.url_template.is_empty() {
+                        " ".to_string()
+                    } else {
+                        engine.url_template.clone()
+                    };
+                    let has_placeholder = engine.url_template.contains("%s");
+                    div()
+                        .id(SharedString::from(format!("settings-search-engine-{index}")))
+                        .rounded_md()
+                        .border_1()
+                        .border_color(rgb(palette.border))
+                        .bg(rgb(palette.input))
+                        .p_3()
+                        .flex()
+                        .flex_col()
+                        .gap_2()
+                        .child(
+                            div()
+                                .flex()
+                                .items_center()
+                                .justify_between()
+                                .gap_2()
+                                .child(
+                                    div()
+                                        .min_w_0()
+                                        .flex_1()
+                                        .text_size(px(12.))
+                                        .font_weight(FontWeight(700.))
+                                        .text_color(rgb(palette.text))
+                                        .child(if engine.name.trim().is_empty() {
+                                            "Unnamed engine".to_string()
+                                        } else {
+                                            engine.name.clone()
+                                        }),
+                                )
+                                .child(
+                                    div()
+                                        .flex()
+                                        .items_center()
+                                        .gap_1()
+                                        .child(settings_switch(
+                                            palette,
+                                            format!("settings-search-engine-menu-{index}"),
+                                            engine.show_in_menu,
+                                            cx.listener(move |this, _, _, cx| {
+                                                this.toggle_search_engine_in_menu(index, cx);
+                                            }),
+                                        ))
+                                        .child(small_button(
+                                            palette,
+                                            format!("settings-search-engine-del-{index}"),
+                                            "Delete",
+                                            cx.listener(move |this, _, _, cx| {
+                                                this.remove_search_engine(index, cx);
+                                            }),
+                                        )),
+                                ),
+                        )
+                        .child(
+                            transfer_input(
+                                format!("settings-search-engine-name-{index}"),
+                                "Name",
+                                name_value,
+                                name_active,
+                                palette,
+                            )
+                            .track_focus(&self.search_engine_focus)
+                            .on_click(cx.listener(move |this, _, window, cx| {
+                                this.focus_search_engine_field(
+                                    index,
+                                    SearchEngineEditorField::Name,
+                                    window,
+                                    cx,
+                                );
+                            }))
+                            .on_key_down(cx.listener(|this, event: &KeyDownEvent, _, cx| {
+                                cx.stop_propagation();
+                                this.handle_search_engine_key_down(event, cx);
+                            })),
+                        )
+                        .child(
+                            transfer_input(
+                                format!("settings-search-engine-url-{index}"),
+                                "URL template (%s = query)",
+                                url_value,
+                                url_active,
+                                palette,
+                            )
+                            .track_focus(&self.search_engine_focus)
+                            .on_click(cx.listener(move |this, _, window, cx| {
+                                this.focus_search_engine_field(
+                                    index,
+                                    SearchEngineEditorField::Url,
+                                    window,
+                                    cx,
+                                );
+                            }))
+                            .on_key_down(cx.listener(|this, event: &KeyDownEvent, _, cx| {
+                                cx.stop_propagation();
+                                this.handle_search_engine_key_down(event, cx);
+                            })),
+                        )
+                        .child(
+                            div()
+                                .text_size(px(10.))
+                                .text_color(rgb(if has_placeholder {
+                                    palette.text_muted
+                                } else {
+                                    palette.danger
+                                }))
+                                .child(if has_placeholder {
+                                    "Ready for context-menu online search".to_string()
+                                } else {
+                                    "URL should include %s for the selected text".to_string()
+                                }),
+                        )
+                })),
+        )
     }
 
     fn keyword_highlights_settings_section(&mut self, cx: &mut Context<Self>) -> impl IntoElement {

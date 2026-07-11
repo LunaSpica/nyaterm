@@ -574,6 +574,88 @@ impl NyaTermApp {
         cx.notify();
     }
 
+    pub(in crate::ui::view) fn set_terminal_scroll_offset(
+        &mut self,
+        offset: usize,
+        cx: &mut Context<Self>,
+    ) {
+        if let Some(session_id) = self.active_session_id.clone() {
+            if let Some(view) = self.terminal_views.get_mut(&session_id) {
+                let max = view.screen.scrollback_len();
+                view.scroll_offset = offset.min(max);
+            }
+        } else {
+            let max = self.terminal_screen.scrollback_len();
+            self.terminal_scroll_offset = offset.min(max);
+        }
+        cx.notify();
+    }
+
+    pub(in crate::ui::view) fn active_terminal_scroll_max(&self) -> usize {
+        if let Some(session_id) = self.active_session_id.as_deref() {
+            self.terminal_views
+                .get(session_id)
+                .map(|view| view.screen.scrollback_len())
+                .unwrap_or(0)
+        } else {
+            self.terminal_screen.scrollback_len()
+        }
+    }
+
+    /// Map a vertical pointer position (0..=1 top→bottom of track) to scroll_offset.
+    /// Top of track = oldest history (max offset); bottom = live (0).
+    pub(in crate::ui::view) fn set_terminal_scroll_from_track_ratio(
+        &mut self,
+        ratio: f32,
+        cx: &mut Context<Self>,
+    ) {
+        let max = self.active_terminal_scroll_max();
+        if max == 0 {
+            self.set_terminal_scroll_offset(0, cx);
+            return;
+        }
+        let ratio = ratio.clamp(0.0, 1.0);
+        // ratio 0 (top) -> max, ratio 1 (bottom) -> 0
+        let offset = ((1.0 - ratio) * max as f32).round() as usize;
+        self.set_terminal_scroll_offset(offset.min(max), cx);
+    }
+
+    pub(in crate::ui::view) fn begin_terminal_scrollbar_drag(
+        &mut self,
+        cx: &mut Context<Self>,
+    ) {
+        self.terminal_scrollbar_dragging = true;
+        cx.notify();
+    }
+
+    pub(in crate::ui::view) fn update_terminal_scrollbar_drag(
+        &mut self,
+        event: &gpui::MouseMoveEvent,
+        cx: &mut Context<Self>,
+    ) {
+        if !self.terminal_scrollbar_dragging {
+            return;
+        }
+        let Some(bounds) = self.terminal_surface_bounds else {
+            return;
+        };
+        let height = f32::from(bounds.size.height).max(1.0);
+        let local_y = f32::from(event.position.y - bounds.origin.y);
+        let ratio = (local_y / height).clamp(0.0, 1.0);
+        self.set_terminal_scroll_from_track_ratio(ratio, cx);
+    }
+
+    pub(in crate::ui::view) fn finish_terminal_scrollbar_drag(
+        &mut self,
+        cx: &mut Context<Self>,
+    ) {
+        if self.terminal_scrollbar_dragging {
+            self.terminal_scrollbar_dragging = false;
+            cx.notify();
+        }
+    }
+
+
     pub(in crate::ui::view) fn active_terminal_page_rows(&self) -> usize {
         // Prefer live screen rows when available; fall back to classic 24-row page.
         if let Some(session_id) = self.active_session_id.as_deref() {

@@ -75,6 +75,21 @@ impl TerminalViewState {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum SearchEngineEditorField {
+    Name,
+    Url,
+}
+
+impl SearchEngineEditorField {
+    pub(super) fn next(self) -> Self {
+        match self {
+            Self::Name => Self::Url,
+            Self::Url => Self::Name,
+        }
+    }
+}
+
 /// Inclusive cell coordinate inside the visible terminal grid.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) struct TerminalCellPos {

@@ -90,6 +90,12 @@ pub struct NyaTermApp {
     pub(in crate::ui::view) terminal_search_regex: bool,
     pub(in crate::ui::view) terminal_search_whole_word: bool,
     pub(in crate::ui::view) terminal_search_active_index: usize,
+    /// Which search engine row is focused for name/url editing (Settings → Search).
+    pub(in crate::ui::view) search_engine_edit_index: Option<usize>,
+    pub(in crate::ui::view) search_engine_edit_field: SearchEngineEditorField,
+    pub(in crate::ui::view) search_engine_focus: FocusHandle,
+    /// Dragging the terminal scrollback scrollbar thumb.
+    pub(in crate::ui::view) terminal_scrollbar_dragging: bool,
     pub(in crate::ui::view) terminal_actions_open: bool,
     pub(in crate::ui::view) terminal_actions_focus: FocusHandle,
     pub(in crate::ui::view) terminal_context_menu: Option<TerminalContextMenuState>,
@@ -749,6 +755,10 @@ impl NyaTermApp {
             terminal_search_regex: false,
             terminal_search_whole_word: false,
             terminal_search_active_index: 0,
+            search_engine_edit_index: None,
+            search_engine_edit_field: SearchEngineEditorField::Name,
+            search_engine_focus: cx.focus_handle(),
+            terminal_scrollbar_dragging: false,
             terminal_actions_open: false,
             terminal_actions_focus: cx.focus_handle(),
             terminal_context_menu: None,

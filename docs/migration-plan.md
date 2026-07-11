@@ -957,3 +957,11 @@ service boundary first:
 - Buffer find searches absolute scrollback + live screen via `all_lines()`.
 - Next/prev match reveals the absolute line by adjusting `scroll_offset`.
 - Highlight mapping converts absolute indices into the current viewport window.
+
+## Recent parity slices (GPUI)
+
+- Terminal context menu: copy/find/paste/clear/select-all, online search engines
+  from `search.custom_engines`, AI terminal actions, translate selection.
+- Domain settings: `SearchEngineConfig` + load/save under `search.custom_engines`.
+- Settings → Search: edit online search engines (add/remove/toggle menu/name/url).
+- Terminal scrollback scrollbar thumb (drag + track click) with wheel/keyboard.

@@ -13,7 +13,7 @@ use crate::ui::theme::ThemePalette;
 use crate::ui::models::{
     AiInputField, CloudSyncConflictState, CloudSyncInputField, ConfigPathPromptKind,
     DiagnosticsPathPromptKind, KeywordHighlightPathPromptKind, SettingsTab,
-    SnapshotPasswordPromptKind, SnapshotPasswordPromptState, TerminalSearchMode, TransferJobStatus,
+    SearchEngineEditorField, SnapshotPasswordPromptKind, SnapshotPasswordPromptState, TerminalSearchMode, TransferJobStatus,
     TransferPathPromptKind, TranslateInputField,
 };
 

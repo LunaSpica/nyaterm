@@ -361,11 +361,132 @@ impl NyaTermApp {
                                 cx.notify();
                             })
                             })
-                            .child(output)
+                            .child(
+                                div()
+                                    .size_full()
+                                    .flex()
+                                    .flex_row()
+                                    .min_h_0()
+                                    .child(
+                                        div()
+                                            .flex_1()
+                                            .min_w_0()
+                                            .min_h_0()
+                                            .child(output),
+                                    )
+                                    .child(self.terminal_scrollbar_element(
+                                        &session_id,
+                                        is_active,
+                                        scroll_offset,
+                                        cx,
+                                    )),
+                            )
                             .child(terminal_bounds_tracker(cx.entity())),
                     )
                     .when(is_active && self.terminal_search_open, |this| {
                         this.child(self.terminal_search_bar(cx))
+                    }),
+            )
+    }
+
+    fn terminal_scrollbar_element(
+        &self,
+        session_id: &str,
+        is_active: bool,
+        scroll_offset: usize,
+        cx: &mut Context<Self>,
+    ) -> impl IntoElement {
+        use gpui::relative;
+        let palette = self.theme_palette();
+        let max = self
+            .terminal_views
+            .get(session_id)
+            .map(|view| view.screen.scrollback_len())
+            .unwrap_or_else(|| {
+                if session_id.is_empty() {
+                    self.terminal_screen.scrollback_len()
+                } else {
+                    0
+                }
+            });
+        let viewport_rows = self
+            .terminal_views
+            .get(session_id)
+            .map(|view| {
+                // viewport height equals live screen rows
+                view.screen.viewport_snapshot(0).lines.len().max(1)
+            })
+            .unwrap_or_else(|| self.active_terminal_page_rows().max(1));
+        let show = max > 0;
+        let thumb_ratio = if max == 0 {
+            1.0
+        } else {
+            let viewport = viewport_rows as f32;
+            (viewport / (viewport + max as f32)).clamp(0.12, 1.0)
+        };
+        let travel = (1.0 - thumb_ratio).max(0.0);
+        let thumb_top_ratio = if max == 0 {
+            0.0
+        } else {
+            travel * (1.0 - (scroll_offset as f32 / max as f32).clamp(0.0, 1.0))
+        };
+        let track_id = format!("terminal-scrollbar-track-{session_id}");
+        let thumb_id = format!("terminal-scrollbar-thumb-{session_id}");
+
+        div()
+            .id(SharedString::from(format!("terminal-scrollbar-{session_id}")))
+            .w(px(10.))
+            .flex_none()
+            .h_full()
+            .py(px(2.))
+            .pr(px(2.))
+            .opacity(if show { 1.0 } else { 0.35 })
+            .child(
+                div()
+                    .id(SharedString::from(track_id))
+                    .relative()
+                    .size_full()
+                    .rounded_full()
+                    .bg(rgb(palette.border))
+                    .cursor_pointer()
+                    .on_mouse_down(
+                        MouseButton::Left,
+                        {
+                            let session_id = session_id.to_string();
+                            cx.listener(move |this, event: &gpui::MouseDownEvent, _, cx| {
+                            if !session_id.is_empty() {
+                                this.activate_workspace_pane(session_id.clone(), cx);
+                            }
+                            this.begin_terminal_scrollbar_drag(cx);
+                            let Some(bounds) = this.terminal_surface_bounds else {
+                                return;
+                            };
+                            let height = f32::from(bounds.size.height).max(1.0);
+                            let local_y = f32::from(event.position.y - bounds.origin.y);
+                            let ratio = (local_y / height).clamp(0.0, 1.0);
+                            this.set_terminal_scroll_from_track_ratio(ratio, cx);
+                            cx.stop_propagation();
+                        })
+                        },
+                    )
+                    .when(show, |this| {
+                        this.child(
+                            div()
+                                .id(SharedString::from(thumb_id))
+                                .absolute()
+                                .left(px(1.))
+                                .right(px(1.))
+                                .top(relative(thumb_top_ratio))
+                                .h(relative(thumb_ratio))
+                                .min_h(px(18.))
+                                .rounded_full()
+                                .bg(rgb(if is_active {
+                                    palette.accent
+                                } else {
+                                    palette.text_muted
+                                }))
+                                .opacity(0.85),
+                        )
                     }),
             )
     }
