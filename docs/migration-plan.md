@@ -1460,3 +1460,9 @@ service boundary first:
   set, not only cycle), and encoding.
 - Multi-open panels control moved to Appearance · Layout (Tauri Appearance).
 
+## 2026-07-12 Terminal general densify
+
+- Terminal general display block matches Tauri nested switches: timestamp ms,
+  remote/process/docker interval steppers under parent toggles, action-link
+  matchers nested under Enabled.
+
