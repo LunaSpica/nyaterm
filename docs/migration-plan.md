@@ -581,3 +581,8 @@ service boundary first:
 - Network modals now wrap the shared helpers.
 - Connections: New/Edit connection, group editor, and delete confirms use centered modal shells instead of bottom-of-panel banners.
 - Security list rows densified (tighter gap); tab strip padding matches Tauri `px-3 pt-3`.
+
+## 2026-07-11 Quick Commands bottom chrome
+- Bottom Quick Commands panel drops page-like title/metrics cards.
+- Compact header strip: title + count, search field with SVG, denser view/sort mode chips, Add/Import.
+- Category sidebar narrowed; command rows scroll in remaining height.
