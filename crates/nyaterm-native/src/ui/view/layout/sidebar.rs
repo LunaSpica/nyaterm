@@ -871,6 +871,7 @@ impl NyaTermApp {
         } else {
             "not set"
         };
+        let palette = self.theme_palette();
 
         let mut body = div().flex_1().min_h_0().overflow_hidden().flex().flex_col().gap_1().p_2();
 
@@ -891,8 +892,8 @@ impl NyaTermApp {
                                 .h(px(42.))
                                 .rounded_md()
                                 .border_1()
-                                .border_color(rgb(0x30363d))
-                                .bg(rgb(0x0d1117))
+                                .border_color(rgb(palette.border))
+                                .bg(rgb(palette.input))
                                 .px_2()
                                 .flex()
                                 .items_center()
@@ -915,7 +916,7 @@ impl NyaTermApp {
                                                         .flex_1()
                                                         .text_xs()
                                                         .font_weight(FontWeight(600.))
-                                                        .text_color(rgb(0xc9d1d9))
+                                                        .text_color(rgb(palette.text))
                                                         .overflow_hidden()
                                                         .child(truncate_preview(&key.name, 28)),
                                                 )
@@ -923,7 +924,7 @@ impl NyaTermApp {
                                                     div()
                                                         .text_size(px(10.))
                                                         .text_color(if key.has_key_data {
-                                                            rgb(0x3fb950)
+                                                            rgb(palette.success)
                                                         } else {
                                                             rgb(0x8b949e)
                                                         })
@@ -937,7 +938,7 @@ impl NyaTermApp {
                                         .child(
                                             div()
                                                 .text_size(px(10.))
-                                                .text_color(rgb(0x6e7681))
+                                                .text_color(rgb(palette.text_dimmed))
                                                 .overflow_hidden()
                                                 .child(format!(
                                                     "{} · cert {}",
@@ -1005,8 +1006,8 @@ impl NyaTermApp {
                                 .h(px(42.))
                                 .rounded_md()
                                 .border_1()
-                                .border_color(rgb(0x30363d))
-                                .bg(rgb(0x0d1117))
+                                .border_color(rgb(palette.border))
+                                .bg(rgb(palette.input))
                                 .px_2()
                                 .flex()
                                 .items_center()
@@ -1022,7 +1023,7 @@ impl NyaTermApp {
                                             div()
                                                 .text_xs()
                                                 .font_weight(FontWeight(600.))
-                                                .text_color(rgb(0xc9d1d9))
+                                                .text_color(rgb(palette.text))
                                                 .overflow_hidden()
                                                 .child(truncate_preview(&entry.name, 28)),
                                         )
@@ -1030,7 +1031,7 @@ impl NyaTermApp {
                                             div()
                                                 .font_family("JetBrains Mono")
                                                 .text_size(px(10.))
-                                                .text_color(rgb(0x8b949e))
+                                                .text_color(rgb(palette.text_muted))
                                                 .overflow_hidden()
                                                 .child(truncate_preview(&revealed, 20)),
                                         ),
@@ -1105,8 +1106,8 @@ impl NyaTermApp {
                                 .h(px(48.))
                                 .rounded_md()
                                 .border_1()
-                                .border_color(rgb(0x30363d))
-                                .bg(rgb(0x0d1117))
+                                .border_color(rgb(palette.border))
+                                .bg(rgb(palette.input))
                                 .px_2()
                                 .flex()
                                 .items_center()
@@ -1129,7 +1130,7 @@ impl NyaTermApp {
                                                         .flex_1()
                                                         .text_xs()
                                                         .font_weight(FontWeight(600.))
-                                                        .text_color(rgb(0xc9d1d9))
+                                                        .text_color(rgb(palette.text))
                                                         .overflow_hidden()
                                                         .child(truncate_preview(&entry.name, 24)),
                                                 )
@@ -1137,7 +1138,7 @@ impl NyaTermApp {
                                                     div()
                                                         .text_size(px(10.))
                                                         .text_color(if entry.enabled {
-                                                            rgb(0x3fb950)
+                                                            rgb(palette.success)
                                                         } else {
                                                             rgb(0x8b949e)
                                                         })
@@ -1147,7 +1148,7 @@ impl NyaTermApp {
                                         .child(
                                             div()
                                                 .text_size(px(10.))
-                                                .text_color(rgb(0x6e7681))
+                                                .text_color(rgb(palette.text_dimmed))
                                                 .overflow_hidden()
                                                 .child(format!(
                                                     "{} · {}",
@@ -1236,8 +1237,8 @@ impl NyaTermApp {
                                 .h(px(48.))
                                 .rounded_md()
                                 .border_1()
-                                .border_color(rgb(0x30363d))
-                                .bg(rgb(0x0d1117))
+                                .border_color(rgb(palette.border))
+                                .bg(rgb(palette.input))
                                 .px_2()
                                 .flex()
                                 .items_center()
@@ -1260,7 +1261,7 @@ impl NyaTermApp {
                                                         .flex_1()
                                                         .text_xs()
                                                         .font_weight(FontWeight(600.))
-                                                        .text_color(rgb(0xc9d1d9))
+                                                        .text_color(rgb(palette.text))
                                                         .overflow_hidden()
                                                         .child(truncate_preview(&title, 24)),
                                                 )
@@ -1276,7 +1277,7 @@ impl NyaTermApp {
                                         .child(
                                             div()
                                                 .text_size(px(10.))
-                                                .text_color(rgb(0x6e7681))
+                                                .text_color(rgb(palette.text_dimmed))
                                                 .overflow_hidden()
                                                 .child(format!(
                                                     "{} · {} · {}d · {}",
@@ -1377,15 +1378,15 @@ impl NyaTermApp {
             .relative()
             .flex()
             .flex_col()
-            .bg(rgb(0x161b22))
+            .bg(rgb(palette.surface))
             .child(
                 div()
                     .px_3()
                     .pt_3()
                     .pb_2()
                     .border_b_1()
-                    .border_color(rgb(0x30363d))
-                    .bg(rgb(0x12171f))
+                    .border_color(rgb(palette.border))
+                    .bg(rgb(palette.section_header))
                     .flex()
                     .flex_col()
                     .gap_2()
@@ -1395,7 +1396,7 @@ impl NyaTermApp {
                             .h(px(32.))
                             .w_full()
                             .rounded_md()
-                            .bg(rgb(0x21262d))
+                            .bg(rgb(palette.surface_elevated))
                             .p(px(2.))
                             .flex()
                             .items_center()
@@ -1414,7 +1415,7 @@ impl NyaTermApp {
                             .child(
                                 div()
                                     .text_size(px(10.))
-                                    .text_color(rgb(0x6e7681))
+                                    .text_color(rgb(palette.text_dimmed))
                                     .child(self.security_status.clone()),
                             )
                             .child(
@@ -1425,7 +1426,7 @@ impl NyaTermApp {
                                     .child(
                                         div()
                                             .text_size(px(10.))
-                                            .text_color(rgb(0x6e7681))
+                                            .text_color(rgb(palette.text_dimmed))
                                             .child(format!(
                                                 "MP {master} · K{key_count}/P{password_count}/C{credential_count}/O{otp_count}"
                                             )),
@@ -1474,11 +1475,12 @@ impl NyaTermApp {
     ) -> impl IntoElement {
         let unlocked = !self.security_secrets_locked();
         let has_master = self.settings.has_master_password;
+        let palette = self.theme_palette();
         div()
             .flex_none()
             .border_t_1()
-            .border_color(rgb(0x30363d))
-            .bg(rgb(0x12171f))
+            .border_color(rgb(palette.border))
+            .bg(rgb(palette.section_header))
             .px_2()
             .py_2()
             .flex()
@@ -1489,9 +1491,9 @@ impl NyaTermApp {
                 div()
                     .text_size(px(10.))
                     .text_color(if unlocked {
-                        rgb(0x3fb950)
+                        rgb(palette.success)
                     } else {
-                        rgb(0xd29922)
+                        rgb(palette.warning)
                     })
                     .child(if !has_master {
                         "Secrets open (no master password)"
@@ -1627,6 +1629,7 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
         let selected = self.security_auth_tab == tab;
+        let palette = self.theme_palette();
         // Tauri TabsTrigger text-xs inside h-8 grid segment.
         div()
             .id(SharedString::from(format!("security-tab-{}", tab.label())))
@@ -1641,18 +1644,22 @@ impl NyaTermApp {
             .text_size(px(11.))
             .font_weight(FontWeight(if selected { 600. } else { 500. }))
             .text_color(if selected {
-                rgb(0xc9d1d9)
+                rgb(palette.text)
             } else {
-                rgb(0x8b949e)
+                rgb(palette.text_muted)
             })
             .bg(if selected {
-                rgb(0x0d1117)
+                rgb(palette.input)
             } else {
-                rgb(0x21262d)
+                rgb(palette.surface_elevated)
             })
-            .hover(|this| {
-                this.bg(if selected { rgb(0x0d1117) } else { rgb(0x30363d) })
-                    .text_color(rgb(0xc9d1d9))
+            .hover(move |this| {
+                this.bg(if selected {
+                    rgb(palette.input)
+                } else {
+                    rgb(palette.hover)
+                })
+                .text_color(rgb(palette.text))
             })
             .child(tab.label())
             .on_click(cx.listener(move |this, _, _, cx| {

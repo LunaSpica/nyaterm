@@ -791,3 +791,8 @@ service boundary first:
 - Panel headers take live `ThemePalette` (surface/border/text_muted).
 - Status bar, activity bar, left/right side panels, and main surface use palette bg/surface/border.
 - Terminal canvas font family/size follow appearance settings (`terminal_font_family` / `terminal_font_size`).
+
+## 2026-07-11 ThemePalette Tauri field parity + workspace chrome
+- Expand `ThemePalette` to Tauri surface tokens: section_header, hover, input, text_dimmed, success/warning/danger.
+- Align github-light / catppuccin(-mocha) hex values with `nyaterm-tauri/src/lib/themes.ts`.
+- Panel headers use section_header; tab strip, empty workspace, bottom panel, security-auth lists use palette.

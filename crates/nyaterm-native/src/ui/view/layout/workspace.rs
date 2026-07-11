@@ -38,9 +38,9 @@ impl NyaTermApp {
                     .items_center()
                     .gap_2()
                     .border_r_1()
-                    .border_color(rgb(0x30363d))
-                    .bg(rgb(0x161b22))
-                    .child(div().size(px(8.)).rounded_full().bg(rgb(0xd29922)))
+                    .border_color(rgb(self.theme_palette().border))
+                    .bg(rgb(self.theme_palette().surface))
+                    .child(div().size(px(8.)).rounded_full().bg(rgb(self.theme_palette().warning)))
                     .child(
                         div()
                             .min_w_0()
@@ -327,13 +327,14 @@ impl NyaTermApp {
             ));
         }
 
+        let palette = self.theme_palette();
         div()
             .h(px(36.))  // Tauri TabBar: h-9
             .flex()
             .items_center()
             .border_b_1()
-            .border_color(rgb(0x30363d))
-            .bg(rgb(0x161b22))
+            .border_color(rgb(palette.border))
+            .bg(rgb(palette.surface))
             .child(tabs)
             .child(session_actions)
     }
@@ -348,13 +349,14 @@ impl NyaTermApp {
         let show_commands = self.display_shortcut_for("view.showAllCommands", "Ctrl+Shift+P");
         let switch_terminal = self.display_shortcut_for("tab.quickSwitch", "Ctrl+Shift+S");
 
+        let palette = self.theme_palette();
         div()
             .flex_1()
             .min_h_0()
             .flex()
             .items_center()
             .justify_center()
-            .bg(rgb(0x0d1117))
+            .bg(rgb(palette.bg))
             .px_6()
             .child(
                 div()
@@ -416,14 +418,17 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) -> gpui::AnyElement {
         match self.bottom_panel {
-            BottomPanelMode::QuickCommands => div()
-                .h(px(220.))
-                .flex_none()
-                .border_t_1()
-                .border_color(rgb(0x30363d))
-                .bg(rgb(0x161b22))
-                .child(self.quick_commands_panel(cx))
-                .into_any_element(),
+            BottomPanelMode::QuickCommands => {
+                let palette = self.theme_palette();
+                div()
+                    .h(px(220.))
+                    .flex_none()
+                    .border_t_1()
+                    .border_color(rgb(palette.border))
+                    .bg(rgb(palette.surface))
+                    .child(self.quick_commands_panel(cx))
+                    .into_any_element()
+            }
             BottomPanelMode::CommandSend => self.bottom_command_send_bar(cx).into_any_element(),
             BottomPanelMode::Hidden => div().into_any_element(),
         }
@@ -450,12 +455,13 @@ impl NyaTermApp {
             }
         }
 
+        let palette = self.theme_palette();
         div()
             .h(px(112.))
             .flex_none()
             .border_t_1()
-            .border_color(rgb(0x30363d))
-            .bg(rgb(0x161b22))
+            .border_color(rgb(palette.border))
+            .bg(rgb(palette.surface))
             .p_3()
             .child(
                 div()
@@ -519,6 +525,7 @@ impl NyaTermApp {
         } else {
             "Run"
         };
+        let palette = self.theme_palette();
 
         div()
             .id(SharedString::from(format!("bottom-quick-command-{index}")))
@@ -527,11 +534,11 @@ impl NyaTermApp {
             .flex_none()
             .rounded_md()
             .border_1()
-            .border_color(rgb(0x30363d))
-            .bg(rgb(0x161b22))
+            .border_color(rgb(palette.border))
+            .bg(rgb(palette.surface))
             .p_2()
             .cursor_pointer()
-            .hover(|this| this.bg(rgb(0x1c2431)))
+            .hover(move |this| this.bg(rgb(palette.hover)))
             .child(
                 div()
                     .flex()
@@ -543,13 +550,13 @@ impl NyaTermApp {
                             .min_w_0()
                             .text_xs()
                             .font_weight(FontWeight(800.))
-                            .text_color(rgb(0xc9d1d9))
+                            .text_color(rgb(palette.text))
                             .child(title),
                     )
                     .child(
                         div()
                             .text_xs()
-                            .text_color(rgb(0x3fb950))
+                            .text_color(rgb(palette.success))
                             .child(execute_label),
                     ),
             )

@@ -157,7 +157,7 @@ pub(in crate::ui::view) fn panel_header(
         .px_3()
         .border_b_1()
         .border_color(rgb(palette.border))
-        .bg(rgb(palette.surface))
+        .bg(rgb(palette.section_header))
         .child(
             div()
                 .min_w_0()
