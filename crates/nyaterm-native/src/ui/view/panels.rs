@@ -54,7 +54,8 @@ impl NyaTermApp {
             })
             .unwrap_or_else(|| "No active session".to_string());
         let target_available = self.active_session_id.is_some();
-        let target_scope_label = match self.send_command_target {
+        let group_targets = self.send_command_group_target_options();
+        let target_scope_label = match &self.send_command_target {
             SendCommandTarget::Current => active_target.clone(),
             SendCommandTarget::AllCompatible => {
                 let n = self.send_command_target_session_ids().len();
@@ -62,6 +63,25 @@ impl NyaTermApp {
                     "No compatible sessions".to_string()
                 } else {
                     format!("All compatible ({n})")
+                }
+            }
+            SendCommandTarget::Group(group_id) => {
+                let n = self.send_command_target_session_ids().len();
+                let name = group_targets
+                    .iter()
+                    .find(|(id, _, _)| id == group_id)
+                    .map(|(_, name, _)| name.clone())
+                    .or_else(|| {
+                        self.sync_groups
+                            .iter()
+                            .find(|group| &group.id == group_id)
+                            .map(|group| group.name.clone())
+                    })
+                    .unwrap_or_else(|| "Group".to_string());
+                if n == 0 {
+                    format!("Group: {name} (empty)")
+                } else {
+                    format!("Group: {name} ({n})")
                 }
             }
         };
@@ -245,33 +265,67 @@ impl NyaTermApp {
                             ))
                             .child(send_command_control_group(
                                 "Target",
-                                div()
-                                    .flex()
-                                    .items_center()
-                                    .child(send_command_chip(
-                                        "bottom-command-target-current",
-                                        "Current",
-                                        self.send_command_target == SendCommandTarget::Current,
-                                        cx.listener(|this, _, _, cx| {
-                                            this.send_command_target = SendCommandTarget::Current;
-                                            this.terminal_status =
-                                                "command send target: Current".to_string();
-                                            cx.notify();
-                                        }),
-                                    ))
-                                    .child(send_command_chip(
-                                        "bottom-command-target-all",
-                                        "All",
-                                        self.send_command_target
-                                            == SendCommandTarget::AllCompatible,
-                                        cx.listener(|this, _, _, cx| {
-                                            this.send_command_target =
-                                                SendCommandTarget::AllCompatible;
-                                            this.terminal_status =
-                                                "command send target: All compatible".to_string();
-                                            cx.notify();
-                                        }),
-                                    )),
+                                {
+                                    let mut chips = div().flex().items_center().flex_wrap().gap_0();
+                                    chips = chips
+                                        .child(send_command_chip(
+                                            "bottom-command-target-current",
+                                            "Current",
+                                            matches!(
+                                                self.send_command_target,
+                                                SendCommandTarget::Current
+                                            ),
+                                            cx.listener(|this, _, _, cx| {
+                                                this.set_send_command_target(
+                                                    SendCommandTarget::Current,
+                                                    cx,
+                                                );
+                                            }),
+                                        ))
+                                        .child(send_command_chip(
+                                            "bottom-command-target-all",
+                                            "All",
+                                            matches!(
+                                                self.send_command_target,
+                                                SendCommandTarget::AllCompatible
+                                            ),
+                                            cx.listener(|this, _, _, cx| {
+                                                this.set_send_command_target(
+                                                    SendCommandTarget::AllCompatible,
+                                                    cx,
+                                                );
+                                            }),
+                                        ));
+                                    for (group_id, group_name, count) in group_targets.iter().take(4) {
+                                        let selected = matches!(
+                                            &self.send_command_target,
+                                            SendCommandTarget::Group(id) if id == group_id
+                                        );
+                                        let label = if group_name.chars().count() > 10 {
+                                            format!(
+                                                "{}…({})",
+                                                group_name.chars().take(8).collect::<String>(),
+                                                count
+                                            )
+                                        } else {
+                                            format!("{group_name}({count})")
+                                        };
+                                        let group_id = group_id.clone();
+                                        // send_command_chip needs &'static str for label - use dynamic via local helper
+                                        chips = chips.child(send_command_target_chip(
+                                            format!("bottom-command-target-group-{group_id}"),
+                                            label,
+                                            selected,
+                                            cx.listener(move |this, _, _, cx| {
+                                                this.set_send_command_target(
+                                                    SendCommandTarget::Group(group_id.clone()),
+                                                    cx,
+                                                );
+                                            }),
+                                        ));
+                                    }
+                                    chips
+                                },
                             ))
                             .child(send_command_control_group(
                                 "Mode",
@@ -713,6 +767,41 @@ fn send_command_chip(
         .child(label)
         .on_click(on_click)
 }
+
+fn send_command_target_chip(
+    id: impl Into<String>,
+    label: impl Into<SharedString>,
+    active: bool,
+    on_click: impl Fn(&gpui::ClickEvent, &mut gpui::Window, &mut gpui::App) + 'static,
+) -> impl IntoElement {
+    div()
+        .id(SharedString::from(id.into()))
+        .h(px(28.))
+        .px_2()
+        .flex()
+        .items_center()
+        .text_size(px(11.))
+        .font_weight(if active {
+            FontWeight(600.)
+        } else {
+            FontWeight(500.)
+        })
+        .text_color(if active {
+            rgb(0x58a6ff)
+        } else {
+            rgb(0x8b949e)
+        })
+        .bg(if active {
+            rgb(0x122033)
+        } else {
+            rgb(0x00000000)
+        })
+        .cursor_pointer()
+        .hover(|this| this.bg(rgb(0x21262d)).text_color(rgb(0xc9d1d9)))
+        .child(label.into())
+        .on_click(on_click)
+}
+
 
 fn send_command_stepper_button(
     id: impl Into<String>,

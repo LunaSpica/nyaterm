@@ -655,3 +655,13 @@ service boundary first:
 
 ## 2026-07-11 Command Send hex ASCII side pane
 - Hex data mode shows mono editor + compact ASCII preview column (Tauri dual-pane step).
+
+## 2026-07-11 Command Send sync-group targets
+- `SendCommandTarget` supports Current / AllCompatible / Group(id).
+- Group targets resolve enabled sync groups, skip paused members, filter by serial/shell compatibility.
+- Target control shows Current, All, and up to 4 group chips with member counts.
+
+## 2026-07-11 Process/Docker densify pass
+- Process toolbar shows filtered/total/users + top CPU/MEM mono summary.
+- Expanded process details compacted: inline chips, nice steppers, SIG buttons on one dense strip.
+- Docker container rows tightened (48px, softer title weights).

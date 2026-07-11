@@ -371,6 +371,7 @@ pub(super) fn process_details(
     nice_focus: &gpui::FocusHandle,
     cx: &mut Context<NyaTermApp>,
 ) -> gpui::AnyElement {
+    // Tauri expanded process details: compact mono command + meta chips + dense actions.
     let command = if process.command_line.trim().is_empty() {
         process.command.clone()
     } else {
@@ -378,29 +379,30 @@ pub(super) fn process_details(
     };
     let pid = process.pid;
     div()
-        .mx_3()
-        .mb_3()
-        .rounded_sm()
+        .mx_2()
+        .mb_1()
+        .rounded_md()
         .border_1()
-        .border_color(rgb(0x2a3140))
-        .bg(rgb(0x0d1320))
-        .p_3()
+        .border_color(rgb(0x30363d))
+        .bg(rgb(0x0d1117))
+        .px_2()
+        .py_2()
         .flex()
         .flex_col()
-        .gap_3()
+        .gap_2()
         .child(
             div()
                 .font_family("JetBrains Mono")
-                .text_xs()
-                .line_height(px(18.))
-                .text_color(rgb(0xcbd5e1))
+                .text_size(px(11.))
+                .line_height(px(15.))
+                .text_color(rgb(0xc9d1d9))
                 .child(truncate_preview(&command, 180)),
         )
         .child(
             div()
-                .grid()
-                .grid_cols(6)
-                .gap_2()
+                .flex()
+                .flex_wrap()
+                .gap_1()
                 .child(process_detail_chip("PPID", process.ppid.to_string()))
                 .child(process_detail_chip(
                     "RSS",
@@ -415,70 +417,59 @@ pub(super) fn process_details(
             div()
                 .flex()
                 .items_center()
-                .gap_2()
+                .gap_1()
                 .flex_wrap()
                 .child(
-                    div()
-                        .flex()
-                        .items_center()
-                        .gap_2()
-                        .child(
-                            transfer_input("process-nice-input", "Nice", nice_draft, true)
-                                .w(px(116.))
-                                .track_focus(nice_focus)
-                                .on_click(cx.listener(|this, _, window, cx| {
-                                    window.focus(&this.process_nice_focus);
-                                    cx.notify();
-                                }))
-                                .on_key_down(cx.listener(
-                                    |this, event: &KeyDownEvent, window, cx| {
-                                        cx.stop_propagation();
-                                        this.handle_process_nice_key_down(event, window, cx);
-                                    },
-                                )),
-                        )
-                        .child(small_button(
-                            format!("process-nice-apply-{pid}"),
-                            "Apply",
-                            cx.listener(move |this, _, window, cx| {
-                                this.apply_process_nice_draft(window, cx);
-                            }),
+                    transfer_input("process-nice-input", "Nice", nice_draft, true)
+                        .w(px(88.))
+                        .h(px(26.))
+                        .track_focus(nice_focus)
+                        .on_click(cx.listener(|this, _, window, cx| {
+                            window.focus(&this.process_nice_focus);
+                            cx.notify();
+                        }))
+                        .on_key_down(cx.listener(
+                            |this, event: &KeyDownEvent, window, cx| {
+                                cx.stop_propagation();
+                                this.handle_process_nice_key_down(event, window, cx);
+                            },
                         )),
                 )
                 .child(small_button(
+                    format!("process-nice-apply-{pid}"),
+                    "Apply",
+                    cx.listener(move |this, _, window, cx| {
+                        this.apply_process_nice_draft(window, cx);
+                    }),
+                ))
+                .child(small_button(
                     format!("process-nice-low-{pid}"),
-                    "Nice -5",
+                    "-5",
                     cx.listener(move |this, _, window, cx| {
                         this.renice_process(pid, -5, window, cx);
                     }),
                 ))
                 .child(small_button(
                     format!("process-nice-zero-{pid}"),
-                    "Nice 0",
+                    "0",
                     cx.listener(move |this, _, window, cx| {
                         this.renice_process(pid, 0, window, cx);
                     }),
                 ))
                 .child(small_button(
                     format!("process-nice-high-{pid}"),
-                    "Nice +5",
+                    "+5",
                     cx.listener(move |this, _, window, cx| {
                         this.renice_process(pid, 5, window, cx);
                     }),
-                )),
-        )
-        .child(
-            div()
-                .flex()
-                .items_center()
-                .gap_2()
-                .flex_wrap()
+                ))
                 .child(
                     div()
-                        .text_xs()
-                        .font_weight(FontWeight(800.))
-                        .text_color(rgb(0x8f98aa))
-                        .child("Signals"),
+                        .mx_1()
+                        .text_size(px(10.))
+                        .font_weight(FontWeight(700.))
+                        .text_color(rgb(0x6e7681))
+                        .child("SIG"),
                 )
                 .child(small_button(
                     format!("process-signal-term-{pid}"),
@@ -521,28 +512,29 @@ pub(super) fn process_details(
 
 pub(super) fn process_detail_chip(label: &'static str, value: String) -> impl IntoElement {
     div()
-        .rounded_sm()
+        .rounded_md()
         .border_1()
-        .border_color(rgb(0x253044))
-        .bg(rgb(0x10151e))
+        .border_color(rgb(0x21262d))
+        .bg(rgb(0x161b22))
         .px_2()
-        .py_1()
+        .py_0()
+        .h(px(28.))
         .flex()
-        .flex_col()
+        .items_center()
         .gap_1()
         .child(
             div()
-                .text_xs()
-                .font_weight(FontWeight(800.))
-                .text_color(rgb(0x64748b))
+                .text_size(px(10.))
+                .font_weight(FontWeight(700.))
+                .text_color(rgb(0x6e7681))
                 .child(label),
         )
         .child(
             div()
                 .font_family("JetBrains Mono")
-                .text_xs()
-                .text_color(rgb(0xdbeafe))
-                .child(truncate_preview(&value, 36)),
+                .text_size(px(11.))
+                .text_color(rgb(0xc9d1d9))
+                .child(truncate_preview(&value, 24)),
         )
 }
 

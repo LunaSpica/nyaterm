@@ -2,10 +2,11 @@ use gpui::{FontWeight, IntoElement, div, prelude::*, px, rgb};
 use nyaterm_session::SessionKind;
 
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub(super) enum SendCommandTarget {
     Current,
     AllCompatible,
+    Group(String),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

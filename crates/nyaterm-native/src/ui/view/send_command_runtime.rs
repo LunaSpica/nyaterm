@@ -157,35 +157,122 @@ impl NyaTermApp {
 
 
     pub(in crate::ui::view) fn send_command_target_session_ids(&self) -> Vec<String> {
-        let sessions = self
-            .session_manager
-            .list_sessions()
-            .unwrap_or_default();
+        let sessions = self.session_manager.list_sessions().unwrap_or_default();
         let active_kind = self.active_session_kind();
-        match self.send_command_target {
-            SendCommandTarget::Current => self
-                .active_session_id
-                .clone()
-                .into_iter()
-                .collect(),
+        let is_compatible = |kind: SessionKind| -> bool {
+            match active_kind {
+                Some(SessionKind::Serial) => matches!(kind, SessionKind::Serial),
+                Some(_) => !matches!(kind, SessionKind::Serial),
+                None => true,
+            }
+        };
+        match &self.send_command_target {
+            SendCommandTarget::Current => self.active_session_id.clone().into_iter().collect(),
             SendCommandTarget::AllCompatible => {
-                let Some(active_kind) = active_kind else {
+                if active_kind.is_none() {
                     return Vec::new();
-                };
-                let serial = matches!(active_kind, SessionKind::Serial);
+                }
                 sessions
                     .into_iter()
-                    .filter(|session| {
-                        if serial {
-                            matches!(session.kind, SessionKind::Serial)
-                        } else {
-                            !matches!(session.kind, SessionKind::Serial)
-                        }
-                    })
+                    .filter(|session| is_compatible(session.kind))
                     .map(|session| session.id)
                     .collect()
             }
+            SendCommandTarget::Group(group_id) => {
+                let Some(group) = self.sync_groups.iter().find(|group| &group.id == group_id) else {
+                    return Vec::new();
+                };
+                if !group.enabled {
+                    return Vec::new();
+                }
+                let paused: std::collections::HashSet<&str> = group
+                    .paused_session_ids
+                    .iter()
+                    .map(String::as_str)
+                    .collect();
+                let session_kind_by_id: std::collections::HashMap<&str, SessionKind> = sessions
+                    .iter()
+                    .map(|session| (session.id.as_str(), session.kind))
+                    .collect();
+                group
+                    .session_ids
+                    .iter()
+                    .filter(|session_id| !paused.contains(session_id.as_str()))
+                    .filter(|session_id| {
+                        session_kind_by_id
+                            .get(session_id.as_str())
+                            .copied()
+                            .is_some_and(is_compatible)
+                    })
+                    .cloned()
+                    .collect()
+            }
         }
+    }
+
+    pub(in crate::ui::view) fn send_command_group_target_options(
+        &self,
+    ) -> Vec<(String, String, usize)> {
+        let sessions = self.session_manager.list_sessions().unwrap_or_default();
+        let active_kind = self.active_session_kind();
+        let is_compatible = |kind: SessionKind| -> bool {
+            match active_kind {
+                Some(SessionKind::Serial) => matches!(kind, SessionKind::Serial),
+                Some(_) => !matches!(kind, SessionKind::Serial),
+                None => true,
+            }
+        };
+        let session_kind_by_id: std::collections::HashMap<&str, SessionKind> = sessions
+            .iter()
+            .map(|session| (session.id.as_str(), session.kind))
+            .collect();
+        self.sync_groups
+            .iter()
+            .filter(|group| group.enabled)
+            .filter_map(|group| {
+                let paused: std::collections::HashSet<&str> = group
+                    .paused_session_ids
+                    .iter()
+                    .map(String::as_str)
+                    .collect();
+                let count = group
+                    .session_ids
+                    .iter()
+                    .filter(|session_id| !paused.contains(session_id.as_str()))
+                    .filter(|session_id| {
+                        session_kind_by_id
+                            .get(session_id.as_str())
+                            .copied()
+                            .is_some_and(is_compatible)
+                    })
+                    .count();
+                if count == 0 {
+                    None
+                } else {
+                    Some((group.id.clone(), group.name.clone(), count))
+                }
+            })
+            .collect()
+    }
+
+    pub(in crate::ui::view) fn set_send_command_target(
+        &mut self,
+        target: SendCommandTarget,
+        cx: &mut Context<Self>,
+    ) {
+        self.send_command_target = target;
+        let label = match &self.send_command_target {
+            SendCommandTarget::Current => "Current".to_string(),
+            SendCommandTarget::AllCompatible => "All compatible".to_string(),
+            SendCommandTarget::Group(id) => self
+                .sync_groups
+                .iter()
+                .find(|group| &group.id == id)
+                .map(|group| format!("Group: {}", group.name))
+                .unwrap_or_else(|| "Group".to_string()),
+        };
+        self.terminal_status = format!("command send target: {label}");
+        cx.notify();
     }
 
     pub(in crate::ui::view) fn build_send_command_units(

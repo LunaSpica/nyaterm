@@ -140,12 +140,13 @@ impl NyaTermApp {
         }
 
         // Tauri ProcessManager shell: dense search toolbar + sort strip + scrollable table.
-        let _ = (top_cpu, top_memory, user_count);
         let count_label = format!(
-            "{}/{}",
+            "{}/{} · {} users",
             filtered_processes.len(),
-            self.processes.len()
+            self.processes.len(),
+            user_count
         );
+        let top_label = format!("CPU {} · MEM {}", truncate_preview(&top_cpu, 28), truncate_preview(&top_memory, 28));
         div()
             .flex()
             .flex_col()
@@ -201,9 +202,24 @@ impl NyaTermApp {
                     )
                     .child(
                         div()
-                            .text_size(px(11.))
-                            .text_color(rgb(0x6e7681))
-                            .child(count_label),
+                            .flex()
+                            .flex_col()
+                            .items_end()
+                            .child(
+                                div()
+                                    .text_size(px(11.))
+                                    .text_color(rgb(0x8b949e))
+                                    .child(count_label),
+                            )
+                            .child(
+                                div()
+                                    .max_w(px(220.))
+                                    .font_family("JetBrains Mono")
+                                    .text_size(px(10.))
+                                    .text_color(rgb(0x6e7681))
+                                    .overflow_hidden()
+                                    .child(top_label),
+                            ),
                     ),
             )
             .when_some(self.process_signal_confirm.clone(), |this, confirm| {
