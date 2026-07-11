@@ -1118,4 +1118,6 @@ service boundary first:
   collapses the caret and clears the selection (Tauri mouse smart-cursor path).
 - Paste into a smart input selection replaces the range (Tauri pasteText path).
 - Terminal Enter now sends CR (`\r`) like xterm/Tauri instead of LF.
+- Command suggestion popup densified to Tauri-like 380px width, uppercase
+  compact header, and 11px mono rows.
 

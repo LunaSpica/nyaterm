@@ -765,7 +765,7 @@ impl NyaTermApp {
             (24.0, 120.0)
         };
         let (viewport_w, viewport_h) = self.last_viewport_size;
-        let menu_w = 360.0_f32;
+        let menu_w = 380.0_f32;
         let menu_h = (state.items.len() as f32 * 28.0 + 44.0).min(320.0);
         let mut x = base_x;
         let mut y = base_y + 4.0;
@@ -806,7 +806,7 @@ impl NyaTermApp {
                 .border_l_2()
                 .border_color(rgb(if selected { palette.accent } else { palette.surface }))
                 .bg(rgb(if selected { palette.hover } else { palette.surface }))
-                .text_size(px(12.))
+                .text_size(px(11.))
                 .text_color(rgb(palette.text))
                 .cursor_pointer()
                 .on_click(cx.listener(move |this, _, _, cx| {
@@ -893,15 +893,16 @@ impl NyaTermApp {
                     .justify_between()
                     .child(
                         div()
-                            .text_size(px(11.))
-                            .text_color(rgb(palette.text_muted))
-                            .child("Suggestions"),
+                            .text_size(px(10.))
+                            .font_weight(FontWeight(600.))
+                            .text_color(rgb(palette.text_dimmed))
+                            .child("SUGGESTIONS"),
                     )
                     .child(
                         div()
                             .text_size(px(10.))
                             .text_color(rgb(palette.text_dimmed))
-                            .child(format!("{} matches", state.items.len())),
+                            .child(format!("{}", state.items.len())),
                     ),
             )
             .child(list)
