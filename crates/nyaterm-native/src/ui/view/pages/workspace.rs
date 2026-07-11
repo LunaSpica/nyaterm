@@ -207,6 +207,15 @@ impl NyaTermApp {
                                         .h(px(2.))
                                         .bg(accent),
                                 )
+                                .child(
+                                    div()
+                                        .absolute()
+                                        .bottom_0()
+                                        .left_0()
+                                        .right_0()
+                                        .h(px(1.))
+                                        .bg(rgb(palette.bg)),
+                                )
                             })
                             .when(custom_color.is_some(), |this| {
                                 this.child(
