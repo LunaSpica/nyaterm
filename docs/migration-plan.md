@@ -804,3 +804,8 @@ service boundary first:
 ## 2026-07-11 AI Assistant shell palette + Connections extras
 - AI panel root/action strip/composer borders and muted text follow ThemePalette.
 - Connections more-menu and group-header hover/drop accents use palette tokens.
+
+## 2026-07-11 Shared ThemePalette + major panel shells
+- Extract `ThemePalette` to `crates/nyaterm-native/src/ui/theme.rs` for shared use.
+- Shared components: `empty_panel`, `mode_button`, `icon_button`, `section_header` take live palette.
+- Shell theming: Settings page, Docker/Process/Stats toolbars, Transfers root + path bar + queue, Quick Commands sidebar, Network/Tunnels surface.

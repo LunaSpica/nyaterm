@@ -119,20 +119,21 @@ impl NyaTermApp {
         // Tauri DockerManager shell: dense toolbar (search+actions) + tabs + flex list body.
         // Shared PanelHeader already shows title/meta; avoid page-like section headers.
         let status_short = truncate_preview(&self.docker_status, 36);
+        let palette = self.theme_palette();
         div()
             .flex()
             .flex_col()
             .size_full()
             .overflow_hidden()
-            .bg(rgb(0x161b22))
+            .bg(rgb(palette.surface))
             .child(
                 div()
                     .h(px(36.))
                     .flex_none()
                     .px_2()
                     .border_b_1()
-                    .border_color(rgb(0x30363d))
-                    .bg(rgb(0x12171f))
+                    .border_color(rgb(palette.border))
+                    .bg(rgb(palette.section_header))
                     .flex()
                     .items_center()
                     .gap_1()

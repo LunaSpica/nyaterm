@@ -45,9 +45,9 @@ impl NyaTermApp {
                 "No stats snapshot loaded."
             } else {
                 "Start an SSH session to inspect remote stats."
-            }));
+            }, self.theme_palette()));
         } else if stats.networks.is_empty() {
-            networks = networks.child(empty_panel("No active physical network interfaces found."));
+            networks = networks.child(empty_panel("No active physical network interfaces found.", self.theme_palette()));
         } else {
             for network in &stats.networks {
                 networks = networks.child(stats_resource_row(
@@ -65,7 +65,7 @@ impl NyaTermApp {
 
         let mut disks = div().flex().flex_col().gap_2();
         if self.remote_stats.is_some() && stats.disks.is_empty() {
-            disks = disks.child(empty_panel("No mounted block devices found."));
+            disks = disks.child(empty_panel("No mounted block devices found.", self.theme_palette()));
         } else {
             for disk in &stats.disks {
                 disks = disks.child(stats_resource_row(
@@ -92,15 +92,15 @@ impl NyaTermApp {
             .flex_col()
             .size_full()
             .overflow_hidden()
-            .bg(rgb(0x161b22))
+            .bg(rgb(self.theme_palette().surface))
             .child(
                 div()
                     .h(px(36.))
                     .flex_none()
                     .px_2()
                     .border_b_1()
-                    .border_color(rgb(0x30363d))
-                    .bg(rgb(0x12171f))
+                    .border_color(rgb(self.theme_palette().border))
+                    .bg(rgb(self.theme_palette().section_header))
                     .flex()
                     .items_center()
                     .gap_2()

@@ -98,10 +98,7 @@ impl NyaTermApp {
             .size_full()
             .p_3()
             .gap_4()
-            .child(section_header(
-                "Translation",
-                "Native translation for selected terminal text or manual input.",
-            ))
+            .child(section_header("Translation", "Native translation for selected terminal text or manual input.", self.theme_palette()))
             .child(
                 div()
                     .grid()

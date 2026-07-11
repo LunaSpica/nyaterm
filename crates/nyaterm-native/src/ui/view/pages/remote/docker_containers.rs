@@ -22,7 +22,7 @@ pub(in crate::ui::view::pages::remote) fn docker_containers_panel(
                 "No Docker snapshot loaded."
             } else {
                 "Start an SSH session to inspect remote Docker."
-            }))
+            }, super::cx_theme_palette(cx)))
             .into_any_element();
     }
     if !docker_available {
@@ -31,9 +31,7 @@ pub(in crate::ui::view::pages::remote) fn docker_containers_panel(
             .flex()
             .items_center()
             .justify_center()
-            .child(empty_panel(
-                "Docker is not installed or the daemon is not reachable.",
-            ))
+            .child(empty_panel("Docker is not installed or the daemon is not reachable.", super::cx_theme_palette(cx)))
             .into_any_element();
     }
     if filtered_containers.is_empty() {
@@ -46,7 +44,7 @@ pub(in crate::ui::view::pages::remote) fn docker_containers_panel(
                 "No containers found."
             } else {
                 "No containers match the Docker search."
-            }))
+            }, super::cx_theme_palette(cx)))
             .into_any_element();
     }
 
@@ -260,8 +258,7 @@ fn docker_container_row(
                         .relative()
                         .child(icon_button(
                             format!("docker-menu-toggle-{short}"),
-                            "⋮",
-                            cx.listener(move |this, _, _, cx| {
+                            "⋮", super::cx_theme_palette(cx),cx.listener(move |this, _, _, cx| {
                                 cx.stop_propagation();
                                 if this.docker_container_menu_id.as_deref() == Some(menu_id.as_str())
                                 {

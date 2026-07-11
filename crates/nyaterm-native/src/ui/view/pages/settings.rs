@@ -54,11 +54,12 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
         // Tauri SettingsPage shell: compact header + narrow nav + scroll content.
+        let palette = self.theme_palette();
         div()
             .flex()
             .flex_col()
             .size_full()
-            .bg(rgb(0x0d1117))
+            .bg(rgb(palette.bg))
             .child(
                 div()
                     .h(px(36.))
@@ -68,13 +69,13 @@ impl NyaTermApp {
                     .justify_between()
                     .px_3()
                     .border_b_1()
-                    .border_color(rgb(0x30363d))
-                    .bg(rgb(0x12171f))
+                    .border_color(rgb(palette.border))
+                    .bg(rgb(palette.section_header))
                     .child(
                         div()
                             .text_size(px(12.))
                             .font_weight(FontWeight(700.))
-                            .text_color(rgb(0xc9d1d9))
+                            .text_color(rgb(palette.text))
                             .child("Settings"),
                     )
                     .child(
@@ -86,9 +87,12 @@ impl NyaTermApp {
                             .items_center()
                             .rounded_md()
                             .text_size(px(11.))
-                            .text_color(rgb(0x8b949e))
+                            .text_color(rgb(palette.text_muted))
                             .cursor_pointer()
-                            .hover(|this| this.bg(rgb(0x21262d)).text_color(rgb(0xc9d1d9)))
+                            .hover(move |this| {
+                                this.bg(rgb(palette.surface_elevated))
+                                    .text_color(rgb(palette.text))
+                            })
                             .child("Back")
                             .on_click(cx.listener(|this, _, _, cx| {
                                 this.close_settings(cx);
@@ -108,21 +112,22 @@ impl NyaTermApp {
                             .min_w_0()
                             .min_h_0()
                             .overflow_hidden()
-                            .bg(rgb(0x0d1117))
+                            .bg(rgb(palette.bg))
                             .child(self.settings_active_panel(backup_snapshot_prompt, cx)),
                     ),
             )
     }
 
     fn settings_sidebar(&mut self, cx: &mut Context<Self>) -> impl IntoElement {
+        let palette = self.theme_palette();
         div()
             .id(SharedString::from("settings-sidebar-scroll"))
             .w(px(220.))
             .flex_none()
             .h_full()
             .border_r_1()
-            .border_color(rgb(0x30363d))
-            .bg(rgb(0x161b22))
+            .border_color(rgb(palette.border))
+            .bg(rgb(palette.surface))
             .px_2()
             .py_2()
             .overflow_scroll()

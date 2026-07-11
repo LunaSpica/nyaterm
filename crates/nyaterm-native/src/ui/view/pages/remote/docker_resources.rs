@@ -36,8 +36,7 @@ pub(in crate::ui::view::pages::remote) fn docker_images_panel(
             )
             .child(icon_button(
                 format!("docker-image-remove-{}", compact_id(&image_id)),
-                "×",
-                cx.listener(move |this, _, _, cx| {
+                "×", super::cx_theme_palette(cx),cx.listener(move |this, _, _, cx| {
                     this.request_docker_confirm(
                         DockerConfirmState {
                             title: format!("Remove image {label}"),
@@ -85,8 +84,7 @@ pub(in crate::ui::view::pages::remote) fn docker_volumes_panel(
             docker_resource_row(volume.name.clone(), format!("driver {}", volume.driver)).child(
                 icon_button(
                     format!("docker-volume-remove-{volume_name}"),
-                    "×",
-                    cx.listener(move |this, _, _, cx| {
+                    "×", super::cx_theme_palette(cx),cx.listener(move |this, _, _, cx| {
                         this.request_docker_confirm(
                             DockerConfirmState {
                                 title: format!("Remove volume {volume_name}"),
@@ -144,8 +142,7 @@ pub(in crate::ui::view::pages::remote) fn docker_networks_panel(
             )
             .child(icon_button(
                 format!("docker-network-remove-{}", compact_id(&network_id)),
-                "×",
-                cx.listener(move |this, _, _, cx| {
+                "×", super::cx_theme_palette(cx),cx.listener(move |this, _, _, cx| {
                     this.request_docker_confirm(
                         DockerConfirmState {
                             title: format!("Remove network {name}"),
@@ -207,7 +204,7 @@ fn docker_resource_empty(title: &'static str, message: &'static str) -> gpui::An
         .flex()
         .items_center()
         .justify_center()
-        .child(empty_panel(message))
+        .child(empty_panel(message, crate::ui::theme::theme_palette("github-dark")))
         .into_any_element()
 }
 

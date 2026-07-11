@@ -972,6 +972,7 @@ pub(in crate::ui::view) fn connection_row(
                     format!("select-connection-{}", connection.id),
                     if selected { "Selected" } else { "Select" },
                     selected,
+                    crate::ui::theme::theme_palette("github-dark"),
                     on_select,
                 ))
                 .child(

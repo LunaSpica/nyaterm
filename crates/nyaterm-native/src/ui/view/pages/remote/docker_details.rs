@@ -33,7 +33,7 @@ pub(in crate::ui::view::pages::remote) fn docker_details_panel(
 
     let mut mounts = div().flex().flex_col().gap_1();
     if details.mounts.is_empty() {
-        mounts = mounts.child(empty_panel("No mounts reported."));
+        mounts = mounts.child(empty_panel("No mounts reported.", super::cx_theme_palette(cx)));
     } else {
         for mount in &details.mounts {
             mounts = mounts.child(
@@ -76,7 +76,7 @@ pub(in crate::ui::view::pages::remote) fn docker_details_panel(
 
     let mut networks = div().flex().flex_col().gap_1();
     if details.networks.is_empty() {
-        networks = networks.child(empty_panel("No networks reported."));
+        networks = networks.child(empty_panel("No networks reported.", super::cx_theme_palette(cx)));
     } else {
         for network in &details.networks {
             let ip_address = if network.ip_address.trim().is_empty() {

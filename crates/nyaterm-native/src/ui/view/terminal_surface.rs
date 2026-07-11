@@ -423,8 +423,7 @@ impl NyaTermApp {
                     .child(mode_button(
                         "terminal-search-mode-buffer",
                         TerminalSearchMode::Buffer.label(),
-                        self.terminal_search_mode == TerminalSearchMode::Buffer,
-                        cx.listener(|this, _, _, cx| {
+                        self.terminal_search_mode == TerminalSearchMode::Buffer, self.theme_palette(),cx.listener(|this, _, _, cx| {
                             this.terminal_search_mode = TerminalSearchMode::Buffer;
                             this.terminal_search_active_index = 0;
                             cx.notify();
@@ -433,8 +432,7 @@ impl NyaTermApp {
                     .child(mode_button(
                         "terminal-search-mode-history",
                         TerminalSearchMode::History.label(),
-                        self.terminal_search_mode == TerminalSearchMode::History,
-                        cx.listener(|this, _, _, cx| {
+                        self.terminal_search_mode == TerminalSearchMode::History, self.theme_palette(),cx.listener(|this, _, _, cx| {
                             this.terminal_search_mode = TerminalSearchMode::History;
                             this.terminal_search_active_index = 0;
                             cx.notify();
@@ -453,8 +451,7 @@ impl NyaTermApp {
                     )
                     .child(icon_button(
                         "terminal-search-close",
-                        "x",
-                        cx.listener(|this, _, window, cx| {
+                        "x", self.theme_palette(),cx.listener(|this, _, window, cx| {
                             this.close_terminal_search(window, cx);
                         }),
                     )),
@@ -489,8 +486,7 @@ impl NyaTermApp {
                     .child(mode_button(
                         "terminal-search-case",
                         "Aa",
-                        self.terminal_search_case_sensitive,
-                        cx.listener(|this, _, _, cx| {
+                        self.terminal_search_case_sensitive, self.theme_palette(),cx.listener(|this, _, _, cx| {
                             this.terminal_search_case_sensitive =
                                 !this.terminal_search_case_sensitive;
                             this.terminal_search_active_index = 0;
@@ -500,8 +496,7 @@ impl NyaTermApp {
                     .child(mode_button(
                         "terminal-search-regex",
                         ".*",
-                        self.terminal_search_regex,
-                        cx.listener(|this, _, _, cx| {
+                        self.terminal_search_regex, self.theme_palette(),cx.listener(|this, _, _, cx| {
                             this.terminal_search_regex = !this.terminal_search_regex;
                             this.terminal_search_active_index = 0;
                             cx.notify();
@@ -510,8 +505,7 @@ impl NyaTermApp {
                     .child(mode_button(
                         "terminal-search-word",
                         "Word",
-                        self.terminal_search_whole_word,
-                        cx.listener(|this, _, _, cx| {
+                        self.terminal_search_whole_word, self.theme_palette(),cx.listener(|this, _, _, cx| {
                             this.terminal_search_whole_word = !this.terminal_search_whole_word;
                             this.terminal_search_active_index = 0;
                             cx.notify();
@@ -519,15 +513,13 @@ impl NyaTermApp {
                     ))
                     .child(icon_button(
                         "terminal-search-prev",
-                        "^",
-                        cx.listener(|this, _, _, cx| {
+                        "^", self.theme_palette(),cx.listener(|this, _, _, cx| {
                             this.navigate_terminal_search(-1, cx);
                         }),
                     ))
                     .child(icon_button(
                         "terminal-search-next",
-                        "v",
-                        cx.listener(|this, _, _, cx| {
+                        "v", self.theme_palette(),cx.listener(|this, _, _, cx| {
                             this.navigate_terminal_search(1, cx);
                         }),
                     )),

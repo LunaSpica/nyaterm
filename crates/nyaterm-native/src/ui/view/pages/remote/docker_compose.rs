@@ -12,7 +12,7 @@ pub(in crate::ui::view::pages::remote) fn docker_compose_panel(
     // Tauri Compose tab: dense project rows (≈74px) + chevron + ⋮ overflow; services ≈58px.
     let mut rows = div().flex().flex_col().gap_1();
     if projects.is_empty() {
-        rows = rows.child(empty_panel("No compose projects loaded."));
+        rows = rows.child(empty_panel("No compose projects loaded.", super::cx_theme_palette(cx)));
     } else {
         for project in projects {
             let config_files = Some(project.config_files.clone()).filter(|value| {
@@ -173,8 +173,7 @@ fn docker_compose_project_row(
                                 .relative()
                                 .child(icon_button(
                                     format!("docker-compose-menu-{project_key}"),
-                                    "⋮",
-                                    cx.listener({
+                                    "⋮", super::cx_theme_palette(cx),cx.listener({
                                         let menu_id = menu_id.clone();
                                         move |this, _, _, cx| {
                                             cx.stop_propagation();
@@ -405,8 +404,7 @@ pub(in crate::ui::view::pages::remote) fn docker_compose_service_row(
                         .relative()
                         .child(icon_button(
                             format!("{row_id}-menu"),
-                            "⋮",
-                            cx.listener({
+                            "⋮", super::cx_theme_palette(cx),cx.listener({
                                 let menu_id = menu_id.clone();
                                 move |this, _, _, cx| {
                                     cx.stop_propagation();

@@ -1,3 +1,4 @@
+use crate::ui::theme::ThemePalette;
 use gpui::{
     App, ClickEvent, FontWeight, Hsla, IntoElement, SharedString, Window, div, prelude::*, px, rgb,
 };
@@ -17,25 +18,29 @@ pub(super) fn status_pill(
         .child(label)
 }
 
-pub(super) fn empty_panel(text: &'static str) -> impl IntoElement {
+pub(super) fn empty_panel(text: &'static str, palette: ThemePalette) -> impl IntoElement {
     div()
         .rounded_md()
         .border_1()
-        .border_color(rgb(0x30363d))
-        .bg(rgb(0x0d1117))
+        .border_color(rgb(palette.border))
+        .bg(rgb(palette.input))
         .p_4()
         .text_sm()
-        .text_color(rgb(0x8b949e))
+        .text_color(rgb(palette.text_muted))
         .child(text)
 }
 
-pub(super) fn section_header(title: &'static str, detail: &'static str) -> impl IntoElement {
+pub(super) fn section_header(
+    title: &'static str,
+    detail: &'static str,
+    palette: ThemePalette,
+) -> impl IntoElement {
     div()
         .flex()
         .flex_col()
         .gap_1()
         .child(div().text_2xl().font_weight(FontWeight(800.)).child(title))
-        .child(div().text_sm().text_color(rgb(0x8b949e)).child(detail))
+        .child(div().text_sm().text_color(rgb(palette.text_muted)).child(detail))
 }
 
 pub(super) fn capability_line(
@@ -93,6 +98,7 @@ pub(super) fn small_button(
     label: &'static str,
     on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
 ) -> impl IntoElement {
+    // Uses github-dark chrome tokens; callers that need live theme should use themed shells.
     div()
         .id(SharedString::from(id.into()))
         .h(px(28.))
@@ -101,12 +107,12 @@ pub(super) fn small_button(
         .items_center()
         .rounded_sm()
         .border_1()
-        .border_color(rgb(0x303848))
-        .bg(rgb(0x151b27))
-        .text_color(rgb(0xdbeafe))
+        .border_color(rgb(0x30363d))
+        .bg(rgb(0x21262d))
+        .text_color(rgb(0xc9d1d9))
         .text_xs()
         .cursor_pointer()
-        .hover(|this| this.bg(rgb(0x223047)))
+        .hover(|this| this.bg(rgb(0x1c2128)).text_color(rgb(0xffffff)))
         .child(label)
         .on_click(on_click)
 }
@@ -115,6 +121,7 @@ pub(super) fn mode_button(
     id: impl Into<String>,
     label: &'static str,
     active: bool,
+    palette: ThemePalette,
     on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
 ) -> impl IntoElement {
     // Tauri AI mode switch: compact segment, primary when active.
@@ -125,12 +132,20 @@ pub(super) fn mode_button(
         .flex()
         .items_center()
         .rounded_md()
-        .bg(if active { rgb(0x122033) } else { rgb(0x0d1117) })
-        .text_color(if active { rgb(0x58a6ff) } else { rgb(0x8b949e) })
+        .bg(if active {
+            rgb(palette.hover)
+        } else {
+            rgb(palette.input)
+        })
+        .text_color(if active {
+            rgb(palette.accent)
+        } else {
+            rgb(palette.text_muted)
+        })
         .text_size(px(11.))
         .font_weight(if active { FontWeight(600.) } else { FontWeight(500.) })
         .cursor_pointer()
-        .hover(|this| this.bg(rgb(0x21262d)).text_color(rgb(0xc9d1d9)))
+        .hover(move |this| this.bg(rgb(palette.surface_elevated)).text_color(rgb(palette.text)))
         .child(label)
         .on_click(on_click)
 }
@@ -138,6 +153,7 @@ pub(super) fn mode_button(
 pub(super) fn icon_button(
     id: impl Into<String>,
     label: &'static str,
+    palette: ThemePalette,
     on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
 ) -> impl IntoElement {
     // Tauri ghost icon-sm buttons: no hard border until hover.
@@ -148,10 +164,10 @@ pub(super) fn icon_button(
         .items_center()
         .justify_center()
         .rounded_md()
-        .text_color(rgb(0x8b949e))
+        .text_color(rgb(palette.text_muted))
         .text_xs()
         .cursor_pointer()
-        .hover(|this| this.bg(rgb(0x21262d)).text_color(rgb(0xc9d1d9)))
+        .hover(move |this| this.bg(rgb(palette.surface_elevated)).text_color(rgb(palette.text)))
         .child(label)
         .on_click(on_click)
 }

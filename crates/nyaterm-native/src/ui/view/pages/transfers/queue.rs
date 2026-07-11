@@ -56,13 +56,14 @@ impl NyaTermApp {
             }
         }
 
+        let palette = self.theme_palette();
         div()
             .id(SharedString::from("transfer-queue-panel"))
             .size_full()
             .flex()
             .flex_col()
             .overflow_hidden()
-            .bg(rgb(0x161b22))
+            .bg(rgb(palette.surface))
             .track_focus(&self.transfer_queue_focus)
             .on_click(cx.listener(|this, _, window, cx| {
                 window.focus(&this.transfer_queue_focus);

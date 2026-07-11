@@ -27,13 +27,14 @@ impl NyaTermApp {
             .unwrap_or_default()
             .len()
             > 1;
+        let palette = self.theme_palette();
 
         let mut category_sidebar = div()
             .w(px(140.))
             .flex_shrink_0()
             .pr_2()
             .border_r_1()
-            .border_color(rgb(0x30363d))
+            .border_color(rgb(palette.border))
             .flex()
             .flex_col()
             .gap_1();
@@ -57,22 +58,22 @@ impl NyaTermApp {
                         .gap_2()
                         .rounded_sm()
                         .bg(if selected {
-                            rgb(0x12171f)
+                            rgb(palette.section_header)
                         } else {
                             rgba(0x00000000)
                         })
                         .text_xs()
                         .text_color(if selected {
-                            rgb(0x58a6ff)
+                            rgb(palette.accent)
                         } else {
-                            rgb(0xc9d1d9)
+                            rgb(palette.text)
                         })
                         .cursor_pointer()
-                        .hover(|this| this.bg(rgb(0x1c2128)))
+                        .hover(move |this| this.bg(rgb(palette.hover)))
                         .child(div().size(px(6.)).rounded_full().bg(if selected {
-                            rgb(0x58a6ff)
+                            rgb(palette.accent)
                         } else {
-                            rgb(0x6e7681)
+                            rgb(palette.text_dimmed)
                         }))
                         .child(
                             div()
@@ -270,8 +271,7 @@ impl NyaTermApp {
                         ))
                         .child(icon_button(
                             format!("quick-command-tile-detail-{command_id}"),
-                            "ⓘ",
-                            cx.listener(move |this, _, window, cx| {
+                            "ⓘ", self.theme_palette(),cx.listener(move |this, _, window, cx| {
                                 this.open_quick_command_details(
                                     detail_command_id.clone(),
                                     window,
@@ -282,8 +282,7 @@ impl NyaTermApp {
                         .when(can_send_to_all, |this| {
                             this.child(icon_button(
                                 format!("quick-command-tile-all-{command_id}"),
-                                "≫",
-                                cx.listener(move |this, _, _, cx| {
+                                "≫", self.theme_palette(),cx.listener(move |this, _, _, cx| {
                                     this.send_quick_command_to_all_by_id(
                                         all_command_id.clone(),
                                         cx,
@@ -297,15 +296,13 @@ impl NyaTermApp {
                         let mut actions = div().flex().items_center().gap_1();
                         actions = actions.child(icon_button(
                             format!("quick-command-compact-run-{command_id}"),
-                            "▶",
-                            cx.listener(move |this, _, _, cx| {
+                            "▶", self.theme_palette(),cx.listener(move |this, _, _, cx| {
                                 this.run_quick_command_by_id(run_command_id.clone(), cx);
                             }),
                         ));
                         actions = actions.child(icon_button(
                             format!("quick-command-compact-detail-{command_id}"),
-                            "ⓘ",
-                            cx.listener(move |this, _, window, cx| {
+                            "ⓘ", self.theme_palette(),cx.listener(move |this, _, window, cx| {
                                 this.open_quick_command_details(
                                     detail_command_id.clone(),
                                     window,
@@ -315,8 +312,7 @@ impl NyaTermApp {
                         ));
                         actions = actions.child(icon_button(
                             format!("quick-command-compact-edit-{command_id}"),
-                            "✎",
-                            cx.listener(move |this, _, window, cx| {
+                            "✎", self.theme_palette(),cx.listener(move |this, _, window, cx| {
                                 this.open_edit_quick_command_editor(
                                     edit_command_id.clone(),
                                     window,
@@ -327,8 +323,7 @@ impl NyaTermApp {
                         if can_send_to_all {
                             actions = actions.child(icon_button(
                                 format!("quick-command-compact-all-{command_id}"),
-                                "≫",
-                                cx.listener(move |this, _, _, cx| {
+                                "≫", self.theme_palette(),cx.listener(move |this, _, _, cx| {
                                     this.send_quick_command_to_all_by_id(
                                         all_command_id.clone(),
                                         cx,
@@ -338,8 +333,7 @@ impl NyaTermApp {
                         }
                         actions = actions.child(icon_button(
                             format!("quick-command-compact-delete-{command_id}"),
-                            "×",
-                            cx.listener(move |this, _, _, cx| {
+                            "×", self.theme_palette(),cx.listener(move |this, _, _, cx| {
                                 this.open_delete_quick_command_confirm(
                                     delete_command_id.clone(),
                                     cx,
@@ -431,15 +425,13 @@ impl NyaTermApp {
                         ));
                         actions = actions.child(icon_button(
                             format!("quick-command-list-run-{command_id}"),
-                            "▶",
-                            cx.listener(move |this, _, _, cx| {
+                            "▶", self.theme_palette(),cx.listener(move |this, _, _, cx| {
                                 this.run_quick_command_by_id(run_command_id.clone(), cx);
                             }),
                         ));
                         actions = actions.child(icon_button(
                             format!("quick-command-detail-{command_id}"),
-                            "ⓘ",
-                            cx.listener(move |this, _, window, cx| {
+                            "ⓘ", self.theme_palette(),cx.listener(move |this, _, window, cx| {
                                 this.open_quick_command_details(
                                     detail_command_id.clone(),
                                     window,
@@ -449,8 +441,7 @@ impl NyaTermApp {
                         ));
                         actions = actions.child(icon_button(
                             format!("quick-command-edit-{command_id}"),
-                            "✎",
-                            cx.listener(move |this, _, window, cx| {
+                            "✎", self.theme_palette(),cx.listener(move |this, _, window, cx| {
                                 this.open_edit_quick_command_editor(
                                     edit_command_id.clone(),
                                     window,
@@ -461,8 +452,7 @@ impl NyaTermApp {
                         if can_send_to_all {
                             actions = actions.child(icon_button(
                                 format!("quick-command-all-{command_id}"),
-                                "≫",
-                                cx.listener(move |this, _, _, cx| {
+                                "≫", self.theme_palette(),cx.listener(move |this, _, _, cx| {
                                     this.send_quick_command_to_all_by_id(
                                         all_command_id.clone(),
                                         cx,
@@ -472,8 +462,7 @@ impl NyaTermApp {
                         }
                         actions = actions.child(icon_button(
                             format!("quick-command-delete-{command_id}"),
-                            "×",
-                            cx.listener(move |this, _, _, cx| {
+                            "×", self.theme_palette(),cx.listener(move |this, _, _, cx| {
                                 this.open_delete_quick_command_confirm(
                                     delete_command_id.clone(),
                                     cx,
@@ -583,7 +572,7 @@ impl NyaTermApp {
             .flex()
             .flex_col()
             .overflow_hidden()
-            .bg(rgb(0x161b22))
+            .bg(rgb(palette.surface))
             .child(
                 div()
                     .h(px(36.))
@@ -663,48 +652,42 @@ impl NyaTermApp {
                     .child(mode_button(
                         "quick-command-view-list",
                         "List",
-                        self.quick_command_view_mode == QuickCommandViewMode::List,
-                        cx.listener(|this, _, _, cx| {
+                        self.quick_command_view_mode == QuickCommandViewMode::List, self.theme_palette(),cx.listener(|this, _, _, cx| {
                             this.set_quick_command_view_mode(QuickCommandViewMode::List, cx);
                         }),
                     ))
                     .child(mode_button(
                         "quick-command-view-compact",
                         "Cmp",
-                        self.quick_command_view_mode == QuickCommandViewMode::Compact,
-                        cx.listener(|this, _, _, cx| {
+                        self.quick_command_view_mode == QuickCommandViewMode::Compact, self.theme_palette(),cx.listener(|this, _, _, cx| {
                             this.set_quick_command_view_mode(QuickCommandViewMode::Compact, cx);
                         }),
                     ))
                     .child(mode_button(
                         "quick-command-view-tile",
                         "Tile",
-                        self.quick_command_view_mode == QuickCommandViewMode::Tile,
-                        cx.listener(|this, _, _, cx| {
+                        self.quick_command_view_mode == QuickCommandViewMode::Tile, self.theme_palette(),cx.listener(|this, _, _, cx| {
                             this.set_quick_command_view_mode(QuickCommandViewMode::Tile, cx);
                         }),
                     ))
                     .child(mode_button(
                         "quick-command-sort-created",
                         "New",
-                        self.quick_command_sort_mode == QuickCommandSortMode::Created,
-                        cx.listener(|this, _, _, cx| {
+                        self.quick_command_sort_mode == QuickCommandSortMode::Created, self.theme_palette(),cx.listener(|this, _, _, cx| {
                             this.set_quick_command_sort_mode(QuickCommandSortMode::Created, cx);
                         }),
                     ))
                     .child(mode_button(
                         "quick-command-sort-name",
                         "Name",
-                        self.quick_command_sort_mode == QuickCommandSortMode::Name,
-                        cx.listener(|this, _, _, cx| {
+                        self.quick_command_sort_mode == QuickCommandSortMode::Name, self.theme_palette(),cx.listener(|this, _, _, cx| {
                             this.set_quick_command_sort_mode(QuickCommandSortMode::Name, cx);
                         }),
                     ))
                     .child(mode_button(
                         "quick-command-sort-usage",
                         "Use",
-                        self.quick_command_sort_mode == QuickCommandSortMode::Usage,
-                        cx.listener(|this, _, _, cx| {
+                        self.quick_command_sort_mode == QuickCommandSortMode::Usage, self.theme_palette(),cx.listener(|this, _, _, cx| {
                             this.set_quick_command_sort_mode(QuickCommandSortMode::Usage, cx);
                         }),
                     ))

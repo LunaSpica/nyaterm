@@ -69,11 +69,9 @@ impl NyaTermApp {
             .count();
                 let mut tunnel_list = div().flex().flex_col().gap_2();
         if self.tunnels.is_empty() {
-            tunnel_list = tunnel_list.child(empty_panel(
-                "No saved tunnels were found in the native runtime directory yet.",
-            ));
+            tunnel_list = tunnel_list.child(empty_panel("No saved tunnels were found in the native runtime directory yet.", self.theme_palette()));
         } else if filtered_tunnels.is_empty() {
-            tunnel_list = tunnel_list.child(empty_panel("No tunnels match the current search."));
+            tunnel_list = tunnel_list.child(empty_panel("No tunnels match the current search.", self.theme_palette()));
         } else {
             for section in sections {
                 tunnel_list = tunnel_list.child(tunnel_section(section, &open_tunnels, self, cx));
@@ -82,11 +80,9 @@ impl NyaTermApp {
 
         let mut proxy_list = div().flex().flex_col().gap_2();
         if self.proxies.is_empty() {
-            proxy_list = proxy_list.child(empty_panel(
-                "No saved proxies were found in the native runtime directory yet.",
-            ));
+            proxy_list = proxy_list.child(empty_panel("No saved proxies were found in the native runtime directory yet.", self.theme_palette()));
         } else if filtered_proxies.is_empty() {
-            proxy_list = proxy_list.child(empty_panel("No proxies match the current search."));
+            proxy_list = proxy_list.child(empty_panel("No proxies match the current search.", self.theme_palette()));
         } else {
             for section in proxy_sections {
                 proxy_list = proxy_list.child(proxy_section(section, self, cx));
@@ -106,7 +102,7 @@ impl NyaTermApp {
             .flex_col()
             .size_full()
             .overflow_hidden()
-            .bg(rgb(0x161b22))
+            .bg(rgb(self.theme_palette().surface))
             .when(
                 self.network_tab == NetworkTab::Tunnels && missing_connections > 0,
                 |this| {

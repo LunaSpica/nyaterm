@@ -92,12 +92,13 @@ impl NyaTermApp {
         let duplicate_prompt = self.active_duplicate_prompt.clone();
 
         // Tauri AppPanelContent: FileExplorer (flex-1) + vertical resize + FileTransfer fixed height.
+        let palette = self.theme_palette();
         let mut view = div()
             .size_full()
             .flex()
             .flex_col()
             .overflow_hidden()
-            .bg(rgb(0x161b22));
+            .bg(rgb(palette.surface));
 
         if let Some(prompt) = duplicate_prompt {
             view = view.child(self.duplicate_prompt_banner(prompt, cx));

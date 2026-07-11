@@ -47,10 +47,7 @@ impl NyaTermApp {
             .size_full()
             .p_3()
             .gap_4()
-            .child(section_header(
-                "Migration",
-                "Inventory of the ignored Tauri source and the native replacement boundary.",
-            ))
+            .child(section_header("Migration", "Inventory of the ignored Tauri source and the native replacement boundary.", self.theme_palette()))
             .child(
                 div()
                     .grid()

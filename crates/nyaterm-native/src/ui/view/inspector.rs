@@ -109,8 +109,7 @@ impl NyaTermApp {
                             AgentCommandExecutionMode::Auto => "icons/ai/exec-auto.svg",
                             AgentCommandExecutionMode::Smart => "icons/ai/exec-smart.svg",
                             AgentCommandExecutionMode::ConfirmEach => "icons/ai/exec-confirm.svg",
-                        },
-                        cx.listener(|this, _, _, cx| {
+                        }, cx.listener(|this, _, _, cx| {
                             this.ai_history_open = false;
                             this.ai_execution_menu_open = !this.ai_execution_menu_open;
                             cx.notify();
@@ -118,8 +117,7 @@ impl NyaTermApp {
                     ))
                     .child(ai_svg_icon_button(
                         "ai-history-toggle",
-                        "icons/ai/history.svg",
-                        cx.listener(|this, _, window, cx| {
+                        "icons/ai/history.svg", cx.listener(|this, _, window, cx| {
                             this.ai_execution_menu_open = false;
                             this.ai_history_open = !this.ai_history_open;
                             if this.ai_history_open {
@@ -133,16 +131,14 @@ impl NyaTermApp {
                     ))
                     .child(ai_svg_icon_button(
                         "ai-open-settings",
-                        "icons/ai/settings.svg",
-                        cx.listener(|this, _, _, cx| {
+                        "icons/ai/settings.svg", cx.listener(|this, _, _, cx| {
                             this.settings_active_tab = SettingsTab::AiGeneral;
                             this.open_page(NavItem::Settings, cx);
                         }),
                     ))
                     .child(ai_svg_icon_button(
                         "ai-new-chat",
-                        "icons/ai/new.svg",
-                        cx.listener(|this, _, _, cx| {
+                        "icons/ai/new.svg", cx.listener(|this, _, _, cx| {
                             this.ai_prompt_draft.clear();
                             this.ai_response_preview = if this.ai_settings.default_mode
                                 == AiMode::Agent
@@ -249,16 +245,14 @@ impl NyaTermApp {
                                             .child(mode_button(
                                                 "ai-mode-ask",
                                                 "Ask",
-                                                !agent_mode,
-                                                cx.listener(|this, _, _, cx| {
+                                                !agent_mode, self.theme_palette(), cx.listener(|this, _, _, cx| {
                                                     this.set_ai_mode(AiMode::Ask, cx);
                                                 }),
                                             ))
                                             .child(mode_button(
                                                 "ai-mode-agent",
                                                 "Agent",
-                                                agent_mode,
-                                                cx.listener(|this, _, _, cx| {
+                                                agent_mode, self.theme_palette(),cx.listener(|this, _, _, cx| {
                                                     this.set_ai_mode(AiMode::Agent, cx);
                                                 }),
                                             )),
@@ -279,8 +273,7 @@ impl NyaTermApp {
                                     "icons/ai/stop.svg"
                                 } else {
                                     "icons/ai/send.svg"
-                                },
-                                cx.listener(|this, _, _, cx| {
+                                }, cx.listener(|this, _, _, cx| {
                                     if this.ai_chat_pending || this.ai_agent_loop.is_some() {
                                         this.cancel_ai_chat(cx);
                                     } else {
@@ -1660,6 +1653,7 @@ impl NyaTermApp {
                             .child(icon_button(
                                 format!("ai-session-delete-{}", session.id),
                                 "×",
+                                self.theme_palette(),
                                 cx.listener(move |this, _, _, cx| {
                                     this.delete_ai_session(delete_id.clone(), cx);
                                 }),

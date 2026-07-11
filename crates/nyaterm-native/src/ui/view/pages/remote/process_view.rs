@@ -106,9 +106,9 @@ impl NyaTermApp {
                 "No process snapshot loaded."
             } else {
                 "Start an SSH session to list remote processes."
-            }));
+            }, self.theme_palette()));
         } else if filtered_processes.is_empty() {
-            rows = rows.child(empty_panel("No processes match the current search."));
+            rows = rows.child(empty_panel("No processes match the current search.", self.theme_palette()));
         } else {
             if pad_top > 0. {
                 rows = rows.child(
@@ -207,6 +207,7 @@ impl NyaTermApp {
         }
 
         // Tauri ProcessManager shell: dense search toolbar + sort strip + scrollable table.
+        let palette = self.theme_palette();
         let count_label = if total_filtered > PROCESS_VIEWPORT_ROWS {
             format!(
                 "{window_start}-{window_end}/{total_filtered} · {} total · {} users",
@@ -227,15 +228,15 @@ impl NyaTermApp {
             .flex_col()
             .size_full()
             .overflow_hidden()
-            .bg(rgb(0x161b22))
+            .bg(rgb(palette.surface))
             .child(
                 div()
                     .h(px(36.))
                     .flex_none()
                     .px_2()
                     .border_b_1()
-                    .border_color(rgb(0x30363d))
-                    .bg(rgb(0x12171f))
+                    .border_color(rgb(palette.border))
+                    .bg(rgb(palette.section_header))
                     .flex()
                     .items_center()
                     .gap_1()

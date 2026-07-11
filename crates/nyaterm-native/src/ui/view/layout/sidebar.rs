@@ -158,7 +158,7 @@ impl NyaTermApp {
         let mut visible_count = 0usize;
         if sessions.is_empty() {
             active_session_rows =
-                active_session_rows.child(empty_panel("No active runtime sessions."));
+                active_session_rows.child(empty_panel("No active runtime sessions.", self.theme_palette()));
         } else {
             for session in sessions {
                 let display_name = self.session_display_name_by_info(&session);
@@ -179,7 +179,7 @@ impl NyaTermApp {
             }
             if visible_count == 0 {
                 active_session_rows =
-                    active_session_rows.child(empty_panel("No matching active sessions."));
+                    active_session_rows.child(empty_panel("No matching active sessions.", self.theme_palette()));
             }
         }
 
@@ -521,7 +521,7 @@ impl NyaTermApp {
     fn left_connections_panel(&mut self, cx: &mut Context<Self>) -> impl IntoElement {
         let mut rows = div().flex().flex_col().gap_2();
         if self.connections.is_empty() {
-            rows = rows.child(empty_panel("No saved connections imported yet."));
+            rows = rows.child(empty_panel("No saved connections imported yet.", self.theme_palette()));
         } else {
             for connection in self.connections.iter().take(8).cloned() {
                 rows = rows.child(compact_connection_row(
@@ -594,7 +594,7 @@ impl NyaTermApp {
     fn left_network_panel(&mut self, cx: &mut Context<Self>) -> impl IntoElement {
         let mut rows = div().flex().flex_col().gap_2();
         if self.tunnels.is_empty() {
-            rows = rows.child(empty_panel("No SSH tunnels configured."));
+            rows = rows.child(empty_panel("No SSH tunnels configured.", self.theme_palette()));
         } else {
             for tunnel in self.tunnels.iter().take(8).cloned() {
                 let is_pending = self.pending_tunnels.iter().any(|id| id == &tunnel.id);
@@ -660,7 +660,7 @@ impl NyaTermApp {
     fn left_transfers_panel(&mut self, cx: &mut Context<Self>) -> impl IntoElement {
         let mut jobs = div().flex().flex_col().gap_2();
         if self.transfer_jobs.is_empty() {
-            jobs = jobs.child(empty_panel("No SFTP transfer jobs yet."));
+            jobs = jobs.child(empty_panel("No SFTP transfer jobs yet.", self.theme_palette()));
         } else {
             for job in self.transfer_jobs.iter().rev().take(5) {
                 jobs = jobs.child(compact_transfer_job_row(job));
@@ -880,7 +880,7 @@ impl NyaTermApp {
                 if let Some(editor) = self.security_key_editor.clone() {
                     body = body.child(self.security_key_editor_view(editor, cx));
                 } else if self.connection_ssh_keys.is_empty() {
-                    body = body.child(empty_panel("No SSH keys yet. Add a private key to use key auth."));
+                    body = body.child(empty_panel("No SSH keys yet. Add a private key to use key auth.", self.theme_palette()));
                 } else {
                     for key in self.connection_ssh_keys.clone() {
                         let key_id = key.id.clone();
@@ -983,7 +983,7 @@ impl NyaTermApp {
                 if let Some(editor) = self.security_password_editor.clone() {
                     body = body.child(self.security_password_editor_view(editor, cx));
                 } else if self.connection_saved_passwords.is_empty() {
-                    body = body.child(empty_panel("No saved passwords yet."));
+                    body = body.child(empty_panel("No saved passwords yet.", self.theme_palette()));
                 } else {
                     for entry in self.connection_saved_passwords.clone() {
                         let id = entry.id.clone();
@@ -1083,7 +1083,7 @@ impl NyaTermApp {
                 if let Some(editor) = self.security_credential_editor.clone() {
                     body = body.child(self.security_credential_editor_view(editor, cx));
                 } else if self.connection_saved_credentials.is_empty() {
-                    body = body.child(empty_panel("No autofill credentials yet."));
+                    body = body.child(empty_panel("No autofill credentials yet.", self.theme_palette()));
                 } else {
                     for entry in self.connection_saved_credentials.clone() {
                         let id = entry.id.clone();
@@ -1204,7 +1204,7 @@ impl NyaTermApp {
                 if let Some(editor) = self.security_otp_editor.clone() {
                     body = body.child(self.security_otp_editor_view(editor, cx));
                 } else if self.connection_otp_entries.is_empty() {
-                    body = body.child(empty_panel("No OTP accounts yet. Add TOTP/HOTP for auto-fill."));
+                    body = body.child(empty_panel("No OTP accounts yet. Add TOTP/HOTP for auto-fill.", self.theme_palette()));
                 } else {
                     for entry in self.connection_otp_entries.clone() {
                         let otp_id = entry.id.clone();

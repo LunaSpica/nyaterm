@@ -33,14 +33,15 @@ impl NyaTermApp {
         };
 
         // Tauri FileExplorerPathBar: minHeight ~26px, mono path, favorites on the right.
+        let palette = self.theme_palette();
         div()
             .flex()
             .flex_col()
             .gap_0()
             .min_h(px(26.))
             .border_b_1()
-            .border_color(rgb(0x30363d))
-            .bg(rgb(0x161b22))
+            .border_color(rgb(palette.border))
+            .bg(rgb(palette.surface))
             .px_2()
             .py(px(2.))
             .justify_center()
@@ -54,7 +55,7 @@ impl NyaTermApp {
                             .flex_shrink_0()
                             .text_size(px(10.))
                             .font_weight(FontWeight(600.))
-                            .text_color(rgb(0x6e7681))
+                            .text_color(rgb(palette.text_dimmed))
                             .child("PATH"),
                     )
                     .when(self.transfer_browser_path_editing, |this| {

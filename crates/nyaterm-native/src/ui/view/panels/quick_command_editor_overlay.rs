@@ -347,8 +347,7 @@ impl NyaTermApp {
                                     .child(mode_button(
                                         "quick-command-editor-pinned",
                                         if editor.pinned { "Pinned" } else { "Pin" },
-                                        editor.pinned,
-                                        cx.listener(|this, _, _, cx| {
+                                        editor.pinned, self.theme_palette(),cx.listener(|this, _, _, cx| {
                                             this.toggle_quick_command_editor_pinned(cx);
                                         }),
                                     )),
@@ -372,8 +371,7 @@ impl NyaTermApp {
                                     .child(mode_button(
                                         "quick-command-editor-execute",
                                         "Execute Immediately",
-                                        editor.execution_mode != "append",
-                                        cx.listener(|this, _, _, cx| {
+                                        editor.execution_mode != "append", self.theme_palette(),cx.listener(|this, _, _, cx| {
                                             this.set_quick_command_editor_execution_mode(
                                                 "execute", cx,
                                             );
@@ -382,8 +380,7 @@ impl NyaTermApp {
                                     .child(mode_button(
                                         "quick-command-editor-append",
                                         "Append Only",
-                                        editor.execution_mode == "append",
-                                        cx.listener(|this, _, _, cx| {
+                                        editor.execution_mode == "append", self.theme_palette(),cx.listener(|this, _, _, cx| {
                                             this.set_quick_command_editor_execution_mode(
                                                 "append", cx,
                                             );
