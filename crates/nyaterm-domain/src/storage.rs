@@ -2069,7 +2069,32 @@ impl ConnectionStore {
         self.load_app_settings_summary()
     }
 
-    pub fn load_terminal_window_layout(
+    pub fn load_open_tabs(&self) -> Result<Vec<crate::models::RestorableOpenTab>, StorageError> {
+        let value = self.load_settings_value()?;
+        let Some(raw) = json_path(&value, &["ui", "open_tabs"]) else {
+            return Ok(Vec::new());
+        };
+        if raw.is_null() {
+            return Ok(Vec::new());
+        }
+        match serde_json::from_value::<Vec<crate::models::RestorableOpenTab>>(raw.clone()) {
+            Ok(tabs) => Ok(tabs),
+            Err(_) => Ok(Vec::new()),
+        }
+    }
+
+    pub fn save_open_tabs(
+        &self,
+        tabs: &[crate::models::RestorableOpenTab],
+    ) -> Result<(), StorageError> {
+        let mut value = self.load_settings_value()?;
+        let encoded = serde_json::to_value(tabs)?;
+        set_nested_json_value(&mut value, &["ui", "open_tabs"], encoded);
+        self.save_settings_value(&value)?;
+        Ok(())
+    }
+
+        pub fn load_terminal_window_layout(
         &self,
     ) -> Result<Option<crate::models::RestorableTerminalWindowNode>, StorageError> {
         let value = self.load_settings_value()?;
@@ -6130,6 +6155,34 @@ mod tests {
             Some("encrypted")
         );
 
+        std::fs::remove_dir_all(dir).ok();
+    }
+
+    #[test]
+    fn open_tabs_roundtrip() {
+        let dir = unique_temp_dir("open-tabs");
+        let store = ConnectionStore::open(&dir).expect("store");
+        let tabs = vec![
+            crate::models::RestorableOpenTab {
+                title: "Local".to_string(),
+                session_type: "Local".to_string(),
+                connection_id: None,
+                custom_name: Some("dev".to_string()),
+                tab_color: Some("#22c55e".to_string()),
+            },
+            crate::models::RestorableOpenTab {
+                title: "prod".to_string(),
+                session_type: "SSH".to_string(),
+                connection_id: Some("conn-1".to_string()),
+                custom_name: None,
+                tab_color: None,
+            },
+        ];
+        store.save_open_tabs(&tabs).expect("save");
+        let loaded = store.load_open_tabs().expect("load");
+        assert_eq!(loaded, tabs);
+        store.save_open_tabs(&[]).expect("clear");
+        assert!(store.load_open_tabs().expect("load empty").is_empty());
         std::fs::remove_dir_all(dir).ok();
     }
 

@@ -1272,3 +1272,10 @@ service boundary first:
 - Settings flag `general.startup_restore_window_layout` (default true) gates restore/save.
 - Native multi-leaf mutations serialize layout; reconcile restores once sessions exist.
 
+## 2026-07-11 open_tabs startup restore
+
+- Domain persists Tauri-compatible `ui.open_tabs` (session type, connection id,
+  custom name, tab color).
+- When `startup_restore` is enabled, native sequentially reconnects saved tabs on
+  launch, then restores multi-leaf `terminal_window_layout` if enabled.
+

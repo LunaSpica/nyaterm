@@ -569,6 +569,21 @@ pub fn default_search_engines() -> Vec<SearchEngineConfig> {
     ]
 }
 
+/// Tauri `ui.open_tabs` entry (native restores connection/local leaf sessions).
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct RestorableOpenTab {
+    #[serde(default)]
+    pub title: String,
+    #[serde(default)]
+    pub session_type: String,
+    #[serde(default)]
+    pub connection_id: Option<String>,
+    #[serde(default)]
+    pub custom_name: Option<String>,
+    #[serde(default)]
+    pub tab_color: Option<String>,
+}
+
 /// Tauri `ui.terminal_window_layout` node (indexes into ordered open tabs).
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(tag = "kind")]

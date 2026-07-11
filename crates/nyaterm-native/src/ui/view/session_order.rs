@@ -15,6 +15,9 @@ impl NyaTermApp {
             .entry(session_id.to_string())
             .or_insert_with(TerminalViewState::new);
         self.reconcile_terminal_windows();
+        if self.startup_restore_complete {
+            self.persist_open_tabs();
+        }
     }
 
     pub(in crate::ui::view) fn move_session_after(

@@ -75,6 +75,15 @@ impl NyaTermApp {
             }
         }
         self.drain_session_start_events(cx);
+        // Continue sequential startup restore after async SSH connects complete.
+        // Window handle is not available here; pump only when not waiting on pending.
+        if !self.startup_restore_complete
+            && self.pending_session_name.is_none()
+            && !self.startup_restore_queue.is_empty()
+        {
+            // Defer to next render where Window is available.
+            cx.notify();
+        }
         self.drain_tunnel_events();
         self.drain_process_events();
         self.drain_stats_events();

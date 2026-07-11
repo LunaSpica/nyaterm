@@ -40,6 +40,7 @@ mod send_command_runtime;
 mod session_dialog_runtime;
 mod session_lifecycle;
 mod session_order;
+mod startup_restore_runtime;
 mod session_runtime;
 mod session_state;
 mod settings_runtime;

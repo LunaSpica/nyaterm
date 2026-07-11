@@ -6,6 +6,11 @@ use gpui::{
 
 impl Render for NyaTermApp {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        self.try_restore_open_tabs(window, cx);
+        if !self.startup_restore_complete {
+            self.pump_startup_restore_queue(window, cx);
+        }
+
         self.ensure_event_pump(window, cx);
         let vs = window.viewport_size();
         self.last_viewport_size = (f32::from(vs.width), f32::from(vs.height));
