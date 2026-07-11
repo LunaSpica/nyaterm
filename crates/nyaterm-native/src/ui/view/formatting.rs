@@ -331,3 +331,29 @@ pub(in crate::ui::view) fn ssh_multiplex_key(config: &SshSessionConfig) -> Strin
         config.port
     )
 }
+
+
+pub(in crate::ui::view) fn format_last_used_ms(last_used_at_ms: Option<u64>) -> String {
+    let Some(ms) = last_used_at_ms.filter(|value| *value > 0) else {
+        return "never".to_string();
+    };
+    let now_ms = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|duration| duration.as_millis() as u64)
+        .unwrap_or(ms);
+    if now_ms < ms {
+        return "just now".to_string();
+    }
+    let secs = (now_ms - ms) / 1000;
+    if secs < 60 {
+        "just now".to_string()
+    } else if secs < 3600 {
+        format!("{}m ago", secs / 60)
+    } else if secs < 86_400 {
+        format!("{}h ago", secs / 3600)
+    } else if secs < 86_400 * 30 {
+        format!("{}d ago", secs / 86_400)
+    } else {
+        format!("{}mo ago", secs / (86_400 * 30))
+    }
+}

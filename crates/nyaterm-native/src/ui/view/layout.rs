@@ -403,6 +403,7 @@ impl NyaTermApp {
                                 div()
                                     .text_sm()
                                     .font_weight(FontWeight(800.))
+                                    .text_color(rgb(0xe6edf3))
                                     .child("NyaTerm"),
                             ),
                     )
@@ -441,19 +442,19 @@ impl NyaTermApp {
                     )
                     .child(window_control_button(
                         "window-min",
-                        "-",
+                        "–",
                         WindowControlArea::Min,
                         |_, window, _| window.minimize_window(),
                     ))
                     .child(window_control_button(
                         "window-max",
-                        "[]",
+                        "□",
                         WindowControlArea::Max,
                         |_, window, _| window.zoom_window(),
                     ))
                     .child(window_control_button(
                         "window-close",
-                        "x",
+                        "×",
                         WindowControlArea::Close,
                         |_, window, _| window.remove_window(),
                     )),
@@ -517,7 +518,7 @@ impl NyaTermApp {
         bottom = bottom.child(self.activity_zone_end_drop_target(bottom_zone, bottom_len, cx));
 
         div()
-            .w(if show_labels { px(56.) } else { px(40.) })
+            .w(if show_labels { px(52.) } else { px(40.) })
             .flex_none()
             .flex()
             .flex_col()
@@ -564,8 +565,18 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
         let selected = self.activity_entry_selected(entry);
-        let icon = entry.glyph();
+        let icon_path = entry.icon_path();
+        let glyph = entry.glyph();
         let tooltip = entry.label();
+        let short_label = entry.short_label();
+        let icon_color = if selected {
+            match side {
+                ActivitySide::Left => rgb(0x58a6ff),
+                ActivitySide::Right => rgb(0x3fb950),
+            }
+        } else {
+            rgb(0x8b949e)
+        };
         let entry_id = entry.persistence_id().to_string();
         let context_entry_id = entry_id.clone();
         let recording_active = matches!(entry, ActivityBarEntry::Recording)
@@ -639,14 +650,21 @@ impl NyaTermApp {
                     .when(side == ActivitySide::Left, |this| this.left_0())
                     .when(side == ActivitySide::Right, |this| this.right_0()),
             )
-            .child(icon)
+            .child(activity_icon(icon_path, glyph, icon_color.into(), if show_labels { 18. } else { 20. }))
             .when(show_labels, |this| {
                 this.child(
                     div()
-                        .text_size(px(8.))
+                        .text_size(px(9.))
                         .font_weight(FontWeight(600.))
-                        .text_color(rgb(0x8b949e))
-                        .child(truncate_preview(tooltip, 8)),
+                        .text_color(if selected {
+                            match side {
+                                ActivitySide::Left => rgb(0x58a6ff),
+                                ActivitySide::Right => rgb(0x3fb950),
+                            }
+                        } else {
+                            rgb(0x8b949e)
+                        })
+                        .child(short_label),
                 )
             })
             .cursor_move()

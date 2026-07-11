@@ -8,7 +8,7 @@ impl NyaTermApp {
             .as_ref()
             .is_some_and(|request| request.action == AiAction::CustomFileAction);
         let ai_running = self.ai_chat_pending || self.ai_agent_loop.is_some();
-        let action_label = if ai_running {
+        let _action_label = if ai_running {
             "Cancel"
         } else if file_action_ready {
             "Run"
@@ -169,16 +169,25 @@ impl NyaTermApp {
         let mode_label = if agent_mode { "Agent" } else { "Ask" };
         let enabled = self.ai_settings.enabled;
 
-        // Full-height AI shell (Tauri-like): toolbar / scroll body / composer.
+        // Tauri AIAssistantPanel: PanelHeader(title+model meta + history/settings/new) already
+        // provided by side stack; body keeps optional in-panel action strip when not stacked header.
+        // Here we only add a compact action strip under shared header for history toggle + shortcuts.
+        let model_meta = if model_label.trim().is_empty() {
+            "not configured".to_string()
+        } else {
+            model_label.clone()
+        };
+        let _ = (mode_label, model_meta);
         div()
             .size_full()
             .flex()
             .flex_col()
             .overflow_hidden()
             .bg(rgb(0x161b22))
+            .relative()
             .child(
                 div()
-                    .h(px(36.))
+                    .h(px(32.))
                     .flex_none()
                     .px_2()
                     .border_b_1()
@@ -187,54 +196,54 @@ impl NyaTermApp {
                     .flex()
                     .items_center()
                     .gap_1()
-                    .child(mode_button(
-                        "ai-mode-ask",
-                        "Ask",
-                        !agent_mode,
-                        cx.listener(|this, _, _, cx| {
-                            this.set_ai_mode(AiMode::Ask, cx);
-                        }),
-                    ))
-                    .child(mode_button(
-                        "ai-mode-agent",
-                        "Agent",
-                        agent_mode,
-                        cx.listener(|this, _, _, cx| {
-                            this.set_ai_mode(AiMode::Agent, cx);
-                        }),
-                    ))
                     .child(
                         div()
-                            .ml_1()
                             .min_w_0()
                             .flex_1()
                             .text_size(px(11.))
                             .text_color(rgb(0x8b949e))
                             .overflow_hidden()
-                            .child(truncate_preview(&model_label, 28)),
+                            .child(truncate_preview(
+                                &if enabled {
+                                    model_label.clone()
+                                } else {
+                                    "AI disabled".to_string()
+                                },
+                                36,
+                            )),
                     )
-                    .child(status_pill(
-                        if !enabled {
-                            "off"
-                        } else if ai_running {
-                            "run"
-                        } else {
-                            "ok"
+                    .child(icon_button(
+                        "ai-execution-mode-toggle",
+                        match self.ai_settings.agent_command_execution_mode {
+                            AgentCommandExecutionMode::Auto => "⚠",
+                            AgentCommandExecutionMode::Smart => "◎",
+                            AgentCommandExecutionMode::ConfirmEach => "☰",
                         },
-                        if !enabled {
-                            rgb(0x8b949e)
-                        } else if ai_running {
-                            rgb(0xfacc15)
-                        } else {
-                            rgb(0x6ee7b7)
-                        },
-                        if !enabled {
-                            rgb(0x21262d)
-                        } else if ai_running {
-                            rgb(0x3a2f14)
-                        } else {
-                            rgb(0x12342a)
-                        },
+                        cx.listener(|this, _, _, cx| {
+                            this.ai_history_open = false;
+                            this.ai_execution_menu_open = !this.ai_execution_menu_open;
+                            cx.notify();
+                        }),
+                    ))
+                    .child(icon_button(
+                        "ai-history-toggle",
+                        "⌛",
+                        cx.listener(|this, _, _, cx| {
+                            this.ai_execution_menu_open = false;
+                            this.ai_history_open = !this.ai_history_open;
+                            if this.ai_history_open {
+                                this.refresh_ai_session_list(cx);
+                            }
+                            cx.notify();
+                        }),
+                    ))
+                    .child(icon_button(
+                        "ai-open-settings",
+                        "⚙",
+                        cx.listener(|this, _, _, cx| {
+                            this.settings_active_tab = SettingsTab::AiGeneral;
+                            this.open_page(NavItem::Settings, cx);
+                        }),
                     ))
                     .child(icon_button(
                         "ai-new-chat",
@@ -257,16 +266,14 @@ impl NyaTermApp {
                             this.ai_status = "new AI chat".to_string();
                             cx.notify();
                         }),
-                    ))
-                    .child(icon_button(
-                        "ai-open-settings",
-                        "⚙",
-                        cx.listener(|this, _, _, cx| {
-                            this.settings_active_tab = SettingsTab::AiGeneral;
-                            this.open_page(NavItem::Settings, cx);
-                        }),
                     )),
             )
+            .when(self.ai_history_open, |this| {
+                this.child(self.ai_history_popover(cx))
+            })
+            .when(self.ai_execution_menu_open, |this| {
+                this.child(self.ai_execution_mode_menu(cx))
+            })
             .child(
                 div()
                     .id(SharedString::from("ai-transcript-scroll"))
@@ -327,20 +334,41 @@ impl NyaTermApp {
                             .gap_2()
                             .child(
                                 div()
-                                    .text_size(px(10.))
-                                    .text_color(rgb(0x6e7681))
-                                    .child(if file_action_ready {
-                                        "File action ready — press Run".to_string()
-                                    } else {
-                                        format!(
-                                            "{} · Enter to send",
-                                            if agent_mode { "Agent" } else { "Ask" }
-                                        )
-                                    }),
+                                    .min_w_0()
+                                    .flex_1()
+                                    .flex()
+                                    .items_center()
+                                    .gap_1()
+                                    .child(mode_button(
+                                        "ai-mode-ask",
+                                        "Ask",
+                                        !agent_mode,
+                                        cx.listener(|this, _, _, cx| {
+                                            this.set_ai_mode(AiMode::Ask, cx);
+                                        }),
+                                    ))
+                                    .child(mode_button(
+                                        "ai-mode-agent",
+                                        "Agent",
+                                        agent_mode,
+                                        cx.listener(|this, _, _, cx| {
+                                            this.set_ai_mode(AiMode::Agent, cx);
+                                        }),
+                                    ))
+                                    .child(
+                                        div()
+                                            .ml_1()
+                                            .min_w_0()
+                                            .flex_1()
+                                            .text_size(px(11.))
+                                            .text_color(rgb(0x8b949e))
+                                            .overflow_hidden()
+                                            .child(truncate_preview(&model_label, 24)),
+                                    ),
                             )
-                            .child(small_button(
+                            .child(icon_button(
                                 "ai-ask-run",
-                                action_label,
+                                if ai_running { "■" } else { "➤" },
                                 cx.listener(|this, _, _, cx| {
                                     if this.ai_chat_pending || this.ai_agent_loop.is_some() {
                                         this.cancel_ai_chat(cx);
@@ -349,7 +377,15 @@ impl NyaTermApp {
                                     }
                                 }),
                             )),
-                    ),
+                    )
+                    .when(file_action_ready, |this| {
+                        this.child(
+                            div()
+                                .text_size(px(10.))
+                                .text_color(rgb(0xd29922))
+                                .child("File action ready — press send to run"),
+                        )
+                    }),
             )
     }
 
@@ -833,12 +869,69 @@ impl NyaTermApp {
         body.child(agent_step_rows).child(command_rows)
     }
 
-    fn ai_empty_transcript(&self, mode_label: &'static str, enabled: bool) -> impl IntoElement {
+    fn ai_empty_transcript(&self, mode_label: &'static str, enabled: bool) -> gpui::AnyElement {
         let has_model = self
             .ai_settings
             .default_model_id
             .as_ref()
             .is_some_and(|id| !id.trim().is_empty());
+        if !enabled {
+            return div()
+                .min_h(px(180.))
+                .flex()
+                .flex_col()
+                .items_center()
+                .justify_center()
+                .gap_2()
+                .px_3()
+                .child(
+                    div()
+                        .text_size(px(28.))
+                        .text_color(rgb(0x8b949e))
+                        .child("✦"),
+                )
+                .child(
+                    div()
+                        .text_size(px(12.))
+                        .text_color(rgb(0x8b949e))
+                        .child("Enable in Settings"),
+                )
+                .into_any_element();
+        }
+        if !has_model {
+            return div()
+                .min_h(px(220.))
+                .flex()
+                .flex_col()
+                .items_center()
+                .justify_center()
+                .gap_3()
+                .px_4()
+                .child(
+                    div()
+                        .size(px(48.))
+                        .rounded_full()
+                        .border_1()
+                        .border_color(rgb(0x9e6a03))
+                        .bg(rgb(0x3d2e00))
+                        .flex()
+                        .items_center()
+                        .justify_center()
+                        .text_size(px(22.))
+                        .text_color(rgb(0xd29922))
+                        .child("!"),
+                )
+                .child(
+                    div()
+                        .text_size(px(13.))
+                        .font_weight(FontWeight(700.))
+                        .text_color(rgb(0xe5edf7))
+                        .child("AI Not Configured"),
+                )
+                .child(self.ai_setup_step("1", "Add an API key credential"))
+                .child(self.ai_setup_step("2", "Enable a model"))
+                .into_any_element();
+        }
         div()
             .min_h(px(160.))
             .flex()
@@ -849,37 +942,281 @@ impl NyaTermApp {
             .px_3()
             .child(
                 div()
-                    .text_size(px(22.))
+                    .text_size(px(28.))
                     .text_color(rgb(0x8b949e))
                     .child("✦"),
             )
             .child(
                 div()
                     .text_size(px(12.))
-                    .font_weight(FontWeight(700.))
-                    .text_color(rgb(0xc9d1d9))
-                    .child(if !enabled {
-                        "AI is disabled"
-                    } else if !has_model {
-                        "Set up an AI model"
-                    } else {
-                        "Start a conversation"
-                    }),
+                    .text_color(rgb(0x8b949e))
+                    .child("Ask AI to explain output or generate commands."),
+            )
+            .child(
+                div()
+                    .text_size(px(10.))
+                    .text_color(rgb(0x6e7681))
+                    .child(format!(
+                        "{mode_label} · session {}",
+                        compact_id(&self.ai_chat_session_id)
+                    )),
+            )
+            .into_any_element()
+    }
+
+    fn ai_setup_step(&self, index: &'static str, label: &'static str) -> impl IntoElement {
+        div()
+            .w_full()
+            .max_w(px(280.))
+            .rounded_md()
+            .border_1()
+            .border_color(rgb(0x30363d))
+            .bg(rgb(0x0d1117))
+            .px_3()
+            .py_2()
+            .flex()
+            .items_start()
+            .gap_2()
+            .child(
+                div()
+                    .size(px(18.))
+                    .rounded_full()
+                    .bg(rgb(0x122033))
+                    .flex()
+                    .items_center()
+                    .justify_center()
+                    .text_size(px(10.))
+                    .font_weight(FontWeight(800.))
+                    .text_color(rgb(0x58a6ff))
+                    .child(index),
             )
             .child(
                 div()
                     .text_size(px(11.))
-                    .text_color(rgb(0x8b949e))
-                    .child(if !enabled {
-                        "Enable AI in Settings to use Ask/Agent.".to_string()
-                    } else if !has_model {
-                        "Open Settings → AI to pick a model and API key.".to_string()
-                    } else {
-                        format!(
-                            "{mode_label} replies appear here · session {}",
-                            compact_id(&self.ai_chat_session_id)
+                    .text_color(rgb(0xc9d1d9))
+                    .child(label),
+            )
+    }
+
+
+    fn ai_execution_mode_menu(&mut self, cx: &mut Context<Self>) -> impl IntoElement {
+        let current = self.ai_settings.agent_command_execution_mode.clone();
+        div()
+            .id(SharedString::from("ai-execution-mode-menu"))
+            .absolute()
+            .top(px(36.))
+            .right(px(72.))
+            .w(px(260.))
+            .rounded_md()
+            .border_1()
+            .border_color(rgb(0x30363d))
+            .bg(rgb(0x161b22))
+            .shadow_lg()
+            .py_1()
+            .flex()
+            .flex_col()
+            .on_mouse_down(MouseButton::Left, |_, _, _| {})
+            .child(
+                div()
+                    .px_3()
+                    .py_1()
+                    .text_size(px(11.))
+                    .font_weight(FontWeight(700.))
+                    .text_color(rgb(0xc9d1d9))
+                    .child("Agent command execution"),
+            )
+            .child(self.ai_execution_mode_item(
+                "ai-exec-confirm",
+                "Confirm each",
+                "Ask before running every agent command",
+                AgentCommandExecutionMode::ConfirmEach,
+                current == AgentCommandExecutionMode::ConfirmEach,
+                cx,
+            ))
+            .child(self.ai_execution_mode_item(
+                "ai-exec-smart",
+                "Smart",
+                "Auto-run low risk; confirm higher risk",
+                AgentCommandExecutionMode::Smart,
+                current == AgentCommandExecutionMode::Smart,
+                cx,
+            ))
+            .child(self.ai_execution_mode_item(
+                "ai-exec-auto",
+                "Auto",
+                "Run agent commands without confirmation",
+                AgentCommandExecutionMode::Auto,
+                current == AgentCommandExecutionMode::Auto,
+                cx,
+            ))
+    }
+
+    fn ai_execution_mode_item(
+        &self,
+        id: &'static str,
+        title: &'static str,
+        detail: &'static str,
+        mode: AgentCommandExecutionMode,
+        selected: bool,
+        cx: &mut Context<Self>,
+    ) -> impl IntoElement {
+        div()
+            .id(SharedString::from(id))
+            .px_3()
+            .py_2()
+            .flex()
+            .items_start()
+            .gap_2()
+            .cursor_pointer()
+            .hover(|this| this.bg(rgb(0x21262d)))
+            .on_click(cx.listener(move |this, _, _, cx| {
+                this.set_ai_command_mode(mode.clone(), cx);
+                this.save_ai_settings(cx);
+                this.ai_execution_menu_open = false;
+                this.ai_status = format!(
+                    "Agent execution mode: {}",
+                    match mode {
+                        AgentCommandExecutionMode::ConfirmEach => "confirm each",
+                        AgentCommandExecutionMode::Smart => "smart",
+                        AgentCommandExecutionMode::Auto => "auto",
+                    }
+                );
+                cx.notify();
+            }))
+            .child(
+                div()
+                    .min_w_0()
+                    .flex_1()
+                    .flex()
+                    .flex_col()
+                    .gap_0()
+                    .child(
+                        div()
+                            .text_size(px(12.))
+                            .font_weight(FontWeight(600.))
+                            .text_color(if selected {
+                                rgb(0x58a6ff)
+                            } else {
+                                rgb(0xc9d1d9)
+                            })
+                            .child(title),
+                    )
+                    .child(
+                        div()
+                            .text_size(px(10.))
+                            .text_color(rgb(0x8b949e))
+                            .child(detail),
+                    ),
+            )
+            .child(
+                div()
+                    .text_size(px(12.))
+                    .text_color(rgb(0x58a6ff))
+                    .child(if selected { "✓" } else { "" }),
+            )
+    }
+
+    fn ai_history_popover(&mut self, cx: &mut Context<Self>) -> impl IntoElement {
+        let mut rows = div().flex().flex_col().gap_1().p_2();
+        if self.ai_sessions.is_empty() {
+            rows = rows.child(
+                div()
+                    .py_4()
+                    .text_center()
+                    .text_size(px(11.))
+                    .text_color(rgb(0x6e7681))
+                    .child("No chat history yet"),
+            );
+        } else {
+            for session in self.ai_sessions.iter().cloned().take(24) {
+                let session_id = session.id.clone();
+                let delete_id = session.id.clone();
+                rows = rows.child(
+                    div()
+                        .id(SharedString::from(format!("ai-session-{}", session.id)))
+                        .h(px(32.))
+                        .px_2()
+                        .rounded_md()
+                        .flex()
+                        .items_center()
+                        .gap_1()
+                        .hover(|this| this.bg(rgb(0x21262d)))
+                        .child(
+                            div()
+                                .id(SharedString::from(format!(
+                                    "ai-session-open-{}",
+                                    session.id
+                                )))
+                                .min_w_0()
+                                .flex_1()
+                                .text_size(px(12.))
+                                .text_color(rgb(0xc9d1d9))
+                                .overflow_hidden()
+                                .cursor_pointer()
+                                .child(truncate_preview(&session.title, 36))
+                                .on_click(cx.listener(move |this, _, _, cx| {
+                                    this.load_ai_session_messages(session_id.clone(), cx);
+                                })),
                         )
-                    }),
+                        .child(icon_button(
+                            format!("ai-session-delete-{}", session.id),
+                            "×",
+                            cx.listener(move |this, _, _, cx| {
+                                this.delete_ai_session(delete_id.clone(), cx);
+                            }),
+                        )),
+                );
+            }
+        }
+        div()
+            .id(SharedString::from("ai-history-popover"))
+            .absolute()
+            .top(px(36.))
+            .right(px(8.))
+            .w(px(260.))
+            .max_h(px(320.))
+            .rounded_md()
+            .border_1()
+            .border_color(rgb(0x30363d))
+            .bg(rgb(0x161b22))
+            .shadow_lg()
+            .flex()
+            .flex_col()
+            .overflow_hidden()
+            .on_mouse_down(MouseButton::Left, |_, _, _| {})
+            .child(
+                div()
+                    .h(px(32.))
+                    .px_3()
+                    .border_b_1()
+                    .border_color(rgb(0x30363d))
+                    .flex()
+                    .items_center()
+                    .justify_between()
+                    .child(
+                        div()
+                            .text_size(px(11.))
+                            .font_weight(FontWeight(700.))
+                            .text_color(rgb(0xc9d1d9))
+                            .child("History"),
+                    )
+                    .child(icon_button(
+                        "ai-history-close",
+                        "×",
+                        cx.listener(|this, _, _, cx| {
+                            this.ai_history_open = false;
+                            cx.notify();
+                        }),
+                    )),
+            )
+            .child(
+                div()
+                    .id(SharedString::from("ai-history-scroll"))
+                    .flex_1()
+                    .min_h_0()
+                    .overflow_scroll()
+                    .scrollbar_width(px(6.))
+                    .child(rows),
             )
     }
 

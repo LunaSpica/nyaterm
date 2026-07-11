@@ -13,8 +13,8 @@ use crate::ui::models::{
 };
 
 use super::super::{
-    ConnectionDragKind, ConnectionDragPayload, ConnectionDragPreview, ConnectionEditorToggle,
-    NyaTermApp, transfer_input,
+    ConnectionDragKind, ConnectionDragPayload, ConnectionDragPreview, ConnectionDropPosition,
+    ConnectionDropTarget, ConnectionEditorToggle, NyaTermApp, format_last_used_ms, transfer_input,
 };
 
 impl NyaTermApp {
@@ -44,6 +44,7 @@ impl NyaTermApp {
             .flex()
             .flex_col()
             .on_drop(cx.listener(|this, payload: &ConnectionDragPayload, _, cx| {
+                this.connection_drop_target = None;
                 match payload.kind {
                     ConnectionDragKind::Connection => {
                         this.move_connection_into_group(payload.id.clone(), None, cx);
@@ -95,6 +96,7 @@ impl NyaTermApp {
         // Count is shown in the shared panel header via meta; strip hosts search + icons.
         let _ = selected_count;
         div()
+            .relative()
             .flex()
             .flex_col()
             .size_full()
@@ -120,6 +122,9 @@ impl NyaTermApp {
             })
             .when(self.connection_group_context_menu.is_some(), |this| {
                 this.child(self.connection_group_context_menu_overlay(cx))
+            })
+            .when_some(self.connection_details_tooltip_id.clone(), |this, id| {
+                this.child(self.connection_details_tooltip(id, cx))
             })
     }
 
@@ -356,6 +361,7 @@ impl NyaTermApp {
                         "connection-section-{}",
                         section.group_id.clone().unwrap_or_else(|| "root".into())
                     )))
+                    .relative()
                     .h(px(28.))
                     .flex()
                     .items_center()
@@ -363,15 +369,35 @@ impl NyaTermApp {
                     .gap_2()
                     .px_2()
                     .cursor_pointer()
-                    .bg(if section
-                        .group_id
-                        .as_ref()
-                        .is_some_and(|id| self.hovered_connection_group_id.as_deref() == Some(id.as_str()))
-                    {
-                        rgb(0x1c2128)
-                    } else {
-                        rgb(0x161b22)
+                    .bg({
+                        let drop_inside = self.connection_drop_target.as_ref().is_some_and(|target| {
+                            target.kind == ConnectionDragKind::Group
+                                && target.position == ConnectionDropPosition::Inside
+                                && target.id.as_deref()
+                                    == section.group_id.as_deref()
+                        });
+                        if drop_inside {
+                            rgb(0x122033)
+                        } else if section
+                            .group_id
+                            .as_ref()
+                            .is_some_and(|id| {
+                                self.hovered_connection_group_id.as_deref() == Some(id.as_str())
+                            })
+                        {
+                            rgb(0x1c2128)
+                        } else {
+                            rgb(0x161b22)
+                        }
                     })
+                    .when(
+                        self.connection_drop_target.as_ref().is_some_and(|target| {
+                            target.kind == ConnectionDragKind::Group
+                                && target.position == ConnectionDropPosition::Inside
+                                && target.id.as_deref() == section.group_id.as_deref()
+                        }),
+                        |this| this.border_1().border_color(rgb(0x388bfd)),
+                    )
                     .on_hover({
                         let hover_group = section.group_id.clone();
                         cx.listener(move |this, hovered: &bool, _, cx| {
@@ -406,14 +432,50 @@ impl NyaTermApp {
                             .on_drag(
                                 ConnectionDragPayload {
                                     kind: ConnectionDragKind::Group,
-                                    id: drag_group_id,
+                                    id: drag_group_id.clone(),
                                     label,
                                 },
                                 |payload, position, _, cx| {
                                     cx.new(|_| ConnectionDragPreview::new(payload.clone(), position))
                                 },
                             )
+                            .on_drag_move(cx.listener({
+                                let target_id = drop_group_id.clone();
+                                move |this, event: &gpui::DragMoveEvent<ConnectionDragPayload>, _, cx| {
+                                    let _ = event.drag(cx);
+                                    let y = event.event.position.y;
+                                    let bounds = event.bounds;
+                                    let rel = if bounds.size.height > px(0.) {
+                                        ((y - bounds.origin.y) / bounds.size.height).clamp(0., 1.)
+                                    } else {
+                                        0.5
+                                    };
+                                    let position = if rel < 0.25 {
+                                        ConnectionDropPosition::Before
+                                    } else if rel > 0.75 {
+                                        ConnectionDropPosition::After
+                                    } else {
+                                        ConnectionDropPosition::Inside
+                                    };
+                                    let next = ConnectionDropTarget {
+                                        id: Some(target_id.clone()),
+                                        kind: ConnectionDragKind::Group,
+                                        position,
+                                    };
+                                    if this.connection_drop_target.as_ref() != Some(&next) {
+                                        this.connection_drop_target = Some(next);
+                                        cx.notify();
+                                    }
+                                }
+                            }))
                             .on_drop(cx.listener(move |this, payload: &ConnectionDragPayload, _, cx| {
+                                let position = this
+                                    .connection_drop_target
+                                    .as_ref()
+                                    .filter(|t| t.id.as_deref() == Some(drop_group_id.as_str()))
+                                    .map(|t| t.position)
+                                    .unwrap_or(ConnectionDropPosition::Inside);
+                                this.connection_drop_target = None;
                                 match payload.kind {
                                     ConnectionDragKind::Connection => {
                                         this.move_connection_into_group(
@@ -422,13 +484,22 @@ impl NyaTermApp {
                                             cx,
                                         );
                                     }
-                                    ConnectionDragKind::Group => {
-                                        this.move_group_before(
-                                            payload.id.clone(),
-                                            drop_group_id.clone(),
-                                            cx,
-                                        );
-                                    }
+                                    ConnectionDragKind::Group => match position {
+                                        ConnectionDropPosition::Inside => {
+                                            this.move_group_into_group(
+                                                payload.id.clone(),
+                                                Some(drop_group_id.clone()),
+                                                cx,
+                                            );
+                                        }
+                                        _ => {
+                                            this.move_group_before(
+                                                payload.id.clone(),
+                                                drop_group_id.clone(),
+                                                cx,
+                                            );
+                                        }
+                                    },
                                 }
                             }))
                     })
@@ -541,10 +612,21 @@ impl NyaTermApp {
             _ => "☰",
         };
         let show_actions = hovered || selected;
+        let endpoint = connection.endpoint();
+        let last_used = format_last_used_ms(connection.last_used_at_ms);
+        let drop_target = self.connection_drop_target.as_ref().filter(|target| {
+            target.kind == ConnectionDragKind::Connection
+                && target.id.as_deref() == Some(connection.id.as_str())
+        });
+        let show_before = drop_target.is_some_and(|t| t.position == ConnectionDropPosition::Before);
+        let show_after = drop_target.is_some_and(|t| t.position == ConnectionDropPosition::After);
+        let show_inside = drop_target.is_some_and(|t| t.position == ConnectionDropPosition::Inside);
+        let row_id = connection.id.clone();
 
         div()
             .id(SharedString::from(format!("connection-row-{}", connection.id)))
-            .h(px(30.))
+            .relative()
+            .h(px(44.))
             .flex()
             .items_center()
             .gap_2()
@@ -552,11 +634,14 @@ impl NyaTermApp {
             .pl(if indented { px(24.) } else { px(8.) })
             .bg(if selected {
                 rgb(0x122033)
+            } else if show_inside {
+                rgb(0x122033)
             } else if hovered {
                 rgb(0x1c2128)
             } else {
                 rgb(0x161b22)
             })
+            .when(show_inside, |this| this.border_1().border_color(rgb(0x388bfd)))
             .cursor_pointer()
             .cursor_move()
             .on_drag(
@@ -569,20 +654,65 @@ impl NyaTermApp {
                     cx.new(|_| ConnectionDragPreview::new(payload.clone(), position))
                 },
             )
+            .on_drag_move(cx.listener({
+                let target_id = row_id.clone();
+                move |this, event: &gpui::DragMoveEvent<ConnectionDragPayload>, _, cx| {
+                    let _payload = event.drag(cx);
+                    let y = event.event.position.y;
+                    let bounds = event.bounds;
+                    let rel = if bounds.size.height > px(0.) {
+                        ((y - bounds.origin.y) / bounds.size.height).clamp(0., 1.)
+                    } else {
+                        0.5
+                    };
+                    let position = if rel < 0.33 {
+                        ConnectionDropPosition::Before
+                    } else if rel > 0.66 {
+                        ConnectionDropPosition::After
+                    } else {
+                        // Mid band: treat as before for connections (reorder only).
+                        ConnectionDropPosition::Before
+                    };
+                    let next = ConnectionDropTarget {
+                        id: Some(target_id.clone()),
+                        kind: ConnectionDragKind::Connection,
+                        position,
+                    };
+                    if this.connection_drop_target.as_ref() != Some(&next) {
+                        this.connection_drop_target = Some(next);
+                        this.connection_details_tooltip_id = None;
+                        cx.notify();
+                    }
+                }
+            }))
             .on_drop({
                 let target_id = connection.id.clone();
                 cx.listener(move |this, payload: &ConnectionDragPayload, _, cx| {
+                    let position = this
+                        .connection_drop_target
+                        .as_ref()
+                        .filter(|target| target.id.as_deref() == Some(target_id.as_str()))
+                        .map(|target| target.position)
+                        .unwrap_or(ConnectionDropPosition::Before);
+                    this.connection_drop_target = None;
                     match payload.kind {
-                        ConnectionDragKind::Connection => {
-                            this.move_connection_before(
-                                payload.id.clone(),
-                                target_id.clone(),
-                                cx,
-                            );
-                        }
+                        ConnectionDragKind::Connection => match position {
+                            ConnectionDropPosition::After => {
+                                this.move_connection_after(
+                                    payload.id.clone(),
+                                    target_id.clone(),
+                                    cx,
+                                );
+                            }
+                            _ => {
+                                this.move_connection_before(
+                                    payload.id.clone(),
+                                    target_id.clone(),
+                                    cx,
+                                );
+                            }
+                        },
                         ConnectionDragKind::Group => {
-                            // Dropping a group onto a connection reorders groups is not meaningful;
-                            // move group to connection's parent group.
                             let parent = this
                                 .connections
                                 .iter()
@@ -596,8 +726,12 @@ impl NyaTermApp {
             .on_hover(cx.listener(move |this, hovered: &bool, _, cx| {
                 if *hovered {
                     this.hovered_connection_id = Some(hover_id.clone());
+                    this.connection_details_tooltip_id = Some(hover_id.clone());
                 } else if this.hovered_connection_id.as_deref() == Some(hover_id.as_str()) {
                     this.hovered_connection_id = None;
+                    if this.connection_details_tooltip_id.as_deref() == Some(hover_id.as_str()) {
+                        this.connection_details_tooltip_id = None;
+                    }
                 }
                 cx.notify();
             }))
@@ -630,14 +764,44 @@ impl NyaTermApp {
                 div()
                     .min_w_0()
                     .flex_1()
-                    .text_size(px(12.))
-                    .font_weight(FontWeight(600.))
-                    .text_color(if selected {
-                        rgb(0x58a6ff)
-                    } else {
-                        rgb(0xc9d1d9)
-                    })
-                    .child(truncate_preview(&connection.name, 36)),
+                    .flex()
+                    .flex_col()
+                    .justify_center()
+                    .gap_0()
+                    .child(
+                        div()
+                            .text_size(px(12.))
+                            .font_weight(FontWeight(600.))
+                            .text_color(if selected {
+                                rgb(0x58a6ff)
+                            } else {
+                                rgb(0xc9d1d9)
+                            })
+                            .overflow_hidden()
+                            .child(truncate_preview(&connection.name, 36)),
+                    )
+                    .child(
+                        div()
+                            .flex()
+                            .items_center()
+                            .gap_2()
+                            .font_family("JetBrains Mono")
+                            .text_size(px(10.))
+                            .text_color(rgb(0x6e7681))
+                            .child(
+                                div()
+                                    .min_w_0()
+                                    .flex_1()
+                                    .overflow_hidden()
+                                    .child(truncate_preview(&endpoint, 42)),
+                            )
+                            .child(
+                                div()
+                                    .flex_none()
+                                    .text_color(rgb(0x8b949e))
+                                    .child(last_used),
+                            ),
+                    ),
             )
             .child(
                 div()
@@ -673,6 +837,89 @@ impl NyaTermApp {
                         }),
                     )),
             )
+            .when(show_before, |this| {
+                this.child(
+                    div()
+                        .absolute()
+                        .left(px(8.))
+                        .right(px(8.))
+                        .top_0()
+                        .h(px(2.))
+                        .rounded_full()
+                        .bg(rgb(0x58a6ff)),
+                )
+            })
+            .when(show_after, |this| {
+                this.child(
+                    div()
+                        .absolute()
+                        .left(px(8.))
+                        .right(px(8.))
+                        .bottom_0()
+                        .h(px(2.))
+                        .rounded_full()
+                        .bg(rgb(0x58a6ff)),
+                )
+            })
+    }
+
+
+    fn connection_details_tooltip(
+        &self,
+        connection_id: String,
+        _cx: &mut Context<Self>,
+    ) -> gpui::AnyElement {
+        let Some(connection) = self
+            .connections
+            .iter()
+            .find(|connection| connection.id == connection_id)
+        else {
+            return div().into_any_element();
+        };
+        let rows = connection_detail_rows(connection);
+        let mut grid = div().flex().flex_col().gap_1();
+        for (label, value) in rows {
+            grid = grid.child(
+                div()
+                    .flex()
+                    .items_start()
+                    .gap_2()
+                    .child(
+                        div()
+                            .w(px(64.))
+                            .flex_none()
+                            .text_size(px(11.))
+                            .text_color(rgb(0x6e7681))
+                            .child(label),
+                    )
+                    .child(
+                        div()
+                            .min_w_0()
+                            .flex_1()
+                            .text_size(px(11.))
+                            .text_color(rgb(0xc9d1d9))
+                            .child(value),
+                    ),
+            );
+        }
+        div()
+            .id(SharedString::from(format!(
+                "connection-details-tooltip-{}",
+                connection.id
+            )))
+            .absolute()
+            .left(px(8.))
+            .top(px(48.))
+                        .w(px(220.))
+            .rounded_md()
+            .border_1()
+            .border_color(rgb(0x30363d))
+            .bg(rgb(0x161b22))
+            .shadow_lg()
+            .px_2()
+            .py_2()
+            .child(grid)
+            .into_any_element()
     }
 
     fn connection_editor_panel(
@@ -1843,4 +2090,67 @@ fn menu_item_owned(
         .hover(|this| this.bg(rgb(0x21262d)))
         .on_click(on_click)
         .child(label)
+}
+
+
+fn connection_detail_rows(connection: &SavedConnection) -> Vec<(&'static str, String)> {
+    let description = connection
+        .description
+        .as_deref()
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .unwrap_or("—")
+        .to_string();
+    let mut rows = vec![
+        ("Type", connection.kind_label().to_string()),
+        ("Name", connection.name.clone()),
+    ];
+    match &connection.config {
+        nyaterm_domain::ConnectionType::Ssh {
+            host,
+            port,
+            username,
+            ..
+        } => {
+            rows.push(("Host", host.clone()));
+            rows.push(("Port", port.to_string()));
+            rows.push(("User", username.clone()));
+        }
+        nyaterm_domain::ConnectionType::LocalTerminal {
+            shell_path,
+            working_dir,
+            ..
+        } => {
+            rows.push((
+                "Shell",
+                if shell_path.trim().is_empty() {
+                    "system".to_string()
+                } else {
+                    shell_path.clone()
+                },
+            ));
+            rows.push((
+                "CWD",
+                working_dir
+                    .clone()
+                    .filter(|value| !value.trim().is_empty())
+                    .unwrap_or_else(|| "—".to_string()),
+            ));
+        }
+        nyaterm_domain::ConnectionType::Telnet { host, port, .. } => {
+            rows.push(("Host", host.clone()));
+            rows.push(("Port", port.to_string()));
+        }
+        nyaterm_domain::ConnectionType::Serial {
+            port_name,
+            baud_rate,
+            ..
+        } => {
+            rows.push(("Port", port_name.clone()));
+            rows.push(("Baud", baud_rate.to_string()));
+        }
+    }
+    rows.push(("Last", format_last_used_ms(connection.last_used_at_ms)));
+    rows.push(("Desc", description));
+    rows
 }

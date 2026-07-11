@@ -1,6 +1,6 @@
 use gpui::{
     App, ClickEvent, FontWeight, IntoElement, SharedString, Window, WindowControlArea, div,
-    prelude::*, px, rgb,
+    prelude::*, px, rgb, svg,
 };
 use nyaterm_domain::{
     CloudSyncHistoryEntry, ConnectionType, NativeServiceStatus, SavedConnection, TunnelConfig,
@@ -18,19 +18,16 @@ use super::{
 
 pub(in crate::ui::view) fn logo_mark() -> impl IntoElement {
     div()
-        .size(px(26.))
-        .rounded_md()
-        .bg(rgb(0x238636))
-        .shadow_sm()
+        .size(px(22.))
+        .flex_none()
+        .flex()
+        .items_center()
+        .justify_center()
         .child(
-            div()
-                .size_full()
-                .flex()
-                .items_center()
-                .justify_center()
-                .text_color(rgb(0xffffff))
-                .font_weight(FontWeight(900.))
-                .child("N"),
+            svg()
+                .size(px(18.))
+                .path("icons/logo.svg")
+                .text_color(rgb(0x58a6ff)),
         )
 }
 
@@ -378,13 +375,28 @@ pub(in crate::ui::view) fn empty_workspace_action(
     shortcut: impl Into<String>,
     on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
 ) -> impl IntoElement {
+    // Tauri EmptyWorkspaceState: primary label left, Kbd chips right with "+" separators.
     let shortcut = shortcut.into();
+    let parts: Vec<String> = shortcut
+        .split('+')
+        .map(str::trim)
+        .filter(|p| !p.is_empty())
+        .map(str::to_string)
+        .collect();
     let mut keys = div().flex().items_center().gap_1();
-    for part in shortcut.split('+').map(str::trim).filter(|p| !p.is_empty()) {
+    for (index, part) in parts.into_iter().enumerate() {
+        if index > 0 {
+            keys = keys.child(
+                div()
+                    .text_size(px(11.))
+                    .text_color(rgb(0x6e7681))
+                    .child("+"),
+            );
+        }
         keys = keys.child(
             div()
-                .h(px(22.))
-                .min_w(px(22.))
+                .h(px(24.))
+                .min_w(px(28.))
                 .px_1()
                 .flex()
                 .items_center()
@@ -392,11 +404,11 @@ pub(in crate::ui::view) fn empty_workspace_action(
                 .rounded_sm()
                 .border_1()
                 .border_color(rgb(0x30363d))
-                .bg(rgb(0x161b22))
-                .text_size(px(10.))
-                .font_weight(FontWeight(700.))
-                .text_color(rgb(0x8b949e))
-                .child(part.to_string()),
+                .bg(rgb(0x21262d))
+                .text_size(px(12.))
+                .font_weight(FontWeight(600.))
+                .text_color(rgb(0xc9d1d9))
+                .child(part),
         );
     }
 
@@ -934,5 +946,53 @@ pub(in crate::ui::view) fn compact_tunnel_row(
                     small_button(format!("left-tunnel-open-{}", tunnel.id), "Open", on_open)
                         .into_any_element()
                 }),
+        )
+}
+
+/// Monochrome activity-bar SVG icon with glyph fallback.
+pub(in crate::ui::view) fn activity_icon(
+    path: Option<&'static str>,
+    glyph: &'static str,
+    color: gpui::Hsla,
+    size_px: f32,
+) -> gpui::AnyElement {
+    let size = px(size_px);
+    if let Some(path) = path {
+        svg()
+            .size(size)
+            .flex_none()
+            .path(path)
+            .text_color(color)
+            .into_any_element()
+    } else {
+        div()
+            .size(size)
+            .flex_none()
+            .flex()
+            .items_center()
+            .justify_center()
+            .text_size(px(size_px * 0.72))
+            .font_weight(FontWeight(700.))
+            .text_color(color)
+            .child(glyph)
+            .into_any_element()
+    }
+}
+
+/// Faded NyaTerm logo used by empty workspace (Tauri EmptyWorkspaceState).
+pub(in crate::ui::view) fn nyaterm_logo_mark(size_px: f32, opacity: f32) -> impl IntoElement {
+    let size = px(size_px);
+    div()
+        .size(size)
+        .flex_none()
+        .opacity(opacity)
+        .flex()
+        .items_center()
+        .justify_center()
+        .child(
+            svg()
+                .size(size)
+                .path("icons/logo.svg")
+                .text_color(rgb(0x8b949e)),
         )
 }

@@ -465,3 +465,23 @@ service boundary first:
 - In-memory `ai_chat_messages` + `ai_streaming_assistant_id` filled on Ask/Agent start, stream deltas, finish, cancel.
 - Empty state guides enablement / model setup / start conversation (Tauri-like).
 - New chat clears message list; command cards + agent steps remain below transcript.
+
+## 2026-07-11 Screenshot shell fidelity
+- Activity bar short labels now use Tauri-like panel titles (Files/Net/Auth/Sync/AI/…); labeled width ~52px.
+- Side panel headers use compact `panel_title()` (Connections, Files, AI Assistant, …).
+- Saved connection rows densified to ~44px with endpoint + relative last-used meta under the name.
+- Empty workspace: larger greyscale logo mark, Temporary Link label, Kbd chips with "+" separators.
+- AI panel: history popover + settings/new actions, setup empty state steps, composer mode switcher + send/stop icon (Tauri AIAssistantPanel layout).
+
+## 2026-07-11 Shell assets + connection details
+- Bundled monochrome SVG assets (`crates/nyaterm-native/assets/icons/*`) loaded via `NyaTermAssets` + `Application::with_assets`.
+- Activity bar uses SVG icons (Files/Network/Auth/Sync/Settings/Connections/AI/…) with glyph fallback.
+- Empty workspace and titlebar use NyaTerm cat-face logo mark (faded) instead of plain "N"/green square.
+- Connection hover shows Tauri-like detail tooltip (type/host/user/last/desc).
+- Connection drag preview densified with accent icon + label.
+
+## 2026-07-11 Connection DnD indicators + AI execution menu
+- Connection rows show blue before/after drop lines via `on_drag_move` + `connection_drop_target`.
+- Drop supports before/after reorder (`move_connection_after`) and group inside highlight ring.
+- AI toolbar adds agent command execution menu (Confirm each / Smart / Auto) with immediate persist.
+- Title bar window controls use cleaner glyphs (– □ ×).

@@ -16,6 +16,20 @@ pub(in crate::ui::view) enum ConnectionDragKind {
     Group,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(in crate::ui::view) enum ConnectionDropPosition {
+    Before,
+    After,
+    Inside,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(in crate::ui::view) struct ConnectionDropTarget {
+    pub id: Option<String>,
+    pub kind: ConnectionDragKind,
+    pub position: ConnectionDropPosition,
+}
+
 pub(in crate::ui::view) struct ConnectionDragPreview {
     payload: ConnectionDragPayload,
     position: gpui::Point<gpui::Pixels>,
@@ -32,31 +46,30 @@ impl ConnectionDragPreview {
 
 impl Render for ConnectionDragPreview {
     fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
-        let kind = match self.payload.kind {
-            ConnectionDragKind::Connection => "CN",
-            ConnectionDragKind::Group => "GRP",
+        let (kind, accent) = match self.payload.kind {
+            ConnectionDragKind::Connection => ("⌂", rgb(0x3fb950)),
+            ConnectionDragKind::Group => ("▸", rgb(0x58a6ff)),
         };
         div()
             .pl(self.position.x - px(90.))
             .pt(self.position.y - px(16.))
             .child(
                 div()
-                    .w(px(180.))
-                    .h(px(32.))
+                    .w(px(200.))
+                    .h(px(36.))
                     .px_3()
                     .flex()
                     .items_center()
                     .gap_2()
-                    .rounded_sm()
+                    .rounded_md()
                     .border_1()
-                    .border_color(rgb(0x334155))
-                    .bg(rgba(0x151b24dd))
+                    .border_color(rgb(0x388bfd))
+                    .bg(rgba(0x0d1117ee))
                     .shadow_lg()
                     .child(
                         div()
-                            .text_size(px(10.))
-                            .font_weight(FontWeight(800.))
-                            .text_color(rgb(0x93c5fd))
+                            .text_size(px(13.))
+                            .text_color(accent)
                             .child(kind),
                     )
                     .child(
@@ -64,8 +77,9 @@ impl Render for ConnectionDragPreview {
                             .min_w_0()
                             .flex_1()
                             .text_size(px(12.))
-                            .text_color(rgb(0xc9d1d9))
-                            .child(truncate_preview(&self.payload.label, 22)),
+                            .font_weight(FontWeight(600.))
+                            .text_color(rgb(0xe5edf7))
+                            .child(truncate_preview(&self.payload.label, 24)),
                     ),
             )
     }
@@ -198,6 +212,7 @@ impl NyaTermApp {
     ) {
         self.connections_more_menu_open = false;
         self.connection_group_context_menu = None;
+        self.connection_details_tooltip_id = None;
         if !self.selected_connection_ids.contains(&connection_id) {
             self.selected_connection_ids.clear();
             self.selected_connection_ids.insert(connection_id.clone());
@@ -334,6 +349,7 @@ impl NyaTermApp {
         target_id: String,
         cx: &mut Context<Self>,
     ) {
+        self.connection_drop_target = None;
         if source_id == target_id {
             return;
         }
@@ -386,6 +402,74 @@ impl NyaTermApp {
                 self.store_status.ready = false;
             }
         }
+        self.connection_drop_target = None;
+        cx.notify();
+    }
+
+    pub(in crate::ui::view) fn move_connection_after(
+        &mut self,
+        source_id: String,
+        target_id: String,
+        cx: &mut Context<Self>,
+    ) {
+        self.connection_drop_target = None;
+        if source_id == target_id {
+            return;
+        }
+        let Some(source) = self
+            .connections
+            .iter()
+            .find(|c| c.id == source_id)
+            .cloned()
+        else {
+            self.terminal_status = "drag source connection missing".to_string();
+            cx.notify();
+            return;
+        };
+        let Some(target) = self
+            .connections
+            .iter()
+            .find(|c| c.id == target_id)
+            .cloned()
+        else {
+            self.terminal_status = "drop target connection missing".to_string();
+            cx.notify();
+            return;
+        };
+
+        let parent = target.group_id.clone();
+        let mut siblings = self
+            .connections
+            .iter()
+            .filter(|c| c.group_id == parent && c.id != source_id)
+            .cloned()
+            .collect::<Vec<_>>();
+        siblings.sort_by(|a, b| {
+            a.sort_order
+                .cmp(&b.sort_order)
+                .then_with(|| a.name.to_ascii_lowercase().cmp(&b.name.to_ascii_lowercase()))
+        });
+        let target_idx = siblings
+            .iter()
+            .position(|c| c.id == target_id)
+            .map(|idx| idx + 1)
+            .unwrap_or(siblings.len());
+        let mut moved = source;
+        moved.group_id = parent;
+        siblings.insert(target_idx.min(siblings.len()), moved);
+
+        match self.persist_connection_order(&siblings) {
+            Ok(()) => {
+                self.refresh_store_from_runtime();
+                self.terminal_status = "connection reordered".to_string();
+            }
+            Err(error) => {
+                self.terminal_status = format!("reorder connection failed: {error}");
+                self.store_status.message = self.terminal_status.clone();
+                self.store_status.ready = false;
+            }
+        }
+        self.connection_drop_target = None;
         cx.notify();
     }
 
@@ -395,6 +479,7 @@ impl NyaTermApp {
         group_id: Option<String>,
         cx: &mut Context<Self>,
     ) {
+        self.connection_drop_target = None;
         let Some(source) = self
             .connections
             .iter()
@@ -442,6 +527,7 @@ impl NyaTermApp {
         target_id: String,
         cx: &mut Context<Self>,
     ) {
+        self.connection_drop_target = None;
         if source_id == target_id {
             return;
         }
@@ -492,6 +578,7 @@ impl NyaTermApp {
         parent_id: Option<String>,
         cx: &mut Context<Self>,
     ) {
+        self.connection_drop_target = None;
         if parent_id.as_deref() == Some(source_id.as_str()) {
             self.terminal_status = "cannot nest group into itself".to_string();
             cx.notify();

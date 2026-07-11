@@ -90,7 +90,7 @@ pub(in crate::ui::view) use activity_bar_runtime::{
     ActivityBarDragPayload, ActivityBarDragPreview,
 };
 pub(in crate::ui::view) use connections::{
-    ConnectionDragKind, ConnectionDragPayload, ConnectionDragPreview,
+    ConnectionDragKind, ConnectionDragPayload, ConnectionDragPreview, ConnectionDropPosition, ConnectionDropTarget,
 };
 pub(in crate::ui::view) use tab_mouse::{
     SessionTabDragPayload, SessionTabDragPreview, TabMouseActionTarget, tab_mouse_action_label,

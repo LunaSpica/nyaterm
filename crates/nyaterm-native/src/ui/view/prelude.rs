@@ -6,7 +6,7 @@ pub(super) use gpui::{
 pub(super) use nyaterm_domain::{
     AgentApprovalDecision, AgentCapturedOutput, AgentCommandExecutionMode,
     AgentOutputCaptureProcessor, AiAction, AiChatRequest, AiChatStreamDelta, AiCommandCard,
-    AiContext, AiExecutionProfile, AiMessage, AiMessageRole, AiMode, AiModelDiscovery,
+    AiContext, AiExecutionProfile, AiMessage, AiMessageRole, AiMode, AiSession, AiModelDiscovery,
     AiProviderCredential, AiProviderKind, AiSettings, AppRuntime, AppSettingsSummary,
     AppendAiAuditRequest, CLOUD_SYNC_HISTORY_LIMIT, CloudSyncError, CloudSyncHistoryEntry,
     CloudSyncResult, CloudSyncSettings, CloudSyncState, CommandHistoryEntry, CommandObservation,

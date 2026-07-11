@@ -1,3 +1,4 @@
+mod assets;
 pub mod ai_http;
 mod cloud_sync_http;
 mod translation_http;
@@ -17,7 +18,9 @@ fn main() -> anyhow::Result<()> {
         .context("prepare runtime directories")?;
     let _log_guard = init_tracing(&runtime);
 
-    Application::new().run(move |cx: &mut App| {
+    Application::new()
+        .with_assets(assets::NyaTermAssets)
+        .run(move |cx: &mut App| {
         let bounds = Bounds::centered(None, size(px(1280.), px(800.)), cx);
         let app_runtime = runtime.clone();
 

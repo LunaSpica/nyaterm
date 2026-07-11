@@ -302,27 +302,50 @@ impl NavItem {
     }
 
     pub(super) fn short_label(self) -> &'static str {
+        // Tauri panel.* short titles used under activity icons when labels are shown.
         match self {
-            NavItem::Workspace => "WS",
-            NavItem::Connections => "CN",
-            NavItem::Tunnels => "NW",
-            NavItem::Stats => "RS",
-            NavItem::Processes => "PS",
-            NavItem::Docker => "DK",
-            NavItem::Translation => "TR",
-            NavItem::Transfers => "FE",
-            NavItem::Settings => "ST",
-            NavItem::Migration => "MG",
+            NavItem::Workspace => "Work",
+            NavItem::Connections => "Conn",
+            NavItem::Tunnels => "Net",
+            NavItem::Stats => "Res",
+            NavItem::Processes => "Proc",
+            NavItem::Docker => "Dock",
+            NavItem::Translation => "Trans",
+            NavItem::Transfers => "Files",
+            NavItem::Settings => "Set",
+            NavItem::Migration => "Mig",
             NavItem::AiAssistant => "AI",
-            NavItem::ActiveSessions => "AS",
-            NavItem::CommandHistory => "CH",
-            NavItem::SecurityAuth => "SA",
-            NavItem::SyncBackupHistory => "SB",
-            NavItem::Recording => "RC",
+            NavItem::ActiveSessions => "Sess",
+            NavItem::CommandHistory => "Hist",
+            NavItem::SecurityAuth => "Auth",
+            NavItem::SyncBackupHistory => "Sync",
+            NavItem::Recording => "Rec",
         }
     }
 
-    /// Compact monochrome glyph used by the activity bar (closer to Tauri icon density).
+    /// Compact panel title used in side PanelHeader (Tauri panel.* keys).
+    pub(super) fn panel_title(self) -> &'static str {
+        match self {
+            NavItem::Transfers => "Files",
+            NavItem::Tunnels => "Network",
+            NavItem::Connections => "Connections",
+            NavItem::AiAssistant => "AI Assistant",
+            NavItem::ActiveSessions => "Sessions",
+            NavItem::CommandHistory => "History",
+            NavItem::Stats => "Resources",
+            NavItem::Processes => "Processes",
+            NavItem::Docker => "Docker",
+            NavItem::SyncBackupHistory => "Cloud Sync",
+            NavItem::SecurityAuth => "Security",
+            NavItem::Recording => "Recording",
+            NavItem::Translation => "Translation",
+            NavItem::Migration => "Migration",
+            NavItem::Settings => "Settings",
+            NavItem::Workspace => "Workspace",
+        }
+    }
+
+    /// Compact monochrome glyph used as text fallback for the activity bar.
     pub(super) fn glyph(self) -> &'static str {
         match self {
             NavItem::Workspace => "▣",
@@ -342,6 +365,28 @@ impl NavItem {
             NavItem::SyncBackupHistory => "☁",
             NavItem::Recording => "●",
         }
+    }
+
+    /// Bundled SVG path for activity-bar / toolbar icons.
+    pub(super) fn icon_path(self) -> Option<&'static str> {
+        Some(match self {
+            NavItem::Transfers => "icons/files.svg",
+            NavItem::Tunnels => "icons/network.svg",
+            NavItem::SecurityAuth => "icons/auth.svg",
+            NavItem::SyncBackupHistory => "icons/sync.svg",
+            NavItem::Settings => "icons/settings.svg",
+            NavItem::Connections => "icons/connections.svg",
+            NavItem::AiAssistant => "icons/ai.svg",
+            NavItem::ActiveSessions => "icons/sessions.svg",
+            NavItem::CommandHistory => "icons/history.svg",
+            NavItem::Stats => "icons/resources.svg",
+            NavItem::Processes => "icons/processes.svg",
+            NavItem::Docker => "icons/docker.svg",
+            NavItem::Recording => "icons/record.svg",
+            NavItem::Translation => "icons/translation.svg",
+            NavItem::Migration => "icons/migration.svg",
+            NavItem::Workspace => return None,
+        })
     }
 
     pub(super) fn is_left_panel(self) -> bool {
@@ -493,6 +538,16 @@ impl ActivityBarEntry {
         }
     }
 
+    pub(super) fn short_label(self) -> &'static str {
+        match self {
+            Self::Panel(item) => item.short_label(),
+            Self::QuickCommands => "Cmd",
+            Self::CommandSend => "Send",
+            Self::Recording => "Rec",
+            Self::Lock => "Lock",
+        }
+    }
+
     pub(super) fn glyph(self) -> &'static str {
         match self {
             Self::Panel(item) => item.glyph(),
@@ -500,6 +555,16 @@ impl ActivityBarEntry {
             Self::CommandSend => "⏎",
             Self::Recording => "●",
             Self::Lock => "🔒",
+        }
+    }
+
+    pub(super) fn icon_path(self) -> Option<&'static str> {
+        match self {
+            Self::Panel(item) => item.icon_path(),
+            Self::QuickCommands => Some("icons/commands.svg"),
+            Self::CommandSend => Some("icons/send.svg"),
+            Self::Recording => Some("icons/record.svg"),
+            Self::Lock => Some("icons/lock.svg"),
         }
     }
 }

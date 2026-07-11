@@ -968,6 +968,92 @@ impl NyaTermApp {
         self.ai_secret_draft.clear();
     }
 
+
+    pub(in crate::ui::view) fn refresh_ai_session_list(&mut self, cx: &mut Context<Self>) {
+        let Ok(store) = ConnectionStore::open_with_portable_key_path(
+            self.runtime.config_dir(),
+            self.runtime.portable_key_path().map(ToOwned::to_owned),
+        ) else {
+            self.ai_sessions.clear();
+            cx.notify();
+            return;
+        };
+        self.ai_sessions = store.list_ai_sessions().unwrap_or_default();
+        cx.notify();
+    }
+
+    pub(in crate::ui::view) fn load_ai_session_messages(
+        &mut self,
+        session_id: String,
+        cx: &mut Context<Self>,
+    ) {
+        let Ok(store) = ConnectionStore::open_with_portable_key_path(
+            self.runtime.config_dir(),
+            self.runtime.portable_key_path().map(ToOwned::to_owned),
+        ) else {
+            self.ai_status = "failed to open store for AI history".to_string();
+            cx.notify();
+            return;
+        };
+        match store.list_ai_messages(&session_id) {
+            Ok(messages) => {
+                self.ai_chat_session_id = session_id;
+                self.ai_chat_messages = messages;
+                self.ai_streaming_assistant_id = None;
+                self.ai_history_open = false;
+                self.ai_command_cards.clear();
+                if let Some(last) = self
+                    .ai_chat_messages
+                    .iter()
+                    .rev()
+                    .find(|message| matches!(message.role, AiMessageRole::Assistant))
+                {
+                    self.ai_response_preview = truncate_preview(&last.content, 320);
+                    self.ai_command_cards = last.command_cards.clone();
+                } else {
+                    self.ai_response_preview.clear();
+                }
+                self.ai_status = format!("loaded AI session {}", compact_id(&self.ai_chat_session_id));
+            }
+            Err(error) => {
+                self.ai_status = format!("failed to load AI session: {error}");
+            }
+        }
+        cx.notify();
+    }
+
+    pub(in crate::ui::view) fn delete_ai_session(
+        &mut self,
+        session_id: String,
+        cx: &mut Context<Self>,
+    ) {
+        let Ok(store) = ConnectionStore::open_with_portable_key_path(
+            self.runtime.config_dir(),
+            self.runtime.portable_key_path().map(ToOwned::to_owned),
+        ) else {
+            self.ai_status = "failed to open store for AI history".to_string();
+            cx.notify();
+            return;
+        };
+        match store.delete_ai_session(&session_id) {
+            Ok(()) => {
+                if self.ai_chat_session_id == session_id {
+                    self.ai_chat_messages.clear();
+                    self.ai_command_cards.clear();
+                    self.ai_streaming_assistant_id = None;
+                    self.ai_chat_session_id = format!("ai-session-{}", uuid());
+                    self.ai_response_preview = "Ask mode ready".to_string();
+                }
+                self.ai_sessions.retain(|session| session.id != session_id);
+                self.ai_status = "AI session deleted".to_string();
+            }
+            Err(error) => {
+                self.ai_status = format!("failed to delete AI session: {error}");
+            }
+        }
+        cx.notify();
+    }
+
     pub(in crate::ui::view) fn refresh_ai_usage_counts(&mut self) {
         if let Ok(store) = ConnectionStore::open_with_portable_key_path(
             self.runtime.config_dir(),

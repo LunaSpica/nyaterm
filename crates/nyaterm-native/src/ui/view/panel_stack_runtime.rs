@@ -446,7 +446,7 @@ impl NyaTermApp {
                     .flex()
                     .flex_col()
                     .overflow_hidden()
-                    .child(panel_header(panel.label(), meta))
+                    .child(panel_header(panel.panel_title(), meta))
                     .child(div().flex_1().min_h_0().overflow_hidden().child(body)),
             );
             if index + 1 < count {
@@ -473,7 +473,7 @@ impl NyaTermApp {
             .size_full()
             .flex()
             .flex_col()
-            .child(panel_header(panel.label(), meta))
+            .child(panel_header(panel.panel_title(), meta))
             .child(div().flex_1().min_h_0().overflow_hidden().child(body))
     }
 
@@ -488,16 +488,16 @@ impl NyaTermApp {
                 other => other.label(),
             },
             PanelSide::Right => match panel {
-                NavItem::Connections => "saved connections",
+                NavItem::Connections => "saved",
                 NavItem::AiAssistant => "assistant",
-                NavItem::ActiveSessions => "sessions",
-                NavItem::CommandHistory => "history",
-                NavItem::Stats => "resource monitor",
-                NavItem::Processes => "process manager",
-                NavItem::Docker => "docker manager",
-                NavItem::Translation => "translation",
-                NavItem::Recording => "recording",
-                other => other.label(),
+                NavItem::ActiveSessions => "open",
+                NavItem::CommandHistory => "recent",
+                NavItem::Stats => "host",
+                NavItem::Processes => "live",
+                NavItem::Docker => "containers",
+                NavItem::Translation => "i18n",
+                NavItem::Recording => "capture",
+                other => other.panel_title(),
             },
         }
     }

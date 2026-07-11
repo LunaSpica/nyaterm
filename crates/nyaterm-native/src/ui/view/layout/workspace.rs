@@ -352,21 +352,7 @@ impl NyaTermApp {
                     .flex()
                     .flex_col()
                     .items_center()
-                    .child(
-                        div()
-                            .size(px(200.))
-                            .mb_8()
-                            .rounded_lg()
-                            .opacity(0.14)
-                            .bg(rgb(0x238636))
-                            .flex()
-                            .items_center()
-                            .justify_center()
-                            .text_size(px(96.))
-                            .font_weight(FontWeight(900.))
-                            .text_color(rgb(0x8b949e))
-                            .child("N"),
-                    )
+                    .child(div().mb_9().child(nyaterm_logo_mark(256., 0.13)))
                     .child(
                         div()
                             .w(px(420.))
@@ -375,7 +361,7 @@ impl NyaTermApp {
                             .flex_col()
                             .gap_3()
                             .child(empty_workspace_action(
-                                "Temporary SSH Link",
+                                "Temporary Link",
                                 temporary_ssh,
                                 cx.listener(|this, _, window, cx| {
                                     this.ensure_panel_open(NavItem::Connections);
