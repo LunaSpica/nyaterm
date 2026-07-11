@@ -1112,6 +1112,50 @@ impl NyaTermApp {
         cx.notify();
     }
 
+    pub(in crate::ui::view) fn toggle_security_credential_list_enabled(
+        &mut self,
+        credential_id: String,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(entry) = self
+            .connection_saved_credentials
+            .iter()
+            .find(|entry| entry.id == credential_id)
+            .cloned()
+        else {
+            self.security_status = "credential not found".to_string();
+            cx.notify();
+            return;
+        };
+        let store = match ConnectionStore::open_with_portable_key_path(
+            self.runtime.config_dir(),
+            self.runtime.portable_key_path().map(ToOwned::to_owned),
+        ) {
+            Ok(store) => store,
+            Err(error) => {
+                self.security_status = error.to_string();
+                cx.notify();
+                return;
+            }
+        };
+        let mut next = entry;
+        next.enabled = !next.enabled;
+        match store.save_credential(next.clone()) {
+            Ok(_) => {
+                self.refresh_security_catalog();
+                self.security_status = format!(
+                    "credential {} {}",
+                    next.name,
+                    if next.enabled { "enabled" } else { "disabled" }
+                );
+            }
+            Err(error) => {
+                self.security_status = error.to_string();
+            }
+        }
+        cx.notify();
+    }
+
     pub(in crate::ui::view) fn handle_security_credential_editor_key_down(
         &mut self,
         event: &KeyDownEvent,

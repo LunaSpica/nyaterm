@@ -1189,6 +1189,20 @@ impl NyaTermApp {
                                         .flex()
                                         .items_center()
                                         .gap_1()
+                                        .child(small_button(
+                                            palette,
+                                            format!("security-cred-toggle-{id}"),
+                                            if entry.enabled { "Off" } else { "On" },
+                                            {
+                                                let toggle_id = entry.id.clone();
+                                                cx.listener(move |this, _, _, cx| {
+                                                    this.toggle_security_credential_list_enabled(
+                                                        toggle_id.clone(),
+                                                        cx,
+                                                    );
+                                                })
+                                            },
+                                        ))
                                         .child(small_button(palette, 
                                             format!("security-cred-show-{id}"),
                                             "Show",

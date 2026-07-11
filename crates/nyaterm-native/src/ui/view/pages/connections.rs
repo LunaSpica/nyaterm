@@ -2075,6 +2075,32 @@ impl NyaTermApp {
                                     }),
                                 )),
                         )
+                        .child(
+                            div()
+                                .flex()
+                                .items_center()
+                                .justify_between()
+                                .gap_2()
+                                .child(
+                                    div()
+                                        .text_xs()
+                                        .text_color(rgb(palette.text_muted))
+                                        .child(format!(
+                                            "Backspace · {}",
+                                            match editor.backspace_mode.as_str() {
+                                                "ctrl-h" | "bs" | "ctrl_h" => "Ctrl+H (BS)",
+                                                _ => "DEL (0x7F)",
+                                            }
+                                        )),
+                                )
+                                .child(small_button(palette,
+                                    "connection-editor-serial-backspace",
+                                    "Cycle",
+                                    cx.listener(|this, _, _, cx| {
+                                        this.cycle_connection_editor_backspace(cx);
+                                    }),
+                                )),
+                        )
                     }),
             )
             .when_some(editor.error.clone(), |this, error| {
@@ -2915,6 +2941,7 @@ fn connection_detail_rows(
             data_bits,
             parity,
             stop_bits,
+            backspace_mode,
             ..
         } => {
             rows.push(("Port", port_name.clone()));
@@ -2922,6 +2949,13 @@ fn connection_detail_rows(
             rows.push(("Data", data_bits.to_string()));
             rows.push(("Parity", parity.clone()));
             rows.push(("Stop", stop_bits.clone()));
+            rows.push((
+                "BS",
+                match backspace_mode.as_str() {
+                    "ctrl-h" | "bs" | "ctrl_h" => "Ctrl+H".to_string(),
+                    _ => "DEL".to_string(),
+                },
+            ));
         }
     }
     rows.push(("Last", format_last_used_ms(connection.last_used_at_ms)));
