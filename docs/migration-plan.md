@@ -722,3 +722,7 @@ service boundary first:
 - Images/Volumes/Networks: spacer + wheel virtual windows via `docker_resource_list_offset` (Compose keeps static scroll).
 - Tab/search reset resource offset; range footer for large lists.
 - Hex guides translate with `send_command_hex_scroll_y` on wheel (Tauri hexScroll.top step).
+
+## 2026-07-11 Security Auth + Network densify
+- Security Auth Keys/Passwords/Credentials/OTP: fixed-height dense rows with trailing actions (Tauri list density).
+- Network panel scroll body padding/gap tightened (p_2/gap_2).

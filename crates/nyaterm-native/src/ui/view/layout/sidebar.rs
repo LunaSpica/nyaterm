@@ -884,54 +884,69 @@ impl NyaTermApp {
                         let edit_id = key.id.clone();
                         let delete_id = key.id.clone();
                         body = body.child(
+                            // Tauri security-auth: dense single-row list items + trailing actions.
                             div()
+                                .h(px(42.))
                                 .rounded_md()
                                 .border_1()
                                 .border_color(rgb(0x30363d))
                                 .bg(rgb(0x0d1117))
                                 .px_2()
-                                .py_1()
                                 .flex()
-                                .flex_col()
-                                .gap_1()
+                                .items_center()
+                                .gap_2()
                                 .child(
                                     div()
+                                        .min_w_0()
+                                        .flex_1()
                                         .flex()
-                                        .items_center()
-                                        .justify_between()
-                                        .gap_2()
+                                        .flex_col()
+                                        .gap(px(1.))
                                         .child(
                                             div()
-                                                .min_w_0()
-                                                .flex_1()
-                                                .text_xs()
-                                                .font_weight(FontWeight(700.))
-                                                .text_color(rgb(0xc9d1d9))
-                                                .child(truncate_preview(&key.name, 28)),
+                                                .flex()
+                                                .items_center()
+                                                .gap_2()
+                                                .child(
+                                                    div()
+                                                        .min_w_0()
+                                                        .flex_1()
+                                                        .text_xs()
+                                                        .font_weight(FontWeight(600.))
+                                                        .text_color(rgb(0xc9d1d9))
+                                                        .overflow_hidden()
+                                                        .child(truncate_preview(&key.name, 28)),
+                                                )
+                                                .child(
+                                                    div()
+                                                        .text_size(px(10.))
+                                                        .text_color(if key.has_key_data {
+                                                            rgb(0x3fb950)
+                                                        } else {
+                                                            rgb(0x8b949e)
+                                                        })
+                                                        .child(if key.has_key_data {
+                                                            "ready"
+                                                        } else {
+                                                            "empty"
+                                                        }),
+                                                ),
                                         )
                                         .child(
                                             div()
                                                 .text_size(px(10.))
-                                                .text_color(if key.has_key_data {
-                                                    rgb(0x3fb950)
-                                                } else {
-                                                    rgb(0x8b949e)
-                                                })
-                                                .child(if key.has_key_data { "ready" } else { "empty" }),
+                                                .text_color(rgb(0x6e7681))
+                                                .overflow_hidden()
+                                                .child(format!(
+                                                    "{} · cert {}",
+                                                    compact_id(&key_id),
+                                                    if key.has_cert_data { "yes" } else { "no" }
+                                                )),
                                         ),
                                 )
                                 .child(
                                     div()
-                                        .text_size(px(10.))
-                                        .text_color(rgb(0x6e7681))
-                                        .child(format!(
-                                            "{} · cert {}",
-                                            compact_id(&key_id),
-                                            if key.has_cert_data { "yes" } else { "no" }
-                                        )),
-                                )
-                                .child(
-                                    div()
+                                        .flex_none()
                                         .flex()
                                         .items_center()
                                         .gap_1()
@@ -950,7 +965,10 @@ impl NyaTermApp {
                                             format!("security-key-del-{key_id}"),
                                             "Del",
                                             cx.listener(move |this, _, _, cx| {
-                                                this.request_delete_security_key(delete_id.clone(), cx);
+                                                this.request_delete_security_key(
+                                                    delete_id.clone(),
+                                                    cx,
+                                                );
                                             }),
                                         )),
                                 ),
@@ -982,28 +1000,28 @@ impl NyaTermApp {
                             });
                         body = body.child(
                             div()
+                                .h(px(42.))
                                 .rounded_md()
                                 .border_1()
                                 .border_color(rgb(0x30363d))
                                 .bg(rgb(0x0d1117))
                                 .px_2()
-                                .py_1()
                                 .flex()
-                                .flex_col()
-                                .gap_1()
+                                .items_center()
+                                .gap_2()
                                 .child(
                                     div()
+                                        .min_w_0()
+                                        .flex_1()
                                         .flex()
-                                        .items_center()
-                                        .justify_between()
-                                        .gap_2()
+                                        .flex_col()
+                                        .gap(px(1.))
                                         .child(
                                             div()
-                                                .min_w_0()
-                                                .flex_1()
                                                 .text_xs()
-                                                .font_weight(FontWeight(700.))
+                                                .font_weight(FontWeight(600.))
                                                 .text_color(rgb(0xc9d1d9))
+                                                .overflow_hidden()
                                                 .child(truncate_preview(&entry.name, 28)),
                                         )
                                         .child(
@@ -1011,11 +1029,13 @@ impl NyaTermApp {
                                                 .font_family("JetBrains Mono")
                                                 .text_size(px(10.))
                                                 .text_color(rgb(0x8b949e))
-                                                .child(truncate_preview(&revealed, 16)),
+                                                .overflow_hidden()
+                                                .child(truncate_preview(&revealed, 20)),
                                         ),
                                 )
                                 .child(
                                     div()
+                                        .flex_none()
                                         .flex()
                                         .items_center()
                                         .gap_1()
@@ -1080,53 +1100,63 @@ impl NyaTermApp {
                             });
                         body = body.child(
                             div()
+                                .h(px(48.))
                                 .rounded_md()
                                 .border_1()
                                 .border_color(rgb(0x30363d))
                                 .bg(rgb(0x0d1117))
                                 .px_2()
-                                .py_1()
                                 .flex()
-                                .flex_col()
-                                .gap_1()
+                                .items_center()
+                                .gap_2()
                                 .child(
                                     div()
+                                        .min_w_0()
+                                        .flex_1()
                                         .flex()
-                                        .items_center()
-                                        .justify_between()
-                                        .gap_2()
+                                        .flex_col()
+                                        .gap(px(1.))
                                         .child(
                                             div()
-                                                .min_w_0()
-                                                .flex_1()
-                                                .text_xs()
-                                                .font_weight(FontWeight(700.))
-                                                .text_color(rgb(0xc9d1d9))
-                                                .child(truncate_preview(&entry.name, 24)),
+                                                .flex()
+                                                .items_center()
+                                                .gap_2()
+                                                .child(
+                                                    div()
+                                                        .min_w_0()
+                                                        .flex_1()
+                                                        .text_xs()
+                                                        .font_weight(FontWeight(600.))
+                                                        .text_color(rgb(0xc9d1d9))
+                                                        .overflow_hidden()
+                                                        .child(truncate_preview(&entry.name, 24)),
+                                                )
+                                                .child(
+                                                    div()
+                                                        .text_size(px(10.))
+                                                        .text_color(if entry.enabled {
+                                                            rgb(0x3fb950)
+                                                        } else {
+                                                            rgb(0x8b949e)
+                                                        })
+                                                        .child(if entry.enabled { "on" } else { "off" }),
+                                                ),
                                         )
                                         .child(
                                             div()
                                                 .text_size(px(10.))
-                                                .text_color(if entry.enabled {
-                                                    rgb(0x3fb950)
-                                                } else {
-                                                    rgb(0x8b949e)
-                                                })
-                                                .child(if entry.enabled { "on" } else { "off" }),
+                                                .text_color(rgb(0x6e7681))
+                                                .overflow_hidden()
+                                                .child(format!(
+                                                    "{} · {}",
+                                                    truncate_preview(&entry.username, 18),
+                                                    truncate_preview(&secret, 12)
+                                                )),
                                         ),
                                 )
                                 .child(
                                     div()
-                                        .text_size(px(10.))
-                                        .text_color(rgb(0x6e7681))
-                                        .child(format!(
-                                            "{} · {}",
-                                            truncate_preview(&entry.username, 18),
-                                            truncate_preview(&secret, 12)
-                                        )),
-                                )
-                                .child(
-                                    div()
+                                        .flex_none()
                                         .flex()
                                         .items_center()
                                         .gap_1()
@@ -1201,53 +1231,63 @@ impl NyaTermApp {
                             .unwrap_or_else(|| "------".to_string());
                         body = body.child(
                             div()
+                                .h(px(48.))
                                 .rounded_md()
                                 .border_1()
                                 .border_color(rgb(0x30363d))
                                 .bg(rgb(0x0d1117))
                                 .px_2()
-                                .py_1()
                                 .flex()
-                                .flex_col()
-                                .gap_1()
+                                .items_center()
+                                .gap_2()
                                 .child(
                                     div()
+                                        .min_w_0()
+                                        .flex_1()
                                         .flex()
-                                        .items_center()
-                                        .justify_between()
-                                        .gap_2()
+                                        .flex_col()
+                                        .gap(px(1.))
                                         .child(
                                             div()
-                                                .min_w_0()
-                                                .flex_1()
-                                                .text_xs()
-                                                .font_weight(FontWeight(700.))
-                                                .text_color(rgb(0xc9d1d9))
-                                                .child(truncate_preview(&title, 24)),
+                                                .flex()
+                                                .items_center()
+                                                .gap_2()
+                                                .child(
+                                                    div()
+                                                        .min_w_0()
+                                                        .flex_1()
+                                                        .text_xs()
+                                                        .font_weight(FontWeight(600.))
+                                                        .text_color(rgb(0xc9d1d9))
+                                                        .overflow_hidden()
+                                                        .child(truncate_preview(&title, 24)),
+                                                )
+                                                .child(
+                                                    div()
+                                                        .font_family("JetBrains Mono")
+                                                        .text_sm()
+                                                        .font_weight(FontWeight(700.))
+                                                        .text_color(rgb(0x58a6ff))
+                                                        .child(code),
+                                                ),
                                         )
                                         .child(
                                             div()
-                                                .font_family("JetBrains Mono")
-                                                .text_sm()
-                                                .font_weight(FontWeight(800.))
-                                                .text_color(rgb(0x58a6ff))
-                                                .child(code),
+                                                .text_size(px(10.))
+                                                .text_color(rgb(0x6e7681))
+                                                .overflow_hidden()
+                                                .child(format!(
+                                                    "{} · {} · {}d · {}",
+                                                    entry.otp_type.to_uppercase(),
+                                                    entry.algorithm,
+                                                    entry.digits,
+                                                    if entry.has_secret { "secret" } else { "no secret" }
+                                                )),
                                         ),
                                 )
                                 .child(
                                     div()
-                                        .text_size(px(10.))
-                                        .text_color(rgb(0x6e7681))
-                                        .child(format!(
-                                            "{} · {} · {}d · {}",
-                                            entry.otp_type.to_uppercase(),
-                                            entry.algorithm,
-                                            entry.digits,
-                                            if entry.has_secret { "secret" } else { "no secret" }
-                                        )),
-                                )
-                                .child(
-                                    div()
+                                        .flex_none()
                                         .flex()
                                         .items_center()
                                         .gap_1()
@@ -1277,7 +1317,10 @@ impl NyaTermApp {
                                             format!("security-otp-del-{otp_id}"),
                                             "Del",
                                             cx.listener(move |this, _, _, cx| {
-                                                this.request_delete_security_otp(delete_id.clone(), cx);
+                                                this.request_delete_security_otp(
+                                                    delete_id.clone(),
+                                                    cx,
+                                                );
                                             }),
                                         )),
                                 ),

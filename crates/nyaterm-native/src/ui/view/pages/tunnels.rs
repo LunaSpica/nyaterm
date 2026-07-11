@@ -193,10 +193,10 @@ impl NyaTermApp {
                             .size_full()
                             .overflow_scroll()
                             .scrollbar_width(px(6.))
-                            .p_3()
+                            .p_2()
                             .flex()
                             .flex_col()
-                            .gap_3()
+                            .gap_2()
                             // TabsList grid-cols-2 h-8
                             .child(
                                 div()
