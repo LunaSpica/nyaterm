@@ -1343,6 +1343,22 @@ impl NyaTermApp {
                     .flex()
                     .flex_col()
                     .gap_2()
+                    // Tauri SecurityAuthPanel: full-width 4-col segment tabs under PanelHeader.
+                    .child(
+                        div()
+                            .h(px(32.))
+                            .w_full()
+                            .rounded_md()
+                            .bg(rgb(0x21262d))
+                            .p(px(2.))
+                            .flex()
+                            .items_center()
+                            .gap(px(2.))
+                            .child(self.security_tab_chip(SecurityAuthTab::Keys, cx))
+                            .child(self.security_tab_chip(SecurityAuthTab::Passwords, cx))
+                            .child(self.security_tab_chip(SecurityAuthTab::Otp, cx))
+                            .child(self.security_tab_chip(SecurityAuthTab::Credentials, cx)),
+                    )
                     .child(
                         div()
                             .flex()
@@ -1352,60 +1368,51 @@ impl NyaTermApp {
                             .child(
                                 div()
                                     .text_size(px(10.))
-                                    .font_weight(FontWeight(800.))
-                                    .text_color(rgb(0x8b949e))
-                                    .child("SECURITY / AUTH"),
+                                    .text_color(rgb(0x6e7681))
+                                    .child(self.security_status.clone()),
                             )
                             .child(
                                 div()
-                                    .text_size(px(10.))
-                                    .text_color(rgb(0x6e7681))
-                                    .child(format!("MP {master} · K{key_count}/P{password_count}/C{credential_count}/O{otp_count}")),
+                                    .flex()
+                                    .items_center()
+                                    .gap_1()
+                                    .child(
+                                        div()
+                                            .text_size(px(10.))
+                                            .text_color(rgb(0x6e7681))
+                                            .child(format!(
+                                                "MP {master} · K{key_count}/P{password_count}/C{credential_count}/O{otp_count}"
+                                            )),
+                                    )
+                                    .child(small_button(
+                                        "security-add-item",
+                                        "Add",
+                                        cx.listener(|this, _, window, cx| {
+                                            match this.security_auth_tab {
+                                                SecurityAuthTab::Keys => {
+                                                    this.open_security_key_editor(
+                                                        None, window, cx,
+                                                    );
+                                                }
+                                                SecurityAuthTab::Passwords => {
+                                                    this.open_security_password_editor(
+                                                        None, window, cx,
+                                                    );
+                                                }
+                                                SecurityAuthTab::Credentials => {
+                                                    this.open_security_credential_editor(
+                                                        None, window, cx,
+                                                    );
+                                                }
+                                                SecurityAuthTab::Otp => {
+                                                    this.open_security_otp_editor(
+                                                        None, window, cx,
+                                                    );
+                                                }
+                                            }
+                                        }),
+                                    )),
                             ),
-                    )
-                    .child(
-                        div()
-                            .flex()
-                            .items_center()
-                            .gap_1()
-                            .child(self.security_tab_chip(SecurityAuthTab::Keys, cx))
-                            .child(self.security_tab_chip(SecurityAuthTab::Passwords, cx))
-                            .child(self.security_tab_chip(SecurityAuthTab::Credentials, cx))
-                            .child(self.security_tab_chip(SecurityAuthTab::Otp, cx))
-                            .child(div().flex_1())
-                            .child(small_button(
-                                "security-add-item",
-                                "Add",
-                                cx.listener(|this, _, window, cx| {
-                                    match this.security_auth_tab {
-                                        SecurityAuthTab::Keys => {
-                                            this.open_security_key_editor(None, window, cx);
-                                        }
-                                        SecurityAuthTab::Passwords => {
-                                            this.open_security_password_editor(None, window, cx);
-                                        }
-                                        SecurityAuthTab::Credentials => {
-                                            this.open_security_credential_editor(None, window, cx);
-                                        }
-                                        SecurityAuthTab::Otp => {
-                                            this.open_security_otp_editor(None, window, cx);
-                                        }
-                                    }
-                                }),
-                            ))
-                            .child(small_button(
-                                "security-open-settings",
-                                "Settings",
-                                cx.listener(|this, _, _, cx| {
-                                    this.open_page(NavItem::Settings, cx);
-                                }),
-                            )),
-                    )
-                    .child(
-                        div()
-                            .text_size(px(10.))
-                            .text_color(rgb(0x6e7681))
-                            .child(self.security_status.clone()),
                     ),
             )
             .child(body)
@@ -1574,27 +1581,33 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
         let selected = self.security_auth_tab == tab;
+        // Tauri TabsTrigger text-xs inside h-8 grid segment.
         div()
             .id(SharedString::from(format!("security-tab-{}", tab.label())))
-            .h(px(24.))
-            .px_2()
+            .h(px(28.))
+            .flex_1()
+            .px_1()
             .flex()
             .items_center()
+            .justify_center()
             .rounded_sm()
             .cursor_pointer()
-            .text_size(px(10.))
-            .font_weight(FontWeight(700.))
+            .text_size(px(11.))
+            .font_weight(FontWeight(if selected { 600. } else { 500. }))
             .text_color(if selected {
-                rgb(0xffffff)
+                rgb(0xc9d1d9)
             } else {
                 rgb(0x8b949e)
             })
             .bg(if selected {
-                rgb(0x1f6feb)
+                rgb(0x0d1117)
             } else {
                 rgb(0x21262d)
             })
-            .hover(|this| this.bg(if selected { rgb(0x1f6feb) } else { rgb(0x30363d) }))
+            .hover(|this| {
+                this.bg(if selected { rgb(0x0d1117) } else { rgb(0x30363d) })
+                    .text_color(rgb(0xc9d1d9))
+            })
             .child(tab.label())
             .on_click(cx.listener(move |this, _, _, cx| {
                 this.set_security_auth_tab(tab, cx);

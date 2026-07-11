@@ -159,6 +159,9 @@ impl Render for NyaTermApp {
             .when(self.transfer_browser_favorites_menu.is_some(), |this| {
                 this.child(self.transfer_browser_favorites_menu_overlay(cx))
             })
+            .when(self.transfer_browser_upload_menu.is_some(), |this| {
+                this.child(self.transfer_browser_upload_menu_overlay(cx))
+            })
             .when(self.multi_line_paste.is_some(), |this| {
                 this.child(self.multi_line_paste_overlay(cx))
             })

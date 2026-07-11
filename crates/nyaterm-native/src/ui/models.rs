@@ -2148,6 +2148,12 @@ pub(super) struct TransferBrowserFavoritesMenuState {
     pub(super) y: Pixels,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub(super) struct TransferBrowserUploadMenuState {
+    pub(super) x: Pixels,
+    pub(super) y: Pixels,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(super) struct TransferBrowserPendingRenameState {
     pub(super) path: String,

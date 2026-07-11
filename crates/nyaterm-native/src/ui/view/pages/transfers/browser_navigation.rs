@@ -73,6 +73,7 @@ impl NyaTermApp {
         self.cancel_transfer_browser_pending_rename_without_notify();
         self.transfer_browser_context_menu = None;
         self.transfer_browser_favorites_menu = None;
+        self.transfer_browser_upload_menu = None;
         true
     }
 
@@ -98,6 +99,7 @@ impl NyaTermApp {
         self.cancel_transfer_browser_pending_rename_without_notify();
         self.transfer_browser_context_menu = None;
         self.transfer_browser_favorites_menu = None;
+        self.transfer_browser_upload_menu = None;
     }
 
     pub(in crate::ui::view::pages::transfers) fn open_transfer_browser_directory(

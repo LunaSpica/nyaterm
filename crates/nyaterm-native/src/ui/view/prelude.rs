@@ -89,6 +89,7 @@ pub(super) use super::super::models::{
     SyncInputGroup, TerminalSearchMode, TerminalViewState, TransferBrowserColumnResizeState,
     TransferBrowserColumnWidths, TransferBrowserContextMenuState,
     TransferBrowserDragSelectionState, TransferBrowserFavoritesMenuState,
+    TransferBrowserUploadMenuState,
     TransferBrowserPendingRenameState, TransferBrowserSessionCacheState, TransferBrowserSortColumn,
     TransferBrowserSortDirection, TransferDeleteState, TransferEditorState,
     TransferExternalSyncPromptState, TransferInputField, TransferJobDeleteState, TransferJobEvent,

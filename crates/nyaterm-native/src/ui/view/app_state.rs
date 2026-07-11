@@ -218,6 +218,7 @@ pub struct NyaTermApp {
     pub(in crate::ui::view) transfer_browser_context_menu: Option<TransferBrowserContextMenuState>,
     pub(in crate::ui::view) transfer_browser_favorites_menu:
         Option<TransferBrowserFavoritesMenuState>,
+    pub(in crate::ui::view) transfer_browser_upload_menu: Option<TransferBrowserUploadMenuState>,
     pub(in crate::ui::view) transfer_rename: Option<TransferRenameState>,
     pub(in crate::ui::view) transfer_rename_focus_pending: bool,
     pub(in crate::ui::view) transfer_move: Option<TransferMoveState>,
@@ -842,6 +843,7 @@ impl NyaTermApp {
             transfer_browser_pending_rename_token: 0,
             transfer_browser_context_menu: None,
             transfer_browser_favorites_menu: None,
+            transfer_browser_upload_menu: None,
             transfer_rename: None,
             transfer_rename_focus_pending: false,
             transfer_move: None,

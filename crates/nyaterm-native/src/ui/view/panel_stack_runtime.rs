@@ -556,6 +556,20 @@ impl NyaTermApp {
                     SharedString::from(count.to_string())
                 }
             }
+            // Tauri SecurityAuthPanel header actions show active-tab count.
+            NavItem::SecurityAuth => {
+                let count = match self.security_auth_tab {
+                    SecurityAuthTab::Keys => self.connection_ssh_keys.len(),
+                    SecurityAuthTab::Passwords => self.connection_saved_passwords.len(),
+                    SecurityAuthTab::Credentials => self.connection_saved_credentials.len(),
+                    SecurityAuthTab::Otp => self.connection_otp_entries.len(),
+                };
+                if count == 0 {
+                    SharedString::from("")
+                } else {
+                    SharedString::from(count.to_string())
+                }
+            }
             _ => SharedString::from(""),
         }
     }

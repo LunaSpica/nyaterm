@@ -814,7 +814,18 @@ impl NyaTermApp {
                         rgb(0x0d1117)
                     }),
             )
-            .child("●")
+            .child(activity_icon(
+                Some("icons/record.svg"),
+                "●",
+                if recording_count > 0 {
+                    rgb(0xff7b72).into()
+                } else if selected {
+                    rgb(0xffffff).into()
+                } else {
+                    rgb(0x8b949e).into()
+                },
+                18.,
+            ))
             .on_click(cx.listener(|this, _, _, cx| {
                 this.open_panel(NavItem::Recording, cx);
             }))
@@ -857,7 +868,16 @@ impl NyaTermApp {
                         rgb(0x0d1117)
                     }),
             )
-            .child("🔒")
+            .child(activity_icon(
+                Some("icons/lock.svg"),
+                "L",
+                if self.is_locked {
+                    rgb(0xffffff).into()
+                } else {
+                    rgb(0x8b949e).into()
+                },
+                18.,
+            ))
             .on_click(cx.listener(|this, _, window, cx| {
                 this.lock_app(window, cx);
             }))

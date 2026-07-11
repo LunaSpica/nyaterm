@@ -561,3 +561,12 @@ service boundary first:
 - Stats refresh SVG; AI empty states use `icons/ai.svg`.
 - Title bar height 36px; activity labels 8px; menu buttons denser.
 - AI message bubbles tighter padding.
+
+## 2026-07-11 Files upload menu + shell chrome pass
+- File Explorer toolbar matches Tauri: New File/Folder, **Upload dropdown** (files/folder), Download, Delete, Go Up, Refresh, Search.
+- Upload uses popover menu (`TransferBrowserUploadMenuState`) instead of two always-visible buttons.
+- Search expands as absolute overlay on the toolbar strip (primary border), not a second batch-action row.
+- Toolbar no longer duplicates footer cwd-sync / favorite / history controls.
+- Footer densified (~28px) with item count + total file size + 24px cwd/send icons.
+- Activity bar lock/recording use SVG assets (`lock.svg` / `record.svg`) instead of emoji/glyphs.
+- Security / Auth: full-width 4-col segment tabs (Keys/Passwords/OTP/Credentials order) under PanelHeader; header meta shows active-tab count.

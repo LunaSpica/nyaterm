@@ -20,6 +20,12 @@ impl NyaTermApp {
         let selected_entries = self.selected_transfer_entries();
         let selected_count = selected_entries.len();
         let total_count = self.transfer_browser_entries.len();
+        let files_total_size: u64 = self
+            .transfer_browser_entries
+            .iter()
+            .filter(|entry| entry.file_type != SftpFileType::Directory)
+            .map(|entry| entry.size.unwrap_or(0))
+            .sum();
         let search_active = !self.transfer_browser_search.trim().is_empty();
         let search_expanded = self.transfer_browser_search_expanded || search_active;
         let search_value = if self.transfer_browser_search.is_empty() {
@@ -27,14 +33,7 @@ impl NyaTermApp {
         } else {
             self.transfer_browser_search.clone()
         };
-        let can_go_back =
-            self.transfer_browser_history_index + 1 < self.transfer_browser_history.len();
-        let can_go_forward = self.transfer_browser_history_index > 0;
         let current_browser_path = normalized_transfer_browser_path(&self.transfer_browser_path);
-        let is_current_favorite = self
-            .transfer_browser_favorites
-            .iter()
-            .any(|path| path == &current_browser_path);
         let auto_sync_cwd = self.transfer_browser_auto_sync_cwd_enabled();
         let mut rows = div().flex().flex_col();
         if can_transfer && current_browser_path != "/" && current_browser_path != "." {
@@ -55,10 +54,11 @@ impl NyaTermApp {
                     .py_8()
                     .gap_1()
                     .child(
-                        div()
-                            .text_size(px(18.))
-                            .text_color(rgb(0x484f58))
-                            .child("📁"),
+                        svg()
+                            .size(px(28.))
+                            .flex_none()
+                            .path("icons/conn/folder.svg")
+                            .text_color(rgb(0x484f58)),
                     )
                     .child(
                         div()
@@ -146,6 +146,7 @@ impl NyaTermApp {
             .when(can_transfer, |this| {
                 this.child(
                     div()
+                        .relative()
                         .h(px(30.))
                         .px_1()
                         .border_b_1()
@@ -169,26 +170,7 @@ impl NyaTermApp {
                             }),
                         ))
                         .child(transfer_toolbar_divider())
-                        .child(compact_transfer_toolbar_button(
-                            "transfer-browser-upload-file",
-                            "icons/fe/upload.svg",
-                            cx.listener(|this, _, _, cx| {
-                                this.prompt_transfer_browser_upload_path(
-                                    TransferPathPromptKind::UploadFile,
-                                    cx,
-                                );
-                            }),
-                        ))
-                        .child(compact_transfer_toolbar_button(
-                            "transfer-browser-upload-folder",
-                            "icons/fe/upload.svg",
-                            cx.listener(|this, _, _, cx| {
-                                this.prompt_transfer_browser_upload_path(
-                                    TransferPathPromptKind::UploadDirectory,
-                                    cx,
-                                );
-                            }),
-                        ))
+                        .child(compact_transfer_upload_menu_button(cx))
                         .child(
                             div()
                                 .when(selected_count == 0, |this| this.opacity(0.45))
@@ -219,28 +201,6 @@ impl NyaTermApp {
                                 this.open_transfer_parent_directory(window, cx);
                             }),
                         ))
-                        .child(
-                            div()
-                                .when(!can_go_back, |this| this.opacity(0.4))
-                                .child(compact_transfer_toolbar_button(
-                                    "transfer-browser-back",
-                                    "icons/fe/back.svg",
-                                    cx.listener(|this, _, window, cx| {
-                                        this.open_transfer_browser_history(1, window, cx);
-                                    }),
-                                )),
-                        )
-                        .child(
-                            div()
-                                .when(!can_go_forward, |this| this.opacity(0.4))
-                                .child(compact_transfer_toolbar_button(
-                                    "transfer-browser-forward",
-                                    "icons/fe/forward.svg",
-                                    cx.listener(|this, _, window, cx| {
-                                        this.open_transfer_browser_history(-1, window, cx);
-                                    }),
-                                )),
-                        )
                         .child(compact_transfer_toolbar_button(
                             "transfer-browser-refresh",
                             "icons/fe/refresh.svg",
@@ -249,190 +209,114 @@ impl NyaTermApp {
                             }),
                         ))
                         .child(div().flex_1())
-                        .child(status_pill(
-                            if can_transfer { "SSH" } else { "off" },
-                            if can_transfer { rgb(0x34d399) } else { rgb(0x94a3b8) },
-                            if can_transfer { rgb(0x10251d) } else { rgb(0x202633) },
-                        ))
-                        .child(compact_transfer_toolbar_button(
-                            "transfer-browser-sync-cwd",
-                            "icons/fe/sync.svg",
-                            cx.listener(|this, _, window, cx| {
-                                this.start_transfer_sync_cwd_job(window, cx);
-                            }),
-                        ))
-                        .child(compact_transfer_toolbar_button_active(
-                            "transfer-browser-auto-sync-cwd",
-                            "icons/fe/sync.svg",
-                            auto_sync_cwd,
-                            cx.listener(|this, _, window, cx| {
-                                this.toggle_transfer_browser_auto_sync_cwd(window, cx);
-                            }),
-                        ))
-                        .child(compact_transfer_toolbar_button(
-                            "transfer-browser-toggle-favorite",
-                            if is_current_favorite {
-                                "icons/fe/star.svg"
-                            } else {
-                                "icons/fe/star-outline.svg"
-                            },
-                            cx.listener(|this, _, _, cx| {
-                                this.toggle_current_transfer_browser_favorite(cx);
-                            }),
-                        ))
                         .child(compact_transfer_toolbar_button_active(
                             "transfer-browser-expand-search",
                             "icons/fe/search.svg",
-                            search_active,
+                            search_active || search_expanded,
                             cx.listener(|this, _, window, cx| {
                                 this.transfer_browser_search_expanded = true;
                                 this.transfer_browser_status = "file search focused".to_string();
                                 window.focus(&this.transfer_browser_search_focus);
                                 cx.notify();
                             }),
-                        )),
+                        ))
+                        .when(search_expanded, |toolbar| {
+                            toolbar.child(
+                                div()
+                                    .id(SharedString::from("transfer-browser-search-overlay"))
+                                    .absolute()
+                                    .top(px(2.))
+                                    .bottom(px(2.))
+                                    .left(px(4.))
+                                    .right(px(4.))
+                                    .rounded_md()
+                                    .border_1()
+                                    .border_color(rgb(0x388bfd))
+                                    .bg(rgb(0x12171f))
+                                    .px_1()
+                                    .flex()
+                                    .items_center()
+                                    .gap_1()
+                                    .child(
+                                        svg()
+                                            .size(px(16.))
+                                            .flex_none()
+                                            .path("icons/fe/search.svg")
+                                            .text_color(rgb(0x58a6ff)),
+                                    )
+                                    .child(
+                                        div()
+                                            .id(SharedString::from("transfer-browser-search"))
+                                            .h_full()
+                                            .flex_1()
+                                            .min_w_0()
+                                            .px_1()
+                                            .flex()
+                                            .items_center()
+                                            .cursor_text()
+                                            .track_focus(&self.transfer_browser_search_focus)
+                                            .on_click(cx.listener(|this, _, window, cx| {
+                                                window.focus(&this.transfer_browser_search_focus);
+                                                cx.notify();
+                                            }))
+                                            .on_key_down(cx.listener(
+                                                |this, event: &KeyDownEvent, _, cx| {
+                                                    cx.stop_propagation();
+                                                    this.handle_transfer_browser_search_key_down(
+                                                        event, cx,
+                                                    );
+                                                },
+                                            ))
+                                            .child(
+                                                div()
+                                                    .min_w_0()
+                                                    .flex_1()
+                                                    .font_family("JetBrains Mono")
+                                                    .text_size(px(12.))
+                                                    .text_color(if search_active {
+                                                        rgb(0xe5edf7)
+                                                    } else {
+                                                        rgb(0x6e7681)
+                                                    })
+                                                    .child(truncate_preview(&search_value, 96)),
+                                            ),
+                                    )
+                                    .child(
+                                        div()
+                                            .id(SharedString::from(
+                                                "transfer-browser-clear-search",
+                                            ))
+                                            .size(px(20.))
+                                            .flex()
+                                            .items_center()
+                                            .justify_center()
+                                            .rounded_sm()
+                                            .text_size(px(12.))
+                                            .text_color(rgb(0x8b949e))
+                                            .cursor_pointer()
+                                            .hover(|this| {
+                                                this.bg(rgb(0x21262d)).text_color(rgb(0xc9d1d9))
+                                            })
+                                            .child("×")
+                                            .on_click(cx.listener(|this, _, _, cx| {
+                                                if this.transfer_browser_search.is_empty() {
+                                                    this.transfer_browser_search_expanded = false;
+                                                    this.transfer_browser_status =
+                                                        "file search closed".to_string();
+                                                } else {
+                                                    this.transfer_browser_search.clear();
+                                                    this.transfer_browser_status =
+                                                        "file search cleared".to_string();
+                                                }
+                                                cx.notify();
+                                            })),
+                                    ),
+                            )
+                        }),
                 )
                 .child(self.transfer_browser_path_row(current_browser_path.clone(), cx))
             })
-            .when(can_transfer && search_expanded, |this| {
-                this.child(
-                    div()
-                        .flex()
-                        .items_center()
-                        .justify_between()
-                        .gap_2()
-                        .border_b_1()
-                        .border_color(rgb(0x30363d))
-                        .bg(rgb(0x12171f))
-                        .px_2()
-                        .py_1()
                         .child(
-                            div()
-                                .text_xs()
-                                .text_color(rgb(0x98a3b8))
-                                .child(format!("{selected_count} marked for batch actions")),
-                        )
-                        .child(
-                            div()
-                                .flex()
-                                .items_center()
-                                .gap_1()
-                                .child(small_button(
-                                    "transfer-browser-select-all",
-                                    "Select All",
-                                    cx.listener(|this, _, _, cx| {
-                                        this.select_all_visible_transfer_entries(cx);
-                                    }),
-                                ))
-                                .child(small_button(
-                                    "transfer-browser-clear-selection",
-                                    "Clear",
-                                    cx.listener(|this, _, _, cx| {
-                                        this.clear_transfer_browser_selection(cx);
-                                    }),
-                                ))
-                                .child(
-                                    div()
-                                        .when(selected_count == 0, |this| this.opacity(0.45))
-                                        .child(small_button(
-                                            "transfer-browser-download-marked",
-                                            "Download Marked",
-                                            cx.listener(|this, _, window, cx| {
-                                                this.start_selected_sftp_download_jobs(window, cx);
-                                            }),
-                                        )),
-                                )
-                                .child(
-                                    div()
-                                        .when(selected_count == 0, |this| this.opacity(0.45))
-                                        .child(small_button(
-                                            "transfer-browser-delete-marked",
-                                            "Delete Marked",
-                                            cx.listener(|this, _, window, cx| {
-                                                this.open_selected_transfer_delete_dialog(
-                                                    window, cx,
-                                                );
-                                            }),
-                                        )),
-                                ),
-                        ),
-                )
-                .child(
-                    div()
-                        .flex()
-                        .items_center()
-                        .gap_2()
-                        .child(
-                            div()
-                                .id(SharedString::from("transfer-browser-search"))
-                                .h(px(26.))
-                                .flex_1()
-                                .min_w_0()
-                                .rounded_md()
-                                .border_1()
-                                .border_color(if search_active {
-                                    rgb(0x388bfd)
-                                } else {
-                                    rgb(0x30363d)
-                                })
-                                .bg(rgb(0x0d1117))
-                                .px_2()
-                                .flex()
-                                .items_center()
-                                .gap_1()
-                                .cursor_pointer()
-                                .track_focus(&self.transfer_browser_search_focus)
-                                .on_click(cx.listener(|this, _, window, cx| {
-                                    window.focus(&this.transfer_browser_search_focus);
-                                    cx.notify();
-                                }))
-                                .on_key_down(cx.listener(|this, event: &KeyDownEvent, _, cx| {
-                                    cx.stop_propagation();
-                                    this.handle_transfer_browser_search_key_down(event, cx);
-                                }))
-                                .child(
-                                    div()
-                                        .text_xs()
-                                        .font_weight(FontWeight(800.))
-                                        .text_color(if search_active {
-                                            rgb(0x93c5fd)
-                                        } else {
-                                            rgb(0x64748b)
-                                        })
-                                        .child("Search"),
-                                )
-                                .child(
-                                    div()
-                                        .min_w_0()
-                                        .flex_1()
-                                        .font_family("JetBrains Mono")
-                                        .text_xs()
-                                        .text_color(if search_active {
-                                            rgb(0xe5edf7)
-                                        } else {
-                                            rgb(0x64748b)
-                                        })
-                                        .child(truncate_preview(&search_value, 96)),
-                                ),
-                        )
-                        .child(small_button(
-                            "transfer-browser-clear-search",
-                            if search_active { "Clear" } else { "Close" },
-                            cx.listener(|this, _, _, cx| {
-                                if this.transfer_browser_search.is_empty() {
-                                    this.transfer_browser_search_expanded = false;
-                                    this.transfer_browser_status = "file search closed".to_string();
-                                } else {
-                                    this.transfer_browser_search.clear();
-                                    this.transfer_browser_status =
-                                        "file search cleared".to_string();
-                                }
-                                cx.notify();
-                            }),
-                        )),
-                )
-            })
-            .child(
                 div()
                     .id(SharedString::from("transfer-browser-table-scroll"))
                     .flex_1()
@@ -527,7 +411,7 @@ impl NyaTermApp {
             // Tauri FileExplorer footer: totals left, cwd sync / send icons right.
             .child(
                 div()
-                    .h(px(30.))
+                    .h(px(28.))
                     .flex_none()
                     .px_2()
                     .border_t_1()
@@ -546,32 +430,26 @@ impl NyaTermApp {
                             .text_size(px(11.))
                             .text_color(rgb(0x8b949e))
                             .child(format!("{total_count} item(s)"))
+                            .when(files_total_size > 0, |this| {
+                                this.child(format_file_size(Some(files_total_size)))
+                            })
                             .when(selected_count > 0, |this| {
                                 this.child(format!("{selected_count} marked"))
-                            })
-                            .when(self.transfer_selected_remote_path.is_some(), |this| {
-                                this.child(format!("sel {selected}"))
-                            })
-                            .child(
-                                div()
-                                    .text_size(px(10.))
-                                    .text_color(rgb(0x6e7681))
-                                    .child(truncate_preview(&self.transfer_browser_status, 40)),
-                            ),
+                            }),
                     )
                     .child(
                         div()
                             .flex()
                             .items_center()
                             .gap_0()
-                            .child(compact_transfer_toolbar_button(
+                            .child(compact_transfer_footer_button(
                                 "transfer-browser-footer-sync-cwd",
                                 "icons/fe/sync.svg",
                                 cx.listener(|this, _, window, cx| {
                                     this.start_transfer_sync_cwd_job(window, cx);
                                 }),
                             ))
-                            .child(compact_transfer_toolbar_button_active(
+                            .child(compact_transfer_footer_button_active(
                                 "transfer-browser-footer-auto-sync",
                                 "icons/fe/sync.svg",
                                 auto_sync_cwd,
@@ -579,7 +457,7 @@ impl NyaTermApp {
                                     this.toggle_transfer_browser_auto_sync_cwd(window, cx);
                                 }),
                             ))
-                            .child(compact_transfer_toolbar_button(
+                            .child(compact_transfer_footer_button(
                                 "transfer-browser-footer-send-path",
                                 "icons/fe/paste.svg",
                                 cx.listener(|this, _, _, cx| {
@@ -587,14 +465,14 @@ impl NyaTermApp {
                                 }),
                             ))
                             .when(self.transfer_selected_remote_path.is_some(), |this| {
-                                this.child(compact_transfer_toolbar_button(
+                                this.child(compact_transfer_footer_button(
                                     "transfer-footer-copy-path",
                                     "icons/fe/paste.svg",
                                     cx.listener(|this, _, _, cx| {
                                         this.copy_selected_transfer_path(TransferPathPart::Full, cx);
                                     }),
                                 ))
-                                .child(compact_transfer_toolbar_button(
+                                .child(compact_transfer_footer_button(
                                     "transfer-footer-props",
                                     "icons/fe/search.svg",
                                     cx.listener(|this, _, window, cx| {
@@ -605,6 +483,89 @@ impl NyaTermApp {
                     ),
             )
     }
+}
+
+
+
+fn compact_transfer_footer_button(
+    id: impl Into<String>,
+    icon_path: &'static str,
+    on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
+) -> impl IntoElement {
+    // Tauri footer icons: h-6 w-6 (24px)
+    div()
+        .id(SharedString::from(id.into()))
+        .size(px(24.))
+        .flex()
+        .items_center()
+        .justify_center()
+        .rounded_md()
+        .text_color(rgb(0x8b949e))
+        .cursor_pointer()
+        .hover(|this| this.bg(rgb(0x21262d)).text_color(rgb(0xc9d1d9)))
+        .child(
+            svg()
+                .size(px(14.))
+                .flex_none()
+                .path(icon_path),
+        )
+        .on_click(on_click)
+}
+
+fn compact_transfer_footer_button_active(
+    id: impl Into<String>,
+    icon_path: &'static str,
+    active: bool,
+    on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
+) -> impl IntoElement {
+    let color = if active { rgb(0x58a6ff) } else { rgb(0x8b949e) };
+    div()
+        .id(SharedString::from(id.into()))
+        .size(px(24.))
+        .flex()
+        .items_center()
+        .justify_center()
+        .rounded_md()
+        .bg(if active { rgb(0x122033) } else { rgb(0x161b22) })
+        .text_color(color)
+        .cursor_pointer()
+        .hover(|this| {
+            this.bg(rgb(0x21262d))
+                .text_color(if active { rgb(0x79b8ff) } else { rgb(0xc9d1d9) })
+        })
+        .child(
+            svg()
+                .size(px(14.))
+                .flex_none()
+                .path(icon_path),
+        )
+        .on_click(on_click)
+}
+
+fn compact_transfer_upload_menu_button(cx: &mut Context<NyaTermApp>) -> impl IntoElement {
+    // Tauri: single Upload icon opens DropdownMenu (Upload Files / Upload Folder).
+    div()
+        .id(SharedString::from("transfer-browser-upload"))
+        .size(px(28.))
+        .flex()
+        .items_center()
+        .justify_center()
+        .rounded_md()
+        .text_color(rgb(0x8b949e))
+        .cursor_pointer()
+        .hover(|this| this.bg(rgb(0x21262d)).text_color(rgb(0xc9d1d9)))
+        .child(
+            svg()
+                .size(px(16.))
+                .flex_none()
+                .path("icons/fe/upload.svg"),
+        )
+        .on_mouse_down(
+            MouseButton::Left,
+            cx.listener(|this, event: &MouseDownEvent, _, cx| {
+                this.open_transfer_browser_upload_menu(event, cx);
+            }),
+        )
 }
 
 fn compact_transfer_toolbar_button(

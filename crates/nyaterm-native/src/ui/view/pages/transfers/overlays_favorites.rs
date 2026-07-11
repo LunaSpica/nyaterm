@@ -6,6 +6,7 @@ impl NyaTermApp {
         event: &MouseDownEvent,
         cx: &mut Context<Self>,
     ) {
+        self.transfer_browser_upload_menu = None;
         self.transfer_browser_favorites_menu = Some(TransferBrowserFavoritesMenuState {
             x: event.position.x,
             y: event.position.y + px(18.),
