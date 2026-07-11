@@ -106,17 +106,17 @@ impl NyaTermApp {
         };
 
         div()
-            .h(px(24.))
+            .h(px(22.))
             .flex_none()
             .flex()
             .items_center()
             .justify_between()
-            .gap_2()
+            .gap_1()
             .px_2()
             .border_t_1()
             .border_color(rgb(0x30363d))
             .bg(rgb(0x0d1117))
-            .text_xs()
+            .text_size(px(10.))
             .child(
                 div()
                     .flex()

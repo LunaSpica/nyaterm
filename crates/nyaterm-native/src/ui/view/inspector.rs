@@ -718,19 +718,20 @@ impl NyaTermApp {
                                 .min_w_0()
                                 .flex_1()
                                 .font_family("JetBrains Mono")
-                                .text_size(px(11.))
+                                .text_size(px(12.))
                                 .text_color(rgb(0xc9d1d9))
                                 .overflow_hidden()
-                                .child(truncate_preview(&command, 96)),
+                                .child(truncate_preview(&command, 120)),
                         )
-                        .child(icon_button(
-                            format!("history-run-{index}"),
-                            "▶",
+                        // Tauri: double-click runs; GPUI maps primary click to insert.
+                        // Keep a discreet run action on secondary area without glyph noise.
+                        .on_mouse_down(
+                            MouseButton::Right,
                             cx.listener(move |this, _, _, cx| {
                                 cx.stop_propagation();
                                 this.run_history_command(run_index, cx);
                             }),
-                        )),
+                        ),
                 );
             }
         }

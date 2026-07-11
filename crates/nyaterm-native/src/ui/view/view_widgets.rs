@@ -58,18 +58,18 @@ pub(in crate::ui::view) fn status_bar_label(
     let value = value.into();
     let value_color = value_color.into();
     div()
-        .h(px(20.))
+        .h(px(18.))
         .flex()
         .items_center()
         .gap_1()
-        .px_2()
+        .px_1()
         .rounded_sm()
-        .text_xs()
+        .text_size(px(10.))
         .text_color(rgb(0x8b949e))
         .child(label)
         .child(
             div()
-                .font_weight(FontWeight(800.))
+                .font_weight(FontWeight(700.))
                 .text_color(value_color)
                 .child(value),
         )
@@ -86,20 +86,20 @@ pub(in crate::ui::view) fn status_bar_button(
     let value_color = value_color.into();
     div()
         .id(SharedString::from(id.into()))
-        .h(px(20.))
+        .h(px(18.))
         .flex()
         .items_center()
         .gap_1()
-        .px_2()
+        .px_1()
         .rounded_sm()
-        .text_xs()
+        .text_size(px(10.))
         .text_color(rgb(0x8b949e))
         .cursor_pointer()
         .hover(|this| this.bg(rgb(0x1c2128)).text_color(rgb(0xc9d1d9)))
         .child(label)
         .child(
             div()
-                .font_weight(FontWeight(800.))
+                .font_weight(FontWeight(700.))
                 .text_color(value_color)
                 .child(value),
         )
