@@ -1305,3 +1305,9 @@ service boundary first:
 
 - View menu lists appearance themes with checkmarks and English/中文 language
   toggles (Tauri Header theme/language submenus), plus existing zoom/sidebar/tile.
+
+## 2026-07-11 Tab sync/broadcast indicator chrome
+
+- Global and multi-leaf tab strips show a Tauri-style sync/broadcast tower icon
+  when the session is in an enabled sync group or Broadcast to All is on;
+  paused members render at reduced opacity with the group color.

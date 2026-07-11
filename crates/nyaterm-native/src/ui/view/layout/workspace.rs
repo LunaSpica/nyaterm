@@ -91,6 +91,12 @@ impl NyaTermApp {
                     .terminal_views
                     .get(&session.id)
                     .is_some_and(|view| view.has_unread);
+                let sync_group = self.active_sync_group_for_session(&session.id);
+                let sync_paused = self.is_session_paused_in_active_sync_group(&session.id);
+                let show_sync_indicator = self.broadcast_to_all || sync_group.is_some();
+                let sync_indicator_color = sync_group
+                    .map(|group| group.color)
+                    .unwrap_or(palette.accent);
                 let accent = if let Some(custom_color) = custom_color {
                     rgb(custom_color)
                 } else if is_disconnected {
@@ -203,6 +209,22 @@ impl NyaTermApp {
                                 .overflow_hidden()
                                 .child(tab_title.clone()),
                         )
+                        .when(show_sync_indicator, |this| {
+                            this.child(
+                                div()
+                                    .size(px(14.))
+                                    .flex()
+                                    .items_center()
+                                    .justify_center()
+                                    .opacity(if sync_paused { 0.4 } else { 1. })
+                                    .child(
+                                        svg()
+                                            .size(px(11.))
+                                            .path("icons/sync.svg")
+                                            .text_color(rgb(sync_indicator_color)),
+                                    ),
+                            )
+                        })
                         .child(
                             div()
                                 .id(SharedString::from(format!(

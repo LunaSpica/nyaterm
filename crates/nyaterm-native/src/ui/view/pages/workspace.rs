@@ -1,5 +1,5 @@
 use gpui::{
-    Context, FontWeight, IntoElement, SharedString, div, prelude::*, px, relative, rgb, rgba,
+    Context, FontWeight, IntoElement, SharedString, div, prelude::*, px, relative, rgb, rgba, svg,
 };
 
 use crate::ui::models::{
@@ -130,6 +130,12 @@ impl NyaTermApp {
                         .terminal_views
                         .get(tab_id)
                         .is_some_and(|view| view.has_unread);
+                    let sync_group = self.active_sync_group_for_session(tab_id);
+                    let sync_paused = self.is_session_paused_in_active_sync_group(tab_id);
+                    let show_sync_indicator = self.broadcast_to_all || sync_group.is_some();
+                    let sync_indicator_color = sync_group
+                        .map(|group| group.color)
+                        .unwrap_or(palette.accent);
                     let accent = if let Some(custom_color) = custom_color {
                         rgb(custom_color)
                     } else if is_disconnected {
@@ -243,6 +249,22 @@ impl NyaTermApp {
                                     })
                                     .child(tab_title),
                             )
+                            .when(show_sync_indicator, |this| {
+                                this.child(
+                                    div()
+                                        .size(px(12.))
+                                        .flex()
+                                        .items_center()
+                                        .justify_center()
+                                        .opacity(if sync_paused { 0.4 } else { 1. })
+                                        .child(
+                                            svg()
+                                                .size(px(10.))
+                                                .path("icons/sync.svg")
+                                                .text_color(rgb(sync_indicator_color)),
+                                        ),
+                                )
+                            })
                             .child(
                                 div()
                                     .id(SharedString::from(format!(
