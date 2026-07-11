@@ -575,34 +575,34 @@ impl NyaTermApp {
         let glyph = entry.glyph();
         let tooltip = entry.label();
         let short_label = entry.short_label();
+        let palette = self.theme_palette();
+        let active_color = match side {
+            ActivitySide::Left => rgb(palette.accent),
+            ActivitySide::Right => rgb(palette.success),
+        };
         let icon_color = if selected {
-            match side {
-                ActivitySide::Left => rgb(0x58a6ff),
-                ActivitySide::Right => rgb(0x3fb950),
-            }
+            active_color
         } else {
-            rgb(0x8b949e)
+            rgb(palette.text_muted)
         };
         let entry_id = entry.persistence_id().to_string();
         let context_entry_id = entry_id.clone();
         let recording_active = matches!(entry, ActivityBarEntry::Recording)
             && !self.recording_manager.list_recording_sessions().is_empty();
         let indicator = if recording_active {
-            rgb(0xff7b72)
+            rgb(palette.danger)
         } else if selected {
-            match side {
-                ActivitySide::Left => rgb(0x58a6ff),
-                ActivitySide::Right => rgb(0x3fb950),
-            }
+            active_color
         } else {
-            rgb(0x0d1117)
+            rgb(palette.bg)
         };
         let bg = if recording_active {
+            // Keep a subdued danger wash while recording.
             rgb(0x3d1418)
         } else if selected {
-            rgb(0x1c2128)
+            rgb(palette.hover)
         } else {
-            rgb(0x0d1117)
+            rgb(palette.bg)
         };
 
         div()
@@ -630,21 +630,15 @@ impl NyaTermApp {
             .font_weight(FontWeight(700.))
             .text_color(if selected {
                 // Tauri ActivityBarButton uses primary color when active.
-                match side {
-                    ActivitySide::Left => rgb(0x58a6ff),
-                    ActivitySide::Right => rgb(0x3fb950),
-                }
+                active_color
             } else {
-                rgb(0x8b949e)
+                rgb(palette.text_muted)
             })
             .bg(bg)
-            .hover(|hover| {
+            .hover(move |hover| {
                 hover
-                    .bg(rgb(0x1c2128))
-                    .text_color(match side {
-                        ActivitySide::Left => rgb(0x79b8ff),
-                        ActivitySide::Right => rgb(0x56d364),
-                    })
+                    .bg(rgb(palette.hover))
+                    .text_color(active_color)
             })
             .child(
                 div()
@@ -664,12 +658,9 @@ impl NyaTermApp {
                         .text_size(px(8.))
                         .font_weight(FontWeight(500.))
                         .text_color(if selected {
-                            match side {
-                                ActivitySide::Left => rgb(0x58a6ff),
-                                ActivitySide::Right => rgb(0x3fb950),
-                            }
+                            active_color
                         } else {
-                            rgb(0x8b949e)
+                            rgb(palette.text_muted)
                         })
                         .child(short_label),
                 )
@@ -894,6 +885,7 @@ impl NyaTermApp {
     ) -> impl IntoElement {
         let open = self.title_menu_open == Some(menu);
         let label = menu.label();
+        let palette = self.theme_palette();
         div()
             .relative()
             .child(
@@ -906,13 +898,17 @@ impl NyaTermApp {
                     .rounded_sm()
                     .text_xs()
                     .text_color(if open {
-                        rgb(0xffffff)
+                        rgb(palette.text)
                     } else {
-                        rgb(0x8b949e)
+                        rgb(palette.text_muted)
                     })
-                    .bg(if open { rgb(0x1c2128) } else { rgb(0x161b22) })
+                    .bg(if open {
+                        rgb(palette.hover)
+                    } else {
+                        rgb(palette.surface)
+                    })
                     .cursor_pointer()
-                    .hover(|this| this.bg(rgb(0x1c2128)).text_color(rgb(0x58a6ff)))
+                    .hover(move |this| this.bg(rgb(palette.hover)).text_color(rgb(palette.accent)))
                     .child(label)
                     .on_click(cx.listener(move |this, _, _, cx| {
                         this.toggle_title_menu(menu, cx);
@@ -929,6 +925,7 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
         let shortcut = |id: &str, fallback: &str| self.display_shortcut_for(id, fallback);
+        let palette = self.theme_palette();
         let mut items = div()
             .id(SharedString::from(format!("title-menu-{}", menu.label())))
             .absolute()
@@ -937,8 +934,8 @@ impl NyaTermApp {
                         .w(px(240.))
             .rounded_md()
             .border_1()
-            .border_color(rgb(0x30363d))
-            .bg(rgb(0x161b22))
+            .border_color(rgb(palette.border))
+            .bg(rgb(palette.surface))
             .shadow_lg()
             .py_1()
             .flex()
