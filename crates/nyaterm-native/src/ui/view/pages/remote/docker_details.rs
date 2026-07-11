@@ -10,24 +10,24 @@ pub(in crate::ui::view::pages::remote) fn docker_details_panel(
         return div()
             .rounded_md()
             .border_1()
-            .border_color(rgb(0x2a3140))
-            .bg(rgb(0x151923))
-            .p_4()
+            .border_color(rgb(0x30363d))
+            .bg(rgb(0x0d1117))
+            .p_2()
             .flex()
             .flex_col()
-            .gap_2()
+            .gap_1()
             .child(
                 div()
-                    .text_sm()
+                    .text_xs()
                     .font_weight(FontWeight(700.))
-                    .text_color(rgb(0xe5edf7))
+                    .text_color(rgb(0xc9d1d9))
                     .child("Container Details"),
             )
             .child(
                 div()
-                    .text_sm()
-                    .text_color(rgb(0x98a3b8))
-                    .child("Select Details on a container to load inspect data, live stats, mounts, and networks."),
+                    .text_size(px(11.))
+                    .text_color(rgb(0x6e7681))
+                    .child("Select Details on a container to load inspect data, stats, mounts, and networks."),
             );
     };
 
@@ -40,29 +40,36 @@ pub(in crate::ui::view::pages::remote) fn docker_details_panel(
                 div()
                     .rounded_sm()
                     .border_1()
-                    .border_color(rgb(0x303848))
-                    .bg(rgb(0x0d1320))
-                    .p_2()
+                    .border_color(rgb(0x30363d))
+                    .bg(rgb(0x12171f))
+                    .px_2()
+                    .py_1()
                     .flex()
                     .flex_col()
-                    .gap_1()
+                    .gap(px(2.))
                     .child(
                         div()
                             .font_family("JetBrains Mono")
-                            .text_xs()
-                            .text_color(rgb(0xe5edf7))
+                            .text_size(px(11.))
+                            .text_color(rgb(0xc9d1d9))
+                            .overflow_hidden()
                             .child(format!(
                                 "{} -> {}",
                                 truncate_preview(&mount.source, 52),
                                 truncate_preview(&mount.destination, 52)
                             )),
                     )
-                    .child(div().text_xs().text_color(rgb(0x98a3b8)).child(format!(
-                        "{} · {} · {}",
-                        mount.kind,
-                        mount.mode,
-                        if mount.rw { "rw" } else { "ro" }
-                    ))),
+                    .child(
+                        div()
+                            .text_size(px(10.))
+                            .text_color(rgb(0x6e7681))
+                            .child(format!(
+                                "{} · {} · {}",
+                                mount.kind,
+                                mount.mode,
+                                if mount.rw { "rw" } else { "ro" }
+                            )),
+                    ),
             );
         }
     }
@@ -79,17 +86,27 @@ pub(in crate::ui::view::pages::remote) fn docker_details_panel(
             };
             networks = networks.child(
                 div()
-                    .mt_2()
+                    .h(px(24.))
                     .flex()
                     .items_center()
                     .justify_between()
-                    .text_sm()
+                    .gap_2()
                     .child(
                         div()
-                            .text_color(rgb(0xcbd5e1))
+                            .min_w_0()
+                            .flex_1()
+                            .text_size(px(11.))
+                            .text_color(rgb(0xc9d1d9))
+                            .overflow_hidden()
                             .child(truncate_preview(&network.name, 36)),
                     )
-                    .child(div().text_xs().text_color(rgb(0x98a3b8)).child(ip_address)),
+                    .child(
+                        div()
+                            .font_family("JetBrains Mono")
+                            .text_size(px(10.))
+                            .text_color(rgb(0x6e7681))
+                            .child(ip_address),
+                    ),
             );
         }
     }
@@ -142,8 +159,8 @@ pub(in crate::ui::view::pages::remote) fn docker_details_panel(
     div()
         .rounded_md()
         .border_1()
-        .border_color(rgb(0x2a3140))
-        .bg(rgb(0x151923))
+        .border_color(rgb(0x30363d))
+        .bg(rgb(0x0d1117))
         .p_4()
         .flex()
         .flex_col()
@@ -229,9 +246,9 @@ pub(in crate::ui::view::pages::remote) fn docker_details_panel(
                 div()
                     .rounded_sm()
                     .border_1()
-                    .border_color(rgb(0x303848))
-                    .bg(rgb(0x0d1320))
-                    .p_3()
+                    .border_color(rgb(0x30363d))
+                    .bg(rgb(0x12171f))
+                    .p_2()
                     .child(
                         div()
                             .text_sm()
@@ -326,9 +343,9 @@ pub(in crate::ui::view::pages::remote) fn docker_details_panel(
                     div()
                         .rounded_sm()
                         .border_1()
-                        .border_color(rgb(0x303848))
-                        .bg(rgb(0x0d1320))
-                        .p_3()
+                        .border_color(rgb(0x30363d))
+                        .bg(rgb(0x12171f))
+                        .p_2()
                         .child(docker_detail_line(
                             "Started",
                             details.started_at.clone(),
@@ -369,9 +386,9 @@ pub(in crate::ui::view::pages::remote) fn docker_details_panel(
                     div()
                         .rounded_sm()
                         .border_1()
-                        .border_color(rgb(0x303848))
-                        .bg(rgb(0x0d1320))
-                        .p_3()
+                        .border_color(rgb(0x30363d))
+                        .bg(rgb(0x12171f))
+                        .p_2()
                         .child(
                             div()
                                 .text_sm()
@@ -393,14 +410,14 @@ pub(in crate::ui::view::pages::remote) fn docker_details_panel(
             div()
                 .rounded_sm()
                 .border_1()
-                .border_color(rgb(0x303848))
-                .bg(rgb(0x0d1320))
-                .p_3()
+                .border_color(rgb(0x30363d))
+                .bg(rgb(0x12171f))
+                .p_2()
                 .child(
                     div()
-                        .text_sm()
+                        .text_xs()
                         .font_weight(FontWeight(700.))
-                        .text_color(rgb(0xe5edf7))
+                        .text_color(rgb(0x8b949e))
                         .child("Mounts"),
                 )
                 .child(docker_detail_line(
@@ -423,17 +440,17 @@ fn docker_detail_line(
 ) -> gpui::Div {
     let copy_value = value.clone();
     div()
-        .mt_2()
+        .mt_1()
         .flex()
         .items_start()
         .justify_between()
-        .gap_3()
-        .text_sm()
+        .gap_2()
         .child(
             div()
-                .w(px(86.))
+                .w(px(72.))
                 .flex_none()
-                .text_color(rgb(0xcbd5e1))
+                .text_size(px(10.))
+                .text_color(rgb(0x6e7681))
                 .child(label),
         )
         .child(
@@ -441,9 +458,9 @@ fn docker_detail_line(
                 .min_w_0()
                 .flex_1()
                 .font_family("JetBrains Mono")
-                .text_xs()
-                .line_height(px(18.))
-                .text_color(rgb(0x98a3b8))
+                .text_size(px(11.))
+                .line_height(px(15.))
+                .text_color(rgb(0xc9d1d9))
                 .child(display_value),
         )
         .when(copyable && value.trim() != "-", |this| {

@@ -735,3 +735,6 @@ service boundary first:
 ## 2026-07-11 Resource Monitor + Active Sessions densify
 - Resource Monitor section titles + dense_capability_line mono values.
 - Active Sessions rows fixed 44px height.
+
+## 2026-07-11 Docker container details densify
+- Details empty state, key/value lines, mounts, and networks use denser mono chrome matching panel system.
