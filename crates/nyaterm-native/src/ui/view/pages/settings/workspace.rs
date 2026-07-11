@@ -6,148 +6,141 @@ use crate::ui::shortcuts::{
 
 impl NyaTermApp {
     pub(super) fn general_settings_section(&mut self, cx: &mut Context<Self>) -> impl IntoElement {
+        // Tauri GeneralTab: SettingSection + SettingRow switches (no metric cards).
+        let language = self.settings.language.clone();
+        let language_label = match language.as_str() {
+            "zh-CN" | "zh" => "简体中文",
+            "zh-TW" => "繁體中文",
+            "en" | "en-US" => "English",
+            "ja" => "日本語",
+            other => other,
+        };
+
         div()
             .flex()
             .flex_col()
             .gap_3()
-            .child(
+            .child(settings_form_section(
+                None,
+                None,
+                settings_form_row(
+                    "Language",
+                    Some(SharedString::from("UI language preference for labels and dialogs.")),
+                    div()
+                        .flex()
+                        .items_center()
+                        .gap_1()
+                        .child(settings_choice_chip(
+                            "general-lang-en",
+                            "English",
+                            matches!(language.as_str(), "en" | "en-US"),
+                            cx.listener(|this, _, _, cx| {
+                                this.update_ui_language("en", cx);
+                            }),
+                        ))
+                        .child(settings_choice_chip(
+                            "general-lang-zh",
+                            "中文",
+                            matches!(language.as_str(), "zh-CN" | "zh"),
+                            cx.listener(|this, _, _, cx| {
+                                this.update_ui_language("zh-CN", cx);
+                            }),
+                        ))
+                        .child(
+                            div()
+                                .text_size(px(10.))
+                                .text_color(rgb(0x6e7681))
+                                .child(language_label.to_string()),
+                        ),
+                ),
+            ))
+            .child(settings_form_section(
+                Some("Startup & window"),
+                Some("Restore sessions and confirm before closing the app."),
                 div()
-                    .grid()
-                    .grid_cols(3)
+                    .flex()
+                    .flex_col()
                     .gap_3()
-                    .child(metric("Theme", self.settings.theme.clone()))
-                    .child(metric("Language", self.settings.language.clone()))
-                    .child(metric(
-                        "Terminal Font",
-                        format!(
-                            "{} {}",
-                            self.settings.terminal_font_family, self.settings.terminal_font_size
+                    .child(settings_form_row(
+                        "Restore sessions on startup",
+                        Some(SharedString::from("Reopen the previous workspace tabs when NyaTerm starts.")),
+                        settings_switch(
+                            "general-startup-restore",
+                            self.settings.startup_restore,
+                            cx.listener(|this, _, _, cx| {
+                                this.toggle_startup_restore(cx);
+                            }),
                         ),
                     ))
-                    .child(metric(
-                        "Transfer Policy",
-                        self.settings.transfer_duplicate_strategy.clone(),
-                    ))
-                    .child(metric(
-                        "X11 Display",
-                        if self.settings.x11_display.trim().is_empty() {
-                            "auto".to_string()
-                        } else {
-                            self.settings.x11_display.clone()
-                        },
-                    ))
-                    .child(metric(
-                        "Store",
-                        if self.store_status.ready {
-                            "ready".to_string()
-                        } else {
-                            "offline".to_string()
-                        },
+                    .child(settings_form_row(
+                        "Confirm on close",
+                        Some(SharedString::from("Ask before quitting when sessions are still open.")),
+                        settings_switch(
+                            "general-confirm-close",
+                            self.settings.confirm_on_close,
+                            cx.listener(|this, _, _, cx| {
+                                this.toggle_confirm_on_close(cx);
+                            }),
+                        ),
                     )),
-            )
-            .child(
+            ))
+            .child(settings_form_section(
+                Some("Status"),
+                None,
                 div()
-                    .grid()
-                    .grid_cols(2)
-                    .gap_3()
-                    .child(setting_state(
-                        "Startup Restore",
-                        if self.settings.startup_restore {
-                            "enabled"
-                        } else {
-                            "disabled"
-                        },
-                    ))
-                    .child(setting_state(
-                        "Confirm On Close",
-                        if self.settings.confirm_on_close {
-                            "enabled"
-                        } else {
-                            "disabled"
-                        },
-                    )),
-            )
-            .child(
-                div()
-                    .mt_3()
                     .flex()
-                    .items_center()
+                    .flex_col()
                     .gap_2()
-                    .flex_wrap()
-                    .child(small_button(
-                        "general-startup-restore",
-                        if self.settings.startup_restore {
-                            "Restore On"
-                        } else {
-                            "Restore Off"
-                        },
-                        cx.listener(|this, _, _, cx| {
-                            this.toggle_startup_restore(cx);
-                        }),
+                    .child(settings_form_row(
+                        "Connection store",
+                        Some(SharedString::from("Native redb store readiness.")),
+                        div()
+                            .text_size(px(11.))
+                            .font_weight(FontWeight(600.))
+                            .text_color(if self.store_status.ready {
+                                rgb(0x3fb950)
+                            } else {
+                                rgb(0xff7b72)
+                            })
+                            .child(if self.store_status.ready {
+                                "Ready"
+                            } else {
+                                "Offline"
+                            }),
                     ))
-                    .child(small_button(
-                        "general-confirm-close",
-                        if self.settings.confirm_on_close {
-                            "Confirm On"
-                        } else {
-                            "Confirm Off"
-                        },
-                        cx.listener(|this, _, _, cx| {
-                            this.toggle_confirm_on_close(cx);
-                        }),
+                    .child(settings_form_row(
+                        "Theme / font",
+                        Some(SharedString::from("Current appearance snapshot.")),
+                        div()
+                            .text_size(px(11.))
+                            .text_color(rgb(0x8b949e))
+                            .child(format!(
+                                "{} · {} {}",
+                                self.settings.theme,
+                                self.settings.terminal_font_family,
+                                self.settings.terminal_font_size
+                            )),
                     )),
-            )
+            ))
     }
 
     pub(super) fn appearance_settings_section(
         &mut self,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
+        let font_size_label = format!("{} px", self.settings.terminal_font_size);
         div()
-            .rounded_md()
-            .border_1()
-            .border_color(rgb(0x2a3140))
-            .bg(rgb(0x151923))
-            .p_4()
-            .child(
+            .flex()
+            .flex_col()
+            .gap_3()
+            .child(settings_form_section(
+                Some("Theme"),
+                Some("Color scheme used by the native shell chrome."),
                 div()
-                    .text_sm()
-                    .font_weight(FontWeight(700.))
-                    .child("Appearance"),
-            )
-            .child(
-                div()
-                    .mt_3()
-                    .grid()
-                    .grid_cols(5)
-                    .gap_3()
-                    .child(metric("Theme", self.settings.theme.clone()))
-                    .child(metric(
-                        "Terminal Font",
-                        self.settings.terminal_font_family.clone(),
-                    ))
-                    .child(metric(
-                        "Font Size",
-                        self.settings.terminal_font_size.to_string(),
-                    ))
-                    .child(metric(
-                        "X11 Display",
-                        if self.settings.x11_display.trim().is_empty() {
-                            "auto".to_string()
-                        } else {
-                            self.settings.x11_display.clone()
-                        },
-                    ))
-                    .child(metric("Language", self.settings.language.clone())),
-            )
-            .child(
-                div()
-                    .mt_3()
                     .flex()
-                    .items_center()
-                    .gap_2()
                     .flex_wrap()
-                    .child(policy_button(
+                    .gap_1()
+                    .child(settings_choice_chip(
                         "appearance-theme-dark",
                         "GitHub Dark",
                         self.settings.theme == "github-dark",
@@ -155,7 +148,7 @@ impl NyaTermApp {
                             this.update_appearance_theme("github-dark", cx);
                         }),
                     ))
-                    .child(policy_button(
+                    .child(settings_choice_chip(
                         "appearance-theme-light",
                         "GitHub Light",
                         self.settings.theme == "github-light",
@@ -163,7 +156,7 @@ impl NyaTermApp {
                             this.update_appearance_theme("github-light", cx);
                         }),
                     ))
-                    .child(policy_button(
+                    .child(settings_choice_chip(
                         "appearance-theme-catppuccin",
                         "Catppuccin",
                         self.settings.theme == "catppuccin",
@@ -171,498 +164,403 @@ impl NyaTermApp {
                             this.update_appearance_theme("catppuccin", cx);
                         }),
                     )),
-            )
-            .child(
+            ))
+            .child(settings_form_section(
+                Some("Terminal font"),
+                None,
                 div()
-                    .mt_3()
                     .flex()
-                    .items_center()
-                    .gap_2()
-                    .flex_wrap()
-                    .child(policy_button(
-                        "appearance-font-jetbrains",
-                        "JetBrains Mono",
-                        self.settings.terminal_font_family == "JetBrains Mono",
-                        cx.listener(|this, _, _, cx| {
-                            this.update_terminal_font_family("JetBrains Mono", cx);
-                        }),
+                    .flex_col()
+                    .gap_3()
+                    .child(settings_form_row(
+                        "Font family",
+                        Some(SharedString::from("Monospace face used by the GPUI terminal surface.")),
+                        div()
+                            .flex()
+                            .flex_wrap()
+                            .gap_1()
+                            .child(settings_choice_chip(
+                                "appearance-font-jetbrains",
+                                "JetBrains Mono",
+                                self.settings.terminal_font_family == "JetBrains Mono",
+                                cx.listener(|this, _, _, cx| {
+                                    this.update_terminal_font_family("JetBrains Mono", cx);
+                                }),
+                            ))
+                            .child(settings_choice_chip(
+                                "appearance-font-iosevka",
+                                "Iosevka",
+                                self.settings.terminal_font_family == "Iosevka",
+                                cx.listener(|this, _, _, cx| {
+                                    this.update_terminal_font_family("Iosevka", cx);
+                                }),
+                            ))
+                            .child(settings_choice_chip(
+                                "appearance-font-monospace",
+                                "monospace",
+                                self.settings.terminal_font_family == "monospace",
+                                cx.listener(|this, _, _, cx| {
+                                    this.update_terminal_font_family("monospace", cx);
+                                }),
+                            )),
                     ))
-                    .child(policy_button(
-                        "appearance-font-iosevka",
-                        "Iosevka",
-                        self.settings.terminal_font_family == "Iosevka",
-                        cx.listener(|this, _, _, cx| {
-                            this.update_terminal_font_family("Iosevka", cx);
-                        }),
-                    ))
-                    .child(policy_button(
-                        "appearance-font-monospace",
-                        "monospace",
-                        self.settings.terminal_font_family == "monospace",
-                        cx.listener(|this, _, _, cx| {
-                            this.update_terminal_font_family("monospace", cx);
-                        }),
-                    ))
-                    .child(small_button(
-                        "appearance-font-size-minus",
-                        "-1 px",
-                        cx.listener(|this, _, _, cx| {
-                            this.adjust_terminal_font_size(-1, cx);
-                        }),
-                    ))
-                    .child(small_button(
-                        "appearance-font-size-plus",
-                        "+1 px",
-                        cx.listener(|this, _, _, cx| {
-                            this.adjust_terminal_font_size(1, cx);
-                        }),
+                    .child(settings_form_row(
+                        "Font size",
+                        Some(SharedString::from("Zoom the terminal text without leaving Settings.")),
+                        div()
+                            .flex()
+                            .items_center()
+                            .gap_1()
+                            .child(small_button(
+                                "appearance-font-minus",
+                                "−",
+                                cx.listener(|this, _, _, cx| {
+                                    this.adjust_terminal_font_size(-1, cx);
+                                }),
+                            ))
+                            .child(
+                                div()
+                                    .min_w(px(48.))
+                                    .text_center()
+                                    .font_family("JetBrains Mono")
+                                    .text_size(px(12.))
+                                    .font_weight(FontWeight(600.))
+                                    .text_color(rgb(0xc9d1d9))
+                                    .child(font_size_label),
+                            )
+                            .child(small_button(
+                                "appearance-font-plus",
+                                "+",
+                                cx.listener(|this, _, _, cx| {
+                                    this.adjust_terminal_font_size(1, cx);
+                                }),
+                            ))
+                            .child(small_button(
+                                "appearance-font-reset",
+                                "Reset",
+                                cx.listener(|this, _, _, cx| {
+                                    this.reset_terminal_font_size(cx);
+                                }),
+                            )),
                     )),
-            )
-            .child(
-                div()
-                    .mt_3()
-                    .flex()
-                    .items_center()
-                    .gap_2()
-                    .flex_wrap()
-                    .child(policy_button(
-                        "appearance-x11-auto",
-                        "X11 Auto",
-                        self.settings.x11_display.trim().is_empty(),
-                        cx.listener(|this, _, _, cx| {
-                            this.update_x11_display("", cx);
-                        }),
-                    ))
-                    .child(policy_button(
-                        "appearance-x11-localhost0",
-                        "localhost:0",
-                        self.settings.x11_display == "localhost:0",
-                        cx.listener(|this, _, _, cx| {
-                            this.update_x11_display("localhost:0", cx);
-                        }),
-                    ))
-                    .child(policy_button(
-                        "appearance-x11-localhost1",
-                        "localhost:1",
-                        self.settings.x11_display == "localhost:1",
-                        cx.listener(|this, _, _, cx| {
-                            this.update_x11_display("localhost:1", cx);
-                        }),
-                    )),
-            )
+            ))
+            .child(settings_form_section(
+                Some("X11 display"),
+                Some("Used when launching remote X11-forwarded tools."),
+                settings_form_row(
+                    "Display",
+                    Some(SharedString::from("Forwarded X11 DISPLAY preference.")),
+                    div()
+                        .flex()
+                        .flex_wrap()
+                        .gap_1()
+                        .child(settings_choice_chip(
+                            "appearance-x11-auto",
+                            "Auto",
+                            self.settings.x11_display.trim().is_empty(),
+                            cx.listener(|this, _, _, cx| {
+                                this.update_x11_display("", cx);
+                            }),
+                        ))
+                        .child(settings_choice_chip(
+                            "appearance-x11-localhost0",
+                            "localhost:0",
+                            self.settings.x11_display == "localhost:0",
+                            cx.listener(|this, _, _, cx| {
+                                this.update_x11_display("localhost:0", cx);
+                            }),
+                        ))
+                        .child(settings_choice_chip(
+                            "appearance-x11-localhost1",
+                            "localhost:1",
+                            self.settings.x11_display == "localhost:1",
+                            cx.listener(|this, _, _, cx| {
+                                this.update_x11_display("localhost:1", cx);
+                            }),
+                        )),
+                ),
+            ))
     }
 
     pub(super) fn interaction_settings_section(
         &mut self,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
+        // Tauri InteractionTab density: section cards + switch/choice rows.
+        let encoding = self.settings.interaction_default_encoding.clone();
+        let word_sep = self.settings.interaction_word_separators.clone();
+        let double_action = tab_mouse_action_label(&self.settings.interaction_tab_double_click_action);
+        let middle_action = tab_mouse_action_label(&self.settings.interaction_tab_middle_click_action);
+        let right_action = tab_mouse_action_label(&self.settings.interaction_tab_right_click_action);
+        let delay_ms = self
+            .settings
+            .interaction_duplicate_session_command_delay_ms
+            .to_string();
+
         div()
             .flex()
             .flex_col()
-            .gap_4()
-            .child(
+            .gap_3()
+            .child(settings_form_section(
+                Some("Side panels"),
+                Some("Allow multiple side panels stacked on each edge."),
+                settings_form_row(
+                    "Multi-open panels",
+                    Some(SharedString::from("Stack several left/right panels instead of replacing the active one.")),
+                    settings_switch(
+                        "settings-panel-multi-open",
+                        self.panel_multi_open,
+                        cx.listener(|this, _, _, cx| {
+                            this.toggle_panel_multi_open(cx);
+                        }),
+                    ),
+                ),
+            ))
+            .child(settings_form_section(
+                Some("Clipboard and mouse"),
+                None,
                 div()
-                    .rounded_md()
-                    .border_1()
-                    .border_color(rgb(0x2a3140))
-                    .bg(rgb(0x151923))
-                    .p_4()
-                    .child(
+                    .flex()
+                    .flex_col()
+                    .gap_3()
+                    .child(settings_form_row(
+                        "Copy on select",
+                        Some(SharedString::from("Copy selected terminal text to the clipboard automatically.")),
+                        settings_switch(
+                            "interaction-copy-select",
+                            self.settings.interaction_copy_on_select,
+                            cx.listener(|this, _, _, cx| {
+                                this.toggle_interaction_copy_on_select(cx);
+                            }),
+                        ),
+                    ))
+                    .child(settings_form_row(
+                        "Right-click paste",
+                        Some(SharedString::from("Paste from clipboard on right-click instead of opening a menu.")),
+                        settings_switch(
+                            "interaction-right-paste",
+                            self.settings.interaction_right_click_paste,
+                            cx.listener(|this, _, _, cx| {
+                                this.toggle_interaction_right_click_paste(cx);
+                            }),
+                        ),
+                    ))
+                    .child(settings_form_row(
+                        "Alt as Meta",
+                        Some(SharedString::from("Treat Alt as Meta for terminal key bindings.")),
+                        settings_switch(
+                            "interaction-alt-meta",
+                            self.settings.interaction_alt_as_meta,
+                            cx.listener(|this, _, _, cx| {
+                                this.toggle_alt_as_meta(cx);
+                            }),
+                        ),
+                    ))
+                    .child(settings_form_row(
+                        "Mac IME compatibility",
+                        Some(SharedString::from("Improve input method editor handling on macOS.")),
+                        settings_switch(
+                            "interaction-mac-ime",
+                            self.settings.interaction_mac_ime_compatibility,
+                            cx.listener(|this, _, _, cx| {
+                                this.toggle_mac_ime_compatibility(cx);
+                            }),
+                        ),
+                    )),
+            ))
+            .child(settings_form_section(
+                Some("Command input"),
+                None,
+                div()
+                    .flex()
+                    .flex_col()
+                    .gap_3()
+                    .child(settings_form_row(
+                        "Command suggestions",
+                        Some(SharedString::from("Offer history-based suggestions while typing commands.")),
+                        settings_switch(
+                            "interaction-cmd-suggestions",
+                            self.settings.interaction_command_suggestions_enabled,
+                            cx.listener(|this, _, _, cx| {
+                                this.toggle_command_suggestions(cx);
+                            }),
+                        ),
+                    ))
+                    .child(settings_form_row(
+                        "Suggestion length",
+                        Some(SharedString::from("Minimum and maximum characters before suggestions appear.")),
                         div()
                             .flex()
                             .items_center()
-                            .justify_between()
-                            .gap_3()
+                            .gap_1()
                             .child(
                                 div()
-                                    .text_sm()
-                                    .font_weight(FontWeight(700.))
-                                    .child("Side Panels"),
+                                    .font_family("JetBrains Mono")
+                                    .text_size(px(11.))
+                                    .text_color(rgb(0xc9d1d9))
+                                    .child(format!(
+                                        "{}–{}",
+                                        self.settings.interaction_command_suggestion_min_chars,
+                                        self.settings.interaction_command_suggestion_max_chars
+                                    )),
                             )
-                            .child(status_pill(
-                                if self.panel_multi_open {
-                                    "multi-open"
-                                } else {
-                                    "single"
-                                },
-                                if self.panel_multi_open {
-                                    rgb(0x6ee7b7)
-                                } else {
-                                    rgb(0x98a3b8)
-                                },
-                                if self.panel_multi_open {
-                                    rgb(0x12342a)
-                                } else {
-                                    rgb(0x202633)
-                                },
-                            )),
-                    )
-                    .child(
-                        div()
-                            .mt_2()
-                            .text_xs()
-                            .text_color(rgb(0x8b949e))
-                            .child("Allow multiple side panels stacked on each edge, matching Tauri multi-open mode."),
-                    )
-                    .child(
-                        div()
-                            .mt_3()
                             .child(small_button(
-                                "settings-panel-multi-open",
-                                if self.panel_multi_open {
-                                    "Disable Multi-Open"
-                                } else {
-                                    "Enable Multi-Open"
-                                },
-                                cx.listener(|this, _, _, cx| {
-                                    this.toggle_panel_multi_open(cx);
-                                }),
-                            )),
-                    ),
-            )
-            .child(
-                div()
-                    .rounded_md()
-                    .border_1()
-                    .border_color(rgb(0x2a3140))
-                    .bg(rgb(0x151923))
-                    .p_4()
-                    .child(
-                        div()
-                            .text_sm()
-                            .font_weight(FontWeight(700.))
-                            .child("Clipboard and Mouse"),
-                    )
-                    .child(
-                        div()
-                            .mt_3()
-                            .grid()
-                            .grid_cols(4)
-                            .gap_3()
-                            .child(setting_state(
-                                "Copy On Select",
-                                if self.settings.interaction_copy_on_select {
-                                    "enabled"
-                                } else {
-                                    "disabled"
-                                },
-                            ))
-                            .child(setting_state(
-                                "Right Click",
-                                if self.settings.interaction_right_click_paste {
-                                    "paste"
-                                } else {
-                                    "actions"
-                                },
-                            ))
-                            .child(setting_state(
-                                "Alt As Meta",
-                                if self.settings.interaction_alt_as_meta {
-                                    "enabled"
-                                } else {
-                                    "disabled"
-                                },
-                            ))
-                            .child(setting_state(
-                                "Mac IME",
-                                if self.settings.interaction_mac_ime_compatibility {
-                                    "compatible"
-                                } else {
-                                    "normal"
-                                },
-                            )),
-                    )
-                    .child(
-                        div()
-                            .mt_3()
-                            .flex()
-                            .items_center()
-                            .gap_2()
-                            .flex_wrap()
-                            .child(small_button(
-                                "interaction-copy-select",
-                                if self.settings.interaction_copy_on_select {
-                                    "Copy On"
-                                } else {
-                                    "Copy Off"
-                                },
-                                cx.listener(|this, _, _, cx| {
-                                    this.toggle_interaction_copy_on_select(cx);
-                                }),
-                            ))
-                            .child(small_button(
-                                "interaction-right-paste",
-                                if self.settings.interaction_right_click_paste {
-                                    "Right Paste"
-                                } else {
-                                    "Right Menu"
-                                },
-                                cx.listener(|this, _, _, cx| {
-                                    this.toggle_interaction_right_click_paste(cx);
-                                }),
-                            ))
-                            .child(small_button(
-                                "interaction-alt-meta",
-                                if self.settings.interaction_alt_as_meta {
-                                    "Alt Meta On"
-                                } else {
-                                    "Alt Meta Off"
-                                },
-                                cx.listener(|this, _, _, cx| {
-                                    this.toggle_alt_as_meta(cx);
-                                }),
-                            ))
-                            .child(small_button(
-                                "interaction-mac-ime",
-                                if self.settings.interaction_mac_ime_compatibility {
-                                    "IME On"
-                                } else {
-                                    "IME Off"
-                                },
-                                cx.listener(|this, _, _, cx| {
-                                    this.toggle_mac_ime_compatibility(cx);
-                                }),
-                            )),
-                    ),
-            )
-            .child(
-                div()
-                    .rounded_md()
-                    .border_1()
-                    .border_color(rgb(0x2a3140))
-                    .bg(rgb(0x151923))
-                    .p_4()
-                    .child(
-                        div()
-                            .text_sm()
-                            .font_weight(FontWeight(700.))
-                            .child("Command Input"),
-                    )
-                    .child(
-                        div()
-                            .mt_3()
-                            .grid()
-                            .grid_cols(4)
-                            .gap_3()
-                            .child(setting_state(
-                                "Suggestions",
-                                if self.settings.interaction_command_suggestions_enabled {
-                                    "enabled"
-                                } else {
-                                    "disabled"
-                                },
-                            ))
-                            .child(metric(
-                                "Min Chars",
-                                self.settings
-                                    .interaction_command_suggestion_min_chars
-                                    .to_string(),
-                            ))
-                            .child(metric(
-                                "Max Chars",
-                                self.settings
-                                    .interaction_command_suggestion_max_chars
-                                    .to_string(),
-                            ))
-                            .child(metric(
-                                "Dup Delay",
-                                format!(
-                                    "{} ms",
-                                    self.settings.interaction_duplicate_session_command_delay_ms
-                                ),
-                            )),
-                    )
-                    .child(
-                        div()
-                            .mt_3()
-                            .flex()
-                            .items_center()
-                            .gap_2()
-                            .flex_wrap()
-                            .child(small_button(
-                                "interaction-suggestions",
-                                if self.settings.interaction_command_suggestions_enabled {
-                                    "Suggest On"
-                                } else {
-                                    "Suggest Off"
-                                },
-                                cx.listener(|this, _, _, cx| {
-                                    this.toggle_command_suggestions(cx);
-                                }),
-                            ))
-                            .child(small_button(
-                                "interaction-min-minus",
-                                "Min -1",
+                                "interaction-suggest-min-minus",
+                                "Min −",
                                 cx.listener(|this, _, _, cx| {
                                     this.adjust_command_suggestion_min_chars(-1, cx);
                                 }),
                             ))
                             .child(small_button(
-                                "interaction-min-plus",
-                                "Min +1",
+                                "interaction-suggest-min-plus",
+                                "Min +",
                                 cx.listener(|this, _, _, cx| {
                                     this.adjust_command_suggestion_min_chars(1, cx);
                                 }),
                             ))
                             .child(small_button(
-                                "interaction-max-minus",
-                                "Max -8",
+                                "interaction-suggest-max-minus",
+                                "Max −",
                                 cx.listener(|this, _, _, cx| {
-                                    this.adjust_command_suggestion_max_chars(-8, cx);
+                                    this.adjust_command_suggestion_max_chars(-1, cx);
                                 }),
                             ))
                             .child(small_button(
-                                "interaction-max-plus",
-                                "Max +8",
+                                "interaction-suggest-max-plus",
+                                "Max +",
                                 cx.listener(|this, _, _, cx| {
-                                    this.adjust_command_suggestion_max_chars(8, cx);
+                                    this.adjust_command_suggestion_max_chars(1, cx);
+                                }),
+                            )),
+                    ))
+                    .child(settings_form_row(
+                        "Default encoding",
+                        Some(SharedString::from("Fallback character encoding for session I/O.")),
+                        div()
+                            .flex()
+                            .gap_1()
+                            .child(settings_choice_chip(
+                                "interaction-encoding-utf8",
+                                "UTF-8",
+                                encoding == "UTF-8",
+                                cx.listener(|this, _, _, cx| {
+                                    this.set_interaction_encoding("UTF-8", cx);
                                 }),
                             ))
+                            .child(settings_choice_chip(
+                                "interaction-encoding-gbk",
+                                "GBK",
+                                encoding == "GBK",
+                                cx.listener(|this, _, _, cx| {
+                                    this.set_interaction_encoding("GBK", cx);
+                                }),
+                            )),
+                    ))
+                    .child(settings_form_row(
+                        "Word separators",
+                        Some(SharedString::from("Characters that split double-click word selection.")),
+                        div()
+                            .flex()
+                            .items_center()
+                            .gap_1()
+                            .child(
+                                div()
+                                    .font_family("JetBrains Mono")
+                                    .text_size(px(10.))
+                                    .text_color(rgb(0x8b949e))
+                                    .child(truncate_preview(&word_sep, 24)),
+                            )
+                            .child(settings_choice_chip(
+                                "interaction-word-sep-shell",
+                                "Shell",
+                                word_sep.contains('/') && word_sep.contains(':'),
+                                cx.listener(|this, _, _, cx| {
+                                    this.set_interaction_word_separators(
+                                        " `\"'()[]{}<>|&;/",
+                                        cx,
+                                    );
+                                }),
+                            ))
+                            .child(settings_choice_chip(
+                                "interaction-word-sep-basic",
+                                "Basic",
+                                word_sep == " \t\r\n",
+                                cx.listener(|this, _, _, cx| {
+                                    this.set_interaction_word_separators(" \t\r\n", cx);
+                                }),
+                            )),
+                    ))
+                    .child(settings_form_row(
+                        "Duplicate session delay",
+                        Some(SharedString::from("Delay before replaying the startup command on a duplicated tab.")),
+                        div()
+                            .flex()
+                            .items_center()
+                            .gap_1()
+                            .child(
+                                div()
+                                    .font_family("JetBrains Mono")
+                                    .text_size(px(11.))
+                                    .text_color(rgb(0xc9d1d9))
+                                    .child(format!("{delay_ms} ms")),
+                            )
                             .child(small_button(
-                                "interaction-delay-minus",
-                                "-100 ms",
+                                "interaction-dup-delay-minus",
+                                "−100",
                                 cx.listener(|this, _, _, cx| {
                                     this.adjust_duplicate_session_command_delay(-100, cx);
                                 }),
                             ))
                             .child(small_button(
-                                "interaction-delay-plus",
-                                "+100 ms",
+                                "interaction-dup-delay-plus",
+                                "+100",
                                 cx.listener(|this, _, _, cx| {
                                     this.adjust_duplicate_session_command_delay(100, cx);
                                 }),
                             )),
-                    )
-                    .child(
-                        div()
-                            .mt_3()
-                            .grid()
-                            .grid_cols(2)
-                            .gap_3()
-                            .child(metric(
-                                "Word Separators",
-                                truncate_preview(&self.settings.interaction_word_separators, 32),
-                            ))
-                            .child(metric(
-                                "Encoding",
-                                self.settings.interaction_default_encoding.clone(),
-                            )),
-                    )
-                    .child(
-                        div()
-                            .mt_3()
-                            .flex()
-                            .items_center()
-                            .gap_2()
-                            .child(policy_button(
-                                "interaction-encoding-utf8",
-                                "UTF-8",
-                                self.settings.interaction_default_encoding == "UTF-8",
-                                cx.listener(|this, _, _, cx| {
-                                    this.set_interaction_encoding("UTF-8", cx);
-                                }),
-                            ))
-                            .child(policy_button(
-                                "interaction-encoding-gbk",
-                                "GBK",
-                                self.settings.interaction_default_encoding == "GBK",
-                                cx.listener(|this, _, _, cx| {
-                                    this.set_interaction_encoding("GBK", cx);
-                                }),
-                            ))
-                            .child(policy_button(
-                                "interaction-word-default",
-                                "Default Separators",
-                                self.settings.interaction_word_separators
-                                    == " \t\r\n\"'`~!@#$%^&*()-=+[{]}\\|;:,<.>/?",
-                                cx.listener(|this, _, _, cx| {
-                                    this.set_interaction_word_separators(
-                                        " \t\r\n\"'`~!@#$%^&*()-=+[{]}\\|;:,<.>/?",
-                                        cx,
-                                    );
-                                }),
-                            ))
-                            .child(policy_button(
-                                "interaction-word-minimal",
-                                "Minimal Separators",
-                                self.settings.interaction_word_separators == " \t\r\n",
-                                cx.listener(|this, _, _, cx| {
-                                    this.set_interaction_word_separators(" \t\r\n", cx);
-                                }),
-                            )),
-                    ),
-            )
-            .child(
+                    )),
+            ))
+            .child(settings_form_section(
+                Some("Tab mouse actions"),
+                Some("What happens when clicking session tabs."),
                 div()
-                    .rounded_md()
-                    .border_1()
-                    .border_color(rgb(0x2a3140))
-                    .bg(rgb(0x151923))
-                    .p_4()
-                    .child(
-                        div()
-                            .text_sm()
-                            .font_weight(FontWeight(700.))
-                            .child("Tab Mouse Actions"),
-                    )
-                    .child(
-                        div()
-                            .mt_3()
-                            .grid()
-                            .grid_cols(3)
-                            .gap_3()
-                            .child(metric(
-                                "Double Click",
-                                tab_mouse_action_label(
-                                    &self.settings.interaction_tab_double_click_action,
-                                )
-                                .to_string(),
-                            ))
-                            .child(metric(
-                                "Middle Click",
-                                tab_mouse_action_label(
-                                    &self.settings.interaction_tab_middle_click_action,
-                                )
-                                .to_string(),
-                            ))
-                            .child(metric(
-                                "Right Click",
-                                tab_mouse_action_label(
-                                    &self.settings.interaction_tab_right_click_action,
-                                )
-                                .to_string(),
-                            )),
-                    )
-                    .child(
-                        div()
-                            .mt_3()
-                            .flex()
-                            .items_center()
-                            .gap_2()
-                            .flex_wrap()
-                            .child(small_button(
-                                "interaction-cycle-double",
-                                "Cycle Double",
-                                cx.listener(|this, _, _, cx| {
-                                    this.cycle_tab_mouse_action(TabMouseActionTarget::Double, cx);
-                                }),
-                            ))
-                            .child(small_button(
-                                "interaction-cycle-middle",
-                                "Cycle Middle",
-                                cx.listener(|this, _, _, cx| {
-                                    this.cycle_tab_mouse_action(TabMouseActionTarget::Middle, cx);
-                                }),
-                            ))
-                            .child(small_button(
-                                "interaction-cycle-right",
-                                "Cycle Right",
-                                cx.listener(|this, _, _, cx| {
-                                    this.cycle_tab_mouse_action(TabMouseActionTarget::Right, cx);
-                                }),
-                            )),
-                    ),
-            )
+                    .flex()
+                    .flex_col()
+                    .gap_3()
+                    .child(settings_form_row(
+                        "Double-click",
+                        Some(SharedString::from(double_action)),
+                        small_button(
+                            "interaction-cycle-double",
+                            "Cycle",
+                            cx.listener(|this, _, _, cx| {
+                                this.cycle_tab_mouse_action(TabMouseActionTarget::Double, cx);
+                            }),
+                        ),
+                    ))
+                    .child(settings_form_row(
+                        "Middle-click",
+                        Some(SharedString::from(middle_action)),
+                        small_button(
+                            "interaction-cycle-middle",
+                            "Cycle",
+                            cx.listener(|this, _, _, cx| {
+                                this.cycle_tab_mouse_action(TabMouseActionTarget::Middle, cx);
+                            }),
+                        ),
+                    ))
+                    .child(settings_form_row(
+                        "Right-click",
+                        Some(SharedString::from(right_action)),
+                        small_button(
+                            "interaction-cycle-right",
+                            "Cycle",
+                            cx.listener(|this, _, _, cx| {
+                                this.cycle_tab_mouse_action(TabMouseActionTarget::Right, cx);
+                            }),
+                        ),
+                    )),
+            ))
     }
 
     pub(super) fn keybindings_settings_section(

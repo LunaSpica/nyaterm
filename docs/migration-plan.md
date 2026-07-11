@@ -610,3 +610,9 @@ service boundary first:
 - Settings header densified to 36px with ghost Back control.
 - Sidebar narrower (220px), uppercase category labels, soft primary nav items (no green borders).
 - Content pane drops heavy outer card; group/title strip + scroll body like Tauri SettingsPage.
+
+## 2026-07-11 Settings form density
+- Shared `settings_form_section` / `settings_form_row` / `settings_switch` / `settings_choice_chip` primitives (Tauri SettingSection/Row/Switch).
+- General: language chips + switch rows (startup restore / confirm close) instead of metric cards.
+- Appearance: theme/font/X11 as form sections with chips and font-size steppers.
+- Interaction: multi-open, clipboard/mouse switches, suggestions, encoding, word separators, tab mouse actions as dense rows.

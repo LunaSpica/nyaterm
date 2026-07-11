@@ -330,6 +330,176 @@ impl NyaTermApp {
     }
 }
 
+
+/// Tauri SettingSection: rounded card with optional title/desc and body.
+pub(super) fn settings_form_section(
+    title: Option<&'static str>,
+    desc: Option<&'static str>,
+    content: impl IntoElement,
+) -> impl IntoElement {
+    div()
+        .rounded_lg()
+        .border_1()
+        .border_color(rgb(0x30363d))
+        .bg(rgb(0x161b22))
+        .overflow_hidden()
+        .when(title.is_some() || desc.is_some(), |this| {
+            this.child(
+                div()
+                    .px_4()
+                    .py_3()
+                    .border_b_1()
+                    .border_color(rgb(0x21262d))
+                    .flex()
+                    .flex_col()
+                    .gap_1()
+                    .when_some(title, |this, title| {
+                        this.child(
+                            div()
+                                .text_size(px(13.))
+                                .font_weight(FontWeight(600.))
+                                .text_color(rgb(0xc9d1d9))
+                                .child(title),
+                        )
+                    })
+                    .when_some(desc, |this, desc| {
+                        this.child(
+                            div()
+                                .text_size(px(11.))
+                                .text_color(rgb(0x6e7681))
+                                .child(desc),
+                        )
+                    }),
+            )
+        })
+        .child(div().px_4().py_3().flex().flex_col().gap_3().child(content))
+}
+
+/// Tauri SettingRow: label/desc left, control right.
+pub(super) fn settings_form_row(
+    label: impl Into<SharedString>,
+    desc: Option<SharedString>,
+    control: impl IntoElement,
+) -> impl IntoElement {
+    let label = label.into();
+    div()
+        .flex()
+        .items_start()
+        .justify_between()
+        .gap_4()
+        .child(
+            div()
+                .min_w_0()
+                .flex_1()
+                .flex()
+                .flex_col()
+                .gap_1()
+                .child(
+                    div()
+                        .text_size(px(13.))
+                        .font_weight(FontWeight(500.))
+                        .text_color(rgb(0xc9d1d9))
+                        .child(label),
+                )
+                .when_some(desc, |this, desc| {
+                    this.child(
+                        div()
+                            .text_size(px(11.))
+                            .text_color(rgb(0x6e7681))
+                            .child(desc),
+                    )
+                }),
+        )
+        .child(
+            div()
+                .flex_none()
+                .flex()
+                .items_center()
+                .justify_end()
+                .gap_2()
+                .child(control),
+        )
+}
+
+/// Compact on/off switch control (Tauri SettingSwitch look).
+pub(super) fn settings_switch(
+    id: impl Into<String>,
+    checked: bool,
+    on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
+) -> impl IntoElement {
+    div()
+        .id(SharedString::from(id.into()))
+        .h(px(22.))
+        .w(px(40.))
+        .flex()
+        .items_center()
+        .rounded_full()
+        .px(px(2.))
+        .bg(if checked {
+            rgb(0x1f6feb)
+        } else {
+            rgb(0x30363d)
+        })
+        .cursor_pointer()
+        .hover(|this| {
+            this.bg(if checked {
+                rgb(0x388bfd)
+            } else {
+                rgb(0x484f58)
+            })
+        })
+        .child(
+            div()
+                .size(px(18.))
+                .rounded_full()
+                .bg(rgb(0xffffff))
+                .when(checked, |this| this.ml_auto()),
+        )
+        .on_click(on_click)
+}
+
+/// Compact choice chips for enum-like settings.
+pub(super) fn settings_choice_chip(
+    id: impl Into<String>,
+    label: &'static str,
+    selected: bool,
+    on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
+) -> impl IntoElement {
+    div()
+        .id(SharedString::from(id.into()))
+        .h(px(28.))
+        .px_2()
+        .flex()
+        .items_center()
+        .rounded_md()
+        .border_1()
+        .border_color(if selected {
+            rgb(0x1f6feb)
+        } else {
+            rgb(0x30363d)
+        })
+        .bg(if selected {
+            rgb(0x122033)
+        } else {
+            rgb(0x0d1117)
+        })
+        .text_size(px(11.))
+        .font_weight(if selected {
+            FontWeight(600.)
+        } else {
+            FontWeight(500.)
+        })
+        .text_color(if selected {
+            rgb(0x58a6ff)
+        } else {
+            rgb(0x8b949e)
+        })
+        .cursor_pointer()
+        .hover(|this| this.bg(rgb(0x21262d)).text_color(rgb(0xc9d1d9)))
+        .child(label)
+        .on_click(on_click)
+}
+
 fn settings_category_header(
     title: &'static str,
     _badge: &'static str,

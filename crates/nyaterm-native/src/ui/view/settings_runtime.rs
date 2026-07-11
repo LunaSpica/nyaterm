@@ -387,6 +387,15 @@ impl NyaTermApp {
         cx.notify();
     }
 
+    pub(in crate::ui::view) fn update_ui_language(
+        &mut self,
+        language: &'static str,
+        cx: &mut Context<Self>,
+    ) {
+        self.settings.language = language.to_string();
+        self.save_general_settings(cx);
+    }
+
     pub(in crate::ui::view) fn toggle_startup_restore(&mut self, cx: &mut Context<Self>) {
         self.settings.startup_restore = !self.settings.startup_restore;
         self.save_general_settings(cx);
