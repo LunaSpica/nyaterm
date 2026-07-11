@@ -1098,3 +1098,8 @@ service boundary first:
 - Anchored tab actions menu uses a denser single-column layout with a compact
   header (session name/kind/id + Esc close) for closer Tauri TabContextMenu feel.
 
+## 2026-07-11 Terminal search bar polish
+
+- Buffer find status shows `1000+` at the match cap; prev/next controls are
+  buffer-mode only, matching Tauri TerminalSearchBar behavior.
+

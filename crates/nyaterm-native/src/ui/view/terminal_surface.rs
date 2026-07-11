@@ -633,16 +633,24 @@ impl NyaTermApp {
                     ("idle".to_string(), false)
                 }
                 Ok(matches) if matches.is_empty() => ("not found".to_string(), false),
-                Ok(matches) => (
-                    format!(
-                        "{}/{}",
-                        self.terminal_search_active_index
-                            .min(matches.len().saturating_sub(1))
-                            + 1,
-                        matches.len()
-                    ),
-                    false,
-                ),
+                Ok(matches) => {
+                    let count = matches.len();
+                    let count_label = if count >= 1000 {
+                        "1000+".to_string()
+                    } else {
+                        count.to_string()
+                    };
+                    (
+                        format!(
+                            "{}/{}",
+                            self.terminal_search_active_index
+                                .min(count.saturating_sub(1))
+                                + 1,
+                            count_label
+                        ),
+                        false,
+                    )
+                }
                 Err(error) => (truncate_preview(error, 40), true),
             },
             TerminalSearchMode::History => match &history_results {
@@ -875,18 +883,24 @@ impl NyaTermApp {
                             cx.notify();
                         }),
                     ))
-                    .child(icon_button(
-                        "terminal-search-prev",
-                        "^", self.theme_palette(),cx.listener(|this, _, _, cx| {
-                            this.navigate_terminal_search(-1, cx);
-                        }),
-                    ))
-                    .child(icon_button(
-                        "terminal-search-next",
-                        "v", self.theme_palette(),cx.listener(|this, _, _, cx| {
-                            this.navigate_terminal_search(1, cx);
-                        }),
-                    )),
+                    .when(self.terminal_search_mode == TerminalSearchMode::Buffer, |this| {
+                        this.child(icon_button(
+                            "terminal-search-prev",
+                            "^",
+                            self.theme_palette(),
+                            cx.listener(|this, _, _, cx| {
+                                this.navigate_terminal_search(-1, cx);
+                            }),
+                        ))
+                        .child(icon_button(
+                            "terminal-search-next",
+                            "v",
+                            self.theme_palette(),
+                            cx.listener(|this, _, _, cx| {
+                                this.navigate_terminal_search(1, cx);
+                            }),
+                        ))
+                    }),
             )
             .child(history_rows)
     }
