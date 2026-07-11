@@ -1426,3 +1426,13 @@ service boundary first:
 - Global/multi-leaf strip marks a tab active when any of its pane leaves is focused.
 - Unread/disconnected/sync indicators aggregate across leaves under the tab root.
 - Multi-leaf `set_active_tab` maps secondary pane focus to the owning tab root.
+
+
+## 2026-07-12 Activity bar tooltips + chrome densify
+
+- Activity bar and bottom-panel buttons show GPUI hover tooltips (Tauri
+  ActivityBarButton tooltips).
+- Title center label densifies tab-root › leaf, endpoint, disconnect, and pane
+  count; failed connect shows in the title when idle.
+- Settings header shows active category/tab path; View menu groups Theme and
+  Language sections.

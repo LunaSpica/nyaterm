@@ -497,21 +497,50 @@ impl NyaTermApp {
 
     fn title_context_label(&self) -> String {
         if let Some(session_id) = self.active_session_id.as_deref() {
-            let name = self
+            let tab_root = self.tab_root_for_session(session_id);
+            let leaf_name = self
                 .session_display_name(session_id)
                 .unwrap_or_else(|| short_id(session_id).to_string());
-            if let Some(endpoint) = self.session_endpoint(session_id) {
-                let status = if self.is_session_disconnected(session_id) {
-                    " · disconnected"
+            let name = if tab_root != session_id {
+                let tab_name = self
+                    .session_display_name(&tab_root)
+                    .unwrap_or_else(|| short_id(&tab_root).to_string());
+                if tab_name == leaf_name {
+                    leaf_name
                 } else {
-                    ""
-                };
-                return format!("{name} — {endpoint}{status}");
+                    format!("{tab_name} › {leaf_name}")
+                }
+            } else {
+                leaf_name
+            };
+            let mut parts = vec![name];
+            if let Some(endpoint) = self.session_endpoint(session_id) {
+                parts.push(endpoint);
             }
-            return name;
+            if self.is_session_disconnected(session_id) {
+                parts.push("disconnected".to_string());
+            } else if self
+                .session_pane_roots
+                .get(&tab_root)
+                .is_some_and(|root| root.is_split())
+            {
+                let count = self
+                    .session_pane_roots
+                    .get(&tab_root)
+                    .map(|root| root.session_ids().len())
+                    .unwrap_or(1);
+                parts.push(format!("{count} panes"));
+            }
+            return parts.join(" · ");
         }
         if let Some(pending) = self.pending_session_name.as_ref() {
             return format!("Connecting {pending}");
+        }
+        if let (Some(failed), Some(error)) = (
+            self.last_connect_failure_name.as_ref(),
+            self.last_connect_failure_error.as_ref(),
+        ) {
+            return format!("Failed {failed} · {}", truncate_preview(error, 40));
         }
         "NyaTerm".to_string()
     }
@@ -734,6 +763,21 @@ impl NyaTermApp {
                     );
                 })
             })
+            .tooltip({
+                let title = tooltip.to_string();
+                let detail = if show_labels {
+                    None
+                } else {
+                    Some(short_label.to_string())
+                };
+                move |_, cx| {
+                    let mut tip = ChromeTooltip::new(title.clone());
+                    if let Some(detail) = detail.clone() {
+                        tip = tip.with_detail(detail);
+                    }
+                    cx.new(|_| tip).into()
+                }
+            })
             .on_click(cx.listener(move |this, _, window, cx| {
                 this.activate_activity_entry(entry, window, cx);
             }))
@@ -796,6 +840,10 @@ impl NyaTermApp {
                     }),
             )
             .child(icon)
+            .tooltip({
+                let title = tooltip.to_string();
+                move |_, cx| cx.new(|_| ChromeTooltip::new(title.clone())).into()
+            })
             .on_click(cx.listener(move |this, _, _, cx| {
                 this.bottom_panel = if this.bottom_panel == mode {
                     BottomPanelMode::Hidden
@@ -1034,6 +1082,15 @@ impl NyaTermApp {
             }
             TitleMenu::View => {
                 items = items
+                    .child(
+                        div()
+                            .px_3()
+                            .py_1()
+                            .text_size(px(10.))
+                            .font_weight(FontWeight(700.))
+                            .text_color(rgb(palette.text_dimmed))
+                            .child("Theme"),
+                    )
                     .child(title_menu_item(
                         palette,
                         "title-view-theme-github-dark",
@@ -1315,13 +1372,22 @@ impl NyaTermApp {
                         }),
                     ))
                     .child(title_menu_separator(palette))
+                    .child(
+                        div()
+                            .px_3()
+                            .py_1()
+                            .text_size(px(10.))
+                            .font_weight(FontWeight(700.))
+                            .text_color(rgb(palette.text_dimmed))
+                            .child("Language"),
+                    )
                     .child(title_menu_item(
                         palette,
                         "title-view-lang-en",
                         if matches!(self.settings.language.as_str(), "en" | "en-US") {
-                            "Language: English ✓"
+                            "✓ English"
                         } else {
-                            "Language: English"
+                            "English"
                         },
                         None,
                         cx.listener(|this, _, _, cx| {
@@ -1333,9 +1399,9 @@ impl NyaTermApp {
                         palette,
                         "title-view-lang-zh",
                         if matches!(self.settings.language.as_str(), "zh-CN" | "zh") {
-                            "Language: 中文 ✓"
+                            "✓ 中文"
                         } else {
-                            "Language: 中文"
+                            "中文"
                         },
                         None,
                         cx.listener(|this, _, _, cx| {

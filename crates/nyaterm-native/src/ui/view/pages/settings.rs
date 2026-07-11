@@ -74,10 +74,41 @@ impl NyaTermApp {
                     .bg(rgb(palette.section_header))
                     .child(
                         div()
-                            .text_size(px(12.))
-                            .font_weight(FontWeight(700.))
-                            .text_color(rgb(palette.text))
-                            .child("Settings"),
+                            .flex()
+                            .items_center()
+                            .gap_2()
+                            .child(
+                                div()
+                                    .text_size(px(12.))
+                                    .font_weight(FontWeight(700.))
+                                    .text_color(rgb(palette.text))
+                                    .child("Settings"),
+                            )
+                            .child(
+                                div()
+                                    .text_size(px(11.))
+                                    .text_color(rgb(palette.text_dimmed))
+                                    .child("·"),
+                            )
+                            .child(
+                                div()
+                                    .text_size(px(11.))
+                                    .text_color(rgb(palette.text_muted))
+                                    .child(self.settings_active_tab.group_label()),
+                            )
+                            .child(
+                                div()
+                                    .text_size(px(11.))
+                                    .text_color(rgb(palette.text_dimmed))
+                                    .child("/"),
+                            )
+                            .child(
+                                div()
+                                    .text_size(px(11.))
+                                    .font_weight(FontWeight(600.))
+                                    .text_color(rgb(palette.text))
+                                    .child(self.settings_active_tab.label()),
+                            ),
                     )
                     .child(
                         div()
