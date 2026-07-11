@@ -1526,3 +1526,9 @@ service boundary first:
   limit steppers auto-persist like Tauri live settings.
 - AI Rules: terminal/file custom action editor with expand, name/prompt edit,
   enable switch, Add/Delete (Tauri ActionListEditor parity).
+
+## 2026-07-12 AI Models grouped catalog densify
+
+- Models tab groups by credential/provider with collapse headers, credential
+  enable switches, full model list (no take(12)), Default/Delete for manual
+  models, and per-group manual model name + Add.
