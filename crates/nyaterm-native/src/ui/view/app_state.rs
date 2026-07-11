@@ -166,6 +166,8 @@ pub struct NyaTermApp {
     pub(in crate::ui::view) recording_manager: Arc<RecordingManager>,
     pub(in crate::ui::view) recording_search_draft: String,
     pub(in crate::ui::view) recording_search_focus: FocusHandle,
+    /// Per-session recording panel busy state ("record" | "save").
+    pub(in crate::ui::view) recording_busy_actions: HashMap<String, String>,
     pub(in crate::ui::view) session_start_tx: mpsc::Sender<SessionStartResult>,
     pub(in crate::ui::view) session_start_rx: mpsc::Receiver<SessionStartResult>,
     pub(in crate::ui::view) tunnel_manager: Arc<SshTunnelManager>,
@@ -921,6 +923,7 @@ impl NyaTermApp {
             recording_manager,
             recording_search_draft: String::new(),
             recording_search_focus: cx.focus_handle(),
+            recording_busy_actions: HashMap::new(),
             session_start_tx,
             session_start_rx,
             tunnel_manager: Arc::new(SshTunnelManager::new()),

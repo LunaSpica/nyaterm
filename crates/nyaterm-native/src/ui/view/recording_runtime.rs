@@ -112,6 +112,8 @@ impl NyaTermApp {
     }
 
     fn start_recording_to_path(&mut self, session_id: &str, path: String) {
+        self.recording_busy_actions
+            .insert(session_id.to_string(), "record".to_string());
         self.recording_manager
             .set_memory_limit(self.settings.recording_memory_limit_bytes as usize);
         match self.recording_manager.start(
@@ -128,6 +130,7 @@ impl NyaTermApp {
                 self.terminal_status = format!("recording start failed: {error}");
             }
         }
+        self.recording_busy_actions.remove(session_id);
     }
 
     pub(in crate::ui::view) fn stop_active_recording(&mut self, cx: &mut Context<Self>) {
@@ -144,6 +147,8 @@ impl NyaTermApp {
         session_id: &str,
         cx: &mut Context<Self>,
     ) {
+        self.recording_busy_actions
+            .insert(session_id.to_string(), "record".to_string());
         match self.recording_manager.stop(session_id) {
             Ok(path) => {
                 self.terminal_status = format!("recording saved: {path}");
@@ -153,10 +158,13 @@ impl NyaTermApp {
                 self.terminal_status = format!("recording stop failed: {error}");
             }
         }
+        self.recording_busy_actions.remove(session_id);
         cx.notify();
     }
 
     fn save_transcript_to_path(&mut self, session_id: &str, path: String) {
+        self.recording_busy_actions
+            .insert(session_id.to_string(), "save".to_string());
         self.recording_manager
             .set_memory_limit(self.settings.recording_memory_limit_bytes as usize);
         match self.recording_manager.save_transcript(
@@ -173,6 +181,7 @@ impl NyaTermApp {
                 self.terminal_status = format!("transcript save failed: {error}");
             }
         }
+        self.recording_busy_actions.remove(session_id);
     }
 
     pub(in crate::ui::view) fn maybe_auto_start_recording(

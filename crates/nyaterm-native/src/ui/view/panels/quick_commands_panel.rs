@@ -258,7 +258,7 @@ impl NyaTermApp {
                                 ),
                         )
                         .child(status_pill(
-                            if execution_mode == "append" { "+" } else { ">" },
+                            if execution_mode == "append" { "append" } else { "exec" },
                             if execution_mode == "append" {
                                 rgb(palette.warning)
                             } else {
@@ -413,7 +413,7 @@ impl NyaTermApp {
                         // Tauri list: ~44px single-line row with label+command stack and trailing actions.
                         let mut actions = div().flex().items_center().gap_1();
                         actions = actions.child(status_pill(
-                            if execution_mode == "append" { "+" } else { ">" },
+                            if execution_mode == "append" { "append" } else { "exec" },
                             if execution_mode == "append" {
                                 rgb(palette.warning)
                             } else {

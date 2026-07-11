@@ -50,7 +50,9 @@ impl NyaTermApp {
                 let save_session_name = session_name.clone();
                 let is_current = active_session_id.as_deref() == Some(session.id.as_str());
                 let session_is_recording = self.recording_manager.is_recording(&session.id);
-                let kind = session_kind_label(session.kind);
+                let busy_action = self.recording_busy_actions.get(&session.id).cloned();
+                let is_busy = busy_action.is_some();
+                let kind = session_kind_label(session.kind).to_ascii_uppercase();
                 let short = short_id(&session.id).to_string();
 
                 session_rows = session_rows.child(
@@ -58,7 +60,7 @@ impl NyaTermApp {
                         .id(SharedString::from(format!(
                             "recording-session-row-{session_id}"
                         )))
-                        .h(px(40.))
+                        .h(px(44.))
                         .rounded_md()
                         .px_2()
                         .bg(if is_current {
@@ -66,12 +68,7 @@ impl NyaTermApp {
                         } else {
                             rgb(palette.surface)
                         })
-                        .border_1()
-                        .border_color(if is_current {
-                            rgb(0x1f6feb)
-                        } else {
-                            rgb(palette.surface)
-                        })
+                        .when(is_busy, |this| this.opacity(0.72))
                         .flex()
                         .items_center()
                         .gap_2()
@@ -161,13 +158,22 @@ impl NyaTermApp {
                                     } else {
                                         "icons/session/record.svg"
                                     },
-                                    if session_is_recording {
+                                    if busy_action.as_deref() == Some("record") {
+                                        rgb(palette.warning)
+                                    } else if session_is_recording {
                                         rgb(palette.danger)
                                     } else {
                                         rgb(palette.text_muted)
                                     },
+                                    !is_busy,
                                     cx.listener(move |this, _, _, cx| {
                                         cx.stop_propagation();
+                                        if this
+                                            .recording_busy_actions
+                                            .contains_key(&start_session_id)
+                                        {
+                                            return;
+                                        }
                                         if this.recording_manager.is_recording(&start_session_id) {
                                             this.stop_recording_for_session(&start_session_id, cx);
                                         } else {
@@ -184,9 +190,20 @@ impl NyaTermApp {
                                     palette,
                                     format!("recording-session-save-{session_id}"),
                                     "icons/session/save.svg",
-                                    rgb(palette.text_muted),
+                                    if busy_action.as_deref() == Some("save") {
+                                        rgb(palette.warning)
+                                    } else {
+                                        rgb(palette.text_muted)
+                                    },
+                                    !is_busy,
                                     cx.listener(move |this, _, _, cx| {
                                         cx.stop_propagation();
+                                        if this
+                                            .recording_busy_actions
+                                            .contains_key(&save_session_id)
+                                        {
+                                            return;
+                                        }
                                         this.prompt_recording_path_for_session(
                                             RecordingPathPromptKind::SaveTranscript,
                                             save_session_id.clone(),
@@ -309,11 +326,15 @@ impl NyaTermApp {
     }
 }
 
-fn recording_action_svg_button(palette: crate::ui::theme::ThemePalette,
+fn recording_action_svg_button(
+    palette: crate::ui::theme::ThemePalette,
     id: impl Into<String>,
     icon_path: &'static str,
     color: impl Into<gpui::Hsla>,
-    on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,) -> impl IntoElement {    let color = color.into();
+    enabled: bool,
+    on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
+) -> impl IntoElement {
+    let color = color.into();
     div()
         .id(SharedString::from(id.into()))
         .size(px(28.))
@@ -322,13 +343,22 @@ fn recording_action_svg_button(palette: crate::ui::theme::ThemePalette,
         .justify_center()
         .rounded_md()
         .text_color(color)
-        .cursor_pointer()
-        .hover(|this| this.bg(rgb(palette.surface_elevated)).text_color(rgb(palette.text)))
+        .when(enabled, |this| {
+            this.cursor_pointer().hover(|this| {
+                this.bg(rgb(palette.surface_elevated))
+                    .text_color(rgb(palette.text))
+            })
+        })
+        .when(!enabled, |this| this.opacity(0.4))
         .child(
             svg()
                 .size(px(16.))
                 .flex_none()
                 .path(icon_path),
         )
-        .on_click(on_click)
+        .on_click(move |event, window, cx| {
+            if enabled {
+                on_click(event, window, cx);
+            }
+        })
 }
