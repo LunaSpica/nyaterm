@@ -223,6 +223,16 @@ impl NyaTermApp {
             return;
         };
         let (rows, cols) = self.active_terminal_grid_size();
+        // Shift+click extends the existing selection from its anchor (xterm-style).
+        if event.modifiers.shift && event.click_count <= 1 {
+            if let Some(selection) = self.terminal_selection.as_mut() {
+                selection.head = cell;
+                self.terminal_selection_dragging = true;
+                self.terminal_status = "selection extended".to_string();
+                cx.notify();
+                return;
+            }
+        }
         if event.click_count >= 3 {
             self.terminal_selection = Some(TerminalSelection {
                 anchor: TerminalCellPos::new(cell.row, 0),

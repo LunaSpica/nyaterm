@@ -1014,3 +1014,9 @@ service boundary first:
   wordSeparator semantics) instead of a hard-coded alnum set; default separators
   align closer to Tauri.
 - Middle-click on the terminal surface pastes from the clipboard (xterm/Linux).
+
+## 2026-07-11 Shift+click selection extend + clear on input
+
+- Shift+left-click extends the existing terminal selection from its anchor and
+  continues drag-extend (xterm-style).
+- Sending terminal input (typing/paste/commands) clears the active selection.

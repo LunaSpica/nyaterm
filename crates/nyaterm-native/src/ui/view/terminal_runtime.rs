@@ -78,6 +78,10 @@ impl NyaTermApp {
         if bytes.is_empty() {
             return;
         }
+        // Typing/paste input dismisses the visible selection (xterm-like).
+        if self.terminal_selection.take().is_some() || self.terminal_selection_dragging {
+            self.terminal_selection_dragging = false;
+        }
         let Some(session_id) = self.active_session_id.clone() else {
             self.terminal_status = "start a session before typing".to_string();
             cx.notify();
