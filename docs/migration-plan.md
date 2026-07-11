@@ -1051,3 +1051,8 @@ service boundary first:
   the entry from redb command history and refreshes the live suggestion list
   (Tauri CommandSuggestions deleteHistory parity).
 
+## 2026-07-11 Command suggestion fuzzy highlights
+
+- Suggestion rows paint fuzzy match indices in accent/semibold spans, matching
+  Tauri HighlightedCommand presentation for history and quick-command hits.
+
