@@ -235,15 +235,34 @@ impl NyaTermApp {
             TabMouseActionTarget::Right => &self.settings.interaction_tab_right_click_action,
         };
         let next = next_tab_mouse_action(current);
+        self.set_tab_mouse_action(target, next, cx);
+    }
+
+    pub(in crate::ui::view) fn set_tab_mouse_action(
+        &mut self,
+        target: TabMouseActionTarget,
+        action: &str,
+        cx: &mut Context<Self>,
+    ) {
+        let action = normalize_tab_mouse_action(action);
         match target {
             TabMouseActionTarget::Double => {
-                self.settings.interaction_tab_double_click_action = next.to_string();
+                if self.settings.interaction_tab_double_click_action == action {
+                    return;
+                }
+                self.settings.interaction_tab_double_click_action = action.to_string();
             }
             TabMouseActionTarget::Middle => {
-                self.settings.interaction_tab_middle_click_action = next.to_string();
+                if self.settings.interaction_tab_middle_click_action == action {
+                    return;
+                }
+                self.settings.interaction_tab_middle_click_action = action.to_string();
             }
             TabMouseActionTarget::Right => {
-                self.settings.interaction_tab_right_click_action = next.to_string();
+                if self.settings.interaction_tab_right_click_action == action {
+                    return;
+                }
+                self.settings.interaction_tab_right_click_action = action.to_string();
             }
         }
         self.save_interaction_settings(cx);
@@ -403,23 +422,32 @@ impl NyaTermApp {
     }
 }
 
+pub(in crate::ui::view) const TAB_MOUSE_ACTIONS: [&str; 9] = [
+    "none",
+    "rename_tab",
+    "copy_tab_name",
+    "copy_server_ip",
+    "duplicate_session",
+    "multiplex_ssh",
+    "reconnect_session",
+    "disconnect_session",
+    "close_tab",
+];
+
 fn next_tab_mouse_action(current: &str) -> &'static str {
-    const ACTIONS: [&str; 9] = [
-        "none",
-        "rename_tab",
-        "copy_tab_name",
-        "copy_server_ip",
-        "duplicate_session",
-        "multiplex_ssh",
-        "reconnect_session",
-        "disconnect_session",
-        "close_tab",
-    ];
-    let index = ACTIONS
+    let index = TAB_MOUSE_ACTIONS
         .iter()
         .position(|action| *action == current)
         .unwrap_or(0);
-    ACTIONS[(index + 1) % ACTIONS.len()]
+    TAB_MOUSE_ACTIONS[(index + 1) % TAB_MOUSE_ACTIONS.len()]
+}
+
+fn normalize_tab_mouse_action(action: &str) -> &'static str {
+    TAB_MOUSE_ACTIONS
+        .iter()
+        .copied()
+        .find(|item| *item == action)
+        .unwrap_or("none")
 }
 
 pub(in crate::ui::view) fn tab_mouse_action_label(action: &str) -> &'static str {

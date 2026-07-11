@@ -1453,3 +1453,10 @@ service boundary first:
   `save_diagnostics_settings`.
 - Sync & Backup diagnostics section shares the same level/retention controls.
 
+## 2026-07-12 Interaction settings densify
+
+- Interaction tab sections match Tauri InteractionTab: clipboard/mouse,
+  nested command-suggestion min/max, keyboard, tab-mouse action chips (direct
+  set, not only cycle), and encoding.
+- Multi-open panels control moved to Appearance · Layout (Tauri Appearance).
+

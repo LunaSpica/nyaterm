@@ -18,7 +18,7 @@ use crate::ui::models::{
 };
 
 use super::super::{
-    NyaTermApp, TabMouseActionTarget, ai_active_profile_api_key, cloud_secret_display,
+    NyaTermApp, TAB_MOUSE_ACTIONS, TabMouseActionTarget, ai_active_profile_api_key, cloud_secret_display,
     cloud_sync_history_row, compact_id, compact_setting_state, configured_cloud_sync_provider,
     metric, none_if_blank, policy_button, setting_state, tab_mouse_action_label, transfer_input,
     truncate_preview,
