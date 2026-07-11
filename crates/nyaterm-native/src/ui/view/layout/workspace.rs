@@ -38,10 +38,33 @@ impl NyaTermApp {
                     .flex()
                     .items_center()
                     .gap_2()
+                    .relative()
                     .border_r_1()
-                    .border_color(rgb(self.theme_palette().border))
-                    .bg(rgb(self.theme_palette().surface))
-                    .child(div().size(px(8.)).rounded_full().bg(rgb(self.theme_palette().warning)))
+                    .border_color(rgb(palette.border))
+                    .bg(rgb(palette.surface))
+                    .child(
+                        // Active-connecting top accent (Tauri connecting spinner color → warning).
+                        div()
+                            .absolute()
+                            .top_0()
+                            .left_0()
+                            .right_0()
+                            .h(px(2.))
+                            .bg(rgb(palette.warning)),
+                    )
+                    .child(
+                        div()
+                            .size(px(14.))
+                            .flex()
+                            .items_center()
+                            .justify_center()
+                            .child(
+                                svg()
+                                    .size(px(12.))
+                                    .path("icons/conn/connect.svg")
+                                    .text_color(rgb(palette.warning)),
+                            ),
+                    )
                     .child(
                         div()
                             .min_w_0()
@@ -50,6 +73,12 @@ impl NyaTermApp {
                             .text_color(rgb(palette.text))
                             .overflow_hidden()
                             .child(format!("Connecting {pending_name}")),
+                    )
+                    .child(
+                        div()
+                            .text_size(px(10.))
+                            .text_color(rgb(palette.text_dimmed))
+                            .child("…"),
                     ),
             );
         }
