@@ -84,17 +84,24 @@ impl NyaTermApp {
                     .child(
                         div()
                             .min_w_0()
-                            .text_xs()
-                            .font_weight(FontWeight(700.))
-                            .text_color(rgb(palette.text))
-                            .overflow_hidden()
-                            .child(format!("Connecting {pending_name}")),
-                    )
-                    .child(
-                        div()
-                            .text_size(px(10.))
-                            .text_color(rgb(palette.text_dimmed))
-                            .child("…"),
+                            .flex_1()
+                            .flex()
+                            .flex_col()
+                            .gap_0()
+                            .child(
+                                div()
+                                    .text_xs()
+                                    .font_weight(FontWeight(700.))
+                                    .text_color(rgb(palette.text))
+                                    .overflow_hidden()
+                                    .child(truncate_preview(&pending_name, 22)),
+                            )
+                            .child(
+                                div()
+                                    .text_size(px(10.))
+                                    .text_color(rgb(palette.warning))
+                                    .child("Connecting…"),
+                            ),
                     ),
             );
         }
@@ -491,7 +498,11 @@ impl NyaTermApp {
         // Tauri TabBar trailing chrome: optional open-tabs overflow menu + new session menu.
         let open_tabs_menu = self.open_tabs_menu_open;
         let new_session_menu = self.new_session_menu_open;
-        let show_open_tabs_menu = session_count >= 4 || open_tabs_menu;
+        let tab_strip_has_overflow =
+            self.session_tab_strip_scroll.max_offset().width > px(0.);
+        // Tauri shows Open Tabs when the strip overflows; keep a small-count fallback.
+        let show_open_tabs_menu =
+            tab_strip_has_overflow || session_count >= 4 || open_tabs_menu;
 
         let mut session_actions = div()
             .h_full()

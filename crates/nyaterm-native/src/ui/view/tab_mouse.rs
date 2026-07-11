@@ -78,7 +78,7 @@ impl SessionTabTooltip {
 }
 
 impl Render for SessionTabTooltip {
-    fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let mut body = div()
             .flex()
             .flex_col()
@@ -91,12 +91,51 @@ impl Render for SessionTabTooltip {
                     .child(self.title.clone()),
             );
         for line in &self.lines {
-            body = body.child(
-                div()
-                    .text_size(px(11.))
-                    .text_color(rgb(0x8f98aa))
-                    .child(line.clone()),
-            );
+            let copyable = line_looks_copyable(line);
+            let copy_value = line.clone();
+            let row = div()
+                .flex()
+                .items_center()
+                .gap_2()
+                .min_w_0()
+                .child(
+                    div()
+                        .min_w_0()
+                        .flex_1()
+                        .text_size(px(11.))
+                        .text_color(rgb(0x8f98aa))
+                        .overflow_hidden()
+                        .child(line.clone()),
+                )
+                .when(copyable, |this| {
+                    this.child(
+                        div()
+                            .id(SharedString::from(format!(
+                                "tab-tooltip-copy-{}",
+                                copy_value.chars().take(24).collect::<String>()
+                            )))
+                            .size(px(18.))
+                            .flex_none()
+                            .flex()
+                            .items_center()
+                            .justify_center()
+                            .rounded_sm()
+                            .text_size(px(10.))
+                            .text_color(rgb(0x8f98aa))
+                            .hover(|style| {
+                                style.bg(rgb(0x334155)).text_color(rgb(0xe5edf7))
+                            })
+                            .cursor_pointer()
+                            .child("⧉")
+                            .on_click(cx.listener(move |_, _, _, cx| {
+                                cx.stop_propagation();
+                                cx.write_to_clipboard(ClipboardItem::new_string(
+                                    copy_value.clone(),
+                                ));
+                            })),
+                    )
+                });
+            body = body.child(row);
         }
         div()
             .px_3()
@@ -109,6 +148,18 @@ impl Render for SessionTabTooltip {
             .shadow_lg()
             .child(body)
     }
+}
+
+fn line_looks_copyable(line: &str) -> bool {
+    let trimmed = line.trim();
+    if trimmed.is_empty() {
+        return false;
+    }
+    if trimmed.starts_with("cwd ") || trimmed.starts_with("Disconnected") {
+        return false;
+    }
+    // host, endpoint labels, ssh -p user@host
+    true
 }
 
 #[derive(Debug, Clone, Copy)]

@@ -1355,3 +1355,11 @@ service boundary first:
   into view on activation (Tauri TabBar `scrollTabIntoView`).
 - Failed SSH/session starts show an ephemeral failed tab pill with danger accent,
   disconnect icon, truncated error, dismiss control, and tooltip (Tauri connectError).
+
+
+## 2026-07-11 Tab tooltip copy + connecting densify
+
+- Session tab tooltips expose copy buttons on endpoint/SSH lines (Tauri TabBar
+  host/ssh copy rows).
+- Connecting placeholder tab densified to name + "Connecting…" subtitle.
+- Open Tabs overflow menu also appears when the strip reports horizontal overflow.
