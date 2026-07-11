@@ -477,6 +477,9 @@ pub struct NyaTermApp {
     pub(in crate::ui::view) security_unlock_focus: FocusHandle,
     pub(in crate::ui::view) workspace_split: Option<WorkspaceSplitState>,
     pub(in crate::ui::view) workspace_split_resize: Option<WorkspaceSplitResizeState>,
+    /// Tauri-style multi-leaf tab window layout (optional; None = flat tab strip).
+    pub(in crate::ui::view) terminal_windows: Option<TerminalWindowNode>,
+    pub(in crate::ui::view) focused_terminal_window_leaf_id: Option<String>,
     pub(in crate::ui::view) is_locked: bool,
     pub(in crate::ui::view) last_user_activity_at: Instant,
 }
@@ -1155,6 +1158,8 @@ impl NyaTermApp {
             security_unlock_focus: cx.focus_handle(),
             workspace_split: None,
             workspace_split_resize: None,
+            terminal_windows: None,
+            focused_terminal_window_leaf_id: None,
             is_locked: false,
             last_user_activity_at: Instant::now(),
         }

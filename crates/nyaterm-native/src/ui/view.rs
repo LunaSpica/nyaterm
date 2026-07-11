@@ -45,6 +45,7 @@ mod session_state;
 mod settings_runtime;
 mod sync_input;
 mod tab_mouse;
+mod tab_windows_runtime;
 mod temporary_ssh_link;
 mod terminal_runtime;
 mod terminal_search_runtime;

@@ -105,7 +105,7 @@ pub(super) use super::super::models::{
     TransferMoveState, TransferNewFileState, TransferNewFolderState, TransferNewSymlinkState,
     TransferPathPromptKind, TransferPathPromptResult, TransferPropertiesState, TransferRenameState,
     TransferUnknownFileState, TranslateInputField, TranslationSecretDraft, WorkspaceSplitDirection,
-    WorkspacePaneNode, WorkspaceSplitResizeState, WorkspaceSplitState, is_multi_line_paste, normalize_paste_newlines,
+    WorkspacePaneNode, WorkspaceSplitResizeState, WorkspaceSplitState, TerminalWindowNode, SplitEdge, is_multi_line_paste, normalize_paste_newlines,
 };
 pub(super) use super::super::send_command::{
     SendCommandDataType, SendCommandTarget, SendCommandLineEnding, SendCommandMode, bottom_send_field,

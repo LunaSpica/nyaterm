@@ -30,6 +30,7 @@ impl NyaTermApp {
             .position(|session| session.id == session_id)
             .is_some_and(|index| index + 1 < sessions.len());
         let can_unsplit = self.workspace_split.is_some();
+        let can_merge_windows = self.terminal_windows_is_multi_leaf();
         let visible_for_ai = terminal_action_prompt_text(
             &self
                 .terminal_views
@@ -60,6 +61,7 @@ impl NyaTermApp {
                 can_close_inactive,
                 can_close_right,
                 can_unsplit,
+                can_merge_windows,
                 visible_for_ai,
                 buffer_for_ai,
                 sessions.len(),
@@ -78,6 +80,7 @@ impl NyaTermApp {
             can_close_inactive,
             can_close_right,
             can_unsplit,
+            can_merge_windows,
             visible_for_ai,
             buffer_for_ai,
             sessions.len(),
@@ -97,6 +100,7 @@ impl NyaTermApp {
         can_close_inactive: bool,
         can_close_right: bool,
         can_unsplit: bool,
+        can_merge_windows: bool,
         visible_for_ai: String,
         buffer_for_ai: String,
         _session_count: usize,
@@ -165,6 +169,8 @@ impl NyaTermApp {
         let multiplex_startup_session_id = session_id.clone();
         let split_horizontal_session_id = session_id.clone();
         let split_vertical_session_id = session_id.clone();
+        let window_leaf_right_session_id = session_id.clone();
+        let window_leaf_below_session_id = session_id.clone();
         let reconnect_session_id = session_id.clone();
         let info_session_id = session_id.clone();
         let close_session_id = session_id.clone();
@@ -435,6 +441,45 @@ impl NyaTermApp {
                             }),
                         ))
                     })
+                    .child(tab_menu_item(
+                        palette,
+                        "tab-ctx-window-right",
+                        "New Window Right",
+                        cx.listener(move |this, _, _, cx| {
+                            this.select_session(window_leaf_right_session_id.clone(), cx);
+                            this.close_tab_actions(cx);
+                            this.split_active_tab_to_new_window_leaf(
+                                WorkspaceSplitDirection::Vertical,
+                                SplitEdge::After,
+                                cx,
+                            );
+                        }),
+                    ))
+                    .child(tab_menu_item(
+                        palette,
+                        "tab-ctx-window-below",
+                        "New Window Below",
+                        cx.listener(move |this, _, _, cx| {
+                            this.select_session(window_leaf_below_session_id.clone(), cx);
+                            this.close_tab_actions(cx);
+                            this.split_active_tab_to_new_window_leaf(
+                                WorkspaceSplitDirection::Horizontal,
+                                SplitEdge::After,
+                                cx,
+                            );
+                        }),
+                    ))
+                    .when(can_merge_windows, |this| {
+                        this.child(tab_menu_item(
+                            palette,
+                            "tab-ctx-window-flat",
+                            "Merge Windows",
+                            cx.listener(|this, _, _, cx| {
+                                this.close_tab_actions(cx);
+                                this.close_terminal_window_layout(cx);
+                            }),
+                        ))
+                    })
                     .child(tab_menu_separator(palette))
                     .child(tab_menu_item(
                         palette,
@@ -500,6 +545,7 @@ impl NyaTermApp {
         can_close_inactive: bool,
         can_close_right: bool,
         can_unsplit: bool,
+        can_merge_windows: bool,
         visible_for_ai: String,
         buffer_for_ai: String,
         session_count: usize,
@@ -543,6 +589,8 @@ impl NyaTermApp {
         let multiplex_startup_session_id = session_id.clone();
         let split_horizontal_session_id = session_id.clone();
         let split_vertical_session_id = session_id.clone();
+        let window_leaf_right_session_id = session_id.clone();
+        let window_leaf_below_session_id = session_id.clone();
         let reconnect_session_id = session_id.clone();
         let info_session_id = session_id.clone();
         let close_session_id = session_id.clone();
@@ -852,6 +900,48 @@ impl NyaTermApp {
                                     );
                                 }),
                             ))
+                            .child(tab_action_button(
+                                palette,
+                                "tab-actions-window-right",
+                                "Window Right",
+                                "Detach to leaf",
+                                cx.listener(move |this, _, _, cx| {
+                                    this.select_session(window_leaf_right_session_id.clone(), cx);
+                                    this.close_tab_actions(cx);
+                                    this.split_active_tab_to_new_window_leaf(
+                                        WorkspaceSplitDirection::Vertical,
+                                        SplitEdge::After,
+                                        cx,
+                                    );
+                                }),
+                            ))
+                            .child(tab_action_button(
+                                palette,
+                                "tab-actions-window-below",
+                                "Window Below",
+                                "Detach to leaf",
+                                cx.listener(move |this, _, _, cx| {
+                                    this.select_session(window_leaf_below_session_id.clone(), cx);
+                                    this.close_tab_actions(cx);
+                                    this.split_active_tab_to_new_window_leaf(
+                                        WorkspaceSplitDirection::Horizontal,
+                                        SplitEdge::After,
+                                        cx,
+                                    );
+                                }),
+                            ))
+                            .when(can_merge_windows, |this| {
+                                this.child(tab_action_button(
+                                    palette,
+                                    "tab-actions-window-merge",
+                                    "Merge Windows",
+                                    "Flat tab strip",
+                                    cx.listener(|this, _, _, cx| {
+                                        this.close_tab_actions(cx);
+                                        this.close_terminal_window_layout(cx);
+                                    }),
+                                ))
+                            })
                             .child(tab_action_button(
                                 palette,
                                 "tab-actions-reconnect",

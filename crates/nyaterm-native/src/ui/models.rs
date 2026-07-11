@@ -1811,6 +1811,327 @@ pub(super) struct WorkspaceSplitResizeState {
     pub(super) container_size: f32,
 }
 
+/// In-window multi-leaf tab groups (Tauri `TerminalWindowNode` / TabWindowsWorkspace).
+/// Distinct from per-tab pane splits (`WorkspacePaneNode`).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(super) enum TerminalWindowNode {
+    Leaf {
+        id: String,
+        tab_ids: Vec<String>,
+        active_tab_id: Option<String>,
+    },
+    Split {
+        id: String,
+        direction: WorkspaceSplitDirection,
+        ratio_percent: u8,
+        first: Box<TerminalWindowNode>,
+        second: Box<TerminalWindowNode>,
+    },
+}
+
+impl TerminalWindowNode {
+    pub(super) fn leaf(tab_ids: Vec<String>, active_tab_id: Option<String>) -> Self {
+        let tab_ids = Self::unique_tabs(tab_ids);
+        let active_tab_id = active_tab_id
+            .filter(|id| tab_ids.iter().any(|tab| tab == id))
+            .or_else(|| tab_ids.first().cloned());
+        Self::Leaf {
+            id: format!("tw-leaf-{}", uuid_v4_like()),
+            tab_ids,
+            active_tab_id,
+        }
+    }
+
+    pub(super) fn collect_tab_ids(&self) -> Vec<String> {
+        let mut out = Vec::new();
+        self.collect_tab_ids_into(&mut out);
+        out
+    }
+
+    fn collect_tab_ids_into(&self, out: &mut Vec<String>) {
+        match self {
+            Self::Leaf { tab_ids, .. } => out.extend(tab_ids.iter().cloned()),
+            Self::Split { first, second, .. } => {
+                first.collect_tab_ids_into(out);
+                second.collect_tab_ids_into(out);
+            }
+        }
+    }
+
+    pub(super) fn contains_tab(&self, tab_id: &str) -> bool {
+        match self {
+            Self::Leaf { tab_ids, .. } => tab_ids.iter().any(|id| id == tab_id),
+            Self::Split { first, second, .. } => {
+                first.contains_tab(tab_id) || second.contains_tab(tab_id)
+            }
+        }
+    }
+
+    pub(super) fn active_tabs(&self) -> Vec<String> {
+        let mut out = Vec::new();
+        self.collect_active_tabs(&mut out);
+        out
+    }
+
+    fn collect_active_tabs(&self, out: &mut Vec<String>) {
+        match self {
+            Self::Leaf { active_tab_id, .. } => {
+                if let Some(id) = active_tab_id {
+                    out.push(id.clone());
+                }
+            }
+            Self::Split { first, second, .. } => {
+                first.collect_active_tabs(out);
+                second.collect_active_tabs(out);
+            }
+        }
+    }
+
+    pub(super) fn set_active_tab(&mut self, tab_id: &str) -> bool {
+        match self {
+            Self::Leaf {
+                tab_ids,
+                active_tab_id,
+                ..
+            } => {
+                if tab_ids.iter().any(|id| id == tab_id) {
+                    *active_tab_id = Some(tab_id.to_string());
+                    true
+                } else {
+                    false
+                }
+            }
+            Self::Split { first, second, .. } => {
+                first.set_active_tab(tab_id) || second.set_active_tab(tab_id)
+            }
+        }
+    }
+
+    pub(super) fn ensure_tab(&mut self, tab_id: &str, preferred_leaf: Option<&str>) {
+        if self.contains_tab(tab_id) {
+            return;
+        }
+        if let Some(leaf_id) = preferred_leaf {
+            if self.insert_tab_into_leaf(leaf_id, tab_id) {
+                return;
+            }
+        }
+        // Default: first leaf.
+        self.insert_tab_into_first_leaf(tab_id);
+    }
+
+    fn insert_tab_into_first_leaf(&mut self, tab_id: &str) {
+        match self {
+            Self::Leaf {
+                tab_ids,
+                active_tab_id,
+                ..
+            } => {
+                if !tab_ids.iter().any(|id| id == tab_id) {
+                    tab_ids.push(tab_id.to_string());
+                }
+                if active_tab_id.is_none() {
+                    *active_tab_id = Some(tab_id.to_string());
+                }
+            }
+            Self::Split { first, .. } => first.insert_tab_into_first_leaf(tab_id),
+        }
+    }
+
+    fn insert_tab_into_leaf(&mut self, leaf_id: &str, tab_id: &str) -> bool {
+        match self {
+            Self::Leaf {
+                id,
+                tab_ids,
+                active_tab_id,
+            } => {
+                if id != leaf_id {
+                    return false;
+                }
+                if !tab_ids.iter().any(|id| id == tab_id) {
+                    tab_ids.push(tab_id.to_string());
+                }
+                *active_tab_id = Some(tab_id.to_string());
+                true
+            }
+            Self::Split { first, second, .. } => {
+                first.insert_tab_into_leaf(leaf_id, tab_id)
+                    || second.insert_tab_into_leaf(leaf_id, tab_id)
+            }
+        }
+    }
+
+    pub(super) fn remove_tab(&mut self, tab_id: &str) -> Option<Self> {
+        match self {
+            Self::Leaf {
+                tab_ids,
+                active_tab_id,
+                id,
+            } => {
+                if !tab_ids.iter().any(|id| id == tab_id) {
+                    return Some(Self::Leaf {
+                        id: id.clone(),
+                        tab_ids: tab_ids.clone(),
+                        active_tab_id: active_tab_id.clone(),
+                    });
+                }
+                tab_ids.retain(|id| id != tab_id);
+                if active_tab_id.as_deref() == Some(tab_id) {
+                    *active_tab_id = tab_ids.first().cloned();
+                }
+                if tab_ids.is_empty() {
+                    None
+                } else {
+                    Some(Self::Leaf {
+                        id: id.clone(),
+                        tab_ids: tab_ids.clone(),
+                        active_tab_id: active_tab_id.clone(),
+                    })
+                }
+            }
+            Self::Split {
+                id,
+                direction,
+                ratio_percent,
+                first,
+                second,
+            } => {
+                let next_first = first.remove_tab(tab_id);
+                let next_second = second.remove_tab(tab_id);
+                match (next_first, next_second) {
+                    (Some(a), Some(b)) => Some(Self::Split {
+                        id: id.clone(),
+                        direction: *direction,
+                        ratio_percent: *ratio_percent,
+                        first: Box::new(a),
+                        second: Box::new(b),
+                    }),
+                    (Some(only), None) | (None, Some(only)) => Some(only),
+                    (None, None) => None,
+                }
+            }
+        }
+    }
+
+    /// Detach `tab_id` into a new leaf split beside its current leaf.
+    pub(super) fn split_tab_to_edge(
+        &mut self,
+        tab_id: &str,
+        direction: WorkspaceSplitDirection,
+        edge: SplitEdge,
+    ) -> bool {
+        match self {
+            Self::Leaf {
+                id,
+                tab_ids,
+                active_tab_id,
+            } => {
+                if tab_ids.len() < 2 || !tab_ids.iter().any(|id| id == tab_id) {
+                    return false;
+                }
+                tab_ids.retain(|id| id != tab_id);
+                if active_tab_id.as_deref() == Some(tab_id) {
+                    *active_tab_id = tab_ids.first().cloned();
+                }
+                let remaining = Self::Leaf {
+                    id: id.clone(),
+                    tab_ids: tab_ids.clone(),
+                    active_tab_id: active_tab_id.clone(),
+                };
+                let detached = Self::leaf(vec![tab_id.to_string()], Some(tab_id.to_string()));
+                let (first, second) = match edge {
+                    SplitEdge::Before => (detached, remaining),
+                    SplitEdge::After => (remaining, detached),
+                };
+                *self = Self::Split {
+                    id: format!("tw-split-{}", uuid_v4_like()),
+                    direction,
+                    ratio_percent: WorkspacePaneNode::DEFAULT_RATIO_PERCENT,
+                    first: Box::new(first),
+                    second: Box::new(second),
+                };
+                true
+            }
+            Self::Split { first, second, .. } => {
+                first.split_tab_to_edge(tab_id, direction, edge)
+                    || second.split_tab_to_edge(tab_id, direction, edge)
+            }
+        }
+    }
+
+    pub(super) fn move_tab_to_leaf(&mut self, tab_id: &str, target_leaf_id: &str) -> bool {
+        if !self.contains_tab(tab_id) {
+            return false;
+        }
+        // Already on target leaf.
+        if let Self::Leaf { id, tab_ids, .. } = self {
+            if id == target_leaf_id {
+                return tab_ids.iter().any(|id| id == tab_id);
+            }
+        }
+        let Some(removed) = self.remove_tab(tab_id) else {
+            return false;
+        };
+        *self = removed;
+        if self.insert_tab_into_leaf(target_leaf_id, tab_id) {
+            true
+        } else {
+            // Target gone; put back on first leaf.
+            self.insert_tab_into_first_leaf(tab_id);
+            false
+        }
+    }
+
+    pub(super) fn first_leaf_id(&self) -> Option<String> {
+        match self {
+            Self::Leaf { id, .. } => Some(id.clone()),
+            Self::Split { first, .. } => first.first_leaf_id(),
+        }
+    }
+
+    pub(super) fn leaf_ids(&self) -> Vec<String> {
+        let mut out = Vec::new();
+        self.collect_leaf_ids(&mut out);
+        out
+    }
+
+    fn collect_leaf_ids(&self, out: &mut Vec<String>) {
+        match self {
+            Self::Leaf { id, .. } => out.push(id.clone()),
+            Self::Split { first, second, .. } => {
+                first.collect_leaf_ids(out);
+                second.collect_leaf_ids(out);
+            }
+        }
+    }
+
+    fn unique_tabs(tab_ids: Vec<String>) -> Vec<String> {
+        let mut seen = HashSet::new();
+        let mut out = Vec::new();
+        for id in tab_ids {
+            if seen.insert(id.clone()) {
+                out.push(id);
+            }
+        }
+        out
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum SplitEdge {
+    Before,
+    After,
+}
+
+fn uuid_v4_like() -> String {
+    use std::time::{SystemTime, UNIX_EPOCH};
+    let nanos = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_nanos())
+        .unwrap_or(0);
+    format!("{nanos:x}")
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) enum RightFocus {
     Default,
@@ -2820,4 +3141,70 @@ pub(super) enum QuickCommandImportPathPromptResult {
     Cancelled,
     Failed(String),
     Closed,
+}
+
+#[cfg(test)]
+mod terminal_window_tests {
+    use super::{SplitEdge, TerminalWindowNode, WorkspaceSplitDirection};
+
+    #[test]
+    fn split_tab_creates_two_leaves() {
+        let mut root = TerminalWindowNode::leaf(
+            vec!["a".into(), "b".into(), "c".into()],
+            Some("a".into()),
+        );
+        assert!(root.split_tab_to_edge(
+            "b",
+            WorkspaceSplitDirection::Vertical,
+            SplitEdge::After,
+        ));
+        assert!(matches!(root, TerminalWindowNode::Split { .. }));
+        let tabs = root.collect_tab_ids();
+        assert_eq!(tabs.len(), 3);
+        assert!(root.contains_tab("b"));
+        assert!(root.set_active_tab("b"));
+    }
+
+    #[test]
+    fn remove_tab_collapses_empty_leaf() {
+        let mut root = TerminalWindowNode::leaf(vec!["a".into(), "b".into()], Some("a".into()));
+        assert!(root.split_tab_to_edge(
+            "b",
+            WorkspaceSplitDirection::Horizontal,
+            SplitEdge::Before,
+        ));
+        let next = root.remove_tab("b").expect("remaining leaf");
+        assert!(matches!(next, TerminalWindowNode::Leaf { .. }));
+        assert_eq!(next.collect_tab_ids(), vec!["a".to_string()]);
+    }
+
+    #[test]
+    fn move_tab_to_other_leaf() {
+        let mut root = TerminalWindowNode::leaf(vec!["a".into(), "b".into()], Some("a".into()));
+        assert!(root.split_tab_to_edge(
+            "b",
+            WorkspaceSplitDirection::Vertical,
+            SplitEdge::After,
+        ));
+        let leaves = root.leaf_ids();
+        assert_eq!(leaves.len(), 2);
+        // move a into b's leaf
+        let target = leaves
+            .into_iter()
+            .find(|id| {
+                // leaf containing b
+                match &root {
+                    TerminalWindowNode::Split { first, second, .. } => {
+                        matches!(first.as_ref(), TerminalWindowNode::Leaf { id: lid, tab_ids, .. } if lid == id && tab_ids.iter().any(|t| t == "b"))
+                            || matches!(second.as_ref(), TerminalWindowNode::Leaf { id: lid, tab_ids, .. } if lid == id && tab_ids.iter().any(|t| t == "b"))
+                    }
+                    _ => false,
+                }
+            })
+            .expect("target leaf");
+        assert!(root.move_tab_to_leaf("a", &target));
+        // after move, single leaf should remain if other empty collapsed via remove_tab path
+        let tabs = root.collect_tab_ids();
+        assert!(tabs.contains(&"a".to_string()) && tabs.contains(&"b".to_string()));
+    }
 }

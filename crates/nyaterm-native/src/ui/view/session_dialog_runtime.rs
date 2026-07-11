@@ -237,6 +237,7 @@ impl NyaTermApp {
         self.session_command_history.remove(session_id);
         self.transfer_browser_session_cache.remove(session_id);
         self.purge_session_from_sync_groups(session_id);
+        self.reconcile_terminal_windows();
         if let Some(multiplex_key) = multiplex_key {
             let still_in_use = self
                 .session_metadata

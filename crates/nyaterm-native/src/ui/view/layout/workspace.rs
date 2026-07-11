@@ -314,7 +314,38 @@ impl NyaTermApp {
                             cx,
                         );
                     }),
+                ))
+                .child(small_button(palette,
+                    "workspace-window-right",
+                    "W|",
+                    cx.listener(|this, _, _, cx| {
+                        this.split_active_tab_to_new_window_leaf(
+                            WorkspaceSplitDirection::Vertical,
+                            SplitEdge::After,
+                            cx,
+                        );
+                    }),
+                ))
+                .child(small_button(palette,
+                    "workspace-window-below",
+                    "W—",
+                    cx.listener(|this, _, _, cx| {
+                        this.split_active_tab_to_new_window_leaf(
+                            WorkspaceSplitDirection::Horizontal,
+                            SplitEdge::After,
+                            cx,
+                        );
+                    }),
                 ));
+        }
+        if self.terminal_windows_is_multi_leaf() {
+            session_actions = session_actions.child(small_button(palette,
+                "workspace-window-merge",
+                "Merge",
+                cx.listener(|this, _, _, cx| {
+                    this.close_terminal_window_layout(cx);
+                }),
+            ));
         }
         if self.workspace_split.is_some() {
             session_actions = session_actions

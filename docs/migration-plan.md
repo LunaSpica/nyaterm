@@ -1230,3 +1230,13 @@ service boundary first:
 - CSI `S`/`T` scroll the region; CSI `L`/`M` insert/delete lines within the region.
 - ESC `D`/`E`/`M` and C1 IND/NEL/RI drive index/reverse-index; ESC `7`/`8`/`c`
   cover DECSC/DECRC and RIS for tracked state.
+
+## 2026-07-11 In-window Tab Windows multi-leaf layout
+
+- Added `TerminalWindowNode` (leaf/split) modeling Tauri `tabWindows` multi-leaf tab
+  groups, separate from per-session `WorkspacePaneNode` pane splits.
+- Tab actions and workspace toolbar: **New Window Right/Below** detaches the active
+  tab into a new leaf (requires ≥2 tabs in the source leaf); **Merge Windows**
+  restores the flat global tab strip.
+- Multi-leaf mode renders each leaf with its own mini tab strip + terminal canvas;
+  the global strip is hidden while multi-leaf is active.

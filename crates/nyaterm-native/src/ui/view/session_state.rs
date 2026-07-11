@@ -249,6 +249,7 @@ impl NyaTermApp {
             self.terminal_output.clear();
             self.terminal_screen.clear();
         }
+        self.sync_terminal_windows_active_tab(session_id);
     }
 
     pub(in crate::ui::view) fn select_session(
