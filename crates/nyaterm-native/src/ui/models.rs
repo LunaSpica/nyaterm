@@ -1043,6 +1043,14 @@ pub(super) struct ConnectionContextMenuState {
 }
 
 #[derive(Debug, Clone, PartialEq)]
+pub(super) struct TerminalContextMenuState {
+    pub(super) x: Pixels,
+    pub(super) y: Pixels,
+    /// Snapshot of selected text when the menu opened (Tauri caches selection).
+    pub(super) selected_text: String,
+}
+
+#[derive(Debug, Clone, PartialEq)]
 pub(super) struct ConnectionGroupContextMenuState {
     pub(super) group_id: String,
     pub(super) x: Pixels,

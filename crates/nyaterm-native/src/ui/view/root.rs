@@ -207,6 +207,9 @@ impl Render for NyaTermApp {
             .when(self.terminal_actions_open, |this| {
                 this.child(self.terminal_actions_overlay(cx))
             })
+            .when(self.terminal_context_menu.is_some(), |this| {
+                this.child(self.terminal_context_menu_overlay(cx))
+            })
             .when(self.sync_groups_open, |this| {
                 this.child(self.sync_groups_overlay(cx))
             })

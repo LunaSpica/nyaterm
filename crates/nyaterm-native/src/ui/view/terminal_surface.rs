@@ -275,7 +275,24 @@ impl NyaTermApp {
                                     cx.listener(move |this, event: &gpui::MouseDownEvent, window, cx| {
                                         this.activate_workspace_pane(session_id.clone(), cx);
                                         window.focus(&this.terminal_focus);
+                                        this.close_terminal_context_menu(cx);
                                         this.start_terminal_selection(event, cx);
+                                        cx.stop_propagation();
+                                    })
+                                },
+                            )
+                            .on_mouse_down(
+                                MouseButton::Right,
+                                {
+                                    let session_id = output_session_id.clone();
+                                    cx.listener(move |this, event: &gpui::MouseDownEvent, window, cx| {
+                                        this.activate_workspace_pane(session_id.clone(), cx);
+                                        window.focus(&this.terminal_focus);
+                                        if this.settings.interaction_right_click_paste {
+                                            this.paste_from_clipboard(window, cx);
+                                        } else {
+                                            this.open_terminal_context_menu(event, cx);
+                                        }
                                         cx.stop_propagation();
                                     })
                                 },
@@ -285,11 +302,7 @@ impl NyaTermApp {
                                 cx.listener(move |this, event: &ClickEvent, window, cx| {
                                 this.activate_workspace_pane(session_id.clone(), cx);
                                 if event.is_right_click() {
-                                    if this.settings.interaction_right_click_paste {
-                                        this.paste_from_clipboard(window, cx);
-                                    } else {
-                                        this.open_terminal_actions(window, cx);
-                                    }
+                                    // Right-click is handled on mouse_down for Tauri-like context menu.
                                     cx.stop_propagation();
                                     return;
                                 }

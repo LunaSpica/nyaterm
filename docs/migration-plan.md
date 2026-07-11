@@ -931,3 +931,10 @@ service boundary first:
 - `CellStyle` stores `fg_rgb` / `bg_rgb` (CSI 38/48;2) and `underline` (CSI 4/24).
 - 256-color indices beyond 15 are approximated to the 16-color ANSI set.
 - GPUI paints underline via `.underline()` on span elements; reverse video swaps truecolor/index pairs.
+
+## Terminal context menu (native)
+
+- Right-click on the terminal surface opens an anchored context menu (Tauri TerminalContextMenu).
+- When `interaction_right_click_paste` is enabled, right-click pastes instead of opening the menu.
+- Selection-aware items: Copy, Find (prefill), Translate, Ask AI, Paste Selected.
+- Always available: Paste, Find, Clear Screen, Clear All, Select All, More Actions.
