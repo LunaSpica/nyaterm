@@ -694,3 +694,8 @@ service boundary first:
 - Process list: spacer virtual window + `on_scroll_wheel` updates `process_list_offset` (no native overflow alone).
 - Docker containers: same pattern with `docker_list_offset`, search resets offset; row range footer.
 - Hex Command Send: per-line 4-byte guide marks (`send_command_hex_guide_rows`) like Tauri `buildHexGuideRows`.
+
+## 2026-07-11 File Explorer virtual list + process expanded height
+- File Explorer: 30px-row spacer virtual window + wheel offset (`transfer_browser_list_offset`); search/sort/path reset.
+- Process: spacer padding accounts for expanded details height when selected.
+- Command History: dense rows with inline Run (right-click still runs).

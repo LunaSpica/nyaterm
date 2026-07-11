@@ -20,10 +20,19 @@ impl NyaTermApp {
             self.process_sort_direction,
         );
 
-        // Tauri-like virtual list: fixed row height, overscan window, spacer padding.
+        // Tauri-like virtual list: base row + expanded details height, spacer padding.
         const PROCESS_ROW_PX: f32 = 38.;
+        const PROCESS_DETAILS_PX: f32 = 120.; // dense details strip approx (Tauri uses 176)
         const PROCESS_VIEWPORT_ROWS: usize = 28;
         const PROCESS_OVERSCAN: usize = 8;
+        let selected_pid = self.process_selected_pid;
+        let row_height = |process: &RemoteProcess| -> f32 {
+            if selected_pid == Some(process.pid) {
+                PROCESS_ROW_PX + PROCESS_DETAILS_PX
+            } else {
+                PROCESS_ROW_PX
+            }
+        };
         let total_filtered = filtered_processes.len();
         let window_capacity = PROCESS_VIEWPORT_ROWS + PROCESS_OVERSCAN * 2;
         let max_offset = total_filtered.saturating_sub(PROCESS_VIEWPORT_ROWS.min(total_filtered));
@@ -37,8 +46,16 @@ impl NyaTermApp {
             .get(window_start..window_end)
             .unwrap_or(&[])
             .to_vec();
-        let pad_top = (window_start as f32) * PROCESS_ROW_PX;
-        let pad_bottom = ((total_filtered.saturating_sub(window_end)) as f32) * PROCESS_ROW_PX;
+        let pad_top = filtered_processes
+            .iter()
+            .take(window_start)
+            .map(row_height)
+            .sum::<f32>();
+        let pad_bottom = filtered_processes
+            .iter()
+            .skip(window_end)
+            .map(row_height)
+            .sum::<f32>();
 
         let top_cpu = self
             .processes

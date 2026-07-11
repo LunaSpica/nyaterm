@@ -6,7 +6,7 @@ impl NyaTermApp {
         can_transfer: bool,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
-        let selected = self
+        let _selected = self
             .transfer_selected_remote_path
             .as_deref()
             .map(|path| truncate_preview(path, 56))
@@ -117,7 +117,30 @@ impl NyaTermApp {
                     .child("No remote entries match the current search."),
             );
         } else {
-            for entry in visible_entries.into_iter() {
+            // Tauri File Explorer virtual list (30px rows, overscan, spacer padding).
+            const FILE_ROW_PX: f32 = 30.;
+            const FILE_VIEWPORT_ROWS: usize = 36;
+            const FILE_OVERSCAN: usize = 8;
+            let total_entries = visible_entries.len();
+            let window_capacity = FILE_VIEWPORT_ROWS + FILE_OVERSCAN * 2;
+            let max_offset = total_entries.saturating_sub(FILE_VIEWPORT_ROWS.min(total_entries));
+            if self.transfer_browser_list_offset > max_offset {
+                self.transfer_browser_list_offset = max_offset;
+            }
+            let scroll_row = self.transfer_browser_list_offset.min(max_offset);
+            let window_start = scroll_row.saturating_sub(FILE_OVERSCAN);
+            let window_end = (window_start + window_capacity).min(total_entries);
+            let pad_top = (window_start as f32) * FILE_ROW_PX;
+            let pad_bottom = ((total_entries.saturating_sub(window_end)) as f32) * FILE_ROW_PX;
+            if pad_top > 0. {
+                rows = rows.child(div().h(px(pad_top)).w_full().flex_none());
+            }
+            for entry in visible_entries
+                .get(window_start..window_end)
+                .unwrap_or(&[])
+                .iter()
+                .cloned()
+            {
                 let ai_actions = self.enabled_transfer_file_ai_actions_for_entry(&entry);
                 rows = rows.child(transfer_browser_entry_row(
                     entry,
@@ -129,6 +152,9 @@ impl NyaTermApp {
                     ai_actions,
                     cx,
                 ));
+            }
+            if pad_bottom > 0. {
+                rows = rows.child(div().h(px(pad_bottom)).w_full().flex_none());
             }
         }
 
@@ -305,6 +331,7 @@ impl NyaTermApp {
                                                         "file search closed".to_string();
                                                 } else {
                                                     this.transfer_browser_search.clear();
+                                                    this.transfer_browser_list_offset = 0;
                                                     this.transfer_browser_status =
                                                         "file search cleared".to_string();
                                                 }
@@ -322,8 +349,31 @@ impl NyaTermApp {
                     .flex_1()
                     .min_h_0()
                     .min_w_0()
-                    .overflow_scroll()
+                    .overflow_x_scroll()
+                    .overflow_y_hidden()
                     .scrollbar_width(px(8.))
+                    .on_scroll_wheel(cx.listener(|this, event: &ScrollWheelEvent, _, cx| {
+                        const FILE_ROW_PX: f32 = 30.;
+                        const FILE_VIEWPORT_ROWS: usize = 36;
+                        let total = this.visible_transfer_browser_entries().len();
+                        let max_offset =
+                            total.saturating_sub(FILE_VIEWPORT_ROWS.min(total));
+                        if max_offset == 0 {
+                            return;
+                        }
+                        let delta_rows = match event.delta {
+                            ScrollDelta::Lines(delta) => delta.y,
+                            ScrollDelta::Pixels(delta) => f32::from(delta.y) / FILE_ROW_PX,
+                        };
+                        let next = (this.transfer_browser_list_offset as f32 - delta_rows)
+                            .round()
+                            .clamp(0., max_offset as f32) as usize;
+                        if next != this.transfer_browser_list_offset {
+                            this.transfer_browser_list_offset = next;
+                            cx.stop_propagation();
+                            cx.notify();
+                        }
+                    }))
                     .on_mouse_down(
                         MouseButton::Right,
                         cx.listener(|this, event: &MouseDownEvent, window, cx| {

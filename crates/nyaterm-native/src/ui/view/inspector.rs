@@ -703,8 +703,8 @@ impl NyaTermApp {
                         .cursor_pointer()
                         .hover(|this| this.bg(rgb(0x1c2128)))
                         .on_click(cx.listener(move |this, _, _, cx| {
-                            // Single click inserts; double-click not separate in GPUI easily —
-                            // keep insert on click and Run via trailing action.
+                            // Tauri single-click is not used; double-click runs.
+                            // GPUI: primary click inserts into terminal draft, Run button sends.
                             this.insert_history_command(insert_index, cx);
                         }))
                         .child(
@@ -723,8 +723,25 @@ impl NyaTermApp {
                                 .overflow_hidden()
                                 .child(truncate_preview(&command, 120)),
                         )
-                        // Tauri: double-click runs; GPUI maps primary click to insert.
-                        // Keep a discreet run action on secondary area without glyph noise.
+                        .child(
+                            div()
+                                .id(SharedString::from(format!("command-history-run-{index}")))
+                                .flex_none()
+                                .px_1()
+                                .h(px(20.))
+                                .rounded_sm()
+                                .text_size(px(10.))
+                                .text_color(rgb(0x8b949e))
+                                .hover(|this| {
+                                    this.bg(rgb(0x21262d)).text_color(rgb(0x58a6ff))
+                                })
+                                .cursor_pointer()
+                                .on_click(cx.listener(move |this, _, _, cx| {
+                                    cx.stop_propagation();
+                                    this.run_history_command(run_index, cx);
+                                }))
+                                .child("Run"),
+                        )
                         .on_mouse_down(
                             MouseButton::Right,
                             cx.listener(move |this, _, _, cx| {

@@ -118,6 +118,7 @@ impl NyaTermApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        self.transfer_browser_list_offset = 0;
         self.transfer_remote_path = path.clone();
         self.transfer_browser_path = path.clone();
         self.transfer_browser_path_draft.clear();

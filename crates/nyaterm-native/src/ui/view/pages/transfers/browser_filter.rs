@@ -33,6 +33,7 @@ impl NyaTermApp {
             self.transfer_browser_sort_column = column;
             self.transfer_browser_sort_direction = column.default_direction();
         }
+        self.transfer_browser_list_offset = 0;
         self.transfer_browser_status = format!(
             "sorted by {} {}",
             self.transfer_browser_sort_column.label().to_lowercase(),
@@ -55,6 +56,7 @@ impl NyaTermApp {
         match keystroke.key.as_str() {
             "backspace" => {
                 self.transfer_browser_search.pop();
+                self.transfer_browser_list_offset = 0;
                 self.transfer_browser_status = transfer_browser_search_status(
                     self.transfer_browser_search.as_str(),
                     self.visible_transfer_browser_entries().len(),
@@ -68,6 +70,7 @@ impl NyaTermApp {
                     self.transfer_browser_status = "file search closed".to_string();
                 } else {
                     self.transfer_browser_search.clear();
+                    self.transfer_browser_list_offset = 0;
                     self.transfer_browser_status = "file search cleared".to_string();
                 }
                 cx.notify();
@@ -79,6 +82,7 @@ impl NyaTermApp {
                     .filter(|input| !input.is_empty())
                 {
                     self.transfer_browser_search.push_str(input);
+                    self.transfer_browser_list_offset = 0;
                     self.transfer_browser_status = transfer_browser_search_status(
                         self.transfer_browser_search.as_str(),
                         self.visible_transfer_browser_entries().len(),
