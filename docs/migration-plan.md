@@ -1378,3 +1378,9 @@ service boundary first:
   (Tauri openTabsMenuItems reverse).
 - Status bar Session chip uses warning while connecting and danger when
   disconnected or last connect failed.
+
+
+## 2026-07-11 Empty workspace connect banners
+
+- Empty terminal area shows connecting / failed-start banners above the shortcut
+  action grid so failed SSH starts remain visible without an active tab.
