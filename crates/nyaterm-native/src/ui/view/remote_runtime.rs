@@ -15,6 +15,8 @@ impl NyaTermApp {
             return;
         }
         self.docker_tab = tab;
+        self.docker_list_offset = 0;
+        self.docker_resource_list_offset = 0;
         self.docker_status = format!("Docker tab: {}", tab.label());
         cx.notify();
     }
@@ -34,12 +36,14 @@ impl NyaTermApp {
             "backspace" => {
                 self.docker_search_draft.pop();
                 self.docker_list_offset = 0;
+                self.docker_resource_list_offset = 0;
                 self.docker_status = "Docker search updated".to_string();
                 cx.notify();
             }
             "escape" => {
                 self.docker_search_draft.clear();
                 self.docker_list_offset = 0;
+                self.docker_resource_list_offset = 0;
                 self.docker_status = "Docker search cleared".to_string();
                 cx.notify();
             }
@@ -51,6 +55,7 @@ impl NyaTermApp {
                 {
                     self.docker_search_draft.push_str(input);
                     self.docker_list_offset = 0;
+                    self.docker_resource_list_offset = 0;
                     self.docker_status = "Docker search updated".to_string();
                     cx.notify();
                 }

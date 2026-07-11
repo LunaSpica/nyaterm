@@ -52,13 +52,26 @@ impl NyaTermApp {
             .as_deref()
             .map(|id| format!("Recent Logs · {}", compact_id(id)))
             .unwrap_or_else(|| "Recent Logs".to_string());
-        // Keep virtual-list offset valid after search/filter changes.
+        // Keep virtual-list offsets valid after search/filter/tab changes.
         {
             const DOCKER_VIEWPORT_ROWS: usize = 16;
             let total = filtered_containers.len();
             let max_offset = total.saturating_sub(DOCKER_VIEWPORT_ROWS.min(total));
             if self.docker_list_offset > max_offset {
                 self.docker_list_offset = max_offset;
+            }
+        }
+        {
+            const DOCKER_RESOURCE_VIEWPORT_ROWS: usize = 14;
+            let total = match active_tab {
+                DockerTab::Images => filtered_images.len(),
+                DockerTab::Volumes => filtered_volumes.len(),
+                DockerTab::Networks => filtered_networks.len(),
+                _ => 0,
+            };
+            let max_offset = total.saturating_sub(DOCKER_RESOURCE_VIEWPORT_ROWS.min(total));
+            if self.docker_resource_list_offset > max_offset {
+                self.docker_resource_list_offset = max_offset;
             }
         }
 
@@ -74,9 +87,24 @@ impl NyaTermApp {
                 cx,
             )
             .into_any_element(),
-            DockerTab::Images => docker_images_panel(&filtered_images, cx).into_any_element(),
-            DockerTab::Volumes => docker_volumes_panel(&filtered_volumes, cx).into_any_element(),
-            DockerTab::Networks => docker_networks_panel(&filtered_networks, cx).into_any_element(),
+            DockerTab::Images => docker_images_panel(
+                &filtered_images,
+                self.docker_resource_list_offset,
+                cx,
+            )
+            .into_any_element(),
+            DockerTab::Volumes => docker_volumes_panel(
+                &filtered_volumes,
+                self.docker_resource_list_offset,
+                cx,
+            )
+            .into_any_element(),
+            DockerTab::Networks => docker_networks_panel(
+                &filtered_networks,
+                self.docker_resource_list_offset,
+                cx,
+            )
+            .into_any_element(),
             DockerTab::Compose => docker_compose_panel(
                 &filtered_compose_projects,
                 &self.docker_compose_expanded,

@@ -1,178 +1,291 @@
 use super::*;
+use gpui::{ScrollDelta, ScrollWheelEvent, SharedString, prelude::*};
+
+const DOCKER_RESOURCE_ROW_PX: f32 = 68.; // 64px Tauri row + gap
+const DOCKER_RESOURCE_VIEWPORT_ROWS: usize = 14;
+const DOCKER_RESOURCE_OVERSCAN: usize = 6;
 
 pub(in crate::ui::view::pages::remote) fn docker_images_panel(
     images: &[DockerImage],
+    list_offset: usize,
     cx: &mut Context<NyaTermApp>,
 ) -> impl IntoElement {
-    let mut rows = div().flex().flex_col().gap_1();
     if images.is_empty() {
-        rows = rows.child(empty_panel("No images loaded."));
-    } else {
-        const WINDOW: usize = 80;
-        let total = images.len();
-        let slice = if total > WINDOW { &images[..WINDOW] } else { images };
-        for image in slice {
-            let image_id = image.id.clone();
-            let label = docker_image_label(image);
-            rows = rows.child(
-                docker_resource_row(
-                    label.clone(),
-                    format!(
-                        "{} · {} · {}",
-                        compact_id(&image.id),
-                        image.created_since,
-                        image.size
-                    ),
-                )
-                .child(icon_button(
-                    format!("docker-image-remove-{}", compact_id(&image_id)),
+        return docker_resource_empty("Images", "No images loaded.");
+    }
+
+    let total = images.len();
+    let (window_start, window_end, pad_top, pad_bottom, scroll_offset) =
+        docker_resource_window(total, list_offset);
+    let mut rows = div().flex().flex_col().gap_1();
+    if pad_top > 0. {
+        rows = rows.child(div().h(px(pad_top)).w_full().flex_none());
+    }
+    for image in images.get(window_start..window_end).unwrap_or(&[]) {
+        let image_id = image.id.clone();
+        let label = docker_image_label(image);
+        rows = rows.child(
+            docker_resource_row(
+                label.clone(),
+                format!(
+                    "{} · {} · {}",
+                    compact_id(&image.id),
+                    image.created_since,
+                    image.size
+                ),
+            )
+            .child(icon_button(
+                format!("docker-image-remove-{}", compact_id(&image_id)),
+                "×",
+                cx.listener(move |this, _, _, cx| {
+                    this.request_docker_confirm(
+                        DockerConfirmState {
+                            title: format!("Remove image {label}"),
+                            detail: format!("docker image rm {}", compact_id(&image_id)),
+                            action: DockerConfirmAction::ImageRemove {
+                                image_id: image_id.clone(),
+                                force: false,
+                            },
+                        },
+                        cx,
+                    );
+                }),
+            )),
+        );
+    }
+    if pad_bottom > 0. {
+        rows = rows.child(div().h(px(pad_bottom)).w_full().flex_none());
+    }
+    if total > DOCKER_RESOURCE_VIEWPORT_ROWS {
+        rows = rows.child(docker_resource_range_footer(window_start, window_end, total));
+    }
+
+    docker_resource_panel("Images", total, rows, scroll_offset, cx)
+}
+
+pub(in crate::ui::view::pages::remote) fn docker_volumes_panel(
+    volumes: &[DockerVolume],
+    list_offset: usize,
+    cx: &mut Context<NyaTermApp>,
+) -> impl IntoElement {
+    if volumes.is_empty() {
+        return docker_resource_empty("Volumes", "No volumes loaded.");
+    }
+
+    let total = volumes.len();
+    let (window_start, window_end, pad_top, pad_bottom, scroll_offset) =
+        docker_resource_window(total, list_offset);
+    let mut rows = div().flex().flex_col().gap_1();
+    if pad_top > 0. {
+        rows = rows.child(div().h(px(pad_top)).w_full().flex_none());
+    }
+    for volume in volumes.get(window_start..window_end).unwrap_or(&[]) {
+        let volume_name = volume.name.clone();
+        rows = rows.child(
+            docker_resource_row(volume.name.clone(), format!("driver {}", volume.driver)).child(
+                icon_button(
+                    format!("docker-volume-remove-{volume_name}"),
                     "×",
                     cx.listener(move |this, _, _, cx| {
                         this.request_docker_confirm(
                             DockerConfirmState {
-                                title: format!("Remove image {label}"),
-                                detail: format!("docker image rm {}", compact_id(&image_id)),
-                                action: DockerConfirmAction::ImageRemove {
-                                    image_id: image_id.clone(),
+                                title: format!("Remove volume {volume_name}"),
+                                detail: format!("docker volume rm {volume_name}"),
+                                action: DockerConfirmAction::VolumeRemove {
+                                    volume_name: volume_name.clone(),
                                     force: false,
                                 },
                             },
                             cx,
                         );
                     }),
-                )),
-            );
-        }
-        if total > WINDOW {
-            rows = rows.child(
-                div()
-                    .px_2()
-                    .py_1()
-                    .text_size(px(10.))
-                    .text_color(rgb(0x6e7681))
-                    .child(format!("Showing first {WINDOW} of {total} images · refine search")),
-            );
-        }
+                ),
+            ),
+        );
+    }
+    if pad_bottom > 0. {
+        rows = rows.child(div().h(px(pad_bottom)).w_full().flex_none());
+    }
+    if total > DOCKER_RESOURCE_VIEWPORT_ROWS {
+        rows = rows.child(docker_resource_range_footer(window_start, window_end, total));
     }
 
-    docker_resource_panel("Images", images.len(), rows)
-}
-
-pub(in crate::ui::view::pages::remote) fn docker_volumes_panel(
-    volumes: &[DockerVolume],
-    cx: &mut Context<NyaTermApp>,
-) -> impl IntoElement {
-    let mut rows = div().flex().flex_col().gap_1();
-    if volumes.is_empty() {
-        rows = rows.child(empty_panel("No volumes loaded."));
-    } else {
-        const WINDOW: usize = 80;
-        let total = volumes.len();
-        let slice = if total > WINDOW { &volumes[..WINDOW] } else { volumes };
-        for volume in slice {
-            let volume_name = volume.name.clone();
-            rows = rows.child(
-                docker_resource_row(volume.name.clone(), format!("driver {}", volume.driver))
-                    .child(icon_button(
-                        format!("docker-volume-remove-{volume_name}"),
-                        "×",
-                        cx.listener(move |this, _, _, cx| {
-                            this.request_docker_confirm(
-                                DockerConfirmState {
-                                    title: format!("Remove volume {volume_name}"),
-                                    detail: format!("docker volume rm {volume_name}"),
-                                    action: DockerConfirmAction::VolumeRemove {
-                                        volume_name: volume_name.clone(),
-                                        force: false,
-                                    },
-                                },
-                                cx,
-                            );
-                        }),
-                    )),
-            );
-        }
-        if total > WINDOW {
-            rows = rows.child(
-                div()
-                    .px_2()
-                    .py_1()
-                    .text_size(px(10.))
-                    .text_color(rgb(0x6e7681))
-                    .child(format!("Showing first {WINDOW} of {total} volumes · refine search")),
-            );
-        }
-    }
-
-    docker_resource_panel("Volumes", volumes.len(), rows)
+    docker_resource_panel("Volumes", total, rows, scroll_offset, cx)
 }
 
 pub(in crate::ui::view::pages::remote) fn docker_networks_panel(
     networks: &[DockerNetwork],
+    list_offset: usize,
     cx: &mut Context<NyaTermApp>,
 ) -> impl IntoElement {
-    let mut rows = div().flex().flex_col().gap_1();
     if networks.is_empty() {
-        rows = rows.child(empty_panel("No networks loaded."));
-    } else {
-        const WINDOW: usize = 80;
-        let total = networks.len();
-        let slice = if total > WINDOW { &networks[..WINDOW] } else { networks };
-        for network in slice {
-            let network_id = network.id.clone();
-            let name = network.name.clone();
-            rows = rows.child(
-                docker_resource_row(
-                    network.name.clone(),
-                    format!(
-                        "{} · {} · {}",
-                        compact_id(&network.id),
-                        network.driver,
-                        network.scope
-                    ),
-                )
-                .child(icon_button(
-                    format!("docker-network-remove-{}", compact_id(&network_id)),
-                    "×",
-                    cx.listener(move |this, _, _, cx| {
-                        this.request_docker_confirm(
-                            DockerConfirmState {
-                                title: format!("Remove network {name}"),
-                                detail: format!("docker network rm {}", compact_id(&network_id)),
-                                action: DockerConfirmAction::NetworkRemove {
-                                    network_id: network_id.clone(),
-                                },
-                            },
-                            cx,
-                        );
-                    }),
-                )),
-            );
-        }
-        if total > WINDOW {
-            rows = rows.child(
-                div()
-                    .px_2()
-                    .py_1()
-                    .text_size(px(10.))
-                    .text_color(rgb(0x6e7681))
-                    .child(format!("Showing first {WINDOW} of {total} networks · refine search")),
-            );
-        }
+        return docker_resource_empty("Networks", "No networks loaded.");
     }
 
-    docker_resource_panel("Networks", networks.len(), rows)
+    let total = networks.len();
+    let (window_start, window_end, pad_top, pad_bottom, scroll_offset) =
+        docker_resource_window(total, list_offset);
+    let mut rows = div().flex().flex_col().gap_1();
+    if pad_top > 0. {
+        rows = rows.child(div().h(px(pad_top)).w_full().flex_none());
+    }
+    for network in networks.get(window_start..window_end).unwrap_or(&[]) {
+        let network_id = network.id.clone();
+        let name = network.name.clone();
+        rows = rows.child(
+            docker_resource_row(
+                network.name.clone(),
+                format!(
+                    "{} · {} · {}",
+                    compact_id(&network.id),
+                    network.driver,
+                    network.scope
+                ),
+            )
+            .child(icon_button(
+                format!("docker-network-remove-{}", compact_id(&network_id)),
+                "×",
+                cx.listener(move |this, _, _, cx| {
+                    this.request_docker_confirm(
+                        DockerConfirmState {
+                            title: format!("Remove network {name}"),
+                            detail: format!("docker network rm {}", compact_id(&network_id)),
+                            action: DockerConfirmAction::NetworkRemove {
+                                network_id: network_id.clone(),
+                            },
+                        },
+                        cx,
+                    );
+                }),
+            )),
+        );
+    }
+    if pad_bottom > 0. {
+        rows = rows.child(div().h(px(pad_bottom)).w_full().flex_none());
+    }
+    if total > DOCKER_RESOURCE_VIEWPORT_ROWS {
+        rows = rows.child(docker_resource_range_footer(window_start, window_end, total));
+    }
+
+    docker_resource_panel("Networks", total, rows, scroll_offset, cx)
+}
+
+fn docker_resource_window(
+    total: usize,
+    list_offset: usize,
+) -> (usize, usize, f32, f32, usize) {
+    let window_capacity = DOCKER_RESOURCE_VIEWPORT_ROWS + DOCKER_RESOURCE_OVERSCAN * 2;
+    let max_offset = total.saturating_sub(DOCKER_RESOURCE_VIEWPORT_ROWS.min(total));
+    let scroll_row = list_offset.min(max_offset);
+    let window_start = scroll_row.saturating_sub(DOCKER_RESOURCE_OVERSCAN);
+    let window_end = (window_start + window_capacity).min(total);
+    let pad_top = (window_start as f32) * DOCKER_RESOURCE_ROW_PX;
+    let pad_bottom = ((total.saturating_sub(window_end)) as f32) * DOCKER_RESOURCE_ROW_PX;
+    (window_start, window_end, pad_top, pad_bottom, scroll_row)
+}
+
+fn docker_resource_range_footer(start: usize, end: usize, total: usize) -> impl IntoElement {
+    div()
+        .px_2()
+        .py_1()
+        .rounded_md()
+        .border_1()
+        .border_color(rgb(0x21262d))
+        .bg(rgb(0x0d1117))
+        .text_size(px(10.))
+        .text_color(rgb(0x6e7681))
+        .child(format!("Rows {start}-{end}/{total} · scroll or refine search"))
+}
+
+fn docker_resource_empty(title: &'static str, message: &'static str) -> gpui::AnyElement {
+    div()
+        .id(SharedString::from(format!(
+            "docker-resource-{}",
+            title.to_ascii_lowercase()
+        )))
+        .size_full()
+        .flex()
+        .items_center()
+        .justify_center()
+        .child(empty_panel(message))
+        .into_any_element()
 }
 
 pub(in crate::ui::view::pages::remote) fn docker_resource_panel(
     title: &'static str,
     count: usize,
     rows: impl IntoElement,
-) -> impl IntoElement {
-    // Tauri resource tabs: full-height list, no nested section card header.
+    _scroll_offset: usize,
+    cx: &mut Context<NyaTermApp>,
+) -> gpui::AnyElement {
+    // Tauri resource tabs: full-height virtual list + wheel offset.
     let _ = title;
+    let total_for_scroll = count;
     div()
-        .id(gpui::SharedString::from(format!(
+        .id(SharedString::from(format!(
+            "docker-resource-{}",
+            title.to_ascii_lowercase()
+        )))
+        .size_full()
+        .overflow_hidden()
+        .flex()
+        .flex_col()
+        .on_scroll_wheel(cx.listener(move |this, event: &ScrollWheelEvent, _, cx| {
+            let max_offset = total_for_scroll
+                .saturating_sub(DOCKER_RESOURCE_VIEWPORT_ROWS.min(total_for_scroll));
+            if max_offset == 0 {
+                return;
+            }
+            let delta_rows = match event.delta {
+                ScrollDelta::Lines(delta) => delta.y,
+                ScrollDelta::Pixels(delta) => f32::from(delta.y) / DOCKER_RESOURCE_ROW_PX,
+            };
+            let next = (this.docker_resource_list_offset as f32 - delta_rows)
+                .round()
+                .clamp(0., max_offset as f32) as usize;
+            if next != this.docker_resource_list_offset {
+                this.docker_resource_list_offset = next;
+                cx.stop_propagation();
+                cx.notify();
+            }
+        }))
+        .child(
+            div()
+                .h(px(22.))
+                .flex_none()
+                .px_2()
+                .pt_1()
+                .flex()
+                .items_center()
+                .justify_between()
+                .child(
+                    div()
+                        .text_size(px(10.))
+                        .font_weight(FontWeight(700.))
+                        .text_color(rgb(0x6e7681))
+                        .child(format!("{title} · {count}")),
+                ),
+        )
+        .child(
+            div()
+                .flex_1()
+                .min_h_0()
+                .px_2()
+                .pb_2()
+                .flex()
+                .flex_col()
+                .child(rows),
+        )
+        .into_any_element()
+}
+
+pub(in crate::ui::view::pages::remote) fn docker_resource_static_panel(
+    title: &'static str,
+    count: usize,
+    rows: impl IntoElement,
+) -> impl IntoElement {
+    div()
+        .id(SharedString::from(format!(
             "docker-resource-{}",
             title.to_ascii_lowercase()
         )))
@@ -190,7 +303,6 @@ pub(in crate::ui::view::pages::remote) fn docker_resource_panel(
                 .px_1()
                 .flex()
                 .items_center()
-                .justify_between()
                 .child(
                     div()
                         .text_size(px(10.))
@@ -208,7 +320,7 @@ pub(in crate::ui::view::pages::remote) fn docker_resource_row(
 ) -> gpui::Div {
     // ~64px Tauri SIMPLE_ROW_HEIGHT-ish dense resource row (slightly tighter chrome).
     div()
-        .h(px(52.))
+        .h(px(64.))
         .rounded_md()
         .border_1()
         .border_color(rgb(0x30363d))

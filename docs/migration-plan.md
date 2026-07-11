@@ -717,3 +717,8 @@ service boundary first:
 ## 2026-07-11 Command Send default intervals
 - Data/mode switches apply Tauri default intervals: Text/Line=1.00s, Char/Byte=0.02s, Hex/Packet=0.
 - App default interval starts at 1.00s for Text/Line.
+
+## 2026-07-11 Docker resource wheel virtual lists + hex guide scroll
+- Images/Volumes/Networks: spacer + wheel virtual windows via `docker_resource_list_offset` (Compose keeps static scroll).
+- Tab/search reset resource offset; range footer for large lists.
+- Hex guides translate with `send_command_hex_scroll_y` on wheel (Tauri hexScroll.top step).

@@ -509,10 +509,41 @@ impl NyaTermApp {
                                         self.send_command_data_type == SendCommandDataType::Hex,
                                         |this| {
                                             // Tauri overlays dashed 4-byte guides per line above the hex textarea.
+                                            // Scroll-sync: wheel adjusts send_command_hex_scroll_y (like hexScroll.top).
                                             let guide_rows =
                                                 send_command_hex_guide_rows(&self.send_command_draft);
                                             const HEX_LINE_PX: f32 = 15.;
-                                            this.child(
+                                            let line_count = guide_rows.len().max(1);
+                                            let max_scroll = ((line_count as f32) * HEX_LINE_PX)
+                                                .max(0.);
+                                            let scroll_y = self
+                                                .send_command_hex_scroll_y
+                                                .clamp(0., max_scroll);
+                                            this.on_scroll_wheel(cx.listener(
+                                                move |this, event: &ScrollWheelEvent, _, cx| {
+                                                    let delta_y = match event.delta {
+                                                        ScrollDelta::Lines(delta) => {
+                                                            delta.y * HEX_LINE_PX
+                                                        }
+                                                        ScrollDelta::Pixels(delta) => {
+                                                            f32::from(delta.y)
+                                                        }
+                                                    };
+                                                    // Match GPUI: scroll_top -= delta.y
+                                                    let next = (this.send_command_hex_scroll_y
+                                                        - delta_y)
+                                                        .clamp(0., max_scroll);
+                                                    if (next - this.send_command_hex_scroll_y)
+                                                        .abs()
+                                                        > 0.01
+                                                    {
+                                                        this.send_command_hex_scroll_y = next;
+                                                        cx.stop_propagation();
+                                                        cx.notify();
+                                                    }
+                                                },
+                                            ))
+                                            .child(
                                                 div()
                                                     .absolute()
                                                     .top_0()
@@ -556,29 +587,47 @@ impl NyaTermApp {
                                                     .px_2()
                                                     .py_1()
                                                     .overflow_hidden()
-                                                    .flex()
-                                                    .flex_col()
-                                                    .children(guide_rows.into_iter().map(
-                                                        |marks| {
-                                                            div()
-                                                                .h(px(HEX_LINE_PX))
-                                                                .relative()
-                                                                .w_full()
-                                                                .flex_none()
-                                                                .children(marks.into_iter().map(
-                                                                    |mark| {
-                                                                        div()
-                                                                            .absolute()
-                                                                            .top(px(0.))
-                                                                            .left(px(mark as f32 * 7.2))
-                                                                            .h(px(HEX_LINE_PX + 2.))
-                                                                            .w(px(2.))
-                                                                            .bg(rgb(0x1f6feb))
-                                                                            .opacity(0.55)
-                                                                    },
-                                                                ))
-                                                        },
-                                                    )),
+                                                    .child(
+                                                        div()
+                                                            .relative()
+                                                            .top(px(-scroll_y))
+                                                            .flex()
+                                                            .flex_col()
+                                                            .children(guide_rows.into_iter().map(
+                                                                |marks| {
+                                                                    div()
+                                                                        .h(px(HEX_LINE_PX))
+                                                                        .relative()
+                                                                        .w_full()
+                                                                        .flex_none()
+                                                                        .children(
+                                                                            marks.into_iter().map(
+                                                                                |mark| {
+                                                                                    div()
+                                                                                        .absolute()
+                                                                                        .top(px(0.))
+                                                                                        .left(px(
+                                                                                            mark
+                                                                                                as f32
+                                                                                                * 7.2,
+                                                                                        ))
+                                                                                        .h(px(
+                                                                                            HEX_LINE_PX
+                                                                                                + 2.,
+                                                                                        ))
+                                                                                        .w(px(2.))
+                                                                                        .bg(rgb(
+                                                                                            0x1f6feb,
+                                                                                        ))
+                                                                                        .opacity(
+                                                                                            0.55,
+                                                                                        )
+                                                                                },
+                                                                            ),
+                                                                        )
+                                                                },
+                                                            )),
+                                                    ),
                                             )
                                         },
                                     )

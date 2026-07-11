@@ -38,7 +38,7 @@ pub(in crate::ui::view::pages::remote) fn docker_compose_panel(
         }
     }
 
-    docker_resource_panel("Compose", projects.len(), rows)
+    docker_resource_static_panel("Compose", projects.len(), rows)
 }
 
 fn docker_compose_project_row(

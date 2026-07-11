@@ -26,6 +26,7 @@ impl NyaTermApp {
                         .collect();
                     cleaned.pop();
                     self.send_command_draft = format_send_command_hex_display(&cleaned);
+                    self.clamp_send_command_hex_scroll();
                 } else {
                     self.send_command_draft.pop();
                 }
@@ -59,6 +60,7 @@ impl NyaTermApp {
                         self.send_command_draft.push_str(&filtered);
                         self.send_command_draft =
                             format_send_command_hex_display(&self.send_command_draft);
+                        self.clamp_send_command_hex_scroll();
                     } else {
                         self.send_command_draft.push_str(input);
                     }
@@ -419,6 +421,7 @@ impl NyaTermApp {
             }
         }
         self.apply_send_command_default_interval();
+        self.send_command_hex_scroll_y = 0.;
         self.terminal_status = format!(
             "command send data: {}",
             match data_type {
@@ -437,5 +440,20 @@ impl NyaTermApp {
         self.send_command_mode = mode;
         self.apply_send_command_default_interval();
         cx.notify();
+    }
+
+    pub(in crate::ui::view) fn clamp_send_command_hex_scroll(&mut self) {
+        const HEX_LINE_PX: f32 = 15.;
+        let lines = self
+            .send_command_draft
+            .replace("\r\n", "\n")
+            .replace('\r', "\n")
+            .split('\n')
+            .count()
+            .max(1);
+        let max_scroll = (lines as f32) * HEX_LINE_PX;
+        if self.send_command_hex_scroll_y > max_scroll {
+            self.send_command_hex_scroll_y = max_scroll;
+        }
     }
 }
