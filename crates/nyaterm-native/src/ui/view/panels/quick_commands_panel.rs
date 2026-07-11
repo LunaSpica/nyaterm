@@ -140,7 +140,7 @@ impl NyaTermApp {
 
         let mut rows = div()
             .flex()
-            .gap_2()
+            .gap_1()
             .when(
                 self.quick_command_view_mode == QuickCommandViewMode::Tile,
                 |this| this.items_start().flex_wrap(),
@@ -182,29 +182,18 @@ impl NyaTermApp {
         } else {
             for command in filtered_commands {
                 let command_id = command.id.clone();
-                let insert_command_id = command.id.clone();
                 let run_command_id = command.id.clone();
                 let compact_click_command_id = command.id.clone();
                 let list_header_command_id = command.id.clone();
-                let list_body_command_id = command.id.clone();
                 let edit_command_id = command.id.clone();
                 let delete_command_id = command.id.clone();
                 let detail_command_id = command.id.clone();
                 let all_command_id = command.id.clone();
-                let category =
-                    quick_command_category_label(&self.quick_command_categories, &command);
                 let execution_mode = if command.execution_mode.as_deref() == Some("append") {
                     "append"
                 } else {
                     "execute"
                 };
-                let risk = risk_label(command.risk_level.as_ref());
-                let meta = format!(
-                    "{} · used {} · {}",
-                    category,
-                    command.use_count.unwrap_or_default(),
-                    risk
-                );
                 let command_item = match self.quick_command_view_mode {
                     QuickCommandViewMode::Tile => div()
                         .id(SharedString::from(format!(
@@ -279,9 +268,9 @@ impl NyaTermApp {
                                 rgb(0x12342a)
                             },
                         ))
-                        .child(small_button(
+                        .child(icon_button(
                             format!("quick-command-tile-detail-{command_id}"),
-                            "Info",
+                            "ⓘ",
                             cx.listener(move |this, _, window, cx| {
                                 this.open_quick_command_details(
                                     detail_command_id.clone(),
@@ -291,9 +280,9 @@ impl NyaTermApp {
                             }),
                         ))
                         .when(can_send_to_all, |this| {
-                            this.child(small_button(
+                            this.child(icon_button(
                                 format!("quick-command-tile-all-{command_id}"),
-                                "All",
+                                "≫",
                                 cx.listener(move |this, _, _, cx| {
                                     this.send_quick_command_to_all_by_id(
                                         all_command_id.clone(),
@@ -303,321 +292,285 @@ impl NyaTermApp {
                             ))
                         })
                         .into_any_element(),
-                    QuickCommandViewMode::Compact => div()
-                        .id(SharedString::from(format!(
-                            "quick-command-compact-{command_id}"
-                        )))
-                        .min_h(px(38.))
-                        .rounded_sm()
-                        .border_1()
-                        .border_color(rgb(0x30363d))
-                        .bg(rgb(0x0d1320))
-                        .px_2()
-                        .py_1()
-                        .flex()
-                        .items_center()
-                        .gap_2()
-                        .child(quick_command_icon_mark(
-                            command.icon_tag.as_deref(),
-                            command.color_tag.as_deref(),
-                        ))
-                        .child(
-                            div()
-                                .id(SharedString::from(format!(
-                                    "quick-command-compact-run-area-{command_id}"
-                                )))
-                                .min_w_0()
-                                .flex_1()
-                                .flex()
-                                .items_center()
-                                .gap_2()
-                                .cursor_pointer()
-                                .on_click(cx.listener(move |this, _, _, cx| {
-                                    this.run_quick_command_by_id(
-                                        compact_click_command_id.clone(),
+                    QuickCommandViewMode::Compact => {
+                        // Tauri compact: single 32px row, label + mono command, icon actions.
+                        let mut actions = div().flex().items_center().gap_1();
+                        actions = actions.child(icon_button(
+                            format!("quick-command-compact-run-{command_id}"),
+                            "▶",
+                            cx.listener(move |this, _, _, cx| {
+                                this.run_quick_command_by_id(run_command_id.clone(), cx);
+                            }),
+                        ));
+                        actions = actions.child(icon_button(
+                            format!("quick-command-compact-detail-{command_id}"),
+                            "ⓘ",
+                            cx.listener(move |this, _, window, cx| {
+                                this.open_quick_command_details(
+                                    detail_command_id.clone(),
+                                    window,
+                                    cx,
+                                );
+                            }),
+                        ));
+                        actions = actions.child(icon_button(
+                            format!("quick-command-compact-edit-{command_id}"),
+                            "✎",
+                            cx.listener(move |this, _, window, cx| {
+                                this.open_edit_quick_command_editor(
+                                    edit_command_id.clone(),
+                                    window,
+                                    cx,
+                                );
+                            }),
+                        ));
+                        if can_send_to_all {
+                            actions = actions.child(icon_button(
+                                format!("quick-command-compact-all-{command_id}"),
+                                "≫",
+                                cx.listener(move |this, _, _, cx| {
+                                    this.send_quick_command_to_all_by_id(
+                                        all_command_id.clone(),
                                         cx,
                                     );
-                                }))
-                                .child(
-                                    div()
-                                        .min_w(px(88.))
-                                        .max_w(px(180.))
-                                        .text_xs()
-                                        .font_weight(FontWeight(800.))
-                                        .text_color(rgb(0xe5edf7))
-                                        .overflow_hidden()
-                                        .child(truncate_preview(&command.label, 30)),
-                                )
-                                .child(
-                                    div()
-                                        .min_w_0()
-                                        .flex_1()
-                                        .font_family("JetBrains Mono")
-                                        .text_xs()
-                                        .text_color(rgb(0xaeb7c8))
-                                        .overflow_hidden()
-                                        .child(truncate_preview(&command.command, 96)),
-                                ),
-                        )
-                        .child(
-                            div()
-                                .flex()
-                                .items_center()
-                                .gap_1()
-                                .child(small_button(
-                                    format!("quick-command-compact-detail-{command_id}"),
-                                    "View",
-                                    cx.listener(move |this, _, window, cx| {
-                                        this.open_quick_command_details(
-                                            detail_command_id.clone(),
-                                            window,
-                                            cx,
-                                        );
-                                    }),
-                                ))
-                                .when(can_send_to_all, |this| {
-                                    this.child(small_button(
-                                        format!("quick-command-compact-all-{command_id}"),
-                                        "All",
-                                        cx.listener(move |this, _, _, cx| {
-                                            this.send_quick_command_to_all_by_id(
-                                                all_command_id.clone(),
-                                                cx,
-                                            );
-                                        }),
-                                    ))
-                                })
-                                .child(small_button(
-                                    format!("quick-command-compact-edit-{command_id}"),
-                                    "Edit",
-                                    cx.listener(move |this, _, window, cx| {
-                                        this.open_edit_quick_command_editor(
-                                            edit_command_id.clone(),
-                                            window,
-                                            cx,
-                                        );
-                                    }),
-                                ))
-                                .child(small_button(
-                                    format!("quick-command-compact-insert-{command_id}"),
-                                    "Insert",
-                                    cx.listener(move |this, _, _, cx| {
-                                        this.insert_quick_command_by_id(
-                                            insert_command_id.clone(),
-                                            cx,
-                                        );
-                                    }),
-                                ))
-                                .child(small_button(
-                                    format!("quick-command-compact-run-{command_id}"),
-                                    "Run",
-                                    cx.listener(move |this, _, _, cx| {
-                                        this.run_quick_command_by_id(run_command_id.clone(), cx);
-                                    }),
-                                ))
-                                .child(small_button(
-                                    format!("quick-command-compact-delete-{command_id}"),
-                                    "Delete",
-                                    cx.listener(move |this, _, _, cx| {
-                                        this.open_delete_quick_command_confirm(
-                                            delete_command_id.clone(),
-                                            cx,
-                                        );
-                                    }),
-                                )),
-                        )
-                        .into_any_element(),
-                    QuickCommandViewMode::List => div()
-                        .id(SharedString::from(format!(
-                            "quick-command-list-{command_id}"
-                        )))
-                        .rounded_sm()
-                        .border_1()
-                        .border_color(rgb(0x30363d))
-                        .bg(rgb(0x0d1320))
-                        .p_2()
-                        .flex()
-                        .flex_col()
-                        .gap_2()
-                        .child(
-                            div()
-                                .flex()
-                                .items_center()
-                                .justify_between()
-                                .gap_2()
-                                .child(
-                                    div()
-                                        .id(SharedString::from(format!(
-                                            "quick-command-list-run-head-{command_id}"
-                                        )))
-                                        .min_w_0()
-                                        .flex()
-                                        .items_center()
-                                        .gap_2()
-                                        .cursor_pointer()
-                                        .on_click(cx.listener(move |this, _, _, cx| {
-                                            this.run_quick_command_by_id(
-                                                list_header_command_id.clone(),
-                                                cx,
-                                            );
-                                        }))
-                                        .child(quick_command_icon_mark(
-                                            command.icon_tag.as_deref(),
-                                            command.color_tag.as_deref(),
-                                        ))
-                                        .child(
-                                            div()
-                                                .min_w_0()
-                                                .flex()
-                                                .items_center()
-                                                .gap_1()
-                                                .child(
-                                                    div()
-                                                        .min_w_0()
-                                                        .text_xs()
-                                                        .font_weight(FontWeight(800.))
-                                                        .text_color(rgb(0xe5edf7))
-                                                        .child(truncate_preview(
-                                                            &command.label,
-                                                            44,
-                                                        )),
-                                                )
-                                                .when(command.pinned.unwrap_or_default(), |this| {
-                                                    this.child(
-                                                        div()
-                                                            .text_size(px(10.))
-                                                            .text_color(rgb(0xfacc15))
-                                                            .child("PIN"),
-                                                    )
-                                                }),
-                                        ),
-                                )
-                                .child(status_pill(
-                                    execution_mode,
-                                    if execution_mode == "append" {
-                                        rgb(0xfacc15)
-                                    } else {
-                                        rgb(0x6ee7b7)
-                                    },
-                                    if execution_mode == "append" {
-                                        rgb(0x32280f)
-                                    } else {
-                                        rgb(0x12342a)
-                                    },
-                                )),
-                        )
-                        .child(
-                            div()
-                                .id(SharedString::from(format!(
-                                    "quick-command-list-run-body-{command_id}"
-                                )))
-                                .font_family("JetBrains Mono")
-                                .text_xs()
-                                .text_color(rgb(0xaeb7c8))
-                                .line_height(px(18.))
-                                .cursor_pointer()
-                                .on_click(cx.listener(move |this, _, _, cx| {
-                                    this.run_quick_command_by_id(list_body_command_id.clone(), cx);
-                                }))
-                                .child(truncate_preview(&command.command, 140)),
-                        )
-                        .when(command.description.is_some(), |this| {
-                            this.child(
+                                }),
+                            ));
+                        }
+                        actions = actions.child(icon_button(
+                            format!("quick-command-compact-delete-{command_id}"),
+                            "×",
+                            cx.listener(move |this, _, _, cx| {
+                                this.open_delete_quick_command_confirm(
+                                    delete_command_id.clone(),
+                                    cx,
+                                );
+                            }),
+                        ));
+
+                        div()
+                            .id(SharedString::from(format!(
+                                "quick-command-compact-{command_id}"
+                            )))
+                            .h(px(32.))
+                            .w_full()
+                            .rounded_sm()
+                            .px_1()
+                            .flex()
+                            .items_center()
+                            .gap_1()
+                            .hover(|this| this.bg(rgb(0x151d2a)))
+                            .child(
                                 div()
-                                    .text_xs()
-                                    .text_color(rgb(0x98a3b8))
-                                    .line_height(px(18.))
-                                    .child(truncate_preview(
-                                        command.description.as_deref().unwrap_or_default(),
-                                        120,
-                                    )),
+                                    .id(SharedString::from(format!(
+                                        "quick-command-compact-run-area-{command_id}"
+                                    )))
+                                    .min_w_0()
+                                    .flex_1()
+                                    .h_full()
+                                    .flex()
+                                    .items_center()
+                                    .gap_1()
+                                    .cursor_pointer()
+                                    .on_click(cx.listener(move |this, _, _, cx| {
+                                        this.run_quick_command_by_id(
+                                            compact_click_command_id.clone(),
+                                            cx,
+                                        );
+                                    }))
+                                    .child(quick_command_icon_mark(
+                                        command.icon_tag.as_deref(),
+                                        command.color_tag.as_deref(),
+                                    ))
+                                    .when(command.pinned.unwrap_or_default(), |this| {
+                                        this.child(
+                                            div()
+                                                .text_size(px(9.))
+                                                .text_color(rgb(0xfacc15))
+                                                .child("📌"),
+                                        )
+                                    })
+                                    .child(
+                                        div()
+                                            .min_w(px(64.))
+                                            .max_w(px(140.))
+                                            .text_size(px(11.))
+                                            .font_weight(FontWeight(600.))
+                                            .text_color(rgb(0xe5edf7))
+                                            .overflow_hidden()
+                                            .child(truncate_preview(&command.label, 28)),
+                                    )
+                                    .child(
+                                        div()
+                                            .min_w_0()
+                                            .flex_1()
+                                            .font_family("JetBrains Mono")
+                                            .text_size(px(11.))
+                                            .text_color(rgb(0x8b949e))
+                                            .overflow_hidden()
+                                            .child(truncate_preview(&command.command, 96)),
+                                    ),
                             )
-                        })
-                        .child(
-                            div()
-                                .flex()
-                                .items_center()
-                                .justify_between()
-                                .gap_2()
-                                .child(
-                                    div()
-                                        .min_w_0()
-                                        .text_xs()
-                                        .text_color(rgb(0x6e7681))
-                                        .child(meta),
-                                )
-                                .child(
-                                    div()
-                                        .flex()
-                                        .items_center()
-                                        .gap_1()
-                                        .child(small_button(
-                                            format!("quick-command-detail-{command_id}"),
-                                            "View",
-                                            cx.listener(move |this, _, window, cx| {
-                                                this.open_quick_command_details(
-                                                    detail_command_id.clone(),
-                                                    window,
-                                                    cx,
-                                                );
-                                            }),
-                                        ))
-                                        .when(can_send_to_all, |this| {
-                                            this.child(small_button(
-                                                format!("quick-command-all-{command_id}"),
-                                                "All",
-                                                cx.listener(move |this, _, _, cx| {
-                                                    this.send_quick_command_to_all_by_id(
-                                                        all_command_id.clone(),
-                                                        cx,
-                                                    );
-                                                }),
-                                            ))
-                                        })
-                                        .child(small_button(
-                                            format!("quick-command-edit-{command_id}"),
-                                            "Edit",
-                                            cx.listener(move |this, _, window, cx| {
-                                                this.open_edit_quick_command_editor(
-                                                    edit_command_id.clone(),
-                                                    window,
-                                                    cx,
-                                                );
-                                            }),
-                                        ))
-                                        .child(small_button(
-                                            format!("quick-command-insert-{command_id}"),
-                                            "Insert",
-                                            cx.listener(move |this, _, _, cx| {
-                                                this.insert_quick_command_by_id(
-                                                    insert_command_id.clone(),
-                                                    cx,
-                                                );
-                                            }),
-                                        ))
-                                        .child(small_button(
-                                            format!("quick-command-run-{command_id}"),
-                                            "Run",
-                                            cx.listener(move |this, _, _, cx| {
-                                                this.run_quick_command_by_id(
-                                                    run_command_id.clone(),
-                                                    cx,
-                                                );
-                                            }),
-                                        ))
-                                        .child(small_button(
-                                            format!("quick-command-delete-{command_id}"),
-                                            "Delete",
-                                            cx.listener(move |this, _, _, cx| {
-                                                this.open_delete_quick_command_confirm(
-                                                    delete_command_id.clone(),
-                                                    cx,
-                                                );
-                                            }),
-                                        )),
-                                ),
-                        )
-                        .into_any_element(),
+                            .child(actions)
+                            .into_any_element()
+                    }
+                    QuickCommandViewMode::List => {
+                        // Tauri list: ~44px single-line row with label+command stack and trailing actions.
+                        let mut actions = div().flex().items_center().gap_1();
+                        actions = actions.child(status_pill(
+                            if execution_mode == "append" { "+" } else { ">" },
+                            if execution_mode == "append" {
+                                rgb(0xfacc15)
+                            } else {
+                                rgb(0x6ee7b7)
+                            },
+                            if execution_mode == "append" {
+                                rgb(0x32280f)
+                            } else {
+                                rgb(0x12342a)
+                            },
+                        ));
+                        actions = actions.child(icon_button(
+                            format!("quick-command-list-run-{command_id}"),
+                            "▶",
+                            cx.listener(move |this, _, _, cx| {
+                                this.run_quick_command_by_id(run_command_id.clone(), cx);
+                            }),
+                        ));
+                        actions = actions.child(icon_button(
+                            format!("quick-command-detail-{command_id}"),
+                            "ⓘ",
+                            cx.listener(move |this, _, window, cx| {
+                                this.open_quick_command_details(
+                                    detail_command_id.clone(),
+                                    window,
+                                    cx,
+                                );
+                            }),
+                        ));
+                        actions = actions.child(icon_button(
+                            format!("quick-command-edit-{command_id}"),
+                            "✎",
+                            cx.listener(move |this, _, window, cx| {
+                                this.open_edit_quick_command_editor(
+                                    edit_command_id.clone(),
+                                    window,
+                                    cx,
+                                );
+                            }),
+                        ));
+                        if can_send_to_all {
+                            actions = actions.child(icon_button(
+                                format!("quick-command-all-{command_id}"),
+                                "≫",
+                                cx.listener(move |this, _, _, cx| {
+                                    this.send_quick_command_to_all_by_id(
+                                        all_command_id.clone(),
+                                        cx,
+                                    );
+                                }),
+                            ));
+                        }
+                        actions = actions.child(icon_button(
+                            format!("quick-command-delete-{command_id}"),
+                            "×",
+                            cx.listener(move |this, _, _, cx| {
+                                this.open_delete_quick_command_confirm(
+                                    delete_command_id.clone(),
+                                    cx,
+                                );
+                            }),
+                        ));
+
+                        div()
+                            .id(SharedString::from(format!(
+                                "quick-command-list-{command_id}"
+                            )))
+                            .min_h(px(44.))
+                            .w_full()
+                            .rounded_md()
+                            .border_1()
+                            .border_color(rgb(0x30363d))
+                            .bg(rgb(0x121820))
+                            .px_2()
+                            .py_1()
+                            .flex()
+                            .items_center()
+                            .gap_2()
+                            .hover(|this| this.bg(rgb(0x151d2a)))
+                            .child(
+                                div()
+                                    .id(SharedString::from(format!(
+                                        "quick-command-list-run-head-{command_id}"
+                                    )))
+                                    .min_w_0()
+                                    .flex_1()
+                                    .flex()
+                                    .items_center()
+                                    .gap_2()
+                                    .cursor_pointer()
+                                    .on_click(cx.listener(move |this, _, _, cx| {
+                                        this.run_quick_command_by_id(
+                                            list_header_command_id.clone(),
+                                            cx,
+                                        );
+                                    }))
+                                    .child(quick_command_icon_mark(
+                                        command.icon_tag.as_deref(),
+                                        command.color_tag.as_deref(),
+                                    ))
+                                    .child(
+                                        div()
+                                            .min_w_0()
+                                            .flex_1()
+                                            .flex()
+                                            .flex_col()
+                                            .gap(px(2.))
+                                            .child(
+                                                div()
+                                                    .flex()
+                                                    .items_center()
+                                                    .gap_1()
+                                                    .child(
+                                                        div()
+                                                            .min_w_0()
+                                                            .text_size(px(12.))
+                                                            .font_weight(FontWeight(600.))
+                                                            .text_color(rgb(0xe5edf7))
+                                                            .overflow_hidden()
+                                                            .child(truncate_preview(
+                                                                &command.label,
+                                                                44,
+                                                            )),
+                                                    )
+                                                    .when(
+                                                        command.pinned.unwrap_or_default(),
+                                                        |this| {
+                                                            this.child(
+                                                                div()
+                                                                    .text_size(px(9.))
+                                                                    .text_color(rgb(0xfacc15))
+                                                                    .child("📌"),
+                                                            )
+                                                        },
+                                                    ),
+                                            )
+                                            .child(
+                                                div()
+                                                    .min_w_0()
+                                                    .font_family("JetBrains Mono")
+                                                    .text_size(px(11.))
+                                                    .text_color(rgb(0x8b949e))
+                                                    .overflow_hidden()
+                                                    .child(truncate_preview(
+                                                        &command.command,
+                                                        120,
+                                                    )),
+                                            ),
+                                    ),
+                            )
+                            .child(actions)
+                            .into_any_element()
+                    }
                 };
                 rows = rows.child(command_item);
             }

@@ -748,3 +748,13 @@ service boundary first:
 ## 2026-07-11 Process mode sort order + Sync history strip
 - Apply ProcessDisplayMode sort-key coercion before sorting the filtered list.
 - Sync Backup History status strip densified to 36px toolbar chrome.
+
+## 2026-07-11 AI markdown GFM parity
+- `parse_markdown_blocks` gains GFM pipe tables, multi-line quotes, thematic breaks (`---`), and `+` bullets.
+- New `parse_inline_markdown` + `StyledText` highlights: bold/italic/bold-italic, inline code, links, strikethrough.
+- AI transcript renderer shows bordered tables and denser list/code chrome closer to Tauri `MarkdownContent`.
+
+## 2026-07-11 Quick Commands list/compact Tauri density
+- Compact mode: 32px single-line rows (label + mono command), ghost icon actions, no card border stack.
+- List mode: ~44px single-row stack (label over command) with trailing badge + icon actions (was multi-row card).
+- Tile trailing actions use icon buttons; command list gap tightened to `gap_1`.
