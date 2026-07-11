@@ -488,7 +488,7 @@ impl NyaTermApp {
         self.schedule_command_suggestion_refresh(cx);
     }
 
-    fn schedule_command_suggestion_refresh(&mut self, cx: &mut Context<Self>) {
+    pub(in crate::ui::view) fn schedule_command_suggestion_refresh(&mut self, cx: &mut Context<Self>) {
         // Tauri useCommandHistory: 80ms debounce before fuzzy search.
         self.command_suggestion_search_gen = self.command_suggestion_search_gen.saturating_add(1);
         let request_id = self.command_suggestion_search_gen;

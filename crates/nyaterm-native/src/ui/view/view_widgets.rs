@@ -501,6 +501,52 @@ pub(in crate::ui::view) fn empty_workspace_action(palette: ThemePalette,
 }
 
 
+pub(in crate::ui::view) fn tab_menu_item(
+    palette: ThemePalette,
+    id: impl Into<String>,
+    label: impl Into<String>,
+    on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
+) -> impl IntoElement {
+    tab_menu_item_enabled(palette, id, label, true, on_click)
+}
+
+pub(in crate::ui::view) fn tab_menu_item_enabled(
+    palette: ThemePalette,
+    id: impl Into<String>,
+    label: impl Into<String>,
+    enabled: bool,
+    on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
+) -> impl IntoElement {
+    let label = label.into();
+    let text_color = if enabled {
+        rgb(palette.text)
+    } else {
+        rgb(palette.text_dimmed)
+    };
+    div()
+        .id(SharedString::from(id.into()))
+        .h(px(28.))
+        .px_3()
+        .flex()
+        .items_center()
+        .text_size(px(12.))
+        .text_color(text_color)
+        .when(enabled, |this| {
+            this.cursor_pointer()
+                .hover(|this| this.bg(rgb(palette.hover)))
+                .on_click(on_click)
+        })
+        .child(div().min_w_0().flex_1().child(label))
+}
+
+pub(in crate::ui::view) fn tab_menu_separator(palette: ThemePalette) -> impl IntoElement {
+    div()
+        .h(px(1.))
+        .my_1()
+        .mx_2()
+        .bg(rgb(palette.border))
+}
+
 pub(in crate::ui::view) fn tab_action_button(palette: ThemePalette,
     id: impl Into<String>,
     label: &'static str,

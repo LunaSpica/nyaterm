@@ -307,6 +307,9 @@ impl NyaTermApp {
                         if this.handle_terminal_scroll_key(event, cx) {
                             return;
                         }
+                        if this.handle_smart_input_selection_key(event, cx) {
+                            return;
+                        }
                         let keystroke = &event.keystroke;
                         let primary = keystroke.modifiers.control || keystroke.modifiers.platform;
                         if primary

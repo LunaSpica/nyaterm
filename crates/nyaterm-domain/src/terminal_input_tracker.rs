@@ -438,6 +438,84 @@ fn choose_terminal_line_command(previous_value: &str, line_content: &str) -> Opt
     candidates.into_iter().map(|(cmd, _)| cmd).next()
 }
 
+/// Inclusive-exclusive byte range within `TerminalInputState::value`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct InputSelectionRange {
+    pub start: usize,
+    pub end: usize,
+}
+
+impl InputSelectionRange {
+    pub fn new(start: usize, end: usize) -> Option<Self> {
+        if end > start {
+            Some(Self { start, end })
+        } else {
+            None
+        }
+    }
+
+    pub fn len_chars(&self, value: &str) -> usize {
+        let end = self.end.min(value.len());
+        let start = self.start.min(end);
+        value[start..end].chars().count()
+    }
+}
+
+/// Delete a byte range from the tracked input line (Tauri `deleteTerminalInputRange`).
+pub fn delete_terminal_input_range(
+    state: &TerminalInputState,
+    start: usize,
+    end: usize,
+) -> TerminalInputState {
+    let length = state.value.len();
+    let from = start.min(length);
+    let to = end.min(length).max(from);
+    if to <= from {
+        return state.clone();
+    }
+    let mut value = String::with_capacity(length - (to - from));
+    value.push_str(&state.value[..from]);
+    value.push_str(&state.value[to..]);
+    TerminalInputState {
+        value: value.clone(),
+        cursor: from,
+        desynced: state.desynced,
+        desync_reason: state.desync_reason,
+        line_rewrite_required: state.line_rewrite_required,
+        multiline: value.contains('\n') || value.contains('\r'),
+        paste_mode: state.paste_mode,
+    }
+}
+
+/// Build CSI left/right moves between two byte cursors (character steps).
+pub fn build_move_input_cursor_data(value: &str, current_cursor: usize, target_cursor: usize) -> String {
+    let current = current_cursor.min(value.len());
+    let target = target_cursor.min(value.len());
+    let current_chars = value[..current].chars().count();
+    let target_chars = value[..target].chars().count();
+    if target_chars > current_chars {
+        "\u{1b}[C".repeat(target_chars - current_chars)
+    } else if current_chars > target_chars {
+        "\u{1b}[D".repeat(current_chars - target_chars)
+    } else {
+        String::new()
+    }
+}
+
+/// Map a character index into `value` to a byte offset.
+pub fn char_index_to_byte(value: &str, char_index: usize) -> usize {
+    value
+        .char_indices()
+        .nth(char_index)
+        .map(|(i, _)| i)
+        .unwrap_or(value.len())
+}
+
+/// Map a byte offset into `value` to a character index.
+pub fn byte_index_to_char(value: &str, byte_index: usize) -> usize {
+    value[..byte_index.min(value.len())].chars().count()
+}
+
 /// Recover tracker value from the terminal buffer line after tab completion desync.
 pub fn resync_from_terminal_line(
     current: &TerminalInputState,
@@ -510,4 +588,29 @@ mod tests {
         state = apply_terminal_input_data(&state, "\t");
         assert!(get_tracked_submission_command(&state).is_empty());
     }
+
+    #[test]
+    fn deletes_input_range() {
+        let mut state = TerminalInputState::new();
+        state = apply_terminal_input_data(&state, "abcdef");
+        state.cursor = 4;
+        let next = delete_terminal_input_range(&state, 1, 4);
+        assert_eq!(next.value, "aef");
+        assert_eq!(next.cursor, 1);
+    }
+
+    #[test]
+    fn builds_move_cursor_sequences_by_char() {
+        let value = "abc";
+        assert_eq!(
+            build_move_input_cursor_data(value, 0, 3),
+            "\u{1b}[C\u{1b}[C\u{1b}[C"
+        );
+        assert_eq!(
+            build_move_input_cursor_data(value, 3, 1),
+            "\u{1b}[D\u{1b}[D"
+        );
+        assert_eq!(build_move_input_cursor_data(value, 2, 2), "");
+    }
+
 }

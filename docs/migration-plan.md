@@ -1103,3 +1103,14 @@ service boundary first:
 - Buffer find status shows `1000+` at the match cap; prev/next controls are
   buffer-mode only, matching Tauri TerminalSearchBar behavior.
 
+## 2026-07-11 Compact tab actions vertical menu + smart input selection
+
+- Anchored tab actions menu now uses a Tauri TabContextMenu-like vertical item list
+  (28px rows, separators, inline color swatches, disabled items) instead of dense
+  card/grid action buttons. Expanded centered dialog retained for non-anchored open.
+- Domain tracker gains `delete_terminal_input_range`, `build_move_input_cursor_data`,
+  and `InputSelectionRange` helpers (Tauri `deleteTerminalInputRange` / move CSI).
+- GPUI smart cursor selection: when a painted selection is fully contained in the
+  tracked input line, Backspace/Delete removes the range, plain typing replaces it,
+  and Left/Right collapse to edges without clearing via normal send path.
+

@@ -80,9 +80,11 @@ pub use credential_autofill::{
 };
 pub use credentials_crypto::{CredentialCrypto, CredentialCryptoError};
 pub use terminal_input_tracker::{
-    TerminalInputState, apply_terminal_input_data, can_register_command_from_tracker,
-    can_suggest_from_tracker, get_tracked_command, get_tracked_submission_command,
-    resync_from_terminal_line, sanitize_terminal_command, strip_terminal_command_prompt,
+    InputSelectionRange, TerminalInputState, apply_terminal_input_data,
+    build_move_input_cursor_data, byte_index_to_char, can_register_command_from_tracker,
+    can_suggest_from_tracker, char_index_to_byte, delete_terminal_input_range,
+    get_tracked_command, get_tracked_submission_command, resync_from_terminal_line,
+    sanitize_terminal_command, strip_terminal_command_prompt,
 };
 pub use diagnostics::{
     DiagnosticsError, DiagnosticsExportInfo, DiagnosticsExportOptions, DiagnosticsRuntimeSnapshot,
