@@ -189,6 +189,16 @@ impl NyaTermApp {
                                     .h(px(2.))
                                     .bg(accent),
                             )
+                            .child(
+                                // Cover tab strip bottom border so the active tab blends into the terminal.
+                                div()
+                                    .absolute()
+                                    .bottom_0()
+                                    .left_0()
+                                    .right_0()
+                                    .h(px(1.))
+                                    .bg(rgb(palette.bg)),
+                            )
                         })
                         .child(
                             div()
