@@ -739,10 +739,13 @@ pub(in crate::ui::view) fn compact_setting_state(palette: ThemePalette,
         )
 }
 
-pub(in crate::ui::view) fn cloud_sync_history_row(palette: ThemePalette,
+pub(in crate::ui::view) fn cloud_sync_history_row(
+    palette: ThemePalette,
     entry: CloudSyncHistoryEntry,
     expanded: bool,
-    on_toggle: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,) -> impl IntoElement {
+    on_toggle: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
+    on_copy: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
+) -> impl IntoElement {
     let summary = cloud_sync_history_summary(&entry);
     let normalized = entry.message.split_whitespace().collect::<Vec<_>>().join(" ");
     let is_problem = matches!(entry.status.as_str(), "failed" | "conflict");
@@ -779,10 +782,10 @@ pub(in crate::ui::view) fn cloud_sync_history_row(palette: ThemePalette,
         .map(compact_id);
     let message = entry.message.clone();
 
-    // Tauri SyncBackupHistory list: dense row, compact meta chips.
+    // Tauri SyncBackupHistory list: dense row, compact meta chips, copy on expand.
     div()
-        .px_2()
-        .py_1()
+        .px_3()
+        .py_2()
         .border_b_1()
         .border_color(rgb(palette.surface_elevated))
         .child(
@@ -878,7 +881,25 @@ pub(in crate::ui::view) fn cloud_sync_history_row(palette: ThemePalette,
                                                 "View details"
                                             })
                                             .on_click(on_toggle),
-                                    ),
+                                    )
+                                    .when(expanded && has_message_details, |this| {
+                                        this.child(
+                                            div()
+                                                .id(SharedString::from(format!(
+                                                    "sync-history-copy-{}",
+                                                    entry.id
+                                                )))
+                                                .h(px(22.))
+                                                .flex()
+                                                .items_center()
+                                                .text_size(px(10.))
+                                                .text_color(rgb(palette.text_muted))
+                                                .cursor_pointer()
+                                                .hover(|style| style.text_color(rgb(palette.text)))
+                                                .child("Copy message")
+                                                .on_click(on_copy),
+                                        )
+                                    }),
                             )
                         })
                         .when(expanded && has_message_details, |this| {

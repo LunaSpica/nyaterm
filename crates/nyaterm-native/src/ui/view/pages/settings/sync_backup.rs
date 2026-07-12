@@ -1061,10 +1061,26 @@ impl NyaTermApp {
                         let entry_id = entry.id.clone();
                         this.child(cloud_sync_history_row(
                             palette,
-                            entry,
+                            entry.clone(),
                             cloud_history_0_expanded,
                             cx.listener(move |this, _, _, cx| {
                                 this.toggle_cloud_sync_history_details(&entry_id, cx);
+                            }),
+                            cx.listener({
+                                let message = entry.message.clone();
+                                move |this, _, _, cx| {
+                                    if message.trim().is_empty() {
+                                        this.terminal_status =
+                                            "history entry has no message".to_string();
+                                    } else {
+                                        cx.write_to_clipboard(gpui::ClipboardItem::new_string(
+                                            message.clone(),
+                                        ));
+                                        this.terminal_status =
+                                            "sync history message copied".to_string();
+                                    }
+                                    cx.notify();
+                                }
                             }),
                         ))
                     })
@@ -1072,10 +1088,26 @@ impl NyaTermApp {
                         let entry_id = entry.id.clone();
                         this.child(cloud_sync_history_row(
                             palette,
-                            entry,
+                            entry.clone(),
                             cloud_history_1_expanded,
                             cx.listener(move |this, _, _, cx| {
                                 this.toggle_cloud_sync_history_details(&entry_id, cx);
+                            }),
+                            cx.listener({
+                                let message = entry.message.clone();
+                                move |this, _, _, cx| {
+                                    if message.trim().is_empty() {
+                                        this.terminal_status =
+                                            "history entry has no message".to_string();
+                                    } else {
+                                        cx.write_to_clipboard(gpui::ClipboardItem::new_string(
+                                            message.clone(),
+                                        ));
+                                        this.terminal_status =
+                                            "sync history message copied".to_string();
+                                    }
+                                    cx.notify();
+                                }
                             }),
                         ))
                     })
@@ -1083,10 +1115,26 @@ impl NyaTermApp {
                         let entry_id = entry.id.clone();
                         this.child(cloud_sync_history_row(
                             palette,
-                            entry,
+                            entry.clone(),
                             cloud_history_2_expanded,
                             cx.listener(move |this, _, _, cx| {
                                 this.toggle_cloud_sync_history_details(&entry_id, cx);
+                            }),
+                            cx.listener({
+                                let message = entry.message.clone();
+                                move |this, _, _, cx| {
+                                    if message.trim().is_empty() {
+                                        this.terminal_status =
+                                            "history entry has no message".to_string();
+                                    } else {
+                                        cx.write_to_clipboard(gpui::ClipboardItem::new_string(
+                                            message.clone(),
+                                        ));
+                                        this.terminal_status =
+                                            "sync history message copied".to_string();
+                                    }
+                                    cx.notify();
+                                }
                             }),
                         ))
                     }),

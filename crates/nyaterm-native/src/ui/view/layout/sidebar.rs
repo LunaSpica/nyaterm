@@ -2403,12 +2403,24 @@ impl NyaTermApp {
             for entry in history {
                 let entry_id = entry.id.clone();
                 let is_open = expanded.contains(&entry_id);
+                let copy_message = entry.message.clone();
                 rows = rows.child(cloud_sync_history_row(
                     palette,
                     entry,
                     is_open,
                     cx.listener(move |this, _, _, cx| {
                         this.toggle_cloud_sync_history_details(&entry_id, cx);
+                    }),
+                    cx.listener(move |this, _, _, cx| {
+                        if copy_message.trim().is_empty() {
+                            this.terminal_status = "history entry has no message".to_string();
+                        } else {
+                            cx.write_to_clipboard(ClipboardItem::new_string(
+                                copy_message.clone(),
+                            ));
+                            this.terminal_status = "sync history message copied".to_string();
+                        }
+                        cx.notify();
                     }),
                 ));
             }

@@ -1606,3 +1606,8 @@ service boundary first:
 - List/Compact/Tile rows match Tauri command actions: execution badge (list),
   Send, Details, and a More overflow with Edit / Send to all / Delete.
 - Menu state clears when changing category, sort/view mode, or opening editors.
+
+## 2026-07-12 Sync history copy densify
+
+- Sync/Backup history rows densify spacing and add Copy message when details
+  are expanded (Tauri HistoryEntryRow copy parity).
