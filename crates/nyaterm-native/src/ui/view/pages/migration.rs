@@ -48,13 +48,18 @@ impl NyaTermApp {
             .size_full()
             .p_3()
             .gap_4()
-            .child(section_header("Migration", "Inventory of the ignored Tauri source and the native replacement boundary.", self.theme_palette()))
+            .child(section_header(
+                "Migration",
+                "Inventory of the ignored Tauri source and the native replacement boundary.",
+                self.theme_palette(),
+            ))
             .child(
                 div()
                     .grid()
                     .grid_cols(4)
                     .gap_3()
-                    .child(metric(palette, 
+                    .child(metric(
+                        palette,
                         "Legacy source",
                         if self.inventory.exists {
                             "found"
@@ -62,12 +67,18 @@ impl NyaTermApp {
                             "missing"
                         },
                     ))
-                    .child(metric(palette, "Rust files", self.inventory.rust_files.to_string()))
-                    .child(metric(palette, 
+                    .child(metric(
+                        palette,
+                        "Rust files",
+                        self.inventory.rust_files.to_string(),
+                    ))
+                    .child(metric(
+                        palette,
                         "Frontend files",
                         self.inventory.frontend_files.to_string(),
                     ))
-                    .child(metric(palette, 
+                    .child(metric(
+                        palette,
                         "Command modules",
                         self.inventory.command_modules.to_string(),
                     )),

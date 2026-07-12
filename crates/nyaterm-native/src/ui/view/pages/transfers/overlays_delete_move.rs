@@ -228,7 +228,8 @@ impl NyaTermApp {
                             .items_center()
                             .justify_end()
                             .gap_2()
-                            .child(small_button(palette, 
+                            .child(small_button(
+                                palette,
                                 "transfer-move-cancel",
                                 "Cancel",
                                 cx.listener(|this, _, _, cx| {
@@ -236,7 +237,8 @@ impl NyaTermApp {
                                 }),
                             ))
                             .child(div().when(has_error, |this| this.opacity(0.45)).child(
-                                small_button(palette, 
+                                small_button(
+                                    palette,
                                     "transfer-move-save",
                                     "Save",
                                     cx.listener(|this, _, window, cx| {

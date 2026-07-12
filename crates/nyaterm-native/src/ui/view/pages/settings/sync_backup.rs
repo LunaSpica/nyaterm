@@ -21,101 +21,108 @@ impl NyaTermApp {
             None => "native redb backup",
         };
 
-        div()
-            .flex()
-            .flex_col()
-            .gap_3()
-            .child(settings_form_section(palette, 
-                Some("Config backup"),
-                Some("Export or import the native redb configuration store."),
-                div()
-                    .flex()
-                    .flex_col()
-                    .gap_3()
-                    .child(settings_form_row(palette, 
-                        "Store path",
-                        Some(SharedString::from(truncate_preview(
-                            &self.store_status.path,
-                            64,
-                        ))),
-                        div()
-                            .text_size(px(11.))
-                            .text_color(rgb(palette.text_muted))
-                            .child(prompt_label),
-                    ))
-                    .child(settings_form_row(palette, 
-                        "JSON backup",
-                        Some(SharedString::from(
-                            "Portable JSON export/import of connections and settings.",
+        div().flex().flex_col().gap_3().child(settings_form_section(
+            palette,
+            Some("Config backup"),
+            Some("Export or import the native redb configuration store."),
+            div()
+                .flex()
+                .flex_col()
+                .gap_3()
+                .child(settings_form_row(
+                    palette,
+                    "Store path",
+                    Some(SharedString::from(truncate_preview(
+                        &self.store_status.path,
+                        64,
+                    ))),
+                    div()
+                        .text_size(px(11.))
+                        .text_color(rgb(palette.text_muted))
+                        .child(prompt_label),
+                ))
+                .child(settings_form_row(
+                    palette,
+                    "JSON backup",
+                    Some(SharedString::from(
+                        "Portable JSON export/import of connections and settings.",
+                    )),
+                    div()
+                        .flex()
+                        .gap_1()
+                        .child(small_button(
+                            palette,
+                            "settings-config-export",
+                            "Export",
+                            cx.listener(|this, _, _, cx| {
+                                this.prompt_config_export(cx);
+                            }),
+                        ))
+                        .child(small_button(
+                            palette,
+                            "settings-config-import",
+                            "Import",
+                            cx.listener(|this, _, _, cx| {
+                                this.prompt_config_import(cx);
+                            }),
                         )),
-                        div()
-                            .flex()
-                            .gap_1()
-                            .child(small_button(palette, 
-                                "settings-config-export",
-                                "Export",
-                                cx.listener(|this, _, _, cx| {
-                                    this.prompt_config_export(cx);
-                                }),
-                            ))
-                            .child(small_button(palette, 
-                                "settings-config-import",
-                                "Import",
-                                cx.listener(|this, _, _, cx| {
-                                    this.prompt_config_import(cx);
-                                }),
-                            )),
-                    ))
-                    .child(settings_form_row(palette, 
-                        "Portable .nya",
-                        Some(SharedString::from(
-                            "Legacy portable snapshot package used by NyaTerm migration.",
+                ))
+                .child(settings_form_row(
+                    palette,
+                    "Portable .nya",
+                    Some(SharedString::from(
+                        "Legacy portable snapshot package used by NyaTerm migration.",
+                    )),
+                    div()
+                        .flex()
+                        .gap_1()
+                        .child(small_button(
+                            palette,
+                            "settings-portable-export",
+                            "Export .nya",
+                            cx.listener(|this, _, _, cx| {
+                                this.prompt_portable_snapshot_export(cx);
+                            }),
+                        ))
+                        .child(small_button(
+                            palette,
+                            "settings-portable-import",
+                            "Import .nya",
+                            cx.listener(|this, _, _, cx| {
+                                this.prompt_portable_snapshot_import(cx);
+                            }),
                         )),
-                        div()
-                            .flex()
-                            .gap_1()
-                            .child(small_button(palette, 
-                                "settings-portable-export",
-                                "Export .nya",
-                                cx.listener(|this, _, _, cx| {
-                                    this.prompt_portable_snapshot_export(cx);
-                                }),
-                            ))
-                            .child(small_button(palette, 
-                                "settings-portable-import",
-                                "Import .nya",
-                                cx.listener(|this, _, _, cx| {
-                                    this.prompt_portable_snapshot_import(cx);
-                                }),
-                            )),
-                    ))
-                    .child(settings_form_row(palette, 
-                        "Encrypted .nya",
-                        Some(SharedString::from(
-                            "AES-GCM package sealed with the master password.",
+                ))
+                .child(settings_form_row(
+                    palette,
+                    "Encrypted .nya",
+                    Some(SharedString::from(
+                        "AES-GCM package sealed with the master password.",
+                    )),
+                    div()
+                        .flex()
+                        .gap_1()
+                        .child(small_button(
+                            palette,
+                            "settings-encrypted-portable-export",
+                            "Encrypt .nya",
+                            cx.listener(|this, _, _, cx| {
+                                this.prompt_encrypted_portable_snapshot_export(cx);
+                            }),
+                        ))
+                        .child(small_button(
+                            palette,
+                            "settings-encrypted-portable-import",
+                            "Decrypt .nya",
+                            cx.listener(|this, _, _, cx| {
+                                this.prompt_encrypted_portable_snapshot_import(cx);
+                            }),
                         )),
-                        div()
-                            .flex()
-                            .gap_1()
-                            .child(small_button(palette, 
-                                "settings-encrypted-portable-export",
-                                "Encrypt .nya",
-                                cx.listener(|this, _, _, cx| {
-                                    this.prompt_encrypted_portable_snapshot_export(cx);
-                                }),
-                            ))
-                            .child(small_button(palette, 
-                                "settings-encrypted-portable-import",
-                                "Decrypt .nya",
-                                cx.listener(|this, _, _, cx| {
-                                    this.prompt_encrypted_portable_snapshot_import(cx);
-                                }),
-                            )),
-                    ))
-                    .when_some(backup_snapshot_prompt, |this, prompt| {
-                        this.child(self.snapshot_password_prompt_banner(prompt, cx))
-                    }),
-            ))
+                ))
+                .when_some(backup_snapshot_prompt, |this, prompt| {
+                    this.child(self.snapshot_password_prompt_banner(prompt, cx))
+                }),
+        ))
     }
 
     pub(in crate::ui::view) fn diagnostics_settings_section(
@@ -133,7 +140,8 @@ impl NyaTermApp {
             .flex()
             .flex_col()
             .gap_3()
-            .child(settings_form_section(palette, 
+            .child(settings_form_section(
+                palette,
                 Some("Diagnostics"),
                 Some("Export support bundles and open the native log directory."),
                 div()
@@ -182,11 +190,8 @@ impl NyaTermApp {
                         palette,
                         "Log retention",
                         Some(SharedString::from("Retained diagnostics JSONL days.")),
-                        div()
-                            .flex()
-                            .items_center()
-                            .gap_1()
-                            .children([3_u32, 7, 14, 30].into_iter().map(|days| {
+                        div().flex().items_center().gap_1().children(
+                            [3_u32, 7, 14, 30].into_iter().map(|days| {
                                 let selected = self.settings.diagnostics_retention_days == days;
                                 let id = format!("sync-diag-retention-{days}");
                                 let label: &'static str = match days {
@@ -204,22 +209,26 @@ impl NyaTermApp {
                                         this.set_diagnostics_retention_days(days, cx);
                                     }),
                                 )
-                            })),
+                            }),
+                        ),
                     ))
-                    .child(settings_form_row(palette, 
+                    .child(settings_form_row(
+                        palette,
                         "Support bundle",
                         Some(SharedString::from(prompt_label)),
                         div()
                             .flex()
                             .gap_1()
-                            .child(small_button(palette, 
+                            .child(small_button(
+                                palette,
                                 "settings-diagnostics-export",
                                 "Export",
                                 cx.listener(|this, _, _, cx| {
                                     this.prompt_diagnostics_export(cx);
                                 }),
                             ))
-                            .child(small_button(palette, 
+                            .child(small_button(
+                                palette,
                                 "settings-diagnostics-logs",
                                 "Logs",
                                 cx.listener(|this, _, _, cx| {
@@ -227,7 +236,8 @@ impl NyaTermApp {
                                 }),
                             )),
                     ))
-                    .child(settings_form_row(palette, 
+                    .child(settings_form_row(
+                        palette,
                         "Log directory",
                         Some(SharedString::from(truncate_preview(&log_dir, 64))),
                         div()
@@ -236,17 +246,23 @@ impl NyaTermApp {
                             .child("On disk"),
                     )),
             ))
-            .child(settings_form_section(palette, 
+            .child(settings_form_section(
+                palette,
                 Some("Updates"),
                 Some("Check for native application updates."),
                 div()
                     .flex()
                     .flex_col()
                     .gap_3()
-                    .child(settings_form_row(palette, 
+                    .child(settings_form_row(
+                        palette,
                         "Native update",
-                        Some(SharedString::from(truncate_preview(&self.update_status, 96))),
-                        small_button(palette, 
+                        Some(SharedString::from(truncate_preview(
+                            &self.update_status,
+                            96,
+                        ))),
+                        small_button(
+                            palette,
                             "settings-update-check",
                             if self.update_pending {
                                 "Checking"
@@ -263,7 +279,8 @@ impl NyaTermApp {
                             "https://github.com/nyakang/nyaterm/releases".to_string()
                         });
                         let notes = info.release_notes.unwrap_or_default();
-                        this.child(settings_form_row(palette, 
+                        this.child(settings_form_row(
+                            palette,
                             "Latest release",
                             Some(SharedString::from(format!(
                                 "{}{} · {}",
@@ -370,31 +387,36 @@ impl NyaTermApp {
                                     .text_color(rgb(0xe2e8f0))
                                     .child(conflict.message),
                             )
-                            .child(div().text_xs().text_color(rgb(palette.text_muted)).child(format!(
-                                "{} · local {} · remote {}",
-                                conflict.provider, local_hash, remote_revision
-                            ))),
+                            .child(div().text_xs().text_color(rgb(palette.text_muted)).child(
+                                format!(
+                                    "{} · local {} · remote {}",
+                                    conflict.provider, local_hash, remote_revision
+                                ),
+                            )),
                     )
                     .child(
                         div()
                             .flex()
                             .items_center()
                             .gap_2()
-                            .child(small_button(palette, 
+                            .child(small_button(
+                                palette,
                                 "cloud-conflict-force-push",
                                 "Force Push",
                                 cx.listener(move |this, _, _, cx| {
                                     this.prompt_cloud_sync_force_push(provider_action, cx);
                                 }),
                             ))
-                            .child(small_button(palette, 
+                            .child(small_button(
+                                palette,
                                 "cloud-conflict-force-pull",
                                 "Force Pull",
                                 cx.listener(move |this, _, _, cx| {
                                     this.prompt_cloud_sync_force_pull(provider_action, cx);
                                 }),
                             ))
-                            .child(small_button(palette, 
+                            .child(small_button(
+                                palette,
                                 "cloud-conflict-dismiss",
                                 "Dismiss",
                                 cx.listener(|this, _, _, cx| {
@@ -1142,8 +1164,12 @@ impl NyaTermApp {
     }
 }
 
-
-fn sync_provider_hint(palette: crate::ui::theme::ThemePalette, title: &'static str, detail: &'static str) -> impl IntoElement {    div()
+fn sync_provider_hint(
+    palette: crate::ui::theme::ThemePalette,
+    title: &'static str,
+    detail: &'static str,
+) -> impl IntoElement {
+    div()
         .rounded_sm()
         .border_1()
         .border_color(rgb(palette.border))

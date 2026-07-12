@@ -16,14 +16,13 @@ use crate::ui::components::{small_button, status_pill};
 use crate::ui::models::{
     TransferBrowserColumnResizeState, TransferBrowserColumnWidths, TransferBrowserContextMenuState,
     TransferBrowserDragSelectionState, TransferBrowserFavoritesMenuState,
-    TransferBrowserUploadMenuState,
     TransferBrowserPendingRenameState, TransferBrowserSessionCacheState, TransferBrowserSortColumn,
-    TransferBrowserSortDirection, TransferDeleteState, TransferEditorField, TransferEditorState,
-    TransferInputField, TransferJobEvent, TransferJobKind, TransferJobOutput, TransferJobResult,
-    TransferJobState, TransferJobStatus, TransferMoveState, TransferNewFileState,
-    TransferNewFolderState, TransferNewSymlinkState, TransferPathPromptKind,
-    TransferPropertiesField, TransferPropertiesState, TransferRenameState, TransferSymlinkField,
-    TransferUnknownFileState,
+    TransferBrowserSortDirection, TransferBrowserUploadMenuState, TransferDeleteState,
+    TransferEditorField, TransferEditorState, TransferInputField, TransferJobEvent,
+    TransferJobKind, TransferJobOutput, TransferJobResult, TransferJobState, TransferJobStatus,
+    TransferMoveState, TransferNewFileState, TransferNewFolderState, TransferNewSymlinkState,
+    TransferPathPromptKind, TransferPropertiesField, TransferPropertiesState, TransferRenameState,
+    TransferSymlinkField, TransferUnknownFileState,
 };
 use nyaterm_domain::{AiCustomActionConfig, ConnectionStore};
 
@@ -64,12 +63,12 @@ mod overlays_delete_move;
 mod overlays_editor;
 #[path = "transfers/overlays_favorites.rs"]
 mod overlays_favorites;
-#[path = "transfers/overlays_upload.rs"]
-mod overlays_upload;
 #[path = "transfers/overlays_properties.rs"]
 mod overlays_properties;
 #[path = "transfers/overlays_unknown.rs"]
 mod overlays_unknown;
+#[path = "transfers/overlays_upload.rs"]
+mod overlays_upload;
 #[path = "transfers/path_bar.rs"]
 mod path_bar;
 #[path = "transfers/properties.rs"]
@@ -120,7 +119,4 @@ impl NyaTermApp {
                 .child(self.transfer_queue_view(cx)),
         )
     }
-
-
-
 }

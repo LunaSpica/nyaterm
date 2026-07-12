@@ -117,9 +117,9 @@ impl NyaTermApp {
         }
     }
 
-    pub(super) fn drain_host_key_prompts(&mut self) {
+    pub(super) fn drain_host_key_prompts(&mut self) -> bool {
         if self.active_host_key_prompt.is_some() {
-            return;
+            return false;
         }
 
         if let Some(request) = self.host_key_prompts.pop_pending() {
@@ -128,12 +128,14 @@ impl NyaTermApp {
                 request.host_key.host_identifier
             );
             self.active_host_key_prompt = Some(request);
+            return true;
         }
+        false
     }
 
-    pub(super) fn drain_credential_prompts(&mut self) {
+    pub(super) fn drain_credential_prompts(&mut self) -> bool {
         if self.active_credential_prompt.is_some() {
-            return;
+            return false;
         }
 
         if let Some(request) = self.credential_prompts.pop_pending() {
@@ -147,12 +149,14 @@ impl NyaTermApp {
                 response_tx: request.response_tx,
                 value: String::new(),
             });
+            return true;
         }
+        false
     }
 
-    pub(super) fn drain_duplicate_prompts(&mut self) {
+    pub(super) fn drain_duplicate_prompts(&mut self) -> bool {
         if self.active_duplicate_prompt.is_some() {
-            return;
+            return false;
         }
 
         if let Some(request) = self.duplicate_prompts.pop_pending() {
@@ -165,7 +169,9 @@ impl NyaTermApp {
                 request: request.request,
                 response_tx: request.response_tx,
             });
+            return true;
         }
+        false
     }
 }
 

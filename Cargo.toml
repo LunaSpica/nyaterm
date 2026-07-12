@@ -19,6 +19,7 @@ repository = "https://github.com/nyakang/nyaterm"
 [workspace.dependencies]
 aes = "0.9"
 aes-gcm = "0.11"
+alacritty_terminal = "0.26.0"
 anyhow = "1"
 async-http-proxy = { version = "1.2.5", features = ["runtime-tokio", "basic-auth"] }
 async-trait = "0.1.50"

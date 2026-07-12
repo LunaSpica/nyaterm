@@ -180,7 +180,6 @@ impl NyaTermApp {
         }
     }
 
-
     pub(in crate::ui::view) fn open_translation_dialog(
         &mut self,
         text: String,
@@ -252,11 +251,8 @@ impl NyaTermApp {
             .text_sm()
             .text_color(rgb(palette.text));
         for line in source.lines().take(8) {
-            source_box = source_box.child(
-                div()
-                    .whitespace_nowrap()
-                    .child(truncate_preview(line, 96)),
-            );
+            source_box =
+                source_box.child(div().whitespace_nowrap().child(truncate_preview(line, 96)));
         }
         if source.lines().count() == 0 {
             source_box = source_box.child(source.clone());
@@ -280,17 +276,11 @@ impl NyaTermApp {
                     .child("Translating…"),
             );
         } else if status.starts_with("translation failed") {
-            result_box = result_box.child(
-                div()
-                    .text_color(rgb(palette.danger))
-                    .child(status.clone()),
-            );
+            result_box =
+                result_box.child(div().text_color(rgb(palette.danger)).child(status.clone()));
         } else if !translated.is_empty() {
             for line in translated.lines().take(12) {
-                result_box = result_box.child(
-                    div()
-                        .child(line.to_string()),
-                );
+                result_box = result_box.child(div().child(line.to_string()));
             }
             if translated.lines().count() == 0 {
                 result_box = result_box.child(translated.clone());
@@ -404,7 +394,8 @@ impl NyaTermApp {
                                             cx.write_to_clipboard(ClipboardItem::new_string(
                                                 result.translated,
                                             ));
-                                            this.translate_status = "translated text copied".to_string();
+                                            this.translate_status =
+                                                "translated text copied".to_string();
                                             cx.notify();
                                         }
                                     }),
@@ -423,8 +414,10 @@ impl NyaTermApp {
             .into_any_element()
     }
 
-    pub(super) fn drain_translate_events(&mut self) {
+    pub(super) fn drain_translate_events(&mut self) -> bool {
+        let mut dirty = false;
         while let Ok(event) = self.translate_rx.try_recv() {
+            dirty = true;
             self.translate_pending = false;
             match event.result {
                 Ok(result) => {
@@ -442,5 +435,6 @@ impl NyaTermApp {
                 }
             }
         }
+        dirty
     }
 }

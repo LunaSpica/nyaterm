@@ -1,5 +1,5 @@
 use super::*;
-use gpui::{SharedString, prelude::*};
+use gpui::SharedString;
 
 impl NyaTermApp {
     pub(in crate::ui::view) fn stats_view(&mut self, cx: &mut Context<Self>) -> impl IntoElement {
@@ -42,13 +42,19 @@ impl NyaTermApp {
 
         let mut networks = div().flex().flex_col().gap_2();
         if self.remote_stats.is_none() {
-            networks = networks.child(empty_panel(if self.active_ssh_config.is_some() {
-                "No stats snapshot loaded."
-            } else {
-                "Start an SSH session to inspect remote stats."
-            }, self.theme_palette()));
+            networks = networks.child(empty_panel(
+                if self.active_ssh_config.is_some() {
+                    "No stats snapshot loaded."
+                } else {
+                    "Start an SSH session to inspect remote stats."
+                },
+                self.theme_palette(),
+            ));
         } else if stats.networks.is_empty() {
-            networks = networks.child(empty_panel("No active physical network interfaces found.", self.theme_palette()));
+            networks = networks.child(empty_panel(
+                "No active physical network interfaces found.",
+                self.theme_palette(),
+            ));
         } else {
             for network in &stats.networks {
                 networks = networks.child(stats_resource_row(
@@ -67,7 +73,10 @@ impl NyaTermApp {
 
         let mut disks = div().flex().flex_col().gap_2();
         if self.remote_stats.is_some() && stats.disks.is_empty() {
-            disks = disks.child(empty_panel("No mounted block devices found.", self.theme_palette()));
+            disks = disks.child(empty_panel(
+                "No mounted block devices found.",
+                self.theme_palette(),
+            ));
         } else {
             for disk in &stats.disks {
                 disks = disks.child(stats_resource_row(
@@ -119,18 +128,16 @@ impl NyaTermApp {
                                 stats.cpu.usage, memory_percent, disk_summary
                             )),
                     )
-                    .child(
-                        div()
-                            .when(!can_refresh, |this| this.opacity(0.45))
-                            .child(compact_remote_svg_button(
-                                palette,
-                                "stats-refresh",
-                                "icons/fe/refresh.svg",
-                                cx.listener(|this, _, window, cx| {
-                                    this.refresh_stats(window, cx);
-                                }),
-                            )),
-                    ),
+                    .child(div().when(!can_refresh, |this| this.opacity(0.45)).child(
+                        compact_remote_svg_button(
+                            palette,
+                            "stats-refresh",
+                            "icons/fe/refresh.svg",
+                            cx.listener(|this, _, window, cx| {
+                                this.refresh_stats(window, cx);
+                            }),
+                        ),
+                    )),
             )
             .child(
                 div()
@@ -143,198 +150,242 @@ impl NyaTermApp {
                     .flex()
                     .flex_col()
                     .gap_2()
-.child(
-                div()
-                    .grid()
-                    .grid_cols(4)
-                    .gap_2()
-                    .child(resource_gauge_card(
-                        palette,
-                        "CPU",
-                        format!("{:.0}%", stats.cpu.usage.clamp(0., 100.)),
-                        truncate_preview(&stats.cpu.model, 54),
-                        stats.cpu.usage / 100.,
-                    ))
-                    .child(resource_gauge_card(
-                        palette,
-                        "Memory",
-                        format!("{memory_percent:.0}%"),
-                        format!(
-                            "{} used / {} total",
-                            format_file_size(Some(stats.memory.used)),
-                            format_file_size(Some(memory_total))
-                        ),
-                        memory_percent / 100.,
-                    ))
-                    .child(resource_summary_card(
-                        palette,
-                        "Load",
-                        format!("{:.2}", stats.load.load1),
-                        format!(
-                            "5m {:.2} · 15m {:.2} · {} core(s)",
-                            stats.load.load5, stats.load.load15, stats.cpu.cores
-                        ),
-                        load_ratio(stats.load.load1, stats.cpu.cores),
-                    ))
-                    .child(resource_summary_card(
-                        palette,
-                        "Network",
-                        format!(
-                            "{} / {}",
-                            format_rate(total_rx_rate),
-                            format_rate(total_tx_rate)
-                        ),
-                        busiest_network
-                            .map(|network| {
+                    .child(
+                        div()
+                            .grid()
+                            .grid_cols(4)
+                            .gap_2()
+                            .child(resource_gauge_card(
+                                palette,
+                                "CPU",
+                                format!("{:.0}%", stats.cpu.usage.clamp(0., 100.)),
+                                truncate_preview(&stats.cpu.model, 54),
+                                stats.cpu.usage / 100.,
+                            ))
+                            .child(resource_gauge_card(
+                                palette,
+                                "Memory",
+                                format!("{memory_percent:.0}%"),
                                 format!(
-                                    "{} busiest · {}",
-                                    network.nic,
-                                    format_rate(
-                                        network.rx_bytes_per_sec + network.tx_bytes_per_sec
+                                    "{} used / {} total",
+                                    format_file_size(Some(stats.memory.used)),
+                                    format_file_size(Some(memory_total))
+                                ),
+                                memory_percent / 100.,
+                            ))
+                            .child(resource_summary_card(
+                                palette,
+                                "Load",
+                                format!("{:.2}", stats.load.load1),
+                                format!(
+                                    "5m {:.2} · 15m {:.2} · {} core(s)",
+                                    stats.load.load5, stats.load.load15, stats.cpu.cores
+                                ),
+                                load_ratio(stats.load.load1, stats.cpu.cores),
+                            ))
+                            .child(resource_summary_card(
+                                palette,
+                                "Network",
+                                format!(
+                                    "{} / {}",
+                                    format_rate(total_rx_rate),
+                                    format_rate(total_tx_rate)
+                                ),
+                                busiest_network
+                                    .map(|network| {
+                                        format!(
+                                            "{} busiest · {}",
+                                            network.nic,
+                                            format_rate(
+                                                network.rx_bytes_per_sec + network.tx_bytes_per_sec
+                                            )
+                                        )
+                                    })
+                                    .unwrap_or_else(|| "No active interfaces".to_string()),
+                                (total_rx_rate + total_tx_rate) / net_summary.max(1.0),
+                            )),
+                    )
+                    .child(
+                        div()
+                            .grid()
+                            .grid_cols(3)
+                            .gap_2()
+                            .child(
+                                div()
+                                    .rounded_md()
+                                    .border_1()
+                                    .border_color(rgb(palette.border))
+                                    .bg(rgb(palette.bg))
+                                    .p_2()
+                                    .child(
+                                        div()
+                                            .text_xs()
+                                            .font_weight(FontWeight(700.))
+                                            .text_color(rgb(palette.text_muted))
+                                            .child("System"),
                                     )
-                                )
-                            })
-                            .unwrap_or_else(|| "No active interfaces".to_string()),
-                        (total_rx_rate + total_tx_rate) / net_summary.max(1.0),
-                    )),
-            )
-            
-            .child(
-                div()
-                    .grid()
-                    .grid_cols(3)
-                    .gap_2()
-                    .child(
-                        div()
-                            .rounded_md()
-                            .border_1()
-                            .border_color(rgb(palette.border))
-                            .bg(rgb(palette.bg))
-                            .p_2()
+                                    .child(dense_capability_line(
+                                        palette,
+                                        "OS",
+                                        truncate_preview(&stats.system.os, 52),
+                                    ))
+                                    .child(dense_capability_line(
+                                        palette,
+                                        "Arch",
+                                        stats.system.arch.clone(),
+                                    ))
+                                    .child(dense_capability_line(
+                                        palette,
+                                        "Uptime",
+                                        format_uptime(stats.system.uptime_sec),
+                                    ))
+                                    .child(dense_capability_line(
+                                        palette,
+                                        "CPU Model",
+                                        truncate_preview(&stats.cpu.model, 52),
+                                    ))
+                                    .child(dense_capability_line(
+                                        palette,
+                                        "Cores",
+                                        stats.cpu.cores.to_string(),
+                                    )),
+                            )
                             .child(
                                 div()
-                                    .text_xs()
-                                    .font_weight(FontWeight(700.))
-                                    .text_color(rgb(palette.text_muted))
-                                    .child("System"),
+                                    .rounded_md()
+                                    .border_1()
+                                    .border_color(rgb(palette.border))
+                                    .bg(rgb(palette.bg))
+                                    .p_2()
+                                    .child(
+                                        div().text_sm().font_weight(FontWeight(700.)).child("Load"),
+                                    )
+                                    .child(dense_capability_line(
+                                        palette,
+                                        "1 min",
+                                        format!("{:.2}", stats.load.load1),
+                                    ))
+                                    .child(dense_capability_line(
+                                        palette,
+                                        "5 min",
+                                        format!("{:.2}", stats.load.load5),
+                                    ))
+                                    .child(dense_capability_line(
+                                        palette,
+                                        "15 min",
+                                        format!("{:.2}", stats.load.load15),
+                                    ))
+                                    .when(!stats.cpu.per_core.is_empty(), |this| {
+                                        this.child(cpu_core_summary(
+                                            palette,
+                                            &stats.cpu.per_core,
+                                            self.stats_cpu_expanded,
+                                            cx,
+                                        ))
+                                    }),
                             )
-                            .child(dense_capability_line(palette, "OS",
-                                truncate_preview(&stats.system.os, 52),
-                            ))
-                            .child(dense_capability_line(palette, "Arch", stats.system.arch.clone()))
-                            .child(dense_capability_line(palette, "Uptime",
-                                format_uptime(stats.system.uptime_sec),
-                            ))
-                            .child(dense_capability_line(palette, "CPU Model",
-                                truncate_preview(&stats.cpu.model, 52),
-                            ))
-                            .child(dense_capability_line(palette, "Cores", stats.cpu.cores.to_string())),
+                            .child(
+                                div()
+                                    .rounded_md()
+                                    .border_1()
+                                    .border_color(rgb(palette.border))
+                                    .bg(rgb(palette.bg))
+                                    .p_2()
+                                    .child(
+                                        div()
+                                            .text_sm()
+                                            .font_weight(FontWeight(700.))
+                                            .child("Memory"),
+                                    )
+                                    .child(dense_capability_line(
+                                        palette,
+                                        "Used",
+                                        format_file_size(Some(stats.memory.used)),
+                                    ))
+                                    .child(dense_capability_line(
+                                        palette,
+                                        "Available",
+                                        format_file_size(Some(stats.memory.available)),
+                                    ))
+                                    .child(dense_capability_line(
+                                        palette,
+                                        "Cached",
+                                        format_file_size(Some(stats.memory.cached)),
+                                    ))
+                                    .child(dense_capability_line(
+                                        palette,
+                                        "Total",
+                                        format_file_size(Some(memory_total)),
+                                    ))
+                                    .child(stats_progress_bar(palette, memory_percent / 100.)),
+                            ),
                     )
                     .child(
                         div()
-                            .rounded_md()
-                            .border_1()
-                            .border_color(rgb(palette.border))
-                            .bg(rgb(palette.bg))
-                            .p_2()
-                            .child(div().text_sm().font_weight(FontWeight(700.)).child("Load"))
-                            .child(dense_capability_line(palette, "1 min", format!("{:.2}", stats.load.load1)))
-                            .child(dense_capability_line(palette, "5 min", format!("{:.2}", stats.load.load5)))
-                            .child(dense_capability_line(palette, "15 min",
-                                format!("{:.2}", stats.load.load15),
-                            ))
-                            .when(!stats.cpu.per_core.is_empty(), |this| {
-                                this.child(cpu_core_summary(
-                                    palette,
-                                    &stats.cpu.per_core,
-                                    self.stats_cpu_expanded,
-                                    cx,
-                                ))
-                            }),
-                    )
-                    .child(
-                        div()
-                            .rounded_md()
-                            .border_1()
-                            .border_color(rgb(palette.border))
-                            .bg(rgb(palette.bg))
-                            .p_2()
+                            .grid()
+                            .grid_cols(2)
+                            .gap_3()
                             .child(
                                 div()
-                                    .text_sm()
-                                    .font_weight(FontWeight(700.))
-                                    .child("Memory"),
+                                    .rounded_md()
+                                    .border_1()
+                                    .border_color(rgb(palette.border))
+                                    .bg(rgb(palette.bg))
+                                    .p_2()
+                                    .child(
+                                        div()
+                                            .text_xs()
+                                            .font_weight(FontWeight(700.))
+                                            .text_color(rgb(palette.text_muted))
+                                            .child("Network"),
+                                    )
+                                    .child(networks),
                             )
-                            .child(dense_capability_line(palette, "Used",
-                                format_file_size(Some(stats.memory.used)),
-                            ))
-                            .child(dense_capability_line(palette, "Available",
-                                format_file_size(Some(stats.memory.available)),
-                            ))
-                            .child(dense_capability_line(palette, "Cached",
-                                format_file_size(Some(stats.memory.cached)),
-                            ))
-                            .child(dense_capability_line(palette, "Total",
-                                format_file_size(Some(memory_total)),
-                            ))
-                            .child(stats_progress_bar(palette, memory_percent / 100.)),
-                    ),
-            )
-            .child(
-                div()
-                    .grid()
-                    .grid_cols(2)
-                    .gap_3()
-                    .child(
-                        div()
-                            .rounded_md()
-                            .border_1()
-                            .border_color(rgb(palette.border))
-                            .bg(rgb(palette.bg))
-                            .p_2()
                             .child(
                                 div()
-                                    .text_xs()
-                                    .font_weight(FontWeight(700.))
-                                    .text_color(rgb(palette.text_muted))
-                                    .child("Network"),
-                            )
-                            .child(networks),
-                    )
-                    .child(
-                        div()
-                            .rounded_md()
-                            .border_1()
-                            .border_color(rgb(palette.border))
-                            .bg(rgb(palette.bg))
-                            .p_2()
-                            .child(div().text_sm().font_weight(FontWeight(700.)).child("Disks"))
-                            .when(busiest_disk.is_some(), |this| {
-                                let disk = busiest_disk.cloned().expect("checked is_some");
-                                this.child(
-                                    div()
-                                        .mt_2()
-                                        .rounded_sm()
-                                        .border_1()
-                                        .border_color(usage_color(palette, disk.use_percent as f64 / 100.))
-                                        .bg(rgb(palette.input))
-                                        .p_2()
-                                        .child(
+                                    .rounded_md()
+                                    .border_1()
+                                    .border_color(rgb(palette.border))
+                                    .bg(rgb(palette.bg))
+                                    .p_2()
+                                    .child(
+                                        div()
+                                            .text_sm()
+                                            .font_weight(FontWeight(700.))
+                                            .child("Disks"),
+                                    )
+                                    .when(busiest_disk.is_some(), |this| {
+                                        let disk = busiest_disk.cloned().expect("checked is_some");
+                                        this.child(
                                             div()
-                                                .text_xs()
-                                                .font_weight(FontWeight(700.))
-                                                .text_color(rgb(palette.text))
-                                                .child(format!(
-                                                    "Busiest mount: {} ({}%)",
-                                                    disk.mount, disk.use_percent
+                                                .mt_2()
+                                                .rounded_sm()
+                                                .border_1()
+                                                .border_color(usage_color(
+                                                    palette,
+                                                    disk.use_percent as f64 / 100.,
+                                                ))
+                                                .bg(rgb(palette.input))
+                                                .p_2()
+                                                .child(
+                                                    div()
+                                                        .text_xs()
+                                                        .font_weight(FontWeight(700.))
+                                                        .text_color(rgb(palette.text))
+                                                        .child(format!(
+                                                            "Busiest mount: {} ({}%)",
+                                                            disk.mount, disk.use_percent
+                                                        )),
+                                                )
+                                                .child(stats_progress_bar(
+                                                    palette,
+                                                    disk.use_percent as f64 / 100.,
                                                 )),
                                         )
-                                        .child(stats_progress_bar(palette, disk.use_percent as f64 / 100.)),
-                                )
-                            })
-                            .child(disks),
+                                    })
+                                    .child(disks),
+                            ),
                     ),
-            )
             )
     }
 }
@@ -370,7 +421,8 @@ fn cpu_core_summary(
             .justify_between()
             .gap_2()
             .child(dense_capability_line(palette, "Per Core", summary))
-            .child(small_button(palette, 
+            .child(small_button(
+                palette,
                 "stats-cpu-cores-toggle",
                 if expanded { "Hide" } else { "Show" },
                 cx.listener(|this, _, _, cx| {

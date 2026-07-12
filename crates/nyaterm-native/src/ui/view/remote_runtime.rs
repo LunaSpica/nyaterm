@@ -961,8 +961,10 @@ impl NyaTermApp {
         );
     }
 
-    pub(super) fn drain_process_events(&mut self) {
+    pub(super) fn drain_process_events(&mut self) -> bool {
+        let mut dirty = false;
         while let Ok(event) = self.process_rx.try_recv() {
+            dirty = true;
             self.process_pending = false;
             match event.result {
                 Ok(ProcessJobOutput::Listed(processes)) => {
@@ -995,6 +997,7 @@ impl NyaTermApp {
                 }
             }
         }
+        dirty
     }
 
     fn apply_processes(&mut self, processes: Vec<RemoteProcess>) {
@@ -1008,8 +1011,10 @@ impl NyaTermApp {
         self.processes = processes;
     }
 
-    pub(super) fn drain_docker_events(&mut self) {
+    pub(super) fn drain_docker_events(&mut self) -> bool {
+        let mut dirty = false;
         while let Ok(event) = self.docker_rx.try_recv() {
+            dirty = true;
             self.docker_pending = false;
             match event.result {
                 Ok(DockerJobOutput::Overview(overview)) => {
@@ -1092,6 +1097,7 @@ impl NyaTermApp {
                 }
             }
         }
+        dirty
     }
 
     fn apply_docker_overview(&mut self, overview: RemoteDockerOverview) {
@@ -1120,8 +1126,10 @@ impl NyaTermApp {
         self.docker_overview = Some(overview);
     }
 
-    pub(super) fn drain_stats_events(&mut self) {
+    pub(super) fn drain_stats_events(&mut self) -> bool {
+        let mut dirty = false;
         while let Ok(event) = self.stats_rx.try_recv() {
+            dirty = true;
             self.stats_pending = false;
             match event.result {
                 Ok(stats) => {
@@ -1145,6 +1153,7 @@ impl NyaTermApp {
                 }
             }
         }
+        dirty
     }
 }
 

@@ -91,7 +91,8 @@ impl NyaTermApp {
         let mut target_presets = div().mt_3().flex().items_center().gap_2().flex_wrap();
         for (language, label) in TARGET_LANGUAGES {
             let selected = self.translate_target_language == language;
-            target_presets = target_presets.child(language_button(palette, language, label, selected, cx));
+            target_presets =
+                target_presets.child(language_button(palette, language, label, selected, cx));
         }
 
         div()
@@ -100,14 +101,22 @@ impl NyaTermApp {
             .size_full()
             .p_3()
             .gap_4()
-            .child(section_header("Translation", "Native translation for selected terminal text or manual input.", self.theme_palette()))
+            .child(section_header(
+                "Translation",
+                "Native translation for selected terminal text or manual input.",
+                self.theme_palette(),
+            ))
             .child(
                 div()
                     .grid()
                     .grid_cols(4)
                     .gap_3()
                     .child(metric(palette, "Provider", self.translate_provider.clone()))
-                    .child(metric(palette, "Target", self.translate_target_language.clone()))
+                    .child(metric(
+                        palette,
+                        "Target",
+                        self.translate_target_language.clone(),
+                    ))
                     .child(metric(palette, "Detected", detected))
                     .child(metric(palette, "Credentials", credential_status)),
             )
@@ -143,7 +152,8 @@ impl NyaTermApp {
                                     .items_center()
                                     .gap_2()
                                     .when(!can_translate, |this| this.opacity(0.45))
-                                    .child(small_button(palette, 
+                                    .child(small_button(
+                                        palette,
                                         "translate-run",
                                         if self.translate_pending {
                                             "Running"
@@ -274,7 +284,8 @@ impl NyaTermApp {
                                     .items_center()
                                     .gap_2()
                                     .when(!has_result, |this| this.opacity(0.45))
-                                    .child(small_button(palette, 
+                                    .child(small_button(
+                                        palette,
                                         "translate-copy-result",
                                         "Copy",
                                         cx.listener(|this, _, _, cx| {

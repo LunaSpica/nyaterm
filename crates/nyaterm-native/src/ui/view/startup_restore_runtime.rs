@@ -147,9 +147,9 @@ impl NyaTermApp {
                     (None, None) => None,
                     (Some(only), None) | (None, Some(only)) => Some(only),
                     (Some(first), Some(second)) => {
-                        let ratio =
-                            (WorkspacePaneNode::clamped_ratio_percent(*ratio_percent) as f64)
-                                / 100.0;
+                        let ratio = (WorkspacePaneNode::clamped_ratio_percent(*ratio_percent)
+                            as f64)
+                            / 100.0;
                         Some(RestorablePaneNode::Split {
                             id: id.clone(),
                             direction: match direction {
@@ -306,7 +306,10 @@ impl NyaTermApp {
         if self.terminal_windows_is_multi_leaf() {
             self.terminal_status = "restored workspace tabs and window layout".to_string();
         } else if !self.session_pane_roots.is_empty()
-            || self.workspace_split.as_ref().is_some_and(|root| root.is_split())
+            || self
+                .workspace_split
+                .as_ref()
+                .is_some_and(|root| root.is_split())
         {
             self.terminal_status = "restored workspace tabs and pane layout".to_string();
         } else if !self.ordered_sessions().is_empty() {
@@ -351,8 +354,7 @@ impl NyaTermApp {
                     let config = match self.build_ssh_session_config(&connection, &mut Vec::new()) {
                         Ok(config) => config,
                         Err(error) => {
-                            self.terminal_status =
-                                format!("restore SSH prepare failed: {error}");
+                            self.terminal_status = format!("restore SSH prepare failed: {error}");
                             return false;
                         }
                     };
@@ -406,10 +408,7 @@ impl NyaTermApp {
         false
     }
 
-    fn apply_restorable_workspace_pane_layout(
-        &mut self,
-        layout: RestorableWorkspacePaneNode,
-    ) {
+    fn apply_restorable_workspace_pane_layout(&mut self, layout: RestorableWorkspacePaneNode) {
         if self.terminal_windows_is_multi_leaf() {
             return;
         }

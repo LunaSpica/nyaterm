@@ -1,5 +1,68 @@
 use super::*;
 
+pub(in crate::ui::view) struct TerminalRuntimeUiState {
+    pub event_pump_started: bool,
+    pub session_event_backlog_active: bool,
+    pub session_event_queued_events: usize,
+    pub session_event_queued_output_bytes: usize,
+    pub session_event_dropped_output_bytes: u64,
+    pub session_event_last_drained_output_bytes: usize,
+    pub last_terminal_resize_at: Option<Instant>,
+    pub cursor_blink_on: bool,
+    pub cursor_blink_tick: u8,
+    pub visual_bell_ticks: u8,
+}
+
+#[derive(Debug, Clone)]
+pub(in crate::ui::view) enum SessionPaneState {
+    Connecting {
+        request_id: String,
+        name: String,
+        kind: SessionKind,
+    },
+    Live {
+        session_id: String,
+    },
+    Failed {
+        name: String,
+        error: String,
+    },
+    Disconnected {
+        session_id: String,
+    },
+}
+
+pub(in crate::ui::view) struct PendingSessionStart {
+    pub connection_name: String,
+    pub ssh_config: Option<SshSessionConfig>,
+    pub ai_execution_profile: AiExecutionProfile,
+    pub custom_name: Option<String>,
+    pub tab_color: Option<u32>,
+    pub after_session_id: Option<String>,
+    pub insert_index: Option<usize>,
+    pub seed_output: Option<String>,
+    pub startup_command: Option<StartupCommandRequest>,
+    pub multiplex_key: Option<String>,
+    pub source_connection_id: Option<String>,
+}
+
+impl Default for TerminalRuntimeUiState {
+    fn default() -> Self {
+        Self {
+            event_pump_started: false,
+            session_event_backlog_active: false,
+            session_event_queued_events: 0,
+            session_event_queued_output_bytes: 0,
+            session_event_dropped_output_bytes: 0,
+            session_event_last_drained_output_bytes: 0,
+            last_terminal_resize_at: None,
+            cursor_blink_on: true,
+            cursor_blink_tick: 0,
+            visual_bell_ticks: 0,
+        }
+    }
+}
+
 pub struct NyaTermApp {
     pub(in crate::ui::view) runtime: AppRuntime,
     pub(in crate::ui::view) services: NativeServices,
@@ -24,7 +87,8 @@ pub struct NyaTermApp {
     pub(in crate::ui::view) connection_group_editor: Option<ConnectionGroupEditorState>,
     pub(in crate::ui::view) connection_group_editor_focus: FocusHandle,
     pub(in crate::ui::view) connection_delete_confirm: Option<ConnectionDeleteConfirmState>,
-    pub(in crate::ui::view) connection_group_delete_confirm: Option<ConnectionGroupDeleteConfirmState>,
+    pub(in crate::ui::view) connection_group_delete_confirm:
+        Option<ConnectionGroupDeleteConfirmState>,
     pub(in crate::ui::view) connection_ssh_keys: Vec<SshKey>,
     pub(in crate::ui::view) connection_otp_entries: Vec<OtpEntry>,
     pub(in crate::ui::view) connection_saved_passwords: Vec<SavedPassword>,
@@ -128,7 +192,8 @@ pub struct NyaTermApp {
     pub(in crate::ui::view) action_link_menu: Option<ActionLinkMenuState>,
     pub(in crate::ui::view) action_link_tooltip: Option<ActionLinkTooltipState>,
     /// Pending action-link hover (Tauri 250ms delay before showing tooltip).
-    pub(in crate::ui::view) action_link_hover_pending: Option<(String, Instant, ActionLinkTooltipState)>,
+    pub(in crate::ui::view) action_link_hover_pending:
+        Option<(String, Instant, ActionLinkTooltipState)>,
 
     pub(in crate::ui::view) translation_dialog: Option<TranslationDialogState>,
     pub(in crate::ui::view) bottom_panel: BottomPanelMode,
@@ -380,6 +445,8 @@ pub struct NyaTermApp {
     pub(in crate::ui::view) duplicate_prompts: Arc<SftpDuplicatePromptBroker>,
     pub(in crate::ui::view) active_duplicate_prompt: Option<SftpDuplicatePromptState>,
     pub(in crate::ui::view) pending_session_name: Option<String>,
+    pub(in crate::ui::view) pending_session_starts: HashMap<String, PendingSessionStart>,
+    pub(in crate::ui::view) session_pane_states: HashMap<String, SessionPaneState>,
     pub(in crate::ui::view) pending_ssh_config: Option<SshSessionConfig>,
     pub(in crate::ui::view) pending_ai_execution_profile: AiExecutionProfile,
     pub(in crate::ui::view) pending_session_custom_name: Option<String>,
@@ -411,7 +478,8 @@ pub struct NyaTermApp {
     /// Latest OSC 7 working directories per session.
     pub(in crate::ui::view) session_cwds: HashMap<String, String>,
     /// Per-session ZMODEM detector / transfer state (UI-layer interception).
-    pub(in crate::ui::view) zmodem_sessions: HashMap<String, crate::ui::view::zmodem_runtime::ZmodemSessionState>,
+    pub(in crate::ui::view) zmodem_sessions:
+        HashMap<String, crate::ui::view::zmodem_runtime::ZmodemSessionState>,
     pub(in crate::ui::view) session_tab_colors: HashMap<String, u32>,
     pub(in crate::ui::view) ssh_multiplex_handles: HashMap<String, SshMultiplexHandle>,
     pub(in crate::ui::view) terminal_views: HashMap<String, TerminalViewState>,
@@ -449,10 +517,7 @@ pub struct NyaTermApp {
     /// Scroll offset for the fallback/global terminal screen (no session view).
     pub(in crate::ui::view) terminal_scroll_offset: usize,
     pub(in crate::ui::view) terminal_status: String,
-    pub(in crate::ui::view) event_pump_started: bool,
-    /// Toggles on the event pump when cursor blink is enabled.
-    pub(in crate::ui::view) cursor_blink_on: bool,
-    pub(in crate::ui::view) cursor_blink_tick: u8,
+    pub(in crate::ui::view) terminal_runtime: TerminalRuntimeUiState,
     /// Active visible-grid selection for the focused terminal surface.
     pub(in crate::ui::view) terminal_selection: Option<TerminalSelection>,
     /// True while the user is dragging a left-button text selection.
@@ -461,8 +526,6 @@ pub struct NyaTermApp {
     pub(in crate::ui::view) terminal_surface_bounds: Option<gpui::Bounds<gpui::Pixels>>,
     /// Measured monospaced cell size (width, height) from the terminal font when available.
     pub(in crate::ui::view) terminal_cell_metrics: Option<(f32, f32)>,
-    /// Remaining event-pump ticks for visual BEL flash (0 = off).
-    pub(in crate::ui::view) visual_bell_ticks: u8,
     /// Session id currently under an external file drag (drop overlay).
     pub(in crate::ui::view) terminal_file_drop_hover: Option<String>,
 
@@ -760,9 +823,7 @@ impl NyaTermApp {
         let panel_stack_sizes = settings
             .ui_panel_stack_sizes
             .iter()
-            .filter_map(|(key, value)| {
-                (*value > 0).then(|| (key.clone(), (*value as f32) / 1000.))
-            })
+            .filter_map(|(key, value)| (*value > 0).then(|| (key.clone(), (*value as f32) / 1000.)))
             .collect::<HashMap<_, _>>();
         let panel_multi_open = settings.ui_panel_multi_open;
         let translate_target_language = translation_settings.target_language.clone();
@@ -1130,6 +1191,8 @@ impl NyaTermApp {
             duplicate_prompts: Arc::new(SftpDuplicatePromptBroker::default()),
             active_duplicate_prompt: None,
             pending_session_name: None,
+            pending_session_starts: HashMap::new(),
+            session_pane_states: HashMap::new(),
             pending_ssh_config: None,
             pending_ai_execution_profile: AiExecutionProfile::SendOnly,
             pending_session_custom_name: None,
@@ -1194,14 +1257,11 @@ impl NyaTermApp {
             terminal_screen: initial_terminal_screen(),
             terminal_scroll_offset: 0,
             terminal_status: "idle".to_string(),
-            event_pump_started: false,
-            cursor_blink_on: true,
-            cursor_blink_tick: 0,
+            terminal_runtime: TerminalRuntimeUiState::default(),
             terminal_selection: None,
             terminal_selection_dragging: false,
             terminal_surface_bounds: None,
             terminal_cell_metrics: None,
-            visual_bell_ticks: 0,
             terminal_file_drop_hover: None,
             last_viewport_size: (1280., 800.),
             selected_nav: NavItem::Workspace,

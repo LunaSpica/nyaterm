@@ -1,6 +1,11 @@
-use gpui::{FontWeight, IntoElement, KeyDownEvent, div, prelude::*, px, rgb};
+use gpui::{
+    App, Bounds, Element, ElementId, Font, FontStyle, FontWeight, GlobalElementId, Hsla,
+    InspectorElementId, IntoElement, KeyDownEvent, LayoutId, PaintQuad, Pixels, ShapedLine,
+    SharedString, StrikethroughStyle, Style, TextRun, UnderlineStyle, Window, div, fill, font,
+    point, prelude::*, px, relative, rgb, size,
+};
 use nyaterm_domain::ResolvedKeywordHighlightRule;
-use nyaterm_terminal::TerminalScreen;
+use nyaterm_terminal::{TerminalScreen, TerminalSnapshot};
 
 use super::view::INITIAL_TERMINAL_BANNER;
 
@@ -25,7 +30,372 @@ struct TerminalHighlightSpan {
     bg: Option<u32>,
     keyword: bool,
     underline: bool,
+    strikeout: bool,
     bold: bool,
+    italic: bool,
+}
+
+#[derive(Debug, Clone, Default)]
+pub(super) struct TerminalLineDecorations {
+    pub(super) search_ranges: Vec<(usize, usize)>,
+    pub(super) active_search_ranges: Vec<(usize, usize)>,
+    pub(super) selection_cols: Option<(usize, usize)>,
+    pub(super) link_ranges: Vec<(usize, usize)>,
+}
+
+pub(super) struct NyaTerminalElement {
+    snapshot: TerminalSnapshot,
+    keyword_rules: Vec<ResolvedKeywordHighlightRule>,
+    decorations: Vec<TerminalLineDecorations>,
+    show_cursor: bool,
+    cursor_style: String,
+    cell_width: f32,
+    cell_height: f32,
+    palette: crate::ui::theme::ThemePalette,
+    font_family: String,
+    font_size: f32,
+    normal_weight: f32,
+    bold_weight: f32,
+}
+
+struct TerminalPaintRow {
+    y: Pixels,
+    line: ShapedLine,
+}
+
+#[derive(Default)]
+pub(super) struct NyaTerminalPaintPlan {
+    backgrounds: Vec<PaintQuad>,
+    active_markers: Vec<PaintQuad>,
+    rows: Vec<TerminalPaintRow>,
+    cursor: Option<PaintQuad>,
+}
+
+impl NyaTerminalElement {
+    #[allow(clippy::too_many_arguments)]
+    pub(super) fn new(
+        snapshot: TerminalSnapshot,
+        keyword_rules: Vec<ResolvedKeywordHighlightRule>,
+        decorations: Vec<TerminalLineDecorations>,
+        show_cursor: bool,
+        cursor_style: impl Into<String>,
+        cell_width: f32,
+        cell_height: f32,
+        palette: crate::ui::theme::ThemePalette,
+        font_family: String,
+        font_size: f32,
+        normal_weight: f32,
+        bold_weight: f32,
+    ) -> Self {
+        Self {
+            snapshot,
+            keyword_rules,
+            decorations,
+            show_cursor,
+            cursor_style: cursor_style.into(),
+            cell_width,
+            cell_height,
+            palette,
+            font_family,
+            font_size,
+            normal_weight,
+            bold_weight,
+        }
+    }
+}
+
+impl IntoElement for NyaTerminalElement {
+    type Element = Self;
+
+    fn into_element(self) -> Self::Element {
+        self
+    }
+}
+
+impl Element for NyaTerminalElement {
+    type RequestLayoutState = ();
+    type PrepaintState = NyaTerminalPaintPlan;
+
+    fn id(&self) -> Option<ElementId> {
+        None
+    }
+
+    fn source_location(&self) -> Option<&'static core::panic::Location<'static>> {
+        None
+    }
+
+    fn request_layout(
+        &mut self,
+        _id: Option<&GlobalElementId>,
+        _inspector_id: Option<&InspectorElementId>,
+        window: &mut Window,
+        cx: &mut App,
+    ) -> (LayoutId, Self::RequestLayoutState) {
+        let mut style = Style::default();
+        style.size.width = relative(1.).into();
+        style.size.height = px(self.cell_height * self.snapshot.rows.max(1) as f32).into();
+        (window.request_layout(style, [], cx), ())
+    }
+
+    fn prepaint(
+        &mut self,
+        _id: Option<&GlobalElementId>,
+        _inspector_id: Option<&InspectorElementId>,
+        bounds: Bounds<Pixels>,
+        _request_layout: &mut Self::RequestLayoutState,
+        window: &mut Window,
+        _cx: &mut App,
+    ) -> Self::PrepaintState {
+        let mut plan = NyaTerminalPaintPlan::default();
+        let cell_w = self.cell_width.max(1.);
+        let cell_h = self.cell_height.max(1.);
+        let font_size = px(self.font_size.max(8.));
+        let base_font = font(SharedString::from(self.font_family.clone()));
+
+        for row in 0..self.snapshot.rows {
+            let line = self
+                .snapshot
+                .lines
+                .get(row)
+                .map(String::as_str)
+                .unwrap_or("");
+            let display_line = if line.is_empty() { " " } else { line };
+            let ansi = self.snapshot.styled_lines.get(row).map(Vec::as_slice);
+            let decorations = self.decorations.get(row).cloned().unwrap_or_default();
+            let spans = terminal_highlight_spans(
+                display_line,
+                ansi,
+                &self.keyword_rules,
+                &decorations.search_ranges,
+                &decorations.active_search_ranges,
+                decorations.selection_cols,
+                &decorations.link_ranges,
+                self.palette,
+            );
+            let y = px(f32::from(bounds.top()) + row as f32 * cell_h);
+
+            if !decorations.active_search_ranges.is_empty() {
+                plan.active_markers.push(fill(
+                    Bounds::new(point(bounds.left(), y), size(px(2.), px(cell_h))),
+                    rgb(self.palette.warning),
+                ));
+            }
+
+            let mut text = String::new();
+            let mut text_runs = Vec::new();
+            let mut col = 0usize;
+            let mut pending_bg: Option<(u32, usize, usize)> = None;
+            for span in spans {
+                let bg = span
+                    .bg
+                    .or_else(|| span.keyword.then_some(self.palette.surface));
+                let span_cols = span.text.chars().count().max(1);
+                if let Some(bg) = bg {
+                    match pending_bg.as_mut() {
+                        Some((current_bg, _start, end)) if *current_bg == bg && *end == col => {
+                            *end = col + span_cols;
+                        }
+                        _ => {
+                            flush_bg(
+                                pending_bg.take(),
+                                row,
+                                bounds,
+                                cell_w,
+                                cell_h,
+                                &mut plan.backgrounds,
+                            );
+                            pending_bg = Some((bg, col, col + span_cols));
+                        }
+                    }
+                } else {
+                    flush_bg(
+                        pending_bg.take(),
+                        row,
+                        bounds,
+                        cell_w,
+                        cell_h,
+                        &mut plan.backgrounds,
+                    );
+                }
+
+                let run_len = span.text.len();
+                text.push_str(&span.text);
+                if run_len > 0 {
+                    text_runs.push(TextRun {
+                        len: run_len,
+                        font: terminal_run_font(
+                            base_font.clone(),
+                            span.bold,
+                            span.italic,
+                            self.normal_weight,
+                            self.bold_weight,
+                        ),
+                        color: span
+                            .color
+                            .map(rgb)
+                            .unwrap_or_else(|| rgb(self.palette.terminal_fg))
+                            .into(),
+                        background_color: None,
+                        underline: span.underline.then(|| {
+                            line_underline_color(
+                                span.color
+                                    .map(rgb)
+                                    .unwrap_or_else(|| rgb(self.palette.accent))
+                                    .into(),
+                            )
+                        }),
+                        strikethrough: span.strikeout.then(|| {
+                            line_strike_color(
+                                span.color
+                                    .map(rgb)
+                                    .unwrap_or_else(|| rgb(self.palette.terminal_fg))
+                                    .into(),
+                            )
+                        }),
+                    });
+                }
+                col += span_cols;
+            }
+            flush_bg(
+                pending_bg.take(),
+                row,
+                bounds,
+                cell_w,
+                cell_h,
+                &mut plan.backgrounds,
+            );
+
+            if text.is_empty() {
+                text.push(' ');
+                text_runs.push(TextRun {
+                    len: 1,
+                    font: terminal_run_font(
+                        base_font.clone(),
+                        false,
+                        false,
+                        self.normal_weight,
+                        self.bold_weight,
+                    ),
+                    color: rgb(self.palette.terminal_fg).into(),
+                    background_color: None,
+                    underline: None,
+                    strikethrough: None,
+                });
+            }
+            let shaped = window.text_system().shape_line(
+                SharedString::from(text),
+                font_size,
+                &text_runs,
+                None,
+            );
+            plan.rows.push(TerminalPaintRow { y, line: shaped });
+        }
+
+        if self.show_cursor
+            && self.snapshot.cursor_row < self.snapshot.rows
+            && self.snapshot.cursor_col < self.snapshot.cols.max(1)
+        {
+            let x = px(f32::from(bounds.left()) + self.snapshot.cursor_col as f32 * cell_w);
+            let y = px(f32::from(bounds.top()) + self.snapshot.cursor_row as f32 * cell_h);
+            let cursor_bounds = match self.cursor_style.as_str() {
+                "bar" => Bounds::new(point(x, y), size(px(2.), px(cell_h))),
+                "underline" => Bounds::new(
+                    point(x, px(f32::from(y) + cell_h - 2.)),
+                    size(px(cell_w), px(2.)),
+                ),
+                _ => Bounds::new(point(x, y), size(px(cell_w), px(cell_h))),
+            };
+            plan.cursor = Some(fill(cursor_bounds, rgb(self.palette.terminal_cursor)));
+        }
+
+        plan
+    }
+
+    fn paint(
+        &mut self,
+        _id: Option<&GlobalElementId>,
+        _inspector_id: Option<&InspectorElementId>,
+        bounds: Bounds<Pixels>,
+        _request_layout: &mut Self::RequestLayoutState,
+        prepaint: &mut Self::PrepaintState,
+        window: &mut Window,
+        cx: &mut App,
+    ) {
+        for quad in prepaint.backgrounds.drain(..) {
+            window.paint_quad(quad);
+        }
+        for row in prepaint.rows.drain(..) {
+            let _ = row.line.paint(
+                point(bounds.left(), row.y),
+                px(self.cell_height.max(1.)),
+                window,
+                cx,
+            );
+        }
+        for quad in prepaint.active_markers.drain(..) {
+            window.paint_quad(quad);
+        }
+        if let Some(cursor) = prepaint.cursor.take() {
+            window.paint_quad(cursor);
+        }
+    }
+}
+
+fn flush_bg(
+    pending: Option<(u32, usize, usize)>,
+    row: usize,
+    bounds: Bounds<Pixels>,
+    cell_w: f32,
+    cell_h: f32,
+    out: &mut Vec<PaintQuad>,
+) {
+    let Some((bg, start, end)) = pending else {
+        return;
+    };
+    if end <= start {
+        return;
+    }
+    out.push(fill(
+        Bounds::new(
+            point(
+                px(f32::from(bounds.left()) + start as f32 * cell_w),
+                px(f32::from(bounds.top()) + row as f32 * cell_h),
+            ),
+            size(px((end - start) as f32 * cell_w), px(cell_h)),
+        ),
+        rgb(bg),
+    ));
+}
+
+fn terminal_run_font(
+    mut font: Font,
+    bold: bool,
+    italic: bool,
+    normal_weight: f32,
+    bold_weight: f32,
+) -> Font {
+    font.weight = FontWeight(if bold { bold_weight } else { normal_weight });
+    font.style = if italic {
+        FontStyle::Italic
+    } else {
+        FontStyle::Normal
+    };
+    font
+}
+
+fn line_underline_color(color: Hsla) -> UnderlineStyle {
+    UnderlineStyle {
+        color: Some(color),
+        thickness: px(1.0),
+        wavy: false,
+    }
+}
+
+fn line_strike_color(color: Hsla) -> StrikethroughStyle {
+    StrikethroughStyle {
+        color: Some(color),
+        thickness: px(1.0),
+    }
 }
 
 pub(super) fn terminal_line_element(
@@ -44,31 +414,20 @@ pub(super) fn terminal_line_element(
     palette: crate::ui::theme::ThemePalette,
     bold_weight: f32,
 ) -> impl IntoElement {
-    let mut spans = if let Some(ansi) = ansi_spans {
-        if ansi.is_empty() || (ansi.len() == 1 && ansi[0].text.is_empty()) {
-            keyword_highlight_spans(line, keyword_rules)
-        } else {
-            ansi_to_highlight_spans(ansi, palette, keyword_rules)
-        }
-    } else {
-        keyword_highlight_spans(line, keyword_rules)
-    };
-    if !link_ranges.is_empty() {
-        spans = apply_action_link_ranges(spans, link_ranges, palette);
-    }
-    if let Some((start, end)) = selection_cols {
-        spans = apply_selection_range(spans, start, end, palette);
-    }
+    let mut spans = terminal_highlight_spans(
+        line,
+        ansi_spans,
+        keyword_rules,
+        search_ranges,
+        active_search_ranges,
+        selection_cols,
+        link_ranges,
+        palette,
+    );
     if let Some(col) = cursor_col {
         spans = apply_cursor_style(spans, col, cursor_style, palette);
     }
     let line_h = px(line_height.max(12.));
-    if !search_ranges.is_empty() {
-        spans = apply_search_ranges(spans, search_ranges, false, palette);
-    }
-    if !active_search_ranges.is_empty() {
-        spans = apply_search_ranges(spans, active_search_ranges, true, palette);
-    }
 
     let mut row = div()
         .flex()
@@ -83,14 +442,15 @@ pub(super) fn terminal_line_element(
     }
 
     for span in spans {
-        let mut child = div()
-            .line_height(line_h)
-            .whitespace_nowrap()
-            .child(if span.text.is_empty() {
-                " ".to_string()
-            } else {
-                span.text
-            });
+        let mut child =
+            div()
+                .line_height(line_h)
+                .whitespace_nowrap()
+                .child(if span.text.is_empty() {
+                    " ".to_string()
+                } else {
+                    span.text
+                });
         if let Some(color) = span.color {
             child = child.text_color(rgb(color));
         }
@@ -111,6 +471,40 @@ pub(super) fn terminal_line_element(
     row
 }
 
+#[allow(clippy::too_many_arguments)]
+fn terminal_highlight_spans(
+    line: &str,
+    ansi_spans: Option<&[nyaterm_terminal::StyledSpan]>,
+    keyword_rules: &[ResolvedKeywordHighlightRule],
+    search_ranges: &[(usize, usize)],
+    active_search_ranges: &[(usize, usize)],
+    selection_cols: Option<(usize, usize)>,
+    link_ranges: &[(usize, usize)],
+    palette: crate::ui::theme::ThemePalette,
+) -> Vec<TerminalHighlightSpan> {
+    let mut spans = if let Some(ansi) = ansi_spans {
+        if ansi.is_empty() || (ansi.len() == 1 && ansi[0].text.is_empty()) {
+            keyword_highlight_spans(line, keyword_rules)
+        } else {
+            ansi_to_highlight_spans(ansi, palette, keyword_rules)
+        }
+    } else {
+        keyword_highlight_spans(line, keyword_rules)
+    };
+    if !link_ranges.is_empty() {
+        spans = apply_action_link_ranges(spans, link_ranges, palette);
+    }
+    if let Some((start, end)) = selection_cols {
+        spans = apply_selection_range(spans, start, end, palette);
+    }
+    if !search_ranges.is_empty() {
+        spans = apply_search_ranges(spans, search_ranges, false, palette);
+    }
+    if !active_search_ranges.is_empty() {
+        spans = apply_search_ranges(spans, active_search_ranges, true, palette);
+    }
+    spans
+}
 
 /// Underline action-link ranges with the accent color (Tauri decoration look).
 fn apply_action_link_ranges(
@@ -121,13 +515,22 @@ fn apply_action_link_ranges(
     if ranges.is_empty() {
         return spans;
     }
-    let mut flat: Vec<(char, Option<u32>, Option<u32>, bool, bool, bool)> = Vec::new();
+    let mut flat: Vec<FlatTerminalCell> = Vec::new();
     for span in spans {
         if span.text.is_empty() {
             continue;
         }
         for ch in span.text.chars() {
-            flat.push((ch, span.color, span.bg, span.keyword, span.underline, span.bold));
+            flat.push(FlatTerminalCell {
+                ch,
+                color: span.color,
+                bg: span.bg,
+                keyword: span.keyword,
+                underline: span.underline,
+                strikeout: span.strikeout,
+                bold: span.bold,
+                italic: span.italic,
+            });
         }
     }
     for &(start, end) in ranges {
@@ -138,9 +541,9 @@ fn apply_action_link_ranges(
         let start = start.min(end);
         for idx in start..end {
             if let Some(cell) = flat.get_mut(idx) {
-                cell.4 = true; // underline
-                if cell.1.is_none() {
-                    cell.1 = Some(palette.accent);
+                cell.underline = true;
+                if cell.color.is_none() {
+                    cell.color = Some(palette.accent);
                 }
             }
         }
@@ -158,23 +561,32 @@ fn apply_selection_range(
     if start >= end {
         return spans;
     }
-    let mut flat: Vec<(char, Option<u32>, Option<u32>, bool, bool, bool)> = Vec::new();
+    let mut flat: Vec<FlatTerminalCell> = Vec::new();
     for span in spans {
         if span.text.is_empty() {
             continue;
         }
         for ch in span.text.chars() {
-            flat.push((ch, span.color, span.bg, span.keyword, span.underline, span.bold));
+            flat.push(FlatTerminalCell {
+                ch,
+                color: span.color,
+                bg: span.bg,
+                keyword: span.keyword,
+                underline: span.underline,
+                strikeout: span.strikeout,
+                bold: span.bold,
+                italic: span.italic,
+            });
         }
     }
     while flat.len() < end {
-        flat.push((' ', None, None, false, false, false));
+        flat.push(FlatTerminalCell::blank());
     }
     let end = end.min(flat.len());
     for idx in start..end {
         if let Some(cell) = flat.get_mut(idx) {
-            cell.2 = Some(palette.terminal_selection);
-            cell.3 = false;
+            cell.bg = Some(palette.terminal_selection);
+            cell.keyword = false;
         }
     }
     compress_flat_cells(flat)
@@ -189,18 +601,27 @@ fn apply_search_ranges(
     if ranges.is_empty() {
         return spans;
     }
-    let mut flat: Vec<(char, Option<u32>, Option<u32>, bool, bool, bool)> = Vec::new();
+    let mut flat: Vec<FlatTerminalCell> = Vec::new();
     for span in spans {
         if span.text.is_empty() {
             continue;
         }
         for ch in span.text.chars() {
-            flat.push((ch, span.color, span.bg, span.keyword, span.underline, span.bold));
+            flat.push(FlatTerminalCell {
+                ch,
+                color: span.color,
+                bg: span.bg,
+                keyword: span.keyword,
+                underline: span.underline,
+                strikeout: span.strikeout,
+                bold: span.bold,
+                italic: span.italic,
+            });
         }
     }
     let max_end = ranges.iter().map(|(_, end)| *end).max().unwrap_or(0);
     while flat.len() < max_end {
-        flat.push((' ', None, None, false, false, false));
+        flat.push(FlatTerminalCell::blank());
     }
     // Tauri xterm find decorations: inactive selection-ish, active stronger accent.
     let bg = if active {
@@ -221,31 +642,63 @@ fn apply_search_ranges(
         let end = end.min(flat.len());
         for idx in start..end {
             if let Some(cell) = flat.get_mut(idx) {
-                cell.2 = Some(bg);
+                cell.bg = Some(bg);
                 if let Some(fg) = fg {
-                    cell.1 = Some(fg);
+                    cell.color = Some(fg);
                 }
-                cell.3 = false;
+                cell.keyword = false;
             }
         }
     }
     compress_flat_cells(flat)
 }
 
-fn compress_flat_cells(
-    flat: Vec<(char, Option<u32>, Option<u32>, bool, bool, bool)>,
-) -> Vec<TerminalHighlightSpan> {
+#[derive(Debug, Clone, Copy)]
+struct FlatTerminalCell {
+    ch: char,
+    color: Option<u32>,
+    bg: Option<u32>,
+    keyword: bool,
+    underline: bool,
+    strikeout: bool,
+    bold: bool,
+    italic: bool,
+}
+
+impl FlatTerminalCell {
+    fn blank() -> Self {
+        Self {
+            ch: ' ',
+            color: None,
+            bg: None,
+            keyword: false,
+            underline: false,
+            strikeout: false,
+            bold: false,
+            italic: false,
+        }
+    }
+}
+
+fn compress_flat_cells(flat: Vec<FlatTerminalCell>) -> Vec<TerminalHighlightSpan> {
     let mut out = Vec::new();
     let mut i = 0;
     while i < flat.len() {
-        let (ch, color, bg, keyword, underline, bold) = flat[i];
+        let cell = flat[i];
         let mut text = String::new();
-        text.push(ch);
+        text.push(cell.ch);
         let mut j = i + 1;
         while j < flat.len() {
-            let (ch2, c2, b2, k2, u2, bold2) = flat[j];
-            if c2 == color && b2 == bg && k2 == keyword && u2 == underline && bold2 == bold {
-                text.push(ch2);
+            let next = flat[j];
+            if next.color == cell.color
+                && next.bg == cell.bg
+                && next.keyword == cell.keyword
+                && next.underline == cell.underline
+                && next.strikeout == cell.strikeout
+                && next.bold == cell.bold
+                && next.italic == cell.italic
+            {
+                text.push(next.ch);
                 j += 1;
             } else {
                 break;
@@ -253,11 +706,13 @@ fn compress_flat_cells(
         }
         out.push(TerminalHighlightSpan {
             text,
-            color,
-            bg,
-            keyword,
-            underline,
-            bold,
+            color: cell.color,
+            bg: cell.bg,
+            keyword: cell.keyword,
+            underline: cell.underline,
+            strikeout: cell.strikeout,
+            bold: cell.bold,
+            italic: cell.italic,
         });
         i = j;
     }
@@ -271,46 +726,50 @@ fn apply_cursor_style(
     cursor_style: &str,
     palette: crate::ui::theme::ThemePalette,
 ) -> Vec<TerminalHighlightSpan> {
-    let mut flat: Vec<(char, Option<u32>, Option<u32>, bool, bool, bool)> = Vec::new();
+    let mut flat: Vec<FlatTerminalCell> = Vec::new();
     for span in spans {
-        let color = span.color;
-        let bg = span.bg;
-        let keyword = span.keyword;
-        let underline = span.underline;
-        let bold = span.bold;
         if span.text.is_empty() {
             continue;
         }
         for ch in span.text.chars() {
-            flat.push((ch, color, bg, keyword, underline, bold));
+            flat.push(FlatTerminalCell {
+                ch,
+                color: span.color,
+                bg: span.bg,
+                keyword: span.keyword,
+                underline: span.underline,
+                strikeout: span.strikeout,
+                bold: span.bold,
+                italic: span.italic,
+            });
         }
     }
     // Ensure the cursor column exists even on a short/empty line.
     while flat.len() <= cursor_col {
-        flat.push((' ', None, None, false, false, false));
+        flat.push(FlatTerminalCell::blank());
     }
     if let Some(cell) = flat.get_mut(cursor_col) {
         match cursor_style {
             "underline" => {
                 // Approximate underline caret: keep glyph, tint with cursor color and dim cell bg.
-                if cell.1.is_none() {
-                    cell.1 = Some(palette.terminal_cursor);
+                if cell.color.is_none() {
+                    cell.color = Some(palette.terminal_cursor);
                 }
-                cell.2 = Some(palette.terminal_selection);
-                cell.3 = false;
+                cell.bg = Some(palette.terminal_selection);
+                cell.keyword = false;
             }
             "bar" => {
                 // Approximate bar caret: thin visual via inverted narrow space marker.
-                cell.0 = '▌';
-                cell.1 = Some(palette.terminal_cursor);
-                cell.2 = None;
-                cell.3 = false;
+                cell.ch = '|';
+                cell.color = Some(palette.terminal_cursor);
+                cell.bg = None;
+                cell.keyword = false;
             }
             _ => {
                 // Block cursor: invert with theme cursor color (Tauri xterm cursor).
-                cell.1 = Some(palette.terminal_bg);
-                cell.2 = Some(palette.terminal_cursor);
-                cell.3 = false;
+                cell.color = Some(palette.terminal_bg);
+                cell.bg = Some(palette.terminal_cursor);
+                cell.keyword = false;
             }
         }
     }
@@ -336,7 +795,9 @@ fn ansi_to_highlight_spans(
                 bg: palette.resolve_cell_bg(s.style),
                 keyword: false,
                 underline: s.style.underline,
+                strikeout: s.style.strikeout,
                 bold: s.style.bold,
+                italic: s.style.italic,
             })
             .collect();
     }
@@ -378,7 +839,9 @@ fn ansi_to_highlight_spans(
             bg,
             keyword: keyword_hit,
             underline: s.style.underline,
+            strikeout: s.style.strikeout,
             bold: s.style.bold,
+            italic: s.style.italic,
         });
     }
     if out.is_empty() {
@@ -388,7 +851,9 @@ fn ansi_to_highlight_spans(
             bg: None,
             keyword: false,
             underline: false,
+            strikeout: false,
             bold: false,
+            italic: false,
         });
     }
     out
@@ -405,7 +870,9 @@ fn keyword_highlight_spans(
             bg: None,
             keyword: false,
             underline: false,
+            strikeout: false,
             bold: false,
+            italic: false,
         }];
     }
 
@@ -417,7 +884,9 @@ fn keyword_highlight_spans(
             bg: None,
             keyword: false,
             underline: false,
+            strikeout: false,
             bold: false,
+            italic: false,
         }];
     }
 
@@ -450,7 +919,9 @@ fn keyword_highlight_spans(
                 bg: None,
                 keyword: false,
                 underline: false,
+                strikeout: false,
                 bold: false,
+                italic: false,
             });
             break;
         };
@@ -461,7 +932,9 @@ fn keyword_highlight_spans(
                 bg: None,
                 keyword: false,
                 underline: false,
+                strikeout: false,
                 bold: false,
+                italic: false,
             });
         }
         spans.push(TerminalHighlightSpan {
@@ -470,7 +943,9 @@ fn keyword_highlight_spans(
             bg: None,
             keyword: true,
             underline: false,
+            strikeout: false,
             bold: false,
+            italic: false,
         });
         cursor = end;
     }
@@ -482,20 +957,25 @@ fn keyword_highlight_spans(
             bg: None,
             keyword: false,
             underline: false,
+            strikeout: false,
             bold: false,
+            italic: false,
         });
     }
     spans
 }
 
-fn compile_keyword_rules(
-    rules: &[ResolvedKeywordHighlightRule],
-) -> Vec<(regex::Regex, u32)> {
+fn compile_keyword_rules(rules: &[ResolvedKeywordHighlightRule]) -> Vec<(regex::Regex, u32)> {
     let mut compiled = Vec::new();
     for rule in rules.iter().filter(|rule| rule.enabled) {
         let color = parse_hex_rgb(&rule.color).unwrap_or(0x79c0ff);
         let mut alts = Vec::new();
-        for pattern in rule.patterns.iter().map(|p| p.trim()).filter(|p| !p.is_empty()) {
+        for pattern in rule
+            .patterns
+            .iter()
+            .map(|p| p.trim())
+            .filter(|p| !p.is_empty())
+        {
             // Validate each alternative; skip invalid regex like Tauri.
             if regex::Regex::new(&format!("(?i)(?:{pattern})")).is_ok()
                 || regex::Regex::new(pattern).is_ok()
@@ -537,8 +1017,6 @@ fn compile_keyword_rules(
     }
     compiled
 }
-
-
 
 pub(super) fn terminal_buffer_matches(
     output: &str,

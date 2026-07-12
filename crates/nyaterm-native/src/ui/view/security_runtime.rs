@@ -277,10 +277,7 @@ impl NyaTermApp {
             cx.notify();
             return;
         }
-        if editor.id.is_none()
-            && editor.key_file_path.trim().is_empty()
-            && !editor.has_key_data
-        {
+        if editor.id.is_none() && editor.key_file_path.trim().is_empty() && !editor.has_key_data {
             if let Some(editor) = self.security_key_editor.as_mut() {
                 editor.error = Some("select a private key file".to_string());
             }
@@ -794,7 +791,6 @@ impl NyaTermApp {
         cx.notify();
     }
 
-
     pub(in crate::ui::view) fn open_security_password_editor(
         &mut self,
         password_id: Option<String>,
@@ -1171,7 +1167,10 @@ impl NyaTermApp {
         cx.notify();
     }
 
-    pub(in crate::ui::view) fn toggle_security_credential_enabled(&mut self, cx: &mut Context<Self>) {
+    pub(in crate::ui::view) fn toggle_security_credential_enabled(
+        &mut self,
+        cx: &mut Context<Self>,
+    ) {
         if let Some(editor) = self.security_credential_editor.as_mut() {
             editor.enabled = !editor.enabled;
         }
@@ -1356,7 +1355,10 @@ impl NyaTermApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        if self.security_revealed_credentials.contains_key(&credential_id) {
+        if self
+            .security_revealed_credentials
+            .contains_key(&credential_id)
+        {
             self.security_revealed_credentials.remove(&credential_id);
             self.security_status = "credential password hidden".to_string();
             cx.notify();
@@ -1393,5 +1395,4 @@ impl NyaTermApp {
         }
         cx.notify();
     }
-
 }

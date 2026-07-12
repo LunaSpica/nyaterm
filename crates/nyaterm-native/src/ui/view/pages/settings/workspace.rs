@@ -1,9 +1,9 @@
 use super::*;
-use crate::ui::theme::{APPEARANCE_THEME_IDS, appearance_theme_label};
 use crate::ui::shortcuts::{
     SHORTCUT_CATEGORIES, SHORTCUT_REGISTRY, ShortcutCategory, ShortcutDefinition,
     ShortcutNativeStatus, format_hotkey_for_display, shortcut_keys_for,
 };
+use crate::ui::theme::{APPEARANCE_THEME_IDS, appearance_theme_label};
 
 impl NyaTermApp {
     pub(super) fn general_settings_section(&mut self, cx: &mut Context<Self>) -> impl IntoElement {
@@ -318,11 +318,7 @@ impl NyaTermApp {
         let palette = self.theme_palette();
         let font_size_label = format!("{} px", self.settings.terminal_font_size);
         let ui_font_size_label = format!("{} px", self.settings.ui_font_size);
-        let terminal_theme = self
-            .settings
-            .terminal_theme
-            .clone()
-            .unwrap_or_default();
+        let terminal_theme = self.settings.terminal_theme.clone().unwrap_or_default();
         let follow_ui = terminal_theme.trim().is_empty();
         let contrast = self.settings.minimum_contrast_ratio.clone();
         let ui_font = self.settings.ui_font_family.clone();
@@ -412,32 +408,28 @@ impl NyaTermApp {
                         Some(SharedString::from(
                             "Boost terminal fg/ANSI contrast against the terminal background.",
                         )),
-                        div()
-                            .flex()
-                            .flex_wrap()
-                            .gap_1()
-                            .children(
-                                ["1", "3", "4.5", "7", "21"].into_iter().map(|ratio| {
-                                    let selected = contrast == ratio;
-                                    let id = format!("appearance-contrast-{ratio}");
-                                    let label: &'static str = match ratio {
-                                        "1" => "Off",
-                                        "3" => "3:1",
-                                        "4.5" => "4.5:1",
-                                        "7" => "7:1",
-                                        _ => "21:1",
-                                    };
-                                    settings_choice_chip(
-                                        palette,
-                                        id,
-                                        label,
-                                        selected,
-                                        cx.listener(move |this, _, _, cx| {
-                                            this.set_minimum_contrast_ratio(ratio, cx);
-                                        }),
-                                    )
-                                }),
-                            ),
+                        div().flex().flex_wrap().gap_1().children(
+                            ["1", "3", "4.5", "7", "21"].into_iter().map(|ratio| {
+                                let selected = contrast == ratio;
+                                let id = format!("appearance-contrast-{ratio}");
+                                let label: &'static str = match ratio {
+                                    "1" => "Off",
+                                    "3" => "3:1",
+                                    "4.5" => "4.5:1",
+                                    "7" => "7:1",
+                                    _ => "21:1",
+                                };
+                                settings_choice_chip(
+                                    palette,
+                                    id,
+                                    label,
+                                    selected,
+                                    cx.listener(move |this, _, _, cx| {
+                                        this.set_minimum_contrast_ratio(ratio, cx);
+                                    }),
+                                )
+                            }),
+                        ),
                     ))
                     .child(settings_form_row(
                         palette,
@@ -519,7 +511,9 @@ impl NyaTermApp {
                         .child(settings_form_row(
                             palette,
                             "Fit",
-                            Some(SharedString::from("How the wallpaper is scaled in the shell.")),
+                            Some(SharedString::from(
+                                "How the wallpaper is scaled in the shell.",
+                            )),
                             div()
                                 .flex()
                                 .flex_wrap()
@@ -642,7 +636,9 @@ impl NyaTermApp {
                     .child(settings_form_row(
                         palette,
                         "UI font family",
-                        Some(SharedString::from("Sans face for menus, settings, and chrome.")),
+                        Some(SharedString::from(
+                            "Sans face for menus, settings, and chrome.",
+                        )),
                         div()
                             .flex()
                             .flex_wrap()
@@ -825,12 +821,10 @@ impl NyaTermApp {
                         palette,
                         "Regular weight",
                         Some(SharedString::from("Base terminal font weight.")),
-                        div()
-                            .flex()
-                            .flex_wrap()
-                            .gap_1()
-                            .children([300_u16, 400, 500, 600, 700, 800].into_iter().map(
-                                |weight| {
+                        div().flex().flex_wrap().gap_1().children(
+                            [300_u16, 400, 500, 600, 700, 800]
+                                .into_iter()
+                                .map(|weight| {
                                     let selected = font_weight == weight;
                                     let id = format!("appearance-font-weight-{weight}");
                                     let label: &'static str = match weight {
@@ -850,8 +844,8 @@ impl NyaTermApp {
                                             this.set_terminal_font_weight(weight, cx);
                                         }),
                                     )
-                                },
-                            )),
+                                }),
+                        ),
                     ))
                     .child(settings_form_row(
                         palette,
@@ -859,12 +853,10 @@ impl NyaTermApp {
                         Some(SharedString::from(
                             "Weight used for bold/bright ANSI text when supported.",
                         )),
-                        div()
-                            .flex()
-                            .flex_wrap()
-                            .gap_1()
-                            .children([300_u16, 400, 500, 600, 700, 800].into_iter().map(
-                                |weight| {
+                        div().flex().flex_wrap().gap_1().children(
+                            [300_u16, 400, 500, 600, 700, 800]
+                                .into_iter()
+                                .map(|weight| {
                                     let selected = font_weight_bold == weight;
                                     let id = format!("appearance-font-weight-bold-{weight}");
                                     let label: &'static str = match weight {
@@ -884,8 +876,8 @@ impl NyaTermApp {
                                             this.set_terminal_font_weight_bold(weight, cx);
                                         }),
                                     )
-                                },
-                            )),
+                                }),
+                        ),
                     )),
             ))
             .child(settings_form_section(
@@ -899,7 +891,9 @@ impl NyaTermApp {
                     .child(settings_form_row(
                         palette,
                         "Cursor style",
-                        Some(SharedString::from("Block, underline, or vertical bar caret.")),
+                        Some(SharedString::from(
+                            "Block, underline, or vertical bar caret.",
+                        )),
                         div()
                             .flex()
                             .flex_wrap()
@@ -1537,14 +1531,16 @@ impl NyaTermApp {
             rows = rows.child(self.shortcut_registry_row(shortcut, cx));
         }
 
-        settings_form_section(palette, 
+        settings_form_section(
+            palette,
             Some(category.label()),
             None,
             div()
                 .flex()
                 .flex_col()
                 .gap_2()
-                .child(settings_form_row(palette, 
+                .child(settings_form_row(
+                    palette,
                     "Shortcuts",
                     Some(SharedString::from(format!("{count} in category"))),
                     div()

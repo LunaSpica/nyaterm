@@ -103,8 +103,12 @@ fn icon_bytes(path: &str) -> Option<&'static [u8]> {
         "icons/session/save.svg" => Some(include_bytes!("../assets/icons/session/save.svg")),
         "icons/session/stop.svg" => Some(include_bytes!("../assets/icons/session/stop.svg")),
         "icons/session/record.svg" => Some(include_bytes!("../assets/icons/session/record.svg")),
-        "icons/session/disconnect.svg" => Some(include_bytes!("../assets/icons/session/disconnect.svg")),
-        "icons/session/reconnect.svg" => Some(include_bytes!("../assets/icons/session/reconnect.svg")),
+        "icons/session/disconnect.svg" => {
+            Some(include_bytes!("../assets/icons/session/disconnect.svg"))
+        }
+        "icons/session/reconnect.svg" => {
+            Some(include_bytes!("../assets/icons/session/reconnect.svg"))
+        }
         "icons/session/rename.svg" => Some(include_bytes!("../assets/icons/session/rename.svg")),
         "icons/translation.svg" => Some(include_bytes!("../assets/icons/translation.svg")),
         "icons/migration.svg" => Some(include_bytes!("../assets/icons/migration.svg")),
@@ -133,7 +137,9 @@ fn icon_bytes(path: &str) -> Option<&'static [u8]> {
         "icons/fe/new-file.svg" => Some(include_bytes!("../assets/icons/fe/new-file.svg")),
         "icons/fe/new-folder.svg" => Some(include_bytes!("../assets/icons/fe/new-folder.svg")),
         "icons/fe/upload.svg" => Some(include_bytes!("../assets/icons/fe/upload.svg")),
-        "icons/fe/upload-folder.svg" => Some(include_bytes!("../assets/icons/fe/upload-folder.svg")),
+        "icons/fe/upload-folder.svg" => {
+            Some(include_bytes!("../assets/icons/fe/upload-folder.svg"))
+        }
         "icons/fe/download.svg" => Some(include_bytes!("../assets/icons/fe/download.svg")),
         "icons/fe/delete.svg" => Some(include_bytes!("../assets/icons/fe/delete.svg")),
         "icons/fe/up.svg" => Some(include_bytes!("../assets/icons/fe/up.svg")),

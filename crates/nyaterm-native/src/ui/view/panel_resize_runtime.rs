@@ -106,8 +106,10 @@ impl NyaTermApp {
 
     pub(in crate::ui::view) fn persist_ui_layout(&mut self) {
         self.settings.ui_left_panel_width = self.left_panel_width.round().clamp(160., 720.) as u32;
-        self.settings.ui_right_panel_width = self.right_panel_width.round().clamp(200., 720.) as u32;
-        self.settings.ui_transfer_height = self.transfer_panel_height.round().clamp(60., 600.) as u32;
+        self.settings.ui_right_panel_width =
+            self.right_panel_width.round().clamp(200., 720.) as u32;
+        self.settings.ui_transfer_height =
+            self.transfer_panel_height.round().clamp(60., 600.) as u32;
         self.settings.ui_active_left_panel = self
             .active_left_panel
             .map(|item| item.persistence_id().to_string());
@@ -212,10 +214,8 @@ impl NyaTermApp {
     ) {
         if self.transfer_height_resize.take().is_some() {
             self.persist_ui_layout();
-            self.terminal_status = format!(
-                "transfer queue {:.0}px",
-                self.transfer_panel_height.round()
-            );
+            self.terminal_status =
+                format!("transfer queue {:.0}px", self.transfer_panel_height.round());
             cx.notify();
         }
     }

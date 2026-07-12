@@ -89,7 +89,8 @@ impl NyaTermApp {
                             .items_center()
                             .justify_end()
                             .gap_2()
-                            .child(small_button(palette, 
+                            .child(small_button(
+                                palette,
                                 "rename-tab-cancel",
                                 "Cancel",
                                 cx.listener(|this, _, _, cx| {
@@ -97,7 +98,8 @@ impl NyaTermApp {
                                 }),
                             ))
                             .child(div().when(!can_save, |this| this.opacity(0.45)).child(
-                                small_button(palette, 
+                                small_button(
+                                    palette,
                                     "rename-tab-save",
                                     "Save",
                                     cx.listener(|this, _, _, cx| {
@@ -196,14 +198,16 @@ impl NyaTermApp {
                             .items_center()
                             .justify_end()
                             .gap_2()
-                            .child(small_button(palette, 
+                            .child(small_button(
+                                palette,
                                 "tab-color-reset",
                                 "Reset",
                                 cx.listener(|this, _, _, cx| {
                                     this.set_active_session_tab_color(None, cx);
                                 }),
                             ))
-                            .child(small_button(palette, 
+                            .child(small_button(
+                                palette,
                                 "tab-color-cancel",
                                 "Cancel",
                                 cx.listener(|this, _, _, cx| {
@@ -281,7 +285,13 @@ impl NyaTermApp {
                             .flex()
                             .items_start()
                             .gap_3()
-                            .child(div().size(px(10.)).mt_1().rounded_full().bg(rgb(palette.success)))
+                            .child(
+                                div()
+                                    .size(px(10.))
+                                    .mt_1()
+                                    .rounded_full()
+                                    .bg(rgb(palette.success)),
+                            )
                             .child(
                                 div()
                                     .min_w_0()
@@ -310,14 +320,16 @@ impl NyaTermApp {
                             .items_center()
                             .justify_end()
                             .gap_2()
-                            .child(small_button(palette, 
+                            .child(small_button(
+                                palette,
                                 "session-info-copy",
                                 "Copy",
                                 cx.listener(|this, _, _, cx| {
                                     this.copy_active_session_info(cx);
                                 }),
                             ))
-                            .child(small_button(palette, 
+                            .child(small_button(
+                                palette,
                                 "session-info-close",
                                 "Close",
                                 cx.listener(|this, _, _, cx| {
@@ -435,14 +447,16 @@ impl NyaTermApp {
                                     .flex()
                                     .items_center()
                                     .gap_2()
-                                    .child(small_button(palette, 
+                                    .child(small_button(
+                                        palette,
                                         "startup-delay-minus",
                                         "-100",
                                         cx.listener(|this, _, _, cx| {
                                             this.adjust_startup_command_delay(-100, cx);
                                         }),
                                     ))
-                                    .child(small_button(palette, 
+                                    .child(small_button(
+                                        palette,
                                         "startup-delay-zero",
                                         "0",
                                         cx.listener(|this, _, _, cx| {
@@ -450,7 +464,8 @@ impl NyaTermApp {
                                             cx.notify();
                                         }),
                                     ))
-                                    .child(small_button(palette, 
+                                    .child(small_button(
+                                        palette,
                                         "startup-delay-plus",
                                         "+100",
                                         cx.listener(|this, _, _, cx| {
@@ -473,7 +488,8 @@ impl NyaTermApp {
                             .items_center()
                             .justify_end()
                             .gap_2()
-                            .child(small_button(palette, 
+                            .child(small_button(
+                                palette,
                                 "startup-command-cancel",
                                 "Cancel",
                                 cx.listener(|this, _, _, cx| {
@@ -481,7 +497,8 @@ impl NyaTermApp {
                                 }),
                             ))
                             .child(div().when(!can_submit, |this| this.opacity(0.45)).child(
-                                small_button(palette, 
+                                small_button(
+                                    palette,
                                     "startup-command-submit",
                                     action.submit_label(),
                                     cx.listener(|this, _, window, cx| {

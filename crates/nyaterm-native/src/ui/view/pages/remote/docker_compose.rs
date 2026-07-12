@@ -56,16 +56,17 @@ fn docker_compose_project_row(
     cx: &mut Context<NyaTermApp>,
 ) -> impl IntoElement {
     let project_name = project.name.clone();
-    let config_files = Some(project.config_files.clone()).filter(|value| {
-        !value.trim().is_empty() && value.trim().to_ascii_lowercase() != "n/a"
-    });
+    let config_files = Some(project.config_files.clone())
+        .filter(|value| !value.trim().is_empty() && value.trim().to_ascii_lowercase() != "n/a");
     let status_label = compose_status_label(&project.status);
     let status_color = compose_status_color(palette, status_label);
     let chevron = if expanded { "▾" } else { "▸" };
     let key_for_toggle = project_key.to_string();
 
     div()
-        .id(SharedString::from(format!("docker-compose-project-{project_key}")))
+        .id(SharedString::from(format!(
+            "docker-compose-project-{project_key}"
+        )))
         .rounded_md()
         .border_1()
         .border_color(rgb(palette.border))
@@ -98,7 +99,10 @@ fn docker_compose_project_row(
                         .text_size(px(12.))
                         .text_color(rgb(palette.text_muted))
                         .cursor_pointer()
-                        .hover(|this| this.bg(rgb(palette.surface_elevated)).text_color(rgb(palette.text)))
+                        .hover(|this| {
+                            this.bg(rgb(palette.surface_elevated))
+                                .text_color(rgb(palette.text))
+                        })
                         .child(chevron)
                         .on_click(cx.listener({
                             let project_name = project_name.clone();
@@ -167,40 +171,38 @@ fn docker_compose_project_row(
                         ),
                 )
                 .child(
-                    div()
-                        .absolute()
-                        .top(px(8.))
-                        .right(px(6.))
-                        .child(
-                            div()
-                                .relative()
-                                .child(icon_button(
-                                    format!("docker-compose-menu-{project_key}"),
-                                    "⋮", palette,cx.listener({
-                                        let menu_id = menu_id.clone();
-                                        move |this, _, _, cx| {
-                                            cx.stop_propagation();
-                                            if this.docker_compose_menu_id.as_deref()
-                                                == Some(menu_id.as_str())
-                                            {
-                                                this.docker_compose_menu_id = None;
-                                            } else {
-                                                this.docker_compose_menu_id = Some(menu_id.clone());
-                                            }
-                                            cx.notify();
+                    div().absolute().top(px(8.)).right(px(6.)).child(
+                        div()
+                            .relative()
+                            .child(icon_button(
+                                format!("docker-compose-menu-{project_key}"),
+                                "⋮",
+                                palette,
+                                cx.listener({
+                                    let menu_id = menu_id.clone();
+                                    move |this, _, _, cx| {
+                                        cx.stop_propagation();
+                                        if this.docker_compose_menu_id.as_deref()
+                                            == Some(menu_id.as_str())
+                                        {
+                                            this.docker_compose_menu_id = None;
+                                        } else {
+                                            this.docker_compose_menu_id = Some(menu_id.clone());
                                         }
-                                    }),
-                                ))
-                                .when(menu_open, |this| {
-                                    this.child(docker_compose_project_action_menu(
-                                        palette,
-                                        project_name.clone(),
-                                        config_files.clone(),
-                                        &key_for_toggle,
-                                        cx,
-                                    ))
+                                        cx.notify();
+                                    }
                                 }),
-                        ),
+                            ))
+                            .when(menu_open, |this| {
+                                this.child(docker_compose_project_action_menu(
+                                    palette,
+                                    project_name.clone(),
+                                    config_files.clone(),
+                                    &key_for_toggle,
+                                    cx,
+                                ))
+                            }),
+                    ),
                 ),
         )
         .when(expanded, |this| {
@@ -254,7 +256,8 @@ pub(in crate::ui::view::pages::remote) fn docker_compose_services_panel(
                         .overflow_hidden()
                         .child(truncate_preview(&error, 80)),
                 )
-                .child(small_button(palette, 
+                .child(small_button(
+                    palette,
                     format!("docker-compose-retry-{project_name}"),
                     "Retry",
                     cx.listener({
@@ -286,8 +289,7 @@ pub(in crate::ui::view::pages::remote) fn docker_compose_services_panel(
             );
         } else {
             for service in services {
-                let service_menu_id =
-                    format!("compose-service:{project_key}:{}", service.name);
+                let service_menu_id = format!("compose-service:{project_key}:{}", service.name);
                 let menu_open = open_menu_id == Some(service_menu_id.as_str());
                 rows = rows.child(docker_compose_service_row(
                     palette,
@@ -403,42 +405,39 @@ pub(in crate::ui::view::pages::remote) fn docker_compose_service_row(
                 ),
         )
         .child(
-            div()
-                .absolute()
-                .top(px(14.))
-                .right(px(4.))
-                .child(
-                    div()
-                        .relative()
-                        .child(icon_button(
-                            format!("{row_id}-menu"),
-                            "⋮", palette,cx.listener({
-                                let menu_id = menu_id.clone();
-                                move |this, _, _, cx| {
-                                    cx.stop_propagation();
-                                    if this.docker_compose_menu_id.as_deref()
-                                        == Some(menu_id.as_str())
-                                    {
-                                        this.docker_compose_menu_id = None;
-                                    } else {
-                                        this.docker_compose_menu_id = Some(menu_id.clone());
-                                    }
-                                    cx.notify();
+            div().absolute().top(px(14.)).right(px(4.)).child(
+                div()
+                    .relative()
+                    .child(icon_button(
+                        format!("{row_id}-menu"),
+                        "⋮",
+                        palette,
+                        cx.listener({
+                            let menu_id = menu_id.clone();
+                            move |this, _, _, cx| {
+                                cx.stop_propagation();
+                                if this.docker_compose_menu_id.as_deref() == Some(menu_id.as_str())
+                                {
+                                    this.docker_compose_menu_id = None;
+                                } else {
+                                    this.docker_compose_menu_id = Some(menu_id.clone());
                                 }
-                            }),
-                        ))
-                        .when(menu_open, |this| {
-                            this.child(docker_compose_service_action_menu(
-                                palette,
-                                project_name,
-                                config_files,
-                                service_name,
-                                running_container_id,
-                                can_enter,
-                                cx,
-                            ))
+                                cx.notify();
+                            }
                         }),
-                ),
+                    ))
+                    .when(menu_open, |this| {
+                        this.child(docker_compose_service_action_menu(
+                            palette,
+                            project_name,
+                            config_files,
+                            service_name,
+                            running_container_id,
+                            can_enter,
+                            cx,
+                        ))
+                    }),
+            ),
         )
 }
 
@@ -451,7 +450,9 @@ fn docker_compose_project_action_menu(
 ) -> impl IntoElement {
     let short = project_key.replace(['/', ':', ' '], "-");
     div()
-        .id(SharedString::from(format!("docker-compose-project-menu-{short}")))
+        .id(SharedString::from(format!(
+            "docker-compose-project-menu-{short}"
+        )))
         .absolute()
         .top(px(28.))
         .right_0()
@@ -538,10 +539,11 @@ fn docker_compose_service_action_menu(
     can_enter: bool,
     cx: &mut Context<NyaTermApp>,
 ) -> impl IntoElement {
-    let short = format!("{project_name}-{service_name}")
-        .replace(['/', ':', ' '], "-");
+    let short = format!("{project_name}-{service_name}").replace(['/', ':', ' '], "-");
     div()
-        .id(SharedString::from(format!("docker-compose-service-menu-{short}")))
+        .id(SharedString::from(format!(
+            "docker-compose-service-menu-{short}"
+        )))
         .absolute()
         .top(px(28.))
         .right_0()
@@ -656,11 +658,14 @@ fn docker_compose_service_action_menu(
         ))
 }
 
-fn compose_menu_item(palette: crate::ui::theme::ThemePalette,
+fn compose_menu_item(
+    palette: crate::ui::theme::ThemePalette,
     id: impl Into<String>,
     label: &'static str,
     disabled: bool,
-    on_click: impl Fn(&gpui::ClickEvent, &mut gpui::Window, &mut gpui::App) + 'static,) -> impl IntoElement {    div()
+    on_click: impl Fn(&gpui::ClickEvent, &mut gpui::Window, &mut gpui::App) + 'static,
+) -> impl IntoElement {
+    div()
         .id(SharedString::from(id.into()))
         .h(px(28.))
         .px_3()
@@ -681,7 +686,8 @@ fn compose_menu_item(palette: crate::ui::theme::ThemePalette,
         .child(label)
 }
 
-fn compose_menu_separator(palette: crate::ui::theme::ThemePalette) -> impl IntoElement {    div().h(px(1.)).mx_2().my_1().bg(rgb(palette.border))
+fn compose_menu_separator(palette: crate::ui::theme::ThemePalette) -> impl IntoElement {
+    div().h(px(1.)).mx_2().my_1().bg(rgb(palette.border))
 }
 
 fn compose_status_label(status: &str) -> &'static str {
@@ -703,7 +709,8 @@ fn compose_status_label(status: &str) -> &'static str {
     }
 }
 
-fn compose_status_color(palette: crate::ui::theme::ThemePalette, status: &str) -> gpui::Hsla {    match status {
+fn compose_status_color(palette: crate::ui::theme::ThemePalette, status: &str) -> gpui::Hsla {
+    match status {
         "running" => rgb(palette.success).into(),
         "stopped" => rgb(0xfca5a5).into(),
         "created" | "paused" => rgb(0xfbbf24).into(),

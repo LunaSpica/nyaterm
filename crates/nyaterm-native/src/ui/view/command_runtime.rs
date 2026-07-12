@@ -285,16 +285,16 @@ impl NyaTermApp {
         if !text.contains('\n') && !text.contains('\r') {
             return;
         }
-        let submitted: Vec<String> = if let Some(command) = self.pending_command_history_entry.take()
-        {
-            vec![command]
-        } else {
-            text.split(['\r', '\n'])
-                .map(str::trim)
-                .filter(|command| !command.is_empty())
-                .map(ToOwned::to_owned)
-                .collect()
-        };
+        let submitted: Vec<String> =
+            if let Some(command) = self.pending_command_history_entry.take() {
+                vec![command]
+            } else {
+                text.split(['\r', '\n'])
+                    .map(str::trim)
+                    .filter(|command| !command.is_empty())
+                    .map(ToOwned::to_owned)
+                    .collect()
+            };
         if submitted.is_empty() {
             return;
         }
@@ -370,7 +370,6 @@ impl NyaTermApp {
             }
         }
     }
-
 
     pub(in crate::ui::view) fn dismiss_command_suggestions(&mut self, cx: &mut Context<Self>) {
         self.command_suggestion_search_gen = self.command_suggestion_search_gen.saturating_add(1);
@@ -488,7 +487,10 @@ impl NyaTermApp {
         self.schedule_command_suggestion_refresh(cx);
     }
 
-    pub(in crate::ui::view) fn schedule_command_suggestion_refresh(&mut self, cx: &mut Context<Self>) {
+    pub(in crate::ui::view) fn schedule_command_suggestion_refresh(
+        &mut self,
+        cx: &mut Context<Self>,
+    ) {
         // Tauri useCommandHistory: 80ms debounce before fuzzy search.
         self.command_suggestion_search_gen = self.command_suggestion_search_gen.saturating_add(1);
         let request_id = self.command_suggestion_search_gen;
@@ -534,7 +536,10 @@ impl NyaTermApp {
             return;
         }
         let pattern = get_tracked_command(&self.command_input_tracker);
-        let min_chars = self.settings.interaction_command_suggestion_min_chars.max(1) as usize;
+        let min_chars = self
+            .settings
+            .interaction_command_suggestion_min_chars
+            .max(1) as usize;
         let max_chars = self
             .settings
             .interaction_command_suggestion_max_chars
@@ -681,7 +686,8 @@ impl NyaTermApp {
         self.send_terminal_input_without_suggestion_track(payload.into_bytes(), cx);
         if !execute {
             // After fill, tracker becomes the filled command for continued typing.
-            self.command_input_tracker = apply_terminal_input_data(&TerminalInputState::new(), &command);
+            self.command_input_tracker =
+                apply_terminal_input_data(&TerminalInputState::new(), &command);
             self.refresh_command_suggestions(cx);
         }
         self.terminal_status = if execute {
@@ -724,9 +730,9 @@ impl NyaTermApp {
         }
 
         if let Some(state) = self.command_suggestions.as_mut() {
-            state.items.retain(|item| {
-                !(item.source == "history" && item.command == command)
-            });
+            state
+                .items
+                .retain(|item| !(item.source == "history" && item.command == command));
             if state.items.is_empty() {
                 self.command_suggestions = None;
             } else {
@@ -804,8 +810,16 @@ impl NyaTermApp {
                 .items_center()
                 .gap_2()
                 .border_l_2()
-                .border_color(rgb(if selected { palette.accent } else { palette.surface }))
-                .bg(rgb(if selected { palette.hover } else { palette.surface }))
+                .border_color(rgb(if selected {
+                    palette.accent
+                } else {
+                    palette.surface
+                }))
+                .bg(rgb(if selected {
+                    palette.hover
+                } else {
+                    palette.surface
+                }))
                 .text_size(px(11.))
                 .text_color(rgb(palette.text))
                 .cursor_pointer()
@@ -845,7 +859,9 @@ impl NyaTermApp {
             if is_history {
                 row = row.child(
                     div()
-                        .id(SharedString::from(format!("command-suggestion-del-{index}")))
+                        .id(SharedString::from(format!(
+                            "command-suggestion-del-{index}"
+                        )))
                         .flex_none()
                         .w(px(20.))
                         .h(px(20.))
@@ -974,4 +990,3 @@ fn command_suggestion_highlight_parts(
     }
     parts
 }
-

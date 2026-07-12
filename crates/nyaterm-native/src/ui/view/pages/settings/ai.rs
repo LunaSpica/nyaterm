@@ -1,5 +1,4 @@
 use super::*;
-use crate::ui::theme::ThemePalette;
 
 impl NyaTermApp {
     fn ai_input(
@@ -32,7 +31,6 @@ impl NyaTermApp {
             this.handle_ai_key_down(event, cx);
         }))
     }
-
 
     pub(in crate::ui::view) fn ai_settings_section(
         &mut self,
@@ -516,9 +514,8 @@ impl NyaTermApp {
             .as_deref()
             .map(compact_id)
             .unwrap_or_else(|| "none".to_string());
-        let models_summary = format!(
-            "{enabled_models} enabled · {total_models} total · default {ai_default_model}"
-        );
+        let models_summary =
+            format!("{enabled_models} enabled · {total_models} total · default {ai_default_model}");
         let credentials_summary = format!("{enabled_credentials} enabled profiles");
         let active_ai_profile_id = self.ai_settings.active_profile_id.clone();
         let active_ai_api_key = ai_active_profile_api_key(&self.ai_settings);
@@ -529,12 +526,16 @@ impl NyaTermApp {
             "Discover"
         };
 
-
         // Group models by credential/provider (Tauri AiModelsTab groupModels).
         let credentials = self.ai_settings.provider_credentials.clone();
-        let mut groups: Vec<(String, String, Option<nyaterm_domain::AiProviderCredential>, Vec<nyaterm_domain::AiModelConfigItem>)> =
-            Vec::new();
-        let mut group_index: std::collections::HashMap<String, usize> = std::collections::HashMap::new();
+        let mut groups: Vec<(
+            String,
+            String,
+            Option<nyaterm_domain::AiProviderCredential>,
+            Vec<nyaterm_domain::AiModelConfigItem>,
+        )> = Vec::new();
+        let mut group_index: std::collections::HashMap<String, usize> =
+            std::collections::HashMap::new();
         for credential in &credentials {
             let key = credential.id.clone();
             group_index.insert(key.clone(), groups.len());
@@ -558,15 +559,11 @@ impl NyaTermApp {
                 .unwrap_or_else(|| "unknown".to_string());
             if let Some(index) = group_index.get(&key).copied() {
                 groups[index].3.push(model);
-            } else if let Some(index) = model
-                .provider_kind
-                .as_ref()
-                .and_then(|kind| {
-                    credentials
-                        .iter()
-                        .position(|credential| &credential.provider_kind == kind)
-                })
-            {
+            } else if let Some(index) = model.provider_kind.as_ref().and_then(|kind| {
+                credentials
+                    .iter()
+                    .position(|credential| &credential.provider_kind == kind)
+            }) {
                 groups[index].3.push(model);
             } else {
                 let label = model
@@ -581,7 +578,9 @@ impl NyaTermApp {
         }
         // Sort models in group: enabled first.
         for group in &mut groups {
-            group.3.sort_by_key(|model| (!model.enabled, model.name.to_ascii_lowercase()));
+            group
+                .3
+                .sort_by_key(|model| (!model.enabled, model.name.to_ascii_lowercase()));
         }
         let collapsed = self.ai_model_collapsed_groups.clone();
         let default_id = self.ai_settings.default_model_id.clone();
@@ -877,7 +876,6 @@ impl NyaTermApp {
             },
         );
 
-
         let expanded_credential_id = self.ai_credential_expanded_id.clone();
         let credential_edit = self.ai_credential_edit.clone();
         let credential_secret_drafts = self.ai_credential_secret_drafts.clone();
@@ -1141,17 +1139,20 @@ impl NyaTermApp {
             .flex()
             .flex_col()
             .gap_3()
-            .child(settings_form_section(palette, 
+            .child(settings_form_section(
+                palette,
                 Some("Models"),
                 None,
                 div()
                     .flex()
                     .flex_col()
                     .gap_2()
-                    .child(settings_form_row(palette, 
+                    .child(settings_form_row(
+                        palette,
                         "Catalog",
                         Some(SharedString::from(models_summary)),
-                        small_button(palette, 
+                        small_button(
+                            palette,
                             "ai-models-discover",
                             ai_discovery_label,
                             cx.listener(|this, _, _, cx| {
@@ -1161,14 +1162,16 @@ impl NyaTermApp {
                     ))
                     .child(model_groups),
             ))
-            .child(settings_form_section(palette, 
+            .child(settings_form_section(
+                palette,
                 Some("API keys"),
                 Some("Per-provider credentials used for discovery and chat (Tauri AiModelsTab)."),
                 div()
                     .flex()
                     .flex_col()
                     .gap_3()
-                    .child(settings_form_row(palette, 
+                    .child(settings_form_row(
+                        palette,
                         "Profiles",
                         Some(SharedString::from(credentials_summary)),
                         small_button(
@@ -1181,7 +1184,8 @@ impl NyaTermApp {
                         ),
                     ))
                     .child(credential_rows)
-                    .child(settings_form_row(palette, 
+                    .child(settings_form_row(
+                        palette,
                         "Legacy active profile",
                         Some(SharedString::from(
                             "Optional quick draft for the previously selected provider profile.",
@@ -1196,7 +1200,8 @@ impl NyaTermApp {
                             .flex()
                             .flex_wrap()
                             .gap_1()
-                            .child(settings_choice_chip(palette, 
+                            .child(settings_choice_chip(
+                                palette,
                                 "ai-model-provider-openai",
                                 "OpenAI",
                                 active_ai_profile_id == "openai",
@@ -1204,7 +1209,8 @@ impl NyaTermApp {
                                     this.update_ai_profile("openai", cx);
                                 }),
                             ))
-                            .child(settings_choice_chip(palette, 
+                            .child(settings_choice_chip(
+                                palette,
                                 "ai-model-provider-anthropic",
                                 "Anthropic",
                                 active_ai_profile_id == "anthropic",
@@ -1212,7 +1218,8 @@ impl NyaTermApp {
                                     this.update_ai_profile("anthropic", cx);
                                 }),
                             ))
-                            .child(settings_choice_chip(palette, 
+                            .child(settings_choice_chip(
+                                palette,
                                 "ai-model-provider-gemini",
                                 "Gemini",
                                 active_ai_profile_id == "gemini",
@@ -1220,7 +1227,8 @@ impl NyaTermApp {
                                     this.update_ai_profile("gemini", cx);
                                 }),
                             ))
-                            .child(settings_choice_chip(palette, 
+                            .child(settings_choice_chip(
+                                palette,
                                 "ai-model-provider-deepseek",
                                 "DeepSeek",
                                 active_ai_profile_id == "deepseek",
@@ -1228,7 +1236,8 @@ impl NyaTermApp {
                                     this.update_ai_profile("deepseek", cx);
                                 }),
                             ))
-                            .child(settings_choice_chip(palette, 
+                            .child(settings_choice_chip(
+                                palette,
                                 "ai-model-provider-ollama",
                                 "Ollama",
                                 active_ai_profile_id == "ollama",
@@ -1236,7 +1245,8 @@ impl NyaTermApp {
                                     this.update_ai_profile("ollama", cx);
                                 }),
                             ))
-                            .child(settings_choice_chip(palette, 
+                            .child(settings_choice_chip(
+                                palette,
                                 "ai-model-provider-xai",
                                 "xAI",
                                 active_ai_profile_id == "xai",
@@ -1272,10 +1282,12 @@ impl NyaTermApp {
                                 cx,
                             )),
                     )
-                    .child(settings_form_row(palette, 
+                    .child(settings_form_row(
+                        palette,
                         "Actions",
                         Some(SharedString::from(self.ai_status.clone())),
-                        small_button(palette, 
+                        small_button(
+                            palette,
                             "ai-model-tab-save",
                             "Save profile draft",
                             cx.listener(|this, _, _, cx| {
@@ -1305,28 +1317,34 @@ impl NyaTermApp {
             .filter(|action| action.enabled)
             .count();
         let file_size_mb = (self.ai_settings.max_ai_file_size_bytes / (1024 * 1024)).max(1);
-        let step_timeout_s = (self.ai_settings.agent_step_timeout_ms.unwrap_or(30_000) / 1000).max(1);
+        let step_timeout_s =
+            (self.ai_settings.agent_step_timeout_ms.unwrap_or(30_000) / 1000).max(1);
         let smart_risk = ai_risk_label(&self.ai_settings.agent_smart_auto_execute_max_risk);
 
         div()
             .flex()
             .flex_col()
             .gap_3()
-            .child(settings_form_section(palette, 
+            .child(settings_form_section(
+                palette,
                 Some("Rules"),
                 Some("Limits and auto-execute risk for AI-assisted actions."),
                 div()
                     .flex()
                     .flex_col()
                     .gap_3()
-                    .child(settings_form_row(palette, 
+                    .child(settings_form_row(
+                        palette,
                         "Max AI file size",
-                        Some(SharedString::from(format!("{file_size_mb} MiB per attachment"))),
+                        Some(SharedString::from(format!(
+                            "{file_size_mb} MiB per attachment"
+                        ))),
                         div()
                             .flex()
                             .items_center()
                             .gap_1()
-                            .child(small_button(palette, 
+                            .child(small_button(
+                                palette,
                                 "ai-file-size-minus",
                                 "-1 MiB",
                                 cx.listener(|this, _, _, cx| {
@@ -1343,7 +1361,8 @@ impl NyaTermApp {
                                     .text_color(rgb(palette.text))
                                     .child(format!("{file_size_mb}")),
                             )
-                            .child(small_button(palette, 
+                            .child(small_button(
+                                palette,
                                 "ai-file-size-plus",
                                 "+1 MiB",
                                 cx.listener(|this, _, _, cx| {
@@ -1351,14 +1370,18 @@ impl NyaTermApp {
                                 }),
                             )),
                     ))
-                    .child(settings_form_row(palette, 
+                    .child(settings_form_row(
+                        palette,
                         "Agent step timeout",
-                        Some(SharedString::from(format!("{step_timeout_s}s per agent step"))),
+                        Some(SharedString::from(format!(
+                            "{step_timeout_s}s per agent step"
+                        ))),
                         div()
                             .flex()
                             .items_center()
                             .gap_1()
-                            .child(small_button(palette, 
+                            .child(small_button(
+                                palette,
                                 "ai-agent-step-timeout-minus",
                                 "-1s",
                                 cx.listener(|this, _, _, cx| {
@@ -1375,7 +1398,8 @@ impl NyaTermApp {
                                     .text_color(rgb(palette.text))
                                     .child(format!("{step_timeout_s}s")),
                             )
-                            .child(small_button(palette, 
+                            .child(small_button(
+                                palette,
                                 "ai-agent-step-timeout-plus",
                                 "+1s",
                                 cx.listener(|this, _, _, cx| {
@@ -1383,14 +1407,16 @@ impl NyaTermApp {
                                 }),
                             )),
                     ))
-                    .child(settings_form_row(palette, 
+                    .child(settings_form_row(
+                        palette,
                         "Smart auto-execute risk",
                         Some(SharedString::from(format!("current: {smart_risk}"))),
                         div()
                             .flex()
                             .flex_wrap()
                             .gap_1()
-                            .child(settings_choice_chip(palette, 
+                            .child(settings_choice_chip(
+                                palette,
                                 "ai-risk-low",
                                 "Low",
                                 matches!(
@@ -1401,7 +1427,8 @@ impl NyaTermApp {
                                     this.update_ai_smart_auto_execute_max_risk(RiskLevel::Low, cx);
                                 }),
                             ))
-                            .child(settings_choice_chip(palette, 
+                            .child(settings_choice_chip(
+                                palette,
                                 "ai-risk-medium",
                                 "Medium",
                                 matches!(
@@ -1415,7 +1442,8 @@ impl NyaTermApp {
                                     );
                                 }),
                             ))
-                            .child(settings_choice_chip(palette, 
+                            .child(settings_choice_chip(
+                                palette,
                                 "ai-risk-high",
                                 "High",
                                 matches!(
@@ -1426,7 +1454,8 @@ impl NyaTermApp {
                                     this.update_ai_smart_auto_execute_max_risk(RiskLevel::High, cx);
                                 }),
                             ))
-                            .child(settings_choice_chip(palette, 
+                            .child(settings_choice_chip(
+                                palette,
                                 "ai-risk-critical",
                                 "Critical",
                                 matches!(
@@ -1441,10 +1470,12 @@ impl NyaTermApp {
                                 }),
                             )),
                     ))
-                    .child(settings_form_row(palette, 
+                    .child(settings_form_row(
+                        palette,
                         "Actions",
                         Some(SharedString::from(self.ai_status.clone())),
-                        small_button(palette, 
+                        small_button(
+                            palette,
                             "ai-rules-save",
                             "Save",
                             cx.listener(|this, _, _, cx| {
@@ -1593,17 +1624,13 @@ impl NyaTermApp {
                                         this.expand_ai_action(kind, action_id.clone(), cx);
                                     }
                                 }))
-                                .child(
-                                    div()
-                                        .size(px(8.))
-                                        .rounded_full()
-                                        .flex_none()
-                                        .bg(if action.enabled {
-                                            rgb(palette.success)
-                                        } else {
-                                            rgb(palette.border)
-                                        }),
-                                )
+                                .child(div().size(px(8.)).rounded_full().flex_none().bg(
+                                    if action.enabled {
+                                        rgb(palette.success)
+                                    } else {
+                                        rgb(palette.border)
+                                    },
+                                ))
                                 .child(
                                     div()
                                         .min_w_0()
@@ -1657,9 +1684,11 @@ impl NyaTermApp {
                                     .flex_col()
                                     .gap_2()
                                     .track_focus(&self.ai_action_focus)
-                                    .on_key_down(cx.listener(|this, event: &KeyDownEvent, _, cx| {
-                                        this.handle_ai_action_key_down(event, cx);
-                                    }))
+                                    .on_key_down(cx.listener(
+                                        |this, event: &KeyDownEvent, _, cx| {
+                                            this.handle_ai_action_key_down(event, cx);
+                                        },
+                                    ))
                                     .child(
                                         div()
                                             .id(SharedString::from(format!(
@@ -1736,10 +1765,14 @@ impl NyaTermApp {
                 })),
         )
     }
-
 }
 
-fn ai_setting_hint(palette: crate::ui::theme::ThemePalette, title: &'static str, detail: &'static str) -> impl IntoElement {    div()
+fn ai_setting_hint(
+    palette: crate::ui::theme::ThemePalette,
+    title: &'static str,
+    detail: &'static str,
+) -> impl IntoElement {
+    div()
         .rounded_sm()
         .border_1()
         .border_color(rgb(palette.border))
@@ -1762,13 +1795,23 @@ fn ai_setting_hint(palette: crate::ui::theme::ThemePalette, title: &'static str,
         )
 }
 
-fn ai_boolean_state(palette: crate::ui::theme::ThemePalette, label: &'static str, enabled: bool) -> impl IntoElement {    div()
+fn ai_boolean_state(
+    palette: crate::ui::theme::ThemePalette,
+    label: &'static str,
+    enabled: bool,
+) -> impl IntoElement {
+    div()
         .rounded_md()
         .border_1()
         .border_color(rgb(palette.border))
         .bg(rgb(palette.input))
         .p_3()
-        .child(div().text_xs().text_color(rgb(palette.text_muted)).child(label))
+        .child(
+            div()
+                .text_xs()
+                .text_color(rgb(palette.text_muted))
+                .child(label),
+        )
         .child(
             div()
                 .mt_1()

@@ -79,17 +79,13 @@ impl SessionTabTooltip {
 
 impl Render for SessionTabTooltip {
     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        let mut body = div()
-            .flex()
-            .flex_col()
-            .gap_1()
-            .child(
-                div()
-                    .text_size(px(12.))
-                    .font_weight(FontWeight(700.))
-                    .text_color(rgb(0xe5edf7))
-                    .child(self.title.clone()),
-            );
+        let mut body = div().flex().flex_col().gap_1().child(
+            div()
+                .text_size(px(12.))
+                .font_weight(FontWeight(700.))
+                .text_color(rgb(0xe5edf7))
+                .child(self.title.clone()),
+        );
         for line in &self.lines {
             let copyable = line_looks_copyable(line);
             let copy_value = line.clone();
@@ -122,9 +118,7 @@ impl Render for SessionTabTooltip {
                             .rounded_sm()
                             .text_size(px(10.))
                             .text_color(rgb(0x8f98aa))
-                            .hover(|style| {
-                                style.bg(rgb(0x334155)).text_color(rgb(0xe5edf7))
-                            })
+                            .hover(|style| style.bg(rgb(0x334155)).text_color(rgb(0xe5edf7)))
                             .cursor_pointer()
                             .child("⧉")
                             .on_click(cx.listener(move |_, _, _, cx| {
@@ -172,17 +166,13 @@ impl ChromeTooltip {
 
 impl Render for ChromeTooltip {
     fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
-        let mut body = div()
-            .flex()
-            .flex_col()
-            .gap_1()
-            .child(
-                div()
-                    .text_size(px(12.))
-                    .font_weight(FontWeight(700.))
-                    .text_color(rgb(0xe5edf7))
-                    .child(self.title.clone()),
-            );
+        let mut body = div().flex().flex_col().gap_1().child(
+            div()
+                .text_size(px(12.))
+                .font_weight(FontWeight(700.))
+                .text_color(rgb(0xe5edf7))
+                .child(self.title.clone()),
+        );
         if let Some(detail) = &self.detail {
             body = body.child(
                 div()
@@ -295,7 +285,10 @@ impl NyaTermApp {
                 let action = self.settings.interaction_tab_right_click_action.clone();
                 if action == "none" {
                     let anchor = if let ClickEvent::Mouse(mouse) = event {
-                        Some((f32::from(mouse.up.position.x), f32::from(mouse.up.position.y)))
+                        Some((
+                            f32::from(mouse.up.position.x),
+                            f32::from(mouse.up.position.y),
+                        ))
                     } else {
                         None
                     };

@@ -1,5 +1,5 @@
 use super::*;
-use gpui::{SharedString, prelude::*};
+use gpui::SharedString;
 
 pub(in crate::ui::view::pages::remote) fn docker_containers_panel(
     palette: crate::ui::theme::ThemePalette,
@@ -19,11 +19,14 @@ pub(in crate::ui::view::pages::remote) fn docker_containers_panel(
             .flex()
             .items_center()
             .justify_center()
-            .child(empty_panel(if has_session {
-                "No Docker snapshot loaded."
-            } else {
-                "Start an SSH session to inspect remote Docker."
-            }, palette))
+            .child(empty_panel(
+                if has_session {
+                    "No Docker snapshot loaded."
+                } else {
+                    "Start an SSH session to inspect remote Docker."
+                },
+                palette,
+            ))
             .into_any_element();
     }
     if !docker_available {
@@ -32,7 +35,10 @@ pub(in crate::ui::view::pages::remote) fn docker_containers_panel(
             .flex()
             .items_center()
             .justify_center()
-            .child(empty_panel("Docker is not installed or the daemon is not reachable.", palette))
+            .child(empty_panel(
+                "Docker is not installed or the daemon is not reachable.",
+                palette,
+            ))
             .into_any_element();
     }
     if filtered_containers.is_empty() {
@@ -41,11 +47,14 @@ pub(in crate::ui::view::pages::remote) fn docker_containers_panel(
             .flex()
             .items_center()
             .justify_center()
-            .child(empty_panel(if query_empty {
-                "No containers found."
-            } else {
-                "No containers match the Docker search."
-            }, palette))
+            .child(empty_panel(
+                if query_empty {
+                    "No containers found."
+                } else {
+                    "No containers match the Docker search."
+                },
+                palette,
+            ))
             .into_any_element();
     }
 
@@ -251,36 +260,33 @@ fn docker_container_row(
             this.load_docker_details(details_id.clone(), window, cx);
         }))
         .child(
-            div()
-                .absolute()
-                .top(px(8.))
-                .right(px(6.))
-                .child(
-                    div()
-                        .relative()
-                        .child(icon_button(
-                            format!("docker-menu-toggle-{short}"),
-                            "⋮", palette,cx.listener(move |this, _, _, cx| {
-                                cx.stop_propagation();
-                                if this.docker_container_menu_id.as_deref() == Some(menu_id.as_str())
-                                {
-                                    this.docker_container_menu_id = None;
-                                } else {
-                                    this.docker_container_menu_id = Some(menu_id.clone());
-                                }
-                                cx.notify();
-                            }),
-                        ))
-                        .when(menu_open, |this| {
-                            this.child(docker_container_action_menu(
-                                palette,
-                                container_id.clone(),
-                                container.name.clone(),
-                                running,
-                                cx,
-                            ))
+            div().absolute().top(px(8.)).right(px(6.)).child(
+                div()
+                    .relative()
+                    .child(icon_button(
+                        format!("docker-menu-toggle-{short}"),
+                        "⋮",
+                        palette,
+                        cx.listener(move |this, _, _, cx| {
+                            cx.stop_propagation();
+                            if this.docker_container_menu_id.as_deref() == Some(menu_id.as_str()) {
+                                this.docker_container_menu_id = None;
+                            } else {
+                                this.docker_container_menu_id = Some(menu_id.clone());
+                            }
+                            cx.notify();
                         }),
-                ),
+                    ))
+                    .when(menu_open, |this| {
+                        this.child(docker_container_action_menu(
+                            palette,
+                            container_id.clone(),
+                            container.name.clone(),
+                            running,
+                            cx,
+                        ))
+                    }),
+            ),
         )
 }
 
@@ -421,11 +427,14 @@ fn docker_container_action_menu(
         ))
 }
 
-fn docker_menu_item(palette: crate::ui::theme::ThemePalette,
+fn docker_menu_item(
+    palette: crate::ui::theme::ThemePalette,
     id: impl Into<String>,
     label: &'static str,
     disabled: bool,
-    on_click: impl Fn(&gpui::ClickEvent, &mut gpui::Window, &mut gpui::App) + 'static,) -> impl IntoElement {    div()
+    on_click: impl Fn(&gpui::ClickEvent, &mut gpui::Window, &mut gpui::App) + 'static,
+) -> impl IntoElement {
+    div()
         .id(SharedString::from(id.into()))
         .h(px(28.))
         .px_3()
@@ -446,10 +455,12 @@ fn docker_menu_item(palette: crate::ui::theme::ThemePalette,
         .child(label)
 }
 
-fn docker_menu_separator(palette: crate::ui::theme::ThemePalette) -> impl IntoElement {    div().h(px(1.)).mx_2().my_1().bg(rgb(palette.border))
+fn docker_menu_separator(palette: crate::ui::theme::ThemePalette) -> impl IntoElement {
+    div().h(px(1.)).mx_2().my_1().bg(rgb(palette.border))
 }
 
-fn docker_state_border_color(palette: crate::ui::theme::ThemePalette, state: &str) -> gpui::Hsla {    match state.trim().to_ascii_lowercase().as_str() {
+fn docker_state_border_color(palette: crate::ui::theme::ThemePalette, state: &str) -> gpui::Hsla {
+    match state.trim().to_ascii_lowercase().as_str() {
         "running" => rgb(0x22c55e).into(),
         "restarting" | "paused" => rgb(0xf59e0b).into(),
         "exited" | "dead" => rgb(0xef4444).into(),

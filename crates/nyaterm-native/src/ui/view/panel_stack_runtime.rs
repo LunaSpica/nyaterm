@@ -109,7 +109,11 @@ impl NyaTermApp {
             .unwrap_or(1.)
     }
 
-    pub(in crate::ui::view) fn open_or_toggle_panel(&mut self, item: NavItem, cx: &mut Context<Self>) {
+    pub(in crate::ui::view) fn open_or_toggle_panel(
+        &mut self,
+        item: NavItem,
+        cx: &mut Context<Self>,
+    ) {
         if item == NavItem::Settings || item.opens_settings() {
             self.open_page(NavItem::Settings, cx);
             return;
@@ -213,7 +217,10 @@ impl NyaTermApp {
             open_list.retain(|value| value != &id);
             let next_active = if open_list.is_empty() {
                 None
-            } else if active.map(|item| item.persistence_id() == id).unwrap_or(false) {
+            } else if active
+                .map(|item| item.persistence_id() == id)
+                .unwrap_or(false)
+            {
                 open_list
                     .first()
                     .and_then(|value| NavItem::from_persistence_id(value))
@@ -223,7 +230,8 @@ impl NyaTermApp {
             match side {
                 PanelSide::Left => {
                     self.active_left_panel = next_active;
-                    self.left_sidebar_collapsed = next_active.is_none() && self.left_open_panels.is_empty();
+                    self.left_sidebar_collapsed =
+                        next_active.is_none() && self.left_open_panels.is_empty();
                 }
                 PanelSide::Right => {
                     self.active_right_panel = next_active;
@@ -323,8 +331,8 @@ impl NyaTermApp {
         }
         let px_per_weight = state.container_height / pair;
         let min_weight = (48. / px_per_weight).min(pair / 2.).max(0.05);
-        let next_above = (state.above_weight + delta_px / px_per_weight)
-            .clamp(min_weight, pair - min_weight);
+        let next_above =
+            (state.above_weight + delta_px / px_per_weight).clamp(min_weight, pair - min_weight);
         let next_below = pair - next_above;
         self.panel_stack_sizes
             .insert(state.above_id.clone(), next_above);
@@ -367,9 +375,7 @@ impl NyaTermApp {
             .settings
             .ui_panel_stack_sizes
             .iter()
-            .filter_map(|(key, value)| {
-                (*value > 0).then(|| (key.clone(), (*value as f32) / 1000.))
-            })
+            .filter_map(|(key, value)| (*value > 0).then(|| (key.clone(), (*value as f32) / 1000.)))
             .collect();
         if self.panel_multi_open {
             if self.left_open_panels.is_empty() {
@@ -390,7 +396,6 @@ impl NyaTermApp {
             }
         }
     }
-
 
     pub(in crate::ui::view) fn side_panel_stack(
         &mut self,
@@ -639,5 +644,4 @@ impl NyaTermApp {
                 }),
             )
     }
-
 }

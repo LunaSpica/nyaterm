@@ -42,7 +42,12 @@ impl NyaTermApp {
             .retain(|_, ts| now.saturating_sub(*ts) <= RECENT_PROMPT_TTL_MS);
     }
 
-    fn remember_credential_prompt(&mut self, kind: CredentialPromptKind, prompt_text: &str, now: u64) -> bool {
+    fn remember_credential_prompt(
+        &mut self,
+        kind: CredentialPromptKind,
+        prompt_text: &str,
+        now: u64,
+    ) -> bool {
         self.prune_recent_credential_prompts(now);
         let key = format!("{kind:?}:{prompt_text}");
         if let Some(last) = self.credential_autofill_recent.get(&key) {
@@ -193,8 +198,7 @@ impl NyaTermApp {
         let password_matches =
             find_matching_credentials(&credentials, CredentialPromptKind::Password, &prompt_text);
         if !password_matches.is_empty() {
-            if !self.remember_credential_prompt(CredentialPromptKind::Password, &prompt_text, now)
-            {
+            if !self.remember_credential_prompt(CredentialPromptKind::Password, &prompt_text, now) {
                 return;
             }
             self.show_credential_panel(
@@ -374,8 +378,7 @@ impl NyaTermApp {
             }
             "down" => {
                 if let Some(state) = self.credential_suggestions.as_mut() {
-                    state.selected_index =
-                        (state.selected_index + 1) % state.matches.len().max(1);
+                    state.selected_index = (state.selected_index + 1) % state.matches.len().max(1);
                     cx.notify();
                 }
                 true
@@ -471,10 +474,8 @@ impl NyaTermApp {
                         if let Some(state) = this.credential_suggestions.as_mut() {
                             state.selected_index = index;
                         }
-                        if let Some(credential) = this
-                            .credential_suggestions
-                            .as_ref()
-                            .and_then(|state| {
+                        if let Some(credential) =
+                            this.credential_suggestions.as_ref().and_then(|state| {
                                 state
                                     .matches
                                     .iter()

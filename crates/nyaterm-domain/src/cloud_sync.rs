@@ -1632,6 +1632,9 @@ fn apply_sync_snapshot(
         options.portable_key_path.clone(),
     )?;
     let database_path = store.db_path().to_path_buf();
+    // On Windows, redb keeps file ranges locked while the database handle is
+    // alive. Release it before copying the current DB for the safety backup.
+    drop(store);
     let safety_backup_path = if database_path.exists() {
         let path = options.config_dir.join(format!(
             "nyaterm.redb.cloud-sync-backup-{}.redb",
@@ -1645,6 +1648,10 @@ fn apply_sync_snapshot(
     } else {
         None
     };
+    let store = ConnectionStore::open_with_portable_key_path(
+        &options.config_dir,
+        options.portable_key_path.clone(),
+    )?;
     if let Err(error) = store.apply_raw_portable_snapshot(snapshot) {
         if let Some(backup) = &safety_backup_path {
             let _ = std::fs::copy(backup, &database_path);

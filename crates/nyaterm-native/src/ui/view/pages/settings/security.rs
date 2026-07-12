@@ -194,7 +194,12 @@ impl NyaTermApp {
     }
 }
 
-fn security_hint(palette: crate::ui::theme::ThemePalette, title: &'static str, detail: &'static str) -> impl IntoElement {    div()
+fn security_hint(
+    palette: crate::ui::theme::ThemePalette,
+    title: &'static str,
+    detail: &'static str,
+) -> impl IntoElement {
+    div()
         .rounded_sm()
         .border_1()
         .border_color(rgb(palette.border))
@@ -227,9 +232,7 @@ fn host_key_policy_label(policy: &str) -> &'static str {
 
 fn host_key_policy_detail(policy: &str) -> &'static str {
     match policy {
-        "strict" | "reject" => {
-            "Current policy: strict. Unknown or changed host keys are rejected."
-        }
+        "strict" | "reject" => "Current policy: strict. Unknown or changed host keys are rejected.",
         "accept_new" | "accept" => {
             "Current policy: accept new. New host keys are saved automatically; changes still prompt."
         }

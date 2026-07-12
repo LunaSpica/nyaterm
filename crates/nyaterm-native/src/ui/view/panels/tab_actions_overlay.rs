@@ -119,7 +119,13 @@ impl NyaTermApp {
             (24.0, 74.0)
         };
 
-        let mut color_row = div().px_3().py_1().flex().flex_wrap().gap_1().items_center();
+        let mut color_row = div()
+            .px_3()
+            .py_1()
+            .flex()
+            .flex_wrap()
+            .gap_1()
+            .items_center();
         for (name, color) in TAB_PRESET_COLORS {
             let selected = active_color == Some(color);
             let color_session_id = session_id.clone();

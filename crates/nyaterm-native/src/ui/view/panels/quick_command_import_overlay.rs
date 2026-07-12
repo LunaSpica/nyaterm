@@ -145,13 +145,16 @@ impl NyaTermApp {
     }
 }
 
-fn quick_command_import_source_card(palette: crate::ui::theme::ThemePalette,
+fn quick_command_import_source_card(
+    palette: crate::ui::theme::ThemePalette,
     id: &'static str,
     monogram: &'static str,
     label: &'static str,
     hint: &'static str,
     accent: u32,
-    on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,) -> impl IntoElement {    div()
+    on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
+) -> impl IntoElement {
+    div()
         .id(SharedString::from(id))
         .min_h(px(124.))
         .rounded_md()

@@ -181,7 +181,8 @@ impl NyaTermApp {
             .activity_bar_layout
             .zone_mut(source_zone)
             .remove(source_index);
-        let mut insert_at = target_index.unwrap_or_else(|| self.activity_bar_layout.zone(target_zone).len());
+        let mut insert_at =
+            target_index.unwrap_or_else(|| self.activity_bar_layout.zone(target_zone).len());
         if source_zone == target_zone && source_index < insert_at {
             insert_at = insert_at.saturating_sub(1);
         }

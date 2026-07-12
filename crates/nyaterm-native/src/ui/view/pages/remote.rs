@@ -3,9 +3,7 @@ use gpui::{
     Window, div, prelude::*, px, rgb, svg,
 };
 
-use crate::ui::components::{
-    capability_line, empty_panel, icon_button, section_header, small_button, status_pill,
-};
+use crate::ui::components::{empty_panel, icon_button, small_button, status_pill};
 use std::collections::{HashMap, HashSet};
 
 use super::super::{
@@ -31,7 +29,6 @@ mod process;
 mod process_view;
 #[path = "remote/stats_view.rs"]
 mod stats_view;
-
 
 use docker::*;
 use process::*;

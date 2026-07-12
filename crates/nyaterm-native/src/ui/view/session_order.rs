@@ -75,7 +75,6 @@ impl NyaTermApp {
         ordered
     }
 
-
     /// True when this session is a secondary leaf inside another tab's pane tree
     /// (Tauri: multiple SessionPanes under one Tab, only one strip entry).
     pub(in crate::ui::view) fn is_secondary_pane_session(&self, session_id: &str) -> bool {
@@ -138,10 +137,7 @@ impl NyaTermApp {
     }
 }
 
-fn session_info_from_metadata(
-    session_id: &str,
-    metadata: &SessionRuntimeMetadata,
-) -> SessionInfo {
+fn session_info_from_metadata(session_id: &str, metadata: &SessionRuntimeMetadata) -> SessionInfo {
     match &metadata.launch_config {
         SessionLaunchConfig::Local(config) => SessionInfo {
             id: session_id.to_string(),

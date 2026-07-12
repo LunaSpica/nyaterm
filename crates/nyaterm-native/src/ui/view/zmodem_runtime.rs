@@ -110,19 +110,16 @@ impl NyaTermApp {
         let transfer_tx = self.transfer_tx.clone();
         let probe_session_id = session_id.clone();
         std::thread::spawn(move || {
-            let result = probe_zmodem_remote_conflicts(
-                config,
-                remote_dir,
-                files,
-                policy,
-                resolver.as_ref(),
-            )
-            .map(|(resolved, probe_skipped)| TransferJobOutput::ZmodemProbeReady {
-                session_id: probe_session_id,
-                files: resolved,
-                probe_skipped,
-            })
-            .map_err(|error| error.to_string());
+            let result =
+                probe_zmodem_remote_conflicts(config, remote_dir, files, policy, resolver.as_ref())
+                    .map(
+                        |(resolved, probe_skipped)| TransferJobOutput::ZmodemProbeReady {
+                            session_id: probe_session_id,
+                            files: resolved,
+                            probe_skipped,
+                        },
+                    )
+                    .map_err(|error| error.to_string());
             let _ = transfer_tx.send(TransferJobResult {
                 id,
                 event: TransferJobEvent::Finished(result),
@@ -267,15 +264,13 @@ impl NyaTermApp {
                 initial_bytes,
             } => {
                 let prepared_upload = if direction == ZmodemDirection::Upload {
-                    self.zmodem_state_mut(session_id)
-                        .pending_upload
-                        .take()
+                    self.zmodem_state_mut(session_id).pending_upload.take()
                 } else {
                     None
                 };
                 let (transfer, bootstrap) =
                     start_zmodem_transfer(direction, &initial_bytes, prepared_upload);
-                let mut actions = bootstrap;
+                let actions = bootstrap;
                 {
                     let state = self.zmodem_state_mut(session_id);
                     state.transfer = Some(transfer);
@@ -344,8 +339,9 @@ impl NyaTermApp {
                 };
                 if total_size > 0 {
                     let pct = (bytes_transferred.saturating_mul(100) / total_size).min(100);
-                    self.terminal_status =
-                        format!("ZMODEM {dir} {file_name}: {pct}% ({bytes_transferred}/{total_size})");
+                    self.terminal_status = format!(
+                        "ZMODEM {dir} {file_name}: {pct}% ({bytes_transferred}/{total_size})"
+                    );
                 } else {
                     self.terminal_status =
                         format!("ZMODEM {dir} {file_name}: {bytes_transferred} bytes");

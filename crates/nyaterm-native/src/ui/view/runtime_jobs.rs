@@ -2,6 +2,7 @@ use super::*;
 
 #[derive(Debug)]
 pub(in crate::ui::view) struct SessionStartResult {
+    pub(in crate::ui::view) request_id: String,
     pub(in crate::ui::view) connection_name: String,
     pub(in crate::ui::view) result: Result<SessionStartSuccess, String>,
 }

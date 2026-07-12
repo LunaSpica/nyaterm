@@ -188,7 +188,6 @@ impl NyaTermApp {
         self.persist_ai_settings_now(cx);
     }
 
-
     pub(in crate::ui::view) fn toggle_ai_credential_enabled(
         &mut self,
         credential_id: String,
@@ -335,8 +334,7 @@ impl NyaTermApp {
                 cx.notify();
             }
             "tab" => {
-                self.ai_credential_edit =
-                    Some((credential_id, field.next(builtin)));
+                self.ai_credential_edit = Some((credential_id, field.next(builtin)));
                 cx.notify();
             }
             "enter" => {
@@ -372,7 +370,8 @@ impl NyaTermApp {
                                         credential.name.push_str(input);
                                     }
                                     AiCredentialEditorField::BaseUrl => {
-                                        let base = credential.base_url.get_or_insert_with(String::new);
+                                        let base =
+                                            credential.base_url.get_or_insert_with(String::new);
                                         base.push_str(input);
                                     }
                                     AiCredentialEditorField::ApiKey => {}
@@ -604,18 +603,13 @@ impl NyaTermApp {
                 last_seen_at: None,
             },
         );
-        if self
-            .ai_settings
-            .default_model_id
-            .as_ref()
-            .is_none_or(|id| {
-                !self
-                    .ai_settings
-                    .models
-                    .iter()
-                    .any(|model| model.enabled && &model.id == id)
-            })
-        {
+        if self.ai_settings.default_model_id.as_ref().is_none_or(|id| {
+            !self
+                .ai_settings
+                .models
+                .iter()
+                .any(|model| model.enabled && &model.id == id)
+        }) {
             self.ai_settings.default_model_id = Some(model_id);
         }
         self.ai_status = format!("Added manual model {name}");
@@ -857,7 +851,6 @@ impl NyaTermApp {
         }
         cx.notify();
     }
-
 
     /// Persist current `ai_settings` without rewriting active profile drafts (Tauri live update).
     pub(in crate::ui::view) fn persist_ai_settings_now(&mut self, cx: &mut Context<Self>) {
@@ -1157,8 +1150,10 @@ impl NyaTermApp {
         })
     }
 
-    pub(in crate::ui::view) fn drain_ai_discovery_events(&mut self) {
+    pub(in crate::ui::view) fn drain_ai_discovery_events(&mut self) -> bool {
+        let mut dirty = false;
         while let Ok(event) = self.ai_discovery_rx.try_recv() {
+            dirty = true;
             self.ai_discovery_pending = false;
             match event.result {
                 Ok(discoveries) if discoveries.is_empty() => {
@@ -1177,6 +1172,7 @@ impl NyaTermApp {
                 }
             }
         }
+        dirty
     }
 
     pub(in crate::ui::view) fn apply_ai_model_discoveries(
@@ -1450,7 +1446,8 @@ impl NyaTermApp {
         }
     }
 
-    pub(in crate::ui::view) fn drain_ai_chat_events(&mut self, cx: &mut Context<Self>) {
+    pub(in crate::ui::view) fn drain_ai_chat_events(&mut self, cx: &mut Context<Self>) -> bool {
+        let mut dirty = false;
         while let Ok(event) = self.ai_chat_rx.try_recv() {
             match event {
                 AiChatWorkerEvent::Delta {
@@ -1462,6 +1459,7 @@ impl NyaTermApp {
                     if job_id != self.ai_chat_job_id {
                         continue;
                     }
+                    dirty = true;
                     if self.ai_response_preview == "Running AI request..." {
                         self.ai_response_preview.clear();
                     }
@@ -1477,7 +1475,8 @@ impl NyaTermApp {
                             message.content.push_str(&text_delta);
                             if let Some(delta) = reasoning_delta.as_ref() {
                                 if !delta.trim().is_empty() {
-                                    let existing = message.reasoning_content.take().unwrap_or_default();
+                                    let existing =
+                                        message.reasoning_content.take().unwrap_or_default();
                                     message.reasoning_content = Some(format!("{existing}{delta}"));
                                 }
                             }
@@ -1493,7 +1492,6 @@ impl NyaTermApp {
                     };
                     self.store_status.message = format!("AI session {session_id} streaming");
                     self.store_status.ready = true;
-                    cx.notify();
                 }
                 AiChatWorkerEvent::AgentToolCallDelta {
                     job_id,
@@ -1504,6 +1502,7 @@ impl NyaTermApp {
                     if job_id != self.ai_chat_job_id {
                         continue;
                     }
+                    dirty = true;
                     let tool_label = tool_name
                         .as_deref()
                         .filter(|name| !name.trim().is_empty())
@@ -1533,7 +1532,6 @@ impl NyaTermApp {
                     self.store_status.message =
                         format!("AI session {session_id} streaming Agent tool call");
                     self.store_status.ready = true;
-                    cx.notify();
                 }
                 AiChatWorkerEvent::AgentBackgroundFinished {
                     job_id,
@@ -1543,6 +1541,7 @@ impl NyaTermApp {
                     if job_id != self.ai_chat_job_id {
                         continue;
                     }
+                    dirty = true;
                     self.ai_chat_cancel = None;
                     let Some(active_state) = self.ai_agent_loop.take() else {
                         continue;
@@ -1578,7 +1577,6 @@ impl NyaTermApp {
                             );
                             self.store_status.message = self.ai_status.clone();
                             self.store_status.ready = false;
-                            cx.notify();
                         }
                     }
                 }
@@ -1586,6 +1584,7 @@ impl NyaTermApp {
                     if event.job_id != self.ai_chat_job_id {
                         continue;
                     }
+                    dirty = true;
                     self.ai_chat_pending = false;
                     self.ai_chat_cancel = None;
                     match event.result {
@@ -1644,7 +1643,8 @@ impl NyaTermApp {
                                     if !output.text.trim().is_empty() {
                                         message.content = output.text.clone();
                                     } else if message.content.trim().is_empty() {
-                                        message.content = "AI returned an empty response".to_string();
+                                        message.content =
+                                            "AI returned an empty response".to_string();
                                     }
                                     message.reasoning_content = output.reasoning.clone();
                                     message.command_cards = output.command_cards.clone();
@@ -1701,6 +1701,8 @@ impl NyaTermApp {
                 }
             }
         }
+        let _ = cx;
+        dirty
     }
 
     pub(in crate::ui::view) fn sync_ai_drafts_from_active_profile(&mut self) {
@@ -1709,7 +1711,6 @@ impl NyaTermApp {
         self.ai_base_url_draft = base_url;
         self.ai_secret_draft.clear();
     }
-
 
     pub(in crate::ui::view) fn refresh_ai_session_list(&mut self, cx: &mut Context<Self>) {
         let Ok(store) = ConnectionStore::open_with_portable_key_path(
@@ -1755,7 +1756,8 @@ impl NyaTermApp {
                 } else {
                     self.ai_response_preview.clear();
                 }
-                self.ai_status = format!("loaded AI session {}", compact_id(&self.ai_chat_session_id));
+                self.ai_status =
+                    format!("loaded AI session {}", compact_id(&self.ai_chat_session_id));
             }
             Err(error) => {
                 self.ai_status = format!("failed to load AI session: {error}");
@@ -1859,7 +1861,6 @@ impl NyaTermApp {
         }
     }
 
-
     pub(in crate::ui::view) fn refresh_ai_usage_counts(&mut self) {
         if let Ok(store) = ConnectionStore::open_with_portable_key_path(
             self.runtime.config_dir(),
@@ -1872,7 +1873,6 @@ impl NyaTermApp {
         }
     }
 }
-
 
 fn is_builtin_ai_provider_id(id: &str) -> bool {
     matches!(
@@ -1918,8 +1918,11 @@ fn seed_builtin_ai_models_for_provider(
         nyaterm_domain::AiProviderKind::Groq => &["llama-3.3-70b-versatile"],
         nyaterm_domain::AiProviderKind::OpenaiCompatible => &[],
     };
-    let existing: std::collections::HashSet<String> =
-        settings.models.iter().map(|model| model.id.clone()).collect();
+    let existing: std::collections::HashSet<String> = settings
+        .models
+        .iter()
+        .map(|model| model.id.clone())
+        .collect();
     for name in names {
         let model_id = nyaterm_domain::ai_model_id_for_provider(provider_kind, name);
         if existing.contains(&model_id) {

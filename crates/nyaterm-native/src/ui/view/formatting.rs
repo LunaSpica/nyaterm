@@ -203,7 +203,6 @@ pub(in crate::ui::view) fn compact_id(value: &str) -> String {
     }
 }
 
-
 pub(in crate::ui::view) fn format_cloud_provider(provider: &str) -> String {
     match provider.trim() {
         "" => "Unknown".to_string(),
@@ -218,7 +217,6 @@ pub(in crate::ui::view) fn format_cloud_provider(provider: &str) -> String {
         other => other.to_string(),
     }
 }
-
 
 pub(in crate::ui::view) fn format_terminal_line_timestamp_ms(
     timestamp_ms: u64,
@@ -261,7 +259,10 @@ pub(in crate::ui::view) fn format_duration_ms(duration_ms: Option<u64>) -> Optio
     }
 }
 
-pub(in crate::ui::view) fn cloud_sync_status_dot_color(palette: ThemePalette, status: &str) -> gpui::Rgba {
+pub(in crate::ui::view) fn cloud_sync_status_dot_color(
+    palette: ThemePalette,
+    status: &str,
+) -> gpui::Rgba {
     match status {
         "running" => rgb(palette.accent),
         "success" => rgb(palette.success),
@@ -272,7 +273,10 @@ pub(in crate::ui::view) fn cloud_sync_status_dot_color(palette: ThemePalette, st
     }
 }
 
-pub(in crate::ui::view) fn cloud_sync_status_text_color(palette: ThemePalette, status: &str) -> gpui::Rgba {
+pub(in crate::ui::view) fn cloud_sync_status_text_color(
+    palette: ThemePalette,
+    status: &str,
+) -> gpui::Rgba {
     match status {
         "running" => rgb(palette.accent),
         "success" => rgb(palette.success),
@@ -283,7 +287,10 @@ pub(in crate::ui::view) fn cloud_sync_status_text_color(palette: ThemePalette, s
     }
 }
 
-pub(in crate::ui::view) fn cloud_sync_kind_text_color(palette: ThemePalette, kind: &str) -> gpui::Rgba {
+pub(in crate::ui::view) fn cloud_sync_kind_text_color(
+    palette: ThemePalette,
+    kind: &str,
+) -> gpui::Rgba {
     match kind {
         "sync" => rgb(palette.accent),
         "backup" => rgb(palette.accent),
@@ -292,7 +299,11 @@ pub(in crate::ui::view) fn cloud_sync_kind_text_color(palette: ThemePalette, kin
 }
 
 pub(in crate::ui::view) fn cloud_sync_history_summary(entry: &CloudSyncHistoryEntry) -> String {
-    let normalized = entry.message.split_whitespace().collect::<Vec<_>>().join(" ");
+    let normalized = entry
+        .message
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ");
     if normalized.is_empty() {
         return format!("{} · {}", entry.kind, entry.status);
     }
@@ -447,7 +458,6 @@ pub(in crate::ui::view) fn ssh_multiplex_key(config: &SshSessionConfig) -> Strin
     )
 }
 
-
 pub(in crate::ui::view) fn format_last_used_ms(last_used_at_ms: Option<u64>) -> String {
     let Some(ms) = last_used_at_ms.filter(|value| *value > 0) else {
         return "never".to_string();
@@ -472,8 +482,6 @@ pub(in crate::ui::view) fn format_last_used_ms(last_used_at_ms: Option<u64>) -> 
         format!("{}mo ago", secs / (86_400 * 30))
     }
 }
-
-
 
 /// Tauri AI history date buckets (`groupSessionsByDate`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -562,7 +570,6 @@ pub(in crate::ui::view) fn group_ai_sessions_by_date(
     }
     groups
 }
-
 
 /// Tauri `resolveConnectionIcon`: map stored icon key / connection kind to SVG path + color.
 #[derive(Debug, Clone, Copy)]
@@ -749,16 +756,24 @@ fn default_connection_icon_for_kind(kind: &str) -> ConnectionIconDef {
     }
 }
 
-
 /// Lightweight GFM-ish blocks for AI transcript (closer to Tauri MarkdownContent).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(in crate::ui::view) enum MarkdownBlock {
     Paragraph(String),
     Bullet(String),
-    Numbered { index: u32, text: String },
-    Code { language: String, code: String },
+    Numbered {
+        index: u32,
+        text: String,
+    },
+    Code {
+        language: String,
+        code: String,
+    },
     Quote(String),
-    Heading { level: u8, text: String },
+    Heading {
+        level: u8,
+        text: String,
+    },
     Table {
         headers: Vec<String>,
         rows: Vec<Vec<String>>,
@@ -828,9 +843,7 @@ fn is_table_separator_row(line: &str) -> bool {
     !cells.is_empty()
         && cells.iter().all(|cell| {
             let t = cell.trim();
-            !t.is_empty()
-                && t.chars().all(|ch| matches!(ch, '-' | ':' | ' '))
-                && t.contains('-')
+            !t.is_empty() && t.chars().all(|ch| matches!(ch, '-' | ':' | ' ')) && t.contains('-')
         })
 }
 
@@ -943,7 +956,10 @@ pub(in crate::ui::view) fn parse_inline_markdown(input: &str) -> InlineMarkdown 
                 let ok = !inner.is_empty()
                     && !inner.contains('\n')
                     && (marker != '_'
-                        || (!inner.chars().next().is_some_and(|c| c.is_ascii_alphanumeric())
+                        || (!inner
+                            .chars()
+                            .next()
+                            .is_some_and(|c| c.is_ascii_alphanumeric())
                             || i == 0
                             || !input[..i]
                                 .chars()
@@ -1093,11 +1109,7 @@ pub(in crate::ui::view) fn parse_markdown_blocks(content: &str) -> Vec<MarkdownB
             continue;
         }
 
-        let heading_level = trimmed
-            .chars()
-            .take_while(|ch| *ch == '#')
-            .count()
-            .min(6) as u8;
+        let heading_level = trimmed.chars().take_while(|ch| *ch == '#').count().min(6) as u8;
         if heading_level > 0 && trimmed.as_bytes().get(heading_level as usize) == Some(&b' ') {
             flush_paragraph(&mut paragraph, &mut blocks);
             blocks.push(MarkdownBlock::Heading {
@@ -1196,8 +1208,7 @@ Hello **bold** and `code` and [link](https://example.com).
 
     #[test]
     fn extract_think_keeps_visible() {
-        let (visible, think) =
-            extract_think_content("hi <think>secret</think> there");
+        let (visible, think) = extract_think_content("hi <think>secret</think> there");
         assert_eq!(visible, "hi  there");
         assert_eq!(think.as_deref(), Some("secret"));
     }

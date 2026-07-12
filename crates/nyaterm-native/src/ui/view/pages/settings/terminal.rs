@@ -420,20 +420,25 @@ impl NyaTermApp {
             .flex()
             .flex_col()
             .gap_3()
-            .child(settings_form_section(palette, 
+            .child(settings_form_section(
+                palette,
                 Some("Terminal search"),
                 Some("Default flags for in-buffer find."),
                 div()
                     .flex()
                     .flex_col()
                     .gap_3()
-                    .child(settings_form_row(palette, 
+                    .child(settings_form_row(
+                        palette,
                         "Search mode",
-                        Some(SharedString::from("Buffer searches the live terminal; History searches session logs.")),
+                        Some(SharedString::from(
+                            "Buffer searches the live terminal; History searches session logs.",
+                        )),
                         div()
                             .flex()
                             .gap_1()
-                            .child(settings_choice_chip(palette, 
+                            .child(settings_choice_chip(
+                                palette,
                                 "settings-search-mode-buffer",
                                 "Buffer",
                                 self.terminal_search_mode == TerminalSearchMode::Buffer,
@@ -443,7 +448,8 @@ impl NyaTermApp {
                                     cx.notify();
                                 }),
                             ))
-                            .child(settings_choice_chip(palette, 
+                            .child(settings_choice_chip(
+                                palette,
                                 "settings-search-mode-history",
                                 "History",
                                 self.terminal_search_mode == TerminalSearchMode::History,
@@ -454,10 +460,12 @@ impl NyaTermApp {
                                 }),
                             )),
                     ))
-                    .child(settings_form_row(palette, 
+                    .child(settings_form_row(
+                        palette,
                         "Case sensitive",
                         None,
-                        settings_switch(palette, 
+                        settings_switch(
+                            palette,
                             "settings-search-case",
                             self.terminal_search_case_sensitive,
                             cx.listener(|this, _, _, cx| {
@@ -468,10 +476,12 @@ impl NyaTermApp {
                             }),
                         ),
                     ))
-                    .child(settings_form_row(palette, 
+                    .child(settings_form_row(
+                        palette,
                         "Regular expression",
                         None,
-                        settings_switch(palette, 
+                        settings_switch(
+                            palette,
                             "settings-search-regex",
                             self.terminal_search_regex,
                             cx.listener(|this, _, _, cx| {
@@ -481,10 +491,12 @@ impl NyaTermApp {
                             }),
                         ),
                     ))
-                    .child(settings_form_row(palette, 
+                    .child(settings_form_row(
+                        palette,
                         "Whole word",
                         None,
-                        settings_switch(palette, 
+                        settings_switch(
+                            palette,
                             "settings-search-word",
                             self.terminal_search_whole_word,
                             cx.listener(|this, _, _, cx| {
@@ -494,10 +506,14 @@ impl NyaTermApp {
                             }),
                         ),
                     ))
-                    .child(settings_form_row(palette, 
+                    .child(settings_form_row(
+                        palette,
                         "Open search",
-                        Some(SharedString::from("Focus the terminal search bar in the workspace.")),
-                        small_button(palette, 
+                        Some(SharedString::from(
+                            "Focus the terminal search bar in the workspace.",
+                        )),
+                        small_button(
+                            palette,
                             "settings-search-open",
                             "Open",
                             cx.listener(|this, _, window, cx| {
@@ -506,10 +522,12 @@ impl NyaTermApp {
                         ),
                     )),
             ))
-            .child(settings_form_section(palette, 
+            .child(settings_form_section(
+                palette,
                 Some("Command search"),
                 Some("Shared matcher sources for history and quick commands."),
-                settings_form_row(palette, 
+                settings_form_row(
+                    palette,
                     "Catalog",
                     Some(SharedString::from(format!(
                         "{} history · {} quick commands",
@@ -617,7 +635,9 @@ impl NyaTermApp {
                     let icon_label = search_engine_icon_label(engine.icon.as_deref());
                     let icon_color = search_engine_icon_color(engine.icon.as_deref());
                     div()
-                        .id(SharedString::from(format!("settings-search-engine-{index}")))
+                        .id(SharedString::from(format!(
+                            "settings-search-engine-{index}"
+                        )))
                         .rounded_md()
                         .border_1()
                         .border_color(rgb(palette.border))
@@ -750,12 +770,12 @@ impl NyaTermApp {
                                                 cx,
                                             );
                                         }))
-                                        .on_key_down(cx.listener(
-                                            |this, event: &KeyDownEvent, _, cx| {
+                                        .on_key_down(
+                                            cx.listener(|this, event: &KeyDownEvent, _, cx| {
                                                 cx.stop_propagation();
                                                 this.handle_search_engine_key_down(event, cx);
-                                            },
-                                        )),
+                                            }),
+                                        ),
                                     )
                                     .child(
                                         transfer_input(
@@ -774,12 +794,12 @@ impl NyaTermApp {
                                                 cx,
                                             );
                                         }))
-                                        .on_key_down(cx.listener(
-                                            |this, event: &KeyDownEvent, _, cx| {
+                                        .on_key_down(
+                                            cx.listener(|this, event: &KeyDownEvent, _, cx| {
                                                 cx.stop_propagation();
                                                 this.handle_search_engine_key_down(event, cx);
-                                            },
-                                        )),
+                                            }),
+                                        ),
                                     )
                                     .child(
                                         div()
@@ -1515,14 +1535,15 @@ impl NyaTermApp {
                 }),
         )
     }
-
 }
 
-
-fn terminal_feature_card(palette: crate::ui::theme::ThemePalette,
+fn terminal_feature_card(
+    palette: crate::ui::theme::ThemePalette,
     title: &'static str,
     detail: &'static str,
-    enabled: bool,) -> impl IntoElement {    div()
+    enabled: bool,
+) -> impl IntoElement {
+    div()
         .rounded_sm()
         .border_1()
         .border_color(rgb(palette.border))
@@ -1566,7 +1587,12 @@ fn terminal_feature_card(palette: crate::ui::theme::ThemePalette,
         )
 }
 
-fn search_engine_hint(palette: crate::ui::theme::ThemePalette, title: &'static str, detail: &'static str) -> impl IntoElement {    div()
+fn search_engine_hint(
+    palette: crate::ui::theme::ThemePalette,
+    title: &'static str,
+    detail: &'static str,
+) -> impl IntoElement {
+    div()
         .rounded_sm()
         .border_1()
         .border_color(rgb(palette.border))
@@ -1589,11 +1615,14 @@ fn search_engine_hint(palette: crate::ui::theme::ThemePalette, title: &'static s
         )
 }
 
-fn settings_toggle_button(palette: crate::ui::theme::ThemePalette,
+fn settings_toggle_button(
+    palette: crate::ui::theme::ThemePalette,
     id: impl Into<String>,
     label: &'static str,
     enabled: bool,
-    on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,) -> impl IntoElement {    div()
+    on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
+) -> impl IntoElement {
+    div()
         .id(SharedString::from(id.into()))
         .h(px(32.))
         .px_3()
@@ -1638,7 +1667,6 @@ fn settings_toggle_button(palette: crate::ui::theme::ThemePalette,
         .on_click(on_click)
 }
 
-
 fn search_engine_icon_label(icon: Option<&str>) -> String {
     match icon.unwrap_or("default") {
         "google" => "G".into(),
@@ -1676,7 +1704,6 @@ fn search_engine_icon_color(icon: Option<&str>) -> u32 {
         _ => 0x8b949e,
     }
 }
-
 
 fn parse_keyword_swatch(value: &str) -> Option<u32> {
     let hex = value.trim().strip_prefix('#').unwrap_or(value.trim());

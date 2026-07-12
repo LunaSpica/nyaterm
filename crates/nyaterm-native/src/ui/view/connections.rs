@@ -2,7 +2,6 @@ use super::*;
 use gpui::{FontWeight, MouseDownEvent, Render, Window, rgba};
 use nyaterm_domain::truncate_preview;
 
-
 #[derive(Clone, Debug)]
 pub(in crate::ui::view) struct ConnectionDragPayload {
     pub kind: ConnectionDragKind,
@@ -66,12 +65,7 @@ impl Render for ConnectionDragPreview {
                     .border_color(rgb(0x388bfd))
                     .bg(rgba(0x0d1117ee))
                     .shadow_lg()
-                    .child(
-                        div()
-                            .text_size(px(13.))
-                            .text_color(accent)
-                            .child(kind),
-                    )
+                    .child(div().text_size(px(13.)).text_color(accent).child(kind))
                     .child(
                         div()
                             .min_w_0()
@@ -192,14 +186,13 @@ impl NyaTermApp {
         }
         for list in by_group.values_mut() {
             list.sort_by(|left, right| match self.connection_sort_mode {
-                crate::ui::models::ConnectionSortMode::Default => left
-                    .sort_order
-                    .cmp(&right.sort_order)
-                    .then_with(|| {
+                crate::ui::models::ConnectionSortMode::Default => {
+                    left.sort_order.cmp(&right.sort_order).then_with(|| {
                         left.name
                             .to_ascii_lowercase()
                             .cmp(&right.name.to_ascii_lowercase())
-                    }),
+                    })
+                }
                 crate::ui::models::ConnectionSortMode::NameAsc => left
                     .name
                     .to_ascii_lowercase()
@@ -480,22 +473,12 @@ impl NyaTermApp {
         if source_id == target_id {
             return;
         }
-        let Some(source) = self
-            .connections
-            .iter()
-            .find(|c| c.id == source_id)
-            .cloned()
-        else {
+        let Some(source) = self.connections.iter().find(|c| c.id == source_id).cloned() else {
             self.terminal_status = "drag source connection missing".to_string();
             cx.notify();
             return;
         };
-        let Some(target) = self
-            .connections
-            .iter()
-            .find(|c| c.id == target_id)
-            .cloned()
-        else {
+        let Some(target) = self.connections.iter().find(|c| c.id == target_id).cloned() else {
             self.terminal_status = "drop target connection missing".to_string();
             cx.notify();
             return;
@@ -509,11 +492,16 @@ impl NyaTermApp {
             .cloned()
             .collect::<Vec<_>>();
         siblings.sort_by(|a, b| {
-            a.sort_order
-                .cmp(&b.sort_order)
-                .then_with(|| a.name.to_ascii_lowercase().cmp(&b.name.to_ascii_lowercase()))
+            a.sort_order.cmp(&b.sort_order).then_with(|| {
+                a.name
+                    .to_ascii_lowercase()
+                    .cmp(&b.name.to_ascii_lowercase())
+            })
         });
-        let target_idx = siblings.iter().position(|c| c.id == target_id).unwrap_or(siblings.len());
+        let target_idx = siblings
+            .iter()
+            .position(|c| c.id == target_id)
+            .unwrap_or(siblings.len());
         let mut moved = source;
         moved.group_id = parent;
         siblings.insert(target_idx, moved);
@@ -543,22 +531,12 @@ impl NyaTermApp {
         if source_id == target_id {
             return;
         }
-        let Some(source) = self
-            .connections
-            .iter()
-            .find(|c| c.id == source_id)
-            .cloned()
-        else {
+        let Some(source) = self.connections.iter().find(|c| c.id == source_id).cloned() else {
             self.terminal_status = "drag source connection missing".to_string();
             cx.notify();
             return;
         };
-        let Some(target) = self
-            .connections
-            .iter()
-            .find(|c| c.id == target_id)
-            .cloned()
-        else {
+        let Some(target) = self.connections.iter().find(|c| c.id == target_id).cloned() else {
             self.terminal_status = "drop target connection missing".to_string();
             cx.notify();
             return;
@@ -572,9 +550,11 @@ impl NyaTermApp {
             .cloned()
             .collect::<Vec<_>>();
         siblings.sort_by(|a, b| {
-            a.sort_order
-                .cmp(&b.sort_order)
-                .then_with(|| a.name.to_ascii_lowercase().cmp(&b.name.to_ascii_lowercase()))
+            a.sort_order.cmp(&b.sort_order).then_with(|| {
+                a.name
+                    .to_ascii_lowercase()
+                    .cmp(&b.name.to_ascii_lowercase())
+            })
         });
         let target_idx = siblings
             .iter()
@@ -607,12 +587,7 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         self.connection_drop_target = None;
-        let Some(source) = self
-            .connections
-            .iter()
-            .find(|c| c.id == source_id)
-            .cloned()
-        else {
+        let Some(source) = self.connections.iter().find(|c| c.id == source_id).cloned() else {
             self.terminal_status = "drag source connection missing".to_string();
             cx.notify();
             return;
@@ -683,7 +658,10 @@ impl NyaTermApp {
             .cloned()
             .collect::<Vec<_>>();
         siblings.sort_by(|a, b| a.sort_order.cmp(&b.sort_order));
-        let target_idx = siblings.iter().position(|g| g.id == target_id).unwrap_or(siblings.len());
+        let target_idx = siblings
+            .iter()
+            .position(|g| g.id == target_id)
+            .unwrap_or(siblings.len());
         let mut moved = source;
         moved.parent_id = parent;
         siblings.insert(target_idx, moved);
@@ -769,10 +747,7 @@ impl NyaTermApp {
         false
     }
 
-    fn persist_connection_order(
-        &mut self,
-        ordered: &[SavedConnection],
-    ) -> Result<(), String> {
+    fn persist_connection_order(&mut self, ordered: &[SavedConnection]) -> Result<(), String> {
         self.with_connection_store(|store| {
             for (index, connection) in ordered.iter().enumerate() {
                 let mut updated = connection.clone();

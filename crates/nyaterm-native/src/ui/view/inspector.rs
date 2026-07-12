@@ -45,8 +45,7 @@ impl NyaTermApp {
                 );
             } else {
                 for step in self.ai_agent_steps.iter().cloned().rev().take(16).rev() {
-                    agent_step_rows =
-                        agent_step_rows.child(self.ai_agent_step_card(step, cx));
+                    agent_step_rows = agent_step_rows.child(self.ai_agent_step_card(step, cx));
                 }
             }
         }
@@ -58,7 +57,6 @@ impl NyaTermApp {
         let mode_label = if agent_mode { "Agent" } else { "Ask" };
         let enabled = self.ai_settings.enabled;
 
-        
         // Tauri AIAssistantPanel: PanelHeader(title+model meta + history/settings/new) already
         // provided by side stack; body keeps optional in-panel action strip when not stacked header.
         // Here we only add a compact action strip under shared header for history toggle + shortcuts.
@@ -110,7 +108,8 @@ impl NyaTermApp {
                             AgentCommandExecutionMode::Auto => "icons/ai/exec-auto.svg",
                             AgentCommandExecutionMode::Smart => "icons/ai/exec-smart.svg",
                             AgentCommandExecutionMode::ConfirmEach => "icons/ai/exec-confirm.svg",
-                        }, cx.listener(|this, _, _, cx| {
+                        },
+                        cx.listener(|this, _, _, cx| {
                             this.ai_history_open = false;
                             this.ai_execution_menu_open = !this.ai_execution_menu_open;
                             cx.notify();
@@ -119,7 +118,8 @@ impl NyaTermApp {
                     .child(ai_svg_icon_button(
                         palette,
                         "ai-history-toggle",
-                        "icons/ai/history.svg", cx.listener(|this, _, window, cx| {
+                        "icons/ai/history.svg",
+                        cx.listener(|this, _, window, cx| {
                             this.ai_execution_menu_open = false;
                             this.ai_history_open = !this.ai_history_open;
                             if this.ai_history_open {
@@ -134,7 +134,8 @@ impl NyaTermApp {
                     .child(ai_svg_icon_button(
                         palette,
                         "ai-open-settings",
-                        "icons/ai/settings.svg", cx.listener(|this, _, _, cx| {
+                        "icons/ai/settings.svg",
+                        cx.listener(|this, _, _, cx| {
                             this.settings_active_tab = SettingsTab::AiGeneral;
                             this.open_page(NavItem::Settings, cx);
                         }),
@@ -142,15 +143,15 @@ impl NyaTermApp {
                     .child(ai_svg_icon_button(
                         palette,
                         "ai-new-chat",
-                        "icons/ai/new.svg", cx.listener(|this, _, _, cx| {
+                        "icons/ai/new.svg",
+                        cx.listener(|this, _, _, cx| {
                             this.ai_prompt_draft.clear();
-                            this.ai_response_preview = if this.ai_settings.default_mode
-                                == AiMode::Agent
-                            {
-                                "Agent mode ready".to_string()
-                            } else {
-                                "Ask mode ready".to_string()
-                            };
+                            this.ai_response_preview =
+                                if this.ai_settings.default_mode == AiMode::Agent {
+                                    "Agent mode ready".to_string()
+                                } else {
+                                    "Ask mode ready".to_string()
+                                };
                             this.ai_command_cards.clear();
                             this.ai_agent_steps.clear();
                             this.ai_agent_thought_expanded.clear();
@@ -210,18 +211,20 @@ impl NyaTermApp {
                             },
                             self.ai_prompt_draft.clone(),
                             true,
-                    self.theme_palette(),
-                )
+                            self.theme_palette(),
+                        )
                         .h(px(64.))
                         .track_focus(&self.ai_chat_focus)
                         .on_click(cx.listener(|this, _, window, cx| {
                             window.focus(&this.ai_chat_focus);
                             cx.notify();
                         }))
-                        .on_key_down(cx.listener(|this, event: &KeyDownEvent, _, cx| {
-                            cx.stop_propagation();
-                            this.handle_ai_prompt_key_down(event, cx);
-                        })),
+                        .on_key_down(cx.listener(
+                            |this, event: &KeyDownEvent, _, cx| {
+                                cx.stop_propagation();
+                                this.handle_ai_prompt_key_down(event, cx);
+                            },
+                        )),
                     )
                     .child(
                         div()
@@ -250,14 +253,18 @@ impl NyaTermApp {
                                             .child(mode_button(
                                                 "ai-mode-ask",
                                                 "Ask",
-                                                !agent_mode, self.theme_palette(), cx.listener(|this, _, _, cx| {
+                                                !agent_mode,
+                                                self.theme_palette(),
+                                                cx.listener(|this, _, _, cx| {
                                                     this.set_ai_mode(AiMode::Ask, cx);
                                                 }),
                                             ))
                                             .child(mode_button(
                                                 "ai-mode-agent",
                                                 "Agent",
-                                                agent_mode, self.theme_palette(),cx.listener(|this, _, _, cx| {
+                                                agent_mode,
+                                                self.theme_palette(),
+                                                cx.listener(|this, _, _, cx| {
                                                     this.set_ai_mode(AiMode::Agent, cx);
                                                 }),
                                             )),
@@ -279,7 +286,8 @@ impl NyaTermApp {
                                     "icons/ai/stop.svg"
                                 } else {
                                     "icons/ai/send.svg"
-                                }, cx.listener(|this, _, _, cx| {
+                                },
+                                cx.listener(|this, _, _, cx| {
                                     if this.ai_chat_pending || this.ai_agent_loop.is_some() {
                                         this.cancel_ai_chat(cx);
                                     } else {
@@ -344,11 +352,13 @@ impl NyaTermApp {
                                         .text_color(rgb(palette.text))
                                         .child(truncate_preview(&display_name, 42)),
                                 )
-                                .child(div().text_xs().text_color(rgb(palette.text_muted)).child(format!(
-                                    "{} · {}",
-                                    session_kind_label(session.kind),
-                                    compact_id(&session.id)
-                                ))),
+                                .child(div().text_xs().text_color(rgb(palette.text_muted)).child(
+                                    format!(
+                                        "{} · {}",
+                                        session_kind_label(session.kind),
+                                        compact_id(&session.id)
+                                    ),
+                                )),
                         )
                         .child(status_pill(
                             if is_active { "active" } else { "open" },
@@ -385,7 +395,11 @@ impl NyaTermApp {
                             .font_weight(FontWeight(700.))
                             .child("Command Center"),
                     )
-                    .child(status_pill("native", rgb(palette.success), rgb(palette.hover))),
+                    .child(status_pill(
+                        "native",
+                        rgb(palette.success),
+                        rgb(palette.hover),
+                    )),
             )
             .child(
                 div()
@@ -402,28 +416,32 @@ impl NyaTermApp {
                     .flex()
                     .flex_wrap()
                     .gap_2()
-                    .child(small_button(palette, 
+                    .child(small_button(
+                        palette,
                         "command-center-new-session",
                         "New",
                         cx.listener(|this, _, _, cx| {
                             this.select(NavItem::Connections, cx);
                         }),
                     ))
-                    .child(small_button(palette, 
+                    .child(small_button(
+                        palette,
                         "command-center-active-sessions",
                         "Sessions",
                         cx.listener(|this, _, _, cx| {
                             this.select(NavItem::Workspace, cx);
                         }),
                     ))
-                    .child(small_button(palette, 
+                    .child(small_button(
+                        palette,
                         "command-center-settings",
                         "Settings",
                         cx.listener(|this, _, _, cx| {
                             this.select(NavItem::Settings, cx);
                         }),
                     ))
-                    .child(small_button(palette, 
+                    .child(small_button(
+                        palette,
                         "command-center-update-check",
                         "Updates",
                         cx.listener(|this, _, _, cx| {
@@ -437,7 +455,8 @@ impl NyaTermApp {
                     .flex()
                     .flex_wrap()
                     .gap_2()
-                    .child(small_button(palette, 
+                    .child(small_button(
+                        palette,
                         "command-center-sync-push",
                         "Push",
                         cx.listener(move |this, _, _, cx| {
@@ -448,7 +467,8 @@ impl NyaTermApp {
                             }
                         }),
                     ))
-                    .child(small_button(palette, 
+                    .child(small_button(
+                        palette,
                         "command-center-sync-pull",
                         "Pull",
                         cx.listener(move |this, _, _, cx| {
@@ -459,14 +479,16 @@ impl NyaTermApp {
                             }
                         }),
                     ))
-                    .child(small_button(palette, 
+                    .child(small_button(
+                        palette,
                         "command-center-sync-history",
                         "History",
                         cx.listener(|this, _, _, cx| {
                             this.select(NavItem::Settings, cx);
                         }),
                     ))
-                    .child(small_button(palette, 
+                    .child(small_button(
+                        palette,
                         "command-center-migration",
                         "Migration",
                         cx.listener(|this, _, _, cx| {
@@ -530,7 +552,12 @@ impl NyaTermApp {
                                         .text_color(rgb(palette.text))
                                         .child(truncate_preview(&result.display, 44)),
                                 )
-                                .child(div().text_xs().text_color(rgb(palette.text_dimmed)).child(meta)),
+                                .child(
+                                    div()
+                                        .text_xs()
+                                        .text_color(rgb(palette.text_dimmed))
+                                        .child(meta),
+                                ),
                         )
                         .child(
                             div()
@@ -546,14 +573,16 @@ impl NyaTermApp {
                                 .items_center()
                                 .justify_end()
                                 .gap_1()
-                                .child(small_button(palette, 
+                                .child(small_button(
+                                    palette,
                                     format!("command-search-insert-{index}"),
                                     "Insert",
                                     cx.listener(move |this, _, _, cx| {
                                         this.insert_command_search_result(index, cx);
                                     }),
                                 ))
-                                .child(small_button(palette, 
+                                .child(small_button(
+                                    palette,
                                     format!("command-search-run-{index}"),
                                     "Run",
                                     cx.listener(move |this, _, _, cx| {
@@ -683,7 +712,6 @@ impl NyaTermApp {
             )
     }
 
-
     pub(in crate::ui::view) fn right_panel(&mut self, cx: &mut Context<Self>) -> impl IntoElement {
         let width = self.right_panel_width.clamp(200., 720.);
         let palette = self.theme_palette();
@@ -756,7 +784,6 @@ impl NyaTermApp {
             _ => self.ai_assistant_panel(cx).into_any_element(),
         }
     }
-
 
     fn ai_transcript_body(
         &self,
@@ -962,8 +989,6 @@ impl NyaTermApp {
             )
     }
 
-
-
     fn ai_agent_step_card(
         &self,
         step: AiAgentStepView,
@@ -1060,11 +1085,7 @@ impl NyaTermApp {
                             .child(if thought_label.is_empty() {
                                 truncate_preview(&step.title, 36)
                             } else {
-                                format!(
-                                    "{} · {}",
-                                    thought_label,
-                                    truncate_preview(&step.title, 28)
-                                )
+                                format!("{} · {}", thought_label, truncate_preview(&step.title, 28))
                             }),
                     )
                     .child(status_pill(label, rgb(fg), rgb(bg))),
@@ -1078,10 +1099,10 @@ impl NyaTermApp {
                         .text_size(px(11.))
                         .text_color(rgb(palette.text_muted))
                         .line_height(px(16.))
-                        .child(markdown_content_view(palette, &truncate_preview(
-                            &thought_text,
-                            800,
-                        ))),
+                        .child(markdown_content_view(
+                            palette,
+                            &truncate_preview(&thought_text, 800),
+                        )),
                 );
             }
         }
@@ -1132,41 +1153,40 @@ impl NyaTermApp {
                 );
 
             if let Some(obs) = observation.clone() {
-                shell = shell
-                    .child(
-                        div()
-                            .id(SharedString::from(format!(
-                                "ai-agent-step-output-toggle-{step_index}"
-                            )))
-                            .px_2()
-                            .py_1()
-                            .border_t_1()
-                            .border_color(rgb(palette.surface_elevated))
-                            .flex()
-                            .items_center()
-                            .gap_1()
-                            .cursor_pointer()
-                            .hover(|this| this.bg(rgb(palette.surface)))
-                            .on_click(cx.listener(move |this, _, _, cx| {
-                                this.toggle_ai_agent_output_expanded(step_index, cx);
-                            }))
-                            .child(
-                                div()
-                                    .text_size(px(10.))
-                                    .text_color(rgb(palette.text_muted))
-                                    .child(if output_open { "▾" } else { "▸" }),
-                            )
-                            .child(
-                                div()
-                                    .text_size(px(10.))
-                                    .text_color(rgb(palette.text_muted))
-                                    .child(if output_open {
-                                        "Hide output"
-                                    } else {
-                                        "Show output"
-                                    }),
-                            ),
-                    );
+                shell = shell.child(
+                    div()
+                        .id(SharedString::from(format!(
+                            "ai-agent-step-output-toggle-{step_index}"
+                        )))
+                        .px_2()
+                        .py_1()
+                        .border_t_1()
+                        .border_color(rgb(palette.surface_elevated))
+                        .flex()
+                        .items_center()
+                        .gap_1()
+                        .cursor_pointer()
+                        .hover(|this| this.bg(rgb(palette.surface)))
+                        .on_click(cx.listener(move |this, _, _, cx| {
+                            this.toggle_ai_agent_output_expanded(step_index, cx);
+                        }))
+                        .child(
+                            div()
+                                .text_size(px(10.))
+                                .text_color(rgb(palette.text_muted))
+                                .child(if output_open { "▾" } else { "▸" }),
+                        )
+                        .child(
+                            div()
+                                .text_size(px(10.))
+                                .text_color(rgb(palette.text_muted))
+                                .child(if output_open {
+                                    "Hide output"
+                                } else {
+                                    "Show output"
+                                }),
+                        ),
+                );
                 if output_open {
                     shell = shell.child(
                         div()
@@ -1181,7 +1201,10 @@ impl NyaTermApp {
                             .child(truncate_preview(&obs, 1200)),
                     );
                 }
-            } else if matches!(step.status, AiAgentStepStatus::Running | AiAgentStepStatus::Tool) {
+            } else if matches!(
+                step.status,
+                AiAgentStepStatus::Running | AiAgentStepStatus::Tool
+            ) {
                 shell = shell.child(
                     div()
                         .px_2()
@@ -1633,7 +1656,11 @@ impl NyaTermApp {
                             .flex()
                             .items_center()
                             .gap_1()
-                            .bg(if active { rgb(palette.hover) } else { rgb(palette.surface) })
+                            .bg(if active {
+                                rgb(palette.hover)
+                            } else {
+                                rgb(palette.surface)
+                            })
                             .hover(|this| this.bg(rgb(palette.surface_elevated)))
                             .child(
                                 div()
@@ -1740,7 +1767,8 @@ impl NyaTermApp {
                                         .text_color(rgb(palette.text_muted))
                                         .cursor_pointer()
                                         .hover(|this| {
-                                            this.bg(rgb(palette.surface_elevated)).text_color(rgb(palette.text))
+                                            this.bg(rgb(palette.surface_elevated))
+                                                .text_color(rgb(palette.text))
                                         })
                                         .on_click(cx.listener(|this, _, window, cx| {
                                             this.ai_history_query.clear();
@@ -1783,7 +1811,10 @@ impl NyaTermApp {
                                 rgb(palette.text_muted)
                             })
                             .cursor_pointer()
-                            .hover(|this| this.bg(rgb(palette.surface_elevated)).text_color(rgb(palette.text)))
+                            .hover(|this| {
+                                this.bg(rgb(palette.surface_elevated))
+                                    .text_color(rgb(palette.text))
+                            })
                             .on_click(cx.listener(move |this, _, _, cx| {
                                 if this.ai_sessions.is_empty() {
                                     return;
@@ -1804,7 +1835,6 @@ impl NyaTermApp {
                     .child(rows),
             )
     }
-
 
     fn ai_message_bubble(&self, message: &AiMessage, cx: &mut Context<Self>) -> impl IntoElement {
         let palette = self.theme_palette();
@@ -1829,11 +1859,7 @@ impl NyaTermApp {
             reasoning = think_reasoning;
         }
         let display = if visible.trim().is_empty() {
-            if streaming {
-                String::new()
-            } else {
-                visible
-            }
+            if streaming { String::new() } else { visible }
         } else {
             visible
         };
@@ -1895,21 +1921,17 @@ impl NyaTermApp {
                             } else {
                                 rgb(palette.text_muted)
                             })
-                            .child(if streaming {
-                                "Thinking…"
-                            } else {
-                                "Thought"
-                            }),
+                            .child(if streaming { "Thinking…" } else { "Thought" }),
                     )
                     .child(
                         div()
                             .text_size(px(11.))
                             .text_color(rgb(palette.text_muted))
                             .line_height(px(16.))
-                            .child(markdown_content_view(palette, &truncate_preview(
-                                &reasoning,
-                                1200,
-                            ))),
+                            .child(markdown_content_view(
+                                palette,
+                                &truncate_preview(&reasoning, 1200),
+                            )),
                     ),
             );
         } else if streaming && display.trim().is_empty() {
@@ -1965,7 +1987,6 @@ impl NyaTermApp {
         bubble
     }
 
-
     fn ai_assistant_panel(&mut self, cx: &mut Context<Self>) -> impl IntoElement {
         // Tauri AIAssistantPanel: toolbar + scroll transcript + bottom composer.
         // Shared stack already renders PanelHeader; body fills remaining height.
@@ -2007,7 +2028,8 @@ impl NyaTermApp {
             .gap_3()
             .child(
                 inspector_card(palette, "Resource Monitor")
-                    .child(capability_line(palette, 
+                    .child(capability_line(
+                        palette,
                         "SSH",
                         if self.active_ssh_config.is_some() {
                             "ready"
@@ -2015,7 +2037,8 @@ impl NyaTermApp {
                             "none"
                         },
                     ))
-                    .child(capability_line(palette, 
+                    .child(capability_line(
+                        palette,
                         "Host",
                         if stats.system.hostname.trim().is_empty() {
                             "n/a".to_string()
@@ -2023,10 +2046,19 @@ impl NyaTermApp {
                             truncate_preview(&stats.system.hostname, 34)
                         },
                     ))
-                    .child(capability_line(palette, "CPU", format!("{:.1}%", stats.cpu.usage)))
-                    .child(capability_line(palette, "Memory", format!("{memory_percent:.0}%")))
+                    .child(capability_line(
+                        palette,
+                        "CPU",
+                        format!("{:.1}%", stats.cpu.usage),
+                    ))
+                    .child(capability_line(
+                        palette,
+                        "Memory",
+                        format!("{memory_percent:.0}%"),
+                    ))
                     .child(capability_line(palette, "Disk", disk_summary))
-                    .child(div().mt_3().child(small_button(palette, 
+                    .child(div().mt_3().child(small_button(
+                        palette,
                         "right-stats-refresh",
                         if self.stats_pending {
                             "Loading"
@@ -2038,7 +2070,10 @@ impl NyaTermApp {
                         }),
                     ))),
             )
-            .child(inspector_card(palette, "Networks").child(compact_network_rows(palette, &stats.networks)))
+            .child(
+                inspector_card(palette, "Networks")
+                    .child(compact_network_rows(palette, &stats.networks)),
+            )
             .child(inspector_status_line(palette, self.stats_status.clone()))
     }
 
@@ -2065,7 +2100,8 @@ impl NyaTermApp {
             .gap_3()
             .child(
                 inspector_card(palette, "Process Manager")
-                    .child(capability_line(palette, 
+                    .child(capability_line(
+                        palette,
                         "SSH",
                         if self.active_ssh_config.is_some() {
                             "ready"
@@ -2073,12 +2109,14 @@ impl NyaTermApp {
                             "none"
                         },
                     ))
-                    .child(capability_line(palette, 
+                    .child(capability_line(
+                        palette,
                         "Processes",
                         self.processes.len().to_string(),
                     ))
                     .child(capability_line(palette, "Top CPU", top_label))
-                    .child(div().mt_3().child(small_button(palette, 
+                    .child(div().mt_3().child(small_button(
+                        palette,
                         "right-process-refresh",
                         if self.process_pending {
                             "Loading"
@@ -2090,7 +2128,10 @@ impl NyaTermApp {
                         }),
                     ))),
             )
-            .child(inspector_card(palette, "Hot Processes").child(compact_process_rows(palette, &self.processes)))
+            .child(
+                inspector_card(palette, "Hot Processes")
+                    .child(compact_process_rows(palette, &self.processes)),
+            )
             .child(inspector_status_line(palette, self.process_status.clone()))
     }
 
@@ -2109,7 +2150,8 @@ impl NyaTermApp {
             .gap_3()
             .child(
                 inspector_card(palette, "Docker")
-                    .child(capability_line(palette, 
+                    .child(capability_line(
+                        palette,
                         "SSH",
                         if self.active_ssh_config.is_some() {
                             "ready"
@@ -2117,20 +2159,24 @@ impl NyaTermApp {
                             "none"
                         },
                     ))
-                    .child(capability_line(palette, 
+                    .child(capability_line(
+                        palette,
                         "Available",
                         if overview.available { "yes" } else { "no" },
                     ))
-                    .child(capability_line(palette, 
+                    .child(capability_line(
+                        palette,
                         "Version",
                         truncate_preview(&overview.version, 24),
                     ))
-                    .child(capability_line(palette, 
+                    .child(capability_line(
+                        palette,
                         "Containers",
                         overview.containers.len().to_string(),
                     ))
                     .child(capability_line(palette, "Running", running.to_string()))
-                    .child(div().mt_3().child(small_button(palette, 
+                    .child(div().mt_3().child(small_button(
+                        palette,
                         "right-docker-refresh",
                         if self.docker_pending {
                             "Loading"
@@ -2168,8 +2214,13 @@ impl NyaTermApp {
             .gap_3()
             .child(
                 inspector_card(palette, "Translation")
-                    .child(capability_line(palette, "Provider", self.translate_provider.clone()))
-                    .child(capability_line(palette, 
+                    .child(capability_line(
+                        palette,
+                        "Provider",
+                        self.translate_provider.clone(),
+                    ))
+                    .child(capability_line(
+                        palette,
                         "Target",
                         self.translate_target_language.clone(),
                     ))
@@ -2187,7 +2238,8 @@ impl NyaTermApp {
                             .mt_3()
                             .flex()
                             .gap_2()
-                            .child(small_button(palette, 
+                            .child(small_button(
+                                palette,
                                 "right-translation-run",
                                 if self.translate_pending {
                                     "Translating"
@@ -2198,7 +2250,8 @@ impl NyaTermApp {
                                     this.run_translation(window, cx);
                                 }),
                             ))
-                            .child(small_button(palette, 
+                            .child(small_button(
+                                palette,
                                 "right-translation-save",
                                 "Save",
                                 cx.listener(|this, _, _, cx| {
@@ -2207,11 +2260,19 @@ impl NyaTermApp {
                             )),
                     ),
             )
-            .child(inspector_status_line(palette, self.translate_status.clone()))
+            .child(inspector_status_line(
+                palette,
+                self.translate_status.clone(),
+            ))
     }
 }
 
-pub(in crate::ui::view) fn disabled_inspector_panel(palette: crate::ui::theme::ThemePalette, title: &'static str, detail: &'static str) -> impl IntoElement {    div()
+pub(in crate::ui::view) fn disabled_inspector_panel(
+    palette: crate::ui::theme::ThemePalette,
+    title: &'static str,
+    detail: &'static str,
+) -> impl IntoElement {
+    div()
         .flex()
         .flex_col()
         .gap_3()
@@ -2235,11 +2296,13 @@ pub(in crate::ui::view) fn disabled_inspector_panel(palette: crate::ui::theme::T
         )
 }
 
-
-fn ai_svg_icon_button(palette: crate::ui::theme::ThemePalette,
+fn ai_svg_icon_button(
+    palette: crate::ui::theme::ThemePalette,
     id: impl Into<String>,
     icon_path: &'static str,
-    on_click: impl Fn(&gpui::ClickEvent, &mut gpui::Window, &mut gpui::App) + 'static,) -> impl gpui::IntoElement {    use gpui::{SharedString, div, prelude::*, px, rgb, svg};
+    on_click: impl Fn(&gpui::ClickEvent, &mut gpui::Window, &mut gpui::App) + 'static,
+) -> impl gpui::IntoElement {
+    use gpui::{SharedString, div, prelude::*, px, rgb, svg};
     div()
         .id(SharedString::from(id.into()))
         .size(px(28.))
@@ -2249,12 +2312,10 @@ fn ai_svg_icon_button(palette: crate::ui::theme::ThemePalette,
         .rounded_md()
         .text_color(rgb(palette.text_muted))
         .cursor_pointer()
-        .hover(|this| this.bg(rgb(palette.surface_elevated)).text_color(rgb(palette.text)))
-        .child(
-            svg()
-                .size(px(16.))
-                .flex_none()
-                .path(icon_path),
-        )
+        .hover(|this| {
+            this.bg(rgb(palette.surface_elevated))
+                .text_color(rgb(palette.text))
+        })
+        .child(svg().size(px(16.)).flex_none().path(icon_path))
         .on_click(on_click)
 }

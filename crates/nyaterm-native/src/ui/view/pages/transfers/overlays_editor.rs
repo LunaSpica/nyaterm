@@ -64,7 +64,11 @@ impl NyaTermApp {
                                     .font_weight(FontWeight(800.))
                                     .child("External File Modified"),
                             )
-                            .child(status_pill("sync pending", rgb(palette.warning), rgb(0x3a2d10))),
+                            .child(status_pill(
+                                "sync pending",
+                                rgb(palette.warning),
+                                rgb(0x3a2d10),
+                            )),
                     )
                     .child(
                         div()
@@ -72,8 +76,13 @@ impl NyaTermApp {
                             .text_color(rgb(palette.text_muted))
                             .child("The externally opened file changed locally."),
                     )
-                    .child(metric(palette, "Remote", truncate_preview(&prompt.remote_path, 58)))
-                    .child(metric(palette, 
+                    .child(metric(
+                        palette,
+                        "Remote",
+                        truncate_preview(&prompt.remote_path, 58),
+                    ))
+                    .child(metric(
+                        palette,
                         "Local",
                         truncate_preview(&prompt.local_path.display().to_string(), 58),
                     ))
@@ -82,21 +91,24 @@ impl NyaTermApp {
                             .flex()
                             .justify_end()
                             .gap_2()
-                            .child(small_button(palette, 
+                            .child(small_button(
+                                palette,
                                 "transfer-external-sync-ignore",
                                 "Ignore",
                                 cx.listener(|this, _, _, cx| {
                                     this.ignore_pending_external_editor_sync(cx);
                                 }),
                             ))
-                            .child(small_button(palette, 
+                            .child(small_button(
+                                palette,
                                 "transfer-external-sync-upload",
                                 "Upload",
                                 cx.listener(|this, _, _, cx| {
                                     this.upload_pending_external_editor_sync(false, cx);
                                 }),
                             ))
-                            .child(small_button(palette, 
+                            .child(small_button(
+                                palette,
                                 "transfer-external-sync-always",
                                 "Always Upload",
                                 cx.listener(|this, _, _, cx| {

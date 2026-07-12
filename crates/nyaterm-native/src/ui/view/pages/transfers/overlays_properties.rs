@@ -133,13 +133,37 @@ impl NyaTermApp {
                             .flex()
                             .flex_col()
                             .gap_2()
-                            .child(property_row(palette, "Name", truncate_preview(&entry.name, 76)))
-                            .child(property_row(palette, "Type", entry_kind_label(entry.file_type)))
-                            .child(property_row(palette, "Location", truncate_preview(&location, 76)))
-                            .child(property_row(palette, "Path", truncate_preview(&entry.path, 82)))
+                            .child(property_row(
+                                palette,
+                                "Name",
+                                truncate_preview(&entry.name, 76),
+                            ))
+                            .child(property_row(
+                                palette,
+                                "Type",
+                                entry_kind_label(entry.file_type),
+                            ))
+                            .child(property_row(
+                                palette,
+                                "Location",
+                                truncate_preview(&location, 76),
+                            ))
+                            .child(property_row(
+                                palette,
+                                "Path",
+                                truncate_preview(&entry.path, 82),
+                            ))
                             .child(property_row(palette, "Size", format_file_size(size)))
-                            .child(property_row(palette, "Modified", format_sftp_modified(modified_at)))
-                            .child(property_row(palette, "Accessed", format_sftp_modified(accessed_at)))
+                            .child(property_row(
+                                palette,
+                                "Modified",
+                                format_sftp_modified(modified_at),
+                            ))
+                            .child(property_row(
+                                palette,
+                                "Accessed",
+                                format_sftp_modified(accessed_at),
+                            ))
                             .child(property_row(palette, "Owner", owner))
                             .child(property_row(palette, "Group", group))
                             .child(property_row(palette, "Permissions", permissions))
@@ -223,7 +247,8 @@ impl NyaTermApp {
                                         .text_xs()
                                         .text_color(rgb(0xaeb7c8))
                                         .child("Apply recursively")
-                                        .child(small_button(palette, 
+                                        .child(small_button(
+                                            palette,
                                             "transfer-properties-recursive-toggle",
                                             if state.recursive { "On" } else { "Off" },
                                             cx.listener(|this, _, _, cx| {
@@ -258,7 +283,8 @@ impl NyaTermApp {
                             .items_center()
                             .justify_end()
                             .gap_2()
-                            .child(small_button(palette, 
+                            .child(small_button(
+                                palette,
                                 "transfer-properties-copy-path",
                                 "Copy Path",
                                 {
@@ -272,7 +298,8 @@ impl NyaTermApp {
                                     })
                                 },
                             ))
-                            .child(small_button(palette, 
+                            .child(small_button(
+                                palette,
                                 "transfer-properties-save",
                                 if state.saving { "Saving" } else { "Save" },
                                 cx.listener(move |this, _, window, cx| {
@@ -281,7 +308,8 @@ impl NyaTermApp {
                                     }
                                 }),
                             ))
-                            .child(small_button(palette, 
+                            .child(small_button(
+                                palette,
                                 "transfer-properties-close",
                                 "Close",
                                 cx.listener(|this, _, _, cx| {

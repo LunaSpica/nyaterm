@@ -590,10 +590,7 @@ impl ZmodemTransfer {
                                 }
                             }
                             Err(e) => {
-                                zmodem_log!(
-                                    "Failed to create file {}: {e}",
-                                    file_path.display()
-                                );
+                                zmodem_log!("Failed to create file {}: {e}", file_path.display());
                                 self.state = TransferState::Done;
                                 actions.push(ZmodemAction::SendToRemote(cancel_sequence()));
                                 actions.push(ZmodemAction::EmitEvent(ZmodemEvent::Failed {

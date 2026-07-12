@@ -470,7 +470,9 @@ fn derive_snapshot_key(prefix: &[u8], master_password: &str) -> Key<Aes256Gcm> {
     hasher.update(prefix);
     hasher.update(master_password.as_bytes());
     let digest = hasher.finalize();
-    *Key::<Aes256Gcm>::from_slice(&digest)
+    let mut key = Key::<Aes256Gcm>::default();
+    key.copy_from_slice(&digest);
+    key
 }
 
 fn decrypt_snapshot_bytes_with_prefix(
@@ -480,9 +482,9 @@ fn decrypt_snapshot_bytes_with_prefix(
 ) -> Result<Vec<u8>, String> {
     let cipher = Aes256Gcm::new(&derive_snapshot_key(prefix, master_password));
     let (nonce_bytes, payload) = ciphertext.split_at(12);
-    let nonce = aes_gcm::Nonce::from_slice(nonce_bytes);
+    let nonce = aes_gcm::Nonce::try_from(nonce_bytes).map_err(|error| error.to_string())?;
     cipher
-        .decrypt(nonce, payload)
+        .decrypt(&nonce, payload)
         .map_err(|error| error.to_string())
 }
 

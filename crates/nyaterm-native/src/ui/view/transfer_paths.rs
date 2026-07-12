@@ -1,7 +1,6 @@
 use super::*;
 
 impl NyaTermApp {
-
     pub(in crate::ui::view) fn prompt_transfer_download_path_setting(
         &mut self,
         cx: &mut Context<Self>,
@@ -38,10 +37,7 @@ impl NyaTermApp {
         cx.notify();
     }
 
-    pub(in crate::ui::view) fn prompt_recording_path_setting(
-        &mut self,
-        cx: &mut Context<Self>,
-    ) {
+    pub(in crate::ui::view) fn prompt_recording_path_setting(&mut self, cx: &mut Context<Self>) {
         let options = PathPromptOptions {
             files: false,
             directories: true,
@@ -99,7 +95,6 @@ impl NyaTermApp {
         .detach();
         cx.notify();
     }
-
 
     pub(in crate::ui::view) fn resolved_transfer_download_dir(&self) -> Option<PathBuf> {
         let configured = self.settings.transfer_download_path.trim();

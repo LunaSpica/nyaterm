@@ -1410,8 +1410,10 @@ impl NyaTermApp {
         cx.notify();
     }
 
-    pub(super) fn drain_tunnel_events(&mut self) {
+    pub(super) fn drain_tunnel_events(&mut self) -> bool {
+        let mut dirty = false;
         while let Ok(event) = self.tunnel_rx.try_recv() {
+            dirty = true;
             self.pending_tunnels.retain(|id| id != &event.tunnel_id);
             match event.result {
                 Ok(TunnelJobOutput::Opened(info)) => {
@@ -1428,6 +1430,7 @@ impl NyaTermApp {
                 }
             }
         }
+        dirty
     }
 }
 

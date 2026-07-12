@@ -107,10 +107,7 @@ impl NyaTermApp {
     }
 
     /// Lines for tab hover tooltip (endpoint + SSH address when available).
-    pub(in crate::ui::view) fn session_tab_tooltip_lines(
-        &self,
-        session_id: &str,
-    ) -> Vec<String> {
+    pub(in crate::ui::view) fn session_tab_tooltip_lines(&self, session_id: &str) -> Vec<String> {
         let mut lines = Vec::new();
         if let Some(endpoint) = self.session_endpoint(session_id) {
             lines.push(endpoint);
@@ -273,8 +270,6 @@ impl NyaTermApp {
         }
         if let Some(view) = self.terminal_views.get_mut(session_id) {
             view.has_unread = false;
-            self.terminal_output = view.output.clone();
-            self.terminal_screen = terminal_screen_from_output(&view.output);
         } else {
             self.terminal_output.clear();
             self.terminal_screen.clear();

@@ -1,5 +1,5 @@
 use super::*;
-use gpui::{SharedString, prelude::*};
+use gpui::SharedString;
 
 impl NyaTermApp {
     pub(in crate::ui::view) fn docker_view(&mut self, cx: &mut Context<Self>) -> impl IntoElement {
@@ -143,28 +143,27 @@ impl NyaTermApp {
                     .items_center()
                     .gap_1()
                     .child(
-                        div()
-                            .flex_1()
-                            .min_w_0()
-                            .child(
-                                transfer_input(
-                                    "docker-search-input",
-                                    "Search containers…",
-                                    self.docker_search_draft.clone(),
-                                    true,
-                    self.theme_palette(),
-                )
-                                .h(px(28.))
-                                .track_focus(&self.docker_search_focus)
-                                .on_click(cx.listener(|this, _, window, cx| {
-                                    window.focus(&this.docker_search_focus);
-                                    cx.notify();
-                                }))
-                                .on_key_down(cx.listener(|this, event: &KeyDownEvent, _, cx| {
+                        div().flex_1().min_w_0().child(
+                            transfer_input(
+                                "docker-search-input",
+                                "Search containers…",
+                                self.docker_search_draft.clone(),
+                                true,
+                                self.theme_palette(),
+                            )
+                            .h(px(28.))
+                            .track_focus(&self.docker_search_focus)
+                            .on_click(cx.listener(|this, _, window, cx| {
+                                window.focus(&this.docker_search_focus);
+                                cx.notify();
+                            }))
+                            .on_key_down(cx.listener(
+                                |this, event: &KeyDownEvent, _, cx| {
                                     cx.stop_propagation();
                                     this.handle_docker_search_key_down(event, cx);
-                                })),
-                            ),
+                                },
+                            )),
+                        ),
                     )
                     .child(
                         div()
@@ -223,40 +222,43 @@ impl NyaTermApp {
                     .cloned(),
                 cx,
             ))
-            .when(!logs.trim().is_empty() && logs != "No logs loaded.", |this| {
-                this.child(
-                    div()
-                        .flex_none()
-                        .max_h(px(140.))
-                        .border_t_1()
-                        .border_color(rgb(palette.border))
-                        .bg(rgb(palette.input))
-                        .px_2()
-                        .py_1()
-                        .flex()
-                        .flex_col()
-                        .gap_1()
-                        .child(
-                            div()
-                                .text_size(px(10.))
-                                .font_weight(FontWeight(700.))
-                                .text_color(rgb(palette.text_muted))
-                                .child(logs_title),
-                        )
-                        .child(
-                            div()
-                                .flex_1()
-                                .min_h_0()
-                                .id(SharedString::from("docker-logs-scroll"))
-                                .overflow_scroll()
-                                .scrollbar_width(px(6.))
-                                .font_family("JetBrains Mono")
-                                .text_size(px(10.))
-                                .line_height(px(16.))
-                                .text_color(rgb(0xaeb7c8))
-                                .child(logs),
-                        ),
-                )
-            })
+            .when(
+                !logs.trim().is_empty() && logs != "No logs loaded.",
+                |this| {
+                    this.child(
+                        div()
+                            .flex_none()
+                            .max_h(px(140.))
+                            .border_t_1()
+                            .border_color(rgb(palette.border))
+                            .bg(rgb(palette.input))
+                            .px_2()
+                            .py_1()
+                            .flex()
+                            .flex_col()
+                            .gap_1()
+                            .child(
+                                div()
+                                    .text_size(px(10.))
+                                    .font_weight(FontWeight(700.))
+                                    .text_color(rgb(palette.text_muted))
+                                    .child(logs_title),
+                            )
+                            .child(
+                                div()
+                                    .flex_1()
+                                    .min_h_0()
+                                    .id(SharedString::from("docker-logs-scroll"))
+                                    .overflow_scroll()
+                                    .scrollbar_width(px(6.))
+                                    .font_family("JetBrains Mono")
+                                    .text_size(px(10.))
+                                    .line_height(px(16.))
+                                    .text_color(rgb(0xaeb7c8))
+                                    .child(logs),
+                            ),
+                    )
+                },
+            )
     }
 }

@@ -1,7 +1,7 @@
 use gpui::{
     App, ClickEvent, FontStyle, FontWeight, HighlightStyle, IntoElement, SharedString,
-    StrikethroughStyle, StyledText, UnderlineStyle, Window, WindowControlArea, div, prelude::*,
-    px, rgb, rgba, svg,
+    StrikethroughStyle, StyledText, UnderlineStyle, Window, WindowControlArea, div, prelude::*, px,
+    rgb, rgba, svg,
 };
 use nyaterm_domain::{
     CloudSyncHistoryEntry, ConnectionType, NativeServiceStatus, SavedConnection, TunnelConfig,
@@ -13,11 +13,11 @@ use crate::ui::components::{mode_button, small_button, status_pill};
 use crate::ui::models::WorkspaceSplitDirection;
 
 use super::{
-    InlineMdStyle, MarkdownBlock, ThemePalette, cloud_sync_history_summary, cloud_sync_kind_text_color,
-    cloud_sync_status_dot_color, cloud_sync_status_text_color, compact_id, docker_state_color,
-    docker_state_label, format_cloud_provider, format_duration_ms, format_history_timestamp_ms,
-    format_rate, parse_inline_markdown, parse_markdown_blocks, tunnel_endpoint, tunnel_mode_label,
-    tunnel_name,
+    InlineMdStyle, MarkdownBlock, ThemePalette, cloud_sync_history_summary,
+    cloud_sync_kind_text_color, cloud_sync_status_dot_color, cloud_sync_status_text_color,
+    compact_id, docker_state_color, docker_state_label, format_cloud_provider, format_duration_ms,
+    format_history_timestamp_ms, format_rate, parse_inline_markdown, parse_markdown_blocks,
+    tunnel_endpoint, tunnel_mode_label, tunnel_name,
 };
 
 pub(in crate::ui::view) fn logo_mark(palette: ThemePalette) -> impl IntoElement {
@@ -35,9 +35,11 @@ pub(in crate::ui::view) fn logo_mark(palette: ThemePalette) -> impl IntoElement 
         )
 }
 
-pub(in crate::ui::view) fn menu_bar_button(palette: ThemePalette,
+pub(in crate::ui::view) fn menu_bar_button(
+    palette: ThemePalette,
     label: &'static str,
-    on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,) -> impl IntoElement {
+    on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
+) -> impl IntoElement {
     div()
         .id(SharedString::from(format!("menu-{label}")))
         .h(px(26.))
@@ -113,11 +115,13 @@ pub(in crate::ui::view) fn status_bar_button(
         .on_click(on_click)
 }
 
-pub(in crate::ui::view) fn window_control_button(palette: ThemePalette,
+pub(in crate::ui::view) fn window_control_button(
+    palette: ThemePalette,
     id: &'static str,
     label: &'static str,
     area: WindowControlArea,
-    on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,) -> impl IntoElement {
+    on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
+) -> impl IntoElement {
     div()
         .id(SharedString::from(id))
         .w(px(46.))
@@ -187,7 +191,6 @@ pub(in crate::ui::view) fn panel_header(
                 }),
         )
 }
-
 
 /// Dimmed full-area modal shell (Tauri Dialog backdrop + centered card).
 pub(in crate::ui::view) fn modal_dialog_shell(
@@ -260,7 +263,10 @@ pub(in crate::ui::view) fn inspector_card(palette: ThemePalette, title: &'static
         )
 }
 
-pub(in crate::ui::view) fn inspector_status_line(palette: ThemePalette, text: String) -> impl IntoElement {
+pub(in crate::ui::view) fn inspector_status_line(
+    palette: ThemePalette,
+    text: String,
+) -> impl IntoElement {
     div()
         .rounded_md()
         .border_1()
@@ -273,7 +279,10 @@ pub(in crate::ui::view) fn inspector_status_line(palette: ThemePalette, text: St
         .child(text)
 }
 
-pub(in crate::ui::view) fn compact_network_rows(palette: ThemePalette, networks: &[NetworkInfo]) -> impl IntoElement {
+pub(in crate::ui::view) fn compact_network_rows(
+    palette: ThemePalette,
+    networks: &[NetworkInfo],
+) -> impl IntoElement {
     let mut rows = div().mt_3().flex().flex_col().gap_2();
     if networks.is_empty() {
         rows = rows.child(
@@ -326,7 +335,10 @@ pub(in crate::ui::view) fn compact_network_rows(palette: ThemePalette, networks:
     rows
 }
 
-pub(in crate::ui::view) fn compact_process_rows(palette: ThemePalette, processes: &[RemoteProcess]) -> impl IntoElement {
+pub(in crate::ui::view) fn compact_process_rows(
+    palette: ThemePalette,
+    processes: &[RemoteProcess],
+) -> impl IntoElement {
     let mut rows = div().mt_3().flex().flex_col().gap_2();
     if processes.is_empty() {
         rows = rows.child(
@@ -387,7 +399,10 @@ pub(in crate::ui::view) fn compact_process_rows(palette: ThemePalette, processes
     rows
 }
 
-pub(in crate::ui::view) fn compact_docker_container_rows(palette: ThemePalette, containers: &[DockerContainer],) -> impl IntoElement {
+pub(in crate::ui::view) fn compact_docker_container_rows(
+    palette: ThemePalette,
+    containers: &[DockerContainer],
+) -> impl IntoElement {
     let mut rows = div().mt_3().flex().flex_col().gap_2();
     if containers.is_empty() {
         rows = rows.child(
@@ -437,10 +452,13 @@ pub(in crate::ui::view) fn compact_docker_container_rows(palette: ThemePalette, 
 }
 
 /// Tauri EmptyWorkspaceState row: action label (primary) + shortcut key chips.
-pub(in crate::ui::view) fn empty_workspace_action(palette: ThemePalette,
+pub(in crate::ui::view) fn empty_workspace_action(
+    palette: ThemePalette,
     label: &'static str,
     shortcut: impl Into<String>,
-    on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,) -> impl IntoElement {    // Tauri EmptyWorkspaceState: primary label left, Kbd chips right with "+" separators.
+    on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
+) -> impl IntoElement {
+    // Tauri EmptyWorkspaceState: primary label left, Kbd chips right with "+" separators.
     let shortcut = shortcut.into();
     let parts: Vec<String> = shortcut
         .split('+')
@@ -500,7 +518,6 @@ pub(in crate::ui::view) fn empty_workspace_action(palette: ThemePalette,
         .on_click(on_click)
 }
 
-
 pub(in crate::ui::view) fn tab_menu_item(
     palette: ThemePalette,
     id: impl Into<String>,
@@ -540,18 +557,16 @@ pub(in crate::ui::view) fn tab_menu_item_enabled(
 }
 
 pub(in crate::ui::view) fn tab_menu_separator(palette: ThemePalette) -> impl IntoElement {
-    div()
-        .h(px(1.))
-        .my_1()
-        .mx_2()
-        .bg(rgb(palette.border))
+    div().h(px(1.)).my_1().mx_2().bg(rgb(palette.border))
 }
 
-pub(in crate::ui::view) fn tab_action_button(palette: ThemePalette,
+pub(in crate::ui::view) fn tab_action_button(
+    palette: ThemePalette,
     id: impl Into<String>,
     label: &'static str,
     detail: &'static str,
-    on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,) -> impl IntoElement {
+    on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
+) -> impl IntoElement {
     div()
         .id(SharedString::from(id.into()))
         .min_h(px(46.))
@@ -583,7 +598,10 @@ pub(in crate::ui::view) fn tab_action_button(palette: ThemePalette,
         .on_click(on_click)
 }
 
-pub(in crate::ui::view) fn split_divider(palette: ThemePalette, direction: WorkspaceSplitDirection) -> gpui::AnyElement {
+pub(in crate::ui::view) fn split_divider(
+    palette: ThemePalette,
+    direction: WorkspaceSplitDirection,
+) -> gpui::AnyElement {
     match direction {
         WorkspaceSplitDirection::Horizontal => div()
             .h(px(6.))
@@ -600,10 +618,12 @@ pub(in crate::ui::view) fn split_divider(palette: ThemePalette, direction: Works
     }
 }
 
-pub(in crate::ui::view) fn stats_resource_row(palette: ThemePalette,
+pub(in crate::ui::view) fn stats_resource_row(
+    palette: ThemePalette,
     label: &str,
     detail: &str,
-    ratio: f64,) -> impl IntoElement {
+    ratio: f64,
+) -> impl IntoElement {
     div()
         .rounded_md()
         .border_1()
@@ -641,7 +661,10 @@ pub(in crate::ui::view) fn stats_resource_row(palette: ThemePalette,
         .child(stats_progress_bar(palette, ratio))
 }
 
-pub(in crate::ui::view) fn stats_progress_bar(palette: ThemePalette, ratio: f64) -> impl IntoElement {
+pub(in crate::ui::view) fn stats_progress_bar(
+    palette: ThemePalette,
+    ratio: f64,
+) -> impl IntoElement {
     let ratio = ratio.clamp(0., 1.);
     div()
         .mt_3()
@@ -665,7 +688,10 @@ pub(in crate::ui::view) fn stats_progress_bar(palette: ThemePalette, ratio: f64)
         )
 }
 
-pub(in crate::ui::view) fn service_status(palette: ThemePalette, status: NativeServiceStatus) -> impl IntoElement {
+pub(in crate::ui::view) fn service_status(
+    palette: ThemePalette,
+    status: NativeServiceStatus,
+) -> impl IntoElement {
     match status {
         NativeServiceStatus::Ready => {
             status_pill("ready", rgb(palette.success), rgb(palette.hover)).into_any_element()
@@ -690,7 +716,12 @@ pub(in crate::ui::view) fn metric(
         .border_color(rgb(palette.border))
         .bg(rgb(palette.surface))
         .p_4()
-        .child(div().text_xs().text_color(rgb(palette.text_muted)).child(label))
+        .child(
+            div()
+                .text_xs()
+                .text_color(rgb(palette.text_muted))
+                .child(label),
+        )
         .child(
             div()
                 .mt_2()
@@ -701,16 +732,23 @@ pub(in crate::ui::view) fn metric(
         )
 }
 
-pub(in crate::ui::view) fn setting_state(palette: ThemePalette,
+pub(in crate::ui::view) fn setting_state(
+    palette: ThemePalette,
     label: &'static str,
-    value: &'static str,) -> impl IntoElement {
+    value: &'static str,
+) -> impl IntoElement {
     div()
         .rounded_md()
         .border_1()
         .border_color(rgb(palette.border))
         .bg(rgb(palette.surface))
         .p_4()
-        .child(div().text_xs().text_color(rgb(palette.text_muted)).child(label))
+        .child(
+            div()
+                .text_xs()
+                .text_color(rgb(palette.text_muted))
+                .child(label),
+        )
         .child(
             div()
                 .mt_2()
@@ -720,16 +758,23 @@ pub(in crate::ui::view) fn setting_state(palette: ThemePalette,
         )
 }
 
-pub(in crate::ui::view) fn compact_setting_state(palette: ThemePalette,
+pub(in crate::ui::view) fn compact_setting_state(
+    palette: ThemePalette,
     label: &'static str,
-    value: String,) -> impl IntoElement {
+    value: String,
+) -> impl IntoElement {
     div()
         .rounded_md()
         .border_1()
         .border_color(rgb(palette.border))
         .bg(rgb(palette.input))
         .p_3()
-        .child(div().text_xs().text_color(rgb(palette.text_muted)).child(label))
+        .child(
+            div()
+                .text_xs()
+                .text_color(rgb(palette.text_muted))
+                .child(label),
+        )
         .child(
             div()
                 .mt_1()
@@ -747,11 +792,19 @@ pub(in crate::ui::view) fn cloud_sync_history_row(
     on_copy: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
 ) -> impl IntoElement {
     let summary = cloud_sync_history_summary(&entry);
-    let normalized = entry.message.split_whitespace().collect::<Vec<_>>().join(" ");
+    let normalized = entry
+        .message
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ");
     let is_problem = matches!(entry.status.as_str(), "failed" | "conflict");
     let has_message_details = !normalized.is_empty()
         && (is_problem || normalized != summary.split_whitespace().collect::<Vec<_>>().join(" "));
-    let has_expandable = has_message_details || entry.revision.as_ref().is_some_and(|r| !r.trim().is_empty());
+    let has_expandable = has_message_details
+        || entry
+            .revision
+            .as_ref()
+            .is_some_and(|r| !r.trim().is_empty());
     let kind_color = cloud_sync_kind_text_color(palette, &entry.kind);
     let status_color = cloud_sync_status_text_color(palette, &entry.status);
     let dot_color = cloud_sync_status_dot_color(palette, &entry.status);
@@ -953,11 +1006,13 @@ pub(in crate::ui::view) fn cloud_sync_history_row(
         )
 }
 
-pub(in crate::ui::view) fn policy_button(palette: ThemePalette,
+pub(in crate::ui::view) fn policy_button(
+    palette: ThemePalette,
     id: &'static str,
     label: &'static str,
     selected: bool,
-    on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,) -> impl IntoElement {
+    on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
+) -> impl IntoElement {
     div()
         .id(SharedString::from(id))
         .h(px(30.))
@@ -988,11 +1043,13 @@ pub(in crate::ui::view) fn policy_button(palette: ThemePalette,
         .on_click(on_click)
 }
 
-pub(in crate::ui::view) fn connection_row(palette: ThemePalette,
+pub(in crate::ui::view) fn connection_row(
+    palette: ThemePalette,
     connection: &SavedConnection,
     selected: bool,
     on_select: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
-    on_connect: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,) -> impl IntoElement {
+    on_connect: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
+) -> impl IntoElement {
     let can_connect = matches!(
         connection.config,
         ConnectionType::Ssh { .. }
@@ -1001,7 +1058,13 @@ pub(in crate::ui::view) fn connection_row(palette: ThemePalette,
             | ConnectionType::Serial { .. }
     );
     let action = if can_connect {
-        small_button(palette, format!("connect-{}", connection.id), "Connect", on_connect).into_any_element()
+        small_button(
+            palette,
+            format!("connect-{}", connection.id),
+            "Connect",
+            on_connect,
+        )
+        .into_any_element()
     } else {
         status_pill("porting", rgb(palette.warning), rgb(palette.hover)).into_any_element()
     };
@@ -1071,9 +1134,11 @@ pub(in crate::ui::view) fn connection_row(palette: ThemePalette,
         )
 }
 
-pub(in crate::ui::view) fn compact_connection_row(palette: ThemePalette,
+pub(in crate::ui::view) fn compact_connection_row(
+    palette: ThemePalette,
     connection: &SavedConnection,
-    on_connect: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,) -> impl IntoElement {
+    on_connect: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
+) -> impl IntoElement {
     div()
         .rounded_md()
         .border_1()
@@ -1129,7 +1194,8 @@ pub(in crate::ui::view) fn compact_connection_row(palette: ThemePalette,
                         }
                     }),
                 ))
-                .child(small_button(palette, 
+                .child(small_button(
+                    palette,
                     format!("left-connect-{}", connection.id),
                     "Connect",
                     on_connect,
@@ -1137,12 +1203,14 @@ pub(in crate::ui::view) fn compact_connection_row(palette: ThemePalette,
         )
 }
 
-pub(in crate::ui::view) fn compact_tunnel_row(palette: ThemePalette,
+pub(in crate::ui::view) fn compact_tunnel_row(
+    palette: ThemePalette,
     tunnel: &TunnelConfig,
     is_open: bool,
     is_pending: bool,
     on_open: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
-    on_close: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,) -> impl IntoElement {
+    on_close: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
+) -> impl IntoElement {
     let status = if is_pending {
         "pending"
     } else if is_open {
@@ -1203,15 +1271,21 @@ pub(in crate::ui::view) fn compact_tunnel_row(palette: ThemePalette,
                     rgb(palette.hover),
                 ))
                 .child(if is_open {
-                    small_button(palette, 
+                    small_button(
+                        palette,
                         format!("left-tunnel-close-{}", tunnel.id),
                         "Close",
                         on_close,
                     )
                     .into_any_element()
                 } else {
-                    small_button(palette, format!("left-tunnel-open-{}", tunnel.id), "Open", on_open)
-                        .into_any_element()
+                    small_button(
+                        palette,
+                        format!("left-tunnel-open-{}", tunnel.id),
+                        "Open",
+                        on_open,
+                    )
+                    .into_any_element()
                 }),
         )
 }
@@ -1246,12 +1320,13 @@ pub(in crate::ui::view) fn activity_icon(
     }
 }
 
-
 /// Compact ghost icon button with bundled SVG (Tauri ToolbarIconButton h-7).
-pub(in crate::ui::view) fn toolbar_svg_button(palette: ThemePalette,
+pub(in crate::ui::view) fn toolbar_svg_button(
+    palette: ThemePalette,
     id: impl Into<SharedString>,
     icon_path: &'static str,
-    on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,) -> impl IntoElement {
+    on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
+) -> impl IntoElement {
     div()
         .id(id.into())
         .size(px(28.))
@@ -1261,7 +1336,10 @@ pub(in crate::ui::view) fn toolbar_svg_button(palette: ThemePalette,
         .rounded_md()
         .text_color(rgb(palette.text_muted))
         .cursor_pointer()
-        .hover(|this| this.bg(rgb(palette.surface_elevated)).text_color(rgb(palette.text)))
+        .hover(|this| {
+            this.bg(rgb(palette.surface_elevated))
+                .text_color(rgb(palette.text))
+        })
         .child(
             svg()
                 .size(px(16.))
@@ -1273,7 +1351,11 @@ pub(in crate::ui::view) fn toolbar_svg_button(palette: ThemePalette,
 }
 
 /// Faded NyaTerm logo used by empty workspace (Tauri EmptyWorkspaceState).
-pub(in crate::ui::view) fn nyaterm_logo_mark(palette: ThemePalette, size_px: f32, opacity: f32) -> impl IntoElement {
+pub(in crate::ui::view) fn nyaterm_logo_mark(
+    palette: ThemePalette,
+    size_px: f32,
+    opacity: f32,
+) -> impl IntoElement {
     let size = px(size_px);
     div()
         .size(size)
@@ -1290,12 +1372,13 @@ pub(in crate::ui::view) fn nyaterm_logo_mark(palette: ThemePalette, size_px: f32
         )
 }
 
-
 /// Colored connection/OS icon for saved connection rows (Tauri resolveConnectionIcon).
-pub(in crate::ui::view) fn connection_type_icon(palette: ThemePalette,
+pub(in crate::ui::view) fn connection_type_icon(
+    palette: ThemePalette,
     def: super::ConnectionIconDef,
     selected: bool,
-    size_px: f32,) -> gpui::AnyElement {
+    size_px: f32,
+) -> gpui::AnyElement {
     let size = px(size_px);
     let color = if selected {
         rgb(palette.accent)
@@ -1310,9 +1393,11 @@ pub(in crate::ui::view) fn connection_type_icon(palette: ThemePalette,
         .into_any_element()
 }
 
-
 /// Lightweight GFM markdown renderer for AI transcript (Tauri MarkdownContent parity).
-pub(in crate::ui::view) fn markdown_content_view(palette: ThemePalette, content: &str) -> impl IntoElement {
+pub(in crate::ui::view) fn markdown_content_view(
+    palette: ThemePalette,
+    content: &str,
+) -> impl IntoElement {
     let blocks = parse_markdown_blocks(content);
     let mut root = div()
         .flex()
@@ -1380,7 +1465,11 @@ fn markdown_inline_text(palette: ThemePalette, raw: &str) -> gpui::AnyElement {
         .into_any_element()
 }
 
-fn markdown_block_view(palette: ThemePalette, index: usize, block: MarkdownBlock) -> gpui::AnyElement {
+fn markdown_block_view(
+    palette: ThemePalette,
+    index: usize,
+    block: MarkdownBlock,
+) -> gpui::AnyElement {
     match block {
         MarkdownBlock::Paragraph(text) => div()
             .id(SharedString::from(format!("md-p-{index}")))
@@ -1577,7 +1666,6 @@ fn markdown_block_view(palette: ThemePalette, index: usize, block: MarkdownBlock
             .into_any_element(),
     }
 }
-
 
 /// Tauri file explorer entry icon (folder / symlink / file).
 pub(in crate::ui::view) fn transfer_entry_icon(

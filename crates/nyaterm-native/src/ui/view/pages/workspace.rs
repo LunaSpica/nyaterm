@@ -2,12 +2,12 @@ use gpui::{
     Context, FontWeight, IntoElement, SharedString, div, prelude::*, px, relative, rgb, rgba, svg,
 };
 
-use crate::ui::models::{
-    TabDockEdge, TabDockZone, TerminalWindowNode, WorkspacePaneNode, WorkspaceSplitDirection,
-};
 use super::super::{
     NyaTermApp, SessionTabDragPayload, SessionTabDragPreview, SessionTabTooltip, ThemePalette,
     session_kind_label, short_id, truncate_preview,
+};
+use crate::ui::models::{
+    TabDockEdge, TabDockZone, TerminalWindowNode, WorkspacePaneNode, WorkspaceSplitDirection,
 };
 
 impl NyaTermApp {
@@ -146,9 +146,8 @@ impl NyaTermApp {
                         .get(tab_id)
                         .map(|root| root.session_ids())
                         .unwrap_or_else(|| vec![tab_id.clone()]);
-                    let is_disconnected = leaf_ids
-                        .iter()
-                        .any(|id| self.is_session_disconnected(id));
+                    let is_disconnected =
+                        leaf_ids.iter().any(|id| self.is_session_disconnected(id));
                     let has_unread = leaf_ids.iter().any(|id| {
                         self.terminal_views
                             .get(id)
@@ -295,12 +294,7 @@ impl NyaTermApp {
                                     .flex()
                                     .items_center()
                                     .justify_center()
-                                    .child(
-                                        svg()
-                                            .size(px(10.))
-                                            .path(kind_icon)
-                                            .text_color(accent),
-                                    ),
+                                    .child(svg().size(px(10.)).path(kind_icon).text_color(accent)),
                             )
                             .when(tab_number > 0, |this| {
                                 this.child(
@@ -316,7 +310,11 @@ impl NyaTermApp {
                                 div()
                                     .min_w_0()
                                     .text_xs()
-                                    .font_weight(FontWeight(if is_active_tab { 700. } else { 500. }))
+                                    .font_weight(FontWeight(if is_active_tab {
+                                        700.
+                                    } else {
+                                        500.
+                                    }))
                                     .text_color(if is_disconnected {
                                         rgb(palette.text_dimmed)
                                     } else if is_active_tab {
@@ -344,17 +342,12 @@ impl NyaTermApp {
                             })
                             .when(has_unread && !is_active_tab, |this| {
                                 this.child(
-                                    div()
-                                        .size(px(7.))
-                                        .rounded_full()
-                                        .bg(rgb(palette.success)),
+                                    div().size(px(7.)).rounded_full().bg(rgb(palette.success)),
                                 )
                             })
                             .child(
                                 div()
-                                    .id(SharedString::from(format!(
-                                        "tw-tab-close-{id}-{close_id}"
-                                    )))
+                                    .id(SharedString::from(format!("tw-tab-close-{id}-{close_id}")))
                                     .size(px(16.))
                                     .flex()
                                     .items_center()
@@ -363,8 +356,7 @@ impl NyaTermApp {
                                     .text_size(px(10.))
                                     .text_color(rgb(palette.text_muted))
                                     .hover(|this| {
-                                        this.bg(rgb(palette.border))
-                                            .text_color(rgb(palette.danger))
+                                        this.bg(rgb(palette.border)).text_color(rgb(palette.danger))
                                     })
                                     .child("x")
                                     .on_click(cx.listener(move |this, _, _, cx| {
@@ -424,8 +416,8 @@ impl NyaTermApp {
                             this.set_terminal_window_drop(drop_leaf_id_move.clone(), zone, cx);
                         },
                     ))
-                    .on_drop(cx.listener(
-                        move |this, payload: &SessionTabDragPayload, _, cx| {
+                    .on_drop(
+                        cx.listener(move |this, payload: &SessionTabDragPayload, _, cx| {
                             let zone = this
                                 .terminal_window_drop
                                 .as_ref()
@@ -438,8 +430,8 @@ impl NyaTermApp {
                                 zone,
                                 cx,
                             );
-                        },
-                    ))
+                        }),
+                    )
                     .child(canvas)
                     .when_some(drop_zone, |this, zone| {
                         this.child(Self::tab_dock_drop_overlay(zone, palette))
@@ -598,18 +590,13 @@ impl NyaTermApp {
                                 } else {
                                     rgb(palette.surface)
                                 })
-                                .child(
-                                    div()
-                                        .size(px(7.))
-                                        .rounded_full()
-                                        .bg(if is_disconnected {
-                                            rgb(palette.danger)
-                                        } else if is_active {
-                                            rgb(palette.success)
-                                        } else {
-                                            rgb(palette.text_dimmed)
-                                        }),
-                                )
+                                .child(div().size(px(7.)).rounded_full().bg(if is_disconnected {
+                                    rgb(palette.danger)
+                                } else if is_active {
+                                    rgb(palette.success)
+                                } else {
+                                    rgb(palette.text_dimmed)
+                                }))
                                 .child(
                                     div()
                                         .min_w_0()
@@ -669,7 +656,8 @@ impl NyaTermApp {
                 let first_el = self.render_workspace_pane_node(*first, true, cx);
                 let second_el = self.render_workspace_pane_node(*second, true, cx);
                 let divider = self.workspace_split_resize_handle(id.clone(), direction, cx);
-                let primary_basis = relative(WorkspacePaneNode::primary_weight(ratio_percent) / 100.);
+                let primary_basis =
+                    relative(WorkspacePaneNode::primary_weight(ratio_percent) / 100.);
                 let secondary_basis =
                     relative(WorkspacePaneNode::secondary_weight(ratio_percent) / 100.);
 
@@ -747,45 +735,34 @@ impl NyaTermApp {
             .bg(rgba((palette.accent << 8) | 0x28));
         zone_box = match zone {
             TabDockZone::Center => zone_box.inset_2(),
-            TabDockZone::Edge(TabDockEdge::Left) => zone_box
-                .top_2()
-                .bottom_2()
-                .left_2()
-                .w(relative(0.38)),
-            TabDockZone::Edge(TabDockEdge::Right) => zone_box
-                .top_2()
-                .bottom_2()
-                .right_2()
-                .w(relative(0.38)),
-            TabDockZone::Edge(TabDockEdge::Top) => zone_box
-                .left_2()
-                .right_2()
-                .top_2()
-                .h(relative(0.38)),
-            TabDockZone::Edge(TabDockEdge::Bottom) => zone_box
-                .left_2()
-                .right_2()
-                .bottom_2()
-                .h(relative(0.38)),
+            TabDockZone::Edge(TabDockEdge::Left) => {
+                zone_box.top_2().bottom_2().left_2().w(relative(0.38))
+            }
+            TabDockZone::Edge(TabDockEdge::Right) => {
+                zone_box.top_2().bottom_2().right_2().w(relative(0.38))
+            }
+            TabDockZone::Edge(TabDockEdge::Top) => {
+                zone_box.left_2().right_2().top_2().h(relative(0.38))
+            }
+            TabDockZone::Edge(TabDockEdge::Bottom) => {
+                zone_box.left_2().right_2().bottom_2().h(relative(0.38))
+            }
         };
-        div()
-            .absolute()
-            .inset_0()
-            .child(
-                zone_box.child(
-                    div()
-                        .rounded_sm()
-                        .border_1()
-                        .border_color(accent)
-                        .bg(rgb(palette.surface))
-                        .px_3()
-                        .py_1()
-                        .text_xs()
-                        .font_weight(FontWeight(600.))
-                        .text_color(rgb(palette.text))
-                        .child(label),
-                ),
-            )
+        div().absolute().inset_0().child(
+            zone_box.child(
+                div()
+                    .rounded_sm()
+                    .border_1()
+                    .border_color(accent)
+                    .bg(rgb(palette.surface))
+                    .px_3()
+                    .py_1()
+                    .text_xs()
+                    .font_weight(FontWeight(600.))
+                    .text_color(rgb(palette.text))
+                    .child(label),
+            ),
+        )
     }
 }
 

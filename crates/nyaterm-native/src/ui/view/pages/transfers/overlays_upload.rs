@@ -27,8 +27,8 @@ impl NyaTermApp {
     pub(in crate::ui::view) fn transfer_browser_upload_menu_overlay(
         &mut self,
         cx: &mut Context<Self>,
-    ) -> impl IntoElement  {
-    let palette = self.theme_palette();
+    ) -> impl IntoElement {
+        let palette = self.theme_palette();
         let state = self
             .transfer_browser_upload_menu
             .unwrap_or(TransferBrowserUploadMenuState {
@@ -94,11 +94,13 @@ impl NyaTermApp {
     }
 }
 
-fn upload_menu_item(palette: crate::ui::theme::ThemePalette,
+fn upload_menu_item(
+    palette: crate::ui::theme::ThemePalette,
     id: impl Into<String>,
     icon_path: &'static str,
     label: &'static str,
-    on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,) -> impl IntoElement  {
+    on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
+) -> impl IntoElement {
     div()
         .id(SharedString::from(id.into()))
         .h(px(30.))
@@ -111,7 +113,10 @@ fn upload_menu_item(palette: crate::ui::theme::ThemePalette,
         .cursor_pointer()
         .text_size(px(12.))
         .text_color(rgb(palette.text))
-        .hover(|this| this.bg(rgb(palette.surface_elevated)).text_color(rgb(0xffffff)))
+        .hover(|this| {
+            this.bg(rgb(palette.surface_elevated))
+                .text_color(rgb(0xffffff))
+        })
         .child(
             svg()
                 .size(px(16.))

@@ -14,9 +14,7 @@ impl NyaTermApp {
         let lower_title = title.to_ascii_lowercase();
         let looks_like_command = matches!(
             status,
-            AiAgentStepStatus::Running
-                | AiAgentStepStatus::Tool
-                | AiAgentStepStatus::NeedsApproval
+            AiAgentStepStatus::Running | AiAgentStepStatus::Tool | AiAgentStepStatus::NeedsApproval
         ) || lower_title.contains("background")
             || lower_title.contains("auto execute")
             || lower_title.contains("needs approval")
@@ -26,7 +24,10 @@ impl NyaTermApp {
             || lower_title == "done"
             || lower_title == "completed"
             || lower_title == "failed"
-            || matches!(status, AiAgentStepStatus::Completed | AiAgentStepStatus::Failed);
+            || matches!(
+                status,
+                AiAgentStepStatus::Completed | AiAgentStepStatus::Failed
+            );
         let looks_like_thought = lower_title.contains("plan")
             || lower_title.contains("think")
             || lower_title.contains("final answer")
@@ -344,15 +345,15 @@ impl NyaTermApp {
         Ok(())
     }
 
-    pub(in crate::ui::view) fn drive_ai_agent_loop(&mut self, cx: &mut Context<Self>) {
+    pub(in crate::ui::view) fn drive_ai_agent_loop(&mut self, cx: &mut Context<Self>) -> bool {
         if self.ai_chat_pending {
-            return;
+            return false;
         }
         let Some(state) = self.ai_agent_loop.as_mut() else {
-            return;
+            return false;
         };
         if state.background_job_id.is_some() {
-            return;
+            return false;
         }
         if self.active_session_id.as_deref() != Some(state.terminal_session_id.as_str()) {
             let step_index = state.step_index;
@@ -365,8 +366,8 @@ impl NyaTermApp {
                 "Stopped",
                 "Terminal session changed",
             );
-            cx.notify();
-            return;
+            let _ = cx;
+            return true;
         }
 
         let now = Instant::now();
@@ -374,10 +375,10 @@ impl NyaTermApp {
         if current_len != state.last_seen_len {
             state.last_seen_len = current_len;
             state.stable_since = now;
-            return;
+            return false;
         }
         if now < state.min_wait_until {
-            return;
+            return false;
         }
         let has_observed_output = current_len > state.output_start_len;
         let output_is_quiet = now.duration_since(state.stable_since) >= AI_AGENT_OBSERVATION_QUIET;
@@ -391,7 +392,7 @@ impl NyaTermApp {
             let command = state.command.clone();
             self.ai_agent_capture.cancel(&marker_id);
             let Some(state) = self.ai_agent_loop.take() else {
-                return;
+                return false;
             };
             let observation = CommandObservation {
                 output: "(command timed out; capture markers were not detected in terminal output)"
@@ -407,17 +408,17 @@ impl NyaTermApp {
                 observation_summary(&observation),
             );
             self.start_ai_agent_continuation(state, observation, cx);
-            return;
+            return true;
         }
         if !timed_out && (!has_observed_output || !output_is_quiet) {
-            return;
+            return false;
         }
         if state.marker_id.is_some() {
-            return;
+            return false;
         }
 
         let Some(state) = self.ai_agent_loop.take() else {
-            return;
+            return false;
         };
         let output = if self.terminal_output.len() > state.output_start_len {
             self.terminal_output[state.output_start_len..].to_string()
@@ -441,6 +442,7 @@ impl NyaTermApp {
             observation_summary(&observation),
         );
         self.start_ai_agent_continuation(state, observation, cx);
+        true
     }
 
     pub(in crate::ui::view) fn handle_ai_agent_captured_output(

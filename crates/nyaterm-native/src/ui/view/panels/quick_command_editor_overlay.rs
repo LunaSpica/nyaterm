@@ -465,11 +465,14 @@ impl NyaTermApp {
     }
 }
 
-fn quick_command_category_choice(palette: crate::ui::theme::ThemePalette,
+fn quick_command_category_choice(
+    palette: crate::ui::theme::ThemePalette,
     id: String,
     label: String,
     selected: bool,
-    on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,) -> impl IntoElement {    div()
+    on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
+) -> impl IntoElement {
+    div()
         .id(SharedString::from(id))
         .h(px(24.))
         .max_w(px(148.))
@@ -495,15 +498,22 @@ fn quick_command_category_choice(palette: crate::ui::theme::ThemePalette,
         } else {
             rgb(palette.text)
         })
-        .hover(|style| style.border_color(rgb(palette.accent)).bg(rgb(palette.hover)))
+        .hover(|style| {
+            style
+                .border_color(rgb(palette.accent))
+                .bg(rgb(palette.hover))
+        })
         .child(label)
         .on_click(on_click)
 }
 
-fn quick_command_color_swatch(palette: crate::ui::theme::ThemePalette,
+fn quick_command_color_swatch(
+    palette: crate::ui::theme::ThemePalette,
     color_tag: Option<&'static str>,
     selected: bool,
-    on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,) -> impl IntoElement {    let id = format!(
+    on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
+) -> impl IntoElement {
+    let id = format!(
         "quick-command-color-swatch-{}",
         color_tag.unwrap_or("default")
     );
@@ -523,11 +533,14 @@ fn quick_command_color_swatch(palette: crate::ui::theme::ThemePalette,
         .hover(|style| style.border_color(rgb(palette.accent)))
 }
 
-fn quick_command_icon_option(palette: crate::ui::theme::ThemePalette,
+fn quick_command_icon_option(
+    palette: crate::ui::theme::ThemePalette,
     icon_tag: &'static str,
     color_tag: Option<&str>,
     selected: bool,
-    on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,) -> impl IntoElement {    div()
+    on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
+) -> impl IntoElement {
+    div()
         .id(SharedString::from(format!(
             "quick-command-icon-option-{icon_tag}"
         )))

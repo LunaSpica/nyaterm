@@ -74,8 +74,8 @@ impl NyaTermApp {
         let (cell_w, _) = self.terminal_cell_size();
         let gutter_font = (self.settings.terminal_font_size.max(8) as f32 * 0.85).max(8.);
         // Gutter text uses 0.85x terminal font; approximate char width proportionally.
-        let gutter_cell_w = (cell_w * (gutter_font / self.settings.terminal_font_size.max(8) as f32))
-            .max(4.);
+        let gutter_cell_w =
+            (cell_w * (gutter_font / self.settings.terminal_font_size.max(8) as f32)).max(4.);
         let mut width = 0.;
         if self.settings.terminal_show_timestamps {
             // HH:MM:SS = 8 chars, HH:MM:SS.mmm = 12 chars (+ small pad like Tauri).
@@ -84,11 +84,13 @@ impl NyaTermApp {
             } else {
                 8.
             };
-            width += (gutter_cell_w * cols + 2.).max(if self.settings.terminal_show_timestamp_milliseconds {
-                96.
-            } else {
-                72.
-            });
+            width += (gutter_cell_w * cols + 2.).max(
+                if self.settings.terminal_show_timestamp_milliseconds {
+                    96.
+                } else {
+                    72.
+                },
+            );
         }
         if self.settings.terminal_show_line_numbers {
             // 5-digit absolute line numbers + pad.
@@ -106,8 +108,8 @@ impl NyaTermApp {
     pub(in crate::ui::view) fn terminal_timestamp_gutter_width_px(&self) -> f32 {
         let (cell_w, _) = self.terminal_cell_size();
         let gutter_font = (self.settings.terminal_font_size.max(8) as f32 * 0.85).max(8.);
-        let gutter_cell_w = (cell_w * (gutter_font / self.settings.terminal_font_size.max(8) as f32))
-            .max(4.);
+        let gutter_cell_w =
+            (cell_w * (gutter_font / self.settings.terminal_font_size.max(8) as f32)).max(4.);
         let cols = if self.settings.terminal_show_timestamp_milliseconds {
             12.
         } else {
@@ -123,8 +125,8 @@ impl NyaTermApp {
     pub(in crate::ui::view) fn terminal_line_number_gutter_width_px(&self) -> f32 {
         let (cell_w, _) = self.terminal_cell_size();
         let gutter_font = (self.settings.terminal_font_size.max(8) as f32 * 0.85).max(8.);
-        let gutter_cell_w = (cell_w * (gutter_font / self.settings.terminal_font_size.max(8) as f32))
-            .max(4.);
+        let gutter_cell_w =
+            (cell_w * (gutter_font / self.settings.terminal_font_size.max(8) as f32)).max(4.);
         (gutter_cell_w * 5. + 2.).max(40.)
     }
 
@@ -417,7 +419,11 @@ impl NyaTermApp {
         if cell.row != snapshot.cursor_row {
             return None;
         }
-        let line = snapshot.lines.get(cell.row).map(String::as_str).unwrap_or("");
+        let line = snapshot
+            .lines
+            .get(cell.row)
+            .map(String::as_str)
+            .unwrap_or("");
         let line_chars: Vec<char> = line.chars().collect();
         let value_chars: Vec<char> = state.value.chars().collect();
         if value_chars.is_empty() || value_chars.len() > line_chars.len() {
@@ -522,9 +528,6 @@ impl NyaTermApp {
         (start, end)
     }
 
-
-
-
     pub(in crate::ui::view) fn clear_action_link_tooltip(&mut self, cx: &mut Context<Self>) {
         let mut changed = false;
         if self.action_link_tooltip.take().is_some() {
@@ -538,12 +541,15 @@ impl NyaTermApp {
         }
     }
 
-    pub(in crate::ui::view) fn poll_action_link_tooltip_delay(&mut self, cx: &mut Context<Self>) {
+    pub(in crate::ui::view) fn poll_action_link_tooltip_delay(
+        &mut self,
+        _cx: &mut Context<Self>,
+    ) -> bool {
         let Some((key, started, tip)) = self.action_link_hover_pending.clone() else {
-            return;
+            return false;
         };
         if started.elapsed() < Duration::from_millis(250) {
-            return;
+            return false;
         }
         self.action_link_hover_pending = None;
         // Only show if still matching the pending key (not superseded).
@@ -552,10 +558,10 @@ impl NyaTermApp {
             .as_ref()
             .is_some_and(|current| current.match_key == key)
         {
-            return;
+            return true;
         }
         self.action_link_tooltip = Some(tip);
-        cx.notify();
+        true
     }
 
     pub(in crate::ui::view) fn update_action_link_hover(
@@ -877,8 +883,6 @@ fn open_external_url_for_action(url: &str) -> Result<(), String> {
     }
 }
 
-
-
 impl NyaTermApp {
     /// Tauri `canUseSmartCursor` gate for input-line selection editing.
     pub(in crate::ui::view) fn can_use_smart_cursor_selection(&self) -> bool {
@@ -901,7 +905,9 @@ impl NyaTermApp {
     }
 
     /// Map the painted terminal selection onto the tracked input line when it is fully contained.
-    pub(in crate::ui::view) fn smart_cursor_selected_input_range(&self) -> Option<InputSelectionRange> {
+    pub(in crate::ui::view) fn smart_cursor_selected_input_range(
+        &self,
+    ) -> Option<InputSelectionRange> {
         if !self.can_use_smart_cursor_selection() {
             return None;
         }
@@ -935,7 +941,11 @@ impl NyaTermApp {
             return None;
         }
 
-        let line = snapshot.lines.get(start.row).map(String::as_str).unwrap_or("");
+        let line = snapshot
+            .lines
+            .get(start.row)
+            .map(String::as_str)
+            .unwrap_or("");
         let line_chars: Vec<char> = line.chars().collect();
         let (col_start, col_end_excl) = selection.cols_for_row(start.row)?;
         let col_end = col_end_excl.min(line_chars.len().max(col_start));
@@ -1028,8 +1038,7 @@ impl NyaTermApp {
             return false;
         }
         let state = self.command_input_tracker.clone();
-        let move_to_end =
-            build_move_input_cursor_data(&state.value, state.cursor, selected.end);
+        let move_to_end = build_move_input_cursor_data(&state.value, state.cursor, selected.end);
         let delete_count = selected.len_chars(&state.value);
         if delete_count == 0 {
             return false;
@@ -1051,8 +1060,7 @@ impl NyaTermApp {
             return false;
         }
         let state = self.command_input_tracker.clone();
-        let move_to_end =
-            build_move_input_cursor_data(&state.value, state.cursor, selected.end);
+        let move_to_end = build_move_input_cursor_data(&state.value, state.cursor, selected.end);
         let delete_count = selected.len_chars(&state.value);
         let delete_bytes = "\u{007f}".repeat(delete_count);
         let after_delete = delete_terminal_input_range(&state, selected.start, selected.end);
@@ -1117,11 +1125,7 @@ impl NyaTermApp {
                 );
             }
             "right" if !keystroke.modifiers.shift => {
-                return self.collapse_smart_input_selection(
-                    selected,
-                    SmartSelectionEdge::End,
-                    cx,
-                );
+                return self.collapse_smart_input_selection(selected, SmartSelectionEdge::End, cx);
             }
             "backspace" | "delete" => {
                 return self.delete_smart_input_selection(selected, cx);

@@ -73,8 +73,8 @@ impl NyaTermApp {
                                             "Value",
                                             variable.value.clone(),
                                             focused,
-                    self.theme_palette(),
-                )
+                                            self.theme_palette(),
+                                        )
                                         .track_focus(&self.quick_command_variable_focus)
                                         .into_any_element()
                                     } else {
@@ -96,7 +96,8 @@ impl NyaTermApp {
                                         .flex()
                                         .items_center()
                                         .gap_1()
-                                        .child(small_button(palette, 
+                                        .child(small_button(
+                                            palette,
                                             format!("quick-command-variable-prev-{index}"),
                                             "Prev",
                                             cx.listener(move |this, _, _, cx| {
@@ -105,7 +106,8 @@ impl NyaTermApp {
                                                 );
                                             }),
                                         ))
-                                        .child(small_button(palette, 
+                                        .child(small_button(
+                                            palette,
                                             format!("quick-command-variable-next-{index}"),
                                             "Next",
                                             cx.listener(move |this, _, _, cx| {

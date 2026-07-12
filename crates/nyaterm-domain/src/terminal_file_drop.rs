@@ -31,10 +31,7 @@ pub fn terminal_drop_overlay_copy(session_kind: &str) -> (&'static str, &'static
             "Drop to insert file paths",
             "File paths will be inserted into the command line",
         ),
-        _ => (
-            "Drop files to upload",
-            "Files only, uploaded via ZMODEM",
-        ),
+        _ => ("Drop files to upload", "Files only, uploaded via ZMODEM"),
     }
 }
 

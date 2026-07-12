@@ -20,8 +20,10 @@ impl NyaTermApp {
         cx.notify();
     }
 
-    pub(super) fn drain_update_events(&mut self) {
+    pub(super) fn drain_update_events(&mut self) -> bool {
+        let mut dirty = false;
         while let Ok(event) = self.update_rx.try_recv() {
+            dirty = true;
             self.update_pending = false;
             match event.result {
                 Ok(info) => {
@@ -43,5 +45,6 @@ impl NyaTermApp {
                 }
             }
         }
+        dirty
     }
 }

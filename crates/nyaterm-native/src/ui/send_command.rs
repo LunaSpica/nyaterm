@@ -2,7 +2,6 @@ use crate::ui::theme::ThemePalette;
 use gpui::{FontWeight, IntoElement, div, prelude::*, px, rgb};
 use nyaterm_session::SessionKind;
 
-
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(super) enum SendCommandTarget {
     Current,

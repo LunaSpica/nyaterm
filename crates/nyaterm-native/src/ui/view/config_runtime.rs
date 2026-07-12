@@ -584,7 +584,8 @@ impl NyaTermApp {
                         self.connection_groups = config.groups;
                         self.connection_ssh_keys = store.list_ssh_keys().unwrap_or_default();
                         self.connection_otp_entries = store.list_otp_entries().unwrap_or_default();
-                        self.connection_saved_passwords = store.list_passwords().unwrap_or_default();
+                        self.connection_saved_passwords =
+                            store.list_passwords().unwrap_or_default();
                         self.connection_saved_credentials =
                             store.list_credentials().unwrap_or_default();
                         self.tunnels = store.list_tunnels().unwrap_or_default();

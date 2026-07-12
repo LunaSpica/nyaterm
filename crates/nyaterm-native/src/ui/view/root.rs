@@ -1,7 +1,7 @@
 use super::*;
 use gpui::{
-    Context, IntoElement, KeyDownEvent, MouseButton, MouseMoveEvent, MouseUpEvent,
-    ImageSource, NavigationDirection, ObjectFit, Render, SharedString, Window, div, img, rgb,
+    Context, ImageSource, IntoElement, KeyDownEvent, MouseButton, MouseMoveEvent, MouseUpEvent,
+    NavigationDirection, ObjectFit, Render, SharedString, Window, div, img, rgb,
 };
 
 impl Render for NyaTermApp {
@@ -32,7 +32,8 @@ impl Render for NyaTermApp {
             .filter(|p| !p.is_empty())
             .map(|p| p.to_string());
         let wallpaper_enabled = wallpaper_path.is_some();
-        let wallpaper_opacity = (self.settings.background_image_opacity.clamp(5, 100) as f32) / 100.0;
+        let wallpaper_opacity =
+            (self.settings.background_image_opacity.clamp(5, 100) as f32) / 100.0;
         let content_opacity = if wallpaper_enabled {
             (self.settings.background_content_opacity.clamp(20, 100) as f32) / 100.0
         } else {

@@ -95,7 +95,8 @@ impl NyaTermApp {
         } else if self
             .ai_prepared_request
             .as_ref()
-            .is_some_and(|request| request.action == AiAction::CustomFileAction) {
+            .is_some_and(|request| request.action == AiAction::CustomFileAction)
+        {
             "file".to_string()
         } else if self.ai_settings.enabled {
             match self.ai_settings.default_mode {
@@ -149,7 +150,8 @@ impl NyaTermApp {
                     .items_center()
                     .gap_1()
                     .min_w_0()
-                    .child(status_bar_button(palette, 
+                    .child(status_bar_button(
+                        palette,
                         "status-session",
                         "Session",
                         session_status,
@@ -174,7 +176,8 @@ impl NyaTermApp {
                             cx.notify();
                         }),
                     ))
-                    .child(status_bar_label(palette, 
+                    .child(status_bar_label(
+                        palette,
                         "Tabs",
                         if pane_count > tab_count {
                             format!("{tab_count} ({pane_count}p)")
@@ -183,7 +186,8 @@ impl NyaTermApp {
                         },
                         rgb(palette.accent),
                     ))
-                    .child(status_bar_button(palette, 
+                    .child(status_bar_button(
+                        palette,
                         "status-recording",
                         "Recording",
                         recording_status,
@@ -197,7 +201,8 @@ impl NyaTermApp {
                             cx.notify();
                         }),
                     ))
-                    .child(status_bar_button(palette, 
+                    .child(status_bar_button(
+                        palette,
                         "status-transfer",
                         "Transfer",
                         transfer_status,
@@ -213,8 +218,14 @@ impl NyaTermApp {
                             cx.notify();
                         }),
                     ))
-                    .child(status_bar_label(palette, "Panel", bottom_panel, rgb(palette.accent)))
-                    .child(status_bar_button(palette, 
+                    .child(status_bar_label(
+                        palette,
+                        "Panel",
+                        bottom_panel,
+                        rgb(palette.accent),
+                    ))
+                    .child(status_bar_button(
+                        palette,
                         "status-broadcast",
                         "Broadcast",
                         if self.broadcast_to_all {
@@ -239,7 +250,8 @@ impl NyaTermApp {
                     .justify_end()
                     .gap_1()
                     .min_w_0()
-                    .child(status_bar_button(palette, 
+                    .child(status_bar_button(
+                        palette,
                         "status-ai",
                         "AI",
                         ai_status,
@@ -253,7 +265,8 @@ impl NyaTermApp {
                             cx.notify();
                         }),
                     ))
-                    .child(status_bar_button(palette, 
+                    .child(status_bar_button(
+                        palette,
                         "status-cpu",
                         "CPU",
                         cpu_status,
@@ -263,7 +276,8 @@ impl NyaTermApp {
                             cx.notify();
                         }),
                     ))
-                    .child(status_bar_button(palette, 
+                    .child(status_bar_button(
+                        palette,
                         "status-memory",
                         "MEM",
                         mem_status,
@@ -273,7 +287,8 @@ impl NyaTermApp {
                             cx.notify();
                         }),
                     ))
-                    .child(status_bar_label(palette, 
+                    .child(status_bar_label(
+                        palette,
                         "Store",
                         if self.store_status.ready {
                             "online"
@@ -286,7 +301,8 @@ impl NyaTermApp {
                             rgb(palette.danger)
                         },
                     ))
-                    .child(status_bar_button(palette, 
+                    .child(status_bar_button(
+                        palette,
                         "status-lock",
                         "Lock",
                         lock_status,
@@ -389,21 +405,24 @@ impl NyaTermApp {
                         div()
                             .flex()
                             .gap_2()
-                            .child(small_button(palette, 
+                            .child(small_button(
+                                palette,
                                 "activity-move-up",
                                 "Up",
                                 cx.listener(move |this, _, _, cx| {
                                     this.reorder_activity_entry(move_up_id.clone(), -1, cx);
                                 }),
                             ))
-                            .child(small_button(palette, 
+                            .child(small_button(
+                                palette,
                                 "activity-move-down",
                                 "Down",
                                 cx.listener(move |this, _, _, cx| {
                                     this.reorder_activity_entry(move_down_id.clone(), 1, cx);
                                 }),
                             ))
-                            .child(small_button(palette, 
+                            .child(small_button(
+                                palette,
                                 "activity-toggle-labels",
                                 if self.activity_bar_layout.show_labels {
                                     "Hide Labels"
@@ -422,7 +441,8 @@ impl NyaTermApp {
                             .child("Move to zone"),
                     )
                     .child(zone_buttons)
-                    .child(small_button(palette, 
+                    .child(small_button(
+                        palette,
                         "activity-menu-close",
                         "Close",
                         cx.listener(|this, _, _, cx| {
@@ -434,7 +454,6 @@ impl NyaTermApp {
     }
 
     pub(in crate::ui::view) fn title_bar(&mut self, cx: &mut Context<Self>) -> impl IntoElement {
-
         let palette = self.theme_palette();
         // Compact chrome closer to Tauri title/menu strip density.
         div()
@@ -609,7 +628,14 @@ impl NyaTermApp {
         // Tauri DropZone: gap-0.5 pt-1
         let mut top = div().flex().flex_col().items_center().gap(px(2.)).pt_1();
         for (index, entry) in top_entries.into_iter().enumerate() {
-            top = top.child(self.activity_entry_button(entry, side, top_zone, index, show_labels, cx));
+            top = top.child(self.activity_entry_button(
+                entry,
+                side,
+                top_zone,
+                index,
+                show_labels,
+                cx,
+            ));
         }
         // End-of-zone drop target (append).
         top = top.child(self.activity_zone_end_drop_target(top_zone, top_len, cx));
@@ -622,8 +648,14 @@ impl NyaTermApp {
             .gap(px(2.))
             .pb_1();
         for (index, entry) in bottom_entries.into_iter().enumerate() {
-            bottom =
-                bottom.child(self.activity_entry_button(entry, side, bottom_zone, index, show_labels, cx));
+            bottom = bottom.child(self.activity_entry_button(
+                entry,
+                side,
+                bottom_zone,
+                index,
+                show_labels,
+                cx,
+            ));
         }
         bottom = bottom.child(self.activity_zone_end_drop_target(bottom_zone, bottom_len, cx));
 
@@ -652,17 +684,14 @@ impl NyaTermApp {
             .w_full()
             .h(px(8.))
             .flex_none()
-            .on_drop(cx.listener(move |this, payload: &ActivityBarDragPayload, _, cx| {
-                if payload.entry_id.is_empty() {
-                    return;
-                }
-                this.move_activity_entry(
-                    payload.entry_id.clone(),
-                    zone,
-                    Some(end_index),
-                    cx,
-                );
-            }))
+            .on_drop(
+                cx.listener(move |this, payload: &ActivityBarDragPayload, _, cx| {
+                    if payload.entry_id.is_empty() {
+                        return;
+                    }
+                    this.move_activity_entry(payload.entry_id.clone(), zone, Some(end_index), cx);
+                }),
+            )
     }
 
     fn activity_entry_button(
@@ -739,11 +768,7 @@ impl NyaTermApp {
                 rgb(palette.text_muted)
             })
             .bg(bg)
-            .hover(move |hover| {
-                hover
-                    .bg(rgb(palette.hover))
-                    .text_color(active_color)
-            })
+            .hover(move |hover| hover.bg(rgb(palette.hover)).text_color(active_color))
             .child(
                 div()
                     .absolute()
@@ -755,7 +780,12 @@ impl NyaTermApp {
                     .when(side == ActivitySide::Left, |this| this.left_0())
                     .when(side == ActivitySide::Right, |this| this.right_0()),
             )
-            .child(activity_icon(icon_path, glyph, icon_color.into(), if show_labels { 18. } else { 20. }))
+            .child(activity_icon(
+                icon_path,
+                glyph,
+                icon_color.into(),
+                if show_labels { 18. } else { 20. },
+            ))
             .when(show_labels, |this| {
                 this.child(
                     div()
@@ -818,12 +848,7 @@ impl NyaTermApp {
             .on_mouse_down(
                 MouseButton::Right,
                 cx.listener(move |this, _, _, cx| {
-                    this.open_activity_bar_context_menu(
-                        context_entry_id.clone(),
-                        zone,
-                        index,
-                        cx,
-                    );
+                    this.open_activity_bar_context_menu(context_entry_id.clone(), zone, index, cx);
                 }),
             )
     }
@@ -1004,11 +1029,7 @@ impl NyaTermApp {
             }))
     }
 
-    fn title_menu_trigger(
-        &self,
-        menu: TitleMenu,
-        cx: &mut Context<Self>,
-    ) -> impl IntoElement {
+    fn title_menu_trigger(&self, menu: TitleMenu, cx: &mut Context<Self>) -> impl IntoElement {
         let open = self.title_menu_open == Some(menu);
         let label = menu.label();
         let palette = self.theme_palette();
@@ -1040,16 +1061,10 @@ impl NyaTermApp {
                         this.toggle_title_menu(menu, cx);
                     })),
             )
-            .when(open, |this| {
-                this.child(self.title_menu_dropdown(menu, cx))
-            })
+            .when(open, |this| this.child(self.title_menu_dropdown(menu, cx)))
     }
 
-    fn title_menu_dropdown(
-        &self,
-        menu: TitleMenu,
-        cx: &mut Context<Self>,
-    ) -> impl IntoElement {
+    fn title_menu_dropdown(&self, menu: TitleMenu, cx: &mut Context<Self>) -> impl IntoElement {
         let shortcut = |id: &str, fallback: &str| self.display_shortcut_for(id, fallback);
         let palette = self.theme_palette();
         let mut items = div()
@@ -1057,7 +1072,7 @@ impl NyaTermApp {
             .absolute()
             .top(px(30.))
             .left_0()
-                        .w(px(260.))
+            .w(px(260.))
             .max_h(px(480.))
             .overflow_y_scroll()
             .rounded_md()
@@ -1211,7 +1226,8 @@ impl NyaTermApp {
                         {
                             let current = self.settings.theme.as_str();
                             let selected = current == "solarized-light"
-                                || (current == "catppuccin" && "solarized-light" == "catppuccin-mocha");
+                                || (current == "catppuccin"
+                                    && "solarized-light" == "catppuccin-mocha");
                             let label = crate::ui::theme::appearance_theme_label("solarized-light");
                             if selected {
                                 format!("✓ {label}")
@@ -1231,8 +1247,10 @@ impl NyaTermApp {
                         {
                             let current = self.settings.theme.as_str();
                             let selected = current == "catppuccin-mocha"
-                                || (current == "catppuccin" && "catppuccin-mocha" == "catppuccin-mocha");
-                            let label = crate::ui::theme::appearance_theme_label("catppuccin-mocha");
+                                || (current == "catppuccin"
+                                    && "catppuccin-mocha" == "catppuccin-mocha");
+                            let label =
+                                crate::ui::theme::appearance_theme_label("catppuccin-mocha");
                             if selected {
                                 format!("✓ {label}")
                             } else {
@@ -1271,7 +1289,8 @@ impl NyaTermApp {
                         {
                             let current = self.settings.theme.as_str();
                             let selected = current == "one-dark-pro"
-                                || (current == "catppuccin" && "one-dark-pro" == "catppuccin-mocha");
+                                || (current == "catppuccin"
+                                    && "one-dark-pro" == "catppuccin-mocha");
                             let label = crate::ui::theme::appearance_theme_label("one-dark-pro");
                             if selected {
                                 format!("✓ {label}")
@@ -1311,7 +1330,8 @@ impl NyaTermApp {
                         {
                             let current = self.settings.theme.as_str();
                             let selected = current == "gruvbox-dark"
-                                || (current == "catppuccin" && "gruvbox-dark" == "catppuccin-mocha");
+                                || (current == "catppuccin"
+                                    && "gruvbox-dark" == "catppuccin-mocha");
                             let label = crate::ui::theme::appearance_theme_label("gruvbox-dark");
                             if selected {
                                 format!("✓ {label}")
@@ -1331,7 +1351,8 @@ impl NyaTermApp {
                         {
                             let current = self.settings.theme.as_str();
                             let selected = current == "github-light"
-                                || (current == "catppuccin" && "github-light" == "catppuccin-mocha");
+                                || (current == "catppuccin"
+                                    && "github-light" == "catppuccin-mocha");
                             let label = crate::ui::theme::appearance_theme_label("github-light");
                             if selected {
                                 format!("✓ {label}")
@@ -1351,8 +1372,10 @@ impl NyaTermApp {
                         {
                             let current = self.settings.theme.as_str();
                             let selected = current == "catppuccin-latte"
-                                || (current == "catppuccin" && "catppuccin-latte" == "catppuccin-mocha");
-                            let label = crate::ui::theme::appearance_theme_label("catppuccin-latte");
+                                || (current == "catppuccin"
+                                    && "catppuccin-latte" == "catppuccin-mocha");
+                            let label =
+                                crate::ui::theme::appearance_theme_label("catppuccin-latte");
                             if selected {
                                 format!("✓ {label}")
                             } else {
@@ -1391,8 +1414,10 @@ impl NyaTermApp {
                         {
                             let current = self.settings.theme.as_str();
                             let selected = current == "nya-high-contrast"
-                                || (current == "catppuccin" && "nya-high-contrast" == "catppuccin-mocha");
-                            let label = crate::ui::theme::appearance_theme_label("nya-high-contrast");
+                                || (current == "catppuccin"
+                                    && "nya-high-contrast" == "catppuccin-mocha");
+                            let label =
+                                crate::ui::theme::appearance_theme_label("nya-high-contrast");
                             if selected {
                                 format!("✓ {label}")
                             } else {
@@ -1757,10 +1782,8 @@ impl NyaTermApp {
                         None,
                         cx.listener(|this, _, _, cx| {
                             this.close_title_menu(cx);
-                            this.terminal_status = format!(
-                                "NyaTerm native {}",
-                                env!("CARGO_PKG_VERSION")
-                            );
+                            this.terminal_status =
+                                format!("NyaTerm native {}", env!("CARGO_PKG_VERSION"));
                             cx.notify();
                         }),
                     ));
@@ -1794,11 +1817,14 @@ impl NyaTermApp {
     }
 }
 
-fn title_menu_item(palette: crate::ui::theme::ThemePalette,
+fn title_menu_item(
+    palette: crate::ui::theme::ThemePalette,
     id: impl Into<String>,
     label: impl Into<String>,
     shortcut: Option<String>,
-    on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,) -> impl IntoElement {    let label = label.into();
+    on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
+) -> impl IntoElement {
+    let label = label.into();
     let mut row = div()
         .id(SharedString::from(id.into()))
         .h(px(30.))
@@ -1824,9 +1850,6 @@ fn title_menu_item(palette: crate::ui::theme::ThemePalette,
     row
 }
 
-fn title_menu_separator(palette: crate::ui::theme::ThemePalette) -> impl IntoElement {    div()
-        .h(px(1.))
-        .mx_2()
-        .my_1()
-        .bg(rgb(palette.border))
+fn title_menu_separator(palette: crate::ui::theme::ThemePalette) -> impl IntoElement {
+    div().h(px(1.)).mx_2().my_1().bg(rgb(palette.border))
 }

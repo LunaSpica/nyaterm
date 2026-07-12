@@ -1,7 +1,7 @@
 use super::*;
 use crate::ui::theme::ThemePalette;
 
-pub(super) fn process_matches(process: &RemoteProcess, normalized_query: &str) -> bool  {
+pub(super) fn process_matches(process: &RemoteProcess, normalized_query: &str) -> bool {
     if normalized_query.is_empty() {
         return true;
     }
@@ -63,7 +63,7 @@ pub(super) fn sort_processes(
     });
 }
 
-pub(super) fn top_process_ratio(processes: &[RemoteProcess], cpu: bool) -> f64  {
+pub(super) fn top_process_ratio(processes: &[RemoteProcess], cpu: bool) -> f64 {
     processes
         .iter()
         .map(|process| {
@@ -77,10 +77,12 @@ pub(super) fn top_process_ratio(processes: &[RemoteProcess], cpu: bool) -> f64  
         / 100.
 }
 
-pub(super) fn process_summary_card(palette: ThemePalette,
+pub(super) fn process_summary_card(
+    palette: ThemePalette,
     title: &'static str,
     value: String,
-    ratio: f64,) -> impl IntoElement {
+    ratio: f64,
+) -> impl IntoElement {
     let ratio = ratio.clamp(0., 1.);
     // Compact metric chip for Process Manager summary strip.
     div()
@@ -110,7 +112,6 @@ pub(super) fn process_summary_card(palette: ThemePalette,
         .child(stats_progress_bar(palette, ratio))
 }
 
-
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(super) enum ProcessDisplayMode {
     Compact,
@@ -132,7 +133,7 @@ pub(super) fn process_display_mode(panel_width: f32) -> ProcessDisplayMode {
     }
 }
 
-pub(super) fn process_row_height_px(mode: ProcessDisplayMode) -> f32  {
+pub(super) fn process_row_height_px(mode: ProcessDisplayMode) -> f32 {
     match mode {
         ProcessDisplayMode::Compact => 62.,
         _ => 38.,
@@ -148,13 +149,16 @@ pub(super) fn process_details_height_px(mode: ProcessDisplayMode) -> f32 {
     }
 }
 
-pub(super) fn process_sort_button(palette: ThemePalette,
+pub(super) fn process_sort_button(
+    palette: ThemePalette,
     id: impl Into<String>,
     label: &'static str,
     active: bool,
     direction: RemoteProcessSortDirection,
     numeric: bool,
-    on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,) -> impl IntoElement {    // Flat sortable header cell (Tauri table header).
+    on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
+) -> impl IntoElement {
+    // Flat sortable header cell (Tauri table header).
     div()
         .id(gpui::SharedString::from(id.into()))
         .h_full()
@@ -165,10 +169,21 @@ pub(super) fn process_sort_button(palette: ThemePalette,
         .when(numeric, |this| this.justify_end())
         .rounded_sm()
         .text_size(px(10.))
-        .font_weight(if active { FontWeight(700.) } else { FontWeight(600.) })
-        .text_color(if active { rgb(palette.text) } else { rgb(palette.text_dimmed) })
+        .font_weight(if active {
+            FontWeight(700.)
+        } else {
+            FontWeight(600.)
+        })
+        .text_color(if active {
+            rgb(palette.text)
+        } else {
+            rgb(palette.text_dimmed)
+        })
         .cursor_pointer()
-        .hover(|this| this.bg(rgb(palette.surface_elevated)).text_color(rgb(palette.text)))
+        .hover(|this| {
+            this.bg(rgb(palette.surface_elevated))
+                .text_color(rgb(palette.text))
+        })
         .child(if active {
             format!("{label} {}", direction.marker())
         } else {
@@ -177,7 +192,8 @@ pub(super) fn process_sort_button(palette: ThemePalette,
         .on_click(on_click)
 }
 
-pub(super) fn process_table_header(palette: ThemePalette) -> impl IntoElement {    // Static fallback header; live header uses process_sort_button grid in process_view.
+pub(super) fn process_table_header(palette: ThemePalette) -> impl IntoElement {
+    // Static fallback header; live header uses process_sort_button grid in process_view.
     div()
         .grid()
         .grid_cols(6)
@@ -200,7 +216,8 @@ pub(super) fn process_table_header(palette: ThemePalette) -> impl IntoElement { 
         .child("")
 }
 
-pub(super) fn process_table_row(palette: ThemePalette,
+pub(super) fn process_table_row(
+    palette: ThemePalette,
     process: &RemoteProcess,
     mode: ProcessDisplayMode,
     selected: bool,
@@ -213,7 +230,9 @@ pub(super) fn process_table_row(palette: ThemePalette,
     on_hup: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
     on_stop: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
     on_cont: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
-    on_kill: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,) -> gpui::Div {    // Tauri ProcessManager: left accent + mode-aware columns (compact/narrow/medium/wide).
+    on_kill: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
+) -> gpui::Div {
+    // Tauri ProcessManager: left accent + mode-aware columns (compact/narrow/medium/wide).
     let accent = if process.cpu_percent >= 80.0 {
         rgb(palette.danger)
     } else if process.memory_percent >= 80.0 {
@@ -223,7 +242,10 @@ pub(super) fn process_table_row(palette: ThemePalette,
     } else {
         rgb(palette.border)
     };
-    let show_memory = !matches!(mode, ProcessDisplayMode::Narrow | ProcessDisplayMode::Compact);
+    let show_memory = !matches!(
+        mode,
+        ProcessDisplayMode::Narrow | ProcessDisplayMode::Compact
+    );
     let show_user = matches!(mode, ProcessDisplayMode::Wide);
     let cols = match mode {
         ProcessDisplayMode::Compact => 2,
@@ -346,10 +368,7 @@ pub(super) fn process_table_row(palette: ThemePalette,
                             .text_size(px(10.))
                             .text_color(rgb(palette.text_dimmed))
                             .overflow_hidden()
-                            .child(format!(
-                                "PID {} · {:.1}%",
-                                process.pid, process.cpu_percent
-                            )),
+                            .child(format!("PID {} · {:.1}%", process.pid, process.cpu_percent)),
                     ),
             )
             .child(menu)
@@ -391,7 +410,12 @@ pub(super) fn process_table_row(palette: ThemePalette,
                             .child(truncate_preview(&process.command_line, 52)),
                     ),
             )
-            .child(process_table_cell(palette, process.pid.to_string(), None, true))
+            .child(process_table_cell(
+                palette,
+                process.pid.to_string(),
+                None,
+                true,
+            ))
             .child(process_table_cell(
                 palette,
                 format!("{:.1}%", process.cpu_percent),
@@ -439,12 +463,12 @@ pub(super) fn process_table_row(palette: ThemePalette,
         .child(body)
 }
 
-
-
-fn process_menu_item(palette: ThemePalette,
+fn process_menu_item(
+    palette: ThemePalette,
     id: impl Into<String>,
     label: &'static str,
-    on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,) -> impl IntoElement {
+    on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
+) -> impl IntoElement {
     div()
         .id(gpui::SharedString::from(id.into()))
         .h(px(24.))
@@ -463,10 +487,13 @@ fn process_menu_sep(palette: ThemePalette) -> impl IntoElement {
     div().h(px(1.)).mx_2().my_1().bg(rgb(palette.border))
 }
 
-pub(super) fn process_table_cell(palette: ThemePalette,
+pub(super) fn process_table_cell(
+    palette: ThemePalette,
     value: String,
     color: Option<gpui::Hsla>,
-    numeric: bool,) -> impl IntoElement {    // Tauri ProcessManager numeric columns are mono + right-aligned.
+    numeric: bool,
+) -> impl IntoElement {
+    // Tauri ProcessManager numeric columns are mono + right-aligned.
     div()
         .min_w_0()
         .font_family("JetBrains Mono")
@@ -477,10 +504,12 @@ pub(super) fn process_table_cell(palette: ThemePalette,
         .child(value)
 }
 
-pub(super) fn icon_action_button(palette: ThemePalette,
+pub(super) fn icon_action_button(
+    palette: ThemePalette,
     id: impl Into<String>,
     label: &'static str,
-    on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,) -> impl IntoElement {
+    on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
+) -> impl IntoElement {
     div()
         .id(gpui::SharedString::from(id.into()))
         .h(px(24.))
@@ -499,12 +528,15 @@ pub(super) fn icon_action_button(palette: ThemePalette,
         .on_click(on_click)
 }
 
-pub(super) fn process_details(palette: ThemePalette,
+pub(super) fn process_details(
+    palette: ThemePalette,
     process: &RemoteProcess,
     mode: ProcessDisplayMode,
     nice_draft: String,
     nice_focus: &gpui::FocusHandle,
-    cx: &mut Context<NyaTermApp>,) -> gpui::AnyElement {    // Tauri expanded process details: compact mono command + meta chips + dense actions.
+    cx: &mut Context<NyaTermApp>,
+) -> gpui::AnyElement {
+    // Tauri expanded process details: compact mono command + meta chips + dense actions.
     let command = if process.command_line.trim().is_empty() {
         process.command.clone()
     } else {
@@ -539,7 +571,11 @@ pub(super) fn process_details(palette: ThemePalette,
                 .flex()
                 .flex_wrap()
                 .gap_1()
-                .child(process_detail_chip(palette, "PPID", process.ppid.to_string()))
+                .child(process_detail_chip(
+                    palette,
+                    "PPID",
+                    process.ppid.to_string(),
+                ))
                 .child(process_detail_chip(
                     palette,
                     "RSS",
@@ -548,7 +584,11 @@ pub(super) fn process_details(palette: ThemePalette,
                 .child(process_detail_chip(palette, "State", process.state.clone()))
                 .child(process_detail_chip(palette, "User", process.user.clone()))
                 .child(process_detail_chip(palette, "PID", process.pid.to_string()))
-                .child(process_detail_chip(palette, "Elapsed", process.elapsed.clone())),
+                .child(process_detail_chip(
+                    palette,
+                    "Elapsed",
+                    process.elapsed.clone(),
+                )),
         )
         .child(
             div()
@@ -565,35 +605,37 @@ pub(super) fn process_details(palette: ThemePalette,
                             window.focus(&this.process_nice_focus);
                             cx.notify();
                         }))
-                        .on_key_down(cx.listener(
-                            |this, event: &KeyDownEvent, window, cx| {
-                                cx.stop_propagation();
-                                this.handle_process_nice_key_down(event, window, cx);
-                            },
-                        )),
+                        .on_key_down(cx.listener(|this, event: &KeyDownEvent, window, cx| {
+                            cx.stop_propagation();
+                            this.handle_process_nice_key_down(event, window, cx);
+                        })),
                 )
-                .child(small_button(palette, 
+                .child(small_button(
+                    palette,
                     format!("process-nice-apply-{pid}"),
                     "Apply",
                     cx.listener(move |this, _, window, cx| {
                         this.apply_process_nice_draft(window, cx);
                     }),
                 ))
-                .child(small_button(palette, 
+                .child(small_button(
+                    palette,
                     format!("process-nice-low-{pid}"),
                     "-5",
                     cx.listener(move |this, _, window, cx| {
                         this.renice_process(pid, -5, window, cx);
                     }),
                 ))
-                .child(small_button(palette, 
+                .child(small_button(
+                    palette,
                     format!("process-nice-zero-{pid}"),
                     "0",
                     cx.listener(move |this, _, window, cx| {
                         this.renice_process(pid, 0, window, cx);
                     }),
                 ))
-                .child(small_button(palette, 
+                .child(small_button(
+                    palette,
                     format!("process-nice-high-{pid}"),
                     "+5",
                     cx.listener(move |this, _, window, cx| {
@@ -608,35 +650,40 @@ pub(super) fn process_details(palette: ThemePalette,
                         .text_color(rgb(palette.text_dimmed))
                         .child("SIG"),
                 )
-                .child(small_button(palette, 
+                .child(small_button(
+                    palette,
                     format!("process-signal-term-{pid}"),
                     "TERM",
                     cx.listener(move |this, _, window, cx| {
                         this.request_process_signal(pid, "TERM", window, cx);
                     }),
                 ))
-                .child(small_button(palette, 
+                .child(small_button(
+                    palette,
                     format!("process-signal-hup-{pid}"),
                     "HUP",
                     cx.listener(move |this, _, window, cx| {
                         this.request_process_signal(pid, "HUP", window, cx);
                     }),
                 ))
-                .child(small_button(palette, 
+                .child(small_button(
+                    palette,
                     format!("process-signal-stop-{pid}"),
                     "STOP",
                     cx.listener(move |this, _, window, cx| {
                         this.request_process_signal(pid, "STOP", window, cx);
                     }),
                 ))
-                .child(small_button(palette, 
+                .child(small_button(
+                    palette,
                     format!("process-signal-cont-{pid}"),
                     "CONT",
                     cx.listener(move |this, _, window, cx| {
                         this.request_process_signal(pid, "CONT", window, cx);
                     }),
                 ))
-                .child(small_button(palette, 
+                .child(small_button(
+                    palette,
                     format!("process-signal-kill-{pid}"),
                     "KILL",
                     cx.listener(move |this, _, window, cx| {
@@ -647,7 +694,11 @@ pub(super) fn process_details(palette: ThemePalette,
         .into_any_element()
 }
 
-pub(super) fn process_detail_chip(palette: ThemePalette, label: &'static str, value: String) -> impl IntoElement {
+pub(super) fn process_detail_chip(
+    palette: ThemePalette,
+    label: &'static str,
+    value: String,
+) -> impl IntoElement {
     div()
         .rounded_md()
         .border_1()
@@ -675,9 +726,11 @@ pub(super) fn process_detail_chip(palette: ThemePalette, label: &'static str, va
         )
 }
 
-pub(super) fn process_signal_confirm_panel(palette: ThemePalette,
+pub(super) fn process_signal_confirm_panel(
+    palette: ThemePalette,
     confirm: RemoteProcessSignalConfirmState,
-    cx: &mut Context<NyaTermApp>,) -> impl IntoElement {
+    cx: &mut Context<NyaTermApp>,
+) -> impl IntoElement {
     div()
         .rounded_md()
         .border_1()
@@ -722,14 +775,16 @@ pub(super) fn process_signal_confirm_panel(palette: ThemePalette,
                 .flex()
                 .items_center()
                 .gap_2()
-                .child(small_button(palette, 
+                .child(small_button(
+                    palette,
                     "process-signal-cancel",
                     "Cancel",
                     cx.listener(|this, _, _, cx| {
                         this.cancel_process_signal_confirm(cx);
                     }),
                 ))
-                .child(small_button(palette, 
+                .child(small_button(
+                    palette,
                     "process-signal-confirm",
                     "Confirm",
                     cx.listener(|this, _, window, cx| {
@@ -738,7 +793,6 @@ pub(super) fn process_signal_confirm_panel(palette: ThemePalette,
                 )),
         )
 }
-
 
 pub(super) fn dense_capability_line(
     palette: crate::ui::theme::ThemePalette,
@@ -769,11 +823,14 @@ pub(super) fn dense_capability_line(
         )
 }
 
-pub(super) fn resource_gauge_card(palette: ThemePalette,
+pub(super) fn resource_gauge_card(
+    palette: ThemePalette,
     title: &'static str,
     value: String,
     detail: String,
-    ratio: f64,) -> impl IntoElement {    // Tauri ResourceMonitor ring-ish card: compact height, dense mono value.
+    ratio: f64,
+) -> impl IntoElement {
+    // Tauri ResourceMonitor ring-ish card: compact height, dense mono value.
     let ratio = ratio.clamp(0., 1.);
     div()
         .rounded_md()
@@ -829,11 +886,13 @@ pub(super) fn resource_gauge_card(palette: ThemePalette,
         )
 }
 
-pub(super) fn resource_summary_card(palette: ThemePalette,
+pub(super) fn resource_summary_card(
+    palette: ThemePalette,
     title: &'static str,
     value: String,
     detail: String,
-    ratio: f64,) -> impl IntoElement {
+    ratio: f64,
+) -> impl IntoElement {
     let ratio = ratio.clamp(0., 1.);
     div()
         .rounded_md()
@@ -880,16 +939,17 @@ pub(super) fn usage_color(palette: ThemePalette, ratio: f64) -> gpui::Hsla {
     }
 }
 
-pub(super) fn load_ratio(load1: f64, cores: u32) -> f64  {
+pub(super) fn load_ratio(load1: f64, cores: u32) -> f64 {
     let cores = cores.max(1) as f64;
     (load1 / cores).clamp(0., 1.)
 }
 
-
-pub(super) fn compact_remote_svg_button(palette: ThemePalette,
+pub(super) fn compact_remote_svg_button(
+    palette: ThemePalette,
     id: impl Into<String>,
     icon_path: &'static str,
-    on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,) -> impl IntoElement {
+    on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
+) -> impl IntoElement {
     div()
         .id(gpui::SharedString::from(id.into()))
         .size(px(28.))
@@ -899,12 +959,10 @@ pub(super) fn compact_remote_svg_button(palette: ThemePalette,
         .rounded_md()
         .text_color(rgb(palette.text_muted))
         .cursor_pointer()
-        .hover(|this| this.bg(rgb(palette.surface_elevated)).text_color(rgb(palette.text)))
-        .child(
-            svg()
-                .size(px(16.))
-                .flex_none()
-                .path(icon_path),
-        )
+        .hover(|this| {
+            this.bg(rgb(palette.surface_elevated))
+                .text_color(rgb(palette.text))
+        })
+        .child(svg().size(px(16.)).flex_none().path(icon_path))
         .on_click(on_click)
 }

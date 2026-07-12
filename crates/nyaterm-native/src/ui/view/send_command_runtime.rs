@@ -183,14 +183,12 @@ impl NyaTermApp {
                     this.terminal_status = if infinite {
                         format!(
                             "command send stopped at {} unit(s) · round {}",
-                            this.send_command_progress_completed,
-                            this.send_command_progress_round
+                            this.send_command_progress_completed, this.send_command_progress_round
                         )
                     } else {
                         format!(
                             "command send stopped at {}/{}",
-                            this.send_command_progress_completed,
-                            this.send_command_progress_total
+                            this.send_command_progress_completed, this.send_command_progress_total
                         )
                     };
                 } else if infinite {
@@ -199,8 +197,7 @@ impl NyaTermApp {
                         this.send_command_progress_completed
                     );
                 } else {
-                    this.terminal_status =
-                        format!("command send completed: {rounds} round(s)");
+                    this.terminal_status = format!("command send completed: {rounds} round(s)");
                 }
                 cx.notify();
             });
@@ -215,7 +212,6 @@ impl NyaTermApp {
             cx.notify();
         }
     }
-
 
     pub(in crate::ui::view) fn send_command_target_session_ids(&self) -> Vec<String> {
         let sessions = self.session_manager.list_sessions().unwrap_or_default();
@@ -240,7 +236,8 @@ impl NyaTermApp {
                     .collect()
             }
             SendCommandTarget::Group(group_id) => {
-                let Some(group) = self.sync_groups.iter().find(|group| &group.id == group_id) else {
+                let Some(group) = self.sync_groups.iter().find(|group| &group.id == group_id)
+                else {
                     return Vec::new();
                 };
                 if !group.enabled {
@@ -387,13 +384,13 @@ impl NyaTermApp {
 
     /// Tauri defaults: line=1.00s, char/byte=0.02s, packet=0.
     pub(in crate::ui::view) fn apply_send_command_default_interval(&mut self) {
-        self.send_command_interval_seconds = match (self.send_command_data_type, self.send_command_mode)
-        {
-            (SendCommandDataType::Hex, SendCommandMode::Byte) => 0.02,
-            (SendCommandDataType::Hex, _) => 0.0,
-            (SendCommandDataType::Text, SendCommandMode::Line) => 1.0,
-            (SendCommandDataType::Text, _) => 0.02,
-        };
+        self.send_command_interval_seconds =
+            match (self.send_command_data_type, self.send_command_mode) {
+                (SendCommandDataType::Hex, SendCommandMode::Byte) => 0.02,
+                (SendCommandDataType::Hex, _) => 0.0,
+                (SendCommandDataType::Text, SendCommandMode::Line) => 1.0,
+                (SendCommandDataType::Text, _) => 0.02,
+            };
     }
 
     pub(in crate::ui::view) fn set_send_command_data_type(

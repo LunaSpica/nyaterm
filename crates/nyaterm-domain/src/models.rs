@@ -506,7 +506,6 @@ pub struct SessionsConfig {
     pub connections: Vec<SavedConnection>,
 }
 
-
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct ActionLinksMatcherSettings {
     #[serde(default = "default_true_action_link")]
@@ -861,7 +860,6 @@ fn default_restorable_split_ratio() -> f64 {
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct AppSettingsSummary {
-
     pub theme: String,
     #[serde(default)]
     pub background_image_path: Option<String>,

@@ -1,6 +1,6 @@
 use gpui::{Pixels, px};
 use nyaterm_domain::{
-    AiAction, AiContext, AiExecutionProfile, ConfigBackupInfo, ConnectionType, CredentialPromptKind,
+    AiAction, AiContext, AiExecutionProfile, ConfigBackupInfo, CredentialPromptKind,
     DiagnosticsExportInfo, QuickCommand, RestorableTerminalWindowNode, RestorableWorkspacePaneNode,
     SavedConnection, SavedCredential,
 };
@@ -10,7 +10,8 @@ use nyaterm_session::{
     SshSessionConfig, TelnetSessionConfig,
 };
 use nyaterm_terminal::TerminalScreen;
-use std::collections::{HashSet, VecDeque};
+use std::collections::{HashMap, HashSet, VecDeque};
+use std::hash::{Hash, Hasher};
 use std::path::PathBuf;
 
 use super::terminal::{terminal_screen_from_output, trim_terminal_output};
@@ -37,9 +38,68 @@ pub(super) const TERMINAL_OUTPUT_VISIBLE_BURST_OVERLOAD: usize = 256 * 1024;
 /// ~3s recovery notice at the 50ms event-pump cadence.
 pub(super) const TERMINAL_PERFORMANCE_RECOVERY_TICKS: u8 = 60;
 
+#[derive(Debug, Clone, Default)]
+pub(super) struct TerminalRenderedLine {
+    pub(super) text: String,
+    pub(super) action_link_ranges: Vec<(usize, usize)>,
+}
+
+#[derive(Debug, Default)]
+pub(super) struct TerminalRenderCache {
+    action_link_ranges_by_line_hash: HashMap<u64, Vec<(usize, usize)>>,
+    pub(super) hits: u64,
+    pub(super) misses: u64,
+}
+
+impl TerminalRenderCache {
+    pub(super) fn clear(&mut self) {
+        self.action_link_ranges_by_line_hash.clear();
+        self.hits = 0;
+        self.misses = 0;
+    }
+
+    pub(super) fn action_link_ranges(
+        &mut self,
+        line: &str,
+        matchers: &nyaterm_domain::ActionLinksMatcherSettings,
+    ) -> Vec<(usize, usize)> {
+        let key = terminal_line_cache_key(line, matchers);
+        if let Some(ranges) = self.action_link_ranges_by_line_hash.get(&key) {
+            self.hits = self.hits.saturating_add(1);
+            return ranges.clone();
+        }
+        self.misses = self.misses.saturating_add(1);
+        let ranges = crate::ui::action_links::find_action_links(line, matchers, true)
+            .into_iter()
+            .map(|item| {
+                let start = line[..item.start.min(line.len())].chars().count();
+                let end = line[..item.end.min(line.len())].chars().count();
+                (start, end)
+            })
+            .collect::<Vec<_>>();
+        self.action_link_ranges_by_line_hash
+            .insert(key, ranges.clone());
+        ranges
+    }
+}
+
+fn terminal_line_cache_key(
+    line: &str,
+    matchers: &nyaterm_domain::ActionLinksMatcherSettings,
+) -> u64 {
+    let mut hasher = std::collections::hash_map::DefaultHasher::new();
+    line.hash(&mut hasher);
+    matchers.ipv4.hash(&mut hasher);
+    matchers.archive.hash(&mut hasher);
+    matchers.host_port.hash(&mut hasher);
+    hasher.finish()
+}
+
 pub(super) struct TerminalViewState {
     pub(super) output: String,
     pub(super) screen: TerminalScreen,
+    pub(super) screen_revision: u64,
+    pub(super) render_cache: TerminalRenderCache,
     pub(super) has_unread: bool,
     /// Viewport offset from the live bottom (0 = follow output).
     pub(super) scroll_offset: usize,
@@ -60,6 +120,8 @@ impl TerminalViewState {
         Self {
             output: String::new(),
             screen: TerminalScreen::default(),
+            screen_revision: 0,
+            render_cache: TerminalRenderCache::default(),
             has_unread: false,
             scroll_offset: 0,
             has_new_while_scrolled: false,
@@ -76,6 +138,8 @@ impl TerminalViewState {
         Self {
             output,
             screen,
+            screen_revision: 0,
+            render_cache: TerminalRenderCache::default(),
             has_unread: false,
             scroll_offset: 0,
             has_new_while_scrolled: false,
@@ -104,6 +168,7 @@ impl TerminalViewState {
             return;
         }
         self.screen.advance(data);
+        self.screen_revision = self.screen_revision.saturating_add(1);
         self.output.push_str(&String::from_utf8_lossy(data));
         trim_terminal_output(&mut self.output);
         if self.scroll_offset > 0 {
@@ -177,6 +242,8 @@ impl TerminalViewState {
     pub(super) fn clear(&mut self) {
         self.output.clear();
         self.screen.clear();
+        self.screen_revision = self.screen_revision.saturating_add(1);
+        self.render_cache.clear();
         self.has_unread = false;
         self.scroll_offset = 0;
         self.has_new_while_scrolled = false;
@@ -219,7 +286,6 @@ impl KeywordHighlightEditorField {
         }
     }
 }
-
 
 impl SearchEngineEditorField {
     pub(super) fn next(self) -> Self {
@@ -705,7 +771,6 @@ impl NavItem {
     }
 }
 
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) enum ActivityBarZone {
     LeftTop,
@@ -734,7 +799,12 @@ impl ActivityBarZone {
     }
 
     pub(super) fn all() -> [Self; 4] {
-        [Self::LeftTop, Self::LeftBottom, Self::RightTop, Self::RightBottom]
+        [
+            Self::LeftTop,
+            Self::LeftBottom,
+            Self::RightTop,
+            Self::RightBottom,
+        ]
     }
 }
 
@@ -1217,7 +1287,6 @@ pub(super) struct ConnectionContextMenuState {
     pub(super) y: Pixels,
 }
 
-
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(super) struct ActionLinkMenuAction {
     pub(super) id: String,
@@ -1627,10 +1696,7 @@ impl WorkspacePaneNode {
         match self {
             Self::Leaf { .. } => None,
             Self::Split {
-                id,
-                first,
-                second,
-                ..
+                id, first, second, ..
             } => {
                 if first.contains_session(session_id) || second.contains_session(session_id) {
                     if matches!(**first, Self::Leaf { .. }) || matches!(**second, Self::Leaf { .. })
@@ -1763,8 +1829,12 @@ impl WorkspacePaneNode {
             }
             Self::Leaf { .. } => false,
             Self::Split { first, second, .. } => {
-                first.split_leaf(target_session_id, new_session_id.clone(), direction, split_id.clone())
-                    || second.split_leaf(target_session_id, new_session_id, direction, split_id)
+                first.split_leaf(
+                    target_session_id,
+                    new_session_id.clone(),
+                    direction,
+                    split_id.clone(),
+                ) || second.split_leaf(target_session_id, new_session_id, direction, split_id)
             }
         }
     }
@@ -1938,10 +2008,8 @@ impl WorkspacePaneNode {
                             "horizontal" | "row" => WorkspaceSplitDirection::Horizontal,
                             _ => WorkspaceSplitDirection::Vertical,
                         };
-                        let ratio_percent = ((*ratio * 100.0).round() as u8).clamp(
-                            Self::MIN_RATIO_PERCENT,
-                            Self::MAX_RATIO_PERCENT,
-                        );
+                        let ratio_percent = ((*ratio * 100.0).round() as u8)
+                            .clamp(Self::MIN_RATIO_PERCENT, Self::MAX_RATIO_PERCENT);
                         let split_id = if id.trim().is_empty() {
                             format!("pane-split-{}", uuid_v4_like())
                         } else {
@@ -2528,11 +2596,10 @@ impl TerminalWindowNode {
                             "horizontal" | "row" => WorkspaceSplitDirection::Horizontal,
                             _ => WorkspaceSplitDirection::Vertical,
                         };
-                        let ratio_percent =
-                            ((*ratio * 100.0).round() as u8).clamp(
-                                WorkspacePaneNode::MIN_RATIO_PERCENT,
-                                WorkspacePaneNode::MAX_RATIO_PERCENT,
-                            );
+                        let ratio_percent = ((*ratio * 100.0).round() as u8).clamp(
+                            WorkspacePaneNode::MIN_RATIO_PERCENT,
+                            WorkspacePaneNode::MAX_RATIO_PERCENT,
+                        );
                         Some(Self::Split {
                             id: format!("tw-split-{}", uuid_v4_like()),
                             direction,
@@ -2629,12 +2696,7 @@ impl TerminalWindowNode {
         }
     }
 
-    fn dock_tab_to_edge(
-        &mut self,
-        tab_id: &str,
-        target_leaf_id: &str,
-        edge: TabDockEdge,
-    ) -> bool {
+    fn dock_tab_to_edge(&mut self, tab_id: &str, target_leaf_id: &str, edge: TabDockEdge) -> bool {
         // If tab is already the sole occupant of the target leaf, nothing to do.
         if let Some((leaf_id, count)) = self.leaf_tab_count_for(tab_id) {
             if leaf_id == target_leaf_id && count == 1 {
@@ -2642,7 +2704,7 @@ impl TerminalWindowNode {
             }
         }
         // Remove from current placement first.
-        let Some(mut next) = self.remove_tab(tab_id) else {
+        let Some(next) = self.remove_tab(tab_id) else {
             // Tree emptied — create target as detached only.
             *self = Self::leaf(vec![tab_id.to_string()], Some(tab_id.to_string()));
             return true;
@@ -2679,7 +2741,11 @@ impl TerminalWindowNode {
         detached: Self,
     ) -> bool {
         match self {
-            Self::Leaf { id, tab_ids, active_tab_id } => {
+            Self::Leaf {
+                id,
+                tab_ids,
+                active_tab_id,
+            } => {
                 if id != target_leaf_id {
                     return false;
                 }
@@ -3669,7 +3735,6 @@ impl AiCredentialEditorField {
     }
 }
 
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) enum TranslateInputField {
     TargetLanguage,
@@ -3889,22 +3954,15 @@ mod workspace_pane_tests {
     }
 }
 
-
 #[cfg(test)]
 mod terminal_window_tests {
     use super::{SmartSplitMode, SplitEdge, TerminalWindowNode, WorkspaceSplitDirection};
 
     #[test]
     fn split_tab_creates_two_leaves() {
-        let mut root = TerminalWindowNode::leaf(
-            vec!["a".into(), "b".into(), "c".into()],
-            Some("a".into()),
-        );
-        assert!(root.split_tab_to_edge(
-            "b",
-            WorkspaceSplitDirection::Vertical,
-            SplitEdge::After,
-        ));
+        let mut root =
+            TerminalWindowNode::leaf(vec!["a".into(), "b".into(), "c".into()], Some("a".into()));
+        assert!(root.split_tab_to_edge("b", WorkspaceSplitDirection::Vertical, SplitEdge::After,));
         assert!(matches!(root, TerminalWindowNode::Split { .. }));
         let tabs = root.collect_tab_ids();
         assert_eq!(tabs.len(), 3);
@@ -3928,11 +3986,7 @@ mod terminal_window_tests {
     #[test]
     fn move_tab_to_other_leaf() {
         let mut root = TerminalWindowNode::leaf(vec!["a".into(), "b".into()], Some("a".into()));
-        assert!(root.split_tab_to_edge(
-            "b",
-            WorkspaceSplitDirection::Vertical,
-            SplitEdge::After,
-        ));
+        assert!(root.split_tab_to_edge("b", WorkspaceSplitDirection::Vertical, SplitEdge::After,));
         let leaves = root.leaf_ids();
         assert_eq!(leaves.len(), 2);
         // move a into b's leaf
@@ -3958,16 +4012,9 @@ mod terminal_window_tests {
     #[test]
     fn dock_tab_to_edge_splits_target() {
         use super::{TabDockEdge, TabDockZone};
-        let mut root = TerminalWindowNode::leaf(
-            vec!["a".into(), "b".into()],
-            Some("a".into()),
-        );
+        let mut root = TerminalWindowNode::leaf(vec!["a".into(), "b".into()], Some("a".into()));
         // Create two leaves first via split
-        assert!(root.split_tab_to_edge(
-            "b",
-            WorkspaceSplitDirection::Vertical,
-            SplitEdge::After,
-        ));
+        assert!(root.split_tab_to_edge("b", WorkspaceSplitDirection::Vertical, SplitEdge::After,));
         let leaves = root.leaf_ids();
         assert_eq!(leaves.len(), 2);
         let a_leaf = leaves
@@ -4013,9 +4060,8 @@ mod terminal_window_tests {
     #[test]
     fn smart_split_horizontal_keeps_direction() {
         let tabs = vec!["a".into(), "b".into(), "c".into()];
-        let root =
-            TerminalWindowNode::build_smart_split_layout(&tabs, SmartSplitMode::Horizontal)
-                .expect("layout");
+        let root = TerminalWindowNode::build_smart_split_layout(&tabs, SmartSplitMode::Horizontal)
+            .expect("layout");
         match root {
             TerminalWindowNode::Split { direction, .. } => {
                 assert_eq!(direction, WorkspaceSplitDirection::Horizontal);
@@ -4029,11 +4075,7 @@ mod terminal_window_tests {
         use nyaterm_domain::RestorableTerminalWindowNode;
         let ordered = vec!["a".into(), "b".into(), "c".into()];
         let mut root = TerminalWindowNode::leaf(ordered.clone(), Some("a".into()));
-        assert!(root.split_tab_to_edge(
-            "b",
-            WorkspaceSplitDirection::Vertical,
-            SplitEdge::After,
-        ));
+        assert!(root.split_tab_to_edge("b", WorkspaceSplitDirection::Vertical, SplitEdge::After,));
         let layout = root.serialize_layout(&ordered).expect("layout");
         match &layout {
             RestorableTerminalWindowNode::Split { .. } => {}
@@ -4057,17 +4099,14 @@ mod terminal_window_tests {
 
     #[test]
     fn place_tab_before_reorders_and_moves() {
-        let mut root = TerminalWindowNode::leaf(
-            vec!["a".into(), "b".into(), "c".into()],
-            Some("a".into()),
-        );
+        let mut root =
+            TerminalWindowNode::leaf(vec!["a".into(), "b".into(), "c".into()], Some("a".into()));
         assert!(root.place_tab_before("c", "a"));
-        assert_eq!(root.collect_tab_ids(), vec!["c".to_string(), "a".to_string(), "b".to_string()]);
-        assert!(root.split_tab_to_edge(
-            "b",
-            WorkspaceSplitDirection::Vertical,
-            SplitEdge::After,
-        ));
+        assert_eq!(
+            root.collect_tab_ids(),
+            vec!["c".to_string(), "a".to_string(), "b".to_string()]
+        );
+        assert!(root.split_tab_to_edge("b", WorkspaceSplitDirection::Vertical, SplitEdge::After,));
         // Move c next to b (other leaf)
         assert!(root.place_tab_before("c", "b"));
         assert!(root.contains_tab("c") && root.contains_tab("b"));

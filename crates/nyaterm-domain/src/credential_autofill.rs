@@ -55,7 +55,9 @@ fn prompt_terminator_pattern() -> &'static Regex {
 pub fn strip_terminal_control_sequences(text: &str) -> String {
     let without_osc = osc_pattern().replace_all(text, "");
     let without_csi = csi_pattern().replace_all(&without_osc, "");
-    other_esc_pattern().replace_all(&without_csi, "").into_owned()
+    other_esc_pattern()
+        .replace_all(&without_csi, "")
+        .into_owned()
 }
 
 pub fn extract_credential_prompt_text(output: &str) -> String {
@@ -136,7 +138,11 @@ pub fn get_credential_prompt_pattern(
         CredentialPromptKind::Username => credential.username_prompt_regex.as_deref(),
         CredentialPromptKind::Password => credential.password_prompt_regex.as_deref(),
     };
-    custom.map(str::trim).filter(|value| !value.is_empty()).unwrap_or("").to_string()
+    custom
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .unwrap_or("")
+        .to_string()
 }
 
 pub fn credential_matches_prompt(

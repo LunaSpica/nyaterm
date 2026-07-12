@@ -118,9 +118,7 @@ fn skip_env_prefix(tokens: &[String], index: usize) -> usize {
                 .chars()
                 .next()
                 .is_some_and(|c| c.is_ascii_alphabetic() || c == '_')
-            || !name
-                .chars()
-                .all(|c| c.is_ascii_alphanumeric() || c == '_')
+            || !name.chars().all(|c| c.is_ascii_alphanumeric() || c == '_')
         {
             break;
         }
@@ -181,9 +179,7 @@ fn has_option(tokens: &[String], long_name: &str, short_name: Option<char>) -> b
     tokens.iter().any(|token| {
         token == long_name
             || short_name.is_some_and(|short| {
-                token.starts_with('-')
-                    && !token.starts_with("--")
-                    && token.contains(short)
+                token.starts_with('-') && !token.starts_with("--") && token.contains(short)
             })
     })
 }
@@ -220,9 +216,7 @@ pub fn command_starts_suggestion_suppressing_program(command: &str) -> bool {
 }
 
 pub fn is_pager_search_or_command_input(value: &str) -> bool {
-    value
-        .trim_start()
-        .starts_with(['/', '?', ':'])
+    value.trim_start().starts_with(['/', '?', ':'])
 }
 
 pub fn is_pager_single_key_input(data: &str) -> bool {
@@ -236,9 +230,15 @@ mod tests {
     #[test]
     fn detects_interactive_and_sudo_wrappers() {
         assert!(command_starts_suggestion_suppressing_program("vim file"));
-        assert!(command_starts_suggestion_suppressing_program("sudo -u root htop"));
-        assert!(command_starts_suggestion_suppressing_program("tail -f /var/log/syslog"));
-        assert!(!command_starts_suggestion_suppressing_program("journalctl --no-pager"));
+        assert!(command_starts_suggestion_suppressing_program(
+            "sudo -u root htop"
+        ));
+        assert!(command_starts_suggestion_suppressing_program(
+            "tail -f /var/log/syslog"
+        ));
+        assert!(!command_starts_suggestion_suppressing_program(
+            "journalctl --no-pager"
+        ));
         assert!(!command_starts_suggestion_suppressing_program("ls -la"));
     }
 

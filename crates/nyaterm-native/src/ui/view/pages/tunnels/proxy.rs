@@ -1,6 +1,6 @@
+use super::common::{network_dialog_footer, network_modal_shell};
 use super::tunnel::tunnel_editor_selector;
 use super::*;
-use super::common::{network_dialog_footer, network_modal_shell};
 
 #[derive(Debug, Clone)]
 pub(super) struct ProxySection {
@@ -10,7 +10,7 @@ pub(super) struct ProxySection {
     proxies: Vec<ProxyConfig>,
 }
 
-pub(super) fn proxy_sections(proxies: &[ProxyConfig], groups: &[ProxyGroup]) -> Vec<ProxySection>  {
+pub(super) fn proxy_sections(proxies: &[ProxyConfig], groups: &[ProxyGroup]) -> Vec<ProxySection> {
     let valid_group_ids = groups
         .iter()
         .map(|group| group.id.as_str())
@@ -53,10 +53,12 @@ pub(super) fn proxy_sections(proxies: &[ProxyConfig], groups: &[ProxyGroup]) -> 
     sections
 }
 
-pub(super) fn proxy_section(palette: crate::ui::theme::ThemePalette,
+pub(super) fn proxy_section(
+    palette: crate::ui::theme::ThemePalette,
     section: ProxySection,
     app: &NyaTermApp,
-    cx: &mut Context<NyaTermApp>,) -> impl IntoElement  {
+    cx: &mut Context<NyaTermApp>,
+) -> impl IntoElement {
     let item_count = section.proxies.len();
     let command_count = section
         .proxies
@@ -114,7 +116,10 @@ pub(super) fn proxy_section(palette: crate::ui::theme::ThemePalette,
         .overflow_hidden()
         .child(
             div()
-                .id(gpui::SharedString::from(format!("proxy-section-header-{}", section.id)))
+                .id(gpui::SharedString::from(format!(
+                    "proxy-section-header-{}",
+                    section.id
+                )))
                 .h(px(30.))
                 .px_3()
                 .flex()
@@ -186,7 +191,8 @@ pub(super) fn proxy_section(palette: crate::ui::theme::ThemePalette,
                             .flex()
                             .items_center()
                             .gap_1()
-                            .child(small_button(palette, 
+                            .child(small_button(
+                                palette,
                                 format!("proxy-group-rename-{}", group.id),
                                 "Rename",
                                 cx.listener(move |this, _, _, cx| {
@@ -197,7 +203,8 @@ pub(super) fn proxy_section(palette: crate::ui::theme::ThemePalette,
                                     );
                                 }),
                             ))
-                            .child(small_button(palette, 
+                            .child(small_button(
+                                palette,
                                 format!("proxy-group-delete-{}", group.id),
                                 "Delete",
                                 cx.listener(move |this, _, _, cx| {
@@ -220,7 +227,7 @@ pub(super) fn proxy_network_row(
     proxy: &ProxyConfig,
     app: &NyaTermApp,
     cx: &mut Context<NyaTermApp>,
-) -> impl IntoElement  {
+) -> impl IntoElement {
     let palette = app.theme_palette();
     let is_command = proxy.protocol == "proxycommand";
     let address = if is_command {
@@ -324,10 +331,12 @@ pub(super) fn proxy_network_row(
         )
 }
 
-fn proxy_icon_action(palette: crate::ui::theme::ThemePalette,
+fn proxy_icon_action(
+    palette: crate::ui::theme::ThemePalette,
     id: impl Into<String>,
     label: &'static str,
-    on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,) -> impl IntoElement  {
+    on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
+) -> impl IntoElement {
     div()
         .id(gpui::SharedString::from(id.into()))
         .size(px(24.))
@@ -338,21 +347,21 @@ fn proxy_icon_action(palette: crate::ui::theme::ThemePalette,
         .text_size(px(12.))
         .text_color(rgb(palette.text_muted))
         .cursor_pointer()
-        .hover(|this| this.bg(rgb(palette.surface_elevated)).text_color(rgb(palette.text)))
-        .child(
-            svg()
-                .size(px(14.))
-                .flex_none()
-                .path(label),
-        )
+        .hover(|this| {
+            this.bg(rgb(palette.surface_elevated))
+                .text_color(rgb(palette.text))
+        })
+        .child(svg().size(px(14.)).flex_none().path(label))
         .on_click(on_click)
 }
 
-fn proxy_move_picker(palette: crate::ui::theme::ThemePalette,
+fn proxy_move_picker(
+    palette: crate::ui::theme::ThemePalette,
     proxy_id: String,
     current_group_id: Option<String>,
     groups: &[ProxyGroup],
-    cx: &mut Context<NyaTermApp>,) -> gpui::Div  {
+    cx: &mut Context<NyaTermApp>,
+) -> gpui::Div {
     let mut targets = div().flex().flex_wrap().items_center().gap_2();
     if current_group_id.is_none() {
         targets = targets.child(status_pill(
@@ -362,7 +371,8 @@ fn proxy_move_picker(palette: crate::ui::theme::ThemePalette,
         ));
     } else {
         let target_id = proxy_id.clone();
-        targets = targets.child(small_button(palette, 
+        targets = targets.child(small_button(
+            palette,
             format!("network-proxy-move-{proxy_id}-ungrouped"),
             "Ungrouped",
             cx.listener(move |this, _, _, cx| {
@@ -373,7 +383,11 @@ fn proxy_move_picker(palette: crate::ui::theme::ThemePalette,
 
     for group in groups {
         if current_group_id.as_deref() == Some(group.id.as_str()) {
-            targets = targets.child(status_pill("current", rgb(palette.success), rgb(palette.hover)));
+            targets = targets.child(status_pill(
+                "current",
+                rgb(palette.success),
+                rgb(palette.hover),
+            ));
             targets = targets.child(
                 div()
                     .text_xs()
@@ -383,7 +397,8 @@ fn proxy_move_picker(palette: crate::ui::theme::ThemePalette,
         } else {
             let target_id = proxy_id.clone();
             let group_id = group.id.clone();
-            targets = targets.child(small_button(palette, 
+            targets = targets.child(small_button(
+                palette,
                 format!("network-proxy-move-{proxy_id}-{}", group.id),
                 "Move Here",
                 cx.listener(move |this, _, _, cx| {
@@ -419,7 +434,7 @@ fn proxy_move_picker(palette: crate::ui::theme::ThemePalette,
         .child(targets)
 }
 
-pub(super) fn proxy_protocol_label(protocol: &str) -> &'static str  {
+pub(super) fn proxy_protocol_label(protocol: &str) -> &'static str {
     match protocol {
         "socks5" => "SOCKS5",
         "http" => "HTTP",
@@ -428,7 +443,7 @@ pub(super) fn proxy_protocol_label(protocol: &str) -> &'static str  {
     }
 }
 
-pub(super) fn proxy_matches(proxy: &ProxyConfig, query: &str) -> bool  {
+pub(super) fn proxy_matches(proxy: &ProxyConfig, query: &str) -> bool {
     if query.is_empty() {
         return true;
     }
@@ -452,7 +467,7 @@ pub(super) fn network_proxy_editor_panel(
     app: &NyaTermApp,
     focus: &gpui::FocusHandle,
     cx: &mut Context<NyaTermApp>,
-) -> impl IntoElement  {
+) -> impl IntoElement {
     let protocol_label = proxy_protocol_label(&editor.protocol);
     let group_label = editor
         .group_id
@@ -663,7 +678,7 @@ pub(super) fn proxy_editor_input(
     field: NetworkProxyEditorField,
     focus: &gpui::FocusHandle,
     cx: &mut Context<NyaTermApp>,
-) -> impl IntoElement  {
+) -> impl IntoElement {
     transfer_input(id, label, value, active, palette)
         .track_focus(focus)
         .on_click(cx.listener(move |this, _, window, cx| {
@@ -675,7 +690,7 @@ pub(super) fn proxy_editor_input(
         }))
 }
 
-pub(super) fn proxy_editor_preview(editor: &NetworkProxyEditorState) -> String  {
+pub(super) fn proxy_editor_preview(editor: &NetworkProxyEditorState) -> String {
     if editor.is_proxy_command() {
         let command = editor.command.trim();
         if command.is_empty() {

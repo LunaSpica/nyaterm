@@ -105,7 +105,8 @@ impl NyaTermApp {
                                     .flex()
                                     .items_center()
                                     .gap_2()
-                                    .child(small_button(palette, 
+                                    .child(small_button(
+                                        palette,
                                         "transfer-new-folder-mode-755",
                                         "0755",
                                         cx.listener(|this, _, _, cx| {
@@ -115,7 +116,8 @@ impl NyaTermApp {
                                             cx.notify();
                                         }),
                                     ))
-                                    .child(small_button(palette, 
+                                    .child(small_button(
+                                        palette,
                                         "transfer-new-folder-mode-700",
                                         "0700",
                                         cx.listener(|this, _, _, cx| {
@@ -131,7 +133,8 @@ impl NyaTermApp {
                                         rgb(palette.hover),
                                     )),
                             )
-                            .child(small_button(palette, 
+                            .child(small_button(
+                                palette,
                                 "transfer-new-folder-open-after",
                                 if state.open_after_create {
                                     "Open: On"
@@ -168,7 +171,8 @@ impl NyaTermApp {
                             .items_center()
                             .justify_end()
                             .gap_2()
-                            .child(small_button(palette, 
+                            .child(small_button(
+                                palette,
                                 "transfer-new-folder-cancel",
                                 "Cancel",
                                 cx.listener(|this, _, _, cx| {
@@ -176,7 +180,8 @@ impl NyaTermApp {
                                 }),
                             ))
                             .child(div().when(has_error, |this| this.opacity(0.45)).child(
-                                small_button(palette, 
+                                small_button(
+                                    palette,
                                     "transfer-new-folder-create",
                                     "Create",
                                     cx.listener(|this, _, window, cx| {
@@ -291,7 +296,8 @@ impl NyaTermApp {
                                     .flex()
                                     .items_center()
                                     .gap_2()
-                                    .child(small_button(palette, 
+                                    .child(small_button(
+                                        palette,
                                         "transfer-new-file-mode-644",
                                         "0644",
                                         cx.listener(|this, _, _, cx| {
@@ -301,7 +307,8 @@ impl NyaTermApp {
                                             cx.notify();
                                         }),
                                     ))
-                                    .child(small_button(palette, 
+                                    .child(small_button(
+                                        palette,
                                         "transfer-new-file-mode-600",
                                         "0600",
                                         cx.listener(|this, _, _, cx| {
@@ -346,7 +353,8 @@ impl NyaTermApp {
                             .items_center()
                             .justify_end()
                             .gap_2()
-                            .child(small_button(palette, 
+                            .child(small_button(
+                                palette,
                                 "transfer-new-file-cancel",
                                 "Cancel",
                                 cx.listener(|this, _, _, cx| {
@@ -354,7 +362,8 @@ impl NyaTermApp {
                                 }),
                             ))
                             .child(div().when(has_error, |this| this.opacity(0.45)).child(
-                                small_button(palette, 
+                                small_button(
+                                    palette,
                                     "transfer-new-file-create",
                                     "Create",
                                     cx.listener(|this, _, window, cx| {
@@ -489,7 +498,8 @@ impl NyaTermApp {
                             .items_center()
                             .justify_end()
                             .gap_2()
-                            .child(small_button(palette, 
+                            .child(small_button(
+                                palette,
                                 "transfer-new-symlink-cancel",
                                 "Cancel",
                                 cx.listener(|this, _, _, cx| {
@@ -497,7 +507,8 @@ impl NyaTermApp {
                                 }),
                             ))
                             .child(div().when(has_error, |this| this.opacity(0.45)).child(
-                                small_button(palette, 
+                                small_button(
+                                    palette,
                                     "transfer-new-symlink-create",
                                     "Create",
                                     cx.listener(|this, _, window, cx| {

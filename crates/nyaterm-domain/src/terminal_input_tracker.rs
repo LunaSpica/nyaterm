@@ -378,7 +378,6 @@ pub fn can_suggest_from_tracker(state: &TerminalInputState) -> bool {
         && !get_tracked_command(state).is_empty()
 }
 
-
 pub fn can_register_command_from_tracker(state: &TerminalInputState) -> bool {
     !state.desynced && !state.multiline && !state.line_rewrite_required
 }
@@ -391,7 +390,10 @@ pub fn get_tracked_submission_command(state: &TerminalInputState) -> String {
 }
 
 fn normalize_line_content(value: &str) -> String {
-    value.replace("\r\n", "").replace('\n', "").replace('\r', "")
+    value
+        .replace("\r\n", "")
+        .replace('\n', "")
+        .replace('\r', "")
 }
 
 fn choose_terminal_line_command(previous_value: &str, line_content: &str) -> Option<String> {
@@ -422,7 +424,11 @@ fn choose_terminal_line_command(previous_value: &str, line_content: &str) -> Opt
     push_candidate(line_content);
 
     // Suffix candidates: line after previous prefix
-    for prefix in [&previous_value.to_string(), &previous_command, &sanitized_line] {
+    for prefix in [
+        &previous_value.to_string(),
+        &previous_command,
+        &sanitized_line,
+    ] {
         let source = normalize_line_content(line_content);
         let source_cmd = sanitize_terminal_command(&source);
         let prefix_cmd = sanitize_terminal_command(prefix);
@@ -488,7 +494,11 @@ pub fn delete_terminal_input_range(
 }
 
 /// Build CSI left/right moves between two byte cursors (character steps).
-pub fn build_move_input_cursor_data(value: &str, current_cursor: usize, target_cursor: usize) -> String {
+pub fn build_move_input_cursor_data(
+    value: &str,
+    current_cursor: usize,
+    target_cursor: usize,
+) -> String {
     let current = current_cursor.min(value.len());
     let target = target_cursor.min(value.len());
     let current_chars = value[..current].chars().count();
@@ -561,10 +571,7 @@ mod tests {
 
     #[test]
     fn strips_shell_prompt_prefixes() {
-        assert_eq!(
-            sanitize_terminal_command("user@host:~$ ls -la"),
-            "ls -la"
-        );
+        assert_eq!(sanitize_terminal_command("user@host:~$ ls -la"), "ls -la");
         assert_eq!(sanitize_terminal_command("PS C:\\Users> dir"), "dir");
     }
 
@@ -574,8 +581,8 @@ mod tests {
         state = apply_terminal_input_data(&state, "doc");
         state = apply_terminal_input_data(&state, "\t");
         assert!(state.desynced);
-        let recovered = resync_from_terminal_line(&state, "user@host:~$ docker compose ps")
-            .expect("recover");
+        let recovered =
+            resync_from_terminal_line(&state, "user@host:~$ docker compose ps").expect("recover");
         assert_eq!(get_tracked_command(&recovered), "docker compose ps");
         assert!(!recovered.desynced);
     }
@@ -612,5 +619,4 @@ mod tests {
         );
         assert_eq!(build_move_input_cursor_data(value, 2, 2), "");
     }
-
 }

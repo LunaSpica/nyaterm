@@ -26,8 +26,8 @@ impl NyaTermApp {
     pub(in crate::ui::view) fn transfer_browser_favorites_menu_overlay(
         &mut self,
         cx: &mut Context<Self>,
-    ) -> impl IntoElement  {
-    let palette = self.theme_palette();
+    ) -> impl IntoElement {
+        let palette = self.theme_palette();
         let state =
             self.transfer_browser_favorites_menu
                 .unwrap_or(TransferBrowserFavoritesMenuState {
@@ -213,10 +213,12 @@ impl NyaTermApp {
     }
 }
 
-fn favorite_menu_button(palette: crate::ui::theme::ThemePalette,
+fn favorite_menu_button(
+    palette: crate::ui::theme::ThemePalette,
     id: impl Into<String>,
     label: impl Into<SharedString>,
-    on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,) -> impl IntoElement  {
+    on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
+) -> impl IntoElement {
     div()
         .id(SharedString::from(id.into()))
         .h(px(30.))

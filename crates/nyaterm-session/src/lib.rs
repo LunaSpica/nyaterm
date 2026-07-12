@@ -1,9 +1,7 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, VecDeque};
 use std::future::Future;
 use std::io::{Read, Write};
 use std::net::{Shutdown, SocketAddr, TcpListener as StdTcpListener, TcpStream};
-#[cfg(windows)]
-use std::os::windows::process::CommandExt;
 use std::path::{Path, PathBuf};
 use std::pin::Pin;
 use std::process::Stdio;
@@ -28,8 +26,8 @@ mod recording;
 mod zmodem;
 
 pub use zmodem::{
-    ZmodemAction, ZmodemDetectResult, ZmodemDetector, ZmodemDirection, ZmodemEvent,
-    ZmodemTransfer, start_zmodem_transfer,
+    ZmodemAction, ZmodemDetectResult, ZmodemDetector, ZmodemDirection, ZmodemEvent, ZmodemTransfer,
+    start_zmodem_transfer,
 };
 mod stats;
 
@@ -2924,8 +2922,38 @@ pub enum SessionKind {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum SessionEvent {
     Output { session_id: String, data: Vec<u8> },
+    OutputDropped { session_id: String, bytes: usize },
     Exited { session_id: String },
     Error { session_id: String, message: String },
+}
+
+pub trait TerminalTransport: Send {
+    fn write(&mut self, data: &[u8]) -> anyhow::Result<()>;
+
+    fn resize(
+        &mut self,
+        cols: u16,
+        rows: u16,
+        pixel_width: u16,
+        pixel_height: u16,
+    ) -> anyhow::Result<()>;
+
+    fn close(&mut self) -> anyhow::Result<()>;
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct SessionDrainStats {
+    pub drained_events: usize,
+    pub drained_output_bytes: usize,
+    pub queued_events: usize,
+    pub queued_output_bytes: usize,
+    pub dropped_output_bytes: usize,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct SessionDrain {
+    pub events: Vec<SessionEvent>,
+    pub stats: SessionDrainStats,
 }
 
 #[derive(Debug, Error)]
@@ -2965,7 +2993,7 @@ pub enum SessionError {
     #[error("failed to write to session {session_id}: {source}")]
     Write {
         session_id: String,
-        source: std::io::Error,
+        source: anyhow::Error,
     },
     #[error("failed to resize session {session_id}: {source}")]
     Resize {
@@ -2978,18 +3006,209 @@ pub enum SessionError {
 
 pub struct SessionManager {
     sessions: Mutex<HashMap<String, ManagedSession>>,
-    event_tx: mpsc::Sender<SessionEvent>,
-    event_rx: Mutex<mpsc::Receiver<SessionEvent>>,
+    event_queue: SessionEventQueue,
+}
+
+const SESSION_EVENT_QUEUE_OUTPUT_LIMIT: usize = 8 * 1024 * 1024;
+const SESSION_EVENT_QUEUE_OUTPUT_EVENT_LIMIT: usize = 256 * 1024;
+
+#[derive(Clone)]
+struct SessionEventQueue {
+    inner: Arc<Mutex<SessionEventQueueInner>>,
+}
+
+#[derive(Default)]
+struct SessionEventQueueInner {
+    events: VecDeque<SessionEvent>,
+    queued_output_bytes: usize,
+}
+
+impl SessionEventQueue {
+    fn new() -> Self {
+        Self {
+            inner: Arc::new(Mutex::new(SessionEventQueueInner::default())),
+        }
+    }
+
+    fn push(&self, event: SessionEvent) {
+        let Ok(mut inner) = self.inner.lock() else {
+            return;
+        };
+        inner.push(event);
+    }
+
+    fn drain(&self, max_events: usize) -> SessionDrain {
+        self.drain_with_output_budget(max_events, None)
+    }
+
+    fn drain_with_output_budget(
+        &self,
+        max_events: usize,
+        max_output_bytes: Option<usize>,
+    ) -> SessionDrain {
+        let Ok(mut inner) = self.inner.lock() else {
+            return SessionDrain::default();
+        };
+        inner.drain(max_events, max_output_bytes)
+    }
+}
+
+impl SessionEventQueueInner {
+    fn push(&mut self, event: SessionEvent) {
+        match event {
+            SessionEvent::Output {
+                session_id,
+                mut data,
+            } => {
+                if data.is_empty() {
+                    return;
+                }
+                let mut dropped_by_session = Vec::new();
+                if data.len() > SESSION_EVENT_QUEUE_OUTPUT_EVENT_LIMIT {
+                    let skip = data.len() - SESSION_EVENT_QUEUE_OUTPUT_EVENT_LIMIT;
+                    data.drain(..skip);
+                    record_output_drop(&mut dropped_by_session, session_id.clone(), skip);
+                }
+                if let Some(SessionEvent::Output {
+                    session_id: last_session_id,
+                    data: last_data,
+                }) = self.events.back_mut()
+                    && last_session_id == &session_id
+                {
+                    last_data.extend_from_slice(&data);
+                    self.queued_output_bytes = self.queued_output_bytes.saturating_add(data.len());
+                    if last_data.len() > SESSION_EVENT_QUEUE_OUTPUT_EVENT_LIMIT {
+                        let skip = last_data.len() - SESSION_EVENT_QUEUE_OUTPUT_EVENT_LIMIT;
+                        last_data.drain(..skip);
+                        self.queued_output_bytes = self.queued_output_bytes.saturating_sub(skip);
+                        record_output_drop(&mut dropped_by_session, session_id.clone(), skip);
+                    }
+                } else {
+                    self.queued_output_bytes = self.queued_output_bytes.saturating_add(data.len());
+                    self.events.push_back(SessionEvent::Output {
+                        session_id: session_id.clone(),
+                        data,
+                    });
+                }
+                dropped_by_session.extend(self.enforce_output_limit());
+                for (session_id, bytes) in dropped_by_session {
+                    self.events
+                        .push_back(SessionEvent::OutputDropped { session_id, bytes });
+                }
+            }
+            other => self.events.push_back(other),
+        }
+    }
+
+    fn enforce_output_limit(&mut self) -> Vec<(String, usize)> {
+        let mut dropped_by_session = Vec::new();
+        while self.queued_output_bytes > SESSION_EVENT_QUEUE_OUTPUT_LIMIT {
+            let excess = self.queued_output_bytes - SESSION_EVENT_QUEUE_OUTPUT_LIMIT;
+            let Some(index) = self
+                .events
+                .iter()
+                .position(|event| matches!(event, SessionEvent::Output { .. }))
+            else {
+                self.queued_output_bytes = 0;
+                break;
+            };
+            let mut remove_event = false;
+            if let Some(SessionEvent::Output { session_id, data }) = self.events.get_mut(index) {
+                let remove = excess.min(data.len());
+                let dropped_session_id = session_id.clone();
+                data.drain(..remove);
+                self.queued_output_bytes = self.queued_output_bytes.saturating_sub(remove);
+                remove_event = data.is_empty();
+                record_output_drop(&mut dropped_by_session, dropped_session_id, remove);
+            }
+            if remove_event {
+                self.events.remove(index);
+            }
+        }
+        dropped_by_session
+    }
+
+    fn drain(&mut self, max_events: usize, max_output_bytes: Option<usize>) -> SessionDrain {
+        let mut events = Vec::new();
+        let mut stats = SessionDrainStats::default();
+        for _ in 0..max_events {
+            if let Some(max_output_bytes) = max_output_bytes {
+                if stats.drained_output_bytes >= max_output_bytes && stats.drained_events > 0 {
+                    break;
+                }
+                let remaining_output_budget =
+                    max_output_bytes.saturating_sub(stats.drained_output_bytes);
+                if remaining_output_budget == 0 && stats.drained_events > 0 {
+                    break;
+                }
+                if let Some(SessionEvent::Output { session_id, data }) = self.events.front_mut() {
+                    let take = data.len().min(remaining_output_budget.max(1));
+                    if data.len() > take {
+                        let remaining = data.split_off(take);
+                        let chunk = std::mem::replace(data, remaining);
+                        let session_id = session_id.clone();
+                        stats.drained_events = stats.drained_events.saturating_add(1);
+                        stats.drained_output_bytes =
+                            stats.drained_output_bytes.saturating_add(chunk.len());
+                        self.queued_output_bytes =
+                            self.queued_output_bytes.saturating_sub(chunk.len());
+                        events.push(SessionEvent::Output {
+                            session_id,
+                            data: chunk,
+                        });
+                        continue;
+                    }
+                }
+            }
+            let Some(event) = self.events.pop_front() else {
+                break;
+            };
+            stats.drained_events = stats.drained_events.saturating_add(1);
+            match &event {
+                SessionEvent::Output { data, .. } => {
+                    stats.drained_output_bytes =
+                        stats.drained_output_bytes.saturating_add(data.len());
+                    self.queued_output_bytes = self.queued_output_bytes.saturating_sub(data.len());
+                }
+                SessionEvent::OutputDropped { bytes, .. } => {
+                    stats.dropped_output_bytes = stats.dropped_output_bytes.saturating_add(*bytes);
+                }
+                SessionEvent::Exited { .. } | SessionEvent::Error { .. } => {}
+            }
+            events.push(event);
+        }
+        stats.queued_events = self.events.len();
+        stats.queued_output_bytes = self.queued_output_bytes;
+        SessionDrain { events, stats }
+    }
+}
+
+fn record_output_drop(
+    dropped_by_session: &mut Vec<(String, usize)>,
+    session_id: String,
+    bytes: usize,
+) {
+    if bytes == 0 {
+        return;
+    }
+    if let Some((_, existing_bytes)) = dropped_by_session
+        .iter_mut()
+        .find(|(existing_session_id, _)| existing_session_id == &session_id)
+    {
+        *existing_bytes = existing_bytes.saturating_add(bytes);
+    } else {
+        dropped_by_session.push((session_id, bytes));
+    }
 }
 
 enum ManagedSession {
-    Local(LocalSession),
-    Ssh(SshSession),
-    Tcp(TcpSession),
-    Serial(SerialSession),
+    Local(LocalPtyTransport),
+    Ssh(SshChannelTransport),
+    Tcp(TelnetTransport),
+    Serial(SerialTransport),
 }
 
-struct LocalSession {
+pub struct LocalPtyTransport {
     info: SessionInfo,
     master: Box<dyn MasterPty + Send>,
     writer: Box<dyn Write + Send>,
@@ -2997,7 +3216,7 @@ struct LocalSession {
     reader_thread: Option<JoinHandle<()>>,
 }
 
-struct TcpSession {
+pub struct TelnetTransport {
     info: SessionInfo,
     writer: TcpStream,
     reader_stream: TcpStream,
@@ -3005,14 +3224,14 @@ struct TcpSession {
     reader_thread: Option<JoinHandle<()>>,
 }
 
-struct SshSession {
+pub struct SshChannelTransport {
     info: SessionInfo,
     command_tx: tokio_mpsc::UnboundedSender<SshCommand>,
     backspace_as_bs: bool,
     worker_thread: Option<JoinHandle<()>>,
 }
 
-struct SerialSession {
+pub struct SerialTransport {
     info: SessionInfo,
     writer: Box<dyn SerialPort>,
     backspace_as_bs: bool,
@@ -3037,11 +3256,9 @@ struct OpenSshShellSession {
 
 impl SessionManager {
     pub fn new() -> Self {
-        let (event_tx, event_rx) = mpsc::channel();
         Self {
             sessions: Mutex::new(HashMap::new()),
-            event_tx,
-            event_rx: Mutex::new(event_rx),
+            event_queue: SessionEventQueue::new(),
         }
     }
 
@@ -3088,8 +3305,9 @@ impl SessionManager {
             cols: config.cols,
             rows: config.rows,
         };
-        let reader_thread = spawn_reader_thread(session_id.clone(), reader, self.event_tx.clone());
-        let session = LocalSession {
+        let reader_thread =
+            spawn_reader_thread(session_id.clone(), reader, self.event_queue.clone());
+        let session = LocalPtyTransport {
             info: info.clone(),
             master: pair.master,
             writer,
@@ -3161,10 +3379,10 @@ impl SessionManager {
                 })?,
             response_writer,
             config.clone(),
-            self.event_tx.clone(),
+            self.event_queue.clone(),
         );
 
-        let session = TcpSession {
+        let session = TelnetTransport {
             info: info.clone(),
             writer,
             reader_stream: stream,
@@ -3210,7 +3428,7 @@ impl SessionManager {
         let addr = format!("{}:{}", config.host, config.port);
         let (command_tx, command_rx) = tokio_mpsc::unbounded_channel();
         let (ready_tx, ready_rx) = mpsc::channel();
-        let event_tx = self.event_tx.clone();
+        let event_queue = self.event_queue.clone();
         let worker_config = config.clone();
         let worker_session_id = session_id.clone();
         let worker_thread = std::thread::spawn(move || {
@@ -3219,7 +3437,7 @@ impl SessionManager {
                 worker_config,
                 command_rx,
                 ready_tx,
-                event_tx,
+                event_queue,
                 multiplex,
             );
         });
@@ -3250,7 +3468,7 @@ impl SessionManager {
             cols: config.cols,
             rows: config.rows,
         };
-        let session = SshSession {
+        let session = SshChannelTransport {
             info: info.clone(),
             command_tx,
             backspace_as_bs: config.backspace_mode == "ctrl_h",
@@ -3294,9 +3512,9 @@ impl SessionManager {
             session_id.clone(),
             reader,
             stop_reader.clone(),
-            self.event_tx.clone(),
+            self.event_queue.clone(),
         );
-        let session = SerialSession {
+        let session = SerialTransport {
             info: info.clone(),
             writer: port,
             backspace_as_bs: config.backspace_mode == "ctrl_h",
@@ -3379,40 +3597,21 @@ impl SessionManager {
     }
 
     pub fn try_recv_event(&self) -> Result<Option<SessionEvent>, SessionError> {
-        let rx = self
-            .event_rx
-            .lock()
-            .map_err(|_| SessionError::LockPoisoned)?;
-        match rx.try_recv() {
-            Ok(event) => Ok(Some(event)),
-            Err(mpsc::TryRecvError::Empty) => Ok(None),
-            Err(mpsc::TryRecvError::Disconnected) => Ok(Some(SessionEvent::Error {
-                session_id: String::new(),
-                message: "session event channel disconnected".to_string(),
-            })),
-        }
+        Ok(self.event_queue.drain(1).events.into_iter().next())
     }
 
-    pub fn drain_events(&self, max_events: usize) -> Result<Vec<SessionEvent>, SessionError> {
-        let rx = self
-            .event_rx
-            .lock()
-            .map_err(|_| SessionError::LockPoisoned)?;
-        let mut events = Vec::new();
-        for _ in 0..max_events {
-            match rx.try_recv() {
-                Ok(event) => events.push(event),
-                Err(mpsc::TryRecvError::Empty) => break,
-                Err(mpsc::TryRecvError::Disconnected) => {
-                    events.push(SessionEvent::Error {
-                        session_id: String::new(),
-                        message: "session event channel disconnected".to_string(),
-                    });
-                    break;
-                }
-            }
-        }
-        Ok(events)
+    pub fn drain_events(&self, max_events: usize) -> Result<SessionDrain, SessionError> {
+        Ok(self.event_queue.drain(max_events))
+    }
+
+    pub fn drain_events_with_output_budget(
+        &self,
+        max_events: usize,
+        max_output_bytes: usize,
+    ) -> Result<SessionDrain, SessionError> {
+        Ok(self
+            .event_queue
+            .drain_with_output_budget(max_events, Some(max_output_bytes)))
     }
 }
 
@@ -3426,117 +3625,184 @@ impl ManagedSession {
         }
     }
 
-    fn write(&mut self, data: &[u8]) -> std::io::Result<()> {
+    fn write(&mut self, data: &[u8]) -> anyhow::Result<()> {
         match self {
-            Self::Local(session) => session
-                .writer
-                .write_all(data)
-                .and_then(|_| session.writer.flush()),
-            Self::Tcp(session) => {
-                let data = normalize_telnet_input(data, &session.config);
-                if session.config.force_character_at_a_time {
-                    for chunk in data.chunks(1) {
-                        session.writer.write_all(chunk)?;
-                        session.writer.flush()?;
-                    }
-                    Ok(())
-                } else {
-                    session.writer.write_all(&data)?;
-                    session.writer.flush()
-                }
-            }
-            Self::Ssh(session) => {
-                let data = if session.backspace_as_bs {
-                    remap_del_to_bs(data)
-                } else {
-                    data.to_vec()
-                };
-                session
-                    .command_tx
-                    .send(SshCommand::Write(data))
-                    .map_err(|_| ssh_worker_stopped())
-            }
-            Self::Serial(session) => {
-                let data = if session.backspace_as_bs {
-                    remap_del_to_bs(data)
-                } else {
-                    data.to_vec()
-                };
-                session
-                    .writer
-                    .write_all(&data)
-                    .and_then(|_| session.writer.flush())
-            }
+            Self::Local(session) => session.write(data),
+            Self::Tcp(session) => session.write(data),
+            Self::Ssh(session) => session.write(data),
+            Self::Serial(session) => session.write(data),
         }
     }
 
     fn resize(&mut self, cols: u16, rows: u16) -> anyhow::Result<()> {
         match self {
-            Self::Local(session) => {
-                session.master.resize(PtySize {
-                    rows,
-                    cols,
-                    pixel_width: 0,
-                    pixel_height: 0,
-                })?;
-                session.info.cols = cols;
-                session.info.rows = rows;
-                Ok(())
-            }
-            Self::Tcp(session) => {
-                session.info.cols = cols;
-                session.info.rows = rows;
-                if let Some(naws) = maybe_build_naws(cols, rows, &session.config) {
-                    session.writer.write_all(&naws)?;
-                    session.writer.flush()?;
-                }
-                Ok(())
-            }
-            Self::Ssh(session) => {
-                session.info.cols = cols;
-                session.info.rows = rows;
-                session
-                    .command_tx
-                    .send(SshCommand::Resize { cols, rows })
-                    .map_err(|_| anyhow::anyhow!("SSH worker stopped"))?;
-                Ok(())
-            }
-            Self::Serial(session) => {
-                session.info.cols = cols;
-                session.info.rows = rows;
-                Ok(())
-            }
+            Self::Local(session) => session.resize(cols, rows, 0, 0),
+            Self::Tcp(session) => session.resize(cols, rows, 0, 0),
+            Self::Ssh(session) => session.resize(cols, rows, 0, 0),
+            Self::Serial(session) => session.resize(cols, rows, 0, 0),
         }
     }
 
     fn close(&mut self) {
         match self {
             Self::Local(session) => {
-                let _ = session.child.kill();
-                if let Some(reader_thread) = session.reader_thread.take() {
-                    let _ = reader_thread.join();
-                }
+                let _ = session.close();
             }
             Self::Tcp(session) => {
-                let _ = session.writer.shutdown(Shutdown::Both);
-                let _ = session.reader_stream.shutdown(Shutdown::Both);
-                if let Some(reader_thread) = session.reader_thread.take() {
-                    let _ = reader_thread.join();
-                }
+                let _ = session.close();
             }
             Self::Ssh(session) => {
-                let _ = session.command_tx.send(SshCommand::Close);
-                if let Some(worker_thread) = session.worker_thread.take() {
-                    let _ = worker_thread.join();
-                }
+                let _ = session.close();
             }
             Self::Serial(session) => {
-                session.stop_reader.store(true, Ordering::Relaxed);
-                if let Some(reader_thread) = session.reader_thread.take() {
-                    let _ = reader_thread.join();
-                }
+                let _ = session.close();
             }
         }
+    }
+}
+
+impl TerminalTransport for LocalPtyTransport {
+    fn write(&mut self, data: &[u8]) -> anyhow::Result<()> {
+        self.writer.write_all(data)?;
+        self.writer.flush()?;
+        Ok(())
+    }
+
+    fn resize(
+        &mut self,
+        cols: u16,
+        rows: u16,
+        pixel_width: u16,
+        pixel_height: u16,
+    ) -> anyhow::Result<()> {
+        self.master.resize(PtySize {
+            rows,
+            cols,
+            pixel_width,
+            pixel_height,
+        })?;
+        self.info.cols = cols;
+        self.info.rows = rows;
+        Ok(())
+    }
+
+    fn close(&mut self) -> anyhow::Result<()> {
+        let _ = self.child.kill();
+        if let Some(reader_thread) = self.reader_thread.take() {
+            let _ = reader_thread.join();
+        }
+        Ok(())
+    }
+}
+
+impl TerminalTransport for TelnetTransport {
+    fn write(&mut self, data: &[u8]) -> anyhow::Result<()> {
+        let data = normalize_telnet_input(data, &self.config);
+        if self.config.force_character_at_a_time {
+            for chunk in data.chunks(1) {
+                self.writer.write_all(chunk)?;
+                self.writer.flush()?;
+            }
+        } else {
+            self.writer.write_all(&data)?;
+            self.writer.flush()?;
+        }
+        Ok(())
+    }
+
+    fn resize(
+        &mut self,
+        cols: u16,
+        rows: u16,
+        _pixel_width: u16,
+        _pixel_height: u16,
+    ) -> anyhow::Result<()> {
+        self.info.cols = cols;
+        self.info.rows = rows;
+        if let Some(naws) = maybe_build_naws(cols, rows, &self.config) {
+            self.writer.write_all(&naws)?;
+            self.writer.flush()?;
+        }
+        Ok(())
+    }
+
+    fn close(&mut self) -> anyhow::Result<()> {
+        let _ = self.writer.shutdown(Shutdown::Both);
+        let _ = self.reader_stream.shutdown(Shutdown::Both);
+        if let Some(reader_thread) = self.reader_thread.take() {
+            let _ = reader_thread.join();
+        }
+        Ok(())
+    }
+}
+
+impl TerminalTransport for SshChannelTransport {
+    fn write(&mut self, data: &[u8]) -> anyhow::Result<()> {
+        let data = if self.backspace_as_bs {
+            remap_del_to_bs(data)
+        } else {
+            data.to_vec()
+        };
+        self.command_tx
+            .send(SshCommand::Write(data))
+            .map_err(|_| anyhow::anyhow!("SSH worker stopped"))?;
+        Ok(())
+    }
+
+    fn resize(
+        &mut self,
+        cols: u16,
+        rows: u16,
+        _pixel_width: u16,
+        _pixel_height: u16,
+    ) -> anyhow::Result<()> {
+        self.info.cols = cols;
+        self.info.rows = rows;
+        self.command_tx
+            .send(SshCommand::Resize { cols, rows })
+            .map_err(|_| anyhow::anyhow!("SSH worker stopped"))?;
+        Ok(())
+    }
+
+    fn close(&mut self) -> anyhow::Result<()> {
+        let _ = self.command_tx.send(SshCommand::Close);
+        if let Some(worker_thread) = self.worker_thread.take() {
+            let _ = worker_thread.join();
+        }
+        Ok(())
+    }
+}
+
+impl TerminalTransport for SerialTransport {
+    fn write(&mut self, data: &[u8]) -> anyhow::Result<()> {
+        let data = if self.backspace_as_bs {
+            remap_del_to_bs(data)
+        } else {
+            data.to_vec()
+        };
+        self.writer.write_all(&data)?;
+        self.writer.flush()?;
+        Ok(())
+    }
+
+    fn resize(
+        &mut self,
+        cols: u16,
+        rows: u16,
+        _pixel_width: u16,
+        _pixel_height: u16,
+    ) -> anyhow::Result<()> {
+        self.info.cols = cols;
+        self.info.rows = rows;
+        Ok(())
+    }
+
+    fn close(&mut self) -> anyhow::Result<()> {
+        self.stop_reader.store(true, Ordering::Relaxed);
+        if let Some(reader_thread) = self.reader_thread.take() {
+            let _ = reader_thread.join();
+        }
+        Ok(())
     }
 }
 
@@ -3549,26 +3815,26 @@ impl Default for SessionManager {
 fn spawn_reader_thread(
     session_id: String,
     mut reader: Box<dyn Read + Send>,
-    event_tx: mpsc::Sender<SessionEvent>,
+    event_queue: SessionEventQueue,
 ) -> JoinHandle<()> {
     std::thread::spawn(move || {
         let mut buffer = [0_u8; 8192];
         loop {
             match reader.read(&mut buffer) {
                 Ok(0) => {
-                    let _ = event_tx.send(SessionEvent::Exited {
+                    event_queue.push(SessionEvent::Exited {
                         session_id: session_id.clone(),
                     });
                     break;
                 }
                 Ok(read) => {
-                    let _ = event_tx.send(SessionEvent::Output {
+                    event_queue.push(SessionEvent::Output {
                         session_id: session_id.clone(),
                         data: buffer[..read].to_vec(),
                     });
                 }
                 Err(error) => {
-                    let _ = event_tx.send(SessionEvent::Error {
+                    event_queue.push(SessionEvent::Error {
                         session_id: session_id.clone(),
                         message: error.to_string(),
                     });
@@ -3584,14 +3850,14 @@ fn spawn_tcp_reader_thread(
     mut reader: TcpStream,
     mut response_writer: TcpStream,
     config: TelnetSessionConfig,
-    event_tx: mpsc::Sender<SessionEvent>,
+    event_queue: SessionEventQueue,
 ) -> JoinHandle<()> {
     std::thread::spawn(move || {
         let mut buffer = [0_u8; 8192];
         loop {
             match reader.read(&mut buffer) {
                 Ok(0) => {
-                    let _ = event_tx.send(SessionEvent::Exited {
+                    event_queue.push(SessionEvent::Exited {
                         session_id: session_id.clone(),
                     });
                     break;
@@ -3614,7 +3880,7 @@ fn spawn_tcp_reader_thread(
                         })
                     };
                     if !visible.is_empty() {
-                        let _ = event_tx.send(SessionEvent::Output {
+                        event_queue.push(SessionEvent::Output {
                             session_id: session_id.clone(),
                             data: visible,
                         });
@@ -3629,7 +3895,7 @@ fn spawn_tcp_reader_thread(
                     continue;
                 }
                 Err(error) => {
-                    let _ = event_tx.send(SessionEvent::Error {
+                    event_queue.push(SessionEvent::Error {
                         session_id: session_id.clone(),
                         message: error.to_string(),
                     });
@@ -3645,7 +3911,7 @@ fn run_ssh_worker(
     config: SshSessionConfig,
     mut command_rx: tokio_mpsc::UnboundedReceiver<SshCommand>,
     ready_tx: mpsc::Sender<Result<(), String>>,
-    event_tx: mpsc::Sender<SessionEvent>,
+    event_queue: SessionEventQueue,
     multiplex: Option<SshMultiplexHandle>,
 ) {
     let runtime = match tokio::runtime::Builder::new_multi_thread()
@@ -3680,13 +3946,13 @@ fn run_ssh_worker(
             local_notice,
         } = open_session;
         if let Some(notice) = local_notice {
-            let _ = event_tx.send(SessionEvent::Output {
+            event_queue.push(SessionEvent::Output {
                 session_id: session_id.clone(),
                 data: notice,
             });
         }
         if let Some(forwarder) = x11_forwarder {
-            spawn_x11_forwarder(event_tx.clone(), session_id.clone(), forwarder);
+            spawn_x11_forwarder(event_queue.clone(), session_id.clone(), forwarder);
         }
 
         loop {
@@ -3695,7 +3961,7 @@ fn run_ssh_worker(
                     match command {
                         Some(SshCommand::Write(data)) => {
                             if let Err(error) = channel.data_bytes(data).await {
-                                send_session_error(&event_tx, &session_id, error);
+                                send_session_error(&event_queue, &session_id, error);
                                 break;
                             }
                         }
@@ -3704,7 +3970,7 @@ fn run_ssh_worker(
                                 .window_change(cols.into(), rows.into(), 0, 0)
                                 .await
                             {
-                                send_session_error(&event_tx, &session_id, error);
+                                send_session_error(&event_queue, &session_id, error);
                                 break;
                             }
                         }
@@ -3718,13 +3984,13 @@ fn run_ssh_worker(
                 message = channel.wait() => {
                     match message {
                         Some(ChannelMsg::Data { data }) | Some(ChannelMsg::ExtendedData { data, .. }) => {
-                            let _ = event_tx.send(SessionEvent::Output {
+                            event_queue.push(SessionEvent::Output {
                                 session_id: session_id.clone(),
                                 data: data.to_vec(),
                             });
                         }
                         Some(ChannelMsg::ExitStatus { .. }) | Some(ChannelMsg::Eof) | Some(ChannelMsg::Close) | None => {
-                            let _ = event_tx.send(SessionEvent::Exited {
+                            event_queue.push(SessionEvent::Exited {
                                 session_id: session_id.clone(),
                             });
                             break;
@@ -4578,7 +4844,7 @@ fn enable_x11_failed_message() -> String {
 }
 
 fn spawn_x11_forwarder(
-    event_tx: mpsc::Sender<SessionEvent>,
+    event_queue: SessionEventQueue,
     session_id: String,
     mut forwarder: X11Forwarder,
 ) {
@@ -4588,11 +4854,11 @@ fn spawn_x11_forwarder(
             let fallback = forwarder.config.fallback_target.clone();
             let fake_cookie = forwarder.config.fake_cookie.clone();
             let real_cookie = forwarder.config.real_cookie.clone();
-            let event_tx = event_tx.clone();
+            let event_queue = event_queue.clone();
             let session_id = session_id.clone();
             tokio::spawn(async move {
                 let _ = handle_x11_channel(
-                    event_tx,
+                    event_queue,
                     session_id,
                     open,
                     target,
@@ -4607,7 +4873,7 @@ fn spawn_x11_forwarder(
 }
 
 async fn handle_x11_channel(
-    event_tx: mpsc::Sender<SessionEvent>,
+    event_queue: SessionEventQueue,
     session_id: String,
     open: X11ChannelOpen,
     target: X11DisplayTarget,
@@ -4626,7 +4892,7 @@ async fn handle_x11_channel(
         Ok(stream) => stream,
         Err(error) => {
             let _ = channel.close().await;
-            let _ = event_tx.send(SessionEvent::Output {
+            event_queue.push(SessionEvent::Output {
                 session_id,
                 data: local_x_server_error_message(&target.describe()).into_bytes(),
             });
@@ -6005,25 +6271,21 @@ fn ssh_host_identifier(host: &str, port: u16) -> String {
 }
 
 fn send_session_error(
-    event_tx: &mpsc::Sender<SessionEvent>,
+    event_queue: &SessionEventQueue,
     session_id: &str,
     error: impl std::fmt::Display,
 ) {
-    let _ = event_tx.send(SessionEvent::Error {
+    event_queue.push(SessionEvent::Error {
         session_id: session_id.to_string(),
         message: error.to_string(),
     });
-}
-
-fn ssh_worker_stopped() -> std::io::Error {
-    std::io::Error::new(std::io::ErrorKind::BrokenPipe, "SSH worker stopped")
 }
 
 fn spawn_serial_reader_thread(
     session_id: String,
     mut reader: Box<dyn SerialPort>,
     stop_reader: Arc<AtomicBool>,
-    event_tx: mpsc::Sender<SessionEvent>,
+    event_queue: SessionEventQueue,
 ) -> JoinHandle<()> {
     std::thread::spawn(move || {
         let mut buffer = [0_u8; 4096];
@@ -6031,7 +6293,7 @@ fn spawn_serial_reader_thread(
             match reader.read(&mut buffer) {
                 Ok(0) => continue,
                 Ok(read) => {
-                    let _ = event_tx.send(SessionEvent::Output {
+                    event_queue.push(SessionEvent::Output {
                         session_id: session_id.clone(),
                         data: buffer[..read].to_vec(),
                     });
@@ -6045,7 +6307,7 @@ fn spawn_serial_reader_thread(
                     continue;
                 }
                 Err(error) => {
-                    let _ = event_tx.send(SessionEvent::Error {
+                    event_queue.push(SessionEvent::Error {
                         session_id: session_id.clone(),
                         message: error.to_string(),
                     });
@@ -6992,9 +7254,18 @@ mod tests {
         )
         .expect("expanded command");
 
-        assert!(expanded.contains("'host name'"));
-        assert!(expanded.contains("'2222'"));
-        assert!(expanded.contains("'user'\\''name'"));
+        #[cfg(windows)]
+        {
+            assert!(expanded.contains("\"host name\""));
+            assert!(expanded.contains("2222"));
+            assert!(expanded.contains("\"user'name\""));
+        }
+        #[cfg(not(windows))]
+        {
+            assert!(expanded.contains("'host name'"));
+            assert!(expanded.contains("'2222'"));
+            assert!(expanded.contains("'user'\\''name'"));
+        }
         assert!(expanded.contains("--literal %"));
     }
 
@@ -7184,12 +7455,13 @@ host/unix:1  MIT-MAGIC-COOKIE-1  ffeeddccbbaa99887766554433221100
         let started = Instant::now();
         let mut output = Vec::new();
         while started.elapsed() < timeout {
-            for event in manager.drain_events(16).expect("events") {
+            for event in manager.drain_events(16).expect("events").events {
                 match event {
                     SessionEvent::Output {
                         session_id: event_session_id,
                         data,
                     } if event_session_id == session_id => output.extend(data),
+                    SessionEvent::OutputDropped { .. } => {}
                     SessionEvent::Error { message, .. } => panic!("session error: {message}"),
                     _ => {}
                 }
@@ -7200,5 +7472,155 @@ host/unix:1  MIT-MAGIC-COOKIE-1  ffeeddccbbaa99887766554433221100
             std::thread::sleep(Duration::from_millis(20));
         }
         output
+    }
+
+    #[test]
+    fn session_event_queue_merges_consecutive_output() {
+        let queue = SessionEventQueue::new();
+        queue.push(SessionEvent::Output {
+            session_id: "a".to_string(),
+            data: b"hello ".to_vec(),
+        });
+        queue.push(SessionEvent::Output {
+            session_id: "a".to_string(),
+            data: b"world".to_vec(),
+        });
+
+        let drain = queue.drain(8);
+        assert_eq!(drain.events.len(), 1);
+        assert_eq!(drain.stats.drained_output_bytes, 11);
+        assert_eq!(drain.stats.queued_output_bytes, 0);
+        match &drain.events[0] {
+            SessionEvent::Output { session_id, data } => {
+                assert_eq!(session_id, "a");
+                assert_eq!(data, b"hello world");
+            }
+            event => panic!("unexpected event: {event:?}"),
+        }
+    }
+
+    #[test]
+    fn session_event_queue_keeps_sessions_separate() {
+        let queue = SessionEventQueue::new();
+        queue.push(SessionEvent::Output {
+            session_id: "a".to_string(),
+            data: b"a1".to_vec(),
+        });
+        queue.push(SessionEvent::Output {
+            session_id: "b".to_string(),
+            data: b"b1".to_vec(),
+        });
+        queue.push(SessionEvent::Output {
+            session_id: "a".to_string(),
+            data: b"a2".to_vec(),
+        });
+
+        let drain = queue.drain(8);
+        assert_eq!(drain.events.len(), 3);
+        assert!(matches!(
+            &drain.events[0],
+            SessionEvent::Output { session_id, data } if session_id == "a" && data == b"a1"
+        ));
+        assert!(matches!(
+            &drain.events[1],
+            SessionEvent::Output { session_id, data } if session_id == "b" && data == b"b1"
+        ));
+        assert!(matches!(
+            &drain.events[2],
+            SessionEvent::Output { session_id, data } if session_id == "a" && data == b"a2"
+        ));
+    }
+
+    #[test]
+    fn session_event_queue_respects_output_drain_budget() {
+        let queue = SessionEventQueue::new();
+        queue.push(SessionEvent::Output {
+            session_id: "a".to_string(),
+            data: vec![b'a'; 128],
+        });
+        queue.push(SessionEvent::Output {
+            session_id: "b".to_string(),
+            data: vec![b'b'; 128],
+        });
+
+        let drain = queue.drain_with_output_budget(8, Some(200));
+        assert_eq!(drain.events.len(), 2);
+        assert_eq!(drain.stats.drained_output_bytes, 200);
+        assert_eq!(drain.stats.queued_output_bytes, 56);
+        assert!(matches!(
+            &drain.events[0],
+            SessionEvent::Output { session_id, data } if session_id == "a" && data.len() == 128
+        ));
+        assert!(matches!(
+            &drain.events[1],
+            SessionEvent::Output { session_id, data } if session_id == "b" && data.len() == 72
+        ));
+
+        let drain = queue.drain_with_output_budget(8, Some(200));
+        assert_eq!(drain.events.len(), 1);
+        assert_eq!(drain.stats.drained_output_bytes, 56);
+        assert_eq!(drain.stats.queued_output_bytes, 0);
+    }
+
+    #[test]
+    fn session_event_queue_trims_oversized_output_and_reports_drop() {
+        let queue = SessionEventQueue::new();
+        queue.push(SessionEvent::Output {
+            session_id: "a".to_string(),
+            data: vec![b'x'; SESSION_EVENT_QUEUE_OUTPUT_EVENT_LIMIT + 32],
+        });
+
+        let drain = queue.drain(8);
+        assert_eq!(drain.events.len(), 2);
+        assert!(matches!(
+            &drain.events[0],
+            SessionEvent::Output { data, .. } if data.len() == SESSION_EVENT_QUEUE_OUTPUT_EVENT_LIMIT
+        ));
+        assert!(matches!(
+            &drain.events[1],
+            SessionEvent::OutputDropped { session_id, bytes } if session_id == "a" && *bytes == 32
+        ));
+        assert_eq!(drain.stats.dropped_output_bytes, 32);
+    }
+
+    #[test]
+    fn session_event_queue_reports_global_limit_drops_for_trimmed_session() {
+        let queue = SessionEventQueue::new();
+        let event_count =
+            (SESSION_EVENT_QUEUE_OUTPUT_LIMIT / SESSION_EVENT_QUEUE_OUTPUT_EVENT_LIMIT) + 2;
+        for index in 0..event_count {
+            queue.push(SessionEvent::Output {
+                session_id: format!("session-{index}"),
+                data: vec![b'x'; SESSION_EVENT_QUEUE_OUTPUT_EVENT_LIMIT],
+            });
+        }
+
+        let drain = queue.drain(event_count + 8);
+        let dropped = drain
+            .events
+            .iter()
+            .filter_map(|event| match event {
+                SessionEvent::OutputDropped { session_id, bytes } => {
+                    Some((session_id.as_str(), *bytes))
+                }
+                _ => None,
+            })
+            .collect::<Vec<_>>();
+
+        assert_eq!(
+            dropped,
+            vec![
+                ("session-0", SESSION_EVENT_QUEUE_OUTPUT_EVENT_LIMIT),
+                ("session-1", SESSION_EVENT_QUEUE_OUTPUT_EVENT_LIMIT),
+            ]
+        );
+        assert_eq!(
+            drain.stats.drained_output_bytes,
+            SESSION_EVENT_QUEUE_OUTPUT_LIMIT
+        );
+        assert_eq!(
+            drain.stats.dropped_output_bytes,
+            SESSION_EVENT_QUEUE_OUTPUT_EVENT_LIMIT * 2
+        );
     }
 }

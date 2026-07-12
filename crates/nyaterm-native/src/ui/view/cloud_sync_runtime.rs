@@ -708,7 +708,8 @@ impl NyaTermApp {
         if self.cloud_sync_history_expanded.contains(entry_id) {
             self.cloud_sync_history_expanded.remove(entry_id);
         } else {
-            self.cloud_sync_history_expanded.insert(entry_id.to_string());
+            self.cloud_sync_history_expanded
+                .insert(entry_id.to_string());
         }
         cx.notify();
     }

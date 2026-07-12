@@ -2,26 +2,23 @@ use gpui::{
     AnyElement, App, ClickEvent, Context, FontWeight, IntoElement, KeyDownEvent, SharedString,
     Window, div, prelude::*, px, rgb,
 };
-use nyaterm_domain::{
-    AgentCommandExecutionMode, AiCustomActionConfig, AiMode, AiModelSource, AiProviderKind,
-    RiskLevel,
-};
+use nyaterm_domain::{AgentCommandExecutionMode, AiMode, AiModelSource, AiProviderKind, RiskLevel};
 use nyaterm_session::SftpDuplicatePolicy;
 
-use crate::ui::components::{section_header, small_button, status_pill};
-use crate::ui::theme::ThemePalette;
+use crate::ui::components::{small_button, status_pill};
 use crate::ui::models::{
-    AiActionEditorField, AiActionListKind, AiCredentialEditorField, AiInputField, CloudSyncConflictState, CloudSyncInputField, ConfigPathPromptKind,
-    DiagnosticsPathPromptKind, KeywordHighlightEditorField, KeywordHighlightPathPromptKind, SettingsTab,
-    SearchEngineEditorField, SnapshotPasswordPromptKind, SnapshotPasswordPromptState, TerminalSearchMode, TransferJobStatus,
-    TransferPathPromptKind, TranslateInputField,
+    AiActionEditorField, AiActionListKind, AiCredentialEditorField, AiInputField,
+    CloudSyncConflictState, CloudSyncInputField, ConfigPathPromptKind, DiagnosticsPathPromptKind,
+    KeywordHighlightEditorField, KeywordHighlightPathPromptKind, SearchEngineEditorField,
+    SettingsTab, SnapshotPasswordPromptKind, SnapshotPasswordPromptState, TerminalSearchMode,
+    TransferJobStatus, TransferPathPromptKind, TranslateInputField,
 };
+use crate::ui::theme::ThemePalette;
 
 use super::super::{
-    NyaTermApp, TAB_MOUSE_ACTIONS, TabMouseActionTarget, ai_active_profile_api_key, cloud_secret_display,
-    cloud_sync_history_row, compact_id, compact_setting_state, configured_cloud_sync_provider,
-    metric, none_if_blank, policy_button, setting_state, tab_mouse_action_label, transfer_input,
-    truncate_preview,
+    NyaTermApp, TAB_MOUSE_ACTIONS, TabMouseActionTarget, ai_active_profile_api_key,
+    cloud_secret_display, cloud_sync_history_row, compact_id, configured_cloud_sync_provider,
+    none_if_blank, tab_mouse_action_label, transfer_input, truncate_preview,
 };
 
 mod ai;
@@ -163,7 +160,12 @@ impl NyaTermApp {
             .px_2()
             .py_2()
             .overflow_scroll()
-            .child(settings_category_header(palette, "Workspace", "WS", rgb(palette.accent)))
+            .child(settings_category_header(
+                palette,
+                "Workspace",
+                "WS",
+                rgb(palette.accent),
+            ))
             .child(self.settings_tab_button(SettingsTab::General, "settings-tab-general", cx))
             .child(self.settings_tab_button(SettingsTab::Appearance, "settings-tab-appearance", cx))
             .child(self.settings_tab_button(
@@ -176,7 +178,8 @@ impl NyaTermApp {
                 "settings-tab-keybindings",
                 cx,
             ))
-            .child(settings_category_header(palette, 
+            .child(settings_category_header(
+                palette,
                 "Terminal Session",
                 "TM",
                 rgb(palette.success),
@@ -196,11 +199,26 @@ impl NyaTermApp {
             .child(self.settings_tab_button(SettingsTab::AiGeneral, "settings-tab-ai-general", cx))
             .child(self.settings_tab_button(SettingsTab::AiModels, "settings-tab-ai-models", cx))
             .child(self.settings_tab_button(SettingsTab::AiRules, "settings-tab-ai-rules", cx))
-            .child(settings_category_header(palette, "Transfer", "TF", rgb(palette.accent)))
+            .child(settings_category_header(
+                palette,
+                "Transfer",
+                "TF",
+                rgb(palette.accent),
+            ))
             .child(self.settings_tab_button(SettingsTab::Transfer, "settings-tab-transfer", cx))
-            .child(settings_category_header(palette, "Security", "SC", rgb(palette.warning)))
+            .child(settings_category_header(
+                palette,
+                "Security",
+                "SC",
+                rgb(palette.warning),
+            ))
             .child(self.settings_tab_button(SettingsTab::Security, "settings-tab-security", cx))
-            .child(settings_category_header(palette, "Sync Backup", "BK", rgb(palette.success)))
+            .child(settings_category_header(
+                palette,
+                "Sync Backup",
+                "BK",
+                rgb(palette.success),
+            ))
             .child(self.settings_tab_button(
                 SettingsTab::SyncBackup,
                 "settings-tab-sync-backup",
@@ -369,7 +387,6 @@ impl NyaTermApp {
     }
 }
 
-
 /// Tauri SettingSection: rounded card with optional title/desc and body.
 pub(super) fn settings_form_section(
     palette: ThemePalette,
@@ -488,11 +505,7 @@ pub(super) fn settings_switch(
         .items_center()
         .rounded_full()
         .px(px(2.))
-        .bg(if checked {
-            rgb(on_bg)
-        } else {
-            rgb(off_bg)
-        })
+        .bg(if checked { rgb(on_bg) } else { rgb(off_bg) })
         .cursor_pointer()
         .hover(move |this| {
             this.bg(if checked {

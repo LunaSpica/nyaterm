@@ -107,29 +107,26 @@ impl NyaTermApp {
                     .items_center()
                     .gap_2()
                     .child(
-                        div()
-                            .flex_1()
-                            .min_w_0()
-                            .child(
-                                transfer_input(
-                                    "active-sessions-search-input",
-                                    "Search sessions",
-                                    self.active_sessions_search_draft.clone(),
-                                    true,
-                    self.theme_palette(),
-                )
-                                .h(px(28.))
-                                .track_focus(&self.active_sessions_search_focus)
-                                .on_click(cx.listener(|this, _, window, cx| {
-                                    window.focus(&this.active_sessions_search_focus);
-                                    cx.notify();
-                                }))
-                                .on_key_down(cx.listener(
-                                    |this, event: &KeyDownEvent, _, cx| {
-                                        this.handle_active_sessions_search_key_down(event, cx);
-                                    },
-                                )),
-                            ),
+                        div().flex_1().min_w_0().child(
+                            transfer_input(
+                                "active-sessions-search-input",
+                                "Search sessions",
+                                self.active_sessions_search_draft.clone(),
+                                true,
+                                self.theme_palette(),
+                            )
+                            .h(px(28.))
+                            .track_focus(&self.active_sessions_search_focus)
+                            .on_click(cx.listener(|this, _, window, cx| {
+                                window.focus(&this.active_sessions_search_focus);
+                                cx.notify();
+                            }))
+                            .on_key_down(cx.listener(
+                                |this, event: &KeyDownEvent, _, cx| {
+                                    this.handle_active_sessions_search_key_down(event, cx);
+                                },
+                            )),
+                        ),
                     )
                     .child(
                         div()
@@ -149,7 +146,10 @@ impl NyaTermApp {
             )
     }
 
-    pub(in crate::ui::view) fn left_workspace_summary(&mut self, cx: &mut Context<Self>) -> impl IntoElement {
+    pub(in crate::ui::view) fn left_workspace_summary(
+        &mut self,
+        cx: &mut Context<Self>,
+    ) -> impl IntoElement {
         let palette = self.theme_palette();
         let sessions = self.ordered_sessions();
         let session_count = sessions.len();
@@ -160,8 +160,10 @@ impl NyaTermApp {
         let mut active_session_rows = div().mt_3().flex().flex_col().gap_2();
         let mut visible_count = 0usize;
         if sessions.is_empty() {
-            active_session_rows =
-                active_session_rows.child(empty_panel("No active runtime sessions.", self.theme_palette()));
+            active_session_rows = active_session_rows.child(empty_panel(
+                "No active runtime sessions.",
+                self.theme_palette(),
+            ));
         } else {
             for session in sessions {
                 let display_name = self.session_display_name_by_info(&session);
@@ -181,8 +183,10 @@ impl NyaTermApp {
                     active_session_rows.child(self.active_session_row(session, display_name, cx));
             }
             if visible_count == 0 {
-                active_session_rows =
-                    active_session_rows.child(empty_panel("No matching active sessions.", self.theme_palette()));
+                active_session_rows = active_session_rows.child(empty_panel(
+                    "No matching active sessions.",
+                    self.theme_palette(),
+                ));
             }
         }
 
@@ -204,19 +208,26 @@ impl NyaTermApp {
                             .text_color(rgb(palette.text_muted))
                             .child("WORKSPACE"),
                     )
-                    .child(capability_line(palette, 
+                    .child(capability_line(
+                        palette,
                         "Active Sessions",
                         session_count.to_string(),
                     ))
-                    .child(capability_line(palette, 
+                    .child(capability_line(
+                        palette,
                         "Profiles",
                         self.connections.len().to_string(),
                     ))
-                    .child(capability_line(palette, 
+                    .child(capability_line(
+                        palette,
                         "Quick Commands",
                         self.quick_commands.len().to_string(),
                     ))
-                    .child(capability_line(palette, "Tunnels", self.tunnels.len().to_string())),
+                    .child(capability_line(
+                        palette,
+                        "Tunnels",
+                        self.tunnels.len().to_string(),
+                    )),
             )
             .child(
                 div()
@@ -259,8 +270,8 @@ impl NyaTermApp {
                             "Search sessions",
                             self.active_sessions_search_draft.clone(),
                             true,
-                    self.theme_palette(),
-                )
+                            self.theme_palette(),
+                        )
                         .mt_3()
                         .track_focus(&self.active_sessions_search_focus)
                         .on_click(cx.listener(|this, _, window, cx| {
@@ -305,14 +316,16 @@ impl NyaTermApp {
                             .mt_3()
                             .flex()
                             .gap_2()
-                            .child(small_button(palette, 
+                            .child(small_button(
+                                palette,
                                 "left-start-local",
                                 "Local",
                                 cx.listener(|this, _, window, cx| {
                                     this.start_local_session(window, cx);
                                 }),
                             ))
-                            .child(small_button(palette, 
+                            .child(small_button(
+                                palette,
                                 "left-probe",
                                 "Probe",
                                 cx.listener(|this, _, _, cx| {
@@ -328,7 +341,12 @@ impl NyaTermApp {
                     .border_color(rgb(palette.border))
                     .bg(rgb(palette.input))
                     .p_3()
-                    .child(div().text_xs().text_color(rgb(palette.text_muted)).child("Runtime"))
+                    .child(
+                        div()
+                            .text_xs()
+                            .text_color(rgb(palette.text_muted))
+                            .child("Runtime"),
+                    )
                     .child(div().mt_1().text_sm().child(match self.runtime.mode() {
                         RuntimeMode::Portable => "Portable",
                         RuntimeMode::Installed => "Installed",
@@ -398,10 +416,7 @@ impl NyaTermApp {
             .terminal_views
             .get(&session.id)
             .is_some_and(|view| view.has_unread);
-        let busy_action = self
-            .active_session_busy_actions
-            .get(&session.id)
-            .cloned();
+        let busy_action = self.active_session_busy_actions.get(&session.id).cloned();
         let is_busy = busy_action.is_some();
         let menu_open = self.active_session_menu_id.as_deref() == Some(session.id.as_str());
         let can_reconnect = !is_busy && self.pending_session_name.is_none();
@@ -648,12 +663,14 @@ impl NyaTermApp {
             }))
     }
 
-
     fn left_connections_panel(&mut self, cx: &mut Context<Self>) -> impl IntoElement {
         let palette = self.theme_palette();
         let mut rows = div().flex().flex_col().gap_2();
         if self.connections.is_empty() {
-            rows = rows.child(empty_panel("No saved connections imported yet.", self.theme_palette()));
+            rows = rows.child(empty_panel(
+                "No saved connections imported yet.",
+                self.theme_palette(),
+            ));
         } else {
             for connection in self.connections.iter().take(8).cloned() {
                 rows = rows.child(compact_connection_row(
@@ -703,14 +720,16 @@ impl NyaTermApp {
                             .mt_3()
                             .flex()
                             .gap_2()
-                            .child(small_button(palette, 
+                            .child(small_button(
+                                palette,
                                 "left-connections-local",
                                 "Local",
                                 cx.listener(|this, _, window, cx| {
                                     this.start_local_session(window, cx);
                                 }),
                             ))
-                            .child(small_button(palette, 
+                            .child(small_button(
+                                palette,
                                 "left-connections-refresh",
                                 "Refresh",
                                 cx.listener(|this, _, _, cx| {
@@ -728,7 +747,10 @@ impl NyaTermApp {
         let palette = self.theme_palette();
         let mut rows = div().flex().flex_col().gap_2();
         if self.tunnels.is_empty() {
-            rows = rows.child(empty_panel("No SSH tunnels configured.", self.theme_palette()));
+            rows = rows.child(empty_panel(
+                "No SSH tunnels configured.",
+                self.theme_palette(),
+            ));
         } else {
             for tunnel in self.tunnels.iter().take(8).cloned() {
                 let is_pending = self.pending_tunnels.iter().any(|id| id == &tunnel.id);
@@ -772,15 +794,18 @@ impl NyaTermApp {
                             .text_color(rgb(palette.text_muted))
                             .child("NETWORK"),
                     )
-                    .child(capability_line(palette, 
+                    .child(capability_line(
+                        palette,
                         "Configured Tunnels",
                         self.tunnels.len().to_string(),
                     ))
-                    .child(capability_line(palette, 
+                    .child(capability_line(
+                        palette,
                         "Pending",
                         self.pending_tunnels.len().to_string(),
                     ))
-                    .child(capability_line(palette, 
+                    .child(capability_line(
+                        palette,
                         "Active SSH",
                         if self.active_ssh_config.is_some() {
                             "ready"
@@ -796,7 +821,10 @@ impl NyaTermApp {
         let palette = self.theme_palette();
         let mut jobs = div().flex().flex_col().gap_2();
         if self.transfer_jobs.is_empty() {
-            jobs = jobs.child(empty_panel("No SFTP transfer jobs yet.", self.theme_palette()));
+            jobs = jobs.child(empty_panel(
+                "No SFTP transfer jobs yet.",
+                self.theme_palette(),
+            ));
         } else {
             for job in self.transfer_jobs.iter().rev().take(5) {
                 jobs = jobs.child(compact_transfer_job_row(palette, job));
@@ -821,7 +849,8 @@ impl NyaTermApp {
                             .text_color(rgb(palette.text_muted))
                             .child("SFTP"),
                     )
-                    .child(capability_line(palette, 
+                    .child(capability_line(
+                        palette,
                         "SSH Session",
                         if self.active_ssh_config.is_some() {
                             "ready"
@@ -829,11 +858,13 @@ impl NyaTermApp {
                             "none"
                         },
                     ))
-                    .child(capability_line(palette, 
+                    .child(capability_line(
+                        palette,
                         "Remote Path",
                         truncate_preview(&self.transfer_remote_path, 28),
                     ))
-                    .child(capability_line(palette, 
+                    .child(capability_line(
+                        palette,
                         "Duplicate Policy",
                         duplicate_policy_label(self.transfer_duplicate_policy),
                     ))
@@ -842,14 +873,16 @@ impl NyaTermApp {
                             .mt_3()
                             .flex()
                             .gap_2()
-                            .child(small_button(palette, 
+                            .child(small_button(
+                                palette,
                                 "left-sftp-list",
                                 "List",
                                 cx.listener(|this, _, window, cx| {
                                     this.start_sftp_list_job(window, cx);
                                 }),
                             ))
-                            .child(small_button(palette, 
+                            .child(small_button(
+                                palette,
                                 "left-sftp-download",
                                 "Download",
                                 cx.listener(|this, _, window, cx| {
@@ -881,19 +914,26 @@ impl NyaTermApp {
                             .text_color(rgb(palette.text_muted))
                             .child("SETTINGS"),
                     )
-                    .child(capability_line(palette, "Theme", self.settings.theme.clone()))
-                    .child(capability_line(palette, 
+                    .child(capability_line(
+                        palette,
+                        "Theme",
+                        self.settings.theme.clone(),
+                    ))
+                    .child(capability_line(
+                        palette,
                         "Terminal Font",
                         format!(
                             "{} {}",
                             self.settings.terminal_font_family, self.settings.terminal_font_size
                         ),
                     ))
-                    .child(capability_line(palette, 
+                    .child(capability_line(
+                        palette,
                         "Host Key Policy",
                         self.settings.host_key_policy.clone(),
                     ))
-                    .child(capability_line(palette, 
+                    .child(capability_line(
+                        palette,
                         "AI",
                         if self.ai_settings.enabled {
                             "enabled"
@@ -993,7 +1033,6 @@ impl NyaTermApp {
     }
 }
 
-
 impl NyaTermApp {
     pub(in crate::ui::view) fn security_auth_panel(
         &mut self,
@@ -1011,14 +1050,24 @@ impl NyaTermApp {
         };
         let palette = self.theme_palette();
 
-        let mut body = div().flex_1().min_h_0().overflow_hidden().flex().flex_col().gap_1().p_2();
+        let mut body = div()
+            .flex_1()
+            .min_h_0()
+            .overflow_hidden()
+            .flex()
+            .flex_col()
+            .gap_1()
+            .p_2();
 
         match active_tab {
             SecurityAuthTab::Keys => {
                 if let Some(editor) = self.security_key_editor.clone() {
                     body = body.child(self.security_key_editor_view(editor, cx));
                 } else if self.connection_ssh_keys.is_empty() {
-                    body = body.child(empty_panel("No SSH keys yet. Add a private key to use key auth.", self.theme_palette()));
+                    body = body.child(empty_panel(
+                        "No SSH keys yet. Add a private key to use key auth.",
+                        self.theme_palette(),
+                    ));
                 } else {
                     for key in self.connection_ssh_keys.clone() {
                         let key_id = key.id.clone();
@@ -1091,7 +1140,8 @@ impl NyaTermApp {
                                         .flex()
                                         .items_center()
                                         .gap_1()
-                                        .child(small_button(palette, 
+                                        .child(small_button(
+                                            palette,
                                             format!("security-key-edit-{key_id}"),
                                             "Edit",
                                             cx.listener(move |this, _, window, cx| {
@@ -1102,7 +1152,8 @@ impl NyaTermApp {
                                                 );
                                             }),
                                         ))
-                                        .child(small_button(palette, 
+                                        .child(small_button(
+                                            palette,
                                             format!("security-key-del-{key_id}"),
                                             "Del",
                                             cx.listener(move |this, _, _, cx| {
@@ -1130,10 +1181,8 @@ impl NyaTermApp {
                         let reveal_id = entry.id.clone();
                         let copy_id = entry.id.clone();
                         let is_revealed = self.security_revealed_passwords.contains_key(&entry.id);
-                        let revealed_value = self
-                            .security_revealed_passwords
-                            .get(&entry.id)
-                            .cloned();
+                        let revealed_value =
+                            self.security_revealed_passwords.get(&entry.id).cloned();
                         // Tauri: masked until revealed; revealed shows secret + Copy.
                         let secret_line = if is_revealed {
                             revealed_value
@@ -1264,7 +1313,10 @@ impl NyaTermApp {
                 if let Some(editor) = self.security_credential_editor.clone() {
                     body = body.child(self.security_credential_editor_view(editor, cx));
                 } else if self.connection_saved_credentials.is_empty() {
-                    body = body.child(empty_panel("No autofill credentials yet.", self.theme_palette()));
+                    body = body.child(empty_panel(
+                        "No autofill credentials yet.",
+                        self.theme_palette(),
+                    ));
                 } else {
                     for entry in self.connection_saved_credentials.clone() {
                         let id = entry.id.clone();
@@ -1272,7 +1324,8 @@ impl NyaTermApp {
                         let delete_id = entry.id.clone();
                         let reveal_id = entry.id.clone();
                         let toggle_id = entry.id.clone();
-                        let is_revealed = self.security_revealed_credentials.contains_key(&entry.id);
+                        let is_revealed =
+                            self.security_revealed_credentials.contains_key(&entry.id);
                         let secret = self
                             .security_revealed_credentials
                             .get(&entry.id)
@@ -1320,7 +1373,11 @@ impl NyaTermApp {
                                                         } else {
                                                             rgb(palette.text_muted)
                                                         })
-                                                        .child(if entry.enabled { "on" } else { "off" }),
+                                                        .child(if entry.enabled {
+                                                            "on"
+                                                        } else {
+                                                            "off"
+                                                        }),
                                                 ),
                                         )
                                         .child(
@@ -1400,14 +1457,19 @@ impl NyaTermApp {
                 if let Some(editor) = self.security_otp_editor.clone() {
                     body = body.child(self.security_otp_editor_view(editor, cx));
                 } else if self.connection_otp_entries.is_empty() {
-                    body = body.child(empty_panel("No OTP accounts yet. Add TOTP/HOTP for auto-fill.", self.theme_palette()));
+                    body = body.child(empty_panel(
+                        "No OTP accounts yet. Add TOTP/HOTP for auto-fill.",
+                        self.theme_palette(),
+                    ));
                 } else {
                     for entry in self.connection_otp_entries.clone() {
                         let otp_id = entry.id.clone();
                         let edit_id = entry.id.clone();
                         let delete_id = entry.id.clone();
                         let code_id = entry.id.clone();
-                        let title = if !entry.issuer.trim().is_empty() || !entry.username.trim().is_empty() {
+                        let title = if !entry.issuer.trim().is_empty()
+                            || !entry.username.trim().is_empty()
+                        {
                             format!(
                                 "{}{}",
                                 entry.issuer,
@@ -1529,7 +1591,8 @@ impl NyaTermApp {
                                         .flex()
                                         .items_center()
                                         .gap_1()
-                                        .child(small_button(palette, 
+                                        .child(small_button(
+                                            palette,
                                             format!("security-otp-code-{otp_id}"),
                                             if is_totp { "Gen" } else { "Next" },
                                             cx.listener(move |this, _, window, cx| {
@@ -1540,7 +1603,8 @@ impl NyaTermApp {
                                                 );
                                             }),
                                         ))
-                                        .child(small_button(palette,
+                                        .child(small_button(
+                                            palette,
                                             format!("security-otp-copy-{otp_id}"),
                                             "Copy",
                                             cx.listener(move |this, _, window, cx| {
@@ -1551,7 +1615,8 @@ impl NyaTermApp {
                                                 );
                                             }),
                                         ))
-                                        .child(small_button(palette, 
+                                        .child(small_button(
+                                            palette,
                                             format!("security-otp-edit-{otp_id}"),
                                             "Edit",
                                             cx.listener(move |this, _, window, cx| {
@@ -1562,7 +1627,8 @@ impl NyaTermApp {
                                                 );
                                             }),
                                         ))
-                                        .child(small_button(palette, 
+                                        .child(small_button(
+                                            palette,
                                             format!("security-otp-del-{otp_id}"),
                                             "Del",
                                             cx.listener(move |this, _, _, cx| {
@@ -1601,14 +1667,16 @@ impl NyaTermApp {
                         div()
                             .flex()
                             .gap_2()
-                            .child(small_button(palette, 
+                            .child(small_button(
+                                palette,
                                 "security-delete-confirm",
                                 "Delete",
                                 cx.listener(|this, _, _, cx| {
                                     this.confirm_security_delete(cx);
                                 }),
                             ))
-                            .child(small_button(palette, 
+                            .child(small_button(
+                                palette,
                                 "security-delete-cancel",
                                 "Cancel",
                                 cx.listener(|this, _, _, cx| {
@@ -1731,10 +1799,7 @@ impl NyaTermApp {
             })
     }
 
-    fn security_secret_footer(
-        &self,
-        cx: &mut Context<Self>,
-    ) -> impl IntoElement {
+    fn security_secret_footer(&self, cx: &mut Context<Self>) -> impl IntoElement {
         let unlocked = !self.security_secrets_locked();
         let has_master = self.settings.has_master_password;
         let palette = self.theme_palette();
@@ -1765,39 +1830,31 @@ impl NyaTermApp {
                         "Secrets locked"
                     }),
             )
-            .child(
-                div()
-                    .flex()
-                    .items_center()
-                    .gap_1()
-                    .child(small_button(palette, 
-                        "security-secrets-toggle",
-                        if unlocked && has_master {
-                            "Lock"
-                        } else if unlocked {
-                            "Open"
-                        } else {
-                            "Unlock"
-                        },
-                        cx.listener(|this, _, window, cx| {
-                            if this.security_secrets_locked() {
-                                this.open_security_unlock_prompt(window, cx);
-                            } else if this.settings.has_master_password {
-                                this.lock_security_secrets(cx);
-                            } else {
-                                this.security_status =
-                                    "set a master password in Settings to lock secrets".to_string();
-                                cx.notify();
-                            }
-                        }),
-                    )),
-            )
+            .child(div().flex().items_center().gap_1().child(small_button(
+                palette,
+                "security-secrets-toggle",
+                if unlocked && has_master {
+                    "Lock"
+                } else if unlocked {
+                    "Open"
+                } else {
+                    "Unlock"
+                },
+                cx.listener(|this, _, window, cx| {
+                    if this.security_secrets_locked() {
+                        this.open_security_unlock_prompt(window, cx);
+                    } else if this.settings.has_master_password {
+                        this.lock_security_secrets(cx);
+                    } else {
+                        this.security_status =
+                            "set a master password in Settings to lock secrets".to_string();
+                        cx.notify();
+                    }
+                }),
+            )))
     }
 
-    fn security_unlock_prompt(
-        &mut self,
-        cx: &mut Context<Self>,
-    ) -> impl IntoElement {
+    fn security_unlock_prompt(&mut self, cx: &mut Context<Self>) -> impl IntoElement {
         let palette = self.theme_palette();
         let draft = if self.security_unlock_draft.is_empty() {
             " ".to_string()
@@ -1868,14 +1925,16 @@ impl NyaTermApp {
                             .flex()
                             .justify_end()
                             .gap_2()
-                            .child(small_button(palette, 
+                            .child(small_button(
+                                palette,
                                 "security-unlock-cancel",
                                 "Cancel",
                                 cx.listener(|this, _, _, cx| {
                                     this.close_security_unlock_prompt(cx);
                                 }),
                             ))
-                            .child(small_button(palette, 
+                            .child(small_button(
+                                palette,
                                 "security-unlock-submit",
                                 "Unlock",
                                 cx.listener(|this, _, _, cx| {
@@ -1886,11 +1945,7 @@ impl NyaTermApp {
             )
     }
 
-    fn security_tab_chip(
-        &self,
-        tab: SecurityAuthTab,
-        cx: &mut Context<Self>,
-    ) -> impl IntoElement {
+    fn security_tab_chip(&self, tab: SecurityAuthTab, cx: &mut Context<Self>) -> impl IntoElement {
         let selected = self.security_auth_tab == tab;
         let palette = self.theme_palette();
         // Tauri TabsTrigger text-xs inside h-8 grid segment.
@@ -2022,13 +2077,13 @@ impl NyaTermApp {
                                     .items_center()
                                     .rounded_sm()
                                     .border_1()
-                                    .border_color(if editor.focused_field
-                                        == SecurityKeyEditorField::KeyPath
-                                    {
-                                        rgb(palette.accent)
-                                    } else {
-                                        rgb(palette.border)
-                                    })
+                                    .border_color(
+                                        if editor.focused_field == SecurityKeyEditorField::KeyPath {
+                                            rgb(palette.accent)
+                                        } else {
+                                            rgb(palette.border)
+                                        },
+                                    )
                                     .bg(rgb(palette.input))
                                     .text_size(px(10.))
                                     .text_color(rgb(palette.text))
@@ -2042,7 +2097,8 @@ impl NyaTermApp {
                                         );
                                     })),
                             )
-                            .child(small_button(palette, 
+                            .child(small_button(
+                                palette,
                                 "security-key-browse",
                                 "Browse",
                                 cx.listener(|this, _, window, cx| {
@@ -2078,13 +2134,14 @@ impl NyaTermApp {
                                     .items_center()
                                     .rounded_sm()
                                     .border_1()
-                                    .border_color(if editor.focused_field
-                                        == SecurityKeyEditorField::CertPath
-                                    {
-                                        rgb(palette.accent)
-                                    } else {
-                                        rgb(palette.border)
-                                    })
+                                    .border_color(
+                                        if editor.focused_field == SecurityKeyEditorField::CertPath
+                                        {
+                                            rgb(palette.accent)
+                                        } else {
+                                            rgb(palette.border)
+                                        },
+                                    )
                                     .bg(rgb(palette.input))
                                     .text_size(px(10.))
                                     .text_color(rgb(palette.text))
@@ -2098,7 +2155,8 @@ impl NyaTermApp {
                                         );
                                     })),
                             )
-                            .child(small_button(palette, 
+                            .child(small_button(
+                                palette,
                                 "security-cert-browse",
                                 "Browse",
                                 cx.listener(|this, _, window, cx| {
@@ -2129,14 +2187,16 @@ impl NyaTermApp {
                 div()
                     .flex()
                     .gap_2()
-                    .child(small_button(palette, 
+                    .child(small_button(
+                        palette,
                         "security-key-save",
                         "Save",
                         cx.listener(|this, _, window, cx| {
                             this.save_security_key_editor(window, cx);
                         }),
                     ))
-                    .child(small_button(palette, 
+                    .child(small_button(
+                        palette,
                         "security-key-cancel",
                         "Cancel",
                         cx.listener(|this, _, _, cx| {
@@ -2283,7 +2343,11 @@ impl NyaTermApp {
                         },
                         editor.focused_field == SecurityOtpEditorField::Digits,
                         cx.listener(|this, _, window, cx| {
-                            this.focus_security_otp_field(SecurityOtpEditorField::Digits, window, cx);
+                            this.focus_security_otp_field(
+                                SecurityOtpEditorField::Digits,
+                                window,
+                                cx,
+                            );
                         }),
                     ))
                     .child(security_editor_field(
@@ -2297,7 +2361,11 @@ impl NyaTermApp {
                         },
                         editor.focused_field == SecurityOtpEditorField::Period,
                         cx.listener(|this, _, window, cx| {
-                            this.focus_security_otp_field(SecurityOtpEditorField::Period, window, cx);
+                            this.focus_security_otp_field(
+                                SecurityOtpEditorField::Period,
+                                window,
+                                cx,
+                            );
                         }),
                     ))
                     .child(security_editor_field(
@@ -2331,14 +2399,16 @@ impl NyaTermApp {
                 div()
                     .flex()
                     .gap_2()
-                    .child(small_button(palette, 
+                    .child(small_button(
+                        palette,
                         "security-otp-save",
                         "Save",
                         cx.listener(|this, _, window, cx| {
                             this.save_security_otp_editor(window, cx);
                         }),
                     ))
-                    .child(small_button(palette, 
+                    .child(small_button(
+                        palette,
                         "security-otp-cancel",
                         "Cancel",
                         cx.listener(|this, _, _, cx| {
@@ -2366,11 +2436,25 @@ impl NyaTermApp {
             "failed"
         } else if self.cloud_sync_status.to_ascii_lowercase().contains("push")
             || self.cloud_sync_status.to_ascii_lowercase().contains("pull")
-            || self.cloud_sync_status.to_ascii_lowercase().contains("running") {
+            || self
+                .cloud_sync_status
+                .to_ascii_lowercase()
+                .contains("running")
+        {
             "running"
-        } else if self.cloud_sync_status.to_ascii_lowercase().contains("success")
-            || self.cloud_sync_status.to_ascii_lowercase().contains("synced")
-            || self.cloud_sync_status.to_ascii_lowercase().contains("ready") {
+        } else if self
+            .cloud_sync_status
+            .to_ascii_lowercase()
+            .contains("success")
+            || self
+                .cloud_sync_status
+                .to_ascii_lowercase()
+                .contains("synced")
+            || self
+                .cloud_sync_status
+                .to_ascii_lowercase()
+                .contains("ready")
+        {
             "success"
         } else {
             "idle"
@@ -2415,9 +2499,7 @@ impl NyaTermApp {
                         if copy_message.trim().is_empty() {
                             this.terminal_status = "history entry has no message".to_string();
                         } else {
-                            cx.write_to_clipboard(ClipboardItem::new_string(
-                                copy_message.clone(),
-                            ));
+                            cx.write_to_clipboard(ClipboardItem::new_string(copy_message.clone()));
                             this.terminal_status = "sync history message copied".to_string();
                         }
                         cx.notify();
@@ -2486,19 +2568,17 @@ impl NyaTermApp {
                                     .overflow_hidden()
                                     .child(provider_label),
                             )
-                            .child(
-                                toolbar_svg_button(
-                                    palette,
-                                    SharedString::from("sync-history-refresh"),
-                                    "icons/fe/refresh.svg",
-                                    cx.listener(|this, _, _, cx| {
-                                        this.refresh_cloud_sync_history();
-                                        this.terminal_status =
-                                            "cloud sync history refreshed".to_string();
-                                        cx.notify();
-                                    }),
-                                ),
-                            ),
+                            .child(toolbar_svg_button(
+                                palette,
+                                SharedString::from("sync-history-refresh"),
+                                "icons/fe/refresh.svg",
+                                cx.listener(|this, _, _, cx| {
+                                    this.refresh_cloud_sync_history();
+                                    this.terminal_status =
+                                        "cloud sync history refreshed".to_string();
+                                    cx.notify();
+                                }),
+                            )),
                     )
                     .when(
                         !status_message.trim().is_empty() && conflict.is_none(),
@@ -2549,35 +2629,29 @@ impl NyaTermApp {
                                 .child(conflict.message.clone()),
                         )
                         .child(
-                            div()
-                                .px_3()
-                                .pb_2()
-                                .grid()
-                                .grid_cols(1)
-                                .gap_2()
-                                .child(
-                                    div()
-                                        .rounded_md()
-                                        .border_1()
-                                        .border_color(rgb(palette.border))
-                                        .bg(rgb(palette.input))
-                                        .px_2()
-                                        .py_1()
-                                        .child(
-                                            div()
-                                                .text_size(px(10.))
-                                                .text_color(rgb(palette.text_muted))
-                                                .child("Provider"),
-                                        )
-                                        .child(
-                                            div()
-                                                .mt_0()
-                                                .font_family("JetBrains Mono")
-                                                .text_size(px(11.))
-                                                .text_color(rgb(palette.text))
-                                                .child(format_cloud_provider(&conflict.provider)),
-                                        ),
-                                ),
+                            div().px_3().pb_2().grid().grid_cols(1).gap_2().child(
+                                div()
+                                    .rounded_md()
+                                    .border_1()
+                                    .border_color(rgb(palette.border))
+                                    .bg(rgb(palette.input))
+                                    .px_2()
+                                    .py_1()
+                                    .child(
+                                        div()
+                                            .text_size(px(10.))
+                                            .text_color(rgb(palette.text_muted))
+                                            .child("Provider"),
+                                    )
+                                    .child(
+                                        div()
+                                            .mt_0()
+                                            .font_family("JetBrains Mono")
+                                            .text_size(px(11.))
+                                            .text_color(rgb(palette.text))
+                                            .child(format_cloud_provider(&conflict.provider)),
+                                    ),
+                            ),
                         )
                         .child(
                             div()
@@ -2585,7 +2659,8 @@ impl NyaTermApp {
                                 .pb_3()
                                 .flex()
                                 .gap_2()
-                                .child(small_button(palette, 
+                                .child(small_button(
+                                    palette,
                                     "sync-panel-force-pull",
                                     "Use remote",
                                     cx.listener({
@@ -2595,7 +2670,8 @@ impl NyaTermApp {
                                         }
                                     }),
                                 ))
-                                .child(small_button(palette, 
+                                .child(small_button(
+                                    palette,
                                     "sync-panel-force-push",
                                     "Use local",
                                     cx.listener({
@@ -2605,7 +2681,8 @@ impl NyaTermApp {
                                         }
                                     }),
                                 ))
-                                .child(small_button(palette, 
+                                .child(small_button(
+                                    palette,
                                     "sync-panel-conflict-dismiss",
                                     "Dismiss",
                                     cx.listener(|this, _, _, cx| {
@@ -2638,7 +2715,8 @@ impl NyaTermApp {
                             .flex()
                             .items_center()
                             .gap_1()
-                            .child(small_button(palette, 
+                            .child(small_button(
+                                palette,
                                 "sync-panel-push",
                                 "Push",
                                 cx.listener(|this, _, _, cx| {
@@ -2651,7 +2729,8 @@ impl NyaTermApp {
                                     }
                                 }),
                             ))
-                            .child(small_button(palette, 
+                            .child(small_button(
+                                palette,
                                 "sync-panel-pull",
                                 "Pull",
                                 cx.listener(|this, _, _, cx| {
@@ -2664,7 +2743,8 @@ impl NyaTermApp {
                                     }
                                 }),
                             ))
-                            .child(small_button(palette, 
+                            .child(small_button(
+                                palette,
                                 "sync-panel-settings",
                                 "Settings",
                                 cx.listener(|this, _, _, cx| {
@@ -2737,7 +2817,11 @@ impl NyaTermApp {
                 },
                 editor.focused_field == SecurityPasswordEditorField::Name,
                 cx.listener(|this, _, window, cx| {
-                    this.focus_security_password_field(SecurityPasswordEditorField::Name, window, cx);
+                    this.focus_security_password_field(
+                        SecurityPasswordEditorField::Name,
+                        window,
+                        cx,
+                    );
                 }),
             ))
             .child(
@@ -2745,22 +2829,20 @@ impl NyaTermApp {
                     .flex()
                     .items_end()
                     .gap_1()
-                    .child(
-                        div().min_w_0().flex_1().child(security_editor_field(
-                            palette,
-                            "security-pw-value",
-                            "Password",
-                            password_display,
-                            editor.focused_field == SecurityPasswordEditorField::Password,
-                            cx.listener(|this, _, window, cx| {
-                                this.focus_security_password_field(
-                                    SecurityPasswordEditorField::Password,
-                                    window,
-                                    cx,
-                                );
-                            }),
-                        )),
-                    )
+                    .child(div().min_w_0().flex_1().child(security_editor_field(
+                        palette,
+                        "security-pw-value",
+                        "Password",
+                        password_display,
+                        editor.focused_field == SecurityPasswordEditorField::Password,
+                        cx.listener(|this, _, window, cx| {
+                            this.focus_security_password_field(
+                                SecurityPasswordEditorField::Password,
+                                window,
+                                cx,
+                            );
+                        }),
+                    )))
                     .child(small_button(
                         palette,
                         "security-pw-toggle-vis",
@@ -2847,9 +2929,14 @@ impl NyaTermApp {
                             .text_color(rgb(palette.text))
                             .child(title),
                     )
-                    .child(small_button(palette, 
+                    .child(small_button(
+                        palette,
                         "security-cred-enabled",
-                        if editor.enabled { "Enabled" } else { "Disabled" },
+                        if editor.enabled {
+                            "Enabled"
+                        } else {
+                            "Disabled"
+                        },
                         cx.listener(|this, _, _, cx| {
                             this.toggle_security_credential_enabled(cx);
                         }),
@@ -2953,14 +3040,16 @@ impl NyaTermApp {
                 div()
                     .flex()
                     .gap_2()
-                    .child(small_button(palette, 
+                    .child(small_button(
+                        palette,
                         "security-cred-save",
                         "Save",
                         cx.listener(|this, _, window, cx| {
                             this.save_security_credential_editor(window, cx);
                         }),
                     ))
-                    .child(small_button(palette, 
+                    .child(small_button(
+                        palette,
                         "security-cred-cancel",
                         "Cancel",
                         cx.listener(|this, _, _, cx| {
@@ -2969,24 +3058,28 @@ impl NyaTermApp {
                     )),
             )
     }
-
 }
 
-fn security_editor_field(palette: crate::ui::theme::ThemePalette,
+fn security_editor_field(
+    palette: crate::ui::theme::ThemePalette,
     id: impl Into<String>,
     label: &'static str,
     value: String,
     active: bool,
-    on_click: impl Fn(&gpui::ClickEvent, &mut gpui::Window, &mut gpui::App) + 'static,) -> impl IntoElement {
+    on_click: impl Fn(&gpui::ClickEvent, &mut gpui::Window, &mut gpui::App) + 'static,
+) -> impl IntoElement {
     transfer_input(id, label, value, active, palette)
         .h(px(42.))
         .on_click(on_click)
 }
 
-fn security_type_chip(palette: crate::ui::theme::ThemePalette,
+fn security_type_chip(
+    palette: crate::ui::theme::ThemePalette,
     label: &'static str,
     selected: bool,
-    on_click: impl Fn(&gpui::ClickEvent, &mut gpui::Window, &mut gpui::App) + 'static,) -> impl IntoElement {    div()
+    on_click: impl Fn(&gpui::ClickEvent, &mut gpui::Window, &mut gpui::App) + 'static,
+) -> impl IntoElement {
+    div()
         .id(SharedString::from(format!("security-type-{label}")))
         .h(px(22.))
         .px_2()
@@ -3038,12 +3131,7 @@ fn session_action_svg_button(
             })
         })
         .when(!enabled, |this| this.opacity(0.4))
-        .child(
-            svg()
-                .size(px(16.))
-                .flex_none()
-                .path(icon_path),
-        )
+        .child(svg().size(px(16.)).flex_none().path(icon_path))
         .on_click(move |event, window, cx| {
             if enabled {
                 on_click(event, window, cx);
@@ -3092,11 +3180,7 @@ fn active_session_menu_item(
             div()
                 .text_size(px(12.))
                 .text_color(rgb(text_color))
-                .child(if busy {
-                    format!("{label}")
-                } else {
-                    label
-                }),
+                .child(if busy { format!("{label}") } else { label }),
         )
         .on_click(move |event, window, cx| {
             if enabled {

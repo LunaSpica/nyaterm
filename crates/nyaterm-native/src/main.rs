@@ -1,5 +1,5 @@
-mod assets;
 pub mod ai_http;
+mod assets;
 mod cloud_sync_http;
 mod translation_http;
 mod ui;
@@ -21,21 +21,21 @@ fn main() -> anyhow::Result<()> {
     Application::new()
         .with_assets(assets::NyaTermAssets)
         .run(move |cx: &mut App| {
-        let bounds = Bounds::centered(None, size(px(1280.), px(800.)), cx);
-        let app_runtime = runtime.clone();
+            let bounds = Bounds::centered(None, size(px(1280.), px(800.)), cx);
+            let app_runtime = runtime.clone();
 
-        cx.open_window(
-            WindowOptions {
-                titlebar: None,
-                window_bounds: Some(WindowBounds::Windowed(bounds)),
-                ..Default::default()
-            },
-            move |_, cx| cx.new(|cx| ui::NyaTermApp::new(app_runtime, cx)),
-        )
-        .expect("failed to open NyaTerm window");
+            cx.open_window(
+                WindowOptions {
+                    titlebar: None,
+                    window_bounds: Some(WindowBounds::Windowed(bounds)),
+                    ..Default::default()
+                },
+                move |_, cx| cx.new(|cx| ui::NyaTermApp::new(app_runtime, cx)),
+            )
+            .expect("failed to open NyaTerm window");
 
-        cx.activate(true);
-    });
+            cx.activate(true);
+        });
 
     Ok(())
 }

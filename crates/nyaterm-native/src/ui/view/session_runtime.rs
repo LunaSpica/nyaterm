@@ -45,7 +45,9 @@ impl NyaTermApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        if self.pending_session_name.is_some() {
+        if self.pending_session_name.is_some()
+            && !matches!(connection.config, ConnectionType::Ssh { .. })
+        {
             self.terminal_status = "wait for the pending session to finish connecting".to_string();
             self.selected_nav = NavItem::Workspace;
             cx.notify();
@@ -372,7 +374,7 @@ impl NyaTermApp {
                 source_connection_id,
                 ai_execution_profile,
                 launch_config,
-                        disconnected: false,
+                disconnected: false,
             },
         );
         self.activate_session_id(&session_id);
@@ -398,19 +400,34 @@ impl NyaTermApp {
         startup_command: Option<StartupCommandRequest>,
         cx: &mut Context<Self>,
     ) {
+        let request_id = uuid();
         self.pending_session_name = Some(connection_name.clone());
         self.last_connect_failure_name = None;
         self.last_connect_failure_error = None;
-        self.pending_ssh_config = Some(config.clone());
-        self.pending_ai_execution_profile = ai_execution_profile;
-        self.pending_session_custom_name = custom_name;
-        self.pending_session_tab_color = tab_color;
-        self.pending_session_after_id = after_session_id;
-        self.pending_session_insert_index = insert_index;
-        self.pending_terminal_seed_output = seed_output;
-        self.pending_startup_command = startup_command;
-        self.pending_session_multiplex_key = None;
-        self.pending_source_connection_id = source_connection_id;
+        self.session_pane_states.insert(
+            request_id.clone(),
+            SessionPaneState::Connecting {
+                request_id: request_id.clone(),
+                name: connection_name.clone(),
+                kind: SessionKind::Ssh,
+            },
+        );
+        self.pending_session_starts.insert(
+            request_id.clone(),
+            PendingSessionStart {
+                connection_name: connection_name.clone(),
+                ssh_config: Some(config.clone()),
+                ai_execution_profile,
+                custom_name,
+                tab_color,
+                after_session_id,
+                insert_index,
+                seed_output,
+                startup_command,
+                multiplex_key: None,
+                source_connection_id,
+            },
+        );
         self.terminal_status = format!("connecting to {connection_name}");
         if self.active_session_id.is_none() {
             self.append_terminal_log(format!("\n# connecting to {connection_name}\n"));
@@ -419,6 +436,7 @@ impl NyaTermApp {
 
         let session_manager = self.session_manager.clone();
         let session_start_tx = self.session_start_tx.clone();
+        let request_id_for_worker = request_id.clone();
         std::thread::spawn(move || {
             let result = session_manager
                 .create_ssh_session(config)
@@ -428,6 +446,7 @@ impl NyaTermApp {
                 })
                 .map_err(|error| error.to_string());
             let _ = session_start_tx.send(SessionStartResult {
+                request_id: request_id_for_worker,
                 connection_name,
                 result,
             });
@@ -449,24 +468,40 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         let multiplex_key = ssh_multiplex_key(&config);
+        let request_id = uuid();
         self.pending_session_name = Some(connection_name.clone());
         self.last_connect_failure_name = None;
         self.last_connect_failure_error = None;
-        self.pending_ssh_config = Some(config.clone());
-        self.pending_ai_execution_profile = ai_execution_profile;
-        self.pending_session_custom_name = custom_name;
-        self.pending_session_tab_color = tab_color;
-        self.pending_session_after_id = after_session_id;
-        self.pending_session_insert_index = None;
-        self.pending_terminal_seed_output = None;
-        self.pending_startup_command = startup_command;
-        self.pending_session_multiplex_key = Some(multiplex_key.clone());
-        self.pending_source_connection_id = source_connection_id;
+        self.session_pane_states.insert(
+            request_id.clone(),
+            SessionPaneState::Connecting {
+                request_id: request_id.clone(),
+                name: connection_name.clone(),
+                kind: SessionKind::Ssh,
+            },
+        );
+        self.pending_session_starts.insert(
+            request_id.clone(),
+            PendingSessionStart {
+                connection_name: connection_name.clone(),
+                ssh_config: Some(config.clone()),
+                ai_execution_profile,
+                custom_name,
+                tab_color,
+                after_session_id,
+                insert_index: None,
+                seed_output: None,
+                startup_command,
+                multiplex_key: Some(multiplex_key.clone()),
+                source_connection_id,
+            },
+        );
         self.terminal_status = format!("multiplexing SSH session {connection_name}");
         self.selected_nav = NavItem::Workspace;
 
         let session_manager = self.session_manager.clone();
         let session_start_tx = self.session_start_tx.clone();
+        let request_id_for_worker = request_id.clone();
         std::thread::spawn(move || {
             let result = (|| {
                 let multiplex = match existing_multiplex {
@@ -483,6 +518,7 @@ impl NyaTermApp {
                 })
             })();
             let _ = session_start_tx.send(SessionStartResult {
+                request_id: request_id_for_worker,
                 connection_name,
                 result,
             });
@@ -513,63 +549,92 @@ impl NyaTermApp {
         cx.notify();
     }
 
-    pub(super) fn drain_session_start_events(&mut self, cx: &mut Context<Self>) {
+    pub(super) fn drain_session_start_events(&mut self, cx: &mut Context<Self>) -> bool {
+        let mut dirty = false;
         while let Ok(event) = self.session_start_rx.try_recv() {
-            self.pending_session_name = None;
+            dirty = true;
+            let pending = self.pending_session_starts.remove(&event.request_id);
             match event.result {
                 Ok(success) => {
                     self.last_connect_failure_name = None;
                     self.last_connect_failure_error = None;
                     let session_id = success.session_id;
-                    let ssh_config = self.pending_ssh_config.take();
+                    let ssh_config = pending
+                        .as_ref()
+                        .and_then(|pending| pending.ssh_config.clone());
                     let launch_config = ssh_config
                         .clone()
                         .map(SessionLaunchConfig::Ssh)
                         .unwrap_or_else(|| SessionLaunchConfig::Ssh(SshSessionConfig::default()));
-                    let ssh_multiplex_key = self.pending_session_multiplex_key.take();
+                    let ssh_multiplex_key = pending
+                        .as_ref()
+                        .and_then(|pending| pending.multiplex_key.clone());
                     if let (Some(key), Some(handle)) =
                         (ssh_multiplex_key.clone(), success.multiplex_handle)
                     {
                         self.ssh_multiplex_handles.insert(key, handle);
                     }
-                    let source_connection_id = self.pending_source_connection_id.take();
+                    let source_connection_id = pending
+                        .as_ref()
+                        .and_then(|pending| pending.source_connection_id.clone());
+                    let ai_execution_profile = pending
+                        .as_ref()
+                        .map(|pending| pending.ai_execution_profile)
+                        .unwrap_or(AiExecutionProfile::SendOnly);
                     self.register_session(
                         &session_id,
                         SessionRuntimeMetadata {
                             ssh_config,
                             ssh_multiplex_key,
                             source_connection_id,
-                            ai_execution_profile: self.pending_ai_execution_profile,
+                            ai_execution_profile,
                             launch_config,
                             disconnected: false,
                         },
                     );
-                    if let Some(custom_name) = self.pending_session_custom_name.take() {
+                    if let Some(custom_name) = pending
+                        .as_ref()
+                        .and_then(|pending| pending.custom_name.clone())
+                    {
                         self.session_custom_names
                             .insert(session_id.clone(), custom_name);
                     }
-                    if let Some(tab_color) = self.pending_session_tab_color.take() {
+                    if let Some(tab_color) = pending.as_ref().and_then(|pending| pending.tab_color)
+                    {
                         self.session_tab_colors
                             .insert(session_id.clone(), tab_color);
                     }
-                    if let Some(seed_output) = self.pending_terminal_seed_output.take() {
+                    if let Some(seed_output) = pending
+                        .as_ref()
+                        .and_then(|pending| pending.seed_output.clone())
+                    {
                         self.terminal_views.insert(
                             session_id.clone(),
                             TerminalViewState::from_output(seed_output),
                         );
                     }
-                    if let Some(after_session_id) = self.pending_session_after_id.take() {
+                    if let Some(after_session_id) = pending
+                        .as_ref()
+                        .and_then(|pending| pending.after_session_id.clone())
+                    {
                         self.move_session_after(&session_id, &after_session_id);
                     }
-                    if let Some(insert_index) = self.pending_session_insert_index.take() {
+                    if let Some(insert_index) =
+                        pending.as_ref().and_then(|pending| pending.insert_index)
+                    {
                         self.move_session_to_index(&session_id, insert_index);
                     }
-                    self.pending_ai_execution_profile = AiExecutionProfile::SendOnly;
                     if let Some(stale_id) = self.pending_reconnect_replace_id.take() {
                         if stale_id != session_id {
                             self.remove_session_state(&stale_id);
                         }
                     }
+                    self.session_pane_states.insert(
+                        event.request_id.clone(),
+                        SessionPaneState::Live {
+                            session_id: session_id.clone(),
+                        },
+                    );
                     self.activate_session_id(&session_id);
                     self.terminal_status = format!("running {}", short_id(&session_id));
                     self.append_terminal_log(format!(
@@ -578,29 +643,24 @@ impl NyaTermApp {
                         short_id(&session_id)
                     ));
                     self.maybe_auto_start_recording(&session_id, &event.connection_name);
-                    if let Some(startup_command) = self.pending_startup_command.take() {
+                    if let Some(startup_command) =
+                        pending.and_then(|pending| pending.startup_command)
+                    {
                         self.schedule_startup_command(session_id.clone(), startup_command, cx);
                     }
                     self.apply_pending_workspace_split_for_duplicate(&session_id);
                     self.selected_nav = NavItem::Workspace;
                 }
                 Err(error) => {
-                    self.pending_ssh_config = None;
-                    self.pending_session_custom_name = None;
-                    self.pending_session_tab_color = None;
-                    self.pending_session_after_id = None;
-                    self.pending_session_insert_index = None;
-                    self.pending_terminal_seed_output = None;
-                    self.pending_startup_command = None;
-                    self.pending_session_multiplex_key = None;
-                    self.pending_source_connection_id = None;
-                    self.pending_workspace_split = None;
-                    self.pending_reconnect_replace_id = None;
-                    self.pending_ai_execution_profile = AiExecutionProfile::SendOnly;
-                    self.active_ssh_config = None;
-                    self.active_ai_execution_profile = AiExecutionProfile::SendOnly;
                     self.last_connect_failure_name = Some(event.connection_name.clone());
                     self.last_connect_failure_error = Some(error.clone());
+                    self.session_pane_states.insert(
+                        event.request_id.clone(),
+                        SessionPaneState::Failed {
+                            name: event.connection_name.clone(),
+                            error: error.clone(),
+                        },
+                    );
                     self.terminal_status =
                         format!("failed to start {}: {error}", event.connection_name);
                     if self.active_session_id.is_none() {
@@ -612,6 +672,16 @@ impl NyaTermApp {
                     self.selected_nav = NavItem::Workspace;
                 }
             }
+            self.refresh_pending_session_name();
         }
+        dirty
+    }
+
+    fn refresh_pending_session_name(&mut self) {
+        self.pending_session_name = self
+            .pending_session_starts
+            .values()
+            .next()
+            .map(|pending| pending.connection_name.clone());
     }
 }

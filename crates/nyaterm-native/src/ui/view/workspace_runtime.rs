@@ -182,9 +182,9 @@ impl NyaTermApp {
     }
 
     pub(in crate::ui::view) fn focused_workspace_split_id(&self) -> Option<String> {
-        self.workspace_split.as_ref()?.focused_split_id(
-            self.active_session_id.as_deref(),
-        )
+        self.workspace_split
+            .as_ref()?
+            .focused_split_id(self.active_session_id.as_deref())
     }
 
     pub(in crate::ui::view) fn adjust_workspace_split_ratio(
@@ -297,10 +297,7 @@ impl NyaTermApp {
         cx.notify();
     }
 
-    pub(in crate::ui::view) fn ensure_workspace_focus(
-        &mut self,
-        cx: &mut Context<Self>,
-    ) {
+    pub(in crate::ui::view) fn ensure_workspace_focus(&mut self, cx: &mut Context<Self>) {
         self.prune_workspace_split();
         cx.notify();
     }
@@ -422,7 +419,11 @@ impl NyaTermApp {
             }
             if self.terminal_windows_is_multi_leaf() {
                 self.persist_terminal_window_layout();
-            } else if self.workspace_split.as_ref().is_some_and(|root| root.is_split()) {
+            } else if self
+                .workspace_split
+                .as_ref()
+                .is_some_and(|root| root.is_split())
+            {
                 self.write_back_active_tab_pane_root();
                 self.persist_workspace_pane_layout();
             }
@@ -578,10 +579,7 @@ impl NyaTermApp {
 
 /// Keep only the branch that contains `session_id`, collapsing every split on the path
 /// into that single branch (closes the sibling panes of the active leaf).
-fn collapse_around_session(
-    node: WorkspacePaneNode,
-    session_id: &str,
-) -> Option<WorkspacePaneNode> {
+fn collapse_around_session(node: WorkspacePaneNode, session_id: &str) -> Option<WorkspacePaneNode> {
     match node {
         WorkspacePaneNode::Leaf { session_id: id } => {
             if id == session_id {
@@ -590,11 +588,7 @@ fn collapse_around_session(
                 None
             }
         }
-        WorkspacePaneNode::Split {
-            first,
-            second,
-            ..
-        } => {
+        WorkspacePaneNode::Split { first, second, .. } => {
             let in_first = first.contains_session(session_id);
             let in_second = second.contains_session(session_id);
             if in_first && !in_second {

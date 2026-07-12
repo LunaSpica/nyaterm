@@ -116,7 +116,12 @@ impl NyaTermApp {
                     .gap_2()
                     .text_xs()
                     .text_color(rgb(palette.text_muted))
-                    .child(div().size(px(8.)).rounded_full().bg(rgb(palette.text_dimmed)))
+                    .child(
+                        div()
+                            .size(px(8.))
+                            .rounded_full()
+                            .bg(rgb(palette.text_dimmed)),
+                    )
                     .child("No sessions"),
             );
         } else {
@@ -146,9 +151,7 @@ impl NyaTermApp {
                     .get(&session.id)
                     .map(|root| root.session_ids())
                     .unwrap_or_else(|| vec![session.id.clone()]);
-                let is_disconnected = leaf_ids
-                    .iter()
-                    .any(|id| self.is_session_disconnected(id));
+                let is_disconnected = leaf_ids.iter().any(|id| self.is_session_disconnected(id));
                 let is_split_tab = self
                     .session_pane_roots
                     .get(&session.id)
@@ -287,12 +290,7 @@ impl NyaTermApp {
                                 .flex()
                                 .items_center()
                                 .justify_center()
-                                .child(
-                                    svg()
-                                        .size(px(12.))
-                                        .path(kind_icon)
-                                        .text_color(accent),
-                                ),
+                                .child(svg().size(px(12.)).path(kind_icon).text_color(accent)),
                         )
                         .child(
                             div()
@@ -339,12 +337,7 @@ impl NyaTermApp {
                             )
                         })
                         .when(has_unread && !is_active, |this| {
-                            this.child(
-                                div()
-                                    .size(px(8.))
-                                    .rounded_full()
-                                    .bg(rgb(palette.success)),
-                            )
+                            this.child(div().size(px(8.)).rounded_full().bg(rgb(palette.success)))
                         })
                         .child(
                             div()
@@ -359,12 +352,11 @@ impl NyaTermApp {
                                 .text_xs()
                                 .font_weight(FontWeight(800.))
                                 .text_color(rgb(palette.text_muted))
-                                .hover(|this| this.bg(rgb(palette.border)).text_color(rgb(palette.success)))
-                                .child(
-                                    svg()
-                                        .size(px(12.))
-                                        .path("icons/conn/more.svg"),
-                                )
+                                .hover(|this| {
+                                    this.bg(rgb(palette.border))
+                                        .text_color(rgb(palette.success))
+                                })
+                                .child(svg().size(px(12.)).path("icons/conn/more.svg"))
                                 .on_click(cx.listener(move |this, _, window, cx| {
                                     cx.stop_propagation();
                                     this.open_tab_actions(actions_session_id.clone(), window, cx);
@@ -382,7 +374,9 @@ impl NyaTermApp {
                                 .rounded_sm()
                                 .text_xs()
                                 .text_color(rgb(palette.text_muted))
-                                .hover(|this| this.bg(rgb(palette.border)).text_color(rgb(palette.danger)))
+                                .hover(|this| {
+                                    this.bg(rgb(palette.border)).text_color(rgb(palette.danger))
+                                })
                                 .child("x")
                                 .on_click(cx.listener(move |this, _, _, cx| {
                                     cx.stop_propagation();
@@ -525,11 +519,9 @@ impl NyaTermApp {
         // Tauri TabBar trailing chrome: optional open-tabs overflow menu + new session menu.
         let open_tabs_menu = self.open_tabs_menu_open;
         let new_session_menu = self.new_session_menu_open;
-        let tab_strip_has_overflow =
-            self.session_tab_strip_scroll.max_offset().width > px(0.);
+        let tab_strip_has_overflow = self.session_tab_strip_scroll.max_offset().width > px(0.);
         // Tauri shows Open Tabs when the strip overflows; keep a small-count fallback.
-        let show_open_tabs_menu =
-            tab_strip_has_overflow || session_count >= 4 || open_tabs_menu;
+        let show_open_tabs_menu = tab_strip_has_overflow || session_count >= 4 || open_tabs_menu;
 
         let mut session_actions = div()
             .h_full()
@@ -627,7 +619,8 @@ impl NyaTermApp {
             );
         if self.active_session_id.is_some() {
             session_actions = session_actions
-                .child(small_button(palette, 
+                .child(small_button(
+                    palette,
                     "workspace-split-horizontal",
                     "H",
                     cx.listener(|this, _, window, cx| {
@@ -638,7 +631,8 @@ impl NyaTermApp {
                         );
                     }),
                 ))
-                .child(small_button(palette, 
+                .child(small_button(
+                    palette,
                     "workspace-split-vertical",
                     "V",
                     cx.listener(|this, _, window, cx| {
@@ -649,7 +643,8 @@ impl NyaTermApp {
                         );
                     }),
                 ))
-                .child(small_button(palette,
+                .child(small_button(
+                    palette,
                     "workspace-window-right",
                     "W|",
                     cx.listener(|this, _, _, cx| {
@@ -660,7 +655,8 @@ impl NyaTermApp {
                         );
                     }),
                 ))
-                .child(small_button(palette,
+                .child(small_button(
+                    palette,
                     "workspace-window-below",
                     "W—",
                     cx.listener(|this, _, _, cx| {
@@ -671,7 +667,8 @@ impl NyaTermApp {
                         );
                     }),
                 ))
-                .child(small_button(palette,
+                .child(small_button(
+                    palette,
                     "workspace-smart-split",
                     "Tile",
                     cx.listener(|this, _, _, cx| {
@@ -680,7 +677,8 @@ impl NyaTermApp {
                 ));
         }
         if self.terminal_windows_is_multi_leaf() {
-            session_actions = session_actions.child(small_button(palette,
+            session_actions = session_actions.child(small_button(
+                palette,
                 "workspace-window-merge",
                 "Merge",
                 cx.listener(|this, _, _, cx| {
@@ -697,21 +695,24 @@ impl NyaTermApp {
             || self.workspace_split.is_some()
         {
             session_actions = session_actions
-                .child(small_button(palette, 
+                .child(small_button(
+                    palette,
                     "workspace-split-ratio-dec",
                     "−",
                     cx.listener(|this, _, _, cx| {
                         this.adjust_workspace_split_ratio(-5, cx);
                     }),
                 ))
-                .child(small_button(palette, 
+                .child(small_button(
+                    palette,
                     "workspace-split-ratio-inc",
                     "+",
                     cx.listener(|this, _, _, cx| {
                         this.adjust_workspace_split_ratio(5, cx);
                     }),
                 ))
-                .child(small_button(palette, 
+                .child(small_button(
+                    palette,
                     "workspace-unsplit",
                     "Unsplit",
                     cx.listener(|this, _, _, cx| {
@@ -720,7 +721,8 @@ impl NyaTermApp {
                 ));
         }
         if session_count > 0 {
-            session_actions = session_actions.child(small_button(palette, 
+            session_actions = session_actions.child(small_button(
+                palette,
                 "workspace-close-all-sessions",
                 "All",
                 cx.listener(|this, _, window, cx| {
@@ -768,7 +770,7 @@ impl NyaTermApp {
             .py_1()
             .flex()
             .flex_col()
-                        .child(
+            .child(
                 div()
                     .px_3()
                     .py_1()
@@ -777,13 +779,7 @@ impl NyaTermApp {
                     .text_color(rgb(palette.text_dimmed))
                     .child("Open Tabs"),
             )
-            .child(
-                div()
-                    .mx_2()
-                    .my_1()
-                    .h(px(1.))
-                    .bg(rgb(palette.border)),
-            );
+            .child(div().mx_2().my_1().h(px(1.)).bg(rgb(palette.border)));
 
         if sessions.is_empty() {
             menu = menu.child(
@@ -801,7 +797,8 @@ impl NyaTermApp {
                 let is_disconnected = self.is_session_disconnected(&session_id);
                 let title = self.session_display_name_by_info(&session);
                 let kind = session_kind_label(session.kind);
-                let accent = if let Some(color) = self.session_tab_colors.get(&session_id).copied() {
+                let accent = if let Some(color) = self.session_tab_colors.get(&session_id).copied()
+                {
                     rgb(color)
                 } else if is_disconnected {
                     rgb(palette.danger)
@@ -830,12 +827,7 @@ impl NyaTermApp {
                             this.select_session(session_id.clone(), cx);
                             window.focus(&this.terminal_focus);
                         }))
-                        .child(
-                            div()
-                                .size(px(8.))
-                                .rounded_full()
-                                .bg(accent),
-                        )
+                        .child(div().size(px(8.)).rounded_full().bg(accent))
                         .child(
                             div()
                                 .min_w(px(14.))
@@ -1012,22 +1004,17 @@ impl NyaTermApp {
                     ),
             );
 
-        menu = menu.child(
-            div()
-                .mx_2()
-                .my_1()
-                .h(px(1.))
-                .bg(rgb(palette.border)),
-        )
-        .child(
-            div()
-                .px_3()
-                .py_1()
-                .text_size(px(10.))
-                .font_weight(FontWeight(700.))
-                .text_color(rgb(palette.text_dimmed))
-                .child("Shell Sessions"),
-        );
+        menu = menu
+            .child(div().mx_2().my_1().h(px(1.)).bg(rgb(palette.border)))
+            .child(
+                div()
+                    .px_3()
+                    .py_1()
+                    .text_size(px(10.))
+                    .font_weight(FontWeight(700.))
+                    .text_color(rgb(palette.text_dimmed))
+                    .child("Shell Sessions"),
+            );
         if shell.is_empty() {
             menu = menu.child(
                 div()
@@ -1044,13 +1031,7 @@ impl NyaTermApp {
         }
 
         menu = menu
-            .child(
-                div()
-                    .mx_2()
-                    .my_1()
-                    .h(px(1.))
-                    .bg(rgb(palette.border)),
-            )
+            .child(div().mx_2().my_1().h(px(1.)).bg(rgb(palette.border)))
             .child(
                 div()
                     .px_3()
@@ -1099,7 +1080,9 @@ impl NyaTermApp {
             format!("{name}")
         };
         div()
-            .id(SharedString::from(format!("new-session-conn-{connection_id}")))
+            .id(SharedString::from(format!(
+                "new-session-conn-{connection_id}"
+            )))
             .h(px(32.))
             .px_3()
             .flex()
@@ -1191,7 +1174,11 @@ impl NyaTermApp {
                     .flex()
                     .flex_col()
                     .items_center()
-                    .child(div().mb_9().child(nyaterm_logo_mark(terminal_palette, 256., 0.13)))
+                    .child(
+                        div()
+                            .mb_9()
+                            .child(nyaterm_logo_mark(terminal_palette, 256., 0.13)),
+                    )
                     .when_some(connecting_name, |this, name| {
                         this.child(
                             div()
@@ -1363,14 +1350,19 @@ impl NyaTermApp {
                                     .text_color(rgb(palette.text_muted))
                                     .child("Quick Commands"),
                             )
-                            .child(status_pill("bottom panel", rgb(palette.accent), rgb(palette.hover))),
+                            .child(status_pill(
+                                "bottom panel",
+                                rgb(palette.accent),
+                                rgb(palette.hover),
+                            )),
                     )
                     .child(
                         div()
                             .flex()
                             .items_center()
                             .gap_2()
-                            .child(small_button(palette, 
+                            .child(small_button(
+                                palette,
                                 "bottom-command-search",
                                 "Search",
                                 cx.listener(|this, _, window, cx| {
@@ -1379,7 +1371,8 @@ impl NyaTermApp {
                                     cx.notify();
                                 }),
                             ))
-                            .child(small_button(palette, 
+                            .child(small_button(
+                                palette,
                                 "bottom-command-refresh",
                                 "Refresh",
                                 cx.listener(|this, _, _, cx| {

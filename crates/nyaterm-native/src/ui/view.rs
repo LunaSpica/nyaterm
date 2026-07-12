@@ -1,20 +1,20 @@
 mod prelude;
 use prelude::*;
 
+mod activity_bar_runtime;
 mod ai_agent_runtime;
 mod ai_jobs;
 mod ai_runtime;
 mod app_state;
 mod appearance;
-mod activity_bar_runtime;
 mod auth_runtime;
 mod cloud_sync_provider;
 mod cloud_sync_runtime;
 mod command_runtime;
-mod credential_autofill_runtime;
 mod config_runtime;
 mod connection_runtime;
 mod connections;
+mod credential_autofill_runtime;
 mod event_pump;
 mod formatting;
 mod global_shortcut_runtime;
@@ -24,10 +24,9 @@ mod keybinding_runtime;
 mod layout;
 mod lock_diagnostics_runtime;
 mod navigation_runtime;
-mod security_runtime;
+mod pages;
 mod panel_resize_runtime;
 mod panel_stack_runtime;
-mod pages;
 mod panels;
 mod prompt_runtime;
 mod quick_command_runtime;
@@ -36,22 +35,23 @@ mod recording_runtime;
 mod remote_runtime;
 mod root;
 mod runtime_jobs;
+mod security_runtime;
 mod send_command_runtime;
 mod session_dialog_runtime;
 mod session_lifecycle;
 mod session_order;
-mod startup_restore_runtime;
 mod session_runtime;
 mod session_state;
 mod settings_runtime;
+mod startup_restore_runtime;
 mod sync_input;
 mod tab_mouse;
 mod tab_windows_runtime;
 mod temporary_ssh_link;
+mod terminal_context_menu_runtime;
 mod terminal_runtime;
 mod terminal_search_runtime;
 mod terminal_selection_runtime;
-mod terminal_context_menu_runtime;
 pub(in crate::ui::view) use terminal_selection_runtime::terminal_bounds_tracker;
 mod terminal_surface;
 mod transfer_events;
@@ -66,18 +66,32 @@ mod view_widgets;
 mod workspace_runtime;
 mod zmodem_runtime;
 
+#[allow(unused_imports)]
+pub(in crate::ui::view) use crate::ui::action_links::{
+    ActionLinkAction, ActionLinkKind, ActionLinkMatch, actions_for_match, find_action_links,
+    match_at_offset,
+};
+pub(in crate::ui::view) use crate::ui::theme::ThemePalette;
+pub(in crate::ui::view) use activity_bar_runtime::{
+    ActivityBarDragPayload, ActivityBarDragPreview,
+};
 pub(in crate::ui::view) use ai_jobs::{
     ai_active_profile_api_key, ai_active_profile_drafts, ai_job_cancelled, ai_usage_counts,
     is_agent_command_card, observation_summary, remote_command_observation, run_ai_ask_job,
 };
 pub use app_state::NyaTermApp;
-pub(in crate::ui::view) use connection_runtime::ConnectionEditorToggle;
+pub(in crate::ui::view) use app_state::{PendingSessionStart, SessionPaneState};
 pub(in crate::ui::view) use auth_runtime::{
     CredentialPromptBroker, CredentialPromptState, HostKeyPromptBroker, HostKeyPromptChoice,
     HostKeyPromptIssue, HostKeyPromptRequest, NativeHostKeyVerifier, NativeOtpProvider,
     SftpDuplicatePromptBroker, SftpDuplicatePromptState,
 };
 pub(in crate::ui::view) use cloud_sync_provider::{pull_provider_snapshot, push_provider_snapshot};
+pub(in crate::ui::view) use connection_runtime::ConnectionEditorToggle;
+pub(in crate::ui::view) use connections::{
+    ConnectionDragKind, ConnectionDragPayload, ConnectionDragPreview, ConnectionDropPosition,
+    ConnectionDropTarget,
+};
 pub(in crate::ui::view) use formatting::*;
 pub(in crate::ui::view) use prompt_runtime::{
     credential_prompt_id, credential_prompt_target, sftp_duplicate_prompt_id, uuid_like_prompt_id,
@@ -93,23 +107,15 @@ pub(in crate::ui::view) use runtime_jobs::{
     DockerJobResult, ProcessJobOutput, ProcessJobResult, SessionStartResult, SessionStartSuccess,
     StatsJobResult, TranslateJobResult, TunnelJobOutput, TunnelJobResult, UpdateJobResult,
 };
-pub(in crate::ui::view) use activity_bar_runtime::{
-    ActivityBarDragPayload, ActivityBarDragPreview,
-};
-pub(in crate::ui::view) use connections::{
-    ConnectionDragKind, ConnectionDragPayload, ConnectionDragPreview, ConnectionDropPosition, ConnectionDropTarget,
-};
 pub(in crate::ui::view) use tab_mouse::{
-    ChromeTooltip, SessionTabDragPayload, SessionTabDragPreview, SessionTabTooltip, TAB_MOUSE_ACTIONS, TabMouseActionTarget, tab_mouse_action_label,
+    ChromeTooltip, SessionTabDragPayload, SessionTabDragPreview, SessionTabTooltip,
+    TAB_MOUSE_ACTIONS, TabMouseActionTarget, tab_mouse_action_label,
 };
 pub(in crate::ui::view) use transfer_widgets::{
     compact_transfer_job_row, duplicate_decision_label, duplicate_policy_label, entry_kind_label,
     format_file_size, format_transfer_progress, transfer_input, transfer_job_title,
     transfer_progress_bar, transfer_status_label,
 };
-#[allow(unused_imports)]
-pub(in crate::ui::view) use crate::ui::action_links::{ActionLinkAction, ActionLinkKind, ActionLinkMatch, actions_for_match, find_action_links, match_at_offset};
-pub(in crate::ui::view) use crate::ui::theme::{ThemePalette, theme_palette};
 pub(in crate::ui::view) use view_widgets::*;
 
 const LEGACY_ROOT: &str = "nyaterm-tauri";

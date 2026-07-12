@@ -53,7 +53,11 @@ impl NyaTermApp {
             .settings
             .search_custom_engines
             .iter()
-            .filter(|engine| engine.show_in_menu && !engine.name.trim().is_empty() && !engine.url_template.trim().is_empty())
+            .filter(|engine| {
+                engine.show_in_menu
+                    && !engine.name.trim().is_empty()
+                    && !engine.url_template.trim().is_empty()
+            })
             .map(|engine| {
                 (
                     engine.name.clone(),
@@ -67,14 +71,19 @@ impl NyaTermApp {
                 .terminal_ai_actions
                 .iter()
                 .filter(|action| action.enabled && !action.name.trim().is_empty())
-                .map(|action| (action.id.clone(), action.name.clone(), action.prompt.clone()))
+                .map(|action| {
+                    (
+                        action.id.clone(),
+                        action.name.clone(),
+                        action.prompt.clone(),
+                    )
+                })
                 .collect()
         } else {
             Vec::new()
         };
-        let translation_providers: Vec<(String, String)> = available_translation_providers(
-            &self.translation_settings,
-        );
+        let translation_providers: Vec<(String, String)> =
+            available_translation_providers(&self.translation_settings);
         let selection_link_kind: Option<&'static str> = None;
         let selection_actions: Vec<(String, ActionLinkAction)> =
             if self.settings.terminal_action_links_enabled && has_selection {
@@ -83,7 +92,11 @@ impl NyaTermApp {
                 let entity = find_action_links(trimmed, matchers, true)
                     .into_iter()
                     .find(|item| item.text == trimmed || item.value == trimmed)
-                    .or_else(|| find_action_links(trimmed, matchers, true).into_iter().next());
+                    .or_else(|| {
+                        find_action_links(trimmed, matchers, true)
+                            .into_iter()
+                            .next()
+                    });
                 entity
                     .map(|item| {
                         let kind = item.kind.label().to_string();
@@ -177,8 +190,7 @@ impl NyaTermApp {
                                         this.terminal_status = format!("opened link: {url}");
                                     }
                                     Err(error) => {
-                                        this.terminal_status =
-                                            format!("open link failed: {error}");
+                                        this.terminal_status = format!("open link failed: {error}");
                                     }
                                 }
                                 cx.notify();
@@ -216,12 +228,10 @@ impl NyaTermApp {
                             let url = search_engine_url(&template, &query);
                             match open_external_url(&url) {
                                 Ok(()) => {
-                                    this.terminal_status =
-                                        format!("opened online search: {name}");
+                                    this.terminal_status = format!("opened online search: {name}");
                                 }
                                 Err(error) => {
-                                    this.terminal_status =
-                                        format!("online search failed: {error}");
+                                    this.terminal_status = format!("online search failed: {error}");
                                 }
                             }
                             cx.notify();
@@ -244,9 +254,11 @@ impl NyaTermApp {
                             } else {
                                 query.clone()
                             };
-                            this.ai_prompt_draft = format!("{prompt}
+                            this.ai_prompt_draft = format!(
+                                "{prompt}
 
-{body}");
+{body}"
+                            );
                             this.ai_status = format!("AI action loaded: {name}");
                             window.focus(&this.ai_chat_focus);
                             cx.notify();
@@ -256,23 +268,25 @@ impl NyaTermApp {
                 .children({
                     let selected = selected_for_translate.clone();
                     if translation_providers.is_empty() {
-                        vec![terminal_ctx_item(
-                            palette,
-                            "term-ctx-translate",
-                            "Translate Selection",
-                            None,
-                            cx.listener(move |this, _, window, cx| {
-                                this.close_terminal_context_menu(cx);
-                                this.open_translation_dialog(
-                                    selected.clone(),
-                                    this.translate_provider.clone(),
-                                    "Default".to_string(),
-                                    window,
-                                    cx,
-                                );
-                            }),
-                        )
-                        .into_any_element()]
+                        vec![
+                            terminal_ctx_item(
+                                palette,
+                                "term-ctx-translate",
+                                "Translate Selection",
+                                None,
+                                cx.listener(move |this, _, window, cx| {
+                                    this.close_terminal_context_menu(cx);
+                                    this.open_translation_dialog(
+                                        selected.clone(),
+                                        this.translate_provider.clone(),
+                                        "Default".to_string(),
+                                        window,
+                                        cx,
+                                    );
+                                }),
+                            )
+                            .into_any_element(),
+                        ]
                     } else {
                         translation_providers
                             .into_iter()
@@ -677,11 +691,16 @@ impl NyaTermApp {
             )
             .into_any_element()
     }
-
 }
 
-
-fn clamp_menu_position(x: f32, y: f32, menu_w: f32, menu_h: f32, viewport_w: f32, viewport_h: f32) -> (f32, f32) {
+fn clamp_menu_position(
+    x: f32,
+    y: f32,
+    menu_w: f32,
+    menu_h: f32,
+    viewport_w: f32,
+    viewport_h: f32,
+) -> (f32, f32) {
     let margin = 8.0;
     let max_x = (viewport_w - menu_w - margin).max(margin);
     let max_y = (viewport_h - menu_h - margin).max(margin);
@@ -722,13 +741,8 @@ fn terminal_ctx_item(
 }
 
 fn terminal_ctx_separator(palette: crate::ui::theme::ThemePalette) -> impl IntoElement {
-    div()
-        .h(px(1.))
-        .my_1()
-        .mx_2()
-        .bg(rgb(palette.border))
+    div().h(px(1.)).my_1().mx_2().bg(rgb(palette.border))
 }
-
 
 fn open_external_url(url: &str) -> Result<(), String> {
     let url = url.trim();
@@ -785,7 +799,6 @@ fn urlencoding_minimal(input: &str) -> String {
     out
 }
 
-
 fn available_translation_providers(
     settings: &nyaterm_domain::TranslationSettings,
 ) -> Vec<(String, String)> {
@@ -821,7 +834,11 @@ fn selection_as_openable_url(selected: &str) -> Option<String> {
     if trimmed.contains('.')
         && !trimmed.contains("://")
         && trimmed.chars().all(|ch| {
-            ch.is_ascii_alphanumeric() || matches!(ch, '.' | '/' | ':' | '-' | '_' | '?' | '=' | '&' | '%' | '#' | '+')
+            ch.is_ascii_alphanumeric()
+                || matches!(
+                    ch,
+                    '.' | '/' | ':' | '-' | '_' | '?' | '=' | '&' | '%' | '#' | '+'
+                )
         })
     {
         // Prefer not to open single-token words without a TLD-ish shape.

@@ -40,28 +40,32 @@ impl NyaTermApp {
             .flex()
             .flex_col()
             .gap_3()
-            .child(settings_form_section(palette, 
+            .child(settings_form_section(
+                palette,
                 Some("Files"),
                 Some("Download location, save prompts, and duplicate strategy."),
                 div()
                     .flex()
                     .flex_col()
                     .gap_3()
-                    .child(settings_form_row(palette, 
+                    .child(settings_form_row(
+                        palette,
                         "Download path",
                         Some(SharedString::from(download_path)),
                         div()
                             .flex()
                             .items_center()
                             .gap_1()
-                            .child(small_button(palette, 
+                            .child(small_button(
+                                palette,
                                 "transfer-browse-download",
                                 "Browse",
                                 cx.listener(|this, _, _, cx| {
                                     this.prompt_transfer_download_path_setting(cx);
                                 }),
                             ))
-                            .child(small_button(palette, 
+                            .child(small_button(
+                                palette,
                                 "transfer-use-local-draft",
                                 "Use Draft",
                                 cx.listener(|this, _, _, cx| {
@@ -76,21 +80,27 @@ impl NyaTermApp {
                                     this.save_transfer_settings("transfer download path saved", cx);
                                 }),
                             ))
-                            .child(small_button(palette, 
+                            .child(small_button(
+                                palette,
                                 "transfer-clear-download",
                                 "Clear",
                                 cx.listener(|this, _, _, cx| {
                                     this.settings.transfer_download_path.clear();
-                                    this.save_transfer_settings("transfer download path cleared", cx);
+                                    this.save_transfer_settings(
+                                        "transfer download path cleared",
+                                        cx,
+                                    );
                                 }),
                             )),
                     ))
-                    .child(settings_form_row(palette, 
+                    .child(settings_form_row(
+                        palette,
                         "Ask save location",
                         Some(SharedString::from(
                             "Prompt for a folder before each download when enabled.",
                         )),
-                        settings_switch(palette, 
+                        settings_switch(
+                            palette,
                             "transfer-ask-save",
                             self.settings.transfer_ask_save_location,
                             cx.listener(|this, _, _, cx| {
@@ -99,14 +109,16 @@ impl NyaTermApp {
                         ),
                     )),
             ))
-            .child(settings_form_section(palette, 
+            .child(settings_form_section(
+                palette,
                 Some("Duplicate files"),
                 Some("What to do when a remote or local file already exists."),
                 div()
                     .flex()
                     .flex_wrap()
                     .gap_1()
-                    .child(settings_choice_chip(palette, 
+                    .child(settings_choice_chip(
+                        palette,
                         "transfer-dup-ask",
                         "Ask",
                         policy == SftpDuplicatePolicy::Ask,
@@ -114,7 +126,8 @@ impl NyaTermApp {
                             this.update_transfer_duplicate_policy(SftpDuplicatePolicy::Ask, cx);
                         }),
                     ))
-                    .child(settings_choice_chip(palette, 
+                    .child(settings_choice_chip(
+                        palette,
                         "transfer-dup-overwrite",
                         "Overwrite",
                         policy == SftpDuplicatePolicy::Overwrite,
@@ -125,7 +138,8 @@ impl NyaTermApp {
                             );
                         }),
                     ))
-                    .child(settings_choice_chip(palette, 
+                    .child(settings_choice_chip(
+                        palette,
                         "transfer-dup-skip",
                         "Skip",
                         policy == SftpDuplicatePolicy::Skip,
@@ -133,7 +147,8 @@ impl NyaTermApp {
                             this.update_transfer_duplicate_policy(SftpDuplicatePolicy::Skip, cx);
                         }),
                     ))
-                    .child(settings_choice_chip(palette, 
+                    .child(settings_choice_chip(
+                        palette,
                         "transfer-dup-rename",
                         "Rename",
                         policy == SftpDuplicatePolicy::Rename,
@@ -142,10 +157,12 @@ impl NyaTermApp {
                         }),
                     )),
             ))
-            .child(settings_form_section(palette, 
+            .child(settings_form_section(
+                palette,
                 Some("Queue snapshot"),
                 None,
-                settings_form_row(palette, 
+                settings_form_row(
+                    palette,
                     "Jobs",
                     Some(SharedString::from(format!(
                         "{running} running · {completed} done · {failed} failed · {} total",
@@ -176,321 +193,341 @@ impl NyaTermApp {
             truncate_preview(&self.settings.transfer_default_editor, 34)
         };
 
-        div()
-            .flex()
-            .flex_col()
-            .gap_3()
-            .child(settings_form_section(palette, 
-                Some("Editor"),
-                Some("How remote files open from the transfer browser."),
-                div()
-                    .flex()
-                    .flex_col()
-                    .gap_3()
-                    .child(settings_form_row(palette, 
-                        "Default open",
-                        Some(SharedString::from(transfer_editor_type_status(&editor_type))),
+        div().flex().flex_col().gap_3().child(settings_form_section(
+            palette,
+            Some("Editor"),
+            Some("How remote files open from the transfer browser."),
+            div()
+                .flex()
+                .flex_col()
+                .gap_3()
+                .child(settings_form_row(
+                    palette,
+                    "Default open",
+                    Some(SharedString::from(transfer_editor_type_status(
+                        &editor_type,
+                    ))),
+                    div()
+                        .flex()
+                        .flex_wrap()
+                        .gap_1()
+                        .child(settings_choice_chip(
+                            palette,
+                            "settings-transfer-editor-external",
+                            "External",
+                            editor_type == "external",
+                            cx.listener(|this, _, _, cx| {
+                                this.update_transfer_editor_type("external", cx);
+                            }),
+                        ))
+                        .child(settings_choice_chip(
+                            palette,
+                            "settings-transfer-editor-internal",
+                            "Internal",
+                            editor_type == "internal",
+                            cx.listener(|this, _, _, cx| {
+                                this.update_transfer_editor_type("internal", cx);
+                            }),
+                        )),
+                ))
+                .when(editor_type == "external", |this| {
+                    this.child(settings_form_row(
+                        palette,
+                        "External command",
+                        Some(SharedString::from(external_cmd)),
                         div()
                             .flex()
-                            .flex_wrap()
+                            .flex_col()
                             .gap_1()
-                            .child(settings_choice_chip(palette, 
-                                "settings-transfer-editor-external",
-                                "External",
-                                editor_type == "external",
-                                cx.listener(|this, _, _, cx| {
-                                    this.update_transfer_editor_type("external", cx);
-                                }),
-                            ))
-                            .child(settings_choice_chip(palette, 
-                                "settings-transfer-editor-internal",
-                                "Internal",
-                                editor_type == "internal",
-                                cx.listener(|this, _, _, cx| {
-                                    this.update_transfer_editor_type("internal", cx);
-                                }),
-                            )),
-                    ))
-                    .when(editor_type == "external", |this| {
-                        this.child(settings_form_row(
-                            palette,
-                            "External command",
-                            Some(SharedString::from(external_cmd)),
-                            div()
-                                .flex()
-                                .flex_col()
-                                .gap_1()
-                                .child(
-                                    transfer_input(
-                                        "settings-transfer-default-editor",
-                                        "Default editor command",
-                                        default_editor_value,
-                                        true,
-                                        palette,
-                                    )
-                                    .track_focus(&self.transfer_default_editor_focus)
-                                    .on_click(cx.listener(|this, _, window, cx| {
-                                        window.focus(&this.transfer_default_editor_focus);
-                                        cx.notify();
-                                    }))
-                                    .on_key_down(cx.listener(
-                                        |this, event: &KeyDownEvent, _, cx| {
-                                            cx.stop_propagation();
-                                            this.handle_transfer_default_editor_key_down(event, cx);
-                                        },
-                                    )),
+                            .child(
+                                transfer_input(
+                                    "settings-transfer-default-editor",
+                                    "Default editor command",
+                                    default_editor_value,
+                                    true,
+                                    palette,
                                 )
-                                .child(
-                                    div()
-                                        .flex()
-                                        .gap_1()
-                                        .child(small_button(
-                                            palette,
-                                            "settings-transfer-editor-browse",
-                                            "Browse",
-                                            cx.listener(|this, _, _, cx| {
-                                                this.prompt_transfer_default_editor_setting(cx);
-                                            }),
-                                        ))
-                                        .child(small_button(
-                                            palette,
-                                            "settings-transfer-editor-save",
-                                            "Save",
-                                            cx.listener(|this, _, _, cx| {
-                                                this.save_transfer_settings(
-                                                    "transfer editor settings saved",
-                                                    cx,
-                                                );
-                                            }),
-                                        )),
-                                ),
-                        ))
-                    }),
-            ))
+                                .track_focus(&self.transfer_default_editor_focus)
+                                .on_click(cx.listener(|this, _, window, cx| {
+                                    window.focus(&this.transfer_default_editor_focus);
+                                    cx.notify();
+                                }))
+                                .on_key_down(cx.listener(
+                                    |this, event: &KeyDownEvent, _, cx| {
+                                        cx.stop_propagation();
+                                        this.handle_transfer_default_editor_key_down(event, cx);
+                                    },
+                                )),
+                            )
+                            .child(
+                                div()
+                                    .flex()
+                                    .gap_1()
+                                    .child(small_button(
+                                        palette,
+                                        "settings-transfer-editor-browse",
+                                        "Browse",
+                                        cx.listener(|this, _, _, cx| {
+                                            this.prompt_transfer_default_editor_setting(cx);
+                                        }),
+                                    ))
+                                    .child(small_button(
+                                        palette,
+                                        "settings-transfer-editor-save",
+                                        "Save",
+                                        cx.listener(|this, _, _, cx| {
+                                            this.save_transfer_settings(
+                                                "transfer editor settings saved",
+                                                cx,
+                                            );
+                                        }),
+                                    )),
+                            ),
+                    ))
+                }),
+        ))
     }
 
     fn transfer_advanced_settings_section(&mut self, cx: &mut Context<Self>) -> impl IntoElement {
         let palette = self.theme_palette();
         let permissions = self.settings.transfer_default_file_permissions.clone();
 
-        div()
-            .flex()
-            .flex_col()
-            .gap_3()
-            .child(settings_form_section(palette, 
-                Some("Advanced transfer"),
-                Some("Concurrency, buffer size, timestamps, and default permissions."),
-                div()
-                    .flex()
-                    .flex_col()
-                    .gap_3()
-                    .child(settings_form_row(palette, 
-                        "Download threads",
-                        Some(SharedString::from(format!(
-                            "{} parallel downloads",
-                            self.settings.transfer_download_threads
-                        ))),
-                        div()
-                            .flex()
-                            .items_center()
-                            .gap_1()
-                            .child(small_button(palette, 
-                                "settings-transfer-download-threads-dec",
-                                "-",
-                                cx.listener(|this, _, _, cx| {
-                                    this.adjust_transfer_download_threads(-1, cx);
-                                }),
-                            ))
-                            .child(
-                                div()
-                                    .min_w(px(28.))
-                                    .text_center()
-                                    .font_family("JetBrains Mono")
-                                    .text_size(px(12.))
-                                    .font_weight(FontWeight(700.))
-                                    .text_color(rgb(palette.text))
-                                    .child(self.settings.transfer_download_threads.to_string()),
-                            )
-                            .child(small_button(palette, 
-                                "settings-transfer-download-threads-inc",
-                                "+",
-                                cx.listener(|this, _, _, cx| {
-                                    this.adjust_transfer_download_threads(1, cx);
-                                }),
-                            )),
-                    ))
-                    .child(settings_form_row(palette, 
-                        "Upload threads",
-                        Some(SharedString::from(format!(
-                            "{} parallel uploads",
-                            self.settings.transfer_upload_threads
-                        ))),
-                        div()
-                            .flex()
-                            .items_center()
-                            .gap_1()
-                            .child(small_button(palette, 
-                                "settings-transfer-upload-threads-dec",
-                                "-",
-                                cx.listener(|this, _, _, cx| {
-                                    this.adjust_transfer_upload_threads(-1, cx);
-                                }),
-                            ))
-                            .child(
-                                div()
-                                    .min_w(px(28.))
-                                    .text_center()
-                                    .font_family("JetBrains Mono")
-                                    .text_size(px(12.))
-                                    .font_weight(FontWeight(700.))
-                                    .text_color(rgb(palette.text))
-                                    .child(self.settings.transfer_upload_threads.to_string()),
-                            )
-                            .child(small_button(palette, 
-                                "settings-transfer-upload-threads-inc",
-                                "+",
-                                cx.listener(|this, _, _, cx| {
-                                    this.adjust_transfer_upload_threads(1, cx);
-                                }),
-                            )),
-                    ))
-                    .child(settings_form_row(palette, 
-                        "Max retries",
-                        Some(SharedString::from(format!(
-                            "{} retries",
-                            self.settings.transfer_max_retries
-                        ))),
-                        div()
-                            .flex()
-                            .items_center()
-                            .gap_1()
-                            .child(small_button(palette, 
-                                "settings-transfer-retries-dec",
-                                "-",
-                                cx.listener(|this, _, _, cx| {
-                                    this.adjust_transfer_max_retries(-1, cx);
-                                }),
-                            ))
-                            .child(
-                                div()
-                                    .min_w(px(28.))
-                                    .text_center()
-                                    .font_family("JetBrains Mono")
-                                    .text_size(px(12.))
-                                    .font_weight(FontWeight(700.))
-                                    .text_color(rgb(palette.text))
-                                    .child(self.settings.transfer_max_retries.to_string()),
-                            )
-                            .child(small_button(palette, 
-                                "settings-transfer-retries-inc",
-                                "+",
-                                cx.listener(|this, _, _, cx| {
-                                    this.adjust_transfer_max_retries(1, cx);
-                                }),
-                            )),
-                    ))
-                    .child(settings_form_row(palette, 
-                        "Buffer size",
-                        Some(SharedString::from(format!(
-                            "{} KiB",
-                            self.settings.transfer_buffer_size
-                        ))),
-                        div()
-                            .flex()
-                            .items_center()
-                            .gap_1()
-                            .child(small_button(palette, 
-                                "settings-transfer-buffer-dec",
-                                "-",
-                                cx.listener(|this, _, _, cx| {
-                                    this.adjust_transfer_buffer_size(-1, cx);
-                                }),
-                            ))
-                            .child(
-                                div()
-                                    .min_w(px(36.))
-                                    .text_center()
-                                    .font_family("JetBrains Mono")
-                                    .text_size(px(12.))
-                                    .font_weight(FontWeight(700.))
-                                    .text_color(rgb(palette.text))
-                                    .child(self.settings.transfer_buffer_size.to_string()),
-                            )
-                            .child(small_button(palette, 
-                                "settings-transfer-buffer-inc",
-                                "+",
-                                cx.listener(|this, _, _, cx| {
-                                    this.adjust_transfer_buffer_size(1, cx);
-                                }),
-                            )),
-                    ))
-                    .child(settings_form_row(palette, 
-                        "Preserve timestamps",
-                        Some(SharedString::from(
-                            "Keep source mtime when downloading when possible.",
-                        )),
-                        settings_switch(palette, 
-                            "settings-transfer-preserve-timestamps",
-                            self.settings.transfer_preserve_timestamps,
+        div().flex().flex_col().gap_3().child(settings_form_section(
+            palette,
+            Some("Advanced transfer"),
+            Some("Concurrency, buffer size, timestamps, and default permissions."),
+            div()
+                .flex()
+                .flex_col()
+                .gap_3()
+                .child(settings_form_row(
+                    palette,
+                    "Download threads",
+                    Some(SharedString::from(format!(
+                        "{} parallel downloads",
+                        self.settings.transfer_download_threads
+                    ))),
+                    div()
+                        .flex()
+                        .items_center()
+                        .gap_1()
+                        .child(small_button(
+                            palette,
+                            "settings-transfer-download-threads-dec",
+                            "-",
                             cx.listener(|this, _, _, cx| {
-                                this.toggle_transfer_preserve_timestamps(cx);
+                                this.adjust_transfer_download_threads(-1, cx);
                             }),
-                        ),
-                    ))
-                    .child(settings_form_row(palette, 
-                        "Resume broken",
-                        Some(SharedString::from(
-                            "Attempt to resume interrupted downloads.",
-                        )),
-                        settings_switch(palette, 
-                            "settings-transfer-resume-broken",
-                            self.settings.transfer_resume_broken_transfer,
+                        ))
+                        .child(
+                            div()
+                                .min_w(px(28.))
+                                .text_center()
+                                .font_family("JetBrains Mono")
+                                .text_size(px(12.))
+                                .font_weight(FontWeight(700.))
+                                .text_color(rgb(palette.text))
+                                .child(self.settings.transfer_download_threads.to_string()),
+                        )
+                        .child(small_button(
+                            palette,
+                            "settings-transfer-download-threads-inc",
+                            "+",
                             cx.listener(|this, _, _, cx| {
-                                this.toggle_transfer_resume_broken(cx);
+                                this.adjust_transfer_download_threads(1, cx);
                             }),
-                        ),
-                    ))
-                    .child(settings_form_row(palette, 
-                        "Default permissions",
-                        Some(SharedString::from(format!("chmod {permissions}"))),
-                        div()
-                            .flex()
-                            .flex_wrap()
-                            .gap_1()
-                            .child(settings_choice_chip(palette, 
-                                "settings-transfer-perm-600",
-                                "600",
-                                permissions == "600",
-                                cx.listener(|this, _, _, cx| {
-                                    this.update_transfer_file_permissions("600", cx);
-                                }),
-                            ))
-                            .child(settings_choice_chip(palette, 
-                                "settings-transfer-perm-644",
-                                "644",
-                                permissions == "644",
-                                cx.listener(|this, _, _, cx| {
-                                    this.update_transfer_file_permissions("644", cx);
-                                }),
-                            ))
-                            .child(settings_choice_chip(palette, 
-                                "settings-transfer-perm-664",
-                                "664",
-                                permissions == "664",
-                                cx.listener(|this, _, _, cx| {
-                                    this.update_transfer_file_permissions("664", cx);
-                                }),
-                            ))
-                            .child(settings_choice_chip(palette, 
-                                "settings-transfer-perm-755",
-                                "755",
-                                permissions == "755",
-                                cx.listener(|this, _, _, cx| {
-                                    this.update_transfer_file_permissions("755", cx);
-                                }),
-                            )),
+                        )),
+                ))
+                .child(settings_form_row(
+                    palette,
+                    "Upload threads",
+                    Some(SharedString::from(format!(
+                        "{} parallel uploads",
+                        self.settings.transfer_upload_threads
+                    ))),
+                    div()
+                        .flex()
+                        .items_center()
+                        .gap_1()
+                        .child(small_button(
+                            palette,
+                            "settings-transfer-upload-threads-dec",
+                            "-",
+                            cx.listener(|this, _, _, cx| {
+                                this.adjust_transfer_upload_threads(-1, cx);
+                            }),
+                        ))
+                        .child(
+                            div()
+                                .min_w(px(28.))
+                                .text_center()
+                                .font_family("JetBrains Mono")
+                                .text_size(px(12.))
+                                .font_weight(FontWeight(700.))
+                                .text_color(rgb(palette.text))
+                                .child(self.settings.transfer_upload_threads.to_string()),
+                        )
+                        .child(small_button(
+                            palette,
+                            "settings-transfer-upload-threads-inc",
+                            "+",
+                            cx.listener(|this, _, _, cx| {
+                                this.adjust_transfer_upload_threads(1, cx);
+                            }),
+                        )),
+                ))
+                .child(settings_form_row(
+                    palette,
+                    "Max retries",
+                    Some(SharedString::from(format!(
+                        "{} retries",
+                        self.settings.transfer_max_retries
+                    ))),
+                    div()
+                        .flex()
+                        .items_center()
+                        .gap_1()
+                        .child(small_button(
+                            palette,
+                            "settings-transfer-retries-dec",
+                            "-",
+                            cx.listener(|this, _, _, cx| {
+                                this.adjust_transfer_max_retries(-1, cx);
+                            }),
+                        ))
+                        .child(
+                            div()
+                                .min_w(px(28.))
+                                .text_center()
+                                .font_family("JetBrains Mono")
+                                .text_size(px(12.))
+                                .font_weight(FontWeight(700.))
+                                .text_color(rgb(palette.text))
+                                .child(self.settings.transfer_max_retries.to_string()),
+                        )
+                        .child(small_button(
+                            palette,
+                            "settings-transfer-retries-inc",
+                            "+",
+                            cx.listener(|this, _, _, cx| {
+                                this.adjust_transfer_max_retries(1, cx);
+                            }),
+                        )),
+                ))
+                .child(settings_form_row(
+                    palette,
+                    "Buffer size",
+                    Some(SharedString::from(format!(
+                        "{} KiB",
+                        self.settings.transfer_buffer_size
+                    ))),
+                    div()
+                        .flex()
+                        .items_center()
+                        .gap_1()
+                        .child(small_button(
+                            palette,
+                            "settings-transfer-buffer-dec",
+                            "-",
+                            cx.listener(|this, _, _, cx| {
+                                this.adjust_transfer_buffer_size(-1, cx);
+                            }),
+                        ))
+                        .child(
+                            div()
+                                .min_w(px(36.))
+                                .text_center()
+                                .font_family("JetBrains Mono")
+                                .text_size(px(12.))
+                                .font_weight(FontWeight(700.))
+                                .text_color(rgb(palette.text))
+                                .child(self.settings.transfer_buffer_size.to_string()),
+                        )
+                        .child(small_button(
+                            palette,
+                            "settings-transfer-buffer-inc",
+                            "+",
+                            cx.listener(|this, _, _, cx| {
+                                this.adjust_transfer_buffer_size(1, cx);
+                            }),
+                        )),
+                ))
+                .child(settings_form_row(
+                    palette,
+                    "Preserve timestamps",
+                    Some(SharedString::from(
+                        "Keep source mtime when downloading when possible.",
                     )),
-            ))
+                    settings_switch(
+                        palette,
+                        "settings-transfer-preserve-timestamps",
+                        self.settings.transfer_preserve_timestamps,
+                        cx.listener(|this, _, _, cx| {
+                            this.toggle_transfer_preserve_timestamps(cx);
+                        }),
+                    ),
+                ))
+                .child(settings_form_row(
+                    palette,
+                    "Resume broken",
+                    Some(SharedString::from(
+                        "Attempt to resume interrupted downloads.",
+                    )),
+                    settings_switch(
+                        palette,
+                        "settings-transfer-resume-broken",
+                        self.settings.transfer_resume_broken_transfer,
+                        cx.listener(|this, _, _, cx| {
+                            this.toggle_transfer_resume_broken(cx);
+                        }),
+                    ),
+                ))
+                .child(settings_form_row(
+                    palette,
+                    "Default permissions",
+                    Some(SharedString::from(format!("chmod {permissions}"))),
+                    div()
+                        .flex()
+                        .flex_wrap()
+                        .gap_1()
+                        .child(settings_choice_chip(
+                            palette,
+                            "settings-transfer-perm-600",
+                            "600",
+                            permissions == "600",
+                            cx.listener(|this, _, _, cx| {
+                                this.update_transfer_file_permissions("600", cx);
+                            }),
+                        ))
+                        .child(settings_choice_chip(
+                            palette,
+                            "settings-transfer-perm-644",
+                            "644",
+                            permissions == "644",
+                            cx.listener(|this, _, _, cx| {
+                                this.update_transfer_file_permissions("644", cx);
+                            }),
+                        ))
+                        .child(settings_choice_chip(
+                            palette,
+                            "settings-transfer-perm-664",
+                            "664",
+                            permissions == "664",
+                            cx.listener(|this, _, _, cx| {
+                                this.update_transfer_file_permissions("664", cx);
+                            }),
+                        ))
+                        .child(settings_choice_chip(
+                            palette,
+                            "settings-transfer-perm-755",
+                            "755",
+                            permissions == "755",
+                            cx.listener(|this, _, _, cx| {
+                                this.update_transfer_file_permissions("755", cx);
+                            }),
+                        )),
+                )),
+        ))
     }
 
     pub(in crate::ui::view) fn recording_settings_section(
@@ -509,114 +546,121 @@ impl NyaTermApp {
         };
         let memory_mib = (self.settings.recording_memory_limit_bytes / (1024 * 1024)).max(1);
 
-        div()
-            .flex()
-            .flex_col()
-            .gap_3()
-            .child(settings_form_section(palette, 
-                Some("Recording"),
-                Some("Session capture path, memory cap, and stream annotations."),
-                div()
-                    .flex()
-                    .flex_col()
-                    .gap_3()
-                    .child(settings_form_row(palette, 
-                        "Path",
-                        Some(SharedString::from(truncate_preview(&path, 56))),
-                        div()
-                            .flex()
-                            .items_center()
-                            .gap_1()
-                            .child(small_button(
-                                palette,
-                                "settings-recording-path-browse",
-                                "Browse",
-                                cx.listener(|this, _, _, cx| {
-                                    this.prompt_recording_path_setting(cx);
-                                }),
-                            ))
-                            .child(small_button(
-                                palette,
-                                "settings-recording-path-clear",
-                                "Clear",
-                                cx.listener(|this, _, _, cx| {
-                                    this.settings.recording_path.clear();
-                                    this.save_recording_settings(cx);
-                                }),
-                            )),
-                    ))
-                    .child(settings_form_row(palette, 
-                        "Memory limit",
-                        Some(SharedString::from(format!("{memory_mib} MiB buffer"))),
-                        div()
-                            .flex()
-                            .items_center()
-                            .gap_1()
-                            .child(small_button(palette, 
-                                "settings-recording-memory-minus",
-                                "-1 MiB",
-                                cx.listener(|this, _, _, cx| {
-                                    this.adjust_recording_memory_limit(-1, cx);
-                                }),
-                            ))
-                            .child(
-                                div()
-                                    .min_w(px(42.))
-                                    .text_center()
-                                    .font_family("JetBrains Mono")
-                                    .text_size(px(12.))
-                                    .font_weight(FontWeight(700.))
-                                    .text_color(rgb(palette.text))
-                                    .child(format!("{memory_mib}")),
-                            )
-                            .child(small_button(palette, 
-                                "settings-recording-memory-plus",
-                                "+1 MiB",
-                                cx.listener(|this, _, _, cx| {
-                                    this.adjust_recording_memory_limit(1, cx);
-                                }),
-                            )),
-                    ))
-                    .child(settings_form_row(palette, 
-                        "Auto start",
-                        Some(SharedString::from(
-                            "Begin recording when a session connects.",
-                        )),
-                        settings_switch(palette, 
-                            "settings-recording-auto",
-                            self.settings.recording_auto_start,
+        div().flex().flex_col().gap_3().child(settings_form_section(
+            palette,
+            Some("Recording"),
+            Some("Session capture path, memory cap, and stream annotations."),
+            div()
+                .flex()
+                .flex_col()
+                .gap_3()
+                .child(settings_form_row(
+                    palette,
+                    "Path",
+                    Some(SharedString::from(truncate_preview(&path, 56))),
+                    div()
+                        .flex()
+                        .items_center()
+                        .gap_1()
+                        .child(small_button(
+                            palette,
+                            "settings-recording-path-browse",
+                            "Browse",
                             cx.listener(|this, _, _, cx| {
-                                this.toggle_recording_auto_start(cx);
+                                this.prompt_recording_path_setting(cx);
                             }),
-                        ),
-                    ))
-                    .child(settings_form_row(palette, 
-                        "IO labels",
-                        Some(SharedString::from(
-                            "Annotate recorded streams with in/out labels.",
-                        )),
-                        settings_switch(palette, 
-                            "settings-recording-labels",
-                            self.settings.recording_include_io_labels,
+                        ))
+                        .child(small_button(
+                            palette,
+                            "settings-recording-path-clear",
+                            "Clear",
                             cx.listener(|this, _, _, cx| {
-                                this.toggle_recording_io_labels(cx);
+                                this.settings.recording_path.clear();
+                                this.save_recording_settings(cx);
                             }),
-                        ),
-                    ))
-                    .child(settings_form_row(palette, 
-                        "Timestamps",
-                        Some(SharedString::from(
-                            "Prefix recorded chunks with wall-clock timestamps.",
                         )),
-                        settings_switch(palette, 
-                            "settings-recording-timestamps",
-                            self.settings.recording_include_timestamps,
+                ))
+                .child(settings_form_row(
+                    palette,
+                    "Memory limit",
+                    Some(SharedString::from(format!("{memory_mib} MiB buffer"))),
+                    div()
+                        .flex()
+                        .items_center()
+                        .gap_1()
+                        .child(small_button(
+                            palette,
+                            "settings-recording-memory-minus",
+                            "-1 MiB",
                             cx.listener(|this, _, _, cx| {
-                                this.toggle_recording_timestamps(cx);
+                                this.adjust_recording_memory_limit(-1, cx);
                             }),
-                        ),
+                        ))
+                        .child(
+                            div()
+                                .min_w(px(42.))
+                                .text_center()
+                                .font_family("JetBrains Mono")
+                                .text_size(px(12.))
+                                .font_weight(FontWeight(700.))
+                                .text_color(rgb(palette.text))
+                                .child(format!("{memory_mib}")),
+                        )
+                        .child(small_button(
+                            palette,
+                            "settings-recording-memory-plus",
+                            "+1 MiB",
+                            cx.listener(|this, _, _, cx| {
+                                this.adjust_recording_memory_limit(1, cx);
+                            }),
+                        )),
+                ))
+                .child(settings_form_row(
+                    palette,
+                    "Auto start",
+                    Some(SharedString::from(
+                        "Begin recording when a session connects.",
                     )),
-            ))
+                    settings_switch(
+                        palette,
+                        "settings-recording-auto",
+                        self.settings.recording_auto_start,
+                        cx.listener(|this, _, _, cx| {
+                            this.toggle_recording_auto_start(cx);
+                        }),
+                    ),
+                ))
+                .child(settings_form_row(
+                    palette,
+                    "IO labels",
+                    Some(SharedString::from(
+                        "Annotate recorded streams with in/out labels.",
+                    )),
+                    settings_switch(
+                        palette,
+                        "settings-recording-labels",
+                        self.settings.recording_include_io_labels,
+                        cx.listener(|this, _, _, cx| {
+                            this.toggle_recording_io_labels(cx);
+                        }),
+                    ),
+                ))
+                .child(settings_form_row(
+                    palette,
+                    "Timestamps",
+                    Some(SharedString::from(
+                        "Prefix recorded chunks with wall-clock timestamps.",
+                    )),
+                    settings_switch(
+                        palette,
+                        "settings-recording-timestamps",
+                        self.settings.recording_include_timestamps,
+                        cx.listener(|this, _, _, cx| {
+                            this.toggle_recording_timestamps(cx);
+                        }),
+                    ),
+                )),
+        ))
     }
 }
 
@@ -644,13 +688,16 @@ fn transfer_editor_type_status(editor_type: &str) -> &'static str {
     }
 }
 
-fn transfer_stepper(palette: crate::ui::theme::ThemePalette,
+fn transfer_stepper(
+    palette: crate::ui::theme::ThemePalette,
     label: &'static str,
     value: u32,
     dec_id: &'static str,
     inc_id: &'static str,
     on_dec: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
-    on_inc: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,) -> impl IntoElement {    div()
+    on_inc: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
+) -> impl IntoElement {
+    div()
         .rounded_sm()
         .border_1()
         .border_color(rgb(palette.border))
@@ -687,11 +734,14 @@ fn transfer_stepper(palette: crate::ui::theme::ThemePalette,
         )
 }
 
-fn permission_preset_button(palette: crate::ui::theme::ThemePalette,
+fn permission_preset_button(
+    palette: crate::ui::theme::ThemePalette,
     id: &'static str,
     label: &'static str,
     active: bool,
-    on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,) -> impl IntoElement {    div()
+    on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
+) -> impl IntoElement {
+    div()
         .id(SharedString::from(id))
         .h(px(28.))
         .px_3()
@@ -699,18 +749,35 @@ fn permission_preset_button(palette: crate::ui::theme::ThemePalette,
         .items_center()
         .rounded_sm()
         .border_1()
-        .border_color(if active { rgb(palette.success) } else { rgb(palette.border) })
-        .bg(if active { rgb(palette.hover) } else { rgb(palette.surface) })
+        .border_color(if active {
+            rgb(palette.success)
+        } else {
+            rgb(palette.border)
+        })
+        .bg(if active {
+            rgb(palette.hover)
+        } else {
+            rgb(palette.surface)
+        })
         .cursor_pointer()
         .text_xs()
         .font_weight(FontWeight(800.))
-        .text_color(if active { rgb(palette.text) } else { rgb(palette.text_muted) })
+        .text_color(if active {
+            rgb(palette.text)
+        } else {
+            rgb(palette.text_muted)
+        })
         .hover(|this| this.bg(rgb(palette.hover)))
         .on_click(on_click)
         .child(label)
 }
 
-fn transfer_capability_card(palette: crate::ui::theme::ThemePalette, title: &'static str, detail: &'static str) -> impl IntoElement {    div()
+fn transfer_capability_card(
+    palette: crate::ui::theme::ThemePalette,
+    title: &'static str,
+    detail: &'static str,
+) -> impl IntoElement {
+    div()
         .rounded_sm()
         .border_1()
         .border_color(rgb(palette.border))

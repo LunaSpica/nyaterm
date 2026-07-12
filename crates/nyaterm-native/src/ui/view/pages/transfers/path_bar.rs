@@ -113,7 +113,9 @@ impl NyaTermApp {
                                 .text_size(px(10.))
                                 .text_color(rgb(palette.text_muted))
                                 .cursor_pointer()
-                                .hover(|this| this.bg(rgb(palette.hover)).text_color(rgb(palette.text)))
+                                .hover(|this| {
+                                    this.bg(rgb(palette.hover)).text_color(rgb(palette.text))
+                                })
                                 .on_click(cx.listener(|this, _, window, cx| {
                                     this.begin_transfer_browser_path_edit(window, cx);
                                 }))
@@ -172,21 +174,24 @@ impl NyaTermApp {
                             .flex()
                             .items_center()
                             .gap_1()
-                            .child(small_button(palette, 
+                            .child(small_button(
+                                palette,
                                 "transfer-browser-copy-current-path",
                                 "Copy",
                                 cx.listener(|this, _, _, cx| {
                                     this.copy_current_transfer_browser_path(cx);
                                 }),
                             ))
-                            .child(small_button(palette, 
+                            .child(small_button(
+                                palette,
                                 "transfer-browser-send-current-path",
                                 "Send",
                                 cx.listener(|this, _, _, cx| {
                                     this.send_current_transfer_browser_path_to_terminal(cx);
                                 }),
                             ))
-                            .child(small_button(palette, 
+                            .child(small_button(
+                                palette,
                                 "transfer-browser-current-properties",
                                 "Props",
                                 cx.listener(|this, _, window, cx| {
@@ -497,7 +502,9 @@ fn transfer_browser_path_quick_list(
                             .justify_center()
                             .rounded_sm()
                             .text_color(rgb(0x86efac))
-                            .hover(|this| this.bg(rgb(palette.border)).text_color(rgb(palette.danger)))
+                            .hover(|this| {
+                                this.bg(rgb(palette.border)).text_color(rgb(palette.danger))
+                            })
                             .on_click(cx.listener(move |this, _: &ClickEvent, _window, cx| {
                                 cx.stop_propagation();
                                 this.remove_transfer_browser_favorite_path(remove_path.clone(), cx);

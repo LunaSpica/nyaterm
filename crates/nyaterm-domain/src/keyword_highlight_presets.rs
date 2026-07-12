@@ -378,10 +378,7 @@ pub fn merge_keyword_highlight_rules_for_paint(
     }
     for builtin in get_builtin_keyword_rules(is_dark) {
         let enabled = builtin_settings.get(&builtin.id).copied().unwrap_or(true);
-        out.push(ResolvedKeywordHighlightRule {
-            enabled,
-            ..builtin
-        });
+        out.push(ResolvedKeywordHighlightRule { enabled, ..builtin });
     }
     out
 }
@@ -390,13 +387,13 @@ pub fn merge_keyword_highlight_rules_for_paint(
 pub fn keyword_highlight_color_palette(is_dark: bool) -> &'static [&'static str] {
     if is_dark {
         &[
-            "#ff7b72", "#e3b341", "#3fb950", "#79c0ff", "#d2a8ff", "#ff9e64", "#f1fa8c",
-            "#bd93f9", "#ffb86c", "#56d364", "#8be9fd", "#7ee787",
+            "#ff7b72", "#e3b341", "#3fb950", "#79c0ff", "#d2a8ff", "#ff9e64", "#f1fa8c", "#bd93f9",
+            "#ffb86c", "#56d364", "#8be9fd", "#7ee787",
         ]
     } else {
         &[
-            "#cf222e", "#9a6700", "#116329", "#0969da", "#8250df", "#b04a00", "#a58900",
-            "#6f42c1", "#cb4b16", "#1a7f37", "#2aa198", "#008573",
+            "#cf222e", "#9a6700", "#116329", "#0969da", "#8250df", "#b04a00", "#a58900", "#6f42c1",
+            "#cb4b16", "#1a7f37", "#2aa198", "#008573",
         ]
     }
 }

@@ -40,7 +40,12 @@ pub(super) fn section_header(
         .flex_col()
         .gap_1()
         .child(div().text_2xl().font_weight(FontWeight(800.)).child(title))
-        .child(div().text_sm().text_color(rgb(palette.text_muted)).child(detail))
+        .child(
+            div()
+                .text_sm()
+                .text_color(rgb(palette.text_muted))
+                .child(detail),
+        )
 }
 
 pub(super) fn capability_line(
@@ -150,9 +155,16 @@ pub(super) fn mode_button(
             rgb(palette.text_muted)
         })
         .text_size(px(11.))
-        .font_weight(if active { FontWeight(600.) } else { FontWeight(500.) })
+        .font_weight(if active {
+            FontWeight(600.)
+        } else {
+            FontWeight(500.)
+        })
         .cursor_pointer()
-        .hover(move |this| this.bg(rgb(palette.surface_elevated)).text_color(rgb(palette.text)))
+        .hover(move |this| {
+            this.bg(rgb(palette.surface_elevated))
+                .text_color(rgb(palette.text))
+        })
         .child(label)
         .on_click(on_click)
 }
@@ -174,7 +186,10 @@ pub(super) fn icon_button(
         .text_color(rgb(palette.text_muted))
         .text_xs()
         .cursor_pointer()
-        .hover(move |this| this.bg(rgb(palette.surface_elevated)).text_color(rgb(palette.text)))
+        .hover(move |this| {
+            this.bg(rgb(palette.surface_elevated))
+                .text_color(rgb(palette.text))
+        })
         .child(label)
         .on_click(on_click)
 }

@@ -186,9 +186,9 @@ impl NyaTermApp {
         &self,
         session_id: &str,
     ) -> Option<&SyncInputGroup> {
-        self.sync_groups.iter().find(|group| {
-            group.enabled && group.session_ids.iter().any(|id| id == session_id)
-        })
+        self.sync_groups
+            .iter()
+            .find(|group| group.enabled && group.session_ids.iter().any(|id| id == session_id))
     }
 
     pub(in crate::ui::view) fn is_session_paused_in_active_sync_group(
@@ -213,7 +213,11 @@ impl NyaTermApp {
             cx.notify();
             return;
         };
-        let Some(group) = self.sync_groups.iter_mut().find(|group| group.id == group_id) else {
+        let Some(group) = self
+            .sync_groups
+            .iter_mut()
+            .find(|group| group.id == group_id)
+        else {
             self.terminal_status = "sync group not found".to_string();
             cx.notify();
             return;
@@ -242,7 +246,11 @@ impl NyaTermApp {
             cx.notify();
             return;
         };
-        if let Some(group) = self.sync_groups.iter_mut().find(|group| group.id == group_id) {
+        if let Some(group) = self
+            .sync_groups
+            .iter_mut()
+            .find(|group| group.id == group_id)
+        {
             group.session_ids.retain(|id| id != &session_id);
             group.paused_session_ids.retain(|id| id != &session_id);
         }
@@ -273,7 +281,11 @@ impl NyaTermApp {
             cx.notify();
             return;
         };
-        if let Some(group) = self.sync_groups.iter_mut().find(|group| group.id == group_id) {
+        if let Some(group) = self
+            .sync_groups
+            .iter_mut()
+            .find(|group| group.id == group_id)
+        {
             group.enabled = false;
         }
         self.terminal_status = "sync group closed".to_string();

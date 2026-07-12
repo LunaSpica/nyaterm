@@ -25,7 +25,9 @@ impl NyaTermApp {
         let has_stopped = self.transfer_jobs.iter().any(|job| {
             !matches!(
                 job.status,
-                TransferJobStatus::Running | TransferJobStatus::Paused | TransferJobStatus::Cancelling
+                TransferJobStatus::Running
+                    | TransferJobStatus::Paused
+                    | TransferJobStatus::Cancelling
             )
         });
         let download_path = if self.transfer_local_path.trim().is_empty() {
@@ -58,7 +60,7 @@ impl NyaTermApp {
                 ));
             }
         }
-div()
+        div()
             .id(SharedString::from("transfer-queue-panel"))
             .size_full()
             .flex()
@@ -195,8 +197,8 @@ fn transfer_job_display_rank(status: TransferJobStatus) -> u8 {
     match status {
         TransferJobStatus::Running | TransferJobStatus::Cancelling => 0,
         TransferJobStatus::Paused => 1,
-        TransferJobStatus::Cancelled
-        | TransferJobStatus::Completed
-        | TransferJobStatus::Failed => 2,
+        TransferJobStatus::Cancelled | TransferJobStatus::Completed | TransferJobStatus::Failed => {
+            2
+        }
     }
 }

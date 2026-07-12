@@ -195,7 +195,8 @@ impl NyaTermApp {
                                         .child(lock_status.clone()),
                                 )
                             })
-                            .child(small_button(palette, 
+                            .child(small_button(
+                                palette,
                                 "lock-screen-unlock",
                                 "Unlock",
                                 cx.listener(|this, _, _, cx| {

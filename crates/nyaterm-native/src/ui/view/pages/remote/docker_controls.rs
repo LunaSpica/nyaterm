@@ -85,21 +85,36 @@ pub(in crate::ui::view::pages::remote) fn docker_tab_bar(
         )
 }
 
-fn docker_tab_button(palette: crate::ui::theme::ThemePalette,
+fn docker_tab_button(
+    palette: crate::ui::theme::ThemePalette,
     id: &'static str,
     label: String,
     active: bool,
-    on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,) -> impl IntoElement {    div()
+    on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
+) -> impl IntoElement {
+    div()
         .id(gpui::SharedString::from(id))
         .h(px(24.))
         .px_2()
         .flex()
         .items_center()
         .rounded_sm()
-        .bg(if active { rgb(palette.surface_elevated) } else { rgb(palette.bg) })
-        .text_color(if active { rgb(palette.text) } else { rgb(palette.text_muted) })
+        .bg(if active {
+            rgb(palette.surface_elevated)
+        } else {
+            rgb(palette.bg)
+        })
+        .text_color(if active {
+            rgb(palette.text)
+        } else {
+            rgb(palette.text_muted)
+        })
         .text_size(px(11.))
-        .font_weight(if active { FontWeight(600.) } else { FontWeight(500.) })
+        .font_weight(if active {
+            FontWeight(600.)
+        } else {
+            FontWeight(500.)
+        })
         .cursor_pointer()
         .hover(|this| this.bg(rgb(palette.hover)).text_color(rgb(palette.text)))
         .child(label)
@@ -147,14 +162,16 @@ pub(in crate::ui::view::pages::remote) fn docker_confirm_panel(
                 .flex()
                 .items_center()
                 .gap_2()
-                .child(small_button(palette, 
+                .child(small_button(
+                    palette,
                     "docker-confirm-cancel",
                     "Cancel",
                     cx.listener(|this, _, _, cx| {
                         this.cancel_docker_confirm(cx);
                     }),
                 ))
-                .child(small_button(palette, 
+                .child(small_button(
+                    palette,
                     "docker-confirm-run",
                     "Confirm",
                     cx.listener(|this, _, window, cx| {
@@ -172,7 +189,8 @@ pub(in crate::ui::view::pages::remote) fn docker_container_confirm_button(
     container_name: String,
     cx: &mut Context<NyaTermApp>,
 ) -> impl IntoElement {
-    small_button(palette, 
+    small_button(
+        palette,
         format!("docker-{action}-{}", compact_id(&container_id)),
         label,
         cx.listener(move |this, _, _, cx| {

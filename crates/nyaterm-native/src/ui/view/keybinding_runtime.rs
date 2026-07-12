@@ -1,13 +1,8 @@
 use super::*;
 
 impl NyaTermApp {
-
     /// First display chord for empty-workspace / UI labels (Tauri-style chips).
-    pub(in crate::ui::view) fn display_shortcut_for(
-        &self,
-        id: &str,
-        fallback: &str,
-    ) -> String {
+    pub(in crate::ui::view) fn display_shortcut_for(&self, id: &str, fallback: &str) -> String {
         use crate::ui::shortcuts::{format_hotkey_for_display, shortcut_keys_for};
         let raw = shortcut_keys_for(id, &self.settings.keybindings)
             .unwrap_or_else(|| fallback.to_string());
@@ -389,13 +384,15 @@ impl NyaTermApp {
         {
             // allow progressive hex entry only when matching /^#[0-9a-fA-F]{0,6}$/
         }
-        if !color.is_empty() && !color.chars().enumerate().all(|(i, ch)| {
-            if i == 0 {
-                ch == '#'
-            } else {
-                ch.is_ascii_hexdigit()
-            }
-        }) {
+        if !color.is_empty()
+            && !color.chars().enumerate().all(|(i, ch)| {
+                if i == 0 {
+                    ch == '#'
+                } else {
+                    ch.is_ascii_hexdigit()
+                }
+            })
+        {
             return;
         }
         if color.len() > 7 {
@@ -598,11 +595,9 @@ impl NyaTermApp {
             if shortcut.id == exclude_id {
                 continue;
             }
-            let existing = crate::ui::shortcuts::shortcut_keys_for(
-                shortcut.id,
-                &self.settings.keybindings,
-            )
-            .unwrap_or_else(|| shortcut.default_keys.to_string());
+            let existing =
+                crate::ui::shortcuts::shortcut_keys_for(shortcut.id, &self.settings.keybindings)
+                    .unwrap_or_else(|| shortcut.default_keys.to_string());
             let normalized_existing = existing
                 .split(',')
                 .map(str::trim)
@@ -643,5 +638,4 @@ impl NyaTermApp {
             cx.notify();
         }
     }
-
 }

@@ -131,14 +131,16 @@ pub(in crate::ui::view::pages::remote) fn docker_details_panel(
     let mut actions = div().flex().items_center().gap_2();
     if let Some(container_id) = container_id.clone() {
         actions = actions
-            .child(small_button(palette, 
+            .child(small_button(
+                palette,
                 format!("docker-details-refresh-{}", compact_id(&container_id)),
                 "Refresh",
                 cx.listener(move |this, _, window, cx| {
                     this.load_docker_details(container_id.clone(), window, cx);
                 }),
             ))
-            .child(small_button(palette, 
+            .child(small_button(
+                palette,
                 "docker-details-close",
                 "Close",
                 cx.listener(|this, _, _, cx| {
@@ -201,7 +203,8 @@ pub(in crate::ui::view::pages::remote) fn docker_details_panel(
                 .grid()
                 .grid_cols(5)
                 .gap_2()
-                .child(metric(palette, 
+                .child(metric(
+                    palette,
                     "CPU",
                     details
                         .stats
@@ -209,7 +212,8 @@ pub(in crate::ui::view::pages::remote) fn docker_details_panel(
                         .map(|stats| format!("{:.1}%", stats.cpu_percent))
                         .unwrap_or_else(|| "n/a".to_string()),
                 ))
-                .child(metric(palette, 
+                .child(metric(
+                    palette,
                     "Memory",
                     details
                         .stats
@@ -217,7 +221,8 @@ pub(in crate::ui::view::pages::remote) fn docker_details_panel(
                         .map(|stats| format!("{:.1}%", stats.memory_percent))
                         .unwrap_or_else(|| "n/a".to_string()),
                 ))
-                .child(metric(palette, 
+                .child(metric(
+                    palette,
                     "Net IO",
                     details
                         .stats
@@ -225,7 +230,8 @@ pub(in crate::ui::view::pages::remote) fn docker_details_panel(
                         .map(|stats| truncate_preview(&stats.net_io, 24))
                         .unwrap_or_else(|| "n/a".to_string()),
                 ))
-                .child(metric(palette, 
+                .child(metric(
+                    palette,
                     "Block IO",
                     details
                         .stats
@@ -233,7 +239,8 @@ pub(in crate::ui::view::pages::remote) fn docker_details_panel(
                         .map(|stats| truncate_preview(&stats.block_io, 24))
                         .unwrap_or_else(|| "n/a".to_string()),
                 ))
-                .child(metric(palette, 
+                .child(metric(
+                    palette,
                     "PIDs",
                     details
                         .stats
@@ -446,12 +453,15 @@ pub(in crate::ui::view::pages::remote) fn docker_details_panel(
         )
 }
 
-fn docker_detail_line(palette: crate::ui::theme::ThemePalette,
+fn docker_detail_line(
+    palette: crate::ui::theme::ThemePalette,
     label: &'static str,
     value: String,
     display_value: String,
     copyable: bool,
-    cx: &mut Context<NyaTermApp>,) -> gpui::Div {    let copy_value = value.clone();
+    cx: &mut Context<NyaTermApp>,
+) -> gpui::Div {
+    let copy_value = value.clone();
     div()
         .mt_1()
         .flex()
@@ -477,7 +487,8 @@ fn docker_detail_line(palette: crate::ui::theme::ThemePalette,
                 .child(display_value),
         )
         .when(copyable && value.trim() != "-", |this| {
-            this.child(small_button(palette, 
+            this.child(small_button(
+                palette,
                 format!("docker-details-copy-{label}"),
                 "Copy",
                 cx.listener(move |this, _, _, cx| {

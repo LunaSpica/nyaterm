@@ -4,8 +4,8 @@ impl NyaTermApp {
     pub(in crate::ui::view) fn transfer_browser_context_menu_overlay(
         &mut self,
         cx: &mut Context<Self>,
-    ) -> impl IntoElement  {
-    let palette = self.theme_palette();
+    ) -> impl IntoElement {
+        let palette = self.theme_palette();
         let state =
             self.transfer_browser_context_menu
                 .clone()
@@ -195,17 +195,15 @@ impl NyaTermApp {
                                     }),
                                 )),
                         )
-                        .child(context_menu_group(palette).child(
-                            context_menu_button(
-                                palette,
-                                "transfer-context-current-properties",
-                                "Properties",
-                                cx.listener(|this, _, window, cx| {
-                                    this.close_transfer_browser_context_menu(cx);
-                                    this.open_current_transfer_browser_properties(window, cx);
-                                }),
-                            ),
-                        ))
+                        .child(context_menu_group(palette).child(context_menu_button(
+                            palette,
+                            "transfer-context-current-properties",
+                            "Properties",
+                            cx.listener(|this, _, window, cx| {
+                                this.close_transfer_browser_context_menu(cx);
+                                this.open_current_transfer_browser_properties(window, cx);
+                            }),
+                        )))
                     })
                     .when(state.is_parent, |this| {
                         this.child(
@@ -473,7 +471,7 @@ impl NyaTermApp {
     }
 }
 
-fn context_menu_group(palette: crate::ui::theme::ThemePalette) -> gpui::Div  {
+fn context_menu_group(palette: crate::ui::theme::ThemePalette) -> gpui::Div {
     div()
         .flex()
         .flex_col()
@@ -483,10 +481,12 @@ fn context_menu_group(palette: crate::ui::theme::ThemePalette) -> gpui::Div  {
         .pt_2()
 }
 
-fn context_menu_button(palette: crate::ui::theme::ThemePalette,
+fn context_menu_button(
+    palette: crate::ui::theme::ThemePalette,
     id: impl Into<String>,
     label: impl Into<SharedString>,
-    on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,) -> impl IntoElement  {
+    on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
+) -> impl IntoElement {
     div()
         .id(SharedString::from(id.into()))
         .h(px(28.))

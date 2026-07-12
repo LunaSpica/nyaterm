@@ -64,16 +64,16 @@ fn host_port_re() -> &'static Regex {
 fn archive_re() -> &'static Regex {
     static RE: OnceLock<Regex> = OnceLock::new();
     RE.get_or_init(|| {
-        Regex::new(r#"(?i)\b(?:[^\s"'`<>|]+?\.(?:zip|rar|7z|tar\.gz|tgz|tar\.bz2|tbz2|tar\.xz|txz))\b"#)
-            .expect("archive regex")
+        Regex::new(
+            r#"(?i)\b(?:[^\s"'`<>|]+?\.(?:zip|rar|7z|tar\.gz|tgz|tar\.bz2|tbz2|tar\.xz|txz))\b"#,
+        )
+        .expect("archive regex")
     })
 }
 
 fn url_re() -> &'static Regex {
     static RE: OnceLock<Regex> = OnceLock::new();
-    RE.get_or_init(|| {
-        Regex::new(r#"(?i)\bhttps?://[^\s"'<>()]+"#).expect("url regex")
-    })
+    RE.get_or_init(|| Regex::new(r#"(?i)\bhttps?://[^\s"'<>()]+"#).expect("url regex"))
 }
 
 const SOURCE_EXTS: &[&str] = &[
@@ -93,11 +93,9 @@ fn is_valid_ipv4(text: &str) -> bool {
     if parts.len() != 4 {
         return false;
     }
-    parts.iter().all(|part| {
-        part.parse::<u16>()
-            .ok()
-            .is_some_and(|value| value <= 255)
-    })
+    parts
+        .iter()
+        .all(|part| part.parse::<u16>().ok().is_some_and(|value| value <= 255))
 }
 
 fn is_valid_archive_name(text: &str) -> bool {

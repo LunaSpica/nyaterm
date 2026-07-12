@@ -122,7 +122,10 @@ impl NyaTermApp {
         cx.notify();
     }
 
-    pub(in crate::ui::view) fn cycle_connection_editor_auth_mode(&mut self, cx: &mut Context<Self>) {
+    pub(in crate::ui::view) fn cycle_connection_editor_auth_mode(
+        &mut self,
+        cx: &mut Context<Self>,
+    ) {
         if let Some(editor) = self.connection_editor.as_mut() {
             editor.auth_mode = match editor.auth_mode.as_str() {
                 "none" => "password",
@@ -254,7 +257,6 @@ impl NyaTermApp {
         cx.notify();
     }
 
-
     pub(in crate::ui::view) fn cycle_connection_editor_data_bits(
         &mut self,
         cx: &mut Context<Self>,
@@ -271,10 +273,7 @@ impl NyaTermApp {
         cx.notify();
     }
 
-    pub(in crate::ui::view) fn cycle_connection_editor_parity(
-        &mut self,
-        cx: &mut Context<Self>,
-    ) {
+    pub(in crate::ui::view) fn cycle_connection_editor_parity(&mut self, cx: &mut Context<Self>) {
         if let Some(editor) = self.connection_editor.as_mut() {
             editor.parity = match editor.parity.trim().to_ascii_lowercase().as_str() {
                 "none" => "odd".to_string(),
@@ -450,8 +449,9 @@ impl NyaTermApp {
             }
             "tab" if !keystroke.modifiers.platform && !keystroke.modifiers.control => {
                 if let Some(editor) = self.connection_editor.as_mut() {
-                    editor.focused_field =
-                        editor.focused_field.next(editor.kind, editor.auth_mode.as_str());
+                    editor.focused_field = editor
+                        .focused_field
+                        .next(editor.kind, editor.auth_mode.as_str());
                     editor.error = None;
                 }
                 cx.notify();
@@ -796,7 +796,10 @@ impl NyaTermApp {
     pub(in crate::ui::view) fn cycle_connection_sort_mode(&mut self, cx: &mut Context<Self>) {
         self.connection_sort_mode = self.connection_sort_mode.next();
         self.connection_list_offset = 0;
-        self.terminal_status = format!("connections sorted by {}", self.connection_sort_mode.label());
+        self.terminal_status = format!(
+            "connections sorted by {}",
+            self.connection_sort_mode.label()
+        );
         cx.notify();
     }
 
@@ -883,7 +886,10 @@ impl NyaTermApp {
         cx.notify();
     }
 
-    fn persist_saved_connection(&mut self, connection: SavedConnection) -> Result<SavedConnection, String> {
+    fn persist_saved_connection(
+        &mut self,
+        connection: SavedConnection,
+    ) -> Result<SavedConnection, String> {
         self.with_connection_store(|store| {
             store.save_connection(&connection)?;
             Ok(())
@@ -922,10 +928,7 @@ impl NyaTermApp {
     }
 
     fn refresh_connection_serial_ports(&mut self) {
-        self.connection_serial_ports = self
-            .session_manager
-            .list_serial_ports()
-            .unwrap_or_default();
+        self.connection_serial_ports = self.session_manager.list_serial_ports().unwrap_or_default();
     }
 }
 
@@ -948,11 +951,14 @@ fn connection_editor_from_saved(
         proxy_id: None,
         proxy_jump_id: None,
     });
-    let post_login = connection.post_login.clone().unwrap_or(ConnectionPostLogin {
-        enabled: false,
-        command: String::new(),
-        delay_ms: 1000,
-    });
+    let post_login = connection
+        .post_login
+        .clone()
+        .unwrap_or(ConnectionPostLogin {
+            enabled: false,
+            command: String::new(),
+            delay_ms: 1000,
+        });
     let mut editor = ConnectionEditorState {
         id: Some(connection.id),
         kind: ConnectionKindTab::from_connection_type(&connection.config),
@@ -1172,8 +1178,14 @@ fn build_saved_connection_from_editor(
                 } else {
                     existing
                 },
-                key_id: editor.key_id.clone().filter(|value| !value.trim().is_empty()),
-                otp_id: editor.otp_id.clone().filter(|value| !value.trim().is_empty()),
+                key_id: editor
+                    .key_id
+                    .clone()
+                    .filter(|value| !value.trim().is_empty()),
+                otp_id: editor
+                    .otp_id
+                    .clone()
+                    .filter(|value| !value.trim().is_empty()),
                 auto_fill_otp: editor.auto_fill_otp,
                 has_password: false,
             })
@@ -1183,7 +1195,10 @@ fn build_saved_connection_from_editor(
 
     let network = match editor.kind {
         ConnectionKindTab::Ssh => {
-            let proxy_id = editor.proxy_id.clone().filter(|value| !value.trim().is_empty());
+            let proxy_id = editor
+                .proxy_id
+                .clone()
+                .filter(|value| !value.trim().is_empty());
             let proxy_jump_id = editor
                 .proxy_jump_id
                 .clone()
@@ -1222,7 +1237,10 @@ fn build_saved_connection_from_editor(
         id: editor.id.clone().unwrap_or_else(uuid),
         name,
         config,
-        group_id: editor.group_id.clone().filter(|value| !value.trim().is_empty()),
+        group_id: editor
+            .group_id
+            .clone()
+            .filter(|value| !value.trim().is_empty()),
         description: non_empty_optional(&editor.description),
         sort_order: 0,
         icon: None,

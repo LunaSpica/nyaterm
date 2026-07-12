@@ -115,7 +115,8 @@ impl NyaTermApp {
                             .flex()
                             .items_center()
                             .gap_1()
-                            .child(small_button(palette, 
+                            .child(small_button(
+                                palette,
                                 format!("quick-command-category-rename-{}", rename_id),
                                 "Rename",
                                 cx.listener(move |this, _, window, cx| {
@@ -126,7 +127,8 @@ impl NyaTermApp {
                                     );
                                 }),
                             ))
-                            .child(small_button(palette, 
+                            .child(small_button(
+                                palette,
                                 format!("quick-command-category-delete-{}", delete_id),
                                 "Delete",
                                 cx.listener(move |this, _, _, cx| {
@@ -172,7 +174,8 @@ impl NyaTermApp {
                         "No quick commands match the current filters."
                     })
                     .when(total_commands == 0, |this| {
-                        this.child(small_button(palette, 
+                        this.child(small_button(
+                            palette,
                             "quick-command-empty-add",
                             "Add Command",
                             cx.listener(|this, _, window, cx| {
@@ -590,7 +593,9 @@ impl NyaTermApp {
                                                             this.child(
                                                                 div()
                                                                     .text_size(px(9.))
-                                                                    .text_color(rgb(palette.warning))
+                                                                    .text_color(
+                                                                        rgb(palette.warning),
+                                                                    )
                                                                     .child("📌"),
                                                             )
                                                         },
@@ -603,10 +608,7 @@ impl NyaTermApp {
                                                     .text_size(px(11.))
                                                     .text_color(rgb(palette.text_muted))
                                                     .overflow_hidden()
-                                                    .child(truncate_preview(
-                                                        &command.command,
-                                                        120,
-                                                    )),
+                                                    .child(truncate_preview(&command.command, 120)),
                                             ),
                                     ),
                             )
@@ -828,7 +830,6 @@ impl NyaTermApp {
     }
 }
 
-
 fn quick_command_row_actions(
     palette: crate::ui::theme::ThemePalette,
     command_id: &str,
@@ -906,7 +907,9 @@ fn quick_command_more_menu(
         .relative()
         .child(
             div()
-                .id(SharedString::from(format!("quick-command-more-{command_id}")))
+                .id(SharedString::from(format!(
+                    "quick-command-more-{command_id}"
+                )))
                 .size(px(26.))
                 .flex()
                 .items_center()
@@ -961,13 +964,7 @@ fn quick_command_more_menu(
                             on_send_all,
                         ))
                     })
-                    .child(
-                        div()
-                            .mx_2()
-                            .my_1()
-                            .h(px(1.))
-                            .bg(rgb(palette.border)),
-                    )
+                    .child(div().mx_2().my_1().h(px(1.)).bg(rgb(palette.border)))
                     .child(quick_command_menu_item(
                         palette,
                         format!("quick-command-menu-delete-{command_id}"),

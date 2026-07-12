@@ -77,17 +77,13 @@ impl NyaTermApp {
                         .on_click(cx.listener(move |this, _, _, cx| {
                             this.select_session(select_session_id.clone(), cx);
                         }))
-                        .child(
-                            div()
-                                .size(px(8.))
-                                .rounded_full()
-                                .flex_none()
-                                .bg(if session_is_recording {
-                                    rgb(0xef4444)
-                                } else {
-                                    rgb(0x22c55e)
-                                }),
-                        )
+                        .child(div().size(px(8.)).rounded_full().flex_none().bg(
+                            if session_is_recording {
+                                rgb(0xef4444)
+                            } else {
+                                rgb(0x22c55e)
+                            },
+                        ))
                         .child(
                             div()
                                 .min_w_0()
@@ -254,54 +250,50 @@ impl NyaTermApp {
                     .items_center()
                     .gap_2()
                     .child(
-                        div()
-                            .relative()
-                            .flex_1()
-                            .min_w_0()
-                            .child(
-                                div()
-                                    .id(SharedString::from("recording-session-search"))
-                                    .h(px(28.))
-                                    .rounded_md()
-                                    .bg(rgb(palette.surface_elevated))
-                                    .px_2()
-                                    .flex()
-                                    .items_center()
-                                    .gap_1()
-                                    .cursor_text()
-                                    .track_focus(&self.recording_search_focus)
-                                    .on_click(cx.listener(|this, _, window, cx| {
-                                        window.focus(&this.recording_search_focus);
-                                        cx.notify();
-                                    }))
-                                    .on_key_down(cx.listener(|this, event: &KeyDownEvent, _, cx| {
-                                        cx.stop_propagation();
-                                        this.handle_recording_search_key_down(event, cx);
-                                    }))
-                                    .child(
-                                        svg()
-                                            .size(px(14.))
-                                            .flex_none()
-                                            .path("icons/fe/search.svg")
-                                            .text_color(rgb(palette.text_muted)),
-                                    )
-                                    .child(
-                                        div()
-                                            .min_w_0()
-                                            .flex_1()
-                                            .text_size(px(12.))
-                                            .text_color(if self.recording_search_draft.is_empty() {
-                                                rgb(palette.text_dimmed)
-                                            } else {
-                                                rgb(palette.text)
-                                            })
-                                            .child(if self.recording_search_draft.is_empty() {
-                                                "Search sessions".to_string()
-                                            } else {
-                                                self.recording_search_draft.clone()
-                                            }),
-                                    ),
-                            ),
+                        div().relative().flex_1().min_w_0().child(
+                            div()
+                                .id(SharedString::from("recording-session-search"))
+                                .h(px(28.))
+                                .rounded_md()
+                                .bg(rgb(palette.surface_elevated))
+                                .px_2()
+                                .flex()
+                                .items_center()
+                                .gap_1()
+                                .cursor_text()
+                                .track_focus(&self.recording_search_focus)
+                                .on_click(cx.listener(|this, _, window, cx| {
+                                    window.focus(&this.recording_search_focus);
+                                    cx.notify();
+                                }))
+                                .on_key_down(cx.listener(|this, event: &KeyDownEvent, _, cx| {
+                                    cx.stop_propagation();
+                                    this.handle_recording_search_key_down(event, cx);
+                                }))
+                                .child(
+                                    svg()
+                                        .size(px(14.))
+                                        .flex_none()
+                                        .path("icons/fe/search.svg")
+                                        .text_color(rgb(palette.text_muted)),
+                                )
+                                .child(
+                                    div()
+                                        .min_w_0()
+                                        .flex_1()
+                                        .text_size(px(12.))
+                                        .text_color(if self.recording_search_draft.is_empty() {
+                                            rgb(palette.text_dimmed)
+                                        } else {
+                                            rgb(palette.text)
+                                        })
+                                        .child(if self.recording_search_draft.is_empty() {
+                                            "Search sessions".to_string()
+                                        } else {
+                                            self.recording_search_draft.clone()
+                                        }),
+                                ),
+                        ),
                     )
                     .child(
                         div()
@@ -350,12 +342,7 @@ fn recording_action_svg_button(
             })
         })
         .when(!enabled, |this| this.opacity(0.4))
-        .child(
-            svg()
-                .size(px(16.))
-                .flex_none()
-                .path(icon_path),
-        )
+        .child(svg().size(px(16.)).flex_none().path(icon_path))
         .on_click(move |event, window, cx| {
             if enabled {
                 on_click(event, window, cx);

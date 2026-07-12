@@ -40,18 +40,22 @@ impl NyaTermApp {
                 let badge = match &item {
                     QuickSwitchItem::Session { active, unread, .. } => {
                         if *active {
-                            status_pill("active", rgb(palette.success), rgb(palette.hover)).into_any_element()
+                            status_pill("active", rgb(palette.success), rgb(palette.hover))
+                                .into_any_element()
                         } else if *unread {
-                            status_pill("unread", rgb(palette.warning), rgb(palette.hover)).into_any_element()
+                            status_pill("unread", rgb(palette.warning), rgb(palette.hover))
+                                .into_any_element()
                         } else {
-                            status_pill("open", rgb(palette.accent), rgb(palette.hover)).into_any_element()
+                            status_pill("open", rgb(palette.accent), rgb(palette.hover))
+                                .into_any_element()
                         }
                     }
                     QuickSwitchItem::Connection { .. } => {
                         status_pill("saved", rgb(0xc4b5fd), rgb(0x2b2142)).into_any_element()
                     }
                     QuickSwitchItem::Pending { .. } => {
-                        status_pill("connecting", rgb(palette.warning), rgb(palette.hover)).into_any_element()
+                        status_pill("connecting", rgb(palette.warning), rgb(palette.hover))
+                            .into_any_element()
                     }
                 };
 
@@ -200,7 +204,8 @@ impl NyaTermApp {
                                     .flex()
                                     .items_center()
                                     .gap_2()
-                                    .child(small_button(palette, 
+                                    .child(small_button(
+                                        palette,
                                         "quick-switch-new-ssh",
                                         "New SSH",
                                         cx.listener(|this, _, _, cx| {
@@ -210,7 +215,8 @@ impl NyaTermApp {
                                                 "new SSH session page opened".to_string();
                                         }),
                                     ))
-                                    .child(small_button(palette, 
+                                    .child(small_button(
+                                        palette,
                                         "quick-switch-close",
                                         "Close",
                                         cx.listener(|this, _, _, cx| {

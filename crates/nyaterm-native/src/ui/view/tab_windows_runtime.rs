@@ -160,7 +160,10 @@ impl NyaTermApp {
     }
 
     pub(in crate::ui::view) fn terminal_windows_is_multi_leaf(&self) -> bool {
-        matches!(self.terminal_windows, Some(TerminalWindowNode::Split { .. }))
+        matches!(
+            self.terminal_windows,
+            Some(TerminalWindowNode::Split { .. })
+        )
     }
 
     pub(in crate::ui::view) fn sync_terminal_windows_active_tab(&mut self, session_id: &str) {
@@ -256,11 +259,7 @@ impl NyaTermApp {
             TabDockZone::Center => "merged into leaf".to_string(),
             TabDockZone::Edge(edge) => format!("split to {}", edge.label()),
         };
-        self.terminal_status = format!(
-            "docked tab {} ({})",
-            short_id(&tab_id),
-            zone_label
-        );
+        self.terminal_status = format!("docked tab {} ({})", short_id(&tab_id), zone_label);
         self.persist_terminal_window_layout();
         cx.notify();
     }
@@ -381,8 +380,6 @@ impl NyaTermApp {
         }
         self.terminal_status = "restored multi-leaf window layout".to_string();
     }
-
-
 }
 
 fn find_leaf_with_tab(node: &TerminalWindowNode, tab_id: &str) -> Option<String> {

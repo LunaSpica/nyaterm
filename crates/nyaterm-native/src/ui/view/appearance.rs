@@ -5,8 +5,6 @@ pub(in crate::ui::view) use crate::ui::theme::{ThemePalette, theme_palette};
 const TERMINAL_FONT_SIZE_MIN: i16 = 8;
 const TERMINAL_FONT_SIZE_MAX: i16 = 72;
 
-
-
 impl NyaTermApp {
     pub(in crate::ui::view) fn theme_palette(&self) -> ThemePalette {
         theme_palette(&self.settings.theme)
@@ -49,9 +47,9 @@ impl NyaTermApp {
             id
         };
         let mut palette = theme_palette(id);
-        palette.apply_minimum_contrast_ratio(
-            parse_minimum_contrast_ratio(&self.settings.minimum_contrast_ratio),
-        );
+        palette.apply_minimum_contrast_ratio(parse_minimum_contrast_ratio(
+            &self.settings.minimum_contrast_ratio,
+        ));
         palette
     }
 
@@ -126,16 +124,13 @@ impl NyaTermApp {
         theme: Option<&str>,
         cx: &mut Context<Self>,
     ) {
-        self.settings.terminal_theme = theme
-            .map(str::trim)
-            .filter(|s| !s.is_empty())
-            .map(|s| {
-                if s == "catppuccin" {
-                    "catppuccin-mocha".to_string()
-                } else {
-                    s.to_string()
-                }
-            });
+        self.settings.terminal_theme = theme.map(str::trim).filter(|s| !s.is_empty()).map(|s| {
+            if s == "catppuccin" {
+                "catppuccin-mocha".to_string()
+            } else {
+                s.to_string()
+            }
+        });
         self.save_appearance_settings(cx);
         self.terminal_status = match self.settings.terminal_theme.as_deref() {
             Some(id) => format!("terminal theme → {id}"),
@@ -169,11 +164,7 @@ impl NyaTermApp {
         self.save_appearance_settings(cx);
     }
 
-    pub(in crate::ui::view) fn adjust_ui_font_size(
-        &mut self,
-        delta: i16,
-        cx: &mut Context<Self>,
-    ) {
+    pub(in crate::ui::view) fn adjust_ui_font_size(&mut self, delta: i16, cx: &mut Context<Self>) {
         let next = (self.settings.ui_font_size as i16 + delta).clamp(12, 24) as u16;
         self.settings.ui_font_size = next;
         self.save_appearance_settings(cx);
@@ -218,7 +209,6 @@ impl NyaTermApp {
     pub(in crate::ui::view) fn zoom_terminal_out(&mut self, cx: &mut Context<Self>) {
         self.adjust_terminal_font_size(-1, cx);
     }
-
 
     pub(in crate::ui::view) fn prompt_background_image(&mut self, cx: &mut Context<Self>) {
         if self.settings.background_image_path.is_some() {
@@ -319,7 +309,6 @@ impl NyaTermApp {
         cx.notify();
     }
 }
-
 
 fn parse_minimum_contrast_ratio(raw: &str) -> f32 {
     match raw.trim() {

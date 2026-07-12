@@ -141,7 +141,7 @@ impl NyaTermApp {
         };
         let _ = (unit_count, byte_count);
         let is_sending = self.send_command_sending;
-                let infinite_progress = is_sending && self.send_command_progress_rounds == 0;
+        let infinite_progress = is_sending && self.send_command_progress_rounds == 0;
         let progress_total = self.send_command_progress_total.max(1);
         let progress_completed = if infinite_progress {
             self.send_command_progress_completed
@@ -933,13 +933,14 @@ impl NyaTermApp {
                     ),
             )
     }
-
 }
 
-
-fn send_command_control_group(palette: crate::ui::theme::ThemePalette,
+fn send_command_control_group(
+    palette: crate::ui::theme::ThemePalette,
     label: &'static str,
-    content: impl IntoElement,) -> impl IntoElement {    // Tauri labeled control: h-8 bordered group with muted label prefix.
+    content: impl IntoElement,
+) -> impl IntoElement {
+    // Tauri labeled control: h-8 bordered group with muted label prefix.
     div()
         .h(px(30.))
         .flex()
@@ -970,11 +971,14 @@ fn send_command_control_group(palette: crate::ui::theme::ThemePalette,
         )
 }
 
-fn send_command_chip(palette: crate::ui::theme::ThemePalette,
+fn send_command_chip(
+    palette: crate::ui::theme::ThemePalette,
     id: impl Into<String>,
     label: &'static str,
     active: bool,
-    on_click: impl Fn(&gpui::ClickEvent, &mut gpui::Window, &mut gpui::App) + 'static,) -> impl IntoElement {    div()
+    on_click: impl Fn(&gpui::ClickEvent, &mut gpui::Window, &mut gpui::App) + 'static,
+) -> impl IntoElement {
+    div()
         .id(SharedString::from(id.into()))
         .h(px(28.))
         .px_2()
@@ -997,16 +1001,22 @@ fn send_command_chip(palette: crate::ui::theme::ThemePalette,
             rgb(0x00000000)
         })
         .cursor_pointer()
-        .hover(|this| this.bg(rgb(palette.surface_elevated)).text_color(rgb(palette.text)))
+        .hover(|this| {
+            this.bg(rgb(palette.surface_elevated))
+                .text_color(rgb(palette.text))
+        })
         .child(label)
         .on_click(on_click)
 }
 
-fn send_command_target_chip(palette: crate::ui::theme::ThemePalette,
+fn send_command_target_chip(
+    palette: crate::ui::theme::ThemePalette,
     id: impl Into<String>,
     label: impl Into<SharedString>,
     active: bool,
-    on_click: impl Fn(&gpui::ClickEvent, &mut gpui::Window, &mut gpui::App) + 'static,) -> impl IntoElement {    div()
+    on_click: impl Fn(&gpui::ClickEvent, &mut gpui::Window, &mut gpui::App) + 'static,
+) -> impl IntoElement {
+    div()
         .id(SharedString::from(id.into()))
         .h(px(28.))
         .px_2()
@@ -1029,16 +1039,21 @@ fn send_command_target_chip(palette: crate::ui::theme::ThemePalette,
             rgb(0x00000000)
         })
         .cursor_pointer()
-        .hover(|this| this.bg(rgb(palette.surface_elevated)).text_color(rgb(palette.text)))
+        .hover(|this| {
+            this.bg(rgb(palette.surface_elevated))
+                .text_color(rgb(palette.text))
+        })
         .child(label.into())
         .on_click(on_click)
 }
 
-
-fn send_command_stepper_button(palette: crate::ui::theme::ThemePalette,
+fn send_command_stepper_button(
+    palette: crate::ui::theme::ThemePalette,
     id: impl Into<String>,
     label: &'static str,
-    on_click: impl Fn(&gpui::ClickEvent, &mut gpui::Window, &mut gpui::App) + 'static,) -> impl IntoElement {    div()
+    on_click: impl Fn(&gpui::ClickEvent, &mut gpui::Window, &mut gpui::App) + 'static,
+) -> impl IntoElement {
+    div()
         .id(SharedString::from(id.into()))
         .size(px(28.))
         .flex()
@@ -1047,7 +1062,10 @@ fn send_command_stepper_button(palette: crate::ui::theme::ThemePalette,
         .text_size(px(12.))
         .text_color(rgb(palette.text_muted))
         .cursor_pointer()
-        .hover(|this| this.bg(rgb(palette.surface_elevated)).text_color(rgb(palette.text)))
+        .hover(|this| {
+            this.bg(rgb(palette.surface_elevated))
+                .text_color(rgb(palette.text))
+        })
         .child(label)
         .on_click(on_click)
 }

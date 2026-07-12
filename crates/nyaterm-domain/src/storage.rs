@@ -18,12 +18,11 @@ use crate::{
     KeywordHighlightConfig, KeywordHighlightImportResult, KeywordHighlightRule,
     OAuthDriveSyncSettings, OtpEntry, PortableSnapshotError, PortableSnapshotKind, ProxyConfig,
     ProxyGroup, ProxyGroupsConfig, QuickCommand, QuickCommandCategory, QuickCommandsConfig,
-    SearchEngineConfig, default_search_engines,
-    RawPortableSnapshot, SavedConnection, SavedCredential, SavedPassword, SessionsConfig, SshKey,
-    TranslationSettings, TunnelConfig, TunnelGroup, TunnelGroupsConfig,
-    ai_settings_has_secret, merge_masked_ai_settings, merge_masked_cloud_sync_settings,
-    merge_masked_translation_settings, normalize_ai_settings, now_rfc3339,
-    translation_settings_has_secret, trim_ai_audit, trim_ai_history, uuid,
+    RawPortableSnapshot, SavedConnection, SavedCredential, SavedPassword, SearchEngineConfig,
+    SessionsConfig, SshKey, TranslationSettings, TunnelConfig, TunnelGroup, TunnelGroupsConfig,
+    ai_settings_has_secret, default_search_engines, merge_masked_ai_settings,
+    merge_masked_cloud_sync_settings, merge_masked_translation_settings, normalize_ai_settings,
+    now_rfc3339, translation_settings_has_secret, trim_ai_audit, trim_ai_history, uuid,
 };
 
 const DATABASE_FILE: &str = "nyaterm.redb";
@@ -632,7 +631,9 @@ impl ConnectionStore {
             .filter(|path| !path.is_empty())
         {
             let content = std::fs::read_to_string(path).map_err(|source| {
-                StorageError::InvalidData(format!("failed to read key material from {path}: {source}"))
+                StorageError::InvalidData(format!(
+                    "failed to read key material from {path}: {source}"
+                ))
             })?;
             let token = self.get_or_create_master_key_token(&crypto)?;
             Some(crypto.encrypt_secret(&token, &content)?)
@@ -656,7 +657,9 @@ impl ConnectionStore {
             .filter(|path| !path.is_empty())
         {
             let content = std::fs::read_to_string(path).map_err(|source| {
-                StorageError::InvalidData(format!("failed to read certificate from {path}: {source}"))
+                StorageError::InvalidData(format!(
+                    "failed to read certificate from {path}: {source}"
+                ))
             })?;
             let token = self.get_or_create_master_key_token(&crypto)?;
             Some(crypto.encrypt_secret(&token, &content)?)
@@ -759,15 +762,17 @@ impl ConnectionStore {
             password.has_password = password.password.is_some();
             password.password = None;
         }
-        passwords.sort_by(|left, right| {
-            left.name.cmp(&right.name).then(left.id.cmp(&right.id))
-        });
+        passwords.sort_by(|left, right| left.name.cmp(&right.name).then(left.id.cmp(&right.id)));
         Ok(passwords)
     }
 
-    pub fn load_password_by_id(&self, password_id: &str) -> Result<Option<SavedPassword>, StorageError> {
+    pub fn load_password_by_id(
+        &self,
+        password_id: &str,
+    ) -> Result<Option<SavedPassword>, StorageError> {
         let key = entity_key(PASSWORD_PREFIX, password_id);
-        let Some(mut entry) = self.read_json_table::<SavedPassword>(CREDENTIALS_TABLE, &key)? else {
+        let Some(mut entry) = self.read_json_table::<SavedPassword>(CREDENTIALS_TABLE, &key)?
+        else {
             return Ok(None);
         };
         entry.has_password = entry.password.is_some();
@@ -786,7 +791,11 @@ impl ConnectionStore {
         Ok(Some(DecryptedSavedPassword {
             id: entry.id,
             name: entry.name,
-            password: decrypt_optional_secret(&crypto, master_key_token.as_deref(), &entry.password)?,
+            password: decrypt_optional_secret(
+                &crypto,
+                master_key_token.as_deref(),
+                &entry.password,
+            )?,
         }))
     }
 
@@ -831,9 +840,7 @@ impl ConnectionStore {
             credential.has_password = credential.password.is_some();
             credential.password = None;
         }
-        credentials.sort_by(|left, right| {
-            left.name.cmp(&right.name).then(left.id.cmp(&right.id))
-        });
+        credentials.sort_by(|left, right| left.name.cmp(&right.name).then(left.id.cmp(&right.id)));
         Ok(credentials)
     }
 
@@ -842,7 +849,8 @@ impl ConnectionStore {
         credential_id: &str,
     ) -> Result<Option<SavedCredential>, StorageError> {
         let key = entity_key(CREDENTIAL_PREFIX, credential_id);
-        let Some(mut entry) = self.read_json_table::<SavedCredential>(CREDENTIALS_TABLE, &key)? else {
+        let Some(mut entry) = self.read_json_table::<SavedCredential>(CREDENTIALS_TABLE, &key)?
+        else {
             return Ok(None);
         };
         entry.has_password = entry.password.is_some();
@@ -862,7 +870,11 @@ impl ConnectionStore {
             id: entry.id,
             name: entry.name,
             username: entry.username,
-            password: decrypt_optional_secret(&crypto, master_key_token.as_deref(), &entry.password)?,
+            password: decrypt_optional_secret(
+                &crypto,
+                master_key_token.as_deref(),
+                &entry.password,
+            )?,
             username_prompt_regex: entry.username_prompt_regex,
             password_prompt_regex: entry.password_prompt_regex,
             enabled: entry.enabled,
@@ -1251,11 +1263,7 @@ impl ConnectionStore {
                     _ => "1".to_string(),
                 }
             },
-            ui_font_family: json_string(
-                &value,
-                &["appearance", "ui_font_family"],
-                "Inter",
-            ),
+            ui_font_family: json_string(&value, &["appearance", "ui_font_family"], "Inter"),
             ui_font_size: json_u16(&value, &["appearance", "ui_font_size"], 16).clamp(12, 24),
             terminal_font_weight: {
                 let w = json_u16(&value, &["appearance", "font_weight"], 400);
@@ -1355,11 +1363,8 @@ impl ConnectionStore {
             ui_left_panel_collapsed: json_bool(&value, &["ui", "left_panel_collapsed"], false),
             ui_right_panel_collapsed: json_bool(&value, &["ui", "right_panel_collapsed"], false),
             ui_activity_bar_left_top: {
-                let values = json_string_vec(
-                    &value,
-                    &["ui", "activity_bar_layout", "left_top"],
-                    32,
-                );
+                let values =
+                    json_string_vec(&value, &["ui", "activity_bar_layout", "left_top"], 32);
                 if values.is_empty() {
                     default_activity_left_top()
                 } else {
@@ -1367,11 +1372,8 @@ impl ConnectionStore {
                 }
             },
             ui_activity_bar_left_bottom: {
-                let values = json_string_vec(
-                    &value,
-                    &["ui", "activity_bar_layout", "left_bottom"],
-                    32,
-                );
+                let values =
+                    json_string_vec(&value, &["ui", "activity_bar_layout", "left_bottom"], 32);
                 if values.is_empty() {
                     default_activity_left_bottom()
                 } else {
@@ -1379,11 +1381,8 @@ impl ConnectionStore {
                 }
             },
             ui_activity_bar_right_top: {
-                let values = json_string_vec(
-                    &value,
-                    &["ui", "activity_bar_layout", "right_top"],
-                    32,
-                );
+                let values =
+                    json_string_vec(&value, &["ui", "activity_bar_layout", "right_top"], 32);
                 if values.is_empty() {
                     default_activity_right_top()
                 } else {
@@ -1391,11 +1390,8 @@ impl ConnectionStore {
                 }
             },
             ui_activity_bar_right_bottom: {
-                let values = json_string_vec(
-                    &value,
-                    &["ui", "activity_bar_layout", "right_bottom"],
-                    32,
-                );
+                let values =
+                    json_string_vec(&value, &["ui", "activity_bar_layout", "right_bottom"], 32);
                 if values.is_empty() {
                     default_activity_right_bottom()
                 } else {
@@ -1546,11 +1542,7 @@ impl ConnectionStore {
                 }
             },
             diagnostics_retention_days: {
-                let days = u32::from(json_u16(
-                    &value,
-                    &["diagnostics", "retention_days"],
-                    7,
-                ));
+                let days = u32::from(json_u16(&value, &["diagnostics", "retention_days"], 7));
                 match days {
                     3 | 7 | 14 | 30 => days,
                     _ => 7,
@@ -1757,11 +1749,9 @@ impl ConnectionStore {
             serde_json::Value::from(settings.ui_transfer_height.clamp(60, 600)),
         );
         match &settings.ui_active_left_panel {
-            Some(panel) if !panel.trim().is_empty() => set_nested_json_string(
-                &mut value,
-                &["ui", "active_left_panel"],
-                panel.clone(),
-            ),
+            Some(panel) if !panel.trim().is_empty() => {
+                set_nested_json_string(&mut value, &["ui", "active_left_panel"], panel.clone())
+            }
             _ => set_nested_json_value(
                 &mut value,
                 &["ui", "active_left_panel"],
@@ -1769,11 +1759,9 @@ impl ConnectionStore {
             ),
         }
         match &settings.ui_active_right_panel {
-            Some(panel) if !panel.trim().is_empty() => set_nested_json_string(
-                &mut value,
-                &["ui", "active_right_panel"],
-                panel.clone(),
-            ),
+            Some(panel) if !panel.trim().is_empty() => {
+                set_nested_json_string(&mut value, &["ui", "active_right_panel"], panel.clone())
+            }
             _ => set_nested_json_value(
                 &mut value,
                 &["ui", "active_right_panel"],
@@ -1851,7 +1839,12 @@ impl ConnectionStore {
     ) -> Result<AppSettingsSummary, StorageError> {
         let mut value = self.load_settings_value()?;
         set_nested_json_string(&mut value, &["appearance", "theme"], settings.theme.clone());
-        match settings.background_image_path.as_deref().map(str::trim).filter(|s| !s.is_empty()) {
+        match settings
+            .background_image_path
+            .as_deref()
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+        {
             Some(path) => set_nested_json_string(
                 &mut value,
                 &["appearance", "background_image_path"],
@@ -4694,8 +4687,6 @@ fn set_nested_json_string(value: &mut serde_json::Value, path: &[&str], new_valu
     set_nested_json_value(value, path, serde_json::Value::String(new_value));
 }
 
-
-
 fn load_action_links_matchers(value: &serde_json::Value) -> crate::ActionLinksMatcherSettings {
     let defaults = crate::ActionLinksMatcherSettings::default();
     let Some(obj) = json_path(value, &["terminal", "action_links_matchers"]) else {
@@ -4718,7 +4709,8 @@ fn load_action_links_matchers(value: &serde_json::Value) -> crate::ActionLinksMa
 }
 
 fn load_search_engines(value: &serde_json::Value) -> Vec<SearchEngineConfig> {
-    let Some(arr) = json_path(value, &["search", "custom_engines"]).and_then(|v| v.as_array()) else {
+    let Some(arr) = json_path(value, &["search", "custom_engines"]).and_then(|v| v.as_array())
+    else {
         return default_search_engines();
     };
     let mut engines = Vec::new();
@@ -5880,12 +5872,24 @@ mod tests {
         assert_eq!(saved.terminal_font_weight, 500);
         assert_eq!(saved.terminal_font_weight_bold, 800);
         let raw = store.load_settings_value().expect("raw");
-        assert_eq!(raw["appearance"]["terminal_theme"], serde_json::Value::String("nord".into()));
-        assert_eq!(raw["appearance"]["minimum_contrast_ratio"], serde_json::json!(4.5));
-        assert_eq!(raw["appearance"]["ui_font_family"], serde_json::Value::String("Segoe UI".into()));
+        assert_eq!(
+            raw["appearance"]["terminal_theme"],
+            serde_json::Value::String("nord".into())
+        );
+        assert_eq!(
+            raw["appearance"]["minimum_contrast_ratio"],
+            serde_json::json!(4.5)
+        );
+        assert_eq!(
+            raw["appearance"]["ui_font_family"],
+            serde_json::Value::String("Segoe UI".into())
+        );
         assert_eq!(raw["appearance"]["ui_font_size"], serde_json::json!(18));
         assert_eq!(raw["appearance"]["font_weight"], serde_json::json!(500));
-        assert_eq!(raw["appearance"]["font_weight_bold"], serde_json::json!(800));
+        assert_eq!(
+            raw["appearance"]["font_weight_bold"],
+            serde_json::json!(800)
+        );
         std::fs::remove_dir_all(dir).ok();
     }
 
@@ -5920,9 +5924,18 @@ mod tests {
             raw["general"]["minimize_to_tray"],
             serde_json::Value::Bool(true)
         );
-        assert_eq!(raw["ui"]["language"], serde_json::Value::String("zh-CN".into()));
-        assert_eq!(raw["diagnostics"]["level"], serde_json::Value::String("debug".into()));
-        assert_eq!(raw["diagnostics"]["retention_days"], serde_json::Value::from(14));
+        assert_eq!(
+            raw["ui"]["language"],
+            serde_json::Value::String("zh-CN".into())
+        );
+        assert_eq!(
+            raw["diagnostics"]["level"],
+            serde_json::Value::String("debug".into())
+        );
+        assert_eq!(
+            raw["diagnostics"]["retention_days"],
+            serde_json::Value::from(14)
+        );
 
         std::fs::remove_dir_all(dir).ok();
     }
@@ -6473,9 +6486,7 @@ mod tests {
                     Some("c1".to_string()),
                 )),
                 second: Box::new(crate::models::RestorablePaneNode::leaf_session(
-                    "b",
-                    "Local",
-                    None,
+                    "b", "Local", None,
                 )),
             }),
         };
@@ -7278,10 +7289,8 @@ mod tests {
         use std::sync::atomic::{AtomicU64, Ordering};
         static COUNTER: AtomicU64 = AtomicU64::new(0);
         let n = COUNTER.fetch_add(1, Ordering::Relaxed);
-        let dir = std::env::temp_dir().join(format!(
-            "nyaterm-domain-{name}-{}-{n}",
-            std::process::id()
-        ));
+        let dir =
+            std::env::temp_dir().join(format!("nyaterm-domain-{name}-{}-{n}", std::process::id()));
         std::fs::remove_dir_all(&dir).ok();
         dir
     }

@@ -1,5 +1,5 @@
 use super::*;
-use gpui::{ScrollDelta, ScrollWheelEvent, SharedString, prelude::*};
+use gpui::{ScrollDelta, ScrollWheelEvent, SharedString};
 
 const DOCKER_RESOURCE_ROW_PX: f32 = 68.; // 64px Tauri row + gap
 const DOCKER_RESOURCE_VIEWPORT_ROWS: usize = 14;
@@ -38,7 +38,9 @@ pub(in crate::ui::view::pages::remote) fn docker_images_panel(
             )
             .child(icon_button(
                 format!("docker-image-remove-{}", compact_id(&image_id)),
-                "×", palette,cx.listener(move |this, _, _, cx| {
+                "×",
+                palette,
+                cx.listener(move |this, _, _, cx| {
                     this.request_docker_confirm(
                         DockerConfirmState {
                             title: format!("Remove image {label}"),
@@ -58,7 +60,12 @@ pub(in crate::ui::view::pages::remote) fn docker_images_panel(
         rows = rows.child(div().h(px(pad_bottom)).w_full().flex_none());
     }
     if total > DOCKER_RESOURCE_VIEWPORT_ROWS {
-        rows = rows.child(docker_resource_range_footer(palette, window_start, window_end, total));
+        rows = rows.child(docker_resource_range_footer(
+            palette,
+            window_start,
+            window_end,
+            total,
+        ));
     }
 
     docker_resource_panel(palette, "Images", total, rows, scroll_offset, cx)
@@ -84,31 +91,41 @@ pub(in crate::ui::view::pages::remote) fn docker_volumes_panel(
     for volume in volumes.get(window_start..window_end).unwrap_or(&[]) {
         let volume_name = volume.name.clone();
         rows = rows.child(
-            docker_resource_row(palette, volume.name.clone(), format!("driver {}", volume.driver)).child(
-                icon_button(
-                    format!("docker-volume-remove-{volume_name}"),
-                    "×", palette,cx.listener(move |this, _, _, cx| {
-                        this.request_docker_confirm(
-                            DockerConfirmState {
-                                title: format!("Remove volume {volume_name}"),
-                                detail: format!("docker volume rm {volume_name}"),
-                                action: DockerConfirmAction::VolumeRemove {
-                                    volume_name: volume_name.clone(),
-                                    force: false,
-                                },
+            docker_resource_row(
+                palette,
+                volume.name.clone(),
+                format!("driver {}", volume.driver),
+            )
+            .child(icon_button(
+                format!("docker-volume-remove-{volume_name}"),
+                "×",
+                palette,
+                cx.listener(move |this, _, _, cx| {
+                    this.request_docker_confirm(
+                        DockerConfirmState {
+                            title: format!("Remove volume {volume_name}"),
+                            detail: format!("docker volume rm {volume_name}"),
+                            action: DockerConfirmAction::VolumeRemove {
+                                volume_name: volume_name.clone(),
+                                force: false,
                             },
-                            cx,
-                        );
-                    }),
-                ),
-            ),
+                        },
+                        cx,
+                    );
+                }),
+            )),
         );
     }
     if pad_bottom > 0. {
         rows = rows.child(div().h(px(pad_bottom)).w_full().flex_none());
     }
     if total > DOCKER_RESOURCE_VIEWPORT_ROWS {
-        rows = rows.child(docker_resource_range_footer(palette, window_start, window_end, total));
+        rows = rows.child(docker_resource_range_footer(
+            palette,
+            window_start,
+            window_end,
+            total,
+        ));
     }
 
     docker_resource_panel(palette, "Volumes", total, rows, scroll_offset, cx)
@@ -147,7 +164,9 @@ pub(in crate::ui::view::pages::remote) fn docker_networks_panel(
             )
             .child(icon_button(
                 format!("docker-network-remove-{}", compact_id(&network_id)),
-                "×", palette,cx.listener(move |this, _, _, cx| {
+                "×",
+                palette,
+                cx.listener(move |this, _, _, cx| {
                     this.request_docker_confirm(
                         DockerConfirmState {
                             title: format!("Remove network {name}"),
@@ -166,16 +185,18 @@ pub(in crate::ui::view::pages::remote) fn docker_networks_panel(
         rows = rows.child(div().h(px(pad_bottom)).w_full().flex_none());
     }
     if total > DOCKER_RESOURCE_VIEWPORT_ROWS {
-        rows = rows.child(docker_resource_range_footer(palette, window_start, window_end, total));
+        rows = rows.child(docker_resource_range_footer(
+            palette,
+            window_start,
+            window_end,
+            total,
+        ));
     }
 
     docker_resource_panel(palette, "Networks", total, rows, scroll_offset, cx)
 }
 
-fn docker_resource_window(
-    total: usize,
-    list_offset: usize,
-) -> (usize, usize, f32, f32, usize) {
+fn docker_resource_window(total: usize, list_offset: usize) -> (usize, usize, f32, f32, usize) {
     let window_capacity = DOCKER_RESOURCE_VIEWPORT_ROWS + DOCKER_RESOURCE_OVERSCAN * 2;
     let max_offset = total.saturating_sub(DOCKER_RESOURCE_VIEWPORT_ROWS.min(total));
     let scroll_row = list_offset.min(max_offset);
@@ -186,7 +207,13 @@ fn docker_resource_window(
     (window_start, window_end, pad_top, pad_bottom, scroll_row)
 }
 
-fn docker_resource_range_footer(palette: crate::ui::theme::ThemePalette, start: usize, end: usize, total: usize) -> impl IntoElement {    div()
+fn docker_resource_range_footer(
+    palette: crate::ui::theme::ThemePalette,
+    start: usize,
+    end: usize,
+    total: usize,
+) -> impl IntoElement {
+    div()
         .px_2()
         .py_1()
         .rounded_md()
@@ -195,10 +222,16 @@ fn docker_resource_range_footer(palette: crate::ui::theme::ThemePalette, start: 
         .bg(rgb(palette.bg))
         .text_size(px(10.))
         .text_color(rgb(palette.text_dimmed))
-        .child(format!("Rows {start}-{end}/{total} · scroll or refine search"))
+        .child(format!(
+            "Rows {start}-{end}/{total} · scroll or refine search"
+        ))
 }
 
-fn docker_resource_empty(palette: crate::ui::theme::ThemePalette, title: &'static str, message: &'static str) -> gpui::AnyElement {
+fn docker_resource_empty(
+    palette: crate::ui::theme::ThemePalette,
+    title: &'static str,
+    message: &'static str,
+) -> gpui::AnyElement {
     div()
         .id(SharedString::from(format!(
             "docker-resource-{}",
@@ -281,10 +314,13 @@ pub(in crate::ui::view::pages::remote) fn docker_resource_panel(
         .into_any_element()
 }
 
-pub(in crate::ui::view::pages::remote) fn docker_resource_static_panel(palette: crate::ui::theme::ThemePalette,
+pub(in crate::ui::view::pages::remote) fn docker_resource_static_panel(
+    palette: crate::ui::theme::ThemePalette,
     title: &'static str,
     count: usize,
-    rows: impl IntoElement,) -> impl IntoElement {    div()
+    rows: impl IntoElement,
+) -> impl IntoElement {
+    div()
         .id(SharedString::from(format!(
             "docker-resource-{}",
             title.to_ascii_lowercase()
@@ -314,9 +350,12 @@ pub(in crate::ui::view::pages::remote) fn docker_resource_static_panel(palette: 
         .child(rows)
 }
 
-pub(in crate::ui::view::pages::remote) fn docker_resource_row(palette: crate::ui::theme::ThemePalette,
+pub(in crate::ui::view::pages::remote) fn docker_resource_row(
+    palette: crate::ui::theme::ThemePalette,
     title: String,
-    detail: String,) -> gpui::Div {    // ~64px Tauri SIMPLE_ROW_HEIGHT-ish dense resource row (slightly tighter chrome).
+    detail: String,
+) -> gpui::Div {
+    // ~64px Tauri SIMPLE_ROW_HEIGHT-ish dense resource row (slightly tighter chrome).
     div()
         .h(px(64.))
         .rounded_md()

@@ -86,14 +86,16 @@ impl NyaTermApp {
                             .flex()
                             .justify_end()
                             .gap_2()
-                            .child(small_button(palette, 
+                            .child(small_button(
+                                palette,
                                 "transfer-job-delete-cancel",
                                 "Cancel",
                                 cx.listener(|this, _, _, cx| {
                                     this.cancel_delete_transfer_job(cx);
                                 }),
                             ))
-                            .child(small_button(palette, 
+                            .child(small_button(
+                                palette,
                                 "transfer-job-delete-confirm",
                                 "Delete",
                                 cx.listener(|this, _, _, cx| {

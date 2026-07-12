@@ -28,7 +28,11 @@ pub(super) fn network_tab_button(
             rgb(palette.text_muted)
         })
         .text_size(px(12.))
-        .font_weight(if active { FontWeight(600.) } else { FontWeight(500.) })
+        .font_weight(if active {
+            FontWeight(600.)
+        } else {
+            FontWeight(500.)
+        })
         .cursor_pointer()
         .hover(move |this| this.bg(rgb(palette.hover)).text_color(rgb(palette.text)))
         .child(label)
@@ -62,7 +66,8 @@ pub(super) fn network_delete_confirm_panel(
                     truncate_preview(&confirm.id, 32)
                 )),
         )
-        .child(network_dialog_footer(palette, 
+        .child(network_dialog_footer(
+            palette,
             "network-delete-cancel",
             "network-delete-confirm",
             "Delete",
@@ -116,8 +121,8 @@ pub(super) fn network_group_editor_panel(
                 "Group name",
                 editor.name.clone(),
                 true,
-                    palette,
-                )
+                palette,
+            )
             .track_focus(focus)
             .on_click(cx.listener(|this, _, window, cx| {
                 window.focus(&this.network_group_editor_focus);
@@ -129,9 +134,15 @@ pub(super) fn network_group_editor_panel(
             })),
         )
         .when_some(editor.error.clone(), |this, error| {
-            this.child(div().text_size(px(12.)).text_color(rgb(0xfda4af)).child(error))
+            this.child(
+                div()
+                    .text_size(px(12.))
+                    .text_color(rgb(0xfda4af))
+                    .child(error),
+            )
         })
-        .child(network_dialog_footer(palette, 
+        .child(network_dialog_footer(
+            palette,
             "network-group-editor-cancel",
             "network-group-editor-save",
             "Save",
@@ -172,7 +183,8 @@ pub(super) fn network_group_delete_confirm_panel(
                     confirm.item_count
                 )),
         )
-        .child(network_dialog_footer(palette, 
+        .child(network_dialog_footer(
+            palette,
             "network-group-delete-cancel",
             "network-group-delete-confirm",
             "Delete",
@@ -185,7 +197,6 @@ pub(super) fn network_group_delete_confirm_panel(
         ));
     network_modal_shell(palette, "network-group-delete-modal", 420., card)
 }
-
 
 pub(super) fn network_modal_shell(
     palette: crate::ui::theme::ThemePalette,
@@ -206,4 +217,3 @@ pub(super) fn network_dialog_footer(
 ) -> impl IntoElement {
     modal_dialog_footer(palette, cancel_id, save_id, save_label, on_cancel, on_save)
 }
-

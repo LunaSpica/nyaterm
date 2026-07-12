@@ -102,9 +102,9 @@ impl NyaTermApp {
                                         "Close All Sessions"
                                     }),
                             )
-                            .child(div().text_xs().text_color(rgb(palette.text_muted)).child(format!(
-                                "This will close {session_count} active session(s)."
-                            ))),
+                            .child(div().text_xs().text_color(rgb(palette.text_muted)).child(
+                                format!("This will close {session_count} active session(s)."),
+                            )),
                     )
                     .child(session_list)
                     .child(
@@ -114,7 +114,8 @@ impl NyaTermApp {
                             .items_center()
                             .justify_end()
                             .gap_2()
-                            .child(small_button(palette, 
+                            .child(small_button(
+                                palette,
                                 "close-all-sessions-cancel",
                                 "Cancel",
                                 cx.listener(|this, _, _, cx| {

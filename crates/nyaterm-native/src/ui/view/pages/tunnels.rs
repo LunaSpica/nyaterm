@@ -1,6 +1,6 @@
 use gpui::{
     App, ClickEvent, Context, FontWeight, Hsla, IntoElement, KeyDownEvent, Window, div, prelude::*,
-    px, rgb, rgba, svg,
+    px, rgb, svg,
 };
 
 use std::collections::{HashMap, HashSet};
@@ -68,22 +68,35 @@ impl NyaTermApp {
                 })
             })
             .count();
-                let mut tunnel_list = div().flex().flex_col().gap_2();
+        let mut tunnel_list = div().flex().flex_col().gap_2();
         if self.tunnels.is_empty() {
-            tunnel_list = tunnel_list.child(empty_panel("No saved tunnels were found in the native runtime directory yet.", self.theme_palette()));
+            tunnel_list = tunnel_list.child(empty_panel(
+                "No saved tunnels were found in the native runtime directory yet.",
+                self.theme_palette(),
+            ));
         } else if filtered_tunnels.is_empty() {
-            tunnel_list = tunnel_list.child(empty_panel("No tunnels match the current search.", self.theme_palette()));
+            tunnel_list = tunnel_list.child(empty_panel(
+                "No tunnels match the current search.",
+                self.theme_palette(),
+            ));
         } else {
             for section in sections {
-                tunnel_list = tunnel_list.child(tunnel_section(palette, section, &open_tunnels, self, cx));
+                tunnel_list =
+                    tunnel_list.child(tunnel_section(palette, section, &open_tunnels, self, cx));
             }
         }
 
         let mut proxy_list = div().flex().flex_col().gap_2();
         if self.proxies.is_empty() {
-            proxy_list = proxy_list.child(empty_panel("No saved proxies were found in the native runtime directory yet.", self.theme_palette()));
+            proxy_list = proxy_list.child(empty_panel(
+                "No saved proxies were found in the native runtime directory yet.",
+                self.theme_palette(),
+            ));
         } else if filtered_proxies.is_empty() {
-            proxy_list = proxy_list.child(empty_panel("No proxies match the current search.", self.theme_palette()));
+            proxy_list = proxy_list.child(empty_panel(
+                "No proxies match the current search.",
+                self.theme_palette(),
+            ));
         } else {
             for section in proxy_sections {
                 proxy_list = proxy_list.child(proxy_section(palette, section, self, cx));
@@ -391,10 +404,12 @@ impl NyaTermApp {
     }
 }
 
-fn icon_network_action(palette: crate::ui::theme::ThemePalette,
+fn icon_network_action(
+    palette: crate::ui::theme::ThemePalette,
     id: impl Into<String>,
     label: &'static str,
-    on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,) -> impl IntoElement {
+    on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
+) -> impl IntoElement {
     div()
         .id(gpui::SharedString::from(id.into()))
         .size(px(28.))
@@ -405,7 +420,10 @@ fn icon_network_action(palette: crate::ui::theme::ThemePalette,
         .text_size(px(12.))
         .text_color(rgb(palette.text_muted))
         .cursor_pointer()
-        .hover(|this| this.bg(rgb(palette.surface_elevated)).text_color(rgb(palette.text)))
+        .hover(|this| {
+            this.bg(rgb(palette.surface_elevated))
+                .text_color(rgb(palette.text))
+        })
         .child(label)
         .on_click(on_click)
 }

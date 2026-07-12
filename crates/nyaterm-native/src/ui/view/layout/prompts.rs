@@ -62,7 +62,8 @@ impl NyaTermApp {
                             .flex()
                             .items_center()
                             .gap_2()
-                            .child(small_button(palette, 
+                            .child(small_button(
+                                palette,
                                 format!("duplicate-overwrite-{overwrite_id}"),
                                 "Overwrite",
                                 cx.listener(move |this, _, _, cx| {
@@ -73,7 +74,8 @@ impl NyaTermApp {
                                     );
                                 }),
                             ))
-                            .child(small_button(palette, 
+                            .child(small_button(
+                                palette,
                                 format!("duplicate-skip-{skip_id}"),
                                 "Skip",
                                 cx.listener(move |this, _, _, cx| {
@@ -84,7 +86,8 @@ impl NyaTermApp {
                                     );
                                 }),
                             ))
-                            .child(small_button(palette, 
+                            .child(small_button(
+                                palette,
                                 format!("duplicate-rename-{rename_id}"),
                                 "Rename",
                                 cx.listener(move |this, _, _, cx| {
@@ -148,18 +151,26 @@ impl NyaTermApp {
                                     .text_color(rgb(palette.text))
                                     .child(prompt.host_key.host_identifier.clone()),
                             )
-                            .child(div().text_xs().text_color(rgb(palette.text_muted)).child(format!(
-                                "{} {}",
-                                prompt.host_key.key_type, prompt.host_key.fingerprint
-                            )))
-                            .child(div().text_xs().text_color(rgb(palette.text_muted)).child(action)),
+                            .child(div().text_xs().text_color(rgb(palette.text_muted)).child(
+                                format!(
+                                    "{} {}",
+                                    prompt.host_key.key_type, prompt.host_key.fingerprint
+                                ),
+                            ))
+                            .child(
+                                div()
+                                    .text_xs()
+                                    .text_color(rgb(palette.text_muted))
+                                    .child(action),
+                            ),
                     )
                     .child(
                         div()
                             .flex()
                             .items_center()
                             .gap_2()
-                            .child(small_button(palette, 
+                            .child(small_button(
+                                palette,
                                 format!("host-key-reject-{reject_id}"),
                                 "Reject",
                                 cx.listener(move |this, _, _, cx| {
@@ -170,7 +181,8 @@ impl NyaTermApp {
                                     );
                                 }),
                             ))
-                            .child(small_button(palette, 
+                            .child(small_button(
+                                palette,
                                 format!("host-key-accept-{accept_id}"),
                                 "Accept",
                                 cx.listener(move |this, _, _, cx| {
@@ -224,7 +236,12 @@ impl NyaTermApp {
                     .text_color(rgb(palette.text))
                     .child(credential_prompt_target(&prompt.prompt)),
             )
-            .child(div().text_xs().text_color(rgb(palette.text_muted)).child(reason));
+            .child(
+                div()
+                    .text_xs()
+                    .text_color(rgb(palette.text_muted))
+                    .child(reason),
+            );
         if let Some(prompt_text) = prompt
             .prompt
             .prompt_text
@@ -289,14 +306,16 @@ impl NyaTermApp {
                             .flex()
                             .items_center()
                             .gap_2()
-                            .child(small_button(palette, 
+                            .child(small_button(
+                                palette,
                                 format!("credential-cancel-{}", prompt.id),
                                 "Cancel",
                                 cx.listener(|this, _, _, cx| {
                                     this.cancel_credential_prompt(cx);
                                 }),
                             ))
-                            .child(small_button(palette, 
+                            .child(small_button(
+                                palette,
                                 format!("credential-submit-{}", prompt.id),
                                 "Submit",
                                 cx.listener(|this, _, _, cx| {
@@ -398,14 +417,16 @@ impl NyaTermApp {
                             .flex()
                             .items_center()
                             .gap_2()
-                            .child(small_button(palette, 
+                            .child(small_button(
+                                palette,
                                 "snapshot-password-cancel",
                                 "Cancel",
                                 cx.listener(|this, _, _, cx| {
                                     this.cancel_snapshot_password_prompt(cx);
                                 }),
                             ))
-                            .child(small_button(palette, 
+                            .child(small_button(
+                                palette,
                                 "snapshot-password-submit",
                                 "Submit",
                                 cx.listener(|this, _, _, cx| {

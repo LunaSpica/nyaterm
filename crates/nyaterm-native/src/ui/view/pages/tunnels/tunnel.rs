@@ -1,5 +1,5 @@
-use super::*;
 use super::common::{network_dialog_footer, network_modal_shell};
+use super::*;
 
 #[derive(Debug, Clone)]
 pub(super) struct TunnelSection {
@@ -9,9 +9,11 @@ pub(super) struct TunnelSection {
     tunnels: Vec<TunnelConfig>,
 }
 
-pub(super) fn tunnel_sections(palette: crate::ui::theme::ThemePalette,
+pub(super) fn tunnel_sections(
+    _palette: crate::ui::theme::ThemePalette,
     tunnels: &[TunnelConfig],
-    groups: &[TunnelGroup],) -> Vec<TunnelSection>  {
+    groups: &[TunnelGroup],
+) -> Vec<TunnelSection> {
     let valid_group_ids = groups
         .iter()
         .map(|group| group.id.as_str())
@@ -54,11 +56,13 @@ pub(super) fn tunnel_sections(palette: crate::ui::theme::ThemePalette,
     sections
 }
 
-pub(super) fn tunnel_section(palette: crate::ui::theme::ThemePalette,
+pub(super) fn tunnel_section(
+    palette: crate::ui::theme::ThemePalette,
     section: TunnelSection,
     open_tunnels: &HashMap<String, SshTunnelInfo>,
     app: &NyaTermApp,
-    cx: &mut Context<NyaTermApp>,) -> impl IntoElement  {
+    cx: &mut Context<NyaTermApp>,
+) -> impl IntoElement {
     let item_count = section.tunnels.len();
     let open_count = section
         .tunnels
@@ -170,7 +174,10 @@ pub(super) fn tunnel_section(palette: crate::ui::theme::ThemePalette,
         .overflow_hidden()
         .child(
             div()
-                .id(gpui::SharedString::from(format!("tunnel-section-header-{}", section.id)))
+                .id(gpui::SharedString::from(format!(
+                    "tunnel-section-header-{}",
+                    section.id
+                )))
                 .h(px(30.))
                 .px_3()
                 .flex()
@@ -242,7 +249,8 @@ pub(super) fn tunnel_section(palette: crate::ui::theme::ThemePalette,
                             .flex()
                             .items_center()
                             .gap_1()
-                            .child(small_button(palette, 
+                            .child(small_button(
+                                palette,
                                 format!("tunnel-group-rename-{}", group.id),
                                 "Rename",
                                 cx.listener(move |this, _, _, cx| {
@@ -253,7 +261,8 @@ pub(super) fn tunnel_section(palette: crate::ui::theme::ThemePalette,
                                     );
                                 }),
                             ))
-                            .child(small_button(palette, 
+                            .child(small_button(
+                                palette,
                                 format!("tunnel-group-delete-{}", group.id),
                                 "Delete",
                                 cx.listener(move |this, _, _, cx| {
@@ -272,11 +281,13 @@ pub(super) fn tunnel_section(palette: crate::ui::theme::ThemePalette,
         .when(!collapsed, |this| this.child(rows))
 }
 
-fn tunnel_move_picker(palette: crate::ui::theme::ThemePalette,
+fn tunnel_move_picker(
+    palette: crate::ui::theme::ThemePalette,
     tunnel_id: String,
     current_group_id: Option<String>,
     groups: &[TunnelGroup],
-    cx: &mut Context<NyaTermApp>,) -> gpui::Div  {
+    cx: &mut Context<NyaTermApp>,
+) -> gpui::Div {
     let mut targets = div().flex().flex_wrap().items_center().gap_2();
     if current_group_id.is_none() {
         targets = targets.child(status_pill(
@@ -286,7 +297,8 @@ fn tunnel_move_picker(palette: crate::ui::theme::ThemePalette,
         ));
     } else {
         let target_id = tunnel_id.clone();
-        targets = targets.child(small_button(palette, 
+        targets = targets.child(small_button(
+            palette,
             format!("network-tunnel-move-{tunnel_id}-ungrouped"),
             "Ungrouped",
             cx.listener(move |this, _, _, cx| {
@@ -297,7 +309,11 @@ fn tunnel_move_picker(palette: crate::ui::theme::ThemePalette,
 
     for group in groups {
         if current_group_id.as_deref() == Some(group.id.as_str()) {
-            targets = targets.child(status_pill("current", rgb(palette.success), rgb(palette.hover)));
+            targets = targets.child(status_pill(
+                "current",
+                rgb(palette.success),
+                rgb(palette.hover),
+            ));
             targets = targets.child(
                 div()
                     .text_xs()
@@ -307,7 +323,8 @@ fn tunnel_move_picker(palette: crate::ui::theme::ThemePalette,
         } else {
             let target_id = tunnel_id.clone();
             let group_id = group.id.clone();
-            targets = targets.child(small_button(palette, 
+            targets = targets.child(small_button(
+                palette,
                 format!("network-tunnel-move-{tunnel_id}-{}", group.id),
                 "Move Here",
                 cx.listener(move |this, _, _, cx| {
@@ -343,7 +360,8 @@ fn tunnel_move_picker(palette: crate::ui::theme::ThemePalette,
         .child(targets)
 }
 
-pub(super) fn tunnel_network_row(palette: crate::ui::theme::ThemePalette,
+pub(super) fn tunnel_network_row(
+    palette: crate::ui::theme::ThemePalette,
     tunnel: &TunnelConfig,
     connection_label: String,
     open_info: Option<SshTunnelInfo>,
@@ -353,7 +371,8 @@ pub(super) fn tunnel_network_row(palette: crate::ui::theme::ThemePalette,
     on_close: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
     on_edit: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
     on_move: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
-    on_delete: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,) -> impl IntoElement  {
+    on_delete: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
+) -> impl IntoElement {
     let supported = tunnel_mode(tunnel).is_some();
     let is_open = open_info.is_some();
     let status = if pending {
@@ -490,18 +509,29 @@ pub(super) fn tunnel_network_row(palette: crate::ui::theme::ThemePalette,
         )
 }
 
-fn network_switch_button(palette: crate::ui::theme::ThemePalette,
+fn network_switch_button(
+    palette: crate::ui::theme::ThemePalette,
     id: impl Into<String>,
     on: bool,
-    on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,) -> impl IntoElement {    // Compact switch stand-in for Tauri Switch next to tunnel rows.
+    on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
+) -> impl IntoElement {
+    // Compact switch stand-in for Tauri Switch next to tunnel rows.
     div()
         .id(gpui::SharedString::from(id.into()))
         .w(px(34.))
         .h(px(18.))
         .rounded_full()
         .border_1()
-        .border_color(if on { rgb(palette.success) } else { rgb(palette.border) })
-        .bg(if on { rgb(palette.success) } else { rgb(palette.surface_elevated) })
+        .border_color(if on {
+            rgb(palette.success)
+        } else {
+            rgb(palette.border)
+        })
+        .bg(if on {
+            rgb(palette.success)
+        } else {
+            rgb(palette.surface_elevated)
+        })
         .flex()
         .items_center()
         .px(px(2.))
@@ -518,10 +548,12 @@ fn network_switch_button(palette: crate::ui::theme::ThemePalette,
         .on_click(on_click)
 }
 
-fn network_icon_action(palette: crate::ui::theme::ThemePalette,
+fn network_icon_action(
+    palette: crate::ui::theme::ThemePalette,
     id: impl Into<String>,
     label: &'static str,
-    on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,) -> impl IntoElement  {
+    on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
+) -> impl IntoElement {
     div()
         .id(gpui::SharedString::from(id.into()))
         .size(px(24.))
@@ -532,21 +564,21 @@ fn network_icon_action(palette: crate::ui::theme::ThemePalette,
         .text_size(px(12.))
         .text_color(rgb(palette.text_muted))
         .cursor_pointer()
-        .hover(|this| this.bg(rgb(palette.surface_elevated)).text_color(rgb(palette.text)))
-        .child(
-            svg()
-                .size(px(14.))
-                .flex_none()
-                .path(label),
-        )
+        .hover(|this| {
+            this.bg(rgb(palette.surface_elevated))
+                .text_color(rgb(palette.text))
+        })
+        .child(svg().size(px(14.)).flex_none().path(label))
         .on_click(on_click)
 }
 
-pub(super) fn network_tunnel_editor_panel(palette: crate::ui::theme::ThemePalette,
+pub(super) fn network_tunnel_editor_panel(
+    palette: crate::ui::theme::ThemePalette,
     editor: NetworkTunnelEditorState,
     app: &NyaTermApp,
     focus: &gpui::FocusHandle,
-    cx: &mut Context<NyaTermApp>,) -> impl IntoElement  {
+    cx: &mut Context<NyaTermApp>,
+) -> impl IntoElement {
     let connection_label = editor
         .connection_id
         .as_deref()
@@ -609,7 +641,11 @@ pub(super) fn network_tunnel_editor_panel(palette: crate::ui::theme::ThemePalett
                                 .child("Configure SSH local, remote, or dynamic port forwarding."),
                         ),
                 )
-                .child(status_pill(mode_label, rgb(palette.accent), rgb(palette.hover))),
+                .child(status_pill(
+                    mode_label,
+                    rgb(palette.accent),
+                    rgb(palette.hover),
+                )),
         )
         .child(
             div()
@@ -754,7 +790,12 @@ pub(super) fn network_tunnel_editor_panel(palette: crate::ui::theme::ThemePalett
                 .flex()
                 .flex_col()
                 .gap_1()
-                .child(div().text_xs().text_color(rgb(palette.text_muted)).child("Preview"))
+                .child(
+                    div()
+                        .text_xs()
+                        .text_color(rgb(palette.text_muted))
+                        .child("Preview"),
+                )
                 .child(
                     div()
                         .font_family("JetBrains Mono")
@@ -766,7 +807,8 @@ pub(super) fn network_tunnel_editor_panel(palette: crate::ui::theme::ThemePalett
         .when_some(editor.error.clone(), |this, error| {
             this.child(div().text_xs().text_color(rgb(palette.danger)).child(error))
         })
-        .child(network_dialog_footer(palette, 
+        .child(network_dialog_footer(
+            palette,
             "network-tunnel-editor-cancel",
             "network-tunnel-editor-save",
             "Save",
@@ -781,14 +823,16 @@ pub(super) fn network_tunnel_editor_panel(palette: crate::ui::theme::ThemePalett
     network_modal_shell(palette, "network-tunnel-editor-modal", 640., card)
 }
 
-pub(super) fn tunnel_editor_input(palette: crate::ui::theme::ThemePalette,
+pub(super) fn tunnel_editor_input(
+    palette: crate::ui::theme::ThemePalette,
     id: impl Into<String>,
     label: &'static str,
     value: String,
     active: bool,
     field: NetworkTunnelEditorField,
     focus: &gpui::FocusHandle,
-    cx: &mut Context<NyaTermApp>,) -> impl IntoElement  {
+    cx: &mut Context<NyaTermApp>,
+) -> impl IntoElement {
     transfer_input(id, label, value, active, palette)
         .track_focus(focus)
         .on_click(cx.listener(move |this, _, window, cx| {
@@ -800,11 +844,13 @@ pub(super) fn tunnel_editor_input(palette: crate::ui::theme::ThemePalette,
         }))
 }
 
-pub(super) fn tunnel_editor_selector(palette: crate::ui::theme::ThemePalette,
+pub(super) fn tunnel_editor_selector(
+    palette: crate::ui::theme::ThemePalette,
     id: impl Into<String>,
     label: &'static str,
     value: String,
-    on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,) -> impl IntoElement  {
+    on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
+) -> impl IntoElement {
     div()
         .id(gpui::SharedString::from(id.into()))
         .h(px(52.))
@@ -819,7 +865,12 @@ pub(super) fn tunnel_editor_selector(palette: crate::ui::theme::ThemePalette,
         .bg(rgb(palette.bg))
         .cursor_pointer()
         .hover(|this| this.bg(rgb(palette.surface)))
-        .child(div().text_size(px(11.)).text_color(rgb(palette.text_muted)).child(label))
+        .child(
+            div()
+                .text_size(px(11.))
+                .text_color(rgb(palette.text_muted))
+                .child(label),
+        )
         .child(
             div()
                 .font_family("JetBrains Mono")
@@ -830,18 +881,29 @@ pub(super) fn tunnel_editor_selector(palette: crate::ui::theme::ThemePalette,
         .on_click(on_click)
 }
 
-pub(super) fn tunnel_editor_option(palette: crate::ui::theme::ThemePalette,
+pub(super) fn tunnel_editor_option(
+    palette: crate::ui::theme::ThemePalette,
     id: impl Into<String>,
     title: &'static str,
     detail: &'static str,
     active: bool,
-    on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,) -> impl IntoElement {    // Tauri-like selectable option cards for bind host / auto open.
+    on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
+) -> impl IntoElement {
+    // Tauri-like selectable option cards for bind host / auto open.
     div()
         .id(gpui::SharedString::from(id.into()))
         .rounded_md()
         .border_1()
-        .border_color(if active { rgb(palette.accent) } else { rgb(palette.border) })
-        .bg(if active { rgb(palette.hover) } else { rgb(palette.bg) })
+        .border_color(if active {
+            rgb(palette.accent)
+        } else {
+            rgb(palette.border)
+        })
+        .bg(if active {
+            rgb(palette.hover)
+        } else {
+            rgb(palette.bg)
+        })
         .px_3()
         .py_2()
         .flex()
@@ -853,14 +915,23 @@ pub(super) fn tunnel_editor_option(palette: crate::ui::theme::ThemePalette,
             div()
                 .text_size(px(12.))
                 .font_weight(FontWeight(600.))
-                .text_color(if active { rgb(palette.accent) } else { rgb(palette.text) })
+                .text_color(if active {
+                    rgb(palette.accent)
+                } else {
+                    rgb(palette.text)
+                })
                 .child(title),
         )
-        .child(div().text_size(px(11.)).text_color(rgb(palette.text_muted)).child(detail))
+        .child(
+            div()
+                .text_size(px(11.))
+                .text_color(rgb(palette.text_muted))
+                .child(detail),
+        )
         .on_click(on_click)
 }
 
-pub(super) fn tunnel_editor_preview(editor: &NetworkTunnelEditorState) -> String  {
+pub(super) fn tunnel_editor_preview(editor: &NetworkTunnelEditorState) -> String {
     let bind_host = if editor.bind_localhost {
         "127.0.0.1"
     } else {
@@ -895,7 +966,12 @@ pub(super) fn tunnel_editor_preview(editor: &NetworkTunnelEditorState) -> String
     }
 }
 
-pub(super) fn tunnel_status_style(palette: crate::ui::theme::ThemePalette, pending: bool, is_open: bool, supported: bool) -> (Hsla, Hsla)  {
+pub(super) fn tunnel_status_style(
+    palette: crate::ui::theme::ThemePalette,
+    pending: bool,
+    is_open: bool,
+    supported: bool,
+) -> (Hsla, Hsla) {
     if pending {
         (rgb(palette.warning).into(), rgb(palette.hover).into())
     } else if is_open {
@@ -907,7 +983,7 @@ pub(super) fn tunnel_status_style(palette: crate::ui::theme::ThemePalette, pendi
     }
 }
 
-pub(super) fn tunnel_matches(tunnel: &TunnelConfig, query: &str) -> bool  {
+pub(super) fn tunnel_matches(tunnel: &TunnelConfig, query: &str) -> bool {
     if query.is_empty() {
         return true;
     }

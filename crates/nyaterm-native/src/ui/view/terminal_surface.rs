@@ -1,22 +1,25 @@
 use super::*;
 
 impl NyaTermApp {
-    pub(in crate::ui::view) fn terminal_canvas(&self, cx: &mut Context<Self>) -> impl IntoElement {
+    pub(in crate::ui::view) fn terminal_canvas(
+        &mut self,
+        cx: &mut Context<Self>,
+    ) -> impl IntoElement {
         let session_id = self.active_session_id.clone().unwrap_or_default();
         self.terminal_canvas_for(session_id, false, cx)
     }
 
     pub(in crate::ui::view) fn terminal_canvas_for(
-        &self,
+        &mut self,
         session_id: String,
         show_pane_chrome: bool,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
         let palette = self.terminal_theme_palette();
         let keyword_rules = self.resolved_keyword_highlight_rules();
+        let action_link_matchers = self.settings.terminal_action_links_matchers.clone();
         let is_active = self.active_session_id.as_deref() == Some(session_id.as_str());
         let is_disconnected = !session_id.is_empty() && self.is_session_disconnected(&session_id);
-        let mut output = div().flex().flex_col();
         let scroll_offset = self
             .terminal_views
             .get(&session_id)
@@ -27,12 +30,10 @@ impl NyaTermApp {
             .get(&session_id)
             .map(|view| view.screen.viewport_snapshot(scroll_offset))
             .unwrap_or_else(|| self.terminal_screen.viewport_snapshot(scroll_offset));
-        let lines = snapshot.lines;
-        let styled_lines = snapshot.styled_lines;
-        let line_timestamps_ms = snapshot.line_timestamps_ms;
-        let hyperlink_lines = snapshot.hyperlink_lines;
+        let lines = snapshot.lines.clone();
+        let line_timestamps_ms = snapshot.line_timestamps_ms.clone();
+        let hyperlink_lines = snapshot.hyperlink_lines.clone();
         let cursor_row = snapshot.cursor_row;
-        let cursor_col = snapshot.cursor_col;
         let show_line_numbers = self.settings.terminal_show_line_numbers;
         let show_timestamps = self.settings.terminal_show_timestamps;
         let show_timestamp_ms = self.settings.terminal_show_timestamp_milliseconds;
@@ -42,7 +43,7 @@ impl NyaTermApp {
             && !is_disconnected
             && scroll_offset == 0
             && cursor_row != usize::MAX
-            && (!self.settings.cursor_blink || self.cursor_blink_on);
+            && (!self.settings.cursor_blink || self.terminal_runtime.cursor_blink_on);
         let cursor_style = self.settings.cursor_style.as_str();
         let search_matches = if is_active
             && self.terminal_search_open
@@ -89,13 +90,13 @@ impl NyaTermApp {
                     .push(range);
             }
         }
-        for (line_index, line) in lines.into_iter().enumerate() {
+        let mut line_decorations = Vec::with_capacity(lines.len());
+        for (line_index, line) in lines.iter().enumerate() {
             let line = if line.is_empty() {
                 " ".to_string()
             } else {
-                line
+                line.clone()
             };
-            let ansi = styled_lines.get(line_index).map(|s| s.as_slice());
             let selection_cols = if is_active {
                 self.terminal_selection
                     .as_ref()
@@ -103,23 +104,25 @@ impl NyaTermApp {
             } else {
                 None
             };
-            let mut link_ranges: Vec<(usize, usize)> = if self.settings.terminal_action_links_enabled {
-                find_action_links(
-                    &line,
-                    &self.settings.terminal_action_links_matchers,
-                    true,
-                )
-                .into_iter()
-                .map(|item| {
-                    // Convert byte offsets from regex to char indices for painting.
-                    let start_chars = line[..item.start.min(line.len())].chars().count();
-                    let end_chars = line[..item.end.min(line.len())].chars().count();
-                    (start_chars, end_chars)
-                })
-                .collect()
-            } else {
-                Vec::new()
-            };
+            let mut link_ranges: Vec<(usize, usize)> =
+                if self.settings.terminal_action_links_enabled {
+                    if let Some(view) = self.terminal_views.get_mut(&session_id) {
+                        view.render_cache
+                            .action_link_ranges(&line, &action_link_matchers)
+                    } else {
+                        find_action_links(&line, &action_link_matchers, true)
+                            .into_iter()
+                            .map(|item| {
+                                let start_chars =
+                                    line[..item.start.min(line.len())].chars().count();
+                                let end_chars = line[..item.end.min(line.len())].chars().count();
+                                (start_chars, end_chars)
+                            })
+                            .collect()
+                    }
+                } else {
+                    Vec::new()
+                };
             // OSC 8 hyperlinks from the terminal model (always paint when present).
             if let Some(spans) = hyperlink_lines.get(line_index) {
                 for span in spans {
@@ -139,25 +142,33 @@ impl NyaTermApp {
                 .get(&line_index)
                 .map(|ranges| ranges.as_slice())
                 .unwrap_or(&empty_ranges);
-            let content = terminal_line_element(
-                &line,
-                ansi,
-                &keyword_rules,
-                line_search_ranges,
-                line_active_search_ranges,
-                if show_cursor && line_index == cursor_row {
-                    Some(cursor_col)
-                } else {
-                    None
-                },
-                cursor_style,
+            line_decorations.push(TerminalLineDecorations {
+                search_ranges: line_search_ranges.to_vec(),
+                active_search_ranges: line_active_search_ranges.to_vec(),
                 selection_cols,
-                &link_ranges,
-                self.terminal_cell_size().1,
-                palette,
-                self.settings.terminal_font_weight_bold as f32,
-            );
-            if gutter_enabled {
+                link_ranges,
+            });
+        }
+        let (cell_w, cell_h) = self.terminal_cell_size();
+        let grid = NyaTerminalElement::new(
+            snapshot,
+            keyword_rules,
+            line_decorations,
+            show_cursor,
+            cursor_style,
+            cell_w,
+            cell_h,
+            palette,
+            self.settings.terminal_font_family.clone(),
+            self.settings.terminal_font_size as f32,
+            self.settings.terminal_font_weight as f32,
+            self.settings.terminal_font_weight_bold as f32,
+        );
+        let output = if gutter_enabled {
+            let ts_w = self.terminal_timestamp_gutter_width_px();
+            let ln_w = self.terminal_line_number_gutter_width_px();
+            let mut gutter = div().flex().flex_col().flex_none();
+            for line_index in 0..lines.len() {
                 let ts_label = if show_timestamps {
                     line_timestamps_ms
                         .get(line_index)
@@ -179,49 +190,30 @@ impl NyaTermApp {
                 } else {
                     String::new()
                 };
-                let (_, cell_h) = self.terminal_cell_size();
-                let ts_w = self.terminal_timestamp_gutter_width_px();
-                let ln_w = self.terminal_line_number_gutter_width_px();
-                output = output.child(
+                gutter = gutter.child(
                     div()
                         .flex()
                         .flex_row()
                         .items_center()
                         .min_h(px(cell_h))
-                        .child(
-                            div()
-                                .flex()
-                                .flex_row()
-                                .items_center()
-                                .gap_1()
-                                .flex_none()
-                                .pr_1()
-                                .text_color(rgb(palette.text_dimmed))
-                                .font_family(self.settings.terminal_font_family.clone())
-                                .text_size(px(self.settings.terminal_font_size as f32 * 0.85))
-                                .when(show_timestamps, |this| {
-                                    this.child(
-                                        div()
-                                            .w(px(ts_w))
-                                            .flex_none()
-                                            .child(ts_label),
-                                    )
-                                })
-                                .when(show_line_numbers, |this| {
-                                    this.child(
-                                        div()
-                                            .w(px(ln_w))
-                                            .flex_none()
-                                            .child(line_label),
-                                    )
-                                }),
-                        )
-                        .child(content),
+                        .gap_1()
+                        .flex_none()
+                        .pr_1()
+                        .text_color(rgb(palette.text_dimmed))
+                        .font_family(self.settings.terminal_font_family.clone())
+                        .text_size(px(self.settings.terminal_font_size as f32 * 0.85))
+                        .when(show_timestamps, |this| {
+                            this.child(div().w(px(ts_w)).flex_none().child(ts_label))
+                        })
+                        .when(show_line_numbers, |this| {
+                            this.child(div().w(px(ln_w)).flex_none().child(line_label))
+                        }),
                 );
-            } else {
-                output = output.child(content);
             }
-        }
+            div().flex().flex_row().child(gutter).child(grid)
+        } else {
+            div().flex().flex_row().child(grid)
+        };
         let pane_title = self
             .session_display_name(&session_id)
             .unwrap_or_else(|| short_id(&session_id).to_string());
@@ -229,7 +221,9 @@ impl NyaTermApp {
         let active_sync_group = self.active_sync_group_for_session(&session_id);
         let show_sync_action_overlay = active_sync_group.is_some() && !session_id.is_empty();
         let sync_is_paused = self.is_session_paused_in_active_sync_group(&session_id);
-        let sync_group_color = active_sync_group.map(|group| group.color).unwrap_or(palette.accent);
+        let sync_group_color = active_sync_group
+            .map(|group| group.color)
+            .unwrap_or(palette.accent);
         let sync_status_label = if sync_is_paused { "Paused" } else { "Syncing" };
         let output_session_id = session_id.clone();
         let terminal_font_family = self.settings.terminal_font_family.clone();
@@ -247,8 +241,13 @@ impl NyaTermApp {
             .get(&session_id)
             .map(|view| view.skipped_output_chars)
             .unwrap_or(0);
+        let (render_cache_hits, render_cache_misses) = self
+            .terminal_views
+            .get(&session_id)
+            .map(|view| (view.render_cache.hits, view.render_cache.misses))
+            .unwrap_or((0, 0));
         let show_scroll_to_bottom = is_active && scroll_offset > 0;
-        let show_visual_bell = is_active && self.visual_bell_ticks > 0;
+        let show_visual_bell = is_active && self.terminal_runtime.visual_bell_ticks > 0;
         let file_drop_hover = self
             .terminal_file_drop_hover
             .as_deref()
@@ -860,19 +859,30 @@ impl NyaTermApp {
                                 )
                             })
                             .when_some(performance_overlay, |this, overlay| {
+                                let stats_detail = format!(
+                                    "Queued {} in {} event(s). Dropped {} total. Last drain {}. Link cache {}/{} hit/miss.",
+                                    format_bytes(self.terminal_runtime.session_event_queued_output_bytes as u64),
+                                    format_skipped_count(self.terminal_runtime.session_event_queued_events as u64),
+                                    format_bytes(self.terminal_runtime.session_event_dropped_output_bytes),
+                                    format_bytes(self.terminal_runtime.session_event_last_drained_output_bytes as u64),
+                                    format_skipped_count(render_cache_hits),
+                                    format_skipped_count(render_cache_misses),
+                                );
                                 let (title, detail) = match overlay {
                                     TerminalPerformanceOverlay::Overloaded => (
                                         "Large-output protection active",
                                         format!(
-                                            "Rendering is prioritizing responsiveness. Skipped {} queued characters.",
-                                            format_skipped_count(skipped_output_chars)
+                                            "Rendering is prioritizing responsiveness. Skipped {} queued characters. {}",
+                                            format_skipped_count(skipped_output_chars),
+                                            stats_detail,
                                         ),
                                     ),
                                     TerminalPerformanceOverlay::Recovered => (
                                         "Large-output protection recovered",
                                         format!(
-                                            "The terminal is responsive again. Skipped {} queued characters during overload.",
-                                            format_skipped_count(skipped_output_chars)
+                                            "The terminal is responsive again. Skipped {} queued characters during overload. {}",
+                                            format_skipped_count(skipped_output_chars),
+                                            stats_detail,
                                         ),
                                     ),
                                 };
@@ -1013,7 +1023,9 @@ impl NyaTermApp {
         let thumb_id = format!("terminal-scrollbar-thumb-{session_id}");
 
         div()
-            .id(SharedString::from(format!("terminal-scrollbar-{session_id}")))
+            .id(SharedString::from(format!(
+                "terminal-scrollbar-{session_id}"
+            )))
             .w(px(10.))
             .flex_none()
             .h_full()
@@ -1028,11 +1040,9 @@ impl NyaTermApp {
                     .rounded_full()
                     .bg(rgb(palette.border))
                     .cursor_pointer()
-                    .on_mouse_down(
-                        MouseButton::Left,
-                        {
-                            let session_id = session_id.to_string();
-                            cx.listener(move |this, event: &gpui::MouseDownEvent, _, cx| {
+                    .on_mouse_down(MouseButton::Left, {
+                        let session_id = session_id.to_string();
+                        cx.listener(move |this, event: &gpui::MouseDownEvent, _, cx| {
                             if !session_id.is_empty() {
                                 this.activate_workspace_pane(session_id.clone(), cx);
                             }
@@ -1046,8 +1056,7 @@ impl NyaTermApp {
                             this.set_terminal_scroll_from_track_ratio(ratio, cx);
                             cx.stop_propagation();
                         })
-                        },
-                    )
+                    })
                     .when(show, |this| {
                         this.child(
                             div()
@@ -1121,7 +1130,14 @@ impl NyaTermApp {
         } else {
             self.terminal_search_query.clone()
         };
-        let mut history_rows = div().id(SharedString::from("terminal-search-history-results")).mt_1().max_h(px(260.)).overflow_y_scroll().flex().flex_col().gap_1();
+        let mut history_rows = div()
+            .id(SharedString::from("terminal-search-history-results"))
+            .mt_1()
+            .max_h(px(260.))
+            .overflow_y_scroll()
+            .flex()
+            .flex_col()
+            .gap_1();
         if self.terminal_search_mode == TerminalSearchMode::History
             && !self.terminal_search_query.trim().is_empty()
         {
@@ -1147,7 +1163,11 @@ impl NyaTermApp {
                                 "{} match(es) · {} ms{}",
                                 response.total,
                                 response.elapsed_ms,
-                                if response.truncated { " · truncated" } else { "" }
+                                if response.truncated {
+                                    " · truncated"
+                                } else {
+                                    ""
+                                }
                             )),
                     );
                     for result in response.results.into_iter().take(8) {
@@ -1185,17 +1205,20 @@ impl NyaTermApp {
                                         .line_height(px(16.))
                                         .child(truncate_preview(&result.preview, 96)),
                                 )
-                                .when(!result.before.is_empty() || !result.after.is_empty(), |this| {
-                                    this.child(
-                                        div()
-                                            .mt_1()
-                                            .font_family("JetBrains Mono")
-                                            .text_size(px(10.))
-                                            .text_color(rgb(palette.text_dimmed))
-                                            .line_height(px(14.))
-                                            .child(context),
-                                    )
-                                }),
+                                .when(
+                                    !result.before.is_empty() || !result.after.is_empty(),
+                                    |this| {
+                                        this.child(
+                                            div()
+                                                .mt_1()
+                                                .font_family("JetBrains Mono")
+                                                .text_size(px(10.))
+                                                .text_color(rgb(palette.text_dimmed))
+                                                .line_height(px(14.))
+                                                .child(context),
+                                        )
+                                    },
+                                ),
                         );
                     }
                 }
@@ -1242,7 +1265,9 @@ impl NyaTermApp {
                     .child(mode_button(
                         "terminal-search-mode-buffer",
                         TerminalSearchMode::Buffer.label(),
-                        self.terminal_search_mode == TerminalSearchMode::Buffer, self.theme_palette(),cx.listener(|this, _, _, cx| {
+                        self.terminal_search_mode == TerminalSearchMode::Buffer,
+                        self.theme_palette(),
+                        cx.listener(|this, _, _, cx| {
                             this.terminal_search_mode = TerminalSearchMode::Buffer;
                             this.terminal_search_active_index = 0;
                             cx.notify();
@@ -1251,7 +1276,9 @@ impl NyaTermApp {
                     .child(mode_button(
                         "terminal-search-mode-history",
                         TerminalSearchMode::History.label(),
-                        self.terminal_search_mode == TerminalSearchMode::History, self.theme_palette(),cx.listener(|this, _, _, cx| {
+                        self.terminal_search_mode == TerminalSearchMode::History,
+                        self.theme_palette(),
+                        cx.listener(|this, _, _, cx| {
                             this.terminal_search_mode = TerminalSearchMode::History;
                             this.terminal_search_active_index = 0;
                             cx.notify();
@@ -1270,7 +1297,9 @@ impl NyaTermApp {
                     )
                     .child(icon_button(
                         "terminal-search-close",
-                        "x", self.theme_palette(),cx.listener(|this, _, window, cx| {
+                        "x",
+                        self.theme_palette(),
+                        cx.listener(|this, _, window, cx| {
                             this.close_terminal_search(window, cx);
                         }),
                     )),
@@ -1305,7 +1334,9 @@ impl NyaTermApp {
                     .child(mode_button(
                         "terminal-search-case",
                         "Aa",
-                        self.terminal_search_case_sensitive, self.theme_palette(),cx.listener(|this, _, _, cx| {
+                        self.terminal_search_case_sensitive,
+                        self.theme_palette(),
+                        cx.listener(|this, _, _, cx| {
                             this.terminal_search_case_sensitive =
                                 !this.terminal_search_case_sensitive;
                             this.terminal_search_active_index = 0;
@@ -1315,7 +1346,9 @@ impl NyaTermApp {
                     .child(mode_button(
                         "terminal-search-regex",
                         ".*",
-                        self.terminal_search_regex, self.theme_palette(),cx.listener(|this, _, _, cx| {
+                        self.terminal_search_regex,
+                        self.theme_palette(),
+                        cx.listener(|this, _, _, cx| {
                             this.terminal_search_regex = !this.terminal_search_regex;
                             this.terminal_search_active_index = 0;
                             cx.notify();
@@ -1324,35 +1357,39 @@ impl NyaTermApp {
                     .child(mode_button(
                         "terminal-search-word",
                         "Word",
-                        self.terminal_search_whole_word, self.theme_palette(),cx.listener(|this, _, _, cx| {
+                        self.terminal_search_whole_word,
+                        self.theme_palette(),
+                        cx.listener(|this, _, _, cx| {
                             this.terminal_search_whole_word = !this.terminal_search_whole_word;
                             this.terminal_search_active_index = 0;
                             cx.notify();
                         }),
                     ))
-                    .when(self.terminal_search_mode == TerminalSearchMode::Buffer, |this| {
-                        this.child(icon_button(
-                            "terminal-search-prev",
-                            "^",
-                            self.theme_palette(),
-                            cx.listener(|this, _, _, cx| {
-                                this.navigate_terminal_search(-1, cx);
-                            }),
-                        ))
-                        .child(icon_button(
-                            "terminal-search-next",
-                            "v",
-                            self.theme_palette(),
-                            cx.listener(|this, _, _, cx| {
-                                this.navigate_terminal_search(1, cx);
-                            }),
-                        ))
-                    }),
+                    .when(
+                        self.terminal_search_mode == TerminalSearchMode::Buffer,
+                        |this| {
+                            this.child(icon_button(
+                                "terminal-search-prev",
+                                "^",
+                                self.theme_palette(),
+                                cx.listener(|this, _, _, cx| {
+                                    this.navigate_terminal_search(-1, cx);
+                                }),
+                            ))
+                            .child(icon_button(
+                                "terminal-search-next",
+                                "v",
+                                self.theme_palette(),
+                                cx.listener(|this, _, _, cx| {
+                                    this.navigate_terminal_search(1, cx);
+                                }),
+                            ))
+                        },
+                    ),
             )
             .child(history_rows)
     }
 }
-
 
 fn format_skipped_count(value: u64) -> String {
     // Lightweight thousands separators for the performance overlay.
@@ -1365,4 +1402,17 @@ fn format_skipped_count(value: u64) -> String {
         out.push(ch);
     }
     out.chars().rev().collect()
+}
+
+fn format_bytes(value: u64) -> String {
+    const KIB: f64 = 1024.0;
+    const MIB: f64 = KIB * 1024.0;
+    let value_f = value as f64;
+    if value_f >= MIB {
+        format!("{:.1} MiB", value_f / MIB)
+    } else if value_f >= KIB {
+        format!("{:.1} KiB", value_f / KIB)
+    } else {
+        format!("{value} B")
+    }
 }

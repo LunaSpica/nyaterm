@@ -15,16 +15,16 @@ impl NyaTermApp {
         };
         let parsed = parse_temporary_ssh_link(&draft);
         let can_submit = draft.trim().len() > 0 && parsed.is_ok();
-        let error = self
-            .temporary_ssh_link_error
-            .clone()
-            .or_else(|| {
-                if draft.trim().is_empty() {
-                    None
-                } else {
-                    parsed.as_ref().err().map(|error| error.message().to_string())
-                }
-            });
+        let error = self.temporary_ssh_link_error.clone().or_else(|| {
+            if draft.trim().is_empty() {
+                None
+            } else {
+                parsed
+                    .as_ref()
+                    .err()
+                    .map(|error| error.message().to_string())
+            }
+        });
         let preview = parsed.ok().map(|config| {
             format!(
                 "{}@{}:{} · {}",

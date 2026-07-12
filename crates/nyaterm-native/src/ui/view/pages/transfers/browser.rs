@@ -5,8 +5,8 @@ impl NyaTermApp {
         &mut self,
         can_transfer: bool,
         cx: &mut Context<Self>,
-    ) -> impl IntoElement  {
-    let palette = self.theme_palette();
+    ) -> impl IntoElement {
+        let palette = self.theme_palette();
         let _selected = self
             .transfer_selected_remote_path
             .as_deref()
@@ -319,9 +319,7 @@ impl NyaTermApp {
                                     )
                                     .child(
                                         div()
-                                            .id(SharedString::from(
-                                                "transfer-browser-clear-search",
-                                            ))
+                                            .id(SharedString::from("transfer-browser-clear-search"))
                                             .size(px(20.))
                                             .flex()
                                             .items_center()
@@ -331,7 +329,8 @@ impl NyaTermApp {
                                             .text_color(rgb(palette.text_muted))
                                             .cursor_pointer()
                                             .hover(|this| {
-                                                this.bg(rgb(palette.surface_elevated)).text_color(rgb(palette.text))
+                                                this.bg(rgb(palette.surface_elevated))
+                                                    .text_color(rgb(palette.text))
                                             })
                                             .child("×")
                                             .on_click(cx.listener(|this, _, _, cx| {
@@ -353,7 +352,7 @@ impl NyaTermApp {
                 )
                 .child(self.transfer_browser_path_row(current_browser_path.clone(), cx))
             })
-                        .child(
+            .child(
                 div()
                     .id(SharedString::from("transfer-browser-table-scroll"))
                     .flex_1()
@@ -366,8 +365,7 @@ impl NyaTermApp {
                         const FILE_ROW_PX: f32 = 30.;
                         const FILE_VIEWPORT_ROWS: usize = 36;
                         let total = this.visible_transfer_browser_entries().len();
-                        let max_offset =
-                            total.saturating_sub(FILE_VIEWPORT_ROWS.min(total));
+                        let max_offset = total.saturating_sub(FILE_VIEWPORT_ROWS.min(total));
                         if max_offset == 0 {
                             return;
                         }
@@ -377,7 +375,8 @@ impl NyaTermApp {
                         };
                         let next = (this.transfer_browser_list_offset as f32 - delta_rows)
                             .round()
-                            .clamp(0., max_offset as f32) as usize;
+                            .clamp(0., max_offset as f32)
+                            as usize;
                         if next != this.transfer_browser_list_offset {
                             this.transfer_browser_list_offset = next;
                             cx.stop_propagation();
@@ -539,29 +538,35 @@ impl NyaTermApp {
                                     "transfer-footer-copy-path",
                                     "icons/fe/paste.svg",
                                     cx.listener(|this, _, _, cx| {
-                                        this.copy_selected_transfer_path(TransferPathPart::Full, cx);
+                                        this.copy_selected_transfer_path(
+                                            TransferPathPart::Full,
+                                            cx,
+                                        );
                                     }),
                                 ))
-                                .child(compact_transfer_footer_button(
-                                    palette,
-                                    "transfer-footer-props",
-                                    "icons/fe/search.svg",
-                                    cx.listener(|this, _, window, cx| {
-                                        this.open_selected_transfer_properties(window, cx);
-                                    }),
-                                ))
+                                .child(
+                                    compact_transfer_footer_button(
+                                        palette,
+                                        "transfer-footer-props",
+                                        "icons/fe/search.svg",
+                                        cx.listener(|this, _, window, cx| {
+                                            this.open_selected_transfer_properties(window, cx);
+                                        }),
+                                    ),
+                                )
                             }),
                     ),
             )
     }
 }
 
-
-
-fn compact_transfer_footer_button(palette: crate::ui::theme::ThemePalette,
+fn compact_transfer_footer_button(
+    palette: crate::ui::theme::ThemePalette,
     id: impl Into<String>,
     icon_path: &'static str,
-    on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,) -> impl IntoElement {    // Tauri footer icons: h-6 w-6 (24px)
+    on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
+) -> impl IntoElement {
+    // Tauri footer icons: h-6 w-6 (24px)
     div()
         .id(SharedString::from(id.into()))
         .size(px(24.))
@@ -571,22 +576,26 @@ fn compact_transfer_footer_button(palette: crate::ui::theme::ThemePalette,
         .rounded_md()
         .text_color(rgb(palette.text_muted))
         .cursor_pointer()
-        .hover(|this| this.bg(rgb(palette.surface_elevated)).text_color(rgb(palette.text)))
-        .child(
-            svg()
-                .size(px(14.))
-                .flex_none()
-                .path(icon_path),
-        )
+        .hover(|this| {
+            this.bg(rgb(palette.surface_elevated))
+                .text_color(rgb(palette.text))
+        })
+        .child(svg().size(px(14.)).flex_none().path(icon_path))
         .on_click(on_click)
 }
 
-fn compact_transfer_footer_button_active(palette: crate::ui::theme::ThemePalette,
+fn compact_transfer_footer_button_active(
+    palette: crate::ui::theme::ThemePalette,
     id: impl Into<String>,
     icon_path: &'static str,
     active: bool,
-    on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,) -> impl IntoElement  {
-    let color = if active { rgb(palette.accent) } else { rgb(palette.text_muted) };
+    on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
+) -> impl IntoElement {
+    let color = if active {
+        rgb(palette.accent)
+    } else {
+        rgb(palette.text_muted)
+    };
     div()
         .id(SharedString::from(id.into()))
         .size(px(24.))
@@ -594,26 +603,29 @@ fn compact_transfer_footer_button_active(palette: crate::ui::theme::ThemePalette
         .items_center()
         .justify_center()
         .rounded_md()
-        .bg(if active { rgb(palette.hover) } else { rgb(palette.surface) })
+        .bg(if active {
+            rgb(palette.hover)
+        } else {
+            rgb(palette.surface)
+        })
         .text_color(color)
         .cursor_pointer()
         .hover(|this| {
             this.bg(rgb(palette.surface_elevated))
-                .text_color(if active { rgb(0x79b8ff) } else { rgb(palette.text) })
+                .text_color(if active {
+                    rgb(0x79b8ff)
+                } else {
+                    rgb(palette.text)
+                })
         })
-        .child(
-            svg()
-                .size(px(14.))
-                .flex_none()
-                .path(icon_path),
-        )
+        .child(svg().size(px(14.)).flex_none().path(icon_path))
         .on_click(on_click)
 }
 
 fn compact_transfer_upload_menu_button(
     palette: crate::ui::theme::ThemePalette,
     cx: &mut Context<NyaTermApp>,
-) -> impl IntoElement  {
+) -> impl IntoElement {
     // Tauri: single Upload icon opens DropdownMenu (Upload Files / Upload Folder).
     div()
         .id(SharedString::from("transfer-browser-upload"))
@@ -624,13 +636,11 @@ fn compact_transfer_upload_menu_button(
         .rounded_md()
         .text_color(rgb(palette.text_muted))
         .cursor_pointer()
-        .hover(|this| this.bg(rgb(palette.surface_elevated)).text_color(rgb(palette.text)))
-        .child(
-            svg()
-                .size(px(16.))
-                .flex_none()
-                .path("icons/fe/upload.svg"),
-        )
+        .hover(|this| {
+            this.bg(rgb(palette.surface_elevated))
+                .text_color(rgb(palette.text))
+        })
+        .child(svg().size(px(16.)).flex_none().path("icons/fe/upload.svg"))
         .on_mouse_down(
             MouseButton::Left,
             cx.listener(|this, event: &MouseDownEvent, _, cx| {
@@ -639,10 +649,13 @@ fn compact_transfer_upload_menu_button(
         )
 }
 
-fn compact_transfer_toolbar_button(palette: crate::ui::theme::ThemePalette,
+fn compact_transfer_toolbar_button(
+    palette: crate::ui::theme::ThemePalette,
     id: impl Into<String>,
     icon_path: &'static str,
-    on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,) -> impl IntoElement {    // Tauri FileExplorerToolbar: h-7 ghost icon buttons, muted until hover.
+    on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
+) -> impl IntoElement {
+    // Tauri FileExplorerToolbar: h-7 ghost icon buttons, muted until hover.
     div()
         .id(SharedString::from(id.into()))
         .size(px(28.))
@@ -652,22 +665,26 @@ fn compact_transfer_toolbar_button(palette: crate::ui::theme::ThemePalette,
         .rounded_md()
         .text_color(rgb(palette.text_muted))
         .cursor_pointer()
-        .hover(|this| this.bg(rgb(palette.surface_elevated)).text_color(rgb(palette.text)))
-        .child(
-            svg()
-                .size(px(16.))
-                .flex_none()
-                .path(icon_path),
-        )
+        .hover(|this| {
+            this.bg(rgb(palette.surface_elevated))
+                .text_color(rgb(palette.text))
+        })
+        .child(svg().size(px(16.)).flex_none().path(icon_path))
         .on_click(on_click)
 }
 
-fn compact_transfer_toolbar_button_active(palette: crate::ui::theme::ThemePalette,
+fn compact_transfer_toolbar_button_active(
+    palette: crate::ui::theme::ThemePalette,
     id: impl Into<String>,
     icon_path: &'static str,
     active: bool,
-    on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,) -> impl IntoElement  {
-    let color = if active { rgb(palette.accent) } else { rgb(palette.text_muted) };
+    on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
+) -> impl IntoElement {
+    let color = if active {
+        rgb(palette.accent)
+    } else {
+        rgb(palette.text_muted)
+    };
     div()
         .id(SharedString::from(id.into()))
         .size(px(28.))
@@ -675,23 +692,31 @@ fn compact_transfer_toolbar_button_active(palette: crate::ui::theme::ThemePalett
         .items_center()
         .justify_center()
         .rounded_md()
-        .bg(if active { rgb(palette.hover) } else { rgb(palette.surface) })
+        .bg(if active {
+            rgb(palette.hover)
+        } else {
+            rgb(palette.surface)
+        })
         .text_color(color)
         .cursor_pointer()
-        .hover(|this| this.bg(rgb(palette.surface_elevated)).text_color(if active { rgb(0x79b8ff) } else { rgb(palette.text) }))
-        .child(
-            svg()
-                .size(px(16.))
-                .flex_none()
-                .path(icon_path),
-        )
+        .hover(|this| {
+            this.bg(rgb(palette.surface_elevated))
+                .text_color(if active {
+                    rgb(0x79b8ff)
+                } else {
+                    rgb(palette.text)
+                })
+        })
+        .child(svg().size(px(16.)).flex_none().path(icon_path))
         .on_click(on_click)
 }
 
-fn transfer_dynamic_toolbar_button(palette: crate::ui::theme::ThemePalette,
+fn transfer_dynamic_toolbar_button(
+    palette: crate::ui::theme::ThemePalette,
     id: impl Into<String>,
     label: impl Into<String>,
-    on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,) -> impl IntoElement  {
+    on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
+) -> impl IntoElement {
     div()
         .id(SharedString::from(id.into()))
         .h(px(28.))
@@ -712,7 +737,7 @@ fn transfer_dynamic_toolbar_button(palette: crate::ui::theme::ThemePalette,
         .on_click(on_click)
 }
 
-fn transfer_toolbar_divider(palette: crate::ui::theme::ThemePalette) -> impl IntoElement  {
+fn transfer_toolbar_divider(palette: crate::ui::theme::ThemePalette) -> impl IntoElement {
     div()
         .h(px(16.))
         .w(px(1.))

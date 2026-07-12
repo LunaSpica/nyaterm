@@ -404,8 +404,6 @@ impl NyaTermApp {
                     )),
             ))
     }
-
-
 }
 
 fn translation_provider_status(provider: &str) -> &'static str {
@@ -479,4 +477,3 @@ fn translation_target_languages() -> &'static [(&'static str, &'static str)] {
         ("vi", "Tiếng Việt"),
     ]
 }
-

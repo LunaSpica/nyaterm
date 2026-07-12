@@ -1,6 +1,6 @@
 use super::*;
 
-pub(super) fn remote_file_name(path: &str) -> String  {
+pub(super) fn remote_file_name(path: &str) -> String {
     path.trim_end_matches('/')
         .rsplit('/')
         .next()
@@ -8,7 +8,7 @@ pub(super) fn remote_file_name(path: &str) -> String  {
         .to_string()
 }
 
-pub(super) fn remote_parent_path(path: &str) -> String  {
+pub(super) fn remote_parent_path(path: &str) -> String {
     let path = path.trim_end_matches('/');
     match path.rfind('/') {
         Some(0) => "/".to_string(),
@@ -17,7 +17,7 @@ pub(super) fn remote_parent_path(path: &str) -> String  {
     }
 }
 
-pub(super) fn remote_sibling_path(old_path: &str, new_name: &str) -> String  {
+pub(super) fn remote_sibling_path(old_path: &str, new_name: &str) -> String {
     match remote_parent_path(old_path).as_str() {
         "/" => format!("/{new_name}"),
         "." => new_name.to_string(),
@@ -25,7 +25,7 @@ pub(super) fn remote_sibling_path(old_path: &str, new_name: &str) -> String  {
     }
 }
 
-pub(super) fn remote_child_path(parent: &str, child_name: &str) -> String  {
+pub(super) fn remote_child_path(parent: &str, child_name: &str) -> String {
     match parent.trim_end_matches('/') {
         "" | "." => child_name.to_string(),
         "/" => format!("/{child_name}"),
@@ -33,7 +33,7 @@ pub(super) fn remote_child_path(parent: &str, child_name: &str) -> String  {
     }
 }
 
-pub(super) fn normalized_transfer_browser_path(path: &str) -> String  {
+pub(super) fn normalized_transfer_browser_path(path: &str) -> String {
     let trimmed = path.trim();
     if trimmed.is_empty() {
         ".".to_string()
@@ -56,8 +56,8 @@ pub(super) enum TransferPathPart {
 }
 
 impl TransferPathPart {
-    pub(super) fn label(self) -> &'static str  {
-    match self {
+    pub(super) fn label(self) -> &'static str {
+        match self {
             Self::Full => "path",
             Self::Name => "name",
             Self::Directory => "directory",
@@ -68,7 +68,7 @@ impl TransferPathPart {
 pub(super) const TRANSFER_BROWSER_ACTIONS_WIDTH: gpui::Pixels = px(360.);
 const TRANSFER_BROWSER_COLUMN_GAP_TOTAL: gpui::Pixels = px(48.);
 
-pub(super) fn transfer_browser_table_width(widths: TransferBrowserColumnWidths) -> gpui::Pixels  {
+pub(super) fn transfer_browser_table_width(widths: TransferBrowserColumnWidths) -> gpui::Pixels {
     widths.name
         + widths.modified
         + widths.size
@@ -79,7 +79,7 @@ pub(super) fn transfer_browser_table_width(widths: TransferBrowserColumnWidths) 
         + TRANSFER_BROWSER_COLUMN_GAP_TOTAL
 }
 
-pub(super) fn transfer_path_part_value(path: &str, part: TransferPathPart) -> String  {
+pub(super) fn transfer_path_part_value(path: &str, part: TransferPathPart) -> String {
     match part {
         TransferPathPart::Full => path.to_string(),
         TransferPathPart::Name => remote_file_name(path),
@@ -87,19 +87,21 @@ pub(super) fn transfer_path_part_value(path: &str, part: TransferPathPart) -> St
     }
 }
 
-pub(super) fn format_sftp_modified(value: Option<u32>) -> String  {
+pub(super) fn format_sftp_modified(value: Option<u32>) -> String {
     value
         .map(|seconds| format!("{seconds}s"))
         .unwrap_or_else(|| "-".to_string())
 }
 
-pub(super) fn symlink_input_row(palette: crate::ui::theme::ThemePalette,
+pub(super) fn symlink_input_row(
+    palette: crate::ui::theme::ThemePalette,
     id: &'static str,
     label: &'static str,
     value: &str,
     focused: bool,
     invalid: bool,
-    on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,) -> impl IntoElement  {
+    on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
+) -> impl IntoElement {
     div()
         .mt_3()
         .flex()
@@ -146,9 +148,11 @@ pub(super) fn symlink_input_row(palette: crate::ui::theme::ThemePalette,
         )
 }
 
-pub(super) fn property_row(palette: crate::ui::theme::ThemePalette,
+pub(super) fn property_row(
+    palette: crate::ui::theme::ThemePalette,
     label: &'static str,
-    value: impl Into<SharedString>,) -> impl IntoElement  {
+    value: impl Into<SharedString>,
+) -> impl IntoElement {
     div()
         .flex()
         .items_start()
@@ -170,13 +174,15 @@ pub(super) fn property_row(palette: crate::ui::theme::ThemePalette,
         )
 }
 
-pub(super) fn property_input_row(palette: crate::ui::theme::ThemePalette,
+pub(super) fn property_input_row(
+    palette: crate::ui::theme::ThemePalette,
     id: &'static str,
     label: &'static str,
     value: &str,
     focused: bool,
     disabled: bool,
-    on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,) -> impl IntoElement  {
+    on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
+) -> impl IntoElement {
     div()
         .flex()
         .items_center()
@@ -228,7 +234,7 @@ pub(super) fn property_input_row(palette: crate::ui::theme::ThemePalette,
 
 pub(super) fn transfer_properties_state_from_entry(
     entry: SftpFileEntry,
-) -> TransferPropertiesState  {
+) -> TransferPropertiesState {
     let mode_value = entry
         .permissions
         .map(format_permissions_octal)
@@ -246,7 +252,7 @@ pub(super) fn transfer_properties_state_from_entry(
     }
 }
 
-pub(super) fn parse_transfer_mode(value: &str) -> Option<u32>  {
+pub(super) fn parse_transfer_mode(value: &str) -> Option<u32> {
     let value = value.trim();
     if !(3..=4).contains(&value.len()) || !value.chars().all(|ch| ('0'..='7').contains(&ch)) {
         return None;
@@ -254,7 +260,7 @@ pub(super) fn parse_transfer_mode(value: &str) -> Option<u32>  {
     u32::from_str_radix(value, 8).ok()
 }
 
-pub(super) fn format_owner_group(name: &str, id: Option<u32>) -> String  {
+pub(super) fn format_owner_group(name: &str, id: Option<u32>) -> String {
     match (name.trim().is_empty(), id) {
         (true, Some(id)) => id.to_string(),
         (true, None) => "-".to_string(),
@@ -263,7 +269,7 @@ pub(super) fn format_owner_group(name: &str, id: Option<u32>) -> String  {
     }
 }
 
-pub(super) fn editor_content_preview(content: &str, query: &str, active_match: usize) -> String  {
+pub(super) fn editor_content_preview(content: &str, query: &str, active_match: usize) -> String {
     const MAX_PREVIEW_CHARS: usize = 16_000;
     if query.trim().is_empty() {
         let mut output = content.chars().take(MAX_PREVIEW_CHARS).collect::<String>();
@@ -299,7 +305,7 @@ pub(super) fn editor_content_preview(content: &str, query: &str, active_match: u
     output
 }
 
-pub(super) fn editor_search_matches(content: &str, query: &str) -> Vec<usize>  {
+pub(super) fn editor_search_matches(content: &str, query: &str) -> Vec<usize> {
     let query = query.trim();
     if query.is_empty() {
         return Vec::new();
@@ -311,11 +317,11 @@ pub(super) fn editor_search_matches(content: &str, query: &str) -> Vec<usize>  {
         .collect()
 }
 
-pub(super) fn format_permissions_octal(mode: u32) -> String  {
+pub(super) fn format_permissions_octal(mode: u32) -> String {
     format!("{:04o}", mode & 0o7777)
 }
 
-pub(super) fn format_permissions_symbolic(file_type: SftpFileType, mode: u32) -> String  {
+pub(super) fn format_permissions_symbolic(file_type: SftpFileType, mode: u32) -> String {
     let mut output = String::with_capacity(10);
     output.push(match file_type {
         SftpFileType::Directory => 'd',
@@ -331,11 +337,13 @@ pub(super) fn format_permissions_symbolic(file_type: SftpFileType, mode: u32) ->
     output
 }
 
-pub(super) fn transfer_job_row(palette: crate::ui::theme::ThemePalette,
+pub(super) fn transfer_job_row(
+    palette: crate::ui::theme::ThemePalette,
     job: TransferJobState,
     selected_remote_path: Option<String>,
     selected_job_id: Option<String>,
-    cx: &mut Context<NyaTermApp>,) -> impl IntoElement  {
+    cx: &mut Context<NyaTermApp>,
+) -> impl IntoElement {
     let status_color = match job.status {
         TransferJobStatus::Running => rgb(palette.warning),
         TransferJobStatus::Paused => rgb(palette.accent),
@@ -351,7 +359,8 @@ pub(super) fn transfer_job_row(palette: crate::ui::theme::ThemePalette,
     let mut status_action = div().flex().items_center().gap_1();
     if job.status == TransferJobStatus::Running && job.control.is_some() {
         let job_id = job.id.clone();
-        status_action = status_action.child(small_button(palette, 
+        status_action = status_action.child(small_button(
+            palette,
             format!("transfer-pause-{job_id}"),
             "Pause",
             cx.listener(move |this, _, _, cx| {
@@ -361,7 +370,8 @@ pub(super) fn transfer_job_row(palette: crate::ui::theme::ThemePalette,
     }
     if job.status == TransferJobStatus::Paused && job.control.is_some() {
         let job_id = job.id.clone();
-        status_action = status_action.child(small_button(palette, 
+        status_action = status_action.child(small_button(
+            palette,
             format!("transfer-resume-{job_id}"),
             "Resume",
             cx.listener(move |this, _, _, cx| {
@@ -375,7 +385,8 @@ pub(super) fn transfer_job_row(palette: crate::ui::theme::ThemePalette,
     ) && job.control.is_some()
     {
         let job_id = job.id.clone();
-        status_action = status_action.child(small_button(palette, 
+        status_action = status_action.child(small_button(
+            palette,
             format!("transfer-cancel-{job_id}"),
             "Cancel",
             cx.listener(move |this, _, _, cx| {
@@ -389,7 +400,8 @@ pub(super) fn transfer_job_row(palette: crate::ui::theme::ThemePalette,
     ) {
         if can_retry {
             let job_id = job.id.clone();
-            status_action = status_action.child(small_button(palette, 
+            status_action = status_action.child(small_button(
+                palette,
                 format!("transfer-retry-job-{job_id}"),
                 "Retry",
                 cx.listener(move |this, _, window, cx| {
@@ -398,7 +410,8 @@ pub(super) fn transfer_job_row(palette: crate::ui::theme::ThemePalette,
             ));
         }
         let job_id = job.id.clone();
-        status_action = status_action.child(small_button(palette, 
+        status_action = status_action.child(small_button(
+            palette,
             format!("transfer-delete-job-{job_id}"),
             "Delete",
             cx.listener(move |this, _, _, cx| {
@@ -408,7 +421,8 @@ pub(super) fn transfer_job_row(palette: crate::ui::theme::ThemePalette,
     }
     if can_reveal_local_target {
         let job_id = job.id.clone();
-        status_action = status_action.child(small_button(palette, 
+        status_action = status_action.child(small_button(
+            palette,
             format!("transfer-open-target-dir-{job_id}"),
             "Open Dir",
             cx.listener(move |this, _, _, cx| {
@@ -525,7 +539,11 @@ pub(super) fn transfer_job_row(palette: crate::ui::theme::ThemePalette,
                                 .flex()
                                 .items_center()
                                 .gap_2()
-                                .child(status_pill(direction, rgb(palette.accent), rgb(palette.hover)))
+                                .child(status_pill(
+                                    direction,
+                                    rgb(palette.accent),
+                                    rgb(palette.hover),
+                                ))
                                 .child(
                                     div()
                                         .text_sm()
@@ -565,7 +583,7 @@ pub(super) fn transfer_job_row(palette: crate::ui::theme::ThemePalette,
         .child(entries)
 }
 
-pub(super) fn transfer_browser_search_status(query: &str, visible: usize, total: usize) -> String  {
+pub(super) fn transfer_browser_search_status(query: &str, visible: usize, total: usize) -> String {
     if query.trim().is_empty() {
         format!("{total} item(s)")
     } else {
@@ -573,7 +591,8 @@ pub(super) fn transfer_browser_search_status(query: &str, visible: usize, total:
     }
 }
 
-pub(super) fn sort_header_cell(palette: crate::ui::theme::ThemePalette,
+pub(super) fn sort_header_cell(
+    palette: crate::ui::theme::ThemePalette,
     column: TransferBrowserSortColumn,
     width: gpui::Pixels,
     active_column: TransferBrowserSortColumn,
@@ -658,7 +677,7 @@ pub(super) fn compare_transfer_browser_entries(
     right: &SftpFileEntry,
     column: TransferBrowserSortColumn,
     direction: TransferBrowserSortDirection,
-) -> Ordering  {
+) -> Ordering {
     if left.file_type != right.file_type {
         let left_dir = left.file_type == SftpFileType::Directory;
         let right_dir = right.file_type == SftpFileType::Directory;
@@ -693,7 +712,7 @@ pub(super) fn compare_transfer_browser_entries(
     directed.then_with(|| natural_compare_ascii(&left.name, &right.name))
 }
 
-pub(super) fn natural_compare_ascii(left: &str, right: &str) -> Ordering  {
+pub(super) fn natural_compare_ascii(left: &str, right: &str) -> Ordering {
     let left = left.to_lowercase();
     let right = right.to_lowercase();
     let mut left_chars = left.chars().peekable();
@@ -760,7 +779,7 @@ pub(super) fn natural_compare_ascii(left: &str, right: &str) -> Ordering  {
 
 pub(super) fn transfer_queue_counts(
     jobs: &[TransferJobState],
-) -> (usize, usize, usize, usize, usize)  {
+) -> (usize, usize, usize, usize, usize) {
     let total = jobs.len();
     let running = jobs
         .iter()
@@ -786,10 +805,12 @@ pub(super) fn transfer_queue_counts(
     (total, running, paused, completed, failed)
 }
 
-pub(super) fn queue_metric(palette: crate::ui::theme::ThemePalette,
+pub(super) fn queue_metric(
+    palette: crate::ui::theme::ThemePalette,
     label: &'static str,
     value: usize,
-    color: impl Into<Hsla>,) -> impl IntoElement  {
+    color: impl Into<Hsla>,
+) -> impl IntoElement {
     let color = color.into();
     div()
         .flex()
@@ -814,11 +835,13 @@ pub(super) fn queue_metric(palette: crate::ui::theme::ThemePalette,
         )
 }
 
-pub(super) fn queue_action_button(palette: crate::ui::theme::ThemePalette,
+pub(super) fn queue_action_button(
+    palette: crate::ui::theme::ThemePalette,
     id: impl Into<String>,
     label: &'static str,
     enabled: bool,
-    on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,) -> impl IntoElement  {
+    on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
+) -> impl IntoElement {
     div()
         .id(SharedString::from(id.into()))
         .h(px(22.))
@@ -835,15 +858,16 @@ pub(super) fn queue_action_button(palette: crate::ui::theme::ThemePalette,
             rgb(palette.border)
         })
         .cursor_pointer()
-        .hover(|this| this.bg(rgb(palette.surface_elevated)).text_color(rgb(palette.text)))
+        .hover(|this| {
+            this.bg(rgb(palette.surface_elevated))
+                .text_color(rgb(palette.text))
+        })
         .opacity(if enabled { 1. } else { 0.4 })
         .when(enabled, |this| this.on_click(on_click))
         .child(label)
 }
 
-
-
-pub(super) fn duplicate_policy_short_label(policy: SftpDuplicatePolicy) -> &'static str  {
+pub(super) fn duplicate_policy_short_label(policy: SftpDuplicatePolicy) -> &'static str {
     match policy {
         SftpDuplicatePolicy::Ask => "ask",
         SftpDuplicatePolicy::Overwrite => "overwrite",
@@ -852,7 +876,7 @@ pub(super) fn duplicate_policy_short_label(policy: SftpDuplicatePolicy) -> &'sta
     }
 }
 
-pub(super) fn transfer_direction_label(kind: &TransferJobKind) -> &'static str  {
+pub(super) fn transfer_direction_label(kind: &TransferJobKind) -> &'static str {
     match kind {
         TransferJobKind::ListDir { .. } => "LIST",
         TransferJobKind::ResolveHome => "HOME",
@@ -877,7 +901,7 @@ pub(super) fn transfer_direction_label(kind: &TransferJobKind) -> &'static str  
     }
 }
 
-pub(super) fn transfer_job_has_local_target(job: &TransferJobState) -> bool  {
+pub(super) fn transfer_job_has_local_target(job: &TransferJobState) -> bool {
     job.summary.is_some()
         || job.progress.is_some()
         || matches!(
@@ -886,7 +910,7 @@ pub(super) fn transfer_job_has_local_target(job: &TransferJobState) -> bool  {
         )
 }
 
-pub(super) fn transfer_job_can_retry(job: &TransferJobState) -> bool  {
+pub(super) fn transfer_job_can_retry(job: &TransferJobState) -> bool {
     matches!(
         job.status,
         TransferJobStatus::Failed | TransferJobStatus::Cancelled
@@ -896,7 +920,7 @@ pub(super) fn transfer_job_can_retry(job: &TransferJobState) -> bool  {
     )
 }
 
-pub(super) fn transfer_progress_percent_label(progress: &SftpTransferProgress) -> String  {
+pub(super) fn transfer_progress_percent_label(progress: &SftpTransferProgress) -> String {
     match progress.total_bytes.filter(|total| *total > 0) {
         Some(total) => {
             let percent = (progress.bytes_transferred as f64 / total as f64 * 100.).clamp(0., 100.);

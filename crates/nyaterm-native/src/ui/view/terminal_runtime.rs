@@ -39,6 +39,26 @@ impl NyaTermApp {
             .unwrap_or_else(|| self.terminal_output.clone())
     }
 
+    pub(in crate::ui::view) fn active_terminal_view(&self) -> Option<&TerminalViewState> {
+        self.active_session_id
+            .as_deref()
+            .and_then(|session_id| self.terminal_views.get(session_id))
+    }
+
+    pub(in crate::ui::view) fn active_terminal_view_mut(
+        &mut self,
+    ) -> Option<&mut TerminalViewState> {
+        let session_id = self.active_session_id.clone()?;
+        self.terminal_views.get_mut(&session_id)
+    }
+
+    pub(in crate::ui::view) fn terminal_view_for(
+        &self,
+        session_id: &str,
+    ) -> Option<&TerminalViewState> {
+        self.terminal_views.get(session_id)
+    }
+
     pub(in crate::ui::view) fn copy_terminal_visible_text(&mut self, cx: &mut Context<Self>) {
         let text = self.active_terminal_visible_text();
         if text.trim().is_empty() {
@@ -108,8 +128,7 @@ impl NyaTermApp {
         };
         if self.is_session_disconnected(&session_id) {
             // Key handler owns Enter-to-reconnect (needs Window). Block writes here.
-            self.terminal_status =
-                "session disconnected — press Enter to reconnect".to_string();
+            self.terminal_status = "session disconnected — press Enter to reconnect".to_string();
             cx.notify();
             return;
         }
@@ -292,7 +311,6 @@ impl NyaTermApp {
         self.send_terminal_input(self.wrap_terminal_paste_bytes(&payload), cx);
     }
 
-
     fn active_terminal_bracketed_paste(&self) -> bool {
         if let Some(session_id) = self.active_session_id.as_deref() {
             self.terminal_views
@@ -316,7 +334,6 @@ impl NyaTermApp {
             body.to_vec()
         }
     }
-
 
     pub(in crate::ui::view) fn close_multi_line_paste(&mut self, cx: &mut Context<Self>) {
         self.multi_line_paste = None;
@@ -463,9 +480,7 @@ impl NyaTermApp {
             match self.session_manager.close(close_id) {
                 Ok(()) => {}
                 Err(_) if disconnected => {}
-                Err(error)
-                    if !disconnected && !self.session_metadata.contains_key(close_id) =>
-                {
+                Err(error) if !disconnected && !self.session_metadata.contains_key(close_id) => {
                     self.terminal_status = format!("close failed: {error}");
                     cx.notify();
                     return;
@@ -562,7 +577,6 @@ impl NyaTermApp {
         };
     }
 
-
     pub(in crate::ui::view) fn handle_window_minimize(
         &mut self,
         window: &mut Window,
@@ -591,9 +605,7 @@ impl NyaTermApp {
             // Reuse close-all confirmation as quit-with-sessions gate (Tauri confirm_on_close).
             self.pending_quit_after_close_all = true;
             self.open_close_all_sessions_confirm(window, cx);
-            self.terminal_status = format!(
-                "confirm close: {open_sessions} session(s) still open"
-            );
+            self.terminal_status = format!("confirm close: {open_sessions} session(s) still open");
             cx.notify();
             return;
         }
@@ -615,7 +627,7 @@ impl NyaTermApp {
             return;
         }
         self.tab_actions_session_id = None;
-            self.tab_actions_anchor = None;
+        self.tab_actions_anchor = None;
         self.close_all_sessions_confirm_open = true;
         self.terminal_status = "close all sessions confirmation opened".to_string();
         window.focus(&self.close_all_sessions_confirm_focus);
@@ -721,7 +733,6 @@ impl NyaTermApp {
         self.append_terminal_log_for_session(session_id.as_deref(), text.as_ref(), false);
     }
 
-
     pub(in crate::ui::view) fn active_terminal_scroll_offset(&self) -> usize {
         if let Some(session_id) = self.active_session_id.as_deref() {
             self.terminal_views
@@ -754,9 +765,11 @@ impl NyaTermApp {
         } else {
             let max = self.terminal_screen.scrollback_len();
             let next = if delta_lines > 0 {
-                self.terminal_scroll_offset.saturating_add(delta_lines as usize)
+                self.terminal_scroll_offset
+                    .saturating_add(delta_lines as usize)
             } else {
-                self.terminal_scroll_offset.saturating_sub((-delta_lines) as usize)
+                self.terminal_scroll_offset
+                    .saturating_sub((-delta_lines) as usize)
             };
             self.terminal_scroll_offset = next.min(max);
         }
@@ -818,13 +831,13 @@ impl NyaTermApp {
                 }
                 let text = nyaterm_domain::format_local_terminal_drop_input(&path_strings);
                 self.send_terminal_input(text.into_bytes(), cx);
-                self.terminal_status = format!(
-                    "inserted {} path(s) into terminal",
-                    path_strings.len()
-                );
+                self.terminal_status =
+                    format!("inserted {} path(s) into terminal", path_strings.len());
                 cx.notify();
             }
-            Some(SessionKind::Ssh | SessionKind::Telnet | SessionKind::Serial | SessionKind::RawTcp) => {
+            Some(
+                SessionKind::Ssh | SessionKind::Telnet | SessionKind::Serial | SessionKind::RawTcp,
+            ) => {
                 if has_dirs {
                     self.terminal_status =
                         "folders cannot be uploaded via ZMODEM — use the file explorer for SFTP"
@@ -856,15 +869,14 @@ impl NyaTermApp {
         }
     }
 
-
-
     fn apply_session_cwd(&mut self, session_id: &str, cwd: String) {
         let changed = self
             .session_cwds
             .get(session_id)
             .map(|prev| prev != &cwd)
             .unwrap_or(true);
-        self.session_cwds.insert(session_id.to_string(), cwd.clone());
+        self.session_cwds
+            .insert(session_id.to_string(), cwd.clone());
         // Auto-sync the transfer browser path when enabled for the active SSH session.
         if changed
             && self.active_session_id.as_deref() == Some(session_id)
@@ -982,10 +994,7 @@ impl NyaTermApp {
         self.set_terminal_scroll_offset(offset.min(max), cx);
     }
 
-    pub(in crate::ui::view) fn begin_terminal_scrollbar_drag(
-        &mut self,
-        cx: &mut Context<Self>,
-    ) {
+    pub(in crate::ui::view) fn begin_terminal_scrollbar_drag(&mut self, cx: &mut Context<Self>) {
         self.terminal_scrollbar_dragging = true;
         cx.notify();
     }
@@ -1007,16 +1016,12 @@ impl NyaTermApp {
         self.set_terminal_scroll_from_track_ratio(ratio, cx);
     }
 
-    pub(in crate::ui::view) fn finish_terminal_scrollbar_drag(
-        &mut self,
-        cx: &mut Context<Self>,
-    ) {
+    pub(in crate::ui::view) fn finish_terminal_scrollbar_drag(&mut self, cx: &mut Context<Self>) {
         if self.terminal_scrollbar_dragging {
             self.terminal_scrollbar_dragging = false;
             cx.notify();
         }
     }
-
 
     pub(in crate::ui::view) fn active_terminal_page_rows(&self) -> usize {
         // Prefer live screen rows when available; fall back to classic 24-row page.
@@ -1030,6 +1035,51 @@ impl NyaTermApp {
         }
         let rows = self.terminal_screen.viewport_snapshot(0).lines.len();
         if rows > 0 { rows } else { 24 }
+    }
+
+    pub(in crate::ui::view) fn desired_terminal_grid_size(&self) -> Option<(u16, u16)> {
+        let bounds = self.terminal_surface_bounds?;
+        let (cell_w, cell_h) = self.terminal_cell_size();
+        let pad = self.terminal_content_padding_px();
+        let gutter = self.terminal_gutter_width_px();
+        let width = (f32::from(bounds.size.width) - pad * 2. - gutter).max(cell_w);
+        let height = (f32::from(bounds.size.height) - pad * 2.).max(cell_h);
+        let cols = (width / cell_w.max(1.)).floor().clamp(20., 500.) as u16;
+        let rows = (height / cell_h.max(1.)).floor().clamp(4., 200.) as u16;
+        Some((cols, rows))
+    }
+
+    pub(in crate::ui::view) fn drive_terminal_resize(&mut self) -> bool {
+        let Some((cols, rows)) = self.desired_terminal_grid_size() else {
+            return false;
+        };
+        if let Some(last) = self.terminal_runtime.last_terminal_resize_at
+            && last.elapsed() < Duration::from_millis(100)
+        {
+            return false;
+        }
+        if let Some(session_id) = self.active_session_id.clone() {
+            let Some(view) = self.terminal_views.get_mut(&session_id) else {
+                return false;
+            };
+            let current_rows = view.screen.rows() as u16;
+            let current_cols = view.screen.cols() as u16;
+            if current_rows == rows && current_cols == cols {
+                return false;
+            }
+            view.screen.resize(cols, rows);
+            view.clamp_scroll_offset();
+            let _ = self.session_manager.resize(&session_id, cols, rows);
+        } else {
+            let current_rows = self.terminal_screen.rows() as u16;
+            let current_cols = self.terminal_screen.cols() as u16;
+            if current_rows == rows && current_cols == cols {
+                return false;
+            }
+            self.terminal_screen.resize(cols, rows);
+        }
+        self.terminal_runtime.last_terminal_resize_at = Some(Instant::now());
+        true
     }
 
     /// Shift+PageUp/PageDown/Home/End (and Ctrl+Shift+Up/Down) navigate local scrollback
@@ -1141,7 +1191,7 @@ impl NyaTermApp {
                 view.has_unread = true;
             }
             if view.screen.take_visual_bell() {
-                self.visual_bell_ticks = 4;
+                self.terminal_runtime.visual_bell_ticks = 4;
             }
             if let Some(title) = view.screen.take_window_title() {
                 self.session_dynamic_titles
@@ -1155,38 +1205,16 @@ impl NyaTermApp {
             if let Some(cwd) = view.screen.take_cwd() {
                 pending_cwd = Some(cwd);
             }
-            if is_active {
-                let feed_text = String::from_utf8_lossy(feed);
-                self.terminal_output.push_str(&feed_text);
-                self.terminal_screen.advance(feed);
-                let max_bytes = self.terminal_scrollback_max_bytes();
-                trim_terminal_output_to(&mut self.terminal_output, max_bytes);
-                if self.terminal_screen.take_visual_bell() {
-                    self.visual_bell_ticks = 4;
-                }
-                if let Some(title) = self.terminal_screen.take_window_title() {
-                    self.session_dynamic_titles
-                        .insert(session_id.to_string(), title);
-                }
-                let (cmd_started, cmd_finished) = self.terminal_screen.take_shell_command_edges();
-                let command_running = self.terminal_screen.command_running();
-                shell_started |= cmd_started;
-                shell_finished |= cmd_finished;
-                shell_running = command_running;
-                if let Some(cwd) = self.terminal_screen.take_cwd() {
-                    pending_cwd = Some(cwd);
-                }
-            }
         } else {
             self.terminal_output.push_str(text);
             self.terminal_screen.advance(text.as_bytes());
             let max_bytes = self.terminal_scrollback_max_bytes();
             trim_terminal_output_to(&mut self.terminal_output, max_bytes);
             if self.terminal_screen.take_visual_bell() {
-                self.visual_bell_ticks = 4;
+                self.terminal_runtime.visual_bell_ticks = 4;
             }
         }
-            if shell_started || shell_finished {
+        if shell_started || shell_finished {
             if let Some(session_id) = session_id {
                 self.apply_shell_integration_edges(
                     session_id,
@@ -1199,7 +1227,7 @@ impl NyaTermApp {
         if let (Some(session_id), Some(cwd)) = (session_id, pending_cwd) {
             self.apply_session_cwd(session_id, cwd);
         }
-}
+    }
 
     pub(in crate::ui::view) fn append_terminal_bytes_for_session(
         &mut self,
@@ -1224,7 +1252,7 @@ impl NyaTermApp {
                 view.has_unread = true;
             }
             if view.screen.take_visual_bell() {
-                self.visual_bell_ticks = 4;
+                self.terminal_runtime.visual_bell_ticks = 4;
             }
             if let Some(title) = view.screen.take_window_title() {
                 self.session_dynamic_titles
@@ -1238,29 +1266,6 @@ impl NyaTermApp {
             if let Some(cwd) = view.screen.take_cwd() {
                 pending_cwd = Some(cwd);
             }
-            if is_active {
-                // Mirror the same protected feed into the active surface.
-                self.terminal_screen.advance(feed);
-                self.terminal_output
-                    .push_str(&String::from_utf8_lossy(feed));
-                let max_bytes = self.terminal_scrollback_max_bytes();
-                trim_terminal_output_to(&mut self.terminal_output, max_bytes);
-                if self.terminal_screen.take_visual_bell() {
-                    self.visual_bell_ticks = 4;
-                }
-                if let Some(title) = self.terminal_screen.take_window_title() {
-                    self.session_dynamic_titles
-                        .insert(session_id.to_string(), title);
-                }
-                let (cmd_started, cmd_finished) = self.terminal_screen.take_shell_command_edges();
-                let command_running = self.terminal_screen.command_running();
-                shell_started |= cmd_started;
-                shell_finished |= cmd_finished;
-                shell_running = command_running;
-                if let Some(cwd) = self.terminal_screen.take_cwd() {
-                    pending_cwd = Some(cwd);
-                }
-            }
         } else {
             self.terminal_screen.advance(data);
             self.terminal_output
@@ -1268,10 +1273,10 @@ impl NyaTermApp {
             let max_bytes = self.terminal_scrollback_max_bytes();
             trim_terminal_output_to(&mut self.terminal_output, max_bytes);
             if self.terminal_screen.take_visual_bell() {
-                self.visual_bell_ticks = 4;
+                self.terminal_runtime.visual_bell_ticks = 4;
             }
         }
-            if shell_started || shell_finished {
+        if shell_started || shell_finished {
             if let Some(session_id) = session_id {
                 self.apply_shell_integration_edges(
                     session_id,
@@ -1284,5 +1289,5 @@ impl NyaTermApp {
         if let (Some(session_id), Some(cwd)) = (session_id, pending_cwd) {
             self.apply_session_cwd(session_id, cwd);
         }
-}
+    }
 }

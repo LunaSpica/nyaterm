@@ -405,8 +405,7 @@ impl NyaTermApp {
         &mut self,
         cx: &mut Context<Self>,
     ) {
-        self.settings.startup_restore_window_layout =
-            !self.settings.startup_restore_window_layout;
+        self.settings.startup_restore_window_layout = !self.settings.startup_restore_window_layout;
         self.save_general_settings(cx);
         if !self.settings.startup_restore_window_layout {
             // Clear stored layouts when the user disables restore.
@@ -708,7 +707,6 @@ impl NyaTermApp {
         self.terminal_status = "search engine removed".to_string();
     }
 
-
     pub(in crate::ui::view) fn cycle_search_engine_icon(
         &mut self,
         index: usize,
@@ -855,11 +853,7 @@ impl NyaTermApp {
         cx.notify();
     }
 
-    pub(in crate::ui::view) fn test_search_engine(
-        &mut self,
-        index: usize,
-        cx: &mut Context<Self>,
-    ) {
+    pub(in crate::ui::view) fn test_search_engine(&mut self, index: usize, cx: &mut Context<Self>) {
         let Some(engine) = self.settings.search_custom_engines.get(index) else {
             self.terminal_status = "search engine not found".to_string();
             cx.notify();
@@ -883,7 +877,6 @@ impl NyaTermApp {
         }
         cx.notify();
     }
-
 
     pub(in crate::ui::view) fn toggle_terminal_action_links(&mut self, cx: &mut Context<Self>) {
         self.settings.terminal_action_links_enabled = !self.settings.terminal_action_links_enabled;
@@ -948,8 +941,6 @@ fn adjust_u32_setting(current: u32, delta: i32, min: u32, max: u32) -> u32 {
     };
     next.clamp(min, max)
 }
-
-
 
 fn urlencoding_query(query: &str) -> String {
     let mut out = String::new();

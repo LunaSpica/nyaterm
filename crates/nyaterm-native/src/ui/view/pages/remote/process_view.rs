@@ -1,5 +1,5 @@
 use super::*;
-use gpui::{SharedString, prelude::*};
+use gpui::SharedString;
 
 impl NyaTermApp {
     pub(in crate::ui::view) fn processes_view(
@@ -17,13 +17,13 @@ impl NyaTermApp {
             .collect::<Vec<_>>();
         // Responsive mode first so hidden columns do not keep invalid sort keys.
         let mode = process_display_mode(self.right_panel_width);
-        if mode != ProcessDisplayMode::Wide
-            && self.process_sort_key == RemoteProcessSortKey::User
-        {
+        if mode != ProcessDisplayMode::Wide && self.process_sort_key == RemoteProcessSortKey::User {
             self.process_sort_key = RemoteProcessSortKey::Cpu;
         }
-        if matches!(mode, ProcessDisplayMode::Compact | ProcessDisplayMode::Narrow)
-            && self.process_sort_key == RemoteProcessSortKey::Memory
+        if matches!(
+            mode,
+            ProcessDisplayMode::Compact | ProcessDisplayMode::Narrow
+        ) && self.process_sort_key == RemoteProcessSortKey::Memory
         {
             self.process_sort_key = RemoteProcessSortKey::Cpu;
         }
@@ -103,21 +103,22 @@ impl NyaTermApp {
 
         let mut rows = div().flex().flex_col();
         if self.processes.is_empty() {
-            rows = rows.child(empty_panel(if self.active_ssh_config.is_some() {
-                "No process snapshot loaded."
-            } else {
-                "Start an SSH session to list remote processes."
-            }, self.theme_palette()));
+            rows = rows.child(empty_panel(
+                if self.active_ssh_config.is_some() {
+                    "No process snapshot loaded."
+                } else {
+                    "Start an SSH session to list remote processes."
+                },
+                self.theme_palette(),
+            ));
         } else if filtered_processes.is_empty() {
-            rows = rows.child(empty_panel("No processes match the current search.", self.theme_palette()));
+            rows = rows.child(empty_panel(
+                "No processes match the current search.",
+                self.theme_palette(),
+            ));
         } else {
             if pad_top > 0. {
-                rows = rows.child(
-                    div()
-                        .h(px(pad_top))
-                        .w_full()
-                        .flex_none(),
-                );
+                rows = rows.child(div().h(px(pad_top)).w_full().flex_none());
             }
             for process in visible_processes.iter() {
                 let pid = process.pid;
@@ -200,12 +201,7 @@ impl NyaTermApp {
                 );
             }
             if pad_bottom > 0. {
-                rows = rows.child(
-                    div()
-                        .h(px(pad_bottom))
-                        .w_full()
-                        .flex_none(),
-                );
+                rows = rows.child(div().h(px(pad_bottom)).w_full().flex_none());
             }
         }
 
@@ -225,7 +221,11 @@ impl NyaTermApp {
                 user_count
             )
         };
-        let top_label = format!("CPU {} · MEM {}", truncate_preview(&top_cpu, 28), truncate_preview(&top_memory, 28));
+        let top_label = format!(
+            "CPU {} · MEM {}",
+            truncate_preview(&top_cpu, 28),
+            truncate_preview(&top_memory, 28)
+        );
         div()
             .flex()
             .flex_col()
@@ -244,43 +244,38 @@ impl NyaTermApp {
                     .items_center()
                     .gap_1()
                     .child(
-                        div()
-                            .flex_1()
-                            .min_w_0()
-                            .child(
-                                transfer_input(
-                                    "process-search-input",
-                                    "Search processes…",
-                                    self.process_search_draft.clone(),
-                                    true,
-                    self.theme_palette(),
-                )
-                                .h(px(28.))
-                                .track_focus(&self.process_search_focus)
-                                .on_click(cx.listener(|this, _, window, cx| {
-                                    window.focus(&this.process_search_focus);
-                                    cx.notify();
-                                }))
-                                .on_key_down(cx.listener(
-                                    |this, event: &KeyDownEvent, _, cx| {
-                                        cx.stop_propagation();
-                                        this.handle_process_search_key_down(event, cx);
-                                    },
-                                )),
-                            ),
-                    )
-                    .child(
-                        div()
-                            .when(!can_list, |this| this.opacity(0.45))
-                            .child(compact_remote_svg_button(
-                                palette,
-                                "process-refresh",
-                                "icons/fe/refresh.svg",
-                                cx.listener(|this, _, window, cx| {
-                                    this.refresh_processes(window, cx);
-                                }),
+                        div().flex_1().min_w_0().child(
+                            transfer_input(
+                                "process-search-input",
+                                "Search processes…",
+                                self.process_search_draft.clone(),
+                                true,
+                                self.theme_palette(),
+                            )
+                            .h(px(28.))
+                            .track_focus(&self.process_search_focus)
+                            .on_click(cx.listener(|this, _, window, cx| {
+                                window.focus(&this.process_search_focus);
+                                cx.notify();
+                            }))
+                            .on_key_down(cx.listener(
+                                |this, event: &KeyDownEvent, _, cx| {
+                                    cx.stop_propagation();
+                                    this.handle_process_search_key_down(event, cx);
+                                },
                             )),
+                        ),
                     )
+                    .child(div().when(!can_list, |this| this.opacity(0.45)).child(
+                        compact_remote_svg_button(
+                            palette,
+                            "process-refresh",
+                            "icons/fe/refresh.svg",
+                            cx.listener(|this, _, window, cx| {
+                                this.refresh_processes(window, cx);
+                            }),
+                        ),
+                    ))
                     .child(
                         div()
                             .flex()
@@ -411,7 +406,7 @@ impl NyaTermApp {
                                     .text_color(rgb(0x6e7681))
                                     .child("Processes · compact"),
                             )
-                    })
+                    }),
             )
             .child(
                 div()
@@ -421,31 +416,27 @@ impl NyaTermApp {
                     .overflow_hidden()
                     .flex()
                     .flex_col()
-                    .on_scroll_wheel(cx.listener(
-                        move |this, event: &ScrollWheelEvent, _, cx| {
-                            let max_offset = total_filtered
-                                .saturating_sub(PROCESS_VIEWPORT_ROWS.min(total_filtered));
-                            if max_offset == 0 {
-                                return;
-                            }
-                            let delta_rows = match event.delta {
-                                ScrollDelta::Lines(delta) => delta.y,
-                                ScrollDelta::Pixels(delta) => {
-                                    f32::from(delta.y) / process_row_px
-                                }
-                            };
-                            // Match GPUI list semantics: scroll_top -= delta.y
-                            let next = (this.process_list_offset as f32 - delta_rows)
-                                .round()
-                                .clamp(0., max_offset as f32)
-                                as usize;
-                            if next != this.process_list_offset {
-                                this.process_list_offset = next;
-                                cx.stop_propagation();
-                                cx.notify();
-                            }
-                        },
-                    ))
+                    .on_scroll_wheel(cx.listener(move |this, event: &ScrollWheelEvent, _, cx| {
+                        let max_offset = total_filtered
+                            .saturating_sub(PROCESS_VIEWPORT_ROWS.min(total_filtered));
+                        if max_offset == 0 {
+                            return;
+                        }
+                        let delta_rows = match event.delta {
+                            ScrollDelta::Lines(delta) => delta.y,
+                            ScrollDelta::Pixels(delta) => f32::from(delta.y) / process_row_px,
+                        };
+                        // Match GPUI list semantics: scroll_top -= delta.y
+                        let next = (this.process_list_offset as f32 - delta_rows)
+                            .round()
+                            .clamp(0., max_offset as f32)
+                            as usize;
+                        if next != this.process_list_offset {
+                            this.process_list_offset = next;
+                            cx.stop_propagation();
+                            cx.notify();
+                        }
+                    }))
                     .child(rows),
             )
     }

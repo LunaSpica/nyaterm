@@ -225,18 +225,13 @@ impl NyaTermApp {
         self.reconnect_session(source_session_id, window, cx);
     }
 
-
     /// Close the backend session but keep the tab for reconnect (Tauri Disconnect).
     pub(in crate::ui::view) fn disconnect_session(
         &mut self,
         session_id: String,
         cx: &mut Context<Self>,
     ) {
-        if self
-            .active_session_busy_actions
-            .get(&session_id)
-            .is_some()
-        {
+        if self.active_session_busy_actions.get(&session_id).is_some() {
             self.terminal_status = "session action already in progress".to_string();
             cx.notify();
             return;
@@ -310,10 +305,6 @@ impl NyaTermApp {
         }
 
         if self.active_session_id.as_deref() == Some(session_id) {
-            if let Some(view) = self.terminal_views.get(session_id) {
-                self.terminal_output = view.output.clone();
-                self.terminal_screen = terminal_screen_from_output(&view.output);
-            }
             self.command_input_tracker = TerminalInputState::new();
             self.command_suggestions = None;
             self.credential_suggestions = None;
@@ -329,11 +320,7 @@ impl NyaTermApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        if self
-            .active_session_busy_actions
-            .get(&session_id)
-            .is_some()
-        {
+        if self.active_session_busy_actions.get(&session_id).is_some() {
             self.terminal_status = "session action already in progress".to_string();
             cx.notify();
             return;
@@ -367,9 +354,11 @@ impl NyaTermApp {
 
         // Tauri: write cyan reconnecting line into the buffer before recreating.
         if let Some(view) = self.terminal_views.get_mut(&session_id) {
-            view.append_text("
+            view.append_text(
+                "
 [36m[Reconnecting…][0m
-");
+",
+            );
         }
         let seed_output = self
             .terminal_views
@@ -555,10 +544,8 @@ impl NyaTermApp {
                 if let Some(view) = view {
                     self.terminal_views.insert(old_id.clone(), view);
                 } else {
-                    self.terminal_views.insert(
-                        old_id.clone(),
-                        TerminalViewState::from_output(seed_output),
-                    );
+                    self.terminal_views
+                        .insert(old_id.clone(), TerminalViewState::from_output(seed_output));
                 }
                 if let Some(custom_name_keep) = custom_name.clone() {
                     self.session_custom_names
@@ -637,7 +624,8 @@ impl NyaTermApp {
                 .insert(old_id.clone(), TerminalViewState::from_output(seed_output));
         }
         if let Some(custom_name) = custom_name {
-            self.session_custom_names.insert(old_id.clone(), custom_name);
+            self.session_custom_names
+                .insert(old_id.clone(), custom_name);
         }
         if let Some(custom_color) = custom_color {
             self.session_tab_colors.insert(old_id.clone(), custom_color);
@@ -651,5 +639,4 @@ impl NyaTermApp {
         self.terminal_status = format!("reconnect failed: {error}");
         cx.notify();
     }
-
 }

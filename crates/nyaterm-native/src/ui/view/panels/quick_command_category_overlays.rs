@@ -61,14 +61,16 @@ impl NyaTermApp {
                             .items_center()
                             .justify_end()
                             .gap_2()
-                            .child(small_button(palette, 
+                            .child(small_button(
+                                palette,
                                 "quick-command-category-delete-cancel",
                                 "Cancel",
                                 cx.listener(|this, _, _, cx| {
                                     this.cancel_delete_quick_command_category(cx);
                                 }),
                             ))
-                            .child(small_button(palette, 
+                            .child(small_button(
+                                palette,
                                 "quick-command-category-delete-confirm",
                                 "Delete",
                                 cx.listener(|this, _, _, cx| {
@@ -136,8 +138,8 @@ impl NyaTermApp {
                             "Category Name",
                             rename.draft,
                             true,
-                    self.theme_palette(),
-                )
+                            self.theme_palette(),
+                        )
                         .mt_3()
                         .track_focus(&self.quick_command_category_rename_focus)
                         .on_click(cx.listener(|this, _, window, cx| {
@@ -167,14 +169,16 @@ impl NyaTermApp {
                             .items_center()
                             .justify_end()
                             .gap_2()
-                            .child(small_button(palette, 
+                            .child(small_button(
+                                palette,
                                 "quick-command-category-rename-cancel",
                                 "Cancel",
                                 cx.listener(|this, _, _, cx| {
                                     this.cancel_rename_quick_command_category(cx);
                                 }),
                             ))
-                            .child(small_button(palette, 
+                            .child(small_button(
+                                palette,
                                 "quick-command-category-rename-confirm",
                                 "Rename",
                                 cx.listener(|this, _, _, cx| {

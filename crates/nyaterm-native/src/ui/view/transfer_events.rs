@@ -1,8 +1,10 @@
 use super::*;
 
 impl NyaTermApp {
-    pub(super) fn drain_transfer_events(&mut self, cx: &mut Context<Self>) {
+    pub(super) fn drain_transfer_events(&mut self, cx: &mut Context<Self>) -> bool {
+        let mut dirty = false;
         while let Ok(event) = self.transfer_rx.try_recv() {
+            dirty = true;
             let Some(job) = self
                 .transfer_jobs
                 .iter_mut()
@@ -515,10 +517,7 @@ impl NyaTermApp {
                 })) => {
                     job.status = TransferJobStatus::Completed;
                     job.detail = if probe_skipped {
-                        format!(
-                            "ZMODEM probe skipped; uploading {} file(s)",
-                            files.len()
-                        )
+                        format!("ZMODEM probe skipped; uploading {} file(s)", files.len())
                     } else {
                         format!("ZMODEM probe ready; uploading {} file(s)", files.len())
                     };
@@ -582,6 +581,7 @@ impl NyaTermApp {
                 self.begin_zmodem_upload_after_probe(session_id, files, cx);
             }
         }
+        dirty
     }
 }
 

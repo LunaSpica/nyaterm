@@ -202,7 +202,8 @@ impl NyaTermApp {
                                     .flex()
                                     .items_center()
                                     .gap_2()
-                                    .child(small_button(palette, 
+                                    .child(small_button(
+                                        palette,
                                         "quick-command-details-edit",
                                         "Edit",
                                         cx.listener(move |this, _, window, cx| {
@@ -214,14 +215,16 @@ impl NyaTermApp {
                                             );
                                         }),
                                     ))
-                                    .child(small_button(palette, 
+                                    .child(small_button(
+                                        palette,
                                         "quick-command-details-copy",
                                         "Copy",
                                         cx.listener(|this, _, _, cx| {
                                             this.copy_quick_command_details(cx);
                                         }),
                                     ))
-                                    .child(small_button(palette, 
+                                    .child(small_button(
+                                        palette,
                                         "quick-command-details-close",
                                         "Close",
                                         cx.listener(|this, _, _, cx| {

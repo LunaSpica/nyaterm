@@ -4,8 +4,6 @@ pub mod cloud_sync;
 pub mod command_search;
 pub mod command_suggestion_suppression;
 pub mod credential_autofill;
-pub mod terminal_input_tracker;
-pub mod terminal_file_drop;
 pub mod credentials_crypto;
 pub mod diagnostics;
 pub mod keyword_highlight_presets;
@@ -14,6 +12,8 @@ pub mod portable_snapshot;
 pub mod runtime;
 pub mod services;
 pub mod storage;
+pub mod terminal_file_drop;
+pub mod terminal_input_tracker;
 pub mod translation;
 pub mod updater;
 
@@ -75,20 +75,11 @@ pub use command_suggestion_suppression::{
 };
 pub use credential_autofill::{
     CredentialPromptKind, compile_prompt_regex, credential_matches_prompt,
-    detect_credential_prompt_kind, extract_credential_prompt_text,
-    find_matching_credentials, find_password_only_fallback_credentials,
-    get_credential_prompt_pattern, is_default_password_prompt,
-    strip_terminal_control_sequences, validate_prompt_regex,
+    detect_credential_prompt_kind, extract_credential_prompt_text, find_matching_credentials,
+    find_password_only_fallback_credentials, get_credential_prompt_pattern,
+    is_default_password_prompt, strip_terminal_control_sequences, validate_prompt_regex,
 };
 pub use credentials_crypto::{CredentialCrypto, CredentialCryptoError};
-pub use terminal_file_drop::{format_local_terminal_drop_input, quote_local_path, terminal_drop_overlay_copy};
-pub use terminal_input_tracker::{
-    InputSelectionRange, TerminalInputState, apply_terminal_input_data,
-    build_move_input_cursor_data, byte_index_to_char, can_register_command_from_tracker,
-    can_suggest_from_tracker, char_index_to_byte, delete_terminal_input_range,
-    get_tracked_command, get_tracked_submission_command, resync_from_terminal_line,
-    sanitize_terminal_command, strip_terminal_command_prompt,
-};
 pub use diagnostics::{
     DiagnosticsError, DiagnosticsExportInfo, DiagnosticsExportOptions, DiagnosticsRuntimeSnapshot,
     LOG_FILE_PREFIX, LOG_FILE_SUFFIX, export_diagnostics_archive,
@@ -107,6 +98,16 @@ pub use portable_snapshot::{
 pub use runtime::{AppRuntime, RuntimeMode};
 pub use services::{MigrationCapability, NativeServiceStatus, NativeServices};
 pub use storage::{ConfigBackupInfo, ConnectionStore, KnownHostCheck, StorageError};
+pub use terminal_file_drop::{
+    format_local_terminal_drop_input, quote_local_path, terminal_drop_overlay_copy,
+};
+pub use terminal_input_tracker::{
+    InputSelectionRange, TerminalInputState, apply_terminal_input_data,
+    build_move_input_cursor_data, byte_index_to_char, can_register_command_from_tracker,
+    can_suggest_from_tracker, char_index_to_byte, delete_terminal_input_range, get_tracked_command,
+    get_tracked_submission_command, resync_from_terminal_line, sanitize_terminal_command,
+    strip_terminal_command_prompt,
+};
 pub use translation::{
     AliSignature, TranslateResult, TranslationError, TranslationSettings, ali_content_sha256,
     ali_signature, ali_translate_body, ali_translate_lang, baidu_translate_lang,
