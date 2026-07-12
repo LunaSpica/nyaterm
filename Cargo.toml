@@ -1,13 +1,20 @@
 [workspace]
 members = [
-    "crates/nyaterm-domain",
-    "crates/nyaterm-migration",
-    "crates/nyaterm-native",
+    "crates/nyaterm-app",
+    "crates/nyaterm-core",
+    "crates/nyaterm-gpui",
+    "crates/nyaterm-legacy",
     "crates/nyaterm-otp",
-    "crates/nyaterm-session",
+    "crates/nyaterm-store",
     "crates/nyaterm-terminal",
+    "crates/nyaterm-transport",
 ]
 resolver = "2"
+exclude = [
+    "vendor/russh",
+    "vendor/russh-sftp",
+    "vendor/zmodem2",
+]
 
 [workspace.package]
 version = "1.1.12"
@@ -38,11 +45,13 @@ hex = "0.4"
 hmac = "0.13"
 log = "0.4.11"
 md5 = "0.8"
-nyaterm-domain = { path = "crates/nyaterm-domain" }
-nyaterm-migration = { path = "crates/nyaterm-migration" }
+nyaterm-core = { path = "crates/nyaterm-core" }
+nyaterm-gpui = { path = "crates/nyaterm-gpui" }
+nyaterm-legacy = { path = "crates/nyaterm-legacy" }
 nyaterm-otp = { path = "crates/nyaterm-otp" }
-nyaterm-session = { path = "crates/nyaterm-session" }
+nyaterm-store = { path = "crates/nyaterm-store" }
 nyaterm-terminal = { path = "crates/nyaterm-terminal" }
+nyaterm-transport = { path = "crates/nyaterm-transport" }
 portable-pty = "0.9"
 rand = { version = "0.10", features = ["thread_rng"] }
 redb = "4.1.0"

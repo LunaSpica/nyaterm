@@ -6,11 +6,11 @@ been ported or replaced.
 
 ## Architecture
 
-- `crates/nyaterm-native`: GPUI application entry point and native desktop UI.
-- `crates/nyaterm-domain`: UI-independent models, runtime paths, and service
+- `crates/nyaterm-app`: GPUI application entry point and native desktop UI.
+- `crates/nyaterm-core`: UI-independent models, runtime paths, and service
   status contracts, plus the native redb-compatible connection store.
-- `crates/nyaterm-migration`: inventory and legacy configuration loading helpers.
-- `crates/nyaterm-session`: Tauri-free session services. Local PTY is backed by
+- `crates/nyaterm-legacy`: inventory and legacy configuration loading helpers.
+- `crates/nyaterm-transport`: Tauri-free session services. Local PTY is backed by
   `portable-pty`; Telnet/Raw TCP uses native `TcpStream`; Serial uses
   `serialport`; SSH uses native `russh` behind the same service shape.
 - `crates/nyaterm-terminal`: Rust terminal screen model backed by `vte`, used by
@@ -268,7 +268,7 @@ service boundary first:
   `command/score/indices/source/display` result model. The Workspace right
   panel exposes this as a compact Command Search surface with Insert/Run actions
   for matched history or quick-command results.
-- Session recording now has a native `nyaterm-session` recording manager that
+- Session recording now has a native `nyaterm-transport` recording manager that
   captures terminal input/output, strips terminal control sequences, suppresses
   common echoed input, writes timestamped/labeled or plain log files, preserves a
   bounded in-memory transcript, saves transcript snapshots, and searches
@@ -306,7 +306,7 @@ service boundary first:
   DISPLAY resolution, local X server TCP/Unix-socket fallback, `xauth` cookie
   hydration, MIT-MAGIC-COOKIE-1 rewrite, and GPUI terminal notices when the
   remote request or local display connection fails.
-- Remote Docker management now has a native `nyaterm-session` service using the
+- Remote Docker management now has a native `nyaterm-transport` service using the
   same SSH authentication, ProxyJump, known_hosts, and prompt path as remote
   processes. It ports the legacy Docker tabular and JSON parsers for overview,
   containers, images, volumes, networks, compose projects, container details,
@@ -314,7 +314,7 @@ service boundary first:
   exposes a dense Docker page with refresh, container start/stop/restart/logs,
   prune, resource counts, and recent log preview for the active SSH session.
 - The Tauri updater plugin dependency now has a native GPUI replacement for
-  update checks: `nyaterm-native` queries GitHub latest-release metadata off the
+  update checks: `nyaterm-app` queries GitHub latest-release metadata off the
   render thread, compares numeric versions against `CARGO_PKG_VERSION`, and
   surfaces availability, release date, notes, and release URL in Settings.
 - The legacy tray action surface now has a GPUI-native in-window replacement:
@@ -474,7 +474,7 @@ service boundary first:
 - AI panel: history popover + settings/new actions, setup empty state steps, composer mode switcher + send/stop icon (Tauri AIAssistantPanel layout).
 
 ## 2026-07-11 Shell assets + connection details
-- Bundled monochrome SVG assets (`crates/nyaterm-native/assets/icons/*`) loaded via `NyaTermAssets` + `Application::with_assets`.
+- Bundled monochrome SVG assets (`crates/nyaterm-app/assets/icons/*`) loaded via `NyaTermAssets` + `Application::with_assets`.
 - Activity bar uses SVG icons (Files/Network/Auth/Sync/Settings/Connections/AI/…) with glyph fallback.
 - Empty workspace and titlebar use NyaTerm cat-face logo mark (faded) instead of plain "N"/green square.
 - Connection hover shows Tauri-like detail tooltip (type/host/user/last/desc).
@@ -806,7 +806,7 @@ service boundary first:
 - Connections more-menu and group-header hover/drop accents use palette tokens.
 
 ## 2026-07-11 Shared ThemePalette + major panel shells
-- Extract `ThemePalette` to `crates/nyaterm-native/src/ui/theme.rs` for shared use.
+- Extract `ThemePalette` to `crates/nyaterm-app/src/ui/theme.rs` for shared use.
 - Shared components: `empty_panel`, `mode_button`, `icon_button`, `section_header` take live palette.
 - Shell theming: Settings page, Docker/Process/Stats toolbars, Transfers root + path bar + queue, Quick Commands sidebar, Network/Tunnels surface.
 
@@ -890,7 +890,7 @@ service boundary first:
 - Title menus, inspector disabled panels, bottom send-command chips/steppers themed.
 - Connections editor chips/fields, Network icon actions, Settings AI/security/transfer/terminal free helpers themed.
 - Sidebar security/session free helpers, quick-command icon/editor helpers and editor overlay choices themed.
-- Zero remaining `theme_palette("github-dark")` hard fallbacks in `nyaterm-native` UI sources (brand/status hardcodes may remain intentionally).
+- Zero remaining `theme_palette("github-dark")` hard fallbacks in `nyaterm-app` UI sources (brand/status hardcodes may remain intentionally).
 
 ## 2026-07-11 Residual chrome hardcode cleanup
 - Map remaining github-dark shell tokens (border/bg/muted) in migration, process/workspace views, panel resize handles, terminal actions, tunnels residual hover, and bottom send field to live ThemePalette.
@@ -1170,7 +1170,7 @@ service boundary first:
 
 ## 2026-07-11 Native ZMODEM core + GPUI interception
 
-- Ported Tauri `core/zmodem.rs` into `nyaterm-session::zmodem` with `zmodem2`
+- Ported Tauri `core/zmodem.rs` into `nyaterm-transport::zmodem` with `zmodem2`
   path dependency; detector/transfer unit tests pass.
 - GPUI event pump intercepts raw session output via per-session
   `ZmodemDetector` / `ZmodemTransfer` before terminal paint.
