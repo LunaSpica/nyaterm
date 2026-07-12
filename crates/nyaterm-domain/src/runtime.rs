@@ -4,7 +4,7 @@ use thiserror::Error;
 
 #[derive(Debug, Error)]
 pub enum RuntimeError {
-    #[error("unable to resolve platform configuration directory")]
+    #[error("unable to resolve home directory for installed configuration")]
     MissingConfigDir,
     #[error("failed to prepare runtime directory {path}: {source}")]
     CreateDir {
@@ -35,16 +35,13 @@ impl AppRuntime {
             return Ok(runtime);
         }
 
-        let config_dir = dirs::config_dir()
-            .ok_or(RuntimeError::MissingConfigDir)?
-            .join("nyaterm");
-        let data_dir = dirs::data_dir()
-            .unwrap_or_else(|| config_dir.clone())
-            .join("nyaterm");
+        let home = dirs::home_dir().ok_or(RuntimeError::MissingConfigDir)?;
+        let config_dir = home.join(".nyaterm");
+        let data_dir = config_dir.clone();
+        let log_dir = data_dir.join("logs");
         let cache_dir = dirs::cache_dir()
             .unwrap_or_else(|| data_dir.join("cache"))
             .join("nyaterm");
-        let log_dir = data_dir.join("logs");
 
         Ok(Self {
             mode: RuntimeMode::Installed,
