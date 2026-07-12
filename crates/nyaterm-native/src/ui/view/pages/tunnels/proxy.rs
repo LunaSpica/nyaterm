@@ -221,7 +221,7 @@ pub(super) fn proxy_network_row(
     app: &NyaTermApp,
     cx: &mut Context<NyaTermApp>,
 ) -> impl IntoElement  {
-    let palette = cx.entity().read(cx).theme_palette();
+    let palette = app.theme_palette();
     let is_command = proxy.protocol == "proxycommand";
     let address = if is_command {
         proxy
@@ -447,12 +447,12 @@ pub(super) fn proxy_matches(proxy: &ProxyConfig, query: &str) -> bool  {
 }
 
 pub(super) fn network_proxy_editor_panel(
+    palette: crate::ui::theme::ThemePalette,
     editor: NetworkProxyEditorState,
     app: &NyaTermApp,
     focus: &gpui::FocusHandle,
     cx: &mut Context<NyaTermApp>,
 ) -> impl IntoElement  {
-    let palette = cx.entity().read(cx).theme_palette();
     let protocol_label = proxy_protocol_label(&editor.protocol);
     let group_label = editor
         .group_id
@@ -526,6 +526,7 @@ pub(super) fn network_proxy_editor_panel(
                     }),
                 ))
                 .child(proxy_editor_input(
+                    palette,
                     "network-proxy-editor-name",
                     "Proxy name",
                     editor.name.clone(),
@@ -546,6 +547,7 @@ pub(super) fn network_proxy_editor_panel(
         )
         .when(editor.is_proxy_command(), |this| {
             this.child(proxy_editor_input(
+                palette,
                 "network-proxy-editor-command",
                 "ProxyCommand",
                 editor.command.clone(),
@@ -568,6 +570,7 @@ pub(super) fn network_proxy_editor_panel(
                     .grid_cols(2)
                     .gap_2()
                     .child(proxy_editor_input(
+                        palette,
                         "network-proxy-editor-host",
                         "Host",
                         editor.host.clone(),
@@ -577,6 +580,7 @@ pub(super) fn network_proxy_editor_panel(
                         cx,
                     ))
                     .child(proxy_editor_input(
+                        palette,
                         "network-proxy-editor-port",
                         "Port",
                         editor.port.clone(),
@@ -592,6 +596,7 @@ pub(super) fn network_proxy_editor_panel(
                     .grid_cols(2)
                     .gap_2()
                     .child(proxy_editor_input(
+                        palette,
                         "network-proxy-editor-username",
                         "Username",
                         editor.username.clone(),
@@ -601,6 +606,7 @@ pub(super) fn network_proxy_editor_panel(
                         cx,
                     ))
                     .child(proxy_editor_input(
+                        palette,
                         "network-proxy-editor-password",
                         "Password",
                         password_value,
@@ -633,7 +639,7 @@ pub(super) fn network_proxy_editor_panel(
         .when_some(editor.error.clone(), |this, error| {
             this.child(div().text_xs().text_color(rgb(palette.danger)).child(error))
         })
-        .child(network_dialog_footer(cx.entity().read(cx).theme_palette(), 
+        .child(network_dialog_footer(palette, 
             "network-proxy-editor-cancel",
             "network-proxy-editor-save",
             "Save",
@@ -645,10 +651,11 @@ pub(super) fn network_proxy_editor_panel(
             }),
         ));
 
-    network_modal_shell(cx.entity().read(cx).theme_palette(), "network-proxy-editor-modal", 520., card)
+    network_modal_shell(palette, "network-proxy-editor-modal", 520., card)
 }
 
 pub(super) fn proxy_editor_input(
+    palette: crate::ui::theme::ThemePalette,
     id: impl Into<String>,
     label: &'static str,
     value: String,
@@ -657,7 +664,7 @@ pub(super) fn proxy_editor_input(
     focus: &gpui::FocusHandle,
     cx: &mut Context<NyaTermApp>,
 ) -> impl IntoElement  {
-    transfer_input(id, label, value, active, crate::ui::theme::theme_palette(&cx.entity().read(cx).settings.theme))
+    transfer_input(id, label, value, active, palette)
         .track_focus(focus)
         .on_click(cx.listener(move |this, _, window, cx| {
             this.focus_network_proxy_editor_field(field, window, cx);

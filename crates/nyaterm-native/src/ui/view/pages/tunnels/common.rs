@@ -36,10 +36,10 @@ pub(super) fn network_tab_button(
 }
 
 pub(super) fn network_delete_confirm_panel(
+    palette: crate::ui::theme::ThemePalette,
     confirm: NetworkDeleteConfirmState,
     cx: &mut Context<NyaTermApp>,
 ) -> impl IntoElement {
-        let palette = cx.entity().read(cx).theme_palette();
     let card = div()
         .p_4()
         .flex()
@@ -62,7 +62,7 @@ pub(super) fn network_delete_confirm_panel(
                     truncate_preview(&confirm.id, 32)
                 )),
         )
-        .child(network_dialog_footer(cx.entity().read(cx).theme_palette(), 
+        .child(network_dialog_footer(palette, 
             "network-delete-cancel",
             "network-delete-confirm",
             "Delete",
@@ -73,15 +73,15 @@ pub(super) fn network_delete_confirm_panel(
                 this.confirm_network_delete(cx);
             }),
         ));
-    network_modal_shell(cx.entity().read(cx).theme_palette(), "network-delete-confirm-modal", 420., card)
+    network_modal_shell(palette, "network-delete-confirm-modal", 420., card)
 }
 
 pub(super) fn network_group_editor_panel(
+    palette: crate::ui::theme::ThemePalette,
     editor: NetworkGroupEditorState,
     focus: &gpui::FocusHandle,
     cx: &mut Context<NyaTermApp>,
 ) -> impl IntoElement {
-        let palette = cx.entity().read(cx).theme_palette();
     let card = div()
         .p_4()
         .flex()
@@ -116,7 +116,7 @@ pub(super) fn network_group_editor_panel(
                 "Group name",
                 editor.name.clone(),
                 true,
-                    crate::ui::theme::theme_palette(&cx.entity().read(cx).settings.theme),
+                    palette,
                 )
             .track_focus(focus)
             .on_click(cx.listener(|this, _, window, cx| {
@@ -131,7 +131,7 @@ pub(super) fn network_group_editor_panel(
         .when_some(editor.error.clone(), |this, error| {
             this.child(div().text_size(px(12.)).text_color(rgb(0xfda4af)).child(error))
         })
-        .child(network_dialog_footer(cx.entity().read(cx).theme_palette(), 
+        .child(network_dialog_footer(palette, 
             "network-group-editor-cancel",
             "network-group-editor-save",
             "Save",
@@ -142,14 +142,14 @@ pub(super) fn network_group_editor_panel(
                 this.save_network_group_editor(cx);
             }),
         ));
-    network_modal_shell(cx.entity().read(cx).theme_palette(), "network-group-editor-modal", 420., card)
+    network_modal_shell(palette, "network-group-editor-modal", 420., card)
 }
 
 pub(super) fn network_group_delete_confirm_panel(
+    palette: crate::ui::theme::ThemePalette,
     confirm: NetworkGroupDeleteConfirmState,
     cx: &mut Context<NyaTermApp>,
 ) -> impl IntoElement {
-        let palette = cx.entity().read(cx).theme_palette();
     let card = div()
         .p_4()
         .flex()
@@ -172,7 +172,7 @@ pub(super) fn network_group_delete_confirm_panel(
                     confirm.item_count
                 )),
         )
-        .child(network_dialog_footer(cx.entity().read(cx).theme_palette(), 
+        .child(network_dialog_footer(palette, 
             "network-group-delete-cancel",
             "network-group-delete-confirm",
             "Delete",
@@ -183,7 +183,7 @@ pub(super) fn network_group_delete_confirm_panel(
                 this.confirm_network_group_delete(cx);
             }),
         ));
-    network_modal_shell(cx.entity().read(cx).theme_palette(), "network-group-delete-modal", 420., card)
+    network_modal_shell(palette, "network-group-delete-modal", 420., card)
 }
 
 

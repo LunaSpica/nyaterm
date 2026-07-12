@@ -245,6 +245,7 @@ impl NyaTermApp {
                             ))
                             .when(!stats.cpu.per_core.is_empty(), |this| {
                                 this.child(cpu_core_summary(
+                                    palette,
                                     &stats.cpu.per_core,
                                     self.stats_cpu_expanded,
                                     cx,
@@ -338,7 +339,12 @@ impl NyaTermApp {
     }
 }
 
-fn cpu_core_summary(per_core: &[f64], expanded: bool, cx: &mut Context<NyaTermApp>) -> gpui::Div {
+fn cpu_core_summary(
+    palette: crate::ui::theme::ThemePalette,
+    per_core: &[f64],
+    expanded: bool,
+    cx: &mut Context<NyaTermApp>,
+) -> gpui::Div {
     let visible_count = if expanded {
         per_core.len()
     } else {
@@ -363,8 +369,8 @@ fn cpu_core_summary(per_core: &[f64], expanded: bool, cx: &mut Context<NyaTermAp
             .items_center()
             .justify_between()
             .gap_2()
-            .child(dense_capability_line(cx_theme_palette(cx), "Per Core", summary))
-            .child(small_button(cx_theme_palette(cx), 
+            .child(dense_capability_line(palette, "Per Core", summary))
+            .child(small_button(palette, 
                 "stats-cpu-cores-toggle",
                 if expanded { "Hide" } else { "Show" },
                 cx.listener(|this, _, _, cx| {
@@ -376,7 +382,7 @@ fn cpu_core_summary(per_core: &[f64], expanded: bool, cx: &mut Context<NyaTermAp
     if expanded {
         let mut core_rows = div().grid().grid_cols(2).gap_2();
         for (index, usage) in per_core.iter().copied().enumerate() {
-            core_rows = core_rows.child(cpu_core_row(cx_theme_palette(cx), index + 1, usage));
+            core_rows = core_rows.child(cpu_core_row(palette, index + 1, usage));
         }
         rows = rows.child(core_rows);
     }

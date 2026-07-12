@@ -80,6 +80,7 @@ impl NyaTermApp {
         for provider in TRANSLATION_PROVIDERS {
             let selected = self.translate_provider == provider;
             provider_controls = provider_controls.child(translation_provider_button(
+                palette,
                 provider,
                 selected,
                 self.translation_provider_status(provider),
@@ -90,7 +91,7 @@ impl NyaTermApp {
         let mut target_presets = div().mt_3().flex().items_center().gap_2().flex_wrap();
         for (language, label) in TARGET_LANGUAGES {
             let selected = self.translate_target_language == language;
-            target_presets = target_presets.child(language_button(language, label, selected, cx));
+            target_presets = target_presets.child(language_button(palette, language, label, selected, cx));
         }
 
         div()
@@ -353,12 +354,12 @@ impl NyaTermApp {
 }
 
 fn translation_provider_button(
+    palette: crate::ui::theme::ThemePalette,
     provider: &'static str,
     selected: bool,
     status: &'static str,
     cx: &mut Context<NyaTermApp>,
 ) -> impl IntoElement {
-        let palette = cx.entity().read(cx).theme_palette();
     div()
         .id(SharedString::from(format!("translate-provider-{provider}")))
         .min_h(px(58.))
@@ -405,12 +406,12 @@ fn translation_provider_button(
 }
 
 fn language_button(
+    palette: crate::ui::theme::ThemePalette,
     language: &'static str,
     label: &'static str,
     selected: bool,
     cx: &mut Context<NyaTermApp>,
 ) -> impl IntoElement {
-        let palette = cx.entity().read(cx).theme_palette();
     div()
         .id(SharedString::from(format!("translate-target-{language}")))
         .h(px(26.))

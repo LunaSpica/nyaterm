@@ -97,6 +97,7 @@ impl NyaTermApp {
                     })
                     .when(!self.transfer_browser_path_editing, |this| {
                         this.child(transfer_browser_path_breadcrumbs(
+                            palette,
                             current_browser_path.clone(),
                             self.transfer_browser_path.clone(),
                             cx,
@@ -199,6 +200,7 @@ impl NyaTermApp {
                     && (!history_paths.is_empty() || !favorite_paths.is_empty()),
                 |this| {
                     this.child(transfer_browser_path_quick_lists(
+                        palette,
                         current_browser_path,
                         self.transfer_browser_home_dir.clone(),
                         history_paths,
@@ -322,13 +324,13 @@ impl NyaTermApp {
 }
 
 fn transfer_browser_path_quick_lists(
+    palette: crate::ui::theme::ThemePalette,
     current_browser_path: String,
     home_dir: String,
     history_paths: Vec<String>,
     favorite_paths: Vec<String>,
     cx: &mut Context<NyaTermApp>,
 ) -> impl IntoElement {
-        let palette = cx.entity().read(cx).theme_palette();
     div()
         .ml(px(40.))
         .flex()
@@ -341,6 +343,7 @@ fn transfer_browser_path_quick_lists(
         .p_2()
         .when(!history_paths.is_empty(), |this| {
             this.child(transfer_browser_path_history_list(
+                palette,
                 current_browser_path.clone(),
                 home_dir.clone(),
                 history_paths,
@@ -349,6 +352,7 @@ fn transfer_browser_path_quick_lists(
         })
         .when(!favorite_paths.is_empty(), |this| {
             this.child(transfer_browser_path_quick_list(
+                palette,
                 "Favorites",
                 current_browser_path,
                 home_dir,
@@ -360,12 +364,12 @@ fn transfer_browser_path_quick_lists(
 }
 
 fn transfer_browser_path_history_list(
+    palette: crate::ui::theme::ThemePalette,
     current_browser_path: String,
     home_dir: String,
     paths: Vec<String>,
     cx: &mut Context<NyaTermApp>,
 ) -> impl IntoElement {
-        let palette = cx.entity().read(cx).theme_palette();
     let mut list = div().flex().flex_col().gap_1().child(
         div()
             .text_size(px(10.))
@@ -421,6 +425,7 @@ fn transfer_browser_path_history_list(
 }
 
 fn transfer_browser_path_quick_list(
+    palette: crate::ui::theme::ThemePalette,
     label: &'static str,
     current_browser_path: String,
     home_dir: String,
@@ -428,7 +433,6 @@ fn transfer_browser_path_quick_list(
     allow_remove: bool,
     cx: &mut Context<NyaTermApp>,
 ) -> impl IntoElement {
-        let palette = cx.entity().read(cx).theme_palette();
     let mut row = div().flex().items_center().gap_1().min_w_0().child(
         div()
             .w(px(58.))
@@ -539,11 +543,11 @@ fn expand_transfer_browser_home_path(path: &str, home_dir: &str) -> String {
 }
 
 fn transfer_browser_path_breadcrumbs(
+    palette: crate::ui::theme::ThemePalette,
     current_browser_path: String,
     raw_browser_path: String,
     cx: &mut Context<NyaTermApp>,
 ) -> gpui::AnyElement {
-        let palette = cx.entity().read(cx).theme_palette();
     let mut row = div()
         .min_w_0()
         .flex_1()

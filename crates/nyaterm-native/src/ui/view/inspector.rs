@@ -1222,13 +1222,15 @@ impl NyaTermApp {
         if self.ai_command_cards.is_empty() {
             return rows.into_any_element();
         }
+        let palette = self.theme_palette();
         for (index, card) in self.ai_command_cards.iter().cloned().take(8).enumerate() {
-            rows = rows.child(Self::ai_command_card_view(index, card, cx));
+            rows = rows.child(Self::ai_command_card_view(palette, index, card, cx));
         }
         rows.into_any_element()
     }
 
     fn ai_command_card_view(
+        palette: crate::ui::theme::ThemePalette,
         index: usize,
         card: AiCommandCard,
         cx: &mut Context<Self>,
@@ -1247,6 +1249,7 @@ impl NyaTermApp {
         let rollback = card.rollback.clone().unwrap_or_default();
 
         Self::ai_command_card_shell(
+            palette,
             format!("idx-{index}"),
             risk,
             title,
@@ -1269,6 +1272,7 @@ impl NyaTermApp {
     }
 
     fn ai_command_card_view_for_card(
+        palette: crate::ui::theme::ThemePalette,
         key: String,
         card: AiCommandCard,
         cx: &mut Context<Self>,
@@ -1291,6 +1295,7 @@ impl NyaTermApp {
         let run_id = card_id.clone();
 
         Self::ai_command_card_shell(
+            palette,
             key,
             risk,
             title,
@@ -1313,6 +1318,7 @@ impl NyaTermApp {
     }
 
     fn ai_command_card_shell(
+        palette: crate::ui::theme::ThemePalette,
         key: String,
         risk: &'static str,
         title: String,
@@ -1326,7 +1332,6 @@ impl NyaTermApp {
         on_run: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
         cx: &mut Context<Self>,
     ) -> gpui::AnyElement {
-        let palette = cx.entity().read(cx).theme_palette();
         div()
             .id(SharedString::from(format!("ai-command-card-{key}")))
             .rounded_md()
@@ -1942,6 +1947,7 @@ impl NyaTermApp {
             // Tauri renders AICommandCardView inside assistant responses.
             for (card_index, card) in message.command_cards.iter().cloned().enumerate() {
                 bubble = bubble.child(Self::ai_command_card_view_for_card(
+                    palette,
                     format!("{}-{}", message.id, card_index),
                     card,
                     cx,

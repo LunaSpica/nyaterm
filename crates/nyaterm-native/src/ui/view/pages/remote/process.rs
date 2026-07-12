@@ -557,7 +557,7 @@ pub(super) fn process_details(palette: ThemePalette,
                 .gap_1()
                 .flex_wrap()
                 .child(
-                    transfer_input("process-nice-input", "Nice", nice_draft, true, crate::ui::theme::theme_palette(&cx.entity().read(cx).settings.theme))
+                    transfer_input("process-nice-input", "Nice", nice_draft, true, palette)
                         .w(px(88.))
                         .h(px(26.))
                         .track_focus(nice_focus)
@@ -678,7 +678,6 @@ pub(super) fn process_detail_chip(palette: ThemePalette, label: &'static str, va
 pub(super) fn process_signal_confirm_panel(palette: ThemePalette,
     confirm: RemoteProcessSignalConfirmState,
     cx: &mut Context<NyaTermApp>,) -> impl IntoElement {
-    let palette = cx.entity().read(cx).theme_palette();
     div()
         .rounded_md()
         .border_1()

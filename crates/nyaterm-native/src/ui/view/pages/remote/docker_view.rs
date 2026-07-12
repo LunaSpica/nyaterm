@@ -75,8 +75,10 @@ impl NyaTermApp {
             }
         }
 
+        let palette = self.theme_palette();
         let docker_content = match active_tab {
             DockerTab::Containers => docker_containers_panel(
+                palette,
                 self.docker_overview.is_some(),
                 self.active_ssh_config.is_some(),
                 overview.available,
@@ -88,24 +90,28 @@ impl NyaTermApp {
             )
             .into_any_element(),
             DockerTab::Images => docker_images_panel(
+                palette,
                 &filtered_images,
                 self.docker_resource_list_offset,
                 cx,
             )
             .into_any_element(),
             DockerTab::Volumes => docker_volumes_panel(
+                palette,
                 &filtered_volumes,
                 self.docker_resource_list_offset,
                 cx,
             )
             .into_any_element(),
             DockerTab::Networks => docker_networks_panel(
+                palette,
                 &filtered_networks,
                 self.docker_resource_list_offset,
                 cx,
             )
             .into_any_element(),
             DockerTab::Compose => docker_compose_panel(
+                palette,
                 &filtered_compose_projects,
                 &self.docker_compose_expanded,
                 &self.docker_compose_services,
@@ -119,7 +125,6 @@ impl NyaTermApp {
         // Tauri DockerManager shell: dense toolbar (search+actions) + tabs + flex list body.
         // Shared PanelHeader already shows title/meta; avoid page-like section headers.
         let status_short = truncate_preview(&self.docker_status, 36);
-        let palette = self.theme_palette();
         div()
             .flex()
             .flex_col()
@@ -193,9 +198,9 @@ impl NyaTermApp {
                     ),
             )
             .when_some(self.docker_confirm.clone(), |this, confirm| {
-                this.child(docker_confirm_panel(confirm, cx))
+                this.child(docker_confirm_panel(palette, confirm, cx))
             })
-            .child(docker_tab_bar(active_tab, &overview, cx))
+            .child(docker_tab_bar(palette, active_tab, &overview, cx))
             .child(
                 div()
                     .flex_1()
@@ -204,6 +209,7 @@ impl NyaTermApp {
                     .child(docker_content),
             )
             .child(docker_details_panel(
+                palette,
                 self.docker_details_container_id.clone(),
                 self.docker_details.clone(),
                 self.docker_details_container_id

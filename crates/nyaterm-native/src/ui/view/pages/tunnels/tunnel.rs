@@ -766,7 +766,7 @@ pub(super) fn network_tunnel_editor_panel(palette: crate::ui::theme::ThemePalett
         .when_some(editor.error.clone(), |this, error| {
             this.child(div().text_xs().text_color(rgb(palette.danger)).child(error))
         })
-        .child(network_dialog_footer(cx.entity().read(cx).theme_palette(), 
+        .child(network_dialog_footer(palette, 
             "network-tunnel-editor-cancel",
             "network-tunnel-editor-save",
             "Save",
@@ -778,7 +778,7 @@ pub(super) fn network_tunnel_editor_panel(palette: crate::ui::theme::ThemePalett
             }),
         ));
 
-    network_modal_shell(cx.entity().read(cx).theme_palette(), "network-tunnel-editor-modal", 640., card)
+    network_modal_shell(palette, "network-tunnel-editor-modal", 640., card)
 }
 
 pub(super) fn tunnel_editor_input(palette: crate::ui::theme::ThemePalette,
@@ -789,7 +789,7 @@ pub(super) fn tunnel_editor_input(palette: crate::ui::theme::ThemePalette,
     field: NetworkTunnelEditorField,
     focus: &gpui::FocusHandle,
     cx: &mut Context<NyaTermApp>,) -> impl IntoElement  {
-    transfer_input(id, label, value, active, crate::ui::theme::theme_palette(&cx.entity().read(cx).settings.theme))
+    transfer_input(id, label, value, active, palette)
         .track_focus(focus)
         .on_click(cx.listener(move |this, _, window, cx| {
             this.focus_network_tunnel_editor_field(field, window, cx);

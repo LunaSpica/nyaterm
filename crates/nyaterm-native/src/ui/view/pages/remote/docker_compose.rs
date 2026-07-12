@@ -2,6 +2,7 @@ use super::*;
 use gpui::SharedString;
 
 pub(in crate::ui::view::pages::remote) fn docker_compose_panel(
+    palette: crate::ui::theme::ThemePalette,
     projects: &[DockerComposeProject],
     expanded_projects: &HashSet<String>,
     services_by_project: &HashMap<String, Vec<DockerComposeService>>,
@@ -9,11 +10,10 @@ pub(in crate::ui::view::pages::remote) fn docker_compose_panel(
     open_menu_id: Option<&str>,
     cx: &mut Context<NyaTermApp>,
 ) -> impl IntoElement {
-    let palette = super::cx_theme_palette(cx);
     // Tauri Compose tab: dense project rows (≈74px) + chevron + ⋮ overflow; services ≈58px.
     let mut rows = div().flex().flex_col().gap_1();
     if projects.is_empty() {
-        rows = rows.child(empty_panel("No compose projects loaded.", super::cx_theme_palette(cx)));
+        rows = rows.child(empty_panel("No compose projects loaded.", palette));
     } else {
         for project in projects {
             let config_files = Some(project.config_files.clone()).filter(|value| {
@@ -26,6 +26,7 @@ pub(in crate::ui::view::pages::remote) fn docker_compose_panel(
             let project_menu_id = format!("compose-project:{key}");
             let project_menu_open = open_menu_id == Some(project_menu_id.as_str());
             rows = rows.child(docker_compose_project_row(
+                palette,
                 project,
                 &key,
                 expanded,
@@ -43,6 +44,7 @@ pub(in crate::ui::view::pages::remote) fn docker_compose_panel(
 }
 
 fn docker_compose_project_row(
+    palette: crate::ui::theme::ThemePalette,
     project: &DockerComposeProject,
     project_key: &str,
     expanded: bool,
@@ -53,7 +55,6 @@ fn docker_compose_project_row(
     open_menu_id: Option<&str>,
     cx: &mut Context<NyaTermApp>,
 ) -> impl IntoElement {
-        let palette = cx.entity().read(cx).theme_palette();
     let project_name = project.name.clone();
     let config_files = Some(project.config_files.clone()).filter(|value| {
         !value.trim().is_empty() && value.trim().to_ascii_lowercase() != "n/a"
@@ -175,7 +176,7 @@ fn docker_compose_project_row(
                                 .relative()
                                 .child(icon_button(
                                     format!("docker-compose-menu-{project_key}"),
-                                    "⋮", super::cx_theme_palette(cx),cx.listener({
+                                    "⋮", palette,cx.listener({
                                         let menu_id = menu_id.clone();
                                         move |this, _, _, cx| {
                                             cx.stop_propagation();
@@ -192,6 +193,7 @@ fn docker_compose_project_row(
                                 ))
                                 .when(menu_open, |this| {
                                     this.child(docker_compose_project_action_menu(
+                                        palette,
                                         project_name.clone(),
                                         config_files.clone(),
                                         &key_for_toggle,
@@ -203,6 +205,7 @@ fn docker_compose_project_row(
         )
         .when(expanded, |this| {
             this.child(docker_compose_services_panel(
+                palette,
                 project_name,
                 config_files,
                 project_key.to_string(),
@@ -215,6 +218,7 @@ fn docker_compose_project_row(
 }
 
 pub(in crate::ui::view::pages::remote) fn docker_compose_services_panel(
+    palette: crate::ui::theme::ThemePalette,
     project_name: String,
     config_files: Option<String>,
     project_key: String,
@@ -223,7 +227,6 @@ pub(in crate::ui::view::pages::remote) fn docker_compose_services_panel(
     open_menu_id: Option<&str>,
     cx: &mut Context<NyaTermApp>,
 ) -> impl IntoElement {
-        let palette = cx.entity().read(cx).theme_palette();
     let mut rows = div()
         .border_t_1()
         .border_color(rgb(palette.border))
@@ -251,7 +254,7 @@ pub(in crate::ui::view::pages::remote) fn docker_compose_services_panel(
                         .overflow_hidden()
                         .child(truncate_preview(&error, 80)),
                 )
-                .child(small_button(super::cx_theme_palette(cx), 
+                .child(small_button(palette, 
                     format!("docker-compose-retry-{project_name}"),
                     "Retry",
                     cx.listener({
@@ -287,6 +290,7 @@ pub(in crate::ui::view::pages::remote) fn docker_compose_services_panel(
                     format!("compose-service:{project_key}:{}", service.name);
                 let menu_open = open_menu_id == Some(service_menu_id.as_str());
                 rows = rows.child(docker_compose_service_row(
+                    palette,
                     project_name.clone(),
                     config_files.clone(),
                     service,
@@ -312,6 +316,7 @@ pub(in crate::ui::view::pages::remote) fn docker_compose_services_panel(
 }
 
 pub(in crate::ui::view::pages::remote) fn docker_compose_service_row(
+    palette: crate::ui::theme::ThemePalette,
     project_name: String,
     config_files: Option<String>,
     service: DockerComposeService,
@@ -319,7 +324,6 @@ pub(in crate::ui::view::pages::remote) fn docker_compose_service_row(
     menu_id: String,
     cx: &mut Context<NyaTermApp>,
 ) -> impl IntoElement {
-        let palette = cx.entity().read(cx).theme_palette();
     let container_summary = if service.containers.is_empty() {
         "no containers".to_string()
     } else {
@@ -408,7 +412,7 @@ pub(in crate::ui::view::pages::remote) fn docker_compose_service_row(
                         .relative()
                         .child(icon_button(
                             format!("{row_id}-menu"),
-                            "⋮", super::cx_theme_palette(cx),cx.listener({
+                            "⋮", palette,cx.listener({
                                 let menu_id = menu_id.clone();
                                 move |this, _, _, cx| {
                                     cx.stop_propagation();
@@ -425,6 +429,7 @@ pub(in crate::ui::view::pages::remote) fn docker_compose_service_row(
                         ))
                         .when(menu_open, |this| {
                             this.child(docker_compose_service_action_menu(
+                                palette,
                                 project_name,
                                 config_files,
                                 service_name,
@@ -438,12 +443,12 @@ pub(in crate::ui::view::pages::remote) fn docker_compose_service_row(
 }
 
 fn docker_compose_project_action_menu(
+    palette: crate::ui::theme::ThemePalette,
     project_name: String,
     config_files: Option<String>,
     project_key: &str,
     cx: &mut Context<NyaTermApp>,
 ) -> impl IntoElement {
-        let palette = cx.entity().read(cx).theme_palette();
     let short = project_key.replace(['/', ':', ' '], "-");
     div()
         .id(SharedString::from(format!("docker-compose-project-menu-{short}")))
@@ -525,6 +530,7 @@ fn docker_compose_project_action_menu(
 }
 
 fn docker_compose_service_action_menu(
+    palette: crate::ui::theme::ThemePalette,
     project_name: String,
     config_files: Option<String>,
     service_name: String,
@@ -532,7 +538,6 @@ fn docker_compose_service_action_menu(
     can_enter: bool,
     cx: &mut Context<NyaTermApp>,
 ) -> impl IntoElement {
-        let palette = cx.entity().read(cx).theme_palette();
     let short = format!("{project_name}-{service_name}")
         .replace(['/', ':', ' '], "-");
     div()

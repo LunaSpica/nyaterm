@@ -4,7 +4,6 @@ pub(super) fn transfer_browser_parent_entry_row(palette: crate::ui::theme::Theme
     current_path: String,
     column_widths: TransferBrowserColumnWidths,
     cx: &mut Context<NyaTermApp>,) -> impl IntoElement  {
-    let palette = cx.entity().read(cx).theme_palette();
     let parent_path = remote_parent_path(&current_path);
     let context_path = current_path.clone();
     div()
@@ -98,7 +97,6 @@ pub(super) fn transfer_browser_entry_row(palette: crate::ui::theme::ThemePalette
     rename_focus: gpui::FocusHandle,
     ai_actions: Vec<AiCustomActionConfig>,
     cx: &mut Context<NyaTermApp>,) -> impl IntoElement  {
-    let palette = cx.entity().read(cx).theme_palette();
     let entry_path = entry.path.clone();
     let mouse_down_path = entry.path.clone();
     let mouse_move_path = entry.path.clone();

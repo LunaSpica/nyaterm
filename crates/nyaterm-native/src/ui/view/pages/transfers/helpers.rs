@@ -336,7 +336,6 @@ pub(super) fn transfer_job_row(palette: crate::ui::theme::ThemePalette,
     selected_remote_path: Option<String>,
     selected_job_id: Option<String>,
     cx: &mut Context<NyaTermApp>,) -> impl IntoElement  {
-    let palette = cx.entity().read(cx).theme_palette();
     let status_color = match job.status {
         TransferJobStatus::Running => rgb(palette.warning),
         TransferJobStatus::Paused => rgb(palette.accent),

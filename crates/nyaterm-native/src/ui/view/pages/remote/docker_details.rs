@@ -1,12 +1,12 @@
 use super::*;
 
 pub(in crate::ui::view::pages::remote) fn docker_details_panel(
+    palette: crate::ui::theme::ThemePalette,
     container_id: Option<String>,
     details: Option<DockerContainerDetails>,
     container: Option<DockerContainer>,
     cx: &mut Context<NyaTermApp>,
 ) -> impl IntoElement {
-    let palette = super::cx_theme_palette(cx);
     let Some(details) = details else {
         return div()
             .rounded_md()
@@ -34,7 +34,7 @@ pub(in crate::ui::view::pages::remote) fn docker_details_panel(
 
     let mut mounts = div().flex().flex_col().gap_1();
     if details.mounts.is_empty() {
-        mounts = mounts.child(empty_panel("No mounts reported.", super::cx_theme_palette(cx)));
+        mounts = mounts.child(empty_panel("No mounts reported.", palette));
     } else {
         for mount in &details.mounts {
             mounts = mounts.child(
@@ -77,7 +77,7 @@ pub(in crate::ui::view::pages::remote) fn docker_details_panel(
 
     let mut networks = div().flex().flex_col().gap_1();
     if details.networks.is_empty() {
-        networks = networks.child(empty_panel("No networks reported.", super::cx_theme_palette(cx)));
+        networks = networks.child(empty_panel("No networks reported.", palette));
     } else {
         for network in &details.networks {
             let ip_address = if network.ip_address.trim().is_empty() {
@@ -131,14 +131,14 @@ pub(in crate::ui::view::pages::remote) fn docker_details_panel(
     let mut actions = div().flex().items_center().gap_2();
     if let Some(container_id) = container_id.clone() {
         actions = actions
-            .child(small_button(super::cx_theme_palette(cx), 
+            .child(small_button(palette, 
                 format!("docker-details-refresh-{}", compact_id(&container_id)),
                 "Refresh",
                 cx.listener(move |this, _, window, cx| {
                     this.load_docker_details(container_id.clone(), window, cx);
                 }),
             ))
-            .child(small_button(super::cx_theme_palette(cx), 
+            .child(small_button(palette, 
                 "docker-details-close",
                 "Close",
                 cx.listener(|this, _, _, cx| {
@@ -189,7 +189,7 @@ pub(in crate::ui::view::pages::remote) fn docker_details_panel(
                         .when_some(details_state, |this, state| {
                             this.child(status_pill(
                                 docker_state_label(&state),
-                                docker_state_color(cx.entity().read(cx).theme_palette(), &state),
+                                docker_state_color(palette, &state),
                                 rgb(0x17233a),
                             ))
                         }),
@@ -201,7 +201,7 @@ pub(in crate::ui::view::pages::remote) fn docker_details_panel(
                 .grid()
                 .grid_cols(5)
                 .gap_2()
-                .child(metric(super::cx_theme_palette(cx), 
+                .child(metric(palette, 
                     "CPU",
                     details
                         .stats
@@ -209,7 +209,7 @@ pub(in crate::ui::view::pages::remote) fn docker_details_panel(
                         .map(|stats| format!("{:.1}%", stats.cpu_percent))
                         .unwrap_or_else(|| "n/a".to_string()),
                 ))
-                .child(metric(super::cx_theme_palette(cx), 
+                .child(metric(palette, 
                     "Memory",
                     details
                         .stats
@@ -217,7 +217,7 @@ pub(in crate::ui::view::pages::remote) fn docker_details_panel(
                         .map(|stats| format!("{:.1}%", stats.memory_percent))
                         .unwrap_or_else(|| "n/a".to_string()),
                 ))
-                .child(metric(super::cx_theme_palette(cx), 
+                .child(metric(palette, 
                     "Net IO",
                     details
                         .stats
@@ -225,7 +225,7 @@ pub(in crate::ui::view::pages::remote) fn docker_details_panel(
                         .map(|stats| truncate_preview(&stats.net_io, 24))
                         .unwrap_or_else(|| "n/a".to_string()),
                 ))
-                .child(metric(super::cx_theme_palette(cx), 
+                .child(metric(palette, 
                     "Block IO",
                     details
                         .stats
@@ -233,7 +233,7 @@ pub(in crate::ui::view::pages::remote) fn docker_details_panel(
                         .map(|stats| truncate_preview(&stats.block_io, 24))
                         .unwrap_or_else(|| "n/a".to_string()),
                 ))
-                .child(metric(super::cx_theme_palette(cx), 
+                .child(metric(palette, 
                     "PIDs",
                     details
                         .stats

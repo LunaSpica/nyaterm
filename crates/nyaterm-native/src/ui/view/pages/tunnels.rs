@@ -130,7 +130,7 @@ impl NyaTermApp {
                     div()
                         .px_2()
                         .pt_2()
-                        .child(network_delete_confirm_panel(confirm, cx)),
+                        .child(network_delete_confirm_panel(palette, confirm, cx)),
                 )
             })
             .when_some(self.network_group_editor.clone(), |this, editor| {
@@ -139,6 +139,7 @@ impl NyaTermApp {
                         .px_2()
                         .pt_2()
                         .child(network_group_editor_panel(
+                            palette,
                             editor,
                             &self.network_group_editor_focus,
                             cx,
@@ -150,7 +151,7 @@ impl NyaTermApp {
                     div()
                         .px_2()
                         .pt_2()
-                        .child(network_group_delete_confirm_panel(confirm, cx)),
+                        .child(network_group_delete_confirm_panel(palette, confirm, cx)),
                 )
             })
             .when_some(self.network_tunnel_editor.clone(), |this, editor| {
@@ -173,6 +174,7 @@ impl NyaTermApp {
                         .px_2()
                         .pt_2()
                         .child(network_proxy_editor_panel(
+                            palette,
                             editor,
                             self,
                             &self.network_proxy_editor_focus,
@@ -355,17 +357,18 @@ impl NyaTermApp {
             )
             // Tauri-style Dialog overlays (absolute) above the panel body.
             .when_some(self.network_delete_confirm.clone(), |this, confirm| {
-                this.child(network_delete_confirm_panel(confirm, cx))
+                this.child(network_delete_confirm_panel(palette, confirm, cx))
             })
             .when_some(self.network_group_editor.clone(), |this, editor| {
                 this.child(network_group_editor_panel(
+                    palette,
                     editor,
                     &self.network_group_editor_focus,
                     cx,
                 ))
             })
             .when_some(self.network_group_delete_confirm.clone(), |this, confirm| {
-                this.child(network_group_delete_confirm_panel(confirm, cx))
+                this.child(network_group_delete_confirm_panel(palette, confirm, cx))
             })
             .when_some(self.network_tunnel_editor.clone(), |this, editor| {
                 this.child(network_tunnel_editor_panel(
@@ -378,6 +381,7 @@ impl NyaTermApp {
             })
             .when_some(self.network_proxy_editor.clone(), |this, editor| {
                 this.child(network_proxy_editor_panel(
+                    palette,
                     editor,
                     self,
                     &self.network_proxy_editor_focus,

@@ -1,11 +1,11 @@
 use super::*;
 
 pub(in crate::ui::view::pages::remote) fn docker_tab_bar(
+    palette: crate::ui::theme::ThemePalette,
     active_tab: DockerTab,
     overview: &nyaterm_session::RemoteDockerOverview,
     cx: &mut Context<NyaTermApp>,
 ) -> impl IntoElement {
-    let palette = super::cx_theme_palette(cx);
     // Dense tab strip similar to Tauri Docker manager tabs.
     div()
         .h(px(32.))
@@ -107,6 +107,7 @@ fn docker_tab_button(palette: crate::ui::theme::ThemePalette,
 }
 
 pub(in crate::ui::view::pages::remote) fn docker_confirm_panel(
+    palette: crate::ui::theme::ThemePalette,
     confirm: DockerConfirmState,
     cx: &mut Context<NyaTermApp>,
 ) -> impl IntoElement {
@@ -146,14 +147,14 @@ pub(in crate::ui::view::pages::remote) fn docker_confirm_panel(
                 .flex()
                 .items_center()
                 .gap_2()
-                .child(small_button(super::cx_theme_palette(cx), 
+                .child(small_button(palette, 
                     "docker-confirm-cancel",
                     "Cancel",
                     cx.listener(|this, _, _, cx| {
                         this.cancel_docker_confirm(cx);
                     }),
                 ))
-                .child(small_button(super::cx_theme_palette(cx), 
+                .child(small_button(palette, 
                     "docker-confirm-run",
                     "Confirm",
                     cx.listener(|this, _, window, cx| {
@@ -164,13 +165,14 @@ pub(in crate::ui::view::pages::remote) fn docker_confirm_panel(
 }
 
 pub(in crate::ui::view::pages::remote) fn docker_container_confirm_button(
+    palette: crate::ui::theme::ThemePalette,
     action: &'static str,
     label: &'static str,
     container_id: String,
     container_name: String,
     cx: &mut Context<NyaTermApp>,
 ) -> impl IntoElement {
-    small_button(super::cx_theme_palette(cx), 
+    small_button(palette, 
         format!("docker-{action}-{}", compact_id(&container_id)),
         label,
         cx.listener(move |this, _, _, cx| {

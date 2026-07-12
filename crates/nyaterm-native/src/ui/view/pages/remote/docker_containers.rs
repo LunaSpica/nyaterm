@@ -2,6 +2,7 @@ use super::*;
 use gpui::{SharedString, prelude::*};
 
 pub(in crate::ui::view::pages::remote) fn docker_containers_panel(
+    palette: crate::ui::theme::ThemePalette,
     has_snapshot: bool,
     has_session: bool,
     docker_available: bool,
@@ -11,7 +12,6 @@ pub(in crate::ui::view::pages::remote) fn docker_containers_panel(
     list_offset: usize,
     cx: &mut Context<NyaTermApp>,
 ) -> impl IntoElement {
-        let palette = cx.entity().read(cx).theme_palette();
     // Tauri Docker containers tab: dense ~66px rows, left accent, ⋮ action menu.
     if !has_snapshot {
         return div()
@@ -23,7 +23,7 @@ pub(in crate::ui::view::pages::remote) fn docker_containers_panel(
                 "No Docker snapshot loaded."
             } else {
                 "Start an SSH session to inspect remote Docker."
-            }, super::cx_theme_palette(cx)))
+            }, palette))
             .into_any_element();
     }
     if !docker_available {
@@ -32,7 +32,7 @@ pub(in crate::ui::view::pages::remote) fn docker_containers_panel(
             .flex()
             .items_center()
             .justify_center()
-            .child(empty_panel("Docker is not installed or the daemon is not reachable.", super::cx_theme_palette(cx)))
+            .child(empty_panel("Docker is not installed or the daemon is not reachable.", palette))
             .into_any_element();
     }
     if filtered_containers.is_empty() {
@@ -45,7 +45,7 @@ pub(in crate::ui::view::pages::remote) fn docker_containers_panel(
                 "No containers found."
             } else {
                 "No containers match the Docker search."
-            }, super::cx_theme_palette(cx)))
+            }, palette))
             .into_any_element();
     }
 
@@ -79,7 +79,7 @@ pub(in crate::ui::view::pages::remote) fn docker_containers_panel(
     }
     for container in visible {
         let menu_open = open_menu_id == Some(container.id.as_str());
-        rows = rows.child(docker_container_row(container, menu_open, cx));
+        rows = rows.child(docker_container_row(palette, container, menu_open, cx));
     }
     if pad_bottom > 0. {
         rows = rows.child(div().h(px(pad_bottom)).w_full().flex_none());
@@ -131,11 +131,11 @@ pub(in crate::ui::view::pages::remote) fn docker_containers_panel(
 }
 
 fn docker_container_row(
+    palette: crate::ui::theme::ThemePalette,
     container: DockerContainer,
     menu_open: bool,
     cx: &mut Context<NyaTermApp>,
 ) -> impl IntoElement {
-        let palette = cx.entity().read(cx).theme_palette();
     let container_id = container.id.clone();
     let details_id = container.id.clone();
     let menu_id = container.id.clone();
@@ -194,7 +194,7 @@ fn docker_container_row(
                         )
                         .child(status_pill(
                             docker_state_label(&container.state),
-                            docker_state_color(cx.entity().read(cx).theme_palette(), &container.state),
+                            docker_state_color(palette, &container.state),
                             rgb(0x17233a),
                         )),
                 )
@@ -260,7 +260,7 @@ fn docker_container_row(
                         .relative()
                         .child(icon_button(
                             format!("docker-menu-toggle-{short}"),
-                            "⋮", super::cx_theme_palette(cx),cx.listener(move |this, _, _, cx| {
+                            "⋮", palette,cx.listener(move |this, _, _, cx| {
                                 cx.stop_propagation();
                                 if this.docker_container_menu_id.as_deref() == Some(menu_id.as_str())
                                 {
@@ -273,6 +273,7 @@ fn docker_container_row(
                         ))
                         .when(menu_open, |this| {
                             this.child(docker_container_action_menu(
+                                palette,
                                 container_id.clone(),
                                 container.name.clone(),
                                 running,
@@ -284,12 +285,12 @@ fn docker_container_row(
 }
 
 fn docker_container_action_menu(
+    palette: crate::ui::theme::ThemePalette,
     container_id: String,
     container_name: String,
     running: bool,
     cx: &mut Context<NyaTermApp>,
 ) -> impl IntoElement {
-        let palette = cx.entity().read(cx).theme_palette();
     let short = compact_id(&container_id);
     let logs_id = container_id.clone();
     let enter_id = container_id.clone();

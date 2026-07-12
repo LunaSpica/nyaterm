@@ -201,7 +201,7 @@ impl NyaTermApp {
                             }),
                         ))
                         .child(transfer_toolbar_divider(palette))
-                        .child(compact_transfer_upload_menu_button(cx))
+                        .child(compact_transfer_upload_menu_button(palette, cx))
                         .child(
                             div()
                                 .when(selected_count == 0, |this| this.opacity(0.45))
@@ -610,8 +610,10 @@ fn compact_transfer_footer_button_active(palette: crate::ui::theme::ThemePalette
         .on_click(on_click)
 }
 
-fn compact_transfer_upload_menu_button(cx: &mut Context<NyaTermApp>) -> impl IntoElement  {
-    let palette = cx.entity().read(cx).theme_palette();
+fn compact_transfer_upload_menu_button(
+    palette: crate::ui::theme::ThemePalette,
+    cx: &mut Context<NyaTermApp>,
+) -> impl IntoElement  {
     // Tauri: single Upload icon opens DropdownMenu (Upload Files / Upload Folder).
     div()
         .id(SharedString::from("transfer-browser-upload"))

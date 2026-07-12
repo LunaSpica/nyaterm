@@ -6,11 +6,11 @@ const DOCKER_RESOURCE_VIEWPORT_ROWS: usize = 14;
 const DOCKER_RESOURCE_OVERSCAN: usize = 6;
 
 pub(in crate::ui::view::pages::remote) fn docker_images_panel(
+    palette: crate::ui::theme::ThemePalette,
     images: &[DockerImage],
     list_offset: usize,
     cx: &mut Context<NyaTermApp>,
 ) -> impl IntoElement {
-    let palette = super::cx_theme_palette(cx);
     if images.is_empty() {
         return docker_resource_empty(palette, "Images", "No images loaded.");
     }
@@ -38,7 +38,7 @@ pub(in crate::ui::view::pages::remote) fn docker_images_panel(
             )
             .child(icon_button(
                 format!("docker-image-remove-{}", compact_id(&image_id)),
-                "×", super::cx_theme_palette(cx),cx.listener(move |this, _, _, cx| {
+                "×", palette,cx.listener(move |this, _, _, cx| {
                     this.request_docker_confirm(
                         DockerConfirmState {
                             title: format!("Remove image {label}"),
@@ -61,15 +61,15 @@ pub(in crate::ui::view::pages::remote) fn docker_images_panel(
         rows = rows.child(docker_resource_range_footer(palette, window_start, window_end, total));
     }
 
-    docker_resource_panel("Images", total, rows, scroll_offset, cx)
+    docker_resource_panel(palette, "Images", total, rows, scroll_offset, cx)
 }
 
 pub(in crate::ui::view::pages::remote) fn docker_volumes_panel(
+    palette: crate::ui::theme::ThemePalette,
     volumes: &[DockerVolume],
     list_offset: usize,
     cx: &mut Context<NyaTermApp>,
 ) -> impl IntoElement {
-    let palette = super::cx_theme_palette(cx);
     if volumes.is_empty() {
         return docker_resource_empty(palette, "Volumes", "No volumes loaded.");
     }
@@ -87,7 +87,7 @@ pub(in crate::ui::view::pages::remote) fn docker_volumes_panel(
             docker_resource_row(palette, volume.name.clone(), format!("driver {}", volume.driver)).child(
                 icon_button(
                     format!("docker-volume-remove-{volume_name}"),
-                    "×", super::cx_theme_palette(cx),cx.listener(move |this, _, _, cx| {
+                    "×", palette,cx.listener(move |this, _, _, cx| {
                         this.request_docker_confirm(
                             DockerConfirmState {
                                 title: format!("Remove volume {volume_name}"),
@@ -111,15 +111,15 @@ pub(in crate::ui::view::pages::remote) fn docker_volumes_panel(
         rows = rows.child(docker_resource_range_footer(palette, window_start, window_end, total));
     }
 
-    docker_resource_panel("Volumes", total, rows, scroll_offset, cx)
+    docker_resource_panel(palette, "Volumes", total, rows, scroll_offset, cx)
 }
 
 pub(in crate::ui::view::pages::remote) fn docker_networks_panel(
+    palette: crate::ui::theme::ThemePalette,
     networks: &[DockerNetwork],
     list_offset: usize,
     cx: &mut Context<NyaTermApp>,
 ) -> impl IntoElement {
-    let palette = super::cx_theme_palette(cx);
     if networks.is_empty() {
         return docker_resource_empty(palette, "Networks", "No networks loaded.");
     }
@@ -147,7 +147,7 @@ pub(in crate::ui::view::pages::remote) fn docker_networks_panel(
             )
             .child(icon_button(
                 format!("docker-network-remove-{}", compact_id(&network_id)),
-                "×", super::cx_theme_palette(cx),cx.listener(move |this, _, _, cx| {
+                "×", palette,cx.listener(move |this, _, _, cx| {
                     this.request_docker_confirm(
                         DockerConfirmState {
                             title: format!("Remove network {name}"),
@@ -169,7 +169,7 @@ pub(in crate::ui::view::pages::remote) fn docker_networks_panel(
         rows = rows.child(docker_resource_range_footer(palette, window_start, window_end, total));
     }
 
-    docker_resource_panel("Networks", total, rows, scroll_offset, cx)
+    docker_resource_panel(palette, "Networks", total, rows, scroll_offset, cx)
 }
 
 fn docker_resource_window(
@@ -213,13 +213,13 @@ fn docker_resource_empty(palette: crate::ui::theme::ThemePalette, title: &'stati
 }
 
 pub(in crate::ui::view::pages::remote) fn docker_resource_panel(
+    palette: crate::ui::theme::ThemePalette,
     title: &'static str,
     count: usize,
     rows: impl IntoElement,
     _scroll_offset: usize,
     cx: &mut Context<NyaTermApp>,
 ) -> gpui::AnyElement {
-        let palette = cx.entity().read(cx).theme_palette();
     // Tauri resource tabs: full-height virtual list + wheel offset.
     let _ = title;
     let total_for_scroll = count;

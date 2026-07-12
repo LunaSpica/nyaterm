@@ -33,9 +33,5 @@ mod process_view;
 mod stats_view;
 
 
-pub(super) fn cx_theme_palette(cx: &Context<NyaTermApp>) -> crate::ui::theme::ThemePalette {
-    crate::ui::theme::theme_palette(&cx.entity().read(cx).settings.theme)
-}
-
 use docker::*;
 use process::*;
