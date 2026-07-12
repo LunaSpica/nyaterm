@@ -1,6 +1,127 @@
 use super::*;
 
 impl NyaTermApp {
+    pub(in crate::ui::view) fn publish_store_snapshots(&self, cx: &mut Context<Self>) {
+        let workspace = crate::entities::WorkspaceSnapshot {
+            active_session_id: self.active_session_id.clone(),
+            ordered_tab_roots: self
+                .ordered_tab_sessions()
+                .into_iter()
+                .map(|session| session.id)
+                .collect(),
+            selected_nav: self.selected_nav.label().to_string(),
+            main_mode: match self.main_mode {
+                MainMode::Workspace => "Workspace",
+                MainMode::Page => "Page",
+            }
+            .to_string(),
+            active_left_panel: self.active_left_panel.map(|item| item.label().to_string()),
+            active_right_panel: self.active_right_panel.map(|item| item.label().to_string()),
+            left_sidebar_collapsed: self.left_sidebar_collapsed,
+            right_inspector_collapsed: self.right_inspector_collapsed,
+            workspace_split_active: self.workspace_split.is_some(),
+            terminal_windows_active: self.terminal_windows.is_some(),
+        };
+
+        let live_session_ids = self
+            .session_manager
+            .list_sessions()
+            .unwrap_or_default()
+            .into_iter()
+            .map(|session| session.id)
+            .collect();
+        let pending_start_count = usize::from(self.pending_session_name.is_some());
+        let sessions = crate::entities::SessionSnapshot {
+            active_session_id: self.active_session_id.clone(),
+            ordered_session_ids: self.session_order.clone(),
+            live_session_ids,
+            metadata_count: self.session_metadata.len(),
+            terminal_view_count: self.terminal_views.len(),
+            pending_start_count,
+            host_prompt_active: self.active_host_key_prompt.is_some(),
+            credential_prompt_active: self.active_credential_prompt.is_some(),
+            zmodem_session_count: self.zmodem_sessions.len(),
+        };
+
+        let overlays = crate::entities::OverlaySnapshot {
+            quick_switch_open: self.quick_switch_open,
+            tab_actions_open: self.tab_actions_session_id.is_some(),
+            rename_open: self.rename_session_id.is_some(),
+            color_picker_open: self.color_picker_open,
+            session_info_open: self.session_info_open,
+            startup_command_open: self.startup_command_open,
+            temporary_ssh_link_open: self.temporary_ssh_link_open,
+            multi_line_paste_open: self.multi_line_paste.is_some(),
+            terminal_actions_open: self.terminal_actions_open,
+            terminal_context_menu_open: self.terminal_context_menu.is_some(),
+            action_link_menu_open: self.action_link_menu.is_some(),
+            action_link_tooltip_open: self.action_link_tooltip.is_some(),
+            command_suggestions_open: self.command_suggestions.is_some(),
+            credential_suggestions_open: self.credential_suggestions.is_some(),
+            close_all_sessions_confirm_open: self.close_all_sessions_confirm_open,
+            locked: self.is_locked,
+        };
+
+        self.stores.workspace.update(cx, |store, cx| {
+            if store.replace_snapshot(workspace) {
+                cx.notify();
+            }
+        });
+        self.stores.sessions.update(cx, |store, cx| {
+            if store.replace_snapshot(sessions) {
+                cx.notify();
+            }
+        });
+        self.stores.overlays.update(cx, |store, cx| {
+            if store.replace_snapshot(overlays) {
+                cx.notify();
+            }
+        });
+    }
+
+    pub(in crate::ui::view) fn refresh_window_render_inputs(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> bool {
+        let before_viewport = self.last_viewport_size;
+        let before_metrics = self.terminal_cell_metrics;
+        let vs = window.viewport_size();
+        self.last_viewport_size = (f32::from(vs.width), f32::from(vs.height));
+        self.refresh_terminal_cell_metrics(cx);
+        self.last_viewport_size != before_viewport || self.terminal_cell_metrics != before_metrics
+    }
+
+    fn drive_startup_restore_queue_tick(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> bool {
+        let should_pump = self.stores.startup_restore.update(cx, |store, _| {
+            store.can_pump_queue(self.pending_session_name.is_some())
+        });
+        if !should_pump {
+            return false;
+        }
+        self.pump_startup_restore_queue(window, cx);
+        true
+    }
+
+    fn drive_pending_focus(&mut self, window: &mut Window) -> bool {
+        let mut dirty = false;
+        if self.ai_chat_focus_pending {
+            window.focus(&self.ai_chat_focus);
+            self.ai_chat_focus_pending = false;
+            dirty = true;
+        }
+        if self.transfer_rename_focus_pending && self.transfer_rename.is_some() {
+            window.focus(&self.transfer_rename_focus);
+            self.transfer_rename_focus_pending = false;
+            dirty = true;
+        }
+        dirty
+    }
+
     pub(in crate::ui::view) fn drain_session_events(&mut self, cx: &mut Context<Self>) -> bool {
         let mut dirty = false;
         let mut drained_events = 0usize;
@@ -134,13 +255,9 @@ impl NyaTermApp {
         dirty |= self.drain_session_start_events(cx);
         // Continue sequential startup restore after async SSH connects complete.
         // Window handle is not available here; pump only when not waiting on pending.
-        if !self.startup_restore_complete
-            && self.pending_session_name.is_none()
-            && !self.startup_restore_queue.is_empty()
-        {
-            // Defer to next render where Window is available.
-            dirty = true;
-        }
+        dirty |= self.stores.startup_restore.update(cx, |store, _| {
+            store.can_pump_queue(self.pending_session_name.is_some())
+        });
         dirty |= self.drain_tunnel_events();
         dirty |= self.drain_process_events();
         dirty |= self.drain_stats_events();
@@ -189,83 +306,65 @@ impl NyaTermApp {
         true
     }
 
-    pub(in crate::ui::view) fn ensure_event_pump(
+    pub(crate) fn mark_window_runtime_started(&mut self) {
+        self.terminal_runtime.event_pump_started = true;
+    }
+
+    pub(crate) fn drive_window_runtime_tick(
         &mut self,
         window: &mut Window,
         cx: &mut Context<Self>,
-    ) {
-        if self.terminal_runtime.event_pump_started {
-            return;
+    ) -> bool {
+        let mut dirty = self.refresh_window_render_inputs(window, cx);
+        dirty |= self.drain_session_events(cx);
+        dirty |= self.drive_startup_restore_queue_tick(window, cx);
+        dirty |= self.drive_terminal_resize();
+        dirty |= self.drive_pending_focus(window);
+        dirty |= self.poll_action_link_tooltip_delay(cx);
+        dirty |= self.drive_remote_auto_refresh(window, cx);
+        dirty |= self.drive_idle_lock();
+        // ~530ms blink half-period (50ms * 11 ticks) when enabled.
+        if self.settings.cursor_blink {
+            self.terminal_runtime.cursor_blink_tick =
+                self.terminal_runtime.cursor_blink_tick.wrapping_add(1);
+            if self.terminal_runtime.cursor_blink_tick >= 11 {
+                self.terminal_runtime.cursor_blink_tick = 0;
+                self.terminal_runtime.cursor_blink_on = !self.terminal_runtime.cursor_blink_on;
+                dirty = true;
+            }
+        } else {
+            if !self.terminal_runtime.cursor_blink_on
+                || self.terminal_runtime.cursor_blink_tick != 0
+            {
+                dirty = true;
+            }
+            self.terminal_runtime.cursor_blink_on = true;
+            self.terminal_runtime.cursor_blink_tick = 0;
         }
-        self.terminal_runtime.event_pump_started = true;
-
-        window
-            .spawn(cx, async move |cx| {
-                loop {
-                    Timer::after(Duration::from_millis(50)).await;
-                    let keep_running = cx
-                        .update_root(|root, window, cx| {
-                            let Ok(view) = root.downcast::<NyaTermApp>() else {
-                                return false;
-                            };
-                            view.update(cx, |this, cx| {
-                                let mut dirty = this.drain_session_events(cx);
-                                dirty |= this.drive_terminal_resize();
-                                dirty |= this.poll_action_link_tooltip_delay(cx);
-                                dirty |= this.drive_remote_auto_refresh(window, cx);
-                                dirty |= this.drive_idle_lock();
-                                // ~530ms blink half-period (50ms * 11 ticks) when enabled.
-                                if this.settings.cursor_blink {
-                                    this.terminal_runtime.cursor_blink_tick =
-                                        this.terminal_runtime.cursor_blink_tick.wrapping_add(1);
-                                    if this.terminal_runtime.cursor_blink_tick >= 11 {
-                                        this.terminal_runtime.cursor_blink_tick = 0;
-                                        this.terminal_runtime.cursor_blink_on =
-                                            !this.terminal_runtime.cursor_blink_on;
-                                        dirty = true;
-                                    }
-                                } else {
-                                    if !this.terminal_runtime.cursor_blink_on
-                                        || this.terminal_runtime.cursor_blink_tick != 0
-                                    {
-                                        dirty = true;
-                                    }
-                                    this.terminal_runtime.cursor_blink_on = true;
-                                    this.terminal_runtime.cursor_blink_tick = 0;
-                                }
-                                // Visual BEL flash (~200ms at 50ms ticks).
-                                if this.terminal_runtime.visual_bell_ticks > 0 {
-                                    this.terminal_runtime.visual_bell_ticks =
-                                        this.terminal_runtime.visual_bell_ticks.saturating_sub(1);
-                                    dirty = true;
-                                }
-                                // Large-output protection recovery accounting.
-                                for view in this.terminal_views.values_mut() {
-                                    let before = view.performance_overlay;
-                                    view.tick_performance_overlay();
-                                    if view.performance_overlay != before {
-                                        dirty = true;
-                                    }
-                                }
-                                // Drop overlay only while a platform drag is active.
-                                if this.terminal_file_drop_hover.is_some() && !cx.has_active_drag()
-                                {
-                                    this.terminal_file_drop_hover = None;
-                                    dirty = true;
-                                }
-                                if dirty {
-                                    cx.notify();
-                                }
-                                this.terminal_runtime.event_pump_started
-                            })
-                        })
-                        .unwrap_or(false);
-                    if !keep_running {
-                        break;
-                    }
-                }
-            })
-            .detach();
+        // Visual BEL flash (~200ms at 50ms ticks).
+        if self.terminal_runtime.visual_bell_ticks > 0 {
+            self.terminal_runtime.visual_bell_ticks =
+                self.terminal_runtime.visual_bell_ticks.saturating_sub(1);
+            dirty = true;
+        }
+        // Large-output protection recovery accounting.
+        for view in self.terminal_views.values_mut() {
+            let before = view.performance_overlay;
+            view.tick_performance_overlay();
+            if view.performance_overlay != before {
+                dirty = true;
+            }
+        }
+        // Drop overlay only while a platform drag is active.
+        if self.terminal_file_drop_hover.is_some() && !cx.has_active_drag() {
+            self.terminal_file_drop_hover = None;
+            dirty = true;
+        }
+        if dirty {
+            cx.notify();
+        }
+        self.publish_store_snapshots(cx);
+        self.terminal_runtime.event_pump_started
     }
 
     fn drive_remote_auto_refresh(&mut self, window: &mut Window, cx: &mut Context<Self>) -> bool {

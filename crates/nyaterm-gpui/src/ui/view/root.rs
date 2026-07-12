@@ -1,34 +1,25 @@
 use super::*;
 use gpui::{
-    Context, ImageSource, IntoElement, KeyDownEvent, MouseButton, MouseMoveEvent, MouseUpEvent,
-    NavigationDirection, ObjectFit, Render, SharedString, Window, div, img, rgb,
+    AnyElement, Context, Div, ImageSource, IntoElement, KeyDownEvent, MouseButton, MouseMoveEvent,
+    MouseUpEvent, NavigationDirection, ObjectFit, Render, SharedString, Stateful, Window, div, img,
+    rgb,
 };
 
 impl NyaTermApp {
-    fn drive_root_window_tasks(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+    pub(crate) fn start_after_window_open(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.refresh_window_render_inputs(window, cx);
         self.try_restore_open_tabs(window, cx);
-        if !self.startup_restore_complete {
+        let should_pump = self.stores.startup_restore.update(cx, |store, _| {
+            store.can_pump_queue(self.pending_session_name.is_some())
+        });
+        if should_pump {
             self.pump_startup_restore_queue(window, cx);
         }
 
-        self.ensure_event_pump(window, cx);
+        self.publish_store_snapshots(cx);
     }
-}
 
-impl Render for NyaTermApp {
-    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        self.drive_root_window_tasks(window, cx);
-        let vs = window.viewport_size();
-        self.last_viewport_size = (f32::from(vs.width), f32::from(vs.height));
-        self.refresh_terminal_cell_metrics(cx);
-        if self.ai_chat_focus_pending {
-            window.focus(&self.ai_chat_focus);
-            self.ai_chat_focus_pending = false;
-        }
-        if self.transfer_rename_focus_pending && self.transfer_rename.is_some() {
-            window.focus(&self.transfer_rename_focus);
-            self.transfer_rename_focus_pending = false;
-        }
+    fn root_chrome(&mut self, cx: &mut Context<Self>) -> Stateful<Div> {
         let palette = self.theme_palette();
         let wallpaper_path = self
             .settings
@@ -46,7 +37,7 @@ impl Render for NyaTermApp {
             1.0
         };
         let wallpaper_fit = self.settings.background_image_fit.as_str();
-        let content = div()
+        div()
             .id(SharedString::from("nyaterm-root"))
             .size_full()
             .relative()
@@ -134,56 +125,86 @@ impl Render for NyaTermApp {
                     .size_full()
                     .opacity(content_opacity)
                     .child(self.title_bar(cx))
-                    .child(
-                        if self.main_mode == MainMode::Page
-                            && self.selected_nav == NavItem::Settings
-                        {
-                            div()
-                                .flex()
-                                .flex_1()
-                                .min_h_0()
-                                .bg(rgb(palette.bg))
-                                .child(self.settings_view(cx))
-                                .into_any_element()
-                        } else {
-                            div()
-                                .flex()
-                                .flex_1()
-                                .min_h_0()
-                                .bg(rgb(palette.bg))
-                                .child(self.activity_bar(ActivitySide::Left, cx))
-                                .when(self.left_side_open(), |this| {
-                                    this.child(self.sidebar(cx))
-                                        .child(self.panel_resize_handle(PanelResizeSide::Left, cx))
-                                })
-                                .child(self.main_surface(cx))
-                                .when(self.right_side_open(), |this| {
-                                    this.child(self.panel_resize_handle(PanelResizeSide::Right, cx))
-                                        .child(self.right_panel(cx))
-                                })
-                                .child(self.activity_bar(ActivitySide::Right, cx))
-                                .into_any_element()
-                        },
-                    )
+                    .child(self.workspace_surface(palette, cx))
                     .child(self.status_bar(cx)),
-            );
+            )
+    }
+
+    fn workspace_surface(
+        &mut self,
+        palette: ThemePalette,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
+        if self.main_mode == MainMode::Page && self.selected_nav == NavItem::Settings {
+            div()
+                .flex()
+                .flex_1()
+                .min_h_0()
+                .bg(rgb(palette.bg))
+                .child(self.settings_view(cx))
+                .into_any_element()
+        } else {
+            div()
+                .flex()
+                .flex_1()
+                .min_h_0()
+                .bg(rgb(palette.bg))
+                .child(self.activity_bar(ActivitySide::Left, cx))
+                .when(self.left_side_open(), |this| {
+                    this.child(self.sidebar(cx))
+                        .child(self.panel_resize_handle(PanelResizeSide::Left, cx))
+                })
+                .child(self.main_surface(cx))
+                .when(self.right_side_open(), |this| {
+                    this.child(self.panel_resize_handle(PanelResizeSide::Right, cx))
+                        .child(self.right_panel(cx))
+                })
+                .child(self.activity_bar(ActivitySide::Right, cx))
+                .into_any_element()
+        }
+    }
+
+    fn overlay_host(&mut self, content: Stateful<Div>, cx: &mut Context<Self>) -> impl IntoElement {
+        let overlay = self
+            .stores
+            .overlays
+            .read_with(cx, |store, _| store.snapshot().cloned())
+            .unwrap_or_else(|| crate::entities::OverlaySnapshot {
+                quick_switch_open: self.quick_switch_open,
+                tab_actions_open: self.tab_actions_session_id.is_some(),
+                rename_open: self.rename_session_id.is_some(),
+                color_picker_open: self.color_picker_open,
+                session_info_open: self.session_info_open,
+                startup_command_open: self.startup_command_open,
+                temporary_ssh_link_open: self.temporary_ssh_link_open,
+                multi_line_paste_open: self.multi_line_paste.is_some(),
+                terminal_actions_open: self.terminal_actions_open,
+                terminal_context_menu_open: self.terminal_context_menu.is_some(),
+                action_link_menu_open: self.action_link_menu.is_some(),
+                action_link_tooltip_open: self.action_link_tooltip.is_some(),
+                command_suggestions_open: self.command_suggestions.is_some(),
+                credential_suggestions_open: self.credential_suggestions.is_some(),
+                close_all_sessions_confirm_open: self.close_all_sessions_confirm_open,
+                locked: self.is_locked,
+            });
+
         content
-            .when(self.tab_actions_session_id.is_some(), |this| {
+            .when(overlay.tab_actions_open, |this| {
                 this.child(self.tab_actions_overlay(cx))
             })
-            .when(self.rename_session_id.is_some(), |this| {
+            .when(overlay.rename_open, |this| {
                 this.child(self.rename_session_overlay(cx))
             })
-            .when(self.color_picker_open, |this| {
+            .when(overlay.color_picker_open, |this| {
                 this.child(self.tab_color_picker_overlay(cx))
             })
-            .when(self.session_info_open, |this| {
+            .when(overlay.session_info_open, |this| {
                 this.child(self.session_info_overlay(cx))
             })
-            .when(self.startup_command_open, |this| {
+            .when(overlay.startup_command_open, |this| {
                 this.child(self.startup_command_overlay(cx))
             })
-            .when(self.temporary_ssh_link_open, |this| {
+            .when(overlay.temporary_ssh_link_open, |this| {
                 this.child(self.temporary_ssh_link_overlay(cx))
             })
             .when(self.transfer_move.is_some(), |this| {
@@ -225,32 +246,32 @@ impl Render for NyaTermApp {
             .when(self.transfer_browser_upload_menu.is_some(), |this| {
                 this.child(self.transfer_browser_upload_menu_overlay(cx))
             })
-            .when(self.multi_line_paste.is_some(), |this| {
+            .when(overlay.multi_line_paste_open, |this| {
                 this.child(self.multi_line_paste_overlay(cx))
             })
-            .when(self.terminal_actions_open, |this| {
+            .when(overlay.terminal_actions_open, |this| {
                 this.child(self.terminal_actions_overlay(cx))
             })
-            .when(self.terminal_context_menu.is_some(), |this| {
+            .when(overlay.terminal_context_menu_open, |this| {
                 this.child(self.terminal_context_menu_overlay(cx))
             })
-            .when(self.action_link_menu.is_some(), |this| {
+            .when(overlay.action_link_menu_open, |this| {
                 this.child(self.action_link_menu_overlay(cx))
             })
             .when(
-                self.action_link_tooltip.is_some()
-                    && self.action_link_menu.is_none()
-                    && self.terminal_context_menu.is_none()
+                overlay.action_link_tooltip_open
+                    && !overlay.action_link_menu_open
+                    && !overlay.terminal_context_menu_open
                     && self.translation_dialog.is_none(),
                 |this| this.child(self.action_link_tooltip_overlay(cx)),
             )
             .when(self.translation_dialog.is_some(), |this| {
                 this.child(self.translation_dialog_overlay(cx))
             })
-            .when(self.command_suggestions.is_some(), |this| {
+            .when(overlay.command_suggestions_open, |this| {
                 this.child(self.command_suggestions_overlay(cx))
             })
-            .when(self.credential_suggestions.is_some(), |this| {
+            .when(overlay.credential_suggestions_open, |this| {
                 this.child(self.credential_suggestions_overlay(cx))
             })
             .when(self.sync_groups_open, |this| {
@@ -277,17 +298,24 @@ impl Render for NyaTermApp {
             .when(self.quick_command_import_dialog_open, |this| {
                 this.child(self.quick_command_import_overlay(cx))
             })
-            .when(self.close_all_sessions_confirm_open, |this| {
+            .when(overlay.close_all_sessions_confirm_open, |this| {
                 this.child(self.close_all_sessions_confirm_overlay(cx))
             })
-            .when(self.quick_switch_open, |this| {
+            .when(overlay.quick_switch_open, |this| {
                 this.child(self.quick_switch_overlay(cx))
             })
             .when(self.activity_bar_context_menu.is_some(), |this| {
                 this.child(self.activity_bar_context_menu_overlay(cx))
             })
-            .when(self.is_locked, |this| {
+            .when(overlay.locked, |this| {
                 this.child(self.lock_screen_overlay(cx))
             })
+    }
+}
+
+impl Render for NyaTermApp {
+    fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let content = self.root_chrome(cx);
+        self.overlay_host(content, cx)
     }
 }

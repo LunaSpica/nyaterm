@@ -3,7 +3,7 @@ use super::*;
 impl NyaTermApp {
     pub(in crate::ui::view) fn start_local_session(
         &mut self,
-        window: &mut Window,
+        _window: &mut Window,
         cx: &mut Context<Self>,
     ) {
         if self.pending_session_name.is_some() {
@@ -30,7 +30,6 @@ impl NyaTermApp {
                 self.terminal_status = format!("running {}", short_id(&info.id));
                 self.append_terminal_log(format!("\n# started local PTY {}\n", short_id(&info.id)));
                 self.maybe_auto_start_recording(&info.id, &info.name);
-                self.ensure_event_pump(window, cx);
             }
             Err(error) => {
                 self.terminal_status = format!("failed to start local PTY: {error}");
@@ -132,7 +131,6 @@ impl NyaTermApp {
                 ai_execution_profile,
                 ..
             } => {
-                self.ensure_event_pump(window, cx);
                 let config = match self.build_ssh_session_config(&connection, &mut Vec::new()) {
                     Ok(config) => config,
                     Err(error) => {
@@ -363,7 +361,7 @@ impl NyaTermApp {
         source_connection_id: Option<String>,
         ai_execution_profile: AiExecutionProfile,
         launch_config: SessionLaunchConfig,
-        window: &mut Window,
+        _window: &mut Window,
         cx: &mut Context<Self>,
     ) {
         self.register_session(
@@ -382,7 +380,6 @@ impl NyaTermApp {
         self.append_terminal_log(format!("\n# started {name} ({})\n", short_id(&session_id)));
         self.selected_nav = NavItem::Workspace;
         self.maybe_auto_start_recording(&session_id, &name);
-        self.ensure_event_pump(window, cx);
         cx.notify();
     }
 

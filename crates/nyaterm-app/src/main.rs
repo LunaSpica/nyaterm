@@ -26,7 +26,13 @@ fn main() -> anyhow::Result<()> {
                     window_bounds: Some(WindowBounds::Windowed(bounds)),
                     ..Default::default()
                 },
-                move |_, cx| cx.new(|cx| AppShell::new(app_runtime, cx)),
+                move |window, cx| {
+                    let shell = cx.new(|cx| AppShell::new(app_runtime, cx));
+                    shell.update(cx, |shell, cx| {
+                        shell.start_after_window_open(window, cx);
+                    });
+                    shell
+                },
             )
             .expect("failed to open NyaTerm window");
 

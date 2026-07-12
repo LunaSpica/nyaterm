@@ -5,7 +5,7 @@ use crate::translation_http::translate_text;
 impl NyaTermApp {
     pub(in crate::ui::view) fn run_translation(
         &mut self,
-        window: &mut Window,
+        _window: &mut Window,
         cx: &mut Context<Self>,
     ) {
         if self.translate_pending {
@@ -21,7 +21,6 @@ impl NyaTermApp {
 
         self.translate_pending = true;
         self.translate_status = format!("translating with {}", self.translate_provider);
-        self.ensure_event_pump(window, cx);
         let tx = self.translate_tx.clone();
         let provider = self.translate_provider.clone();
         let target_language = self.translate_target_language.clone();

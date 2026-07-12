@@ -12,7 +12,7 @@ impl NyaTermApp {
     pub(in crate::ui::view) fn duplicate_active_session_with_startup(
         &mut self,
         startup_command: Option<StartupCommandRequest>,
-        window: &mut Window,
+        _window: &mut Window,
         cx: &mut Context<Self>,
     ) {
         if self.pending_session_name.is_some() {
@@ -128,7 +128,6 @@ impl NyaTermApp {
                 }
             }
             SessionLaunchConfig::Ssh(config) => {
-                self.ensure_event_pump(window, cx);
                 self.begin_background_ssh_start(
                     format!("{} duplicate", config.name),
                     config,
@@ -160,7 +159,7 @@ impl NyaTermApp {
     pub(in crate::ui::view) fn multiplex_active_ssh_session_with_startup(
         &mut self,
         startup_command: Option<StartupCommandRequest>,
-        window: &mut Window,
+        _window: &mut Window,
         cx: &mut Context<Self>,
     ) {
         if self.pending_session_name.is_some() {
@@ -194,7 +193,6 @@ impl NyaTermApp {
         let existing_multiplex = self.ssh_multiplex_handles.get(&multiplex_key).cloned();
         let custom_name = self.session_custom_names.get(&source_session_id).cloned();
         let custom_color = self.session_tab_colors.get(&source_session_id).copied();
-        self.ensure_event_pump(window, cx);
         self.begin_background_multiplex_ssh_start(
             format!("{} multiplex", config.name),
             config,
@@ -317,7 +315,7 @@ impl NyaTermApp {
     pub(in crate::ui::view) fn reconnect_session(
         &mut self,
         session_id: String,
-        window: &mut Window,
+        _window: &mut Window,
         cx: &mut Context<Self>,
     ) {
         if self.active_session_busy_actions.get(&session_id).is_some() {
@@ -570,7 +568,6 @@ impl NyaTermApp {
                     self.activate_session_id(&old_id);
                 }
                 self.pending_reconnect_replace_id = Some(old_id.clone());
-                self.ensure_event_pump(window, cx);
                 self.begin_background_ssh_start(
                     format!("{} reconnect", config.name),
                     config,

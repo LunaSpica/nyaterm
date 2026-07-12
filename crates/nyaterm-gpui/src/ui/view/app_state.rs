@@ -64,6 +64,7 @@ impl Default for TerminalRuntimeUiState {
 }
 
 pub struct NyaTermApp {
+    pub(in crate::ui::view) stores: crate::entities::UiStoreHandles,
     pub(in crate::ui::view) runtime: AppRuntime,
     pub(in crate::ui::view) services: NativeServices,
     pub(in crate::ui::view) inventory: MigrationInventory,
@@ -598,20 +599,17 @@ pub struct NyaTermApp {
     pub(in crate::ui::view) terminal_windows_restored: bool,
     /// Whether we already attempted startup restore of global workspace pane splits.
     pub(in crate::ui::view) workspace_pane_layout_restored: bool,
-    pub(in crate::ui::view) open_tabs_restored: bool,
     pub(in crate::ui::view) startup_restore_complete: bool,
-    pub(in crate::ui::view) startup_restore_queue: Vec<nyaterm_core::RestorableOpenTab>,
-    /// Per-tab pane layouts extracted from open_tabs[].root (indexes into expanded session order).
-    pub(in crate::ui::view) startup_pending_pane_layouts:
-        Vec<nyaterm_core::RestorableWorkspacePaneNode>,
-    /// Optional active leaf session indexes (into expanded order) requested after restore.
-    pub(in crate::ui::view) startup_pending_active_pane_indexes: Vec<usize>,
     pub(in crate::ui::view) is_locked: bool,
     pub(in crate::ui::view) last_user_activity_at: Instant,
 }
 
 impl NyaTermApp {
-    pub fn new(runtime: AppRuntime, cx: &mut Context<Self>) -> Self {
+    pub fn new(
+        runtime: AppRuntime,
+        stores: crate::entities::UiStoreHandles,
+        cx: &mut Context<Self>,
+    ) -> Self {
         let legacy = LegacyProject::new(LEGACY_ROOT);
         let inventory = nyaterm_legacy::inventory(&legacy);
         let (session_start_tx, session_start_rx) = mpsc::channel();
@@ -829,6 +827,7 @@ impl NyaTermApp {
         let translate_target_language = translation_settings.target_language.clone();
 
         Self {
+            stores,
             runtime,
             services: NativeServices::new(),
             inventory,
@@ -1319,11 +1318,7 @@ impl NyaTermApp {
             terminal_window_drop: None,
             terminal_windows_restored: false,
             workspace_pane_layout_restored: false,
-            open_tabs_restored: false,
             startup_restore_complete: false,
-            startup_restore_queue: Vec::new(),
-            startup_pending_pane_layouts: Vec::new(),
-            startup_pending_active_pane_indexes: Vec::new(),
             is_locked: false,
             last_user_activity_at: Instant::now(),
         }

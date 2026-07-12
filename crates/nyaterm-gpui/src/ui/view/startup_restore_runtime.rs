@@ -2,6 +2,13 @@ use super::*;
 use nyaterm_core::{RestorableOpenTab, RestorablePaneNode, RestorableWorkspacePaneNode};
 
 impl NyaTermApp {
+    fn mark_startup_restore_complete(&mut self, cx: &mut Context<Self>) {
+        self.startup_restore_complete = true;
+        self.stores.startup_restore.update(cx, |store, _| {
+            store.mark_complete();
+        });
+    }
+
     pub(in crate::ui::view) fn persist_open_tabs(&mut self) {
         if !self.settings.startup_restore {
             return;
@@ -171,42 +178,45 @@ impl NyaTermApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        if self.open_tabs_restored {
+        let should_restore = self
+            .stores
+            .startup_restore
+            .update(cx, |store, _| store.mark_open_tabs_restored());
+        if !should_restore {
             return;
         }
-        self.open_tabs_restored = true;
         if !self.settings.startup_restore {
-            self.startup_restore_complete = true;
+            self.mark_startup_restore_complete(cx);
             return;
         }
         if !self.ordered_sessions().is_empty() {
-            self.startup_restore_complete = true;
+            self.mark_startup_restore_complete(cx);
             return;
         }
         let Ok(store) = ConnectionStore::open_with_portable_key_path(
             self.runtime.config_dir(),
             self.runtime.portable_key_path().map(ToOwned::to_owned),
         ) else {
-            self.startup_restore_complete = true;
+            self.mark_startup_restore_complete(cx);
             return;
         };
         let Ok(tabs) = store.load_open_tabs() else {
-            self.startup_restore_complete = true;
+            self.mark_startup_restore_complete(cx);
             return;
         };
         if tabs.is_empty() {
-            self.startup_restore_complete = true;
+            self.mark_startup_restore_complete(cx);
             return;
         }
         // Expand Tauri per-tab pane trees into a flat restore queue of sessions.
         // Remember every multi-pane root so we can reinstall per-tab trees after connect.
-        self.startup_pending_pane_layouts.clear();
-        self.startup_pending_active_pane_indexes.clear();
+        let mut pending_pane_layouts = Vec::new();
+        let mut pending_active_pane_indexes = Vec::new();
         let mut expanded = Vec::new();
         let mut base_index = 0usize;
         for tab in &tabs {
             if let Some(layout) = tab.workspace_pane_layout_from_root(base_index) {
-                self.startup_pending_pane_layouts.push(layout);
+                pending_pane_layouts.push(layout);
             }
             if let (Some(root), Some(active_pane_id)) =
                 (tab.root.as_ref(), tab.active_pane_id.as_ref())
@@ -216,8 +226,7 @@ impl NyaTermApp {
                     .iter()
                     .position(|leaf| &leaf.id == active_pane_id)
                 {
-                    self.startup_pending_active_pane_indexes
-                        .push(base_index + leaf_offset);
+                    pending_active_pane_indexes.push(base_index + leaf_offset);
                 }
             }
             let sessions = tab.expanded_sessions();
@@ -235,13 +244,23 @@ impl NyaTermApp {
             }
         }
         if expanded.is_empty() {
-            self.startup_restore_complete = true;
+            self.mark_startup_restore_complete(cx);
             return;
         }
-        self.startup_restore_queue = expanded;
+        let queue_len = expanded.len();
+        self.stores.startup_restore.update(cx, |store, _| {
+            store.clear_pending_layouts();
+            for layout in pending_pane_layouts {
+                store.push_pending_pane_layout(layout);
+            }
+            for index in pending_active_pane_indexes {
+                store.push_pending_active_pane_index(index);
+            }
+            store.set_queue(expanded);
+        });
         self.terminal_status = format!(
             "restoring {} workspace tab(s)...",
-            self.startup_restore_queue.len()
+            queue_len
         );
         self.pump_startup_restore_queue(window, cx);
     }
@@ -251,19 +270,26 @@ impl NyaTermApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        if self.startup_restore_complete {
+        if self
+            .stores
+            .startup_restore
+            .update(cx, |store, _| store.complete())
+        {
             return;
         }
         if self.pending_session_name.is_some() {
             return;
         }
-        let Some(tab) = self.startup_restore_queue.first().cloned() else {
+        let Some(tab) = self
+            .stores
+            .startup_restore
+            .update(cx, |store, _| store.pop_next_tab())
+        else {
             self.finish_startup_restore(cx);
             return;
         };
 
         let started = self.start_restorable_open_tab(&tab, window, cx);
-        self.startup_restore_queue.remove(0);
         if !started {
             // Keep draining sync failures until pending async work or queue empty.
             self.pump_startup_restore_queue(window, cx);
@@ -271,18 +297,28 @@ impl NyaTermApp {
     }
 
     fn finish_startup_restore(&mut self, cx: &mut Context<Self>) {
-        if self.startup_restore_complete {
+        if self
+            .stores
+            .startup_restore
+            .update(cx, |store, _| store.complete())
+        {
             return;
         }
-        self.startup_restore_complete = true;
+        self.mark_startup_restore_complete(cx);
         // After all tabs reconnect, attempt multi-leaf then global pane layout restore.
         self.terminal_windows_restored = false;
         self.workspace_pane_layout_restored = false;
         self.try_restore_terminal_window_layout();
         // Prefer stored ui.workspace_pane_layout only when no open_tabs per-tab roots exist.
         // open_tabs[].root maps to per-tab session_pane_roots (Tauri Tab.root).
-        let pending_layouts = std::mem::take(&mut self.startup_pending_pane_layouts);
-        let pending_active = std::mem::take(&mut self.startup_pending_active_pane_indexes);
+        let pending_layouts = self
+            .stores
+            .startup_restore
+            .update(cx, |store, _| store.take_pending_pane_layouts());
+        let pending_active = self
+            .stores
+            .startup_restore
+            .update(cx, |store, _| store.take_pending_active_pane_indexes());
         if pending_layouts.is_empty() {
             self.try_restore_workspace_pane_layout();
         } else {
@@ -350,7 +386,6 @@ impl NyaTermApp {
                     ai_execution_profile,
                     ..
                 } => {
-                    self.ensure_event_pump(window, cx);
                     let config = match self.build_ssh_session_config(&connection, &mut Vec::new()) {
                         Ok(config) => config,
                         Err(error) => {

@@ -221,7 +221,7 @@ impl NyaTermApp {
     pub(in crate::ui::view) fn prompt_transfer_download_directory_and_start(
         &mut self,
         remote_paths: Vec<String>,
-        window: &mut Window,
+        _window: &mut Window,
         cx: &mut Context<Self>,
     ) {
         if remote_paths.is_empty() {
@@ -245,8 +245,6 @@ impl NyaTermApp {
         let duplicate_resolver = (duplicate_policy == SftpDuplicatePolicy::Ask)
             .then(|| self.duplicate_prompts.clone() as Arc<dyn SftpDuplicateResolver>);
         let transfer_options = self.sftp_transfer_options();
-        self.ensure_event_pump(window, cx);
-
         let options = PathPromptOptions {
             files: false,
             directories: true,

@@ -133,7 +133,7 @@ impl NyaTermApp {
     pub(super) fn start_sftp_properties_load_job(
         &mut self,
         remote_path: String,
-        window: &mut Window,
+        _window: &mut Window,
         cx: &mut Context<Self>,
     ) {
         let Some(config) = self.active_ssh_config.clone() else {
@@ -141,7 +141,6 @@ impl NyaTermApp {
             cx.notify();
             return;
         };
-        self.ensure_event_pump(window, cx);
         let id = self.next_transfer_id("sftp-properties");
         self.transfer_jobs.push(TransferJobState {
             id: id.clone(),
@@ -243,7 +242,7 @@ impl NyaTermApp {
         remote_path: String,
         parent_path: String,
         update: SftpAttributeUpdate,
-        window: &mut Window,
+        _window: &mut Window,
         cx: &mut Context<Self>,
     ) {
         let Some(config) = self.active_ssh_config.clone() else {
@@ -251,7 +250,6 @@ impl NyaTermApp {
             cx.notify();
             return;
         };
-        self.ensure_event_pump(window, cx);
         let id = self.next_transfer_id("sftp-update-properties");
         self.transfer_jobs.push(TransferJobState {
             id: id.clone(),

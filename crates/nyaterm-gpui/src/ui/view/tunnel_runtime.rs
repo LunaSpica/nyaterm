@@ -1292,7 +1292,7 @@ impl NyaTermApp {
     pub(in crate::ui::view) fn start_tunnel_job(
         &mut self,
         tunnel: TunnelConfig,
-        window: &mut Window,
+        _window: &mut Window,
         cx: &mut Context<Self>,
     ) {
         if self.pending_tunnels.iter().any(|id| id == &tunnel.id) {
@@ -1362,7 +1362,6 @@ impl NyaTermApp {
                 .then_some(tunnel.target_port),
         };
 
-        self.ensure_event_pump(window, cx);
         self.pending_tunnels.push(tunnel.id.clone());
         self.terminal_status = format!("opening tunnel {}", tunnel_name(&tunnel));
         let tunnel_manager = self.tunnel_manager.clone();

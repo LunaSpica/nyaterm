@@ -36,7 +36,7 @@ impl NyaTermApp {
         &mut self,
         entry: SftpFileEntry,
         action: AiCustomActionConfig,
-        window: &mut Window,
+        _window: &mut Window,
         cx: &mut Context<Self>,
     ) {
         if entry.file_type == SftpFileType::Directory {
@@ -66,7 +66,6 @@ impl NyaTermApp {
             return;
         };
 
-        self.ensure_event_pump(window, cx);
         self.transfer_selected_remote_path = Some(entry.path.clone());
         self.transfer_remote_path = entry.path.clone();
 
@@ -255,7 +254,7 @@ impl NyaTermApp {
     pub(super) fn open_transfer_external(
         &mut self,
         entry: SftpFileEntry,
-        window: &mut Window,
+        _window: &mut Window,
         cx: &mut Context<Self>,
     ) {
         if entry.file_type == SftpFileType::Directory {
@@ -272,8 +271,6 @@ impl NyaTermApp {
 
         self.transfer_selected_remote_path = Some(entry.path.clone());
         self.transfer_remote_path = entry.path.clone();
-        self.ensure_event_pump(window, cx);
-
         let remote_path = entry.path.clone();
         let local_path = self.transfer_external_open_path(&entry);
         let default_editor = self.settings.transfer_default_editor.clone();
@@ -418,7 +415,7 @@ impl NyaTermApp {
     pub(super) fn start_sftp_editor_load_job(
         &mut self,
         remote_path: String,
-        window: &mut Window,
+        _window: &mut Window,
         cx: &mut Context<Self>,
     ) {
         let Some(config) = self.active_ssh_config.clone() else {
@@ -426,7 +423,6 @@ impl NyaTermApp {
             cx.notify();
             return;
         };
-        self.ensure_event_pump(window, cx);
         let id = self.next_transfer_id("sftp-open-text");
         self.transfer_jobs.push(TransferJobState {
             id: id.clone(),
@@ -513,7 +509,7 @@ impl NyaTermApp {
         expected_modified_at: Option<u64>,
         expected_size: Option<u64>,
         force: bool,
-        window: &mut Window,
+        _window: &mut Window,
         cx: &mut Context<Self>,
     ) {
         let Some(config) = self.active_ssh_config.clone() else {
@@ -521,7 +517,6 @@ impl NyaTermApp {
             cx.notify();
             return;
         };
-        self.ensure_event_pump(window, cx);
         let id = self.next_transfer_id("sftp-save-text");
         self.transfer_jobs.push(TransferJobState {
             id: id.clone(),

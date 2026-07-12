@@ -12,7 +12,7 @@ impl NyaTermApp {
     pub(in crate::ui::view) fn start_sftp_list_job_with_select_after(
         &mut self,
         select_after: Option<String>,
-        window: &mut Window,
+        _window: &mut Window,
         cx: &mut Context<Self>,
     ) {
         let Some(config) = self.active_ssh_config.clone() else {
@@ -21,7 +21,6 @@ impl NyaTermApp {
             cx.notify();
             return;
         };
-        self.ensure_event_pump(window, cx);
         let remote_path = self.normalized_transfer_remote_path();
         self.transfer_browser_path = remote_path.clone();
         self.transfer_browser_status = format!("Listing {remote_path}...");
@@ -58,7 +57,7 @@ impl NyaTermApp {
 
     pub(in crate::ui::view) fn start_transfer_sync_cwd_job(
         &mut self,
-        window: &mut Window,
+        _window: &mut Window,
         cx: &mut Context<Self>,
     ) {
         if self.transfer_sync_cwd_job_running() {
@@ -72,7 +71,6 @@ impl NyaTermApp {
             cx.notify();
             return;
         };
-        self.ensure_event_pump(window, cx);
         self.transfer_auto_sync_cwd_last_at = Some(Instant::now());
         let id = self.next_transfer_id("sftp-sync-cwd");
         self.transfer_jobs.push(TransferJobState {
@@ -215,7 +213,7 @@ impl NyaTermApp {
         &mut self,
         remote_path: String,
         local_path: PathBuf,
-        window: &mut Window,
+        _window: &mut Window,
         cx: &mut Context<Self>,
     ) {
         let Some(config) = self.active_ssh_config.clone() else {
@@ -228,7 +226,6 @@ impl NyaTermApp {
         let duplicate_resolver = (duplicate_policy == SftpDuplicatePolicy::Ask)
             .then(|| self.duplicate_prompts.clone() as Arc<dyn SftpDuplicateResolver>);
         let transfer_options = self.sftp_transfer_options();
-        self.ensure_event_pump(window, cx);
         self.enqueue_sftp_download_job_for_target(
             config,
             remote_path,
@@ -297,12 +294,11 @@ impl NyaTermApp {
 
     pub(in crate::ui::view) fn start_sftp_upload_job(
         &mut self,
-        window: &mut Window,
+        _window: &mut Window,
         cx: &mut Context<Self>,
     ) {
         let local_path = self.normalized_transfer_local_path();
         let remote_path = self.normalized_transfer_remote_path();
-        self.ensure_event_pump(window, cx);
         self.start_sftp_upload_job_for_target(local_path, remote_path, cx);
     }
 
@@ -499,7 +495,7 @@ impl NyaTermApp {
     pub(in crate::ui::view) fn retry_transfer_job(
         &mut self,
         job_id: String,
-        window: &mut Window,
+        _window: &mut Window,
         cx: &mut Context<Self>,
     ) {
         let Some(config) = self.active_ssh_config.clone() else {
@@ -532,7 +528,6 @@ impl NyaTermApp {
                 remote_path,
                 local_path,
             } => {
-                self.ensure_event_pump(window, cx);
                 let duplicate_policy = self.transfer_duplicate_policy;
                 let duplicate_resolver = (duplicate_policy == SftpDuplicatePolicy::Ask)
                     .then(|| self.duplicate_prompts.clone() as Arc<dyn SftpDuplicateResolver>);
@@ -577,7 +572,6 @@ impl NyaTermApp {
                 local_path,
                 remote_path,
             } => {
-                self.ensure_event_pump(window, cx);
                 let duplicate_policy = self.transfer_duplicate_policy;
                 let duplicate_resolver = (duplicate_policy == SftpDuplicatePolicy::Ask)
                     .then(|| self.duplicate_prompts.clone() as Arc<dyn SftpDuplicateResolver>);

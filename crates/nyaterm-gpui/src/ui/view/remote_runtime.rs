@@ -304,7 +304,7 @@ impl NyaTermApp {
 
     pub(in crate::ui::view) fn refresh_processes(
         &mut self,
-        window: &mut Window,
+        _window: &mut Window,
         cx: &mut Context<Self>,
     ) {
         let Some(config) = self.active_ssh_config.clone() else {
@@ -323,7 +323,6 @@ impl NyaTermApp {
         self.process_menu_pid = None;
         self.process_last_refresh_at = Some(Instant::now());
         self.process_status = "listing remote processes".to_string();
-        self.ensure_event_pump(window, cx);
         let tx = self.process_tx.clone();
         std::thread::spawn(move || {
             let result = SshProcessService::new(config)
@@ -339,7 +338,7 @@ impl NyaTermApp {
         &mut self,
         pid: u32,
         signal: &'static str,
-        window: &mut Window,
+        _window: &mut Window,
         cx: &mut Context<Self>,
     ) {
         let Some(config) = self.active_ssh_config.clone() else {
@@ -356,7 +355,6 @@ impl NyaTermApp {
 
         self.process_pending = true;
         self.process_status = format!("sending {signal} to pid {pid}");
-        self.ensure_event_pump(window, cx);
         let tx = self.process_tx.clone();
         std::thread::spawn(move || {
             let result = (|| {
@@ -379,7 +377,7 @@ impl NyaTermApp {
         &mut self,
         pid: u32,
         nice: i32,
-        window: &mut Window,
+        _window: &mut Window,
         cx: &mut Context<Self>,
     ) {
         let Some(config) = self.active_ssh_config.clone() else {
@@ -396,7 +394,6 @@ impl NyaTermApp {
 
         self.process_pending = true;
         self.process_status = format!("renicing pid {pid} to {nice}");
-        self.ensure_event_pump(window, cx);
         let tx = self.process_tx.clone();
         std::thread::spawn(move || {
             let result = (|| {
@@ -417,7 +414,7 @@ impl NyaTermApp {
 
     pub(in crate::ui::view) fn refresh_stats(
         &mut self,
-        window: &mut Window,
+        _window: &mut Window,
         cx: &mut Context<Self>,
     ) {
         let Some(config) = self.active_ssh_config.clone() else {
@@ -435,7 +432,6 @@ impl NyaTermApp {
         self.stats_pending = true;
         self.stats_last_refresh_at = Some(Instant::now());
         self.stats_status = "loading remote system stats".to_string();
-        self.ensure_event_pump(window, cx);
         let tx = self.stats_tx.clone();
         std::thread::spawn(move || {
             let result = RemoteStatsService::new(config)
@@ -458,7 +454,7 @@ impl NyaTermApp {
 
     pub(in crate::ui::view) fn refresh_docker(
         &mut self,
-        window: &mut Window,
+        _window: &mut Window,
         cx: &mut Context<Self>,
     ) {
         let Some(config) = self.active_ssh_config.clone() else {
@@ -476,7 +472,6 @@ impl NyaTermApp {
         self.docker_pending = true;
         self.docker_last_refresh_at = Some(Instant::now());
         self.docker_status = "loading Docker overview".to_string();
-        self.ensure_event_pump(window, cx);
         let tx = self.docker_tx.clone();
         std::thread::spawn(move || {
             let result = DockerService::new(config)
@@ -492,7 +487,7 @@ impl NyaTermApp {
         &mut self,
         container_id: String,
         action: &'static str,
-        window: &mut Window,
+        _window: &mut Window,
         cx: &mut Context<Self>,
     ) {
         let Some(config) = self.active_ssh_config.clone() else {
@@ -511,7 +506,6 @@ impl NyaTermApp {
         self.docker_status = format!("Docker {action} {}", compact_id(&container_id));
         self.docker_details = None;
         self.docker_details_container_id = None;
-        self.ensure_event_pump(window, cx);
         let tx = self.docker_tx.clone();
         std::thread::spawn(move || {
             let result = (|| {
@@ -532,7 +526,7 @@ impl NyaTermApp {
     pub(in crate::ui::view) fn load_docker_details(
         &mut self,
         container_id: String,
-        window: &mut Window,
+        _window: &mut Window,
         cx: &mut Context<Self>,
     ) {
         let Some(config) = self.active_ssh_config.clone() else {
@@ -551,7 +545,6 @@ impl NyaTermApp {
         self.docker_details_container_id = Some(container_id.clone());
         self.docker_details_last_refresh_at = Some(Instant::now());
         self.docker_status = format!("loading details for {}", compact_id(&container_id));
-        self.ensure_event_pump(window, cx);
         let tx = self.docker_tx.clone();
         std::thread::spawn(move || {
             let result = DockerService::new(config)
@@ -578,7 +571,7 @@ impl NyaTermApp {
     pub(in crate::ui::view) fn load_docker_logs(
         &mut self,
         container_id: String,
-        window: &mut Window,
+        _window: &mut Window,
         cx: &mut Context<Self>,
     ) {
         let Some(config) = self.active_ssh_config.clone() else {
@@ -595,7 +588,6 @@ impl NyaTermApp {
 
         self.docker_pending = true;
         self.docker_status = format!("loading logs for {}", compact_id(&container_id));
-        self.ensure_event_pump(window, cx);
         let tx = self.docker_tx.clone();
         std::thread::spawn(move || {
             let result = DockerService::new(config)
@@ -712,7 +704,7 @@ impl NyaTermApp {
         &mut self,
         project_name: String,
         config_files: Option<String>,
-        window: &mut Window,
+        _window: &mut Window,
         cx: &mut Context<Self>,
     ) {
         let Some(config) = self.active_ssh_config.clone() else {
@@ -731,7 +723,6 @@ impl NyaTermApp {
         self.docker_pending = true;
         self.docker_status = format!("loading compose services for {project_name}");
         self.docker_compose_service_errors.remove(&key);
-        self.ensure_event_pump(window, cx);
         let tx = self.docker_tx.clone();
         std::thread::spawn(move || {
             let result = DockerService::new(config)
@@ -753,7 +744,7 @@ impl NyaTermApp {
         config_files: Option<String>,
         service_name: String,
         action: &'static str,
-        window: &mut Window,
+        _window: &mut Window,
         cx: &mut Context<Self>,
     ) {
         let Some(config) = self.active_ssh_config.clone() else {
@@ -772,7 +763,6 @@ impl NyaTermApp {
         let key = docker_compose_project_key(&project_name, config_files.as_deref());
         self.docker_pending = true;
         self.docker_status = format!("compose {action} {service_name}");
-        self.ensure_event_pump(window, cx);
         let tx = self.docker_tx.clone();
         std::thread::spawn(move || {
             let result = (|| {
@@ -804,7 +794,7 @@ impl NyaTermApp {
         project_name: String,
         config_files: Option<String>,
         action: &'static str,
-        window: &mut Window,
+        _window: &mut Window,
         cx: &mut Context<Self>,
     ) {
         let Some(config) = self.active_ssh_config.clone() else {
@@ -824,7 +814,6 @@ impl NyaTermApp {
         self.docker_pending = true;
         self.docker_status = format!("compose {action} {project_name}");
         self.docker_compose_service_errors.remove(&key);
-        self.ensure_event_pump(window, cx);
         let tx = self.docker_tx.clone();
         std::thread::spawn(move || {
             let result = (|| {
@@ -870,7 +859,7 @@ impl NyaTermApp {
 
     pub(in crate::ui::view) fn confirm_docker_action(
         &mut self,
-        window: &mut Window,
+        _window: &mut Window,
         cx: &mut Context<Self>,
     ) {
         let Some(confirm) = self.docker_confirm.clone() else {
@@ -891,7 +880,6 @@ impl NyaTermApp {
 
         self.docker_pending = true;
         self.docker_status = format!("running {}", confirm.title);
-        self.ensure_event_pump(window, cx);
         let tx = self.docker_tx.clone();
         std::thread::spawn(move || {
             let result = (|| {

@@ -103,7 +103,7 @@ impl NyaTermApp {
         parent_path: String,
         mode: u32,
         open_after_create: bool,
-        window: &mut Window,
+        _window: &mut Window,
         cx: &mut Context<Self>,
     ) {
         let Some(config) = self.active_ssh_config.clone() else {
@@ -112,7 +112,6 @@ impl NyaTermApp {
             cx.notify();
             return;
         };
-        self.ensure_event_pump(window, cx);
         let id = self.next_transfer_id("sftp-mkdir");
         self.transfer_jobs.push(TransferJobState {
             id: id.clone(),
@@ -243,7 +242,7 @@ impl NyaTermApp {
         remote_path: String,
         parent_path: String,
         mode: u32,
-        window: &mut Window,
+        _window: &mut Window,
         cx: &mut Context<Self>,
     ) {
         let Some(config) = self.active_ssh_config.clone() else {
@@ -252,7 +251,6 @@ impl NyaTermApp {
             cx.notify();
             return;
         };
-        self.ensure_event_pump(window, cx);
         let id = self.next_transfer_id("sftp-create-file");
         self.transfer_jobs.push(TransferJobState {
             id: id.clone(),
@@ -410,7 +408,7 @@ impl NyaTermApp {
         link_path: String,
         target_path: String,
         parent_path: String,
-        window: &mut Window,
+        _window: &mut Window,
         cx: &mut Context<Self>,
     ) {
         let Some(config) = self.active_ssh_config.clone() else {
@@ -419,7 +417,6 @@ impl NyaTermApp {
             cx.notify();
             return;
         };
-        self.ensure_event_pump(window, cx);
         let id = self.next_transfer_id("sftp-symlink");
         self.transfer_jobs.push(TransferJobState {
             id: id.clone(),
@@ -583,7 +580,7 @@ impl NyaTermApp {
         &mut self,
         old_path: String,
         new_path: String,
-        window: &mut Window,
+        _window: &mut Window,
         cx: &mut Context<Self>,
     ) {
         let Some(config) = self.active_ssh_config.clone() else {
@@ -593,7 +590,6 @@ impl NyaTermApp {
             return;
         };
         let parent_path = remote_parent_path(&old_path);
-        self.ensure_event_pump(window, cx);
         let id = self.next_transfer_id("sftp-rename");
         self.transfer_jobs.push(TransferJobState {
             id: id.clone(),
@@ -739,7 +735,7 @@ impl NyaTermApp {
         &mut self,
         old_path: String,
         new_path: String,
-        window: &mut Window,
+        _window: &mut Window,
         cx: &mut Context<Self>,
     ) {
         let Some(config) = self.active_ssh_config.clone() else {
@@ -749,7 +745,6 @@ impl NyaTermApp {
             return;
         };
         let parent_path = remote_parent_path(&old_path);
-        self.ensure_event_pump(window, cx);
         let id = self.next_transfer_id("sftp-move");
         self.transfer_jobs.push(TransferJobState {
             id: id.clone(),
@@ -864,7 +859,7 @@ impl NyaTermApp {
     pub(super) fn start_sftp_delete_job(
         &mut self,
         remote_path: String,
-        window: &mut Window,
+        _window: &mut Window,
         cx: &mut Context<Self>,
     ) {
         let Some(config) = self.active_ssh_config.clone() else {
@@ -874,7 +869,6 @@ impl NyaTermApp {
             return;
         };
         let parent_path = remote_parent_path(&remote_path);
-        self.ensure_event_pump(window, cx);
         let id = self.next_transfer_id("sftp-delete");
         self.transfer_jobs.push(TransferJobState {
             id: id.clone(),

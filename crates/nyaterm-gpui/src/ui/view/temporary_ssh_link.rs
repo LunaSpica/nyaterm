@@ -29,7 +29,7 @@ impl NyaTermApp {
 
     pub(in crate::ui::view) fn submit_temporary_ssh_link_dialog(
         &mut self,
-        window: &mut Window,
+        _window: &mut Window,
         cx: &mut Context<Self>,
     ) {
         if self.pending_session_name.is_some() {
@@ -53,7 +53,6 @@ impl NyaTermApp {
         self.temporary_ssh_link_open = false;
         self.temporary_ssh_link_draft.clear();
         self.temporary_ssh_link_error = None;
-        self.ensure_event_pump(window, cx);
         self.begin_background_ssh_start(
             parsed.name,
             config,
