@@ -58,6 +58,8 @@ pub struct NyaTermApp {
     pub(in crate::ui::view) quick_command_selected_category: String,
     pub(in crate::ui::view) quick_command_sort_mode: QuickCommandSortMode,
     pub(in crate::ui::view) quick_command_view_mode: QuickCommandViewMode,
+    /// Command id with open row overflow menu (Tauri QuickCommands more menu).
+    pub(in crate::ui::view) quick_command_menu_id: Option<String>,
     pub(in crate::ui::view) quick_command_editor: Option<QuickCommandEditorState>,
     pub(in crate::ui::view) quick_command_delete: Option<QuickCommandDeleteState>,
     pub(in crate::ui::view) quick_command_details: Option<QuickCommandDetailsState>,
@@ -842,6 +844,7 @@ impl NyaTermApp {
             quick_command_view_mode: quick_command_view_mode_from_setting(
                 &settings.ui_quick_cmd_view_mode,
             ),
+            quick_command_menu_id: None,
             quick_command_editor: None,
             quick_command_delete: None,
             quick_command_details: None,

@@ -103,6 +103,7 @@ impl NyaTermApp {
                         )
                         .on_click(cx.listener(move |this, _, _, cx| {
                             this.quick_command_selected_category = id.clone();
+                            this.quick_command_menu_id = None;
                             cx.notify();
                         })),
                 )
@@ -195,11 +196,14 @@ impl NyaTermApp {
                 } else {
                     "execute"
                 };
+                let menu_open = self.quick_command_menu_id.as_deref() == Some(command.id.as_str());
+                let menu_command_id = command.id.clone();
                 let command_item = match self.quick_command_view_mode {
                     QuickCommandViewMode::Tile => div()
                         .id(SharedString::from(format!(
                             "quick-command-tile-{command_id}"
                         )))
+                        .relative()
                         .min_w(px(132.))
                         .max_w(px(220.))
                         .h(px(34.))
@@ -224,6 +228,7 @@ impl NyaTermApp {
                                 .gap_2()
                                 .cursor_pointer()
                                 .on_click(cx.listener(move |this, _, _, cx| {
+                                    this.quick_command_menu_id = None;
                                     this.run_quick_command_by_id(run_command_id.clone(), cx);
                                 }))
                                 .child(quick_command_icon_mark(
@@ -258,7 +263,11 @@ impl NyaTermApp {
                                 ),
                         )
                         .child(status_pill(
-                            if execution_mode == "append" { "append" } else { "exec" },
+                            if execution_mode == "append" {
+                                "append"
+                            } else {
+                                "exec"
+                            },
                             if execution_mode == "append" {
                                 rgb(palette.warning)
                             } else {
@@ -272,7 +281,10 @@ impl NyaTermApp {
                         ))
                         .child(icon_button(
                             format!("quick-command-tile-detail-{command_id}"),
-                            "ⓘ", self.theme_palette(),cx.listener(move |this, _, window, cx| {
+                            "ⓘ",
+                            self.theme_palette(),
+                            cx.listener(move |this, _, window, cx| {
+                                this.quick_command_menu_id = None;
                                 this.open_quick_command_details(
                                     detail_command_id.clone(),
                                     window,
@@ -280,72 +292,110 @@ impl NyaTermApp {
                                 );
                             }),
                         ))
-                        .when(can_send_to_all, |this| {
-                            this.child(icon_button(
-                                format!("quick-command-tile-all-{command_id}"),
-                                "≫", self.theme_palette(),cx.listener(move |this, _, _, cx| {
-                                    this.send_quick_command_to_all_by_id(
-                                        all_command_id.clone(),
-                                        cx,
-                                    );
-                                }),
-                            ))
-                        })
-                        .into_any_element(),
-                    QuickCommandViewMode::Compact => {
-                        // Tauri compact: single 32px row, label + mono command, icon actions.
-                        let mut actions = div().flex().items_center().gap_1();
-                        actions = actions.child(icon_button(
-                            format!("quick-command-compact-run-{command_id}"),
-                            "▶", self.theme_palette(),cx.listener(move |this, _, _, cx| {
-                                this.run_quick_command_by_id(run_command_id.clone(), cx);
+                        .child(quick_command_more_menu(
+                            palette,
+                            &command_id,
+                            menu_open,
+                            can_send_to_all,
+                            cx.listener(move |this, _, _, cx| {
+                                cx.stop_propagation();
+                                if this.quick_command_menu_id.as_deref()
+                                    == Some(menu_command_id.as_str())
+                                {
+                                    this.quick_command_menu_id = None;
+                                } else {
+                                    this.quick_command_menu_id = Some(menu_command_id.clone());
+                                }
+                                cx.notify();
                             }),
-                        ));
-                        actions = actions.child(icon_button(
-                            format!("quick-command-compact-detail-{command_id}"),
-                            "ⓘ", self.theme_palette(),cx.listener(move |this, _, window, cx| {
-                                this.open_quick_command_details(
-                                    detail_command_id.clone(),
-                                    window,
-                                    cx,
-                                );
-                            }),
-                        ));
-                        actions = actions.child(icon_button(
-                            format!("quick-command-compact-edit-{command_id}"),
-                            "✎", self.theme_palette(),cx.listener(move |this, _, window, cx| {
+                            cx.listener(move |this, _, window, cx| {
+                                cx.stop_propagation();
+                                this.quick_command_menu_id = None;
                                 this.open_edit_quick_command_editor(
                                     edit_command_id.clone(),
                                     window,
                                     cx,
                                 );
                             }),
-                        ));
-                        if can_send_to_all {
-                            actions = actions.child(icon_button(
-                                format!("quick-command-compact-all-{command_id}"),
-                                "≫", self.theme_palette(),cx.listener(move |this, _, _, cx| {
-                                    this.send_quick_command_to_all_by_id(
-                                        all_command_id.clone(),
-                                        cx,
-                                    );
-                                }),
-                            ));
-                        }
-                        actions = actions.child(icon_button(
-                            format!("quick-command-compact-delete-{command_id}"),
-                            "×", self.theme_palette(),cx.listener(move |this, _, _, cx| {
+                            cx.listener(move |this, _, _, cx| {
+                                cx.stop_propagation();
+                                this.quick_command_menu_id = None;
+                                this.send_quick_command_to_all_by_id(all_command_id.clone(), cx);
+                            }),
+                            cx.listener(move |this, _, _, cx| {
+                                cx.stop_propagation();
+                                this.quick_command_menu_id = None;
                                 this.open_delete_quick_command_confirm(
                                     delete_command_id.clone(),
                                     cx,
                                 );
                             }),
-                        ));
+                        ))
+                        .into_any_element(),
+                    QuickCommandViewMode::Compact => {
+                        // Tauri compact: send + details + more (edit / send-all / delete).
+                        let actions = quick_command_row_actions(
+                            palette,
+                            &command_id,
+                            false,
+                            execution_mode,
+                            menu_open,
+                            can_send_to_all,
+                            cx.listener(move |this, _, _, cx| {
+                                this.quick_command_menu_id = None;
+                                this.run_quick_command_by_id(run_command_id.clone(), cx);
+                            }),
+                            cx.listener(move |this, _, window, cx| {
+                                this.quick_command_menu_id = None;
+                                this.open_quick_command_details(
+                                    detail_command_id.clone(),
+                                    window,
+                                    cx,
+                                );
+                            }),
+                            cx.listener({
+                                let menu_command_id = command_id.clone();
+                                move |this, _, _, cx| {
+                                    cx.stop_propagation();
+                                    if this.quick_command_menu_id.as_deref()
+                                        == Some(menu_command_id.as_str())
+                                    {
+                                        this.quick_command_menu_id = None;
+                                    } else {
+                                        this.quick_command_menu_id = Some(menu_command_id.clone());
+                                    }
+                                    cx.notify();
+                                }
+                            }),
+                            cx.listener(move |this, _, window, cx| {
+                                cx.stop_propagation();
+                                this.quick_command_menu_id = None;
+                                this.open_edit_quick_command_editor(
+                                    edit_command_id.clone(),
+                                    window,
+                                    cx,
+                                );
+                            }),
+                            cx.listener(move |this, _, _, cx| {
+                                cx.stop_propagation();
+                                this.quick_command_menu_id = None;
+                                this.send_quick_command_to_all_by_id(all_command_id.clone(), cx);
+                            }),
+                            cx.listener(move |this, _, _, cx| {
+                                cx.stop_propagation();
+                                this.quick_command_menu_id = None;
+                                this.open_delete_quick_command_confirm(
+                                    delete_command_id.clone(),
+                                    cx,
+                                );
+                            }),
+                        );
 
                         div()
                             .id(SharedString::from(format!(
                                 "quick-command-compact-{command_id}"
                             )))
+                            .relative()
                             .h(px(32.))
                             .w_full()
                             .rounded_sm()
@@ -367,6 +417,7 @@ impl NyaTermApp {
                                     .gap_1()
                                     .cursor_pointer()
                                     .on_click(cx.listener(move |this, _, _, cx| {
+                                        this.quick_command_menu_id = None;
                                         this.run_quick_command_by_id(
                                             compact_click_command_id.clone(),
                                             cx,
@@ -410,72 +461,69 @@ impl NyaTermApp {
                             .into_any_element()
                     }
                     QuickCommandViewMode::List => {
-                        // Tauri list: ~44px single-line row with label+command stack and trailing actions.
-                        let mut actions = div().flex().items_center().gap_1();
-                        actions = actions.child(status_pill(
-                            if execution_mode == "append" { "append" } else { "exec" },
-                            if execution_mode == "append" {
-                                rgb(palette.warning)
-                            } else {
-                                rgb(palette.success)
-                            },
-                            if execution_mode == "append" {
-                                rgb(0x32280f)
-                            } else {
-                                rgb(palette.hover)
-                            },
-                        ));
-                        actions = actions.child(icon_button(
-                            format!("quick-command-list-run-{command_id}"),
-                            "▶", self.theme_palette(),cx.listener(move |this, _, _, cx| {
+                        // Tauri list: badge + send + details + more.
+                        let actions = quick_command_row_actions(
+                            palette,
+                            &command_id,
+                            true,
+                            execution_mode,
+                            menu_open,
+                            can_send_to_all,
+                            cx.listener(move |this, _, _, cx| {
+                                this.quick_command_menu_id = None;
                                 this.run_quick_command_by_id(run_command_id.clone(), cx);
                             }),
-                        ));
-                        actions = actions.child(icon_button(
-                            format!("quick-command-detail-{command_id}"),
-                            "ⓘ", self.theme_palette(),cx.listener(move |this, _, window, cx| {
+                            cx.listener(move |this, _, window, cx| {
+                                this.quick_command_menu_id = None;
                                 this.open_quick_command_details(
                                     detail_command_id.clone(),
                                     window,
                                     cx,
                                 );
                             }),
-                        ));
-                        actions = actions.child(icon_button(
-                            format!("quick-command-edit-{command_id}"),
-                            "✎", self.theme_palette(),cx.listener(move |this, _, window, cx| {
+                            cx.listener({
+                                let menu_command_id = command_id.clone();
+                                move |this, _, _, cx| {
+                                    cx.stop_propagation();
+                                    if this.quick_command_menu_id.as_deref()
+                                        == Some(menu_command_id.as_str())
+                                    {
+                                        this.quick_command_menu_id = None;
+                                    } else {
+                                        this.quick_command_menu_id = Some(menu_command_id.clone());
+                                    }
+                                    cx.notify();
+                                }
+                            }),
+                            cx.listener(move |this, _, window, cx| {
+                                cx.stop_propagation();
+                                this.quick_command_menu_id = None;
                                 this.open_edit_quick_command_editor(
                                     edit_command_id.clone(),
                                     window,
                                     cx,
                                 );
                             }),
-                        ));
-                        if can_send_to_all {
-                            actions = actions.child(icon_button(
-                                format!("quick-command-all-{command_id}"),
-                                "≫", self.theme_palette(),cx.listener(move |this, _, _, cx| {
-                                    this.send_quick_command_to_all_by_id(
-                                        all_command_id.clone(),
-                                        cx,
-                                    );
-                                }),
-                            ));
-                        }
-                        actions = actions.child(icon_button(
-                            format!("quick-command-delete-{command_id}"),
-                            "×", self.theme_palette(),cx.listener(move |this, _, _, cx| {
+                            cx.listener(move |this, _, _, cx| {
+                                cx.stop_propagation();
+                                this.quick_command_menu_id = None;
+                                this.send_quick_command_to_all_by_id(all_command_id.clone(), cx);
+                            }),
+                            cx.listener(move |this, _, _, cx| {
+                                cx.stop_propagation();
+                                this.quick_command_menu_id = None;
                                 this.open_delete_quick_command_confirm(
                                     delete_command_id.clone(),
                                     cx,
                                 );
                             }),
-                        ));
+                        );
 
                         div()
                             .id(SharedString::from(format!(
                                 "quick-command-list-{command_id}"
                             )))
+                            .relative()
                             .min_h(px(44.))
                             .w_full()
                             .rounded_md()
@@ -500,6 +548,7 @@ impl NyaTermApp {
                                     .gap_2()
                                     .cursor_pointer()
                                     .on_click(cx.listener(move |this, _, _, cx| {
+                                        this.quick_command_menu_id = None;
                                         this.run_quick_command_by_id(
                                             list_header_command_id.clone(),
                                             cx,
@@ -525,13 +574,14 @@ impl NyaTermApp {
                                                     .child(
                                                         div()
                                                             .min_w_0()
-                                                            .text_size(px(12.))
-                                                            .font_weight(FontWeight(600.))
+                                                            .flex_1()
+                                                            .text_xs()
+                                                            .font_weight(FontWeight(700.))
                                                             .text_color(rgb(palette.text))
                                                             .overflow_hidden()
                                                             .child(truncate_preview(
                                                                 &command.label,
-                                                                44,
+                                                                40,
                                                             )),
                                                     )
                                                     .when(
@@ -564,6 +614,7 @@ impl NyaTermApp {
                             .into_any_element()
                     }
                 };
+
                 rows = rows.child(command_item);
             }
         }
@@ -775,4 +826,184 @@ impl NyaTermApp {
                     ),
             )
     }
+}
+
+
+fn quick_command_row_actions(
+    palette: crate::ui::theme::ThemePalette,
+    command_id: &str,
+    show_badge: bool,
+    execution_mode: &str,
+    menu_open: bool,
+    can_send_to_all: bool,
+    on_run: impl Fn(&gpui::ClickEvent, &mut gpui::Window, &mut gpui::App) + 'static,
+    on_details: impl Fn(&gpui::ClickEvent, &mut gpui::Window, &mut gpui::App) + 'static,
+    on_more: impl Fn(&gpui::ClickEvent, &mut gpui::Window, &mut gpui::App) + 'static,
+    on_edit: impl Fn(&gpui::ClickEvent, &mut gpui::Window, &mut gpui::App) + 'static,
+    on_send_all: impl Fn(&gpui::ClickEvent, &mut gpui::Window, &mut gpui::App) + 'static,
+    on_delete: impl Fn(&gpui::ClickEvent, &mut gpui::Window, &mut gpui::App) + 'static,
+) -> impl IntoElement {
+    // Tauri renderCommandActions: optional badge + Send + Details + More menu.
+    div()
+        .flex()
+        .items_center()
+        .gap_1()
+        .flex_none()
+        .when(show_badge, |this| {
+            this.child(status_pill(
+                if execution_mode == "append" {
+                    "append"
+                } else {
+                    "exec"
+                },
+                if execution_mode == "append" {
+                    rgb(palette.warning)
+                } else {
+                    rgb(palette.success)
+                },
+                if execution_mode == "append" {
+                    rgb(0x32280f)
+                } else {
+                    rgb(palette.hover)
+                },
+            ))
+        })
+        .child(icon_button(
+            format!("quick-command-run-{command_id}"),
+            "▶",
+            palette,
+            on_run,
+        ))
+        .child(icon_button(
+            format!("quick-command-detail-{command_id}"),
+            "ⓘ",
+            palette,
+            on_details,
+        ))
+        .child(quick_command_more_menu(
+            palette,
+            command_id,
+            menu_open,
+            can_send_to_all,
+            on_more,
+            on_edit,
+            on_send_all,
+            on_delete,
+        ))
+}
+
+fn quick_command_more_menu(
+    palette: crate::ui::theme::ThemePalette,
+    command_id: &str,
+    menu_open: bool,
+    can_send_to_all: bool,
+    on_more: impl Fn(&gpui::ClickEvent, &mut gpui::Window, &mut gpui::App) + 'static,
+    on_edit: impl Fn(&gpui::ClickEvent, &mut gpui::Window, &mut gpui::App) + 'static,
+    on_send_all: impl Fn(&gpui::ClickEvent, &mut gpui::Window, &mut gpui::App) + 'static,
+    on_delete: impl Fn(&gpui::ClickEvent, &mut gpui::Window, &mut gpui::App) + 'static,
+) -> impl IntoElement {
+    div()
+        .relative()
+        .child(
+            div()
+                .id(SharedString::from(format!("quick-command-more-{command_id}")))
+                .size(px(26.))
+                .flex()
+                .items_center()
+                .justify_center()
+                .rounded_md()
+                .text_color(rgb(palette.text_muted))
+                .cursor_pointer()
+                .hover(|this| {
+                    this.bg(rgb(palette.surface_elevated))
+                        .text_color(rgb(palette.text))
+                })
+                .child(
+                    svg()
+                        .size(px(14.))
+                        .flex_none()
+                        .path("icons/session/more.svg"),
+                )
+                .on_click(on_more),
+        )
+        .when(menu_open, move |this| {
+            this.child(
+                div()
+                    .id(SharedString::from(format!(
+                        "quick-command-more-menu-{command_id}"
+                    )))
+                    .absolute()
+                    .top(px(28.))
+                    .right(px(0.))
+                    .w(px(148.))
+                    .rounded_md()
+                    .border_1()
+                    .border_color(rgb(palette.border))
+                    .bg(rgb(palette.surface))
+                    .shadow_lg()
+                    .py_1()
+                    .on_mouse_down(MouseButton::Left, |_, _, cx| {
+                        cx.stop_propagation();
+                    })
+                    .child(quick_command_menu_item(
+                        palette,
+                        format!("quick-command-menu-edit-{command_id}"),
+                        "Edit",
+                        false,
+                        on_edit,
+                    ))
+                    .when(can_send_to_all, |this| {
+                        this.child(quick_command_menu_item(
+                            palette,
+                            format!("quick-command-menu-all-{command_id}"),
+                            "Send to all",
+                            false,
+                            on_send_all,
+                        ))
+                    })
+                    .child(
+                        div()
+                            .mx_2()
+                            .my_1()
+                            .h(px(1.))
+                            .bg(rgb(palette.border)),
+                    )
+                    .child(quick_command_menu_item(
+                        palette,
+                        format!("quick-command-menu-delete-{command_id}"),
+                        "Delete",
+                        true,
+                        on_delete,
+                    )),
+            )
+        })
+}
+
+fn quick_command_menu_item(
+    palette: crate::ui::theme::ThemePalette,
+    id: impl Into<String>,
+    label: impl Into<SharedString>,
+    destructive: bool,
+    on_click: impl Fn(&gpui::ClickEvent, &mut gpui::Window, &mut gpui::App) + 'static,
+) -> impl IntoElement {
+    let label = label.into();
+    div()
+        .id(SharedString::from(id.into()))
+        .px_3()
+        .h(px(30.))
+        .flex()
+        .items_center()
+        .cursor_pointer()
+        .hover(|this| this.bg(rgb(palette.surface_elevated)))
+        .child(
+            div()
+                .text_size(px(12.))
+                .text_color(rgb(if destructive {
+                    palette.danger
+                } else {
+                    palette.text
+                }))
+                .child(label),
+        )
+        .on_click(on_click)
 }

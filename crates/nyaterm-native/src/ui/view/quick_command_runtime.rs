@@ -70,6 +70,7 @@ impl NyaTermApp {
         mode: QuickCommandViewMode,
         cx: &mut Context<Self>,
     ) {
+        self.quick_command_menu_id = None;
         self.quick_command_view_mode = mode;
         self.settings.ui_quick_cmd_view_mode = quick_command_view_mode_setting(mode).to_string();
         self.save_quick_command_ui_settings(cx);
@@ -80,6 +81,7 @@ impl NyaTermApp {
         mode: QuickCommandSortMode,
         cx: &mut Context<Self>,
     ) {
+        self.quick_command_menu_id = None;
         self.quick_command_sort_mode = mode;
         self.settings.ui_quick_cmd_sort_mode = quick_command_sort_mode_setting(mode).to_string();
         self.save_quick_command_ui_settings(cx);
@@ -459,6 +461,7 @@ impl NyaTermApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        self.quick_command_menu_id = None;
         self.quick_command_editor = Some(QuickCommandEditorState::blank());
         self.terminal_status = "quick command editor opened".to_string();
         window.focus(&self.quick_command_editor_focus);
@@ -471,6 +474,7 @@ impl NyaTermApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        self.quick_command_menu_id = None;
         let Some(command) = self
             .quick_commands
             .iter()
@@ -499,6 +503,7 @@ impl NyaTermApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        self.quick_command_menu_id = None;
         let Some(command) = self
             .quick_commands
             .iter()
@@ -554,6 +559,7 @@ impl NyaTermApp {
         command_id: String,
         cx: &mut Context<Self>,
     ) {
+        self.quick_command_menu_id = None;
         let Some(command) = self
             .quick_commands
             .iter()
