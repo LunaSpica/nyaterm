@@ -6,7 +6,13 @@ been ported or replaced.
 
 ## Architecture
 
-- `crates/nyaterm-app`: GPUI application entry point and native desktop UI.
+- `crates/nyaterm-app`: thin GPUI binary entry (`main` + assets).
+- `crates/nyaterm-gpui`: GPUI presentation crate.
+  - `app_shell/`: window root Entity and lifecycle.
+  - `entities/`: GPUI Entity stores (workspace/session/overlay/…).
+  - `features/`: `NyaTermApp`, pages, panels, layout, and runtimes.
+  - `http/`: AI / cloud sync / translation / update HTTP adapters.
+  - `theme/`, `terminal/`, `widgets/`, `models/`: presentation building blocks.
 - `crates/nyaterm-core`: UI-independent models, runtime paths, and service
   status contracts, plus the native redb-compatible connection store.
 - `crates/nyaterm-legacy`: inventory and legacy configuration loading helpers.
@@ -17,6 +23,8 @@ been ported or replaced.
   the GPUI workspace instead of xterm.js/WebView rendering.
 - `crates/nyaterm-otp`: copied standalone OTP crate from the Tauri source tree.
 - `vendor/`: protocol dependencies copied from the Tauri source tree.
+
+See also `docs/gpui-structure-refactor.md` for the GPUI module layout decisions.
 
 ## Migration Boundary
 
