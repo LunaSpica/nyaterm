@@ -1,5 +1,5 @@
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(in crate::ui) enum ShortcutCategory {
+pub(crate) enum ShortcutCategory {
     Terminal,
     Tab,
     View,
@@ -9,7 +9,7 @@ pub(in crate::ui) enum ShortcutCategory {
 }
 
 impl ShortcutCategory {
-    pub(in crate::ui) fn label(self) -> &'static str {
+    pub(crate) fn label(self) -> &'static str {
         match self {
             Self::Terminal => "Terminal",
             Self::Tab => "Tab / Session",
@@ -22,7 +22,7 @@ impl ShortcutCategory {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(in crate::ui) enum ShortcutNativeStatus {
+pub(crate) enum ShortcutNativeStatus {
     Supported,
     Partial,
     Pending,
@@ -30,7 +30,7 @@ pub(in crate::ui) enum ShortcutNativeStatus {
 }
 
 impl ShortcutNativeStatus {
-    pub(in crate::ui) fn label(self) -> &'static str {
+    pub(crate) fn label(self) -> &'static str {
         match self {
             Self::Supported => "native",
             Self::Partial => "partial",
@@ -41,16 +41,16 @@ impl ShortcutNativeStatus {
 }
 
 #[derive(Debug, Clone, Copy)]
-pub(in crate::ui) struct ShortcutDefinition {
-    pub(in crate::ui) id: &'static str,
-    pub(in crate::ui) category: ShortcutCategory,
-    pub(in crate::ui) label: &'static str,
-    pub(in crate::ui) default_keys: &'static str,
-    pub(in crate::ui) native_status: ShortcutNativeStatus,
-    pub(in crate::ui) note: &'static str,
+pub(crate) struct ShortcutDefinition {
+    pub(crate) id: &'static str,
+    pub(crate) category: ShortcutCategory,
+    pub(crate) label: &'static str,
+    pub(crate) default_keys: &'static str,
+    pub(crate) native_status: ShortcutNativeStatus,
+    pub(crate) note: &'static str,
 }
 
-pub(in crate::ui) const SHORTCUT_CATEGORIES: [ShortcutCategory; 6] = [
+pub(crate) const SHORTCUT_CATEGORIES: [ShortcutCategory; 6] = [
     ShortcutCategory::Terminal,
     ShortcutCategory::Tab,
     ShortcutCategory::View,
@@ -59,7 +59,7 @@ pub(in crate::ui) const SHORTCUT_CATEGORIES: [ShortcutCategory; 6] = [
     ShortcutCategory::Special,
 ];
 
-pub(in crate::ui) const SHORTCUT_REGISTRY: [ShortcutDefinition; 30] = [
+pub(crate) const SHORTCUT_REGISTRY: [ShortcutDefinition; 30] = [
     ShortcutDefinition {
         id: "terminal.copy",
         category: ShortcutCategory::Terminal,
@@ -302,7 +302,7 @@ pub(in crate::ui) const SHORTCUT_REGISTRY: [ShortcutDefinition; 30] = [
     },
 ];
 
-pub(in crate::ui) fn shortcut_keys_for(
+pub(crate) fn shortcut_keys_for(
     id: &str,
     overrides: &HashMap<String, String>,
 ) -> Option<String> {
@@ -313,7 +313,7 @@ pub(in crate::ui) fn shortcut_keys_for(
         .or_else(|| default_chords_for(id).map(ToString::to_string))
 }
 
-pub(in crate::ui) fn shortcut_matches(
+pub(crate) fn shortcut_matches(
     event: &KeyDownEvent,
     id: &str,
     overrides: &HashMap<String, String>,
@@ -323,7 +323,7 @@ pub(in crate::ui) fn shortcut_matches(
         .is_some_and(|keys| hotkey_matches(event, keys))
 }
 
-pub(in crate::ui) fn event_to_hotkey_string(event: &KeyDownEvent) -> Option<String> {
+pub(crate) fn event_to_hotkey_string(event: &KeyDownEvent) -> Option<String> {
     let key = normalized_event_key(event)?;
     if is_modifier_key(&key) {
         return None;
@@ -346,7 +346,7 @@ pub(in crate::ui) fn event_to_hotkey_string(event: &KeyDownEvent) -> Option<Stri
     Some(parts.join("+"))
 }
 
-pub(in crate::ui) fn format_hotkey_for_display(keys: &str) -> String {
+pub(crate) fn format_hotkey_for_display(keys: &str) -> String {
     keys.split(',')
         .map(str::trim)
         .filter(|combo| !combo.is_empty())
@@ -363,7 +363,7 @@ pub(in crate::ui) fn format_hotkey_for_display(keys: &str) -> String {
         .join(" / ")
 }
 
-pub(in crate::ui) fn is_indexed_shortcut_template(keys: &str) -> bool {
+pub(crate) fn is_indexed_shortcut_template(keys: &str) -> bool {
     keys.split(',')
         .map(str::trim)
         .filter(|combo| !combo.is_empty())

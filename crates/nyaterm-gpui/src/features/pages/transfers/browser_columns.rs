@@ -1,7 +1,7 @@
 use super::*;
 
 impl NyaTermApp {
-    pub(in crate::ui::view::pages::transfers) fn start_transfer_browser_column_resize(
+    pub(in crate::features::pages::transfers) fn start_transfer_browser_column_resize(
         &mut self,
         column: TransferBrowserSortColumn,
         event: &MouseDownEvent,
@@ -16,7 +16,7 @@ impl NyaTermApp {
         cx.notify();
     }
 
-    pub(in crate::ui::view) fn update_transfer_browser_column_resize(
+    pub(in crate::features) fn update_transfer_browser_column_resize(
         &mut self,
         event: &MouseMoveEvent,
         cx: &mut Context<Self>,
@@ -33,7 +33,7 @@ impl NyaTermApp {
         cx.notify();
     }
 
-    pub(in crate::ui::view) fn finish_transfer_browser_column_resize(
+    pub(in crate::features) fn finish_transfer_browser_column_resize(
         &mut self,
         _event: &MouseUpEvent,
         cx: &mut Context<Self>,

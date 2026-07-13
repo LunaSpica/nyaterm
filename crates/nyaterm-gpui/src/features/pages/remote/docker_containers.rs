@@ -1,8 +1,8 @@
 use super::*;
 use gpui::SharedString;
 
-pub(in crate::ui::view::pages::remote) fn docker_containers_panel(
-    palette: crate::ui::theme::ThemePalette,
+pub(in crate::features::pages::remote) fn docker_containers_panel(
+    palette: crate::theme::ThemePalette,
     has_snapshot: bool,
     has_session: bool,
     docker_available: bool,
@@ -140,7 +140,7 @@ pub(in crate::ui::view::pages::remote) fn docker_containers_panel(
 }
 
 fn docker_container_row(
-    palette: crate::ui::theme::ThemePalette,
+    palette: crate::theme::ThemePalette,
     container: DockerContainer,
     menu_open: bool,
     cx: &mut Context<NyaTermApp>,
@@ -291,7 +291,7 @@ fn docker_container_row(
 }
 
 fn docker_container_action_menu(
-    palette: crate::ui::theme::ThemePalette,
+    palette: crate::theme::ThemePalette,
     container_id: String,
     container_name: String,
     running: bool,
@@ -428,7 +428,7 @@ fn docker_container_action_menu(
 }
 
 fn docker_menu_item(
-    palette: crate::ui::theme::ThemePalette,
+    palette: crate::theme::ThemePalette,
     id: impl Into<String>,
     label: &'static str,
     disabled: bool,
@@ -455,11 +455,11 @@ fn docker_menu_item(
         .child(label)
 }
 
-fn docker_menu_separator(palette: crate::ui::theme::ThemePalette) -> impl IntoElement {
+fn docker_menu_separator(palette: crate::theme::ThemePalette) -> impl IntoElement {
     div().h(px(1.)).mx_2().my_1().bg(rgb(palette.border))
 }
 
-fn docker_state_border_color(palette: crate::ui::theme::ThemePalette, state: &str) -> gpui::Hsla {
+fn docker_state_border_color(palette: crate::theme::ThemePalette, state: &str) -> gpui::Hsla {
     match state.trim().to_ascii_lowercase().as_str() {
         "running" => rgb(0x22c55e).into(),
         "restarting" | "paused" => rgb(0xf59e0b).into(),

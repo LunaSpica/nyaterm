@@ -1,7 +1,7 @@
 use super::*;
 
 impl NyaTermApp {
-    pub(in crate::ui::view) fn transfer_new_folder_overlay(
+    pub(in crate::features) fn transfer_new_folder_overlay(
         &mut self,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
@@ -193,7 +193,7 @@ impl NyaTermApp {
             )
     }
 
-    pub(in crate::ui::view) fn transfer_new_file_overlay(
+    pub(in crate::features) fn transfer_new_file_overlay(
         &mut self,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
@@ -375,7 +375,7 @@ impl NyaTermApp {
             )
     }
 
-    pub(in crate::ui::view) fn transfer_new_symlink_overlay(
+    pub(in crate::features) fn transfer_new_symlink_overlay(
         &mut self,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {

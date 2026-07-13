@@ -329,7 +329,7 @@ impl NyaTermApp {
 }
 
 fn transfer_browser_path_quick_lists(
-    palette: crate::ui::theme::ThemePalette,
+    palette: crate::theme::ThemePalette,
     current_browser_path: String,
     home_dir: String,
     history_paths: Vec<String>,
@@ -369,7 +369,7 @@ fn transfer_browser_path_quick_lists(
 }
 
 fn transfer_browser_path_history_list(
-    palette: crate::ui::theme::ThemePalette,
+    palette: crate::theme::ThemePalette,
     current_browser_path: String,
     home_dir: String,
     paths: Vec<String>,
@@ -430,7 +430,7 @@ fn transfer_browser_path_history_list(
 }
 
 fn transfer_browser_path_quick_list(
-    palette: crate::ui::theme::ThemePalette,
+    palette: crate::theme::ThemePalette,
     label: &'static str,
     current_browser_path: String,
     home_dir: String,
@@ -550,7 +550,7 @@ fn expand_transfer_browser_home_path(path: &str, home_dir: &str) -> String {
 }
 
 fn transfer_browser_path_breadcrumbs(
-    palette: crate::ui::theme::ThemePalette,
+    palette: crate::theme::ThemePalette,
     current_browser_path: String,
     raw_browser_path: String,
     cx: &mut Context<NyaTermApp>,

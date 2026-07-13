@@ -1,7 +1,7 @@
 use super::*;
 
 impl NyaTermApp {
-    pub(in crate::ui::view) fn recording_panel(
+    pub(in crate::features) fn recording_panel(
         &mut self,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
@@ -319,7 +319,7 @@ impl NyaTermApp {
 }
 
 fn recording_action_svg_button(
-    palette: crate::ui::theme::ThemePalette,
+    palette: crate::theme::ThemePalette,
     id: impl Into<String>,
     icon_path: &'static str,
     color: impl Into<gpui::Hsla>,

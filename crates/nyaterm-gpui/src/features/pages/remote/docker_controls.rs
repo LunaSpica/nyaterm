@@ -1,7 +1,7 @@
 use super::*;
 
-pub(in crate::ui::view::pages::remote) fn docker_tab_bar(
-    palette: crate::ui::theme::ThemePalette,
+pub(in crate::features::pages::remote) fn docker_tab_bar(
+    palette: crate::theme::ThemePalette,
     active_tab: DockerTab,
     overview: &nyaterm_transport::RemoteDockerOverview,
     cx: &mut Context<NyaTermApp>,
@@ -86,7 +86,7 @@ pub(in crate::ui::view::pages::remote) fn docker_tab_bar(
 }
 
 fn docker_tab_button(
-    palette: crate::ui::theme::ThemePalette,
+    palette: crate::theme::ThemePalette,
     id: &'static str,
     label: String,
     active: bool,
@@ -121,8 +121,8 @@ fn docker_tab_button(
         .on_click(on_click)
 }
 
-pub(in crate::ui::view::pages::remote) fn docker_confirm_panel(
-    palette: crate::ui::theme::ThemePalette,
+pub(in crate::features::pages::remote) fn docker_confirm_panel(
+    palette: crate::theme::ThemePalette,
     confirm: DockerConfirmState,
     cx: &mut Context<NyaTermApp>,
 ) -> impl IntoElement {
@@ -181,8 +181,8 @@ pub(in crate::ui::view::pages::remote) fn docker_confirm_panel(
         )
 }
 
-pub(in crate::ui::view::pages::remote) fn docker_container_confirm_button(
-    palette: crate::ui::theme::ThemePalette,
+pub(in crate::features::pages::remote) fn docker_container_confirm_button(
+    palette: crate::theme::ThemePalette,
     action: &'static str,
     label: &'static str,
     container_id: String,

@@ -5,7 +5,7 @@ use gpui::{
 
 use std::collections::{HashMap, HashSet};
 
-use crate::ui::components::{empty_panel, small_button, status_pill};
+use crate::widgets::{empty_panel, small_button, status_pill};
 
 use super::super::{
     NetworkDeleteConfirmState, NetworkGroupDeleteConfirmState, NetworkGroupEditorState,
@@ -31,7 +31,7 @@ use proxy::{network_proxy_editor_panel, proxy_matches, proxy_section, proxy_sect
 use tunnel::{network_tunnel_editor_panel, tunnel_matches, tunnel_section, tunnel_sections};
 
 impl NyaTermApp {
-    pub(in crate::ui::view) fn tunnels_view(&mut self, cx: &mut Context<Self>) -> impl IntoElement {
+    pub(in crate::features) fn tunnels_view(&mut self, cx: &mut Context<Self>) -> impl IntoElement {
         let palette = self.theme_palette();
         let open_tunnels = self
             .tunnel_manager
@@ -405,7 +405,7 @@ impl NyaTermApp {
 }
 
 fn icon_network_action(
-    palette: crate::ui::theme::ThemePalette,
+    palette: crate::theme::ThemePalette,
     id: impl Into<String>,
     label: &'static str,
     on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,

@@ -3,8 +3,8 @@ use gpui::{
     px, rgb,
 };
 
-use crate::ui::components::{section_header, small_button};
-use crate::ui::models::TranslateInputField;
+use crate::widgets::{section_header, small_button};
+use crate::models::TranslateInputField;
 
 use super::super::{NyaTermApp, configured_pair_status, configured_status, metric};
 
@@ -28,7 +28,7 @@ const TARGET_LANGUAGES: [(&str, &str); 14] = [
 const TRANSLATION_PROVIDERS: [&str; 6] = ["google", "microsoft", "deepl", "baidu", "ali", "youdao"];
 
 impl NyaTermApp {
-    pub(in crate::ui::view) fn translation_view(
+    pub(in crate::features) fn translation_view(
         &mut self,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
@@ -365,7 +365,7 @@ impl NyaTermApp {
 }
 
 fn translation_provider_button(
-    palette: crate::ui::theme::ThemePalette,
+    palette: crate::theme::ThemePalette,
     provider: &'static str,
     selected: bool,
     status: &'static str,
@@ -417,7 +417,7 @@ fn translation_provider_button(
 }
 
 fn language_button(
-    palette: crate::ui::theme::ThemePalette,
+    palette: crate::theme::ThemePalette,
     language: &'static str,
     label: &'static str,
     selected: bool,

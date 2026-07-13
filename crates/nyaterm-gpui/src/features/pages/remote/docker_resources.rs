@@ -5,8 +5,8 @@ const DOCKER_RESOURCE_ROW_PX: f32 = 68.; // 64px Tauri row + gap
 const DOCKER_RESOURCE_VIEWPORT_ROWS: usize = 14;
 const DOCKER_RESOURCE_OVERSCAN: usize = 6;
 
-pub(in crate::ui::view::pages::remote) fn docker_images_panel(
-    palette: crate::ui::theme::ThemePalette,
+pub(in crate::features::pages::remote) fn docker_images_panel(
+    palette: crate::theme::ThemePalette,
     images: &[DockerImage],
     list_offset: usize,
     cx: &mut Context<NyaTermApp>,
@@ -71,8 +71,8 @@ pub(in crate::ui::view::pages::remote) fn docker_images_panel(
     docker_resource_panel(palette, "Images", total, rows, scroll_offset, cx)
 }
 
-pub(in crate::ui::view::pages::remote) fn docker_volumes_panel(
-    palette: crate::ui::theme::ThemePalette,
+pub(in crate::features::pages::remote) fn docker_volumes_panel(
+    palette: crate::theme::ThemePalette,
     volumes: &[DockerVolume],
     list_offset: usize,
     cx: &mut Context<NyaTermApp>,
@@ -131,8 +131,8 @@ pub(in crate::ui::view::pages::remote) fn docker_volumes_panel(
     docker_resource_panel(palette, "Volumes", total, rows, scroll_offset, cx)
 }
 
-pub(in crate::ui::view::pages::remote) fn docker_networks_panel(
-    palette: crate::ui::theme::ThemePalette,
+pub(in crate::features::pages::remote) fn docker_networks_panel(
+    palette: crate::theme::ThemePalette,
     networks: &[DockerNetwork],
     list_offset: usize,
     cx: &mut Context<NyaTermApp>,
@@ -208,7 +208,7 @@ fn docker_resource_window(total: usize, list_offset: usize) -> (usize, usize, f3
 }
 
 fn docker_resource_range_footer(
-    palette: crate::ui::theme::ThemePalette,
+    palette: crate::theme::ThemePalette,
     start: usize,
     end: usize,
     total: usize,
@@ -228,7 +228,7 @@ fn docker_resource_range_footer(
 }
 
 fn docker_resource_empty(
-    palette: crate::ui::theme::ThemePalette,
+    palette: crate::theme::ThemePalette,
     title: &'static str,
     message: &'static str,
 ) -> gpui::AnyElement {
@@ -245,8 +245,8 @@ fn docker_resource_empty(
         .into_any_element()
 }
 
-pub(in crate::ui::view::pages::remote) fn docker_resource_panel(
-    palette: crate::ui::theme::ThemePalette,
+pub(in crate::features::pages::remote) fn docker_resource_panel(
+    palette: crate::theme::ThemePalette,
     title: &'static str,
     count: usize,
     rows: impl IntoElement,
@@ -314,8 +314,8 @@ pub(in crate::ui::view::pages::remote) fn docker_resource_panel(
         .into_any_element()
 }
 
-pub(in crate::ui::view::pages::remote) fn docker_resource_static_panel(
-    palette: crate::ui::theme::ThemePalette,
+pub(in crate::features::pages::remote) fn docker_resource_static_panel(
+    palette: crate::theme::ThemePalette,
     title: &'static str,
     count: usize,
     rows: impl IntoElement,
@@ -350,8 +350,8 @@ pub(in crate::ui::view::pages::remote) fn docker_resource_static_panel(
         .child(rows)
 }
 
-pub(in crate::ui::view::pages::remote) fn docker_resource_row(
-    palette: crate::ui::theme::ThemePalette,
+pub(in crate::features::pages::remote) fn docker_resource_row(
+    palette: crate::theme::ThemePalette,
     title: String,
     detail: String,
 ) -> gpui::Div {
@@ -394,7 +394,7 @@ pub(in crate::ui::view::pages::remote) fn docker_resource_row(
         )
 }
 
-pub(in crate::ui::view::pages::remote) fn docker_image_label(image: &DockerImage) -> String {
+pub(in crate::features::pages::remote) fn docker_image_label(image: &DockerImage) -> String {
     match (
         image.repository.trim().is_empty(),
         image.tag.trim().is_empty(),

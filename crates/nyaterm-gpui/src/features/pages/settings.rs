@@ -5,15 +5,15 @@ use gpui::{
 use nyaterm_core::{AgentCommandExecutionMode, AiMode, AiModelSource, AiProviderKind, RiskLevel};
 use nyaterm_transport::SftpDuplicatePolicy;
 
-use crate::ui::components::{small_button, status_pill};
-use crate::ui::models::{
+use crate::widgets::{small_button, status_pill};
+use crate::models::{
     AiActionEditorField, AiActionListKind, AiCredentialEditorField, AiInputField,
     CloudSyncConflictState, CloudSyncInputField, ConfigPathPromptKind, DiagnosticsPathPromptKind,
     KeywordHighlightEditorField, KeywordHighlightPathPromptKind, SearchEngineEditorField,
     SettingsTab, SnapshotPasswordPromptKind, SnapshotPasswordPromptState, TerminalSearchMode,
-    TransferJobStatus, TransferPathPromptKind, TranslateInputField,
+    TransferJobStatus, TranslateInputField,
 };
-use crate::ui::theme::ThemePalette;
+use crate::theme::ThemePalette;
 
 use super::super::{
     NyaTermApp, TAB_MOUSE_ACTIONS, TabMouseActionTarget, ai_active_profile_api_key,
@@ -30,7 +30,7 @@ mod translation;
 mod workspace;
 
 impl NyaTermApp {
-    pub(in crate::ui::view) fn settings_view(
+    pub(in crate::features) fn settings_view(
         &mut self,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
@@ -46,7 +46,7 @@ impl NyaTermApp {
         self.settings_shell(backup_snapshot_prompt, cx)
     }
 
-    pub(in crate::ui::view) fn settings_shell(
+    pub(in crate::features) fn settings_shell(
         &mut self,
         backup_snapshot_prompt: Option<SnapshotPasswordPromptState>,
         cx: &mut Context<Self>,

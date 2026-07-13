@@ -4,7 +4,7 @@ pub(super) fn network_tab_button(
     id: impl Into<String>,
     label: &'static str,
     active: bool,
-    palette: crate::ui::theme::ThemePalette,
+    palette: crate::theme::ThemePalette,
     on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
 ) -> impl IntoElement {
     // Tauri TabsTrigger inside TabsList grid-cols-2 h-8.
@@ -40,7 +40,7 @@ pub(super) fn network_tab_button(
 }
 
 pub(super) fn network_delete_confirm_panel(
-    palette: crate::ui::theme::ThemePalette,
+    palette: crate::theme::ThemePalette,
     confirm: NetworkDeleteConfirmState,
     cx: &mut Context<NyaTermApp>,
 ) -> impl IntoElement {
@@ -82,7 +82,7 @@ pub(super) fn network_delete_confirm_panel(
 }
 
 pub(super) fn network_group_editor_panel(
-    palette: crate::ui::theme::ThemePalette,
+    palette: crate::theme::ThemePalette,
     editor: NetworkGroupEditorState,
     focus: &gpui::FocusHandle,
     cx: &mut Context<NyaTermApp>,
@@ -157,7 +157,7 @@ pub(super) fn network_group_editor_panel(
 }
 
 pub(super) fn network_group_delete_confirm_panel(
-    palette: crate::ui::theme::ThemePalette,
+    palette: crate::theme::ThemePalette,
     confirm: NetworkGroupDeleteConfirmState,
     cx: &mut Context<NyaTermApp>,
 ) -> impl IntoElement {
@@ -199,7 +199,7 @@ pub(super) fn network_group_delete_confirm_panel(
 }
 
 pub(super) fn network_modal_shell(
-    palette: crate::ui::theme::ThemePalette,
+    palette: crate::theme::ThemePalette,
     id: impl Into<String>,
     width: f32,
     content: impl IntoElement,
@@ -208,7 +208,7 @@ pub(super) fn network_modal_shell(
 }
 
 pub(super) fn network_dialog_footer(
-    palette: crate::ui::theme::ThemePalette,
+    palette: crate::theme::ThemePalette,
     cancel_id: impl Into<String>,
     save_id: impl Into<String>,
     save_label: &'static str,

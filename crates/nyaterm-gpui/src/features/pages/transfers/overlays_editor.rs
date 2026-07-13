@@ -1,10 +1,10 @@
 use super::*;
-use crate::ui::view::{TransferExternalSyncPromptState, metric};
+use crate::features::{TransferExternalSyncPromptState, metric};
 use gpui::rgba;
 use std::path::PathBuf;
 
 impl NyaTermApp {
-    pub(in crate::ui::view) fn transfer_external_sync_prompt_overlay(
+    pub(in crate::features) fn transfer_external_sync_prompt_overlay(
         &mut self,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
@@ -119,7 +119,7 @@ impl NyaTermApp {
             )
     }
 
-    pub(in crate::ui::view) fn transfer_editor_overlay(
+    pub(in crate::features) fn transfer_editor_overlay(
         &mut self,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {

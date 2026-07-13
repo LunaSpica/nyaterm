@@ -1,7 +1,7 @@
 use super::*;
 
 impl NyaTermApp {
-    pub(in crate::ui::view) fn rename_session_overlay(
+    pub(in crate::features) fn rename_session_overlay(
         &mut self,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
@@ -111,7 +111,7 @@ impl NyaTermApp {
             )
     }
 
-    pub(in crate::ui::view) fn tab_color_picker_overlay(
+    pub(in crate::features) fn tab_color_picker_overlay(
         &mut self,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
@@ -218,7 +218,7 @@ impl NyaTermApp {
             )
     }
 
-    pub(in crate::ui::view) fn session_info_overlay(
+    pub(in crate::features) fn session_info_overlay(
         &mut self,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
@@ -340,7 +340,7 @@ impl NyaTermApp {
             )
     }
 
-    pub(in crate::ui::view) fn startup_command_overlay(
+    pub(in crate::features) fn startup_command_overlay(
         &mut self,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {

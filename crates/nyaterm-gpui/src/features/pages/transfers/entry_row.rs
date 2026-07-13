@@ -1,7 +1,7 @@
 use super::*;
 
 pub(super) fn transfer_browser_parent_entry_row(
-    palette: crate::ui::theme::ThemePalette,
+    palette: crate::theme::ThemePalette,
     current_path: String,
     column_widths: TransferBrowserColumnWidths,
     cx: &mut Context<NyaTermApp>,
@@ -90,7 +90,7 @@ pub(super) fn transfer_browser_parent_entry_row(
 }
 
 fn transfer_browser_text_cell(
-    palette: crate::ui::theme::ThemePalette,
+    palette: crate::theme::ThemePalette,
     width: gpui::Pixels,
     value: &'static str,
 ) -> impl IntoElement {
@@ -104,7 +104,7 @@ fn transfer_browser_text_cell(
 }
 
 pub(super) fn transfer_browser_entry_row(
-    palette: crate::ui::theme::ThemePalette,
+    palette: crate::theme::ThemePalette,
     entry: SftpFileEntry,
     selected_remote_path: Option<String>,
     selected_remote_paths: &HashSet<String>,

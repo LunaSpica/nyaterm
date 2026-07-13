@@ -1,0 +1,395 @@
+use super::*;
+
+pub(in crate::features::pages::tunnels) fn network_tunnel_editor_panel(
+    palette: crate::theme::ThemePalette,
+    editor: NetworkTunnelEditorState,
+    app: &NyaTermApp,
+    focus: &gpui::FocusHandle,
+    cx: &mut Context<NyaTermApp>,
+) -> impl IntoElement {
+    let connection_label = editor
+        .connection_id
+        .as_deref()
+        .and_then(|id| {
+            app.connections
+                .iter()
+                .find(|connection| connection.id == id)
+                .map(|connection| connection.name.clone())
+        })
+        .unwrap_or_else(|| "Select SSH connection".to_string());
+    let group_label = editor
+        .group_id
+        .as_deref()
+        .and_then(|id| {
+            app.tunnel_groups
+                .iter()
+                .find(|group| group.id == id)
+                .map(|group| group.name.clone())
+        })
+        .unwrap_or_else(|| "Ungrouped".to_string());
+    let mode_label = match editor.tunnel_type.as_str() {
+        "remote" => "Remote",
+        "dynamic" => "Dynamic",
+        _ => "Local",
+    };
+    let preview = tunnel_editor_preview(&editor);
+
+    let card = div()
+        .p_4()
+        .flex()
+        .flex_col()
+        .gap_4()
+        .child(
+            div()
+                .flex()
+                .items_start()
+                .justify_between()
+                .gap_3()
+                .child(
+                    div()
+                        .min_w_0()
+                        .flex()
+                        .flex_col()
+                        .gap_1()
+                        .child(
+                            div()
+                                .text_size(px(15.))
+                                .font_weight(FontWeight(700.))
+                                .text_color(rgb(palette.text))
+                                .child(if editor.id.is_some() {
+                                    "Edit Tunnel"
+                                } else {
+                                    "New Tunnel"
+                                }),
+                        )
+                        .child(
+                            div()
+                                .text_size(px(12.))
+                                .text_color(rgb(palette.text_muted))
+                                .child("Configure SSH local, remote, or dynamic port forwarding."),
+                        ),
+                )
+                .child(status_pill(
+                    mode_label,
+                    rgb(palette.accent),
+                    rgb(palette.hover),
+                )),
+        )
+        .child(
+            div()
+                .grid()
+                .grid_cols(3)
+                .gap_2()
+                .child(tunnel_editor_input(
+                    palette,
+                    "network-tunnel-editor-name",
+                    "Tunnel name",
+                    editor.name.clone(),
+                    editor.focused_field == NetworkTunnelEditorField::Name,
+                    NetworkTunnelEditorField::Name,
+                    focus,
+                    cx,
+                ))
+                .child(tunnel_editor_selector(
+                    palette,
+                    "network-tunnel-editor-type",
+                    "Type",
+                    mode_label.to_string(),
+                    cx.listener(|this, _, _, cx| {
+                        this.cycle_network_tunnel_type(cx);
+                    }),
+                ))
+                .child(tunnel_editor_selector(
+                    palette,
+                    "network-tunnel-editor-group",
+                    "Group",
+                    group_label,
+                    cx.listener(|this, _, _, cx| {
+                        this.cycle_network_tunnel_group(cx);
+                    }),
+                )),
+        )
+        .child(
+            div()
+                .grid()
+                .grid_cols(2)
+                .gap_2()
+                .child(tunnel_editor_selector(
+                    palette,
+                    "network-tunnel-editor-connection",
+                    "SSH connection",
+                    connection_label,
+                    cx.listener(|this, _, _, cx| {
+                        this.cycle_network_tunnel_connection(cx);
+                    }),
+                ))
+                .child(tunnel_editor_input(
+                    palette,
+                    "network-tunnel-editor-listen-port",
+                    match editor.tunnel_type.as_str() {
+                        "remote" => "Remote listen port",
+                        "dynamic" => "SOCKS listen port",
+                        _ => "Local listen port",
+                    },
+                    editor.listen_port.clone(),
+                    editor.focused_field == NetworkTunnelEditorField::ListenPort,
+                    NetworkTunnelEditorField::ListenPort,
+                    focus,
+                    cx,
+                )),
+        )
+        .when(!editor.is_dynamic(), |this| {
+            this.child(
+                div()
+                    .grid()
+                    .grid_cols(2)
+                    .gap_2()
+                    .child(tunnel_editor_input(
+                        palette,
+                        "network-tunnel-editor-target-host",
+                        match editor.tunnel_type.as_str() {
+                            "remote" => "Remote target host",
+                            _ => "Local target host",
+                        },
+                        editor.target_host.clone(),
+                        editor.focused_field == NetworkTunnelEditorField::TargetHost,
+                        NetworkTunnelEditorField::TargetHost,
+                        focus,
+                        cx,
+                    ))
+                    .child(tunnel_editor_input(
+                        palette,
+                        "network-tunnel-editor-target-port",
+                        match editor.tunnel_type.as_str() {
+                            "remote" => "Remote target port",
+                            _ => "Local target port",
+                        },
+                        editor.target_port.clone(),
+                        editor.focused_field == NetworkTunnelEditorField::TargetPort,
+                        NetworkTunnelEditorField::TargetPort,
+                        focus,
+                        cx,
+                    )),
+            )
+        })
+        .child(
+            div()
+                .grid()
+                .grid_cols(3)
+                .gap_2()
+                .child(tunnel_editor_option(
+                    palette,
+                    "network-tunnel-editor-bind-local",
+                    "Localhost only",
+                    "127.0.0.1",
+                    editor.bind_localhost,
+                    cx.listener(|this, _, _, cx| {
+                        this.set_network_tunnel_bind_localhost(true, cx);
+                    }),
+                ))
+                .child(tunnel_editor_option(
+                    palette,
+                    "network-tunnel-editor-bind-all",
+                    "All interfaces",
+                    "0.0.0.0",
+                    !editor.bind_localhost,
+                    cx.listener(|this, _, _, cx| {
+                        this.set_network_tunnel_bind_localhost(false, cx);
+                    }),
+                ))
+                .child(tunnel_editor_option(
+                    palette,
+                    "network-tunnel-editor-auto",
+                    "Auto open",
+                    "with connection",
+                    editor.auto_open,
+                    cx.listener(|this, _, _, cx| {
+                        this.toggle_network_tunnel_auto_open(cx);
+                    }),
+                )),
+        )
+        .child(
+            div()
+                .rounded_sm()
+                .border_1()
+                .border_color(rgb(palette.border))
+                .bg(rgb(palette.input))
+                .p_3()
+                .flex()
+                .flex_col()
+                .gap_1()
+                .child(
+                    div()
+                        .text_xs()
+                        .text_color(rgb(palette.text_muted))
+                        .child("Preview"),
+                )
+                .child(
+                    div()
+                        .font_family("JetBrains Mono")
+                        .text_xs()
+                        .text_color(rgb(palette.text))
+                        .child(preview),
+                ),
+        )
+        .when_some(editor.error.clone(), |this, error| {
+            this.child(div().text_xs().text_color(rgb(palette.danger)).child(error))
+        })
+        .child(network_dialog_footer(
+            palette,
+            "network-tunnel-editor-cancel",
+            "network-tunnel-editor-save",
+            "Save",
+            cx.listener(|this, _, _, cx| {
+                this.close_network_tunnel_editor(cx);
+            }),
+            cx.listener(|this, _, _, cx| {
+                this.save_network_tunnel_editor(cx);
+            }),
+        ));
+
+    network_modal_shell(palette, "network-tunnel-editor-modal", 640., card)
+}
+
+pub(in crate::features::pages::tunnels) fn tunnel_editor_input(
+    palette: crate::theme::ThemePalette,
+    id: impl Into<String>,
+    label: &'static str,
+    value: String,
+    active: bool,
+    field: NetworkTunnelEditorField,
+    focus: &gpui::FocusHandle,
+    cx: &mut Context<NyaTermApp>,
+) -> impl IntoElement {
+    transfer_input(id, label, value, active, palette)
+        .track_focus(focus)
+        .on_click(cx.listener(move |this, _, window, cx| {
+            this.focus_network_tunnel_editor_field(field, window, cx);
+        }))
+        .on_key_down(cx.listener(|this, event: &KeyDownEvent, _, cx| {
+            cx.stop_propagation();
+            this.handle_network_tunnel_editor_key_down(event, cx);
+        }))
+}
+
+pub(in crate::features::pages::tunnels) fn tunnel_editor_selector(
+    palette: crate::theme::ThemePalette,
+    id: impl Into<String>,
+    label: &'static str,
+    value: String,
+    on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
+) -> impl IntoElement {
+    div()
+        .id(gpui::SharedString::from(id.into()))
+        .h(px(52.))
+        .px_3()
+        .py_2()
+        .flex()
+        .flex_col()
+        .gap_1()
+        .rounded_md()
+        .border_1()
+        .border_color(rgb(palette.border))
+        .bg(rgb(palette.bg))
+        .cursor_pointer()
+        .hover(|this| this.bg(rgb(palette.surface)))
+        .child(
+            div()
+                .text_size(px(11.))
+                .text_color(rgb(palette.text_muted))
+                .child(label),
+        )
+        .child(
+            div()
+                .font_family("JetBrains Mono")
+                .text_size(px(12.))
+                .text_color(rgb(palette.text))
+                .child(truncate_preview(&value, 42)),
+        )
+        .on_click(on_click)
+}
+
+pub(in crate::features::pages::tunnels) fn tunnel_editor_option(
+    palette: crate::theme::ThemePalette,
+    id: impl Into<String>,
+    title: &'static str,
+    detail: &'static str,
+    active: bool,
+    on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
+) -> impl IntoElement {
+    // Tauri-like selectable option cards for bind host / auto open.
+    div()
+        .id(gpui::SharedString::from(id.into()))
+        .rounded_md()
+        .border_1()
+        .border_color(if active {
+            rgb(palette.accent)
+        } else {
+            rgb(palette.border)
+        })
+        .bg(if active {
+            rgb(palette.hover)
+        } else {
+            rgb(palette.bg)
+        })
+        .px_3()
+        .py_2()
+        .flex()
+        .flex_col()
+        .gap_1()
+        .cursor_pointer()
+        .hover(|this| this.bg(rgb(palette.surface)))
+        .child(
+            div()
+                .text_size(px(12.))
+                .font_weight(FontWeight(600.))
+                .text_color(if active {
+                    rgb(palette.accent)
+                } else {
+                    rgb(palette.text)
+                })
+                .child(title),
+        )
+        .child(
+            div()
+                .text_size(px(11.))
+                .text_color(rgb(palette.text_muted))
+                .child(detail),
+        )
+        .on_click(on_click)
+}
+
+pub(super) fn tunnel_editor_preview(editor: &NetworkTunnelEditorState) -> String {
+    let bind_host = if editor.bind_localhost {
+        "127.0.0.1"
+    } else {
+        "0.0.0.0"
+    };
+    let listen_port = editor.listen_port.trim();
+    let listen_port = if listen_port.is_empty() {
+        "?"
+    } else {
+        listen_port
+    };
+    if editor.is_dynamic() {
+        return format!("SOCKS {bind_host}:{listen_port}");
+    }
+
+    let target_host = editor.target_host.trim();
+    let target_host = if target_host.is_empty() {
+        "?"
+    } else {
+        target_host
+    };
+    let target_port = editor.target_port.trim();
+    let target_port = if target_port.is_empty() {
+        "?"
+    } else {
+        target_port
+    };
+    if editor.tunnel_type == "remote" {
+        format!("remote {bind_host}:{listen_port} -> {target_host}:{target_port}")
+    } else {
+        format!("local {bind_host}:{listen_port} -> {target_host}:{target_port}")
+    }
+}

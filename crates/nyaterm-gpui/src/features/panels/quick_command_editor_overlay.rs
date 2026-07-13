@@ -1,7 +1,7 @@
 use super::*;
 
 impl NyaTermApp {
-    pub(in crate::ui::view) fn quick_command_editor_overlay(
+    pub(in crate::features) fn quick_command_editor_overlay(
         &mut self,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
@@ -466,7 +466,7 @@ impl NyaTermApp {
 }
 
 fn quick_command_category_choice(
-    palette: crate::ui::theme::ThemePalette,
+    palette: crate::theme::ThemePalette,
     id: String,
     label: String,
     selected: bool,
@@ -508,7 +508,7 @@ fn quick_command_category_choice(
 }
 
 fn quick_command_color_swatch(
-    palette: crate::ui::theme::ThemePalette,
+    palette: crate::theme::ThemePalette,
     color_tag: Option<&'static str>,
     selected: bool,
     on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
@@ -534,7 +534,7 @@ fn quick_command_color_swatch(
 }
 
 fn quick_command_icon_option(
-    palette: crate::ui::theme::ThemePalette,
+    palette: crate::theme::ThemePalette,
     icon_tag: &'static str,
     color_tag: Option<&str>,
     selected: bool,

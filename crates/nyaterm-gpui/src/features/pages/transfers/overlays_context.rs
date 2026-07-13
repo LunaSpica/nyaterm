@@ -1,7 +1,7 @@
 use super::*;
 
 impl NyaTermApp {
-    pub(in crate::ui::view) fn transfer_browser_context_menu_overlay(
+    pub(in crate::features) fn transfer_browser_context_menu_overlay(
         &mut self,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
@@ -471,7 +471,7 @@ impl NyaTermApp {
     }
 }
 
-fn context_menu_group(palette: crate::ui::theme::ThemePalette) -> gpui::Div {
+fn context_menu_group(palette: crate::theme::ThemePalette) -> gpui::Div {
     div()
         .flex()
         .flex_col()
@@ -482,7 +482,7 @@ fn context_menu_group(palette: crate::ui::theme::ThemePalette) -> gpui::Div {
 }
 
 fn context_menu_button(
-    palette: crate::ui::theme::ThemePalette,
+    palette: crate::theme::ThemePalette,
     id: impl Into<String>,
     label: impl Into<SharedString>,
     on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,

@@ -5,7 +5,7 @@ use regex::Regex;
 use std::sync::OnceLock;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(super) enum ActionLinkKind {
+pub(crate) enum ActionLinkKind {
     Url,
     Ip,
     HostPort,
@@ -13,7 +13,7 @@ pub(super) enum ActionLinkKind {
 }
 
 impl ActionLinkKind {
-    pub(super) fn label(self) -> &'static str {
+    pub(crate) fn label(self) -> &'static str {
         match self {
             Self::Url => "URL",
             Self::Ip => "IPv4",
@@ -24,23 +24,23 @@ impl ActionLinkKind {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub(super) struct ActionLinkMatch {
-    pub(super) kind: ActionLinkKind,
-    pub(super) text: String,
-    pub(super) value: String,
-    pub(super) start: usize,
-    pub(super) end: usize,
-    pub(super) host: Option<String>,
-    pub(super) port: Option<String>,
+pub(crate) struct ActionLinkMatch {
+    pub(crate) kind: ActionLinkKind,
+    pub(crate) text: String,
+    pub(crate) value: String,
+    pub(crate) start: usize,
+    pub(crate) end: usize,
+    pub(crate) host: Option<String>,
+    pub(crate) port: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub(super) struct ActionLinkAction {
-    pub(super) id: String,
-    pub(super) label: String,
-    pub(super) command: Option<String>,
-    pub(super) open_url: Option<String>,
-    pub(super) is_default: bool,
+pub(crate) struct ActionLinkAction {
+    pub(crate) id: String,
+    pub(crate) label: String,
+    pub(crate) command: Option<String>,
+    pub(crate) open_url: Option<String>,
+    pub(crate) is_default: bool,
 }
 
 fn ipv4_re() -> &'static Regex {
@@ -125,7 +125,7 @@ fn overlaps(a: (usize, usize), b: (usize, usize)) -> bool {
 }
 
 /// Scan plain text for action-link entities (priority: host:port > url > ipv4 > archive).
-pub(super) fn find_action_links(
+pub(crate) fn find_action_links(
     text: &str,
     matchers: &ActionLinksMatcherSettings,
     include_url: bool,
@@ -249,7 +249,7 @@ pub(super) fn find_action_links(
     accepted
 }
 
-pub(super) fn match_at_offset(
+pub(crate) fn match_at_offset(
     text: &str,
     offset: usize,
     matchers: &ActionLinksMatcherSettings,
@@ -259,7 +259,7 @@ pub(super) fn match_at_offset(
         .find(|item| offset >= item.start && offset < item.end)
 }
 
-pub(super) fn actions_for_match(item: &ActionLinkMatch) -> Vec<ActionLinkAction> {
+pub(crate) fn actions_for_match(item: &ActionLinkMatch) -> Vec<ActionLinkAction> {
     match item.kind {
         ActionLinkKind::Url => vec![
             ActionLinkAction {

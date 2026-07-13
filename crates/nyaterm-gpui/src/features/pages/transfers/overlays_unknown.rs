@@ -1,7 +1,7 @@
 use super::*;
 
 impl NyaTermApp {
-    pub(in crate::ui::view) fn transfer_unknown_file_overlay(
+    pub(in crate::features) fn transfer_unknown_file_overlay(
         &mut self,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {

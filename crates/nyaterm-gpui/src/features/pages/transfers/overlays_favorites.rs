@@ -1,7 +1,7 @@
 use super::*;
 
 impl NyaTermApp {
-    pub(in crate::ui::view::pages::transfers) fn open_transfer_browser_favorites_menu(
+    pub(in crate::features::pages::transfers) fn open_transfer_browser_favorites_menu(
         &mut self,
         event: &MouseDownEvent,
         cx: &mut Context<Self>,
@@ -15,7 +15,7 @@ impl NyaTermApp {
         cx.notify();
     }
 
-    pub(in crate::ui::view) fn close_transfer_browser_favorites_menu(
+    pub(in crate::features) fn close_transfer_browser_favorites_menu(
         &mut self,
         cx: &mut Context<Self>,
     ) {
@@ -23,7 +23,7 @@ impl NyaTermApp {
         cx.notify();
     }
 
-    pub(in crate::ui::view) fn transfer_browser_favorites_menu_overlay(
+    pub(in crate::features) fn transfer_browser_favorites_menu_overlay(
         &mut self,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
@@ -214,7 +214,7 @@ impl NyaTermApp {
 }
 
 fn favorite_menu_button(
-    palette: crate::ui::theme::ThemePalette,
+    palette: crate::theme::ThemePalette,
     id: impl Into<String>,
     label: impl Into<SharedString>,
     on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,

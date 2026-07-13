@@ -1,6 +1,6 @@
 use super::*;
 
-pub(in crate::ui::view::pages::remote) fn docker_container_matches(
+pub(in crate::features::pages::remote) fn docker_container_matches(
     container: &DockerContainer,
     query: &str,
 ) -> bool {
@@ -17,7 +17,7 @@ pub(in crate::ui::view::pages::remote) fn docker_container_matches(
     )
 }
 
-pub(in crate::ui::view::pages::remote) fn docker_image_matches(
+pub(in crate::features::pages::remote) fn docker_image_matches(
     image: &DockerImage,
     query: &str,
 ) -> bool {
@@ -33,14 +33,14 @@ pub(in crate::ui::view::pages::remote) fn docker_image_matches(
     )
 }
 
-pub(in crate::ui::view::pages::remote) fn docker_volume_matches(
+pub(in crate::features::pages::remote) fn docker_volume_matches(
     volume: &DockerVolume,
     query: &str,
 ) -> bool {
     docker_text_matches(query, [volume.driver.as_str(), volume.name.as_str()])
 }
 
-pub(in crate::ui::view::pages::remote) fn docker_network_matches(
+pub(in crate::features::pages::remote) fn docker_network_matches(
     network: &DockerNetwork,
     query: &str,
 ) -> bool {
@@ -55,7 +55,7 @@ pub(in crate::ui::view::pages::remote) fn docker_network_matches(
     )
 }
 
-pub(in crate::ui::view::pages::remote) fn docker_compose_project_matches(
+pub(in crate::features::pages::remote) fn docker_compose_project_matches(
     project: &DockerComposeProject,
     query: &str,
 ) -> bool {
@@ -69,7 +69,7 @@ pub(in crate::ui::view::pages::remote) fn docker_compose_project_matches(
     )
 }
 
-pub(in crate::ui::view::pages::remote) fn docker_text_matches<const N: usize>(
+pub(in crate::features::pages::remote) fn docker_text_matches<const N: usize>(
     query: &str,
     values: [&str; N],
 ) -> bool {

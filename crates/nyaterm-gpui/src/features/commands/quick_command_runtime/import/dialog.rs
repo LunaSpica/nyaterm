@@ -1,0 +1,125 @@
+use super::*;
+
+impl NyaTermApp {
+    pub(in crate::features) fn open_quick_command_import_dialog(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if self.quick_command_import_path_prompt.is_some() {
+            self.terminal_status = "quick command import picker is already open".to_string();
+            cx.notify();
+            return;
+        }
+
+        self.quick_command_import_dialog_open = true;
+        self.terminal_status = "select a quick command import source".to_string();
+        window.focus(&self.quick_command_import_focus);
+        cx.notify();
+    }
+
+    pub(in crate::features) fn close_quick_command_import_dialog(
+        &mut self,
+        cx: &mut Context<Self>,
+    ) {
+        self.quick_command_import_dialog_open = false;
+        cx.notify();
+    }
+
+    pub(in crate::features) fn select_quick_command_import_source(
+        &mut self,
+        kind: QuickCommandImportPathPromptKind,
+        cx: &mut Context<Self>,
+    ) {
+        self.quick_command_import_dialog_open = false;
+        self.prompt_quick_command_import(kind, cx);
+    }
+
+    fn prompt_quick_command_import(
+        &mut self,
+        kind: QuickCommandImportPathPromptKind,
+        cx: &mut Context<Self>,
+    ) {
+        if self.quick_command_import_path_prompt.is_some() {
+            self.terminal_status = "quick command import picker is already open".to_string();
+            cx.notify();
+            return;
+        }
+
+        let options = PathPromptOptions {
+            files: true,
+            directories: false,
+            multiple: false,
+            prompt: Some(SharedString::from(kind.prompt_label())),
+        };
+        let receiver = cx.prompt_for_paths(options);
+        let config_dir = self.runtime.config_dir().to_path_buf();
+        let portable_key_path = self.runtime.portable_key_path().map(ToOwned::to_owned);
+        self.quick_command_import_path_prompt = Some(kind);
+        self.terminal_status = kind.selecting_status().to_string();
+
+        cx.spawn(async move |this, cx| {
+            let result = match receiver.await {
+                Ok(Ok(Some(paths))) => match paths.into_iter().next() {
+                    Some(path) => match import_quick_commands_from_path(
+                        &config_dir,
+                        portable_key_path.clone(),
+                        kind,
+                        &path,
+                    ) {
+                        Ok(summary) => QuickCommandImportPathPromptResult::Imported {
+                            imported_commands: summary.imported_commands,
+                            imported_categories: summary.imported_categories,
+                            updated_commands: summary.updated_commands,
+                            total_commands: summary.total_commands,
+                            total_categories: summary.total_categories,
+                        },
+                        Err(error) => QuickCommandImportPathPromptResult::Failed(error),
+                    },
+                    None => QuickCommandImportPathPromptResult::Cancelled,
+                },
+                Ok(Ok(None)) => QuickCommandImportPathPromptResult::Cancelled,
+                Ok(Err(error)) => QuickCommandImportPathPromptResult::Failed(error.to_string()),
+                Err(_) => QuickCommandImportPathPromptResult::Closed,
+            };
+            let _ = this.update(cx, |this, cx| {
+                this.apply_quick_command_import_result(result);
+                cx.notify();
+            });
+        })
+        .detach();
+        cx.notify();
+    }
+
+    fn apply_quick_command_import_result(&mut self, result: QuickCommandImportPathPromptResult) {
+        self.quick_command_import_path_prompt = None;
+        match result {
+            QuickCommandImportPathPromptResult::Imported {
+                imported_commands,
+                imported_categories,
+                updated_commands,
+                total_commands,
+                total_categories,
+            } => {
+                self.refresh_quick_commands();
+                self.terminal_status = format!(
+                    "imported {imported_commands} quick command(s), updated {updated_commands}, categories +{imported_categories}, total {total_commands}/{total_categories}"
+                );
+                self.store_status.message = self.terminal_status.clone();
+                self.store_status.ready = true;
+            }
+            QuickCommandImportPathPromptResult::Cancelled => {
+                self.terminal_status = "quick command import cancelled".to_string();
+            }
+            QuickCommandImportPathPromptResult::Failed(error) => {
+                self.terminal_status = format!("quick command import failed: {error}");
+                self.store_status.message = self.terminal_status.clone();
+                self.store_status.ready = false;
+            }
+            QuickCommandImportPathPromptResult::Closed => {
+                self.terminal_status =
+                    "quick command import picker closed before returning".to_string();
+            }
+        }
+    }
+}

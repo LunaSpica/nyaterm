@@ -1,7 +1,7 @@
 use super::*;
 
 impl NyaTermApp {
-    pub(in crate::ui::view) fn cache_transfer_browser_session(&mut self, session_id: &str) {
+    pub(in crate::features) fn cache_transfer_browser_session(&mut self, session_id: &str) {
         if session_id.trim().is_empty()
             || !self
                 .session_metadata
@@ -44,7 +44,7 @@ impl NyaTermApp {
         );
     }
 
-    pub(in crate::ui::view) fn restore_transfer_browser_session_cache(
+    pub(in crate::features) fn restore_transfer_browser_session_cache(
         &mut self,
         session_id: &str,
     ) -> bool {
@@ -77,7 +77,7 @@ impl NyaTermApp {
         true
     }
 
-    pub(in crate::ui::view) fn reset_transfer_browser_for_active_session(&mut self) {
+    pub(in crate::features) fn reset_transfer_browser_for_active_session(&mut self) {
         self.transfer_remote_path = ".".to_string();
         self.transfer_browser_path = ".".to_string();
         self.transfer_browser_home_dir.clear();
@@ -102,7 +102,7 @@ impl NyaTermApp {
         self.transfer_browser_upload_menu = None;
     }
 
-    pub(in crate::ui::view::pages::transfers) fn open_transfer_browser_directory(
+    pub(in crate::features::pages::transfers) fn open_transfer_browser_directory(
         &mut self,
         path: String,
         window: &mut Window,
@@ -111,7 +111,7 @@ impl NyaTermApp {
         self.open_transfer_browser_directory_with_history(path, true, window, cx);
     }
 
-    pub(in crate::ui::view::pages::transfers) fn open_transfer_browser_directory_with_history(
+    pub(in crate::features::pages::transfers) fn open_transfer_browser_directory_with_history(
         &mut self,
         path: String,
         record_history: bool,
@@ -133,7 +133,7 @@ impl NyaTermApp {
         self.start_sftp_list_job(window, cx);
     }
 
-    pub(in crate::ui::view::pages::transfers) fn open_transfer_remote_path_from_input(
+    pub(in crate::features::pages::transfers) fn open_transfer_remote_path_from_input(
         &mut self,
         window: &mut Window,
         cx: &mut Context<Self>,
@@ -142,7 +142,7 @@ impl NyaTermApp {
         self.open_transfer_browser_directory(path, window, cx);
     }
 
-    pub(in crate::ui::view) fn open_transfer_browser_history(
+    pub(in crate::features) fn open_transfer_browser_history(
         &mut self,
         delta: isize,
         window: &mut Window,
@@ -177,7 +177,7 @@ impl NyaTermApp {
         self.open_transfer_browser_directory_with_history(path, false, window, cx);
     }
 
-    pub(in crate::ui::view::pages::transfers) fn record_transfer_browser_history(
+    pub(in crate::features::pages::transfers) fn record_transfer_browser_history(
         &mut self,
         path: String,
     ) {
@@ -193,7 +193,7 @@ impl NyaTermApp {
         self.record_transfer_browser_visited_history(path);
     }
 
-    pub(in crate::ui::view::pages::transfers) fn record_transfer_browser_visited_history(
+    pub(in crate::features::pages::transfers) fn record_transfer_browser_visited_history(
         &mut self,
         path: String,
     ) {
@@ -207,7 +207,7 @@ impl NyaTermApp {
         self.transfer_browser_visited_history.truncate(30);
     }
 
-    pub(in crate::ui::view::pages::transfers) fn add_current_transfer_browser_favorite(
+    pub(in crate::features::pages::transfers) fn add_current_transfer_browser_favorite(
         &mut self,
         cx: &mut Context<Self>,
     ) {
@@ -215,7 +215,7 @@ impl NyaTermApp {
         self.add_transfer_browser_favorite_path(path, cx);
     }
 
-    pub(in crate::ui::view::pages::transfers) fn add_transfer_browser_favorite_path(
+    pub(in crate::features::pages::transfers) fn add_transfer_browser_favorite_path(
         &mut self,
         path: String,
         cx: &mut Context<Self>,
@@ -244,7 +244,7 @@ impl NyaTermApp {
         cx.notify();
     }
 
-    pub(in crate::ui::view::pages::transfers) fn remove_current_transfer_browser_favorite(
+    pub(in crate::features::pages::transfers) fn remove_current_transfer_browser_favorite(
         &mut self,
         cx: &mut Context<Self>,
     ) {
@@ -252,7 +252,7 @@ impl NyaTermApp {
         self.remove_transfer_browser_favorite_path(path, cx);
     }
 
-    pub(in crate::ui::view::pages::transfers) fn remove_transfer_browser_favorite_path(
+    pub(in crate::features::pages::transfers) fn remove_transfer_browser_favorite_path(
         &mut self,
         path: String,
         cx: &mut Context<Self>,
@@ -277,7 +277,7 @@ impl NyaTermApp {
         cx.notify();
     }
 
-    pub(in crate::ui::view::pages::transfers) fn toggle_current_transfer_browser_favorite(
+    pub(in crate::features::pages::transfers) fn toggle_current_transfer_browser_favorite(
         &mut self,
         cx: &mut Context<Self>,
     ) {
@@ -293,7 +293,7 @@ impl NyaTermApp {
         }
     }
 
-    pub(in crate::ui::view::pages::transfers) fn toggle_transfer_browser_auto_sync_cwd(
+    pub(in crate::features::pages::transfers) fn toggle_transfer_browser_auto_sync_cwd(
         &mut self,
         window: &mut Window,
         cx: &mut Context<Self>,
@@ -332,7 +332,7 @@ impl NyaTermApp {
         }
     }
 
-    pub(in crate::ui::view) fn transfer_browser_auto_sync_cwd_enabled(&self) -> bool {
+    pub(in crate::features) fn transfer_browser_auto_sync_cwd_enabled(&self) -> bool {
         let Some(connection_id) = self.active_transfer_browser_connection_id() else {
             return false;
         };
@@ -342,7 +342,7 @@ impl NyaTermApp {
             .any(|id| id == &connection_id)
     }
 
-    pub(in crate::ui::view) fn sync_transfer_browser_favorites_for_active_session(&mut self) {
+    pub(in crate::features) fn sync_transfer_browser_favorites_for_active_session(&mut self) {
         let Some(connection_id) = self.active_transfer_browser_connection_id() else {
             self.transfer_browser_favorites.clear();
             return;
@@ -365,7 +365,7 @@ impl NyaTermApp {
         self.transfer_browser_favorites.truncate(12);
     }
 
-    pub(in crate::ui::view::pages::transfers) fn persist_transfer_browser_favorites(
+    pub(in crate::features::pages::transfers) fn persist_transfer_browser_favorites(
         &mut self,
         cx: &mut Context<Self>,
     ) {
@@ -392,7 +392,7 @@ impl NyaTermApp {
         cx.notify();
     }
 
-    pub(in crate::ui::view::pages::transfers) fn persist_transfer_browser_ui_settings(&mut self) {
+    pub(in crate::features::pages::transfers) fn persist_transfer_browser_ui_settings(&mut self) {
         match ConnectionStore::open_with_portable_key_path(
             self.runtime.config_dir(),
             self.runtime.portable_key_path().map(ToOwned::to_owned),
@@ -412,7 +412,7 @@ impl NyaTermApp {
         }
     }
 
-    pub(in crate::ui::view::pages::transfers) fn active_transfer_browser_connection_id(
+    pub(in crate::features::pages::transfers) fn active_transfer_browser_connection_id(
         &self,
     ) -> Option<String> {
         let session_id = self.active_session_id.as_deref()?;
@@ -423,7 +423,7 @@ impl NyaTermApp {
             .filter(|connection_id| !connection_id.trim().is_empty())
     }
 
-    pub(in crate::ui::view::pages::transfers) fn open_transfer_parent_directory(
+    pub(in crate::features::pages::transfers) fn open_transfer_parent_directory(
         &mut self,
         window: &mut Window,
         cx: &mut Context<Self>,
@@ -449,7 +449,7 @@ impl NyaTermApp {
         self.start_sftp_list_job_with_select_after(Some(current_path), window, cx);
     }
 
-    pub(in crate::ui::view::pages::transfers) fn refresh_transfer_browser(
+    pub(in crate::features::pages::transfers) fn refresh_transfer_browser(
         &mut self,
         window: &mut Window,
         cx: &mut Context<Self>,

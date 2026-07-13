@@ -1,0 +1,370 @@
+use super::*;
+
+impl NyaTermApp {
+    pub(in crate::features) fn ai_execution_mode_menu(&mut self, cx: &mut Context<Self>) -> impl IntoElement {
+        let palette = self.theme_palette();
+        let current = self.ai_settings.agent_command_execution_mode.clone();
+        div()
+            .id(SharedString::from("ai-execution-mode-menu"))
+            .absolute()
+            .top(px(36.))
+            .right(px(72.))
+            .w(px(260.))
+            .rounded_md()
+            .border_1()
+            .border_color(rgb(palette.border))
+            .bg(rgb(palette.surface))
+            .shadow_lg()
+            .py_1()
+            .flex()
+            .flex_col()
+            .on_mouse_down(MouseButton::Left, |_, _, _| {})
+            .child(
+                div()
+                    .px_3()
+                    .py_1()
+                    .text_size(px(11.))
+                    .font_weight(FontWeight(700.))
+                    .text_color(rgb(palette.text))
+                    .child("Agent command execution"),
+            )
+            .child(self.ai_execution_mode_item(
+                "ai-exec-confirm",
+                "Confirm each",
+                "Ask before running every agent command",
+                AgentCommandExecutionMode::ConfirmEach,
+                current == AgentCommandExecutionMode::ConfirmEach,
+                cx,
+            ))
+            .child(self.ai_execution_mode_item(
+                "ai-exec-smart",
+                "Smart",
+                "Auto-run low risk; confirm higher risk",
+                AgentCommandExecutionMode::Smart,
+                current == AgentCommandExecutionMode::Smart,
+                cx,
+            ))
+            .child(self.ai_execution_mode_item(
+                "ai-exec-auto",
+                "Auto",
+                "Run agent commands without confirmation",
+                AgentCommandExecutionMode::Auto,
+                current == AgentCommandExecutionMode::Auto,
+                cx,
+            ))
+    }
+
+    pub(in crate::features) fn ai_execution_mode_item(
+        &self,
+        id: &'static str,
+        title: &'static str,
+        detail: &'static str,
+        mode: AgentCommandExecutionMode,
+        selected: bool,
+        cx: &mut Context<Self>,
+    ) -> impl IntoElement {
+        let palette = self.theme_palette();
+        div()
+            .id(SharedString::from(id))
+            .px_3()
+            .py_2()
+            .flex()
+            .items_start()
+            .gap_2()
+            .cursor_pointer()
+            .hover(|this| this.bg(rgb(palette.surface_elevated)))
+            .on_click(cx.listener(move |this, _, _, cx| {
+                this.set_ai_command_mode(mode.clone(), cx);
+                this.save_ai_settings(cx);
+                this.ai_execution_menu_open = false;
+                this.ai_status = format!(
+                    "Agent execution mode: {}",
+                    match mode {
+                        AgentCommandExecutionMode::ConfirmEach => "confirm each",
+                        AgentCommandExecutionMode::Smart => "smart",
+                        AgentCommandExecutionMode::Auto => "auto",
+                    }
+                );
+                cx.notify();
+            }))
+            .child(
+                div()
+                    .min_w_0()
+                    .flex_1()
+                    .flex()
+                    .flex_col()
+                    .gap_0()
+                    .child(
+                        div()
+                            .text_size(px(12.))
+                            .font_weight(FontWeight(600.))
+                            .text_color(if selected {
+                                rgb(palette.accent)
+                            } else {
+                                rgb(palette.text)
+                            })
+                            .child(title),
+                    )
+                    .child(
+                        div()
+                            .text_size(px(10.))
+                            .text_color(rgb(palette.text_muted))
+                            .child(detail),
+                    ),
+            )
+            .child(
+                div()
+                    .text_size(px(12.))
+                    .text_color(rgb(palette.accent))
+                    .child(if selected { "✓" } else { "" }),
+            )
+    }
+
+    pub(in crate::features) fn ai_history_popover(&mut self, cx: &mut Context<Self>) -> impl IntoElement {
+        let palette = self.theme_palette();
+        // Tauri AIAssistantPanel history card: search + Clear All + date-grouped sessions.
+        let query = self.ai_history_query.trim().to_ascii_lowercase();
+        let filtered: Vec<_> = self
+            .ai_sessions
+            .iter()
+            .filter(|session| {
+                if query.is_empty() {
+                    return true;
+                }
+                session.title.to_ascii_lowercase().contains(&query)
+                    || session.id.to_ascii_lowercase().contains(&query)
+            })
+            .cloned()
+            .collect();
+        let total_count = self.ai_sessions.len();
+        let filtered_count = filtered.len();
+        let grouped = group_ai_sessions_by_date(&filtered);
+        let search_display = if self.ai_history_query.is_empty() {
+            "Search history...".to_string()
+        } else {
+            self.ai_history_query.clone()
+        };
+
+        let mut rows = div().flex().flex_col().gap_1().p_2();
+        if filtered_count == 0 {
+            rows = rows.child(
+                div()
+                    .py_4()
+                    .text_center()
+                    .text_size(px(11.))
+                    .text_color(rgb(palette.text_dimmed))
+                    .child(if total_count == 0 {
+                        "No chat history yet"
+                    } else {
+                        "No matching history"
+                    }),
+            );
+        } else {
+            for (group, sessions) in grouped {
+                if sessions.is_empty() {
+                    continue;
+                }
+                rows = rows.child(
+                    div()
+                        .px_2()
+                        .py_1()
+                        .text_size(px(10.))
+                        .font_weight(FontWeight(700.))
+                        .text_color(rgb(palette.text_dimmed))
+                        .child(group.label()),
+                );
+                for session in sessions.into_iter().take(48) {
+                    let session_id = session.id.clone();
+                    let delete_id = session.id.clone();
+                    let active = self.ai_chat_session_id == session.id;
+                    rows = rows.child(
+                        div()
+                            .id(SharedString::from(format!("ai-session-{}", session.id)))
+                            .h(px(32.))
+                            .px_2()
+                            .rounded_md()
+                            .flex()
+                            .items_center()
+                            .gap_1()
+                            .bg(if active {
+                                rgb(palette.hover)
+                            } else {
+                                rgb(palette.surface)
+                            })
+                            .hover(|this| this.bg(rgb(palette.surface_elevated)))
+                            .child(
+                                div()
+                                    .id(SharedString::from(format!(
+                                        "ai-session-open-{}",
+                                        session.id
+                                    )))
+                                    .min_w_0()
+                                    .flex_1()
+                                    .text_size(px(12.))
+                                    .text_color(rgb(palette.text))
+                                    .overflow_hidden()
+                                    .cursor_pointer()
+                                    .child(truncate_preview(&session.title, 36))
+                                    .on_click(cx.listener(move |this, _, _, cx| {
+                                        this.load_ai_session_messages(session_id.clone(), cx);
+                                    })),
+                            )
+                            .child(icon_button(
+                                format!("ai-session-delete-{}", session.id),
+                                "×",
+                                self.theme_palette(),
+                                cx.listener(move |this, _, _, cx| {
+                                    this.delete_ai_session(delete_id.clone(), cx);
+                                }),
+                            )),
+                    );
+                }
+            }
+        }
+
+        div()
+            .id(SharedString::from("ai-history-popover"))
+            .absolute()
+            .top(px(36.))
+            .left(px(8.))
+            .right(px(8.))
+            .max_h(px(352.))
+            .rounded_md()
+            .border_1()
+            .border_color(rgb(palette.border))
+            .bg(rgb(palette.surface))
+            .shadow_lg()
+            .flex()
+            .flex_col()
+            .overflow_hidden()
+            .on_mouse_down(MouseButton::Left, |_, _, _| {})
+            .child(
+                div()
+                    .p_2()
+                    .border_b_1()
+                    .border_color(rgb(palette.border))
+                    .child(
+                        div()
+                            .id(SharedString::from("ai-history-search"))
+                            .h(px(28.))
+                            .px_2()
+                            .rounded_md()
+                            .border_1()
+                            .border_color(rgb(palette.border))
+                            .bg(rgb(palette.bg))
+                            .flex()
+                            .items_center()
+                            .gap_2()
+                            .cursor_pointer()
+                            .track_focus(&self.ai_history_search_focus)
+                            .on_click(cx.listener(|this, _, window, cx| {
+                                window.focus(&this.ai_history_search_focus);
+                                cx.notify();
+                            }))
+                            .on_key_down(cx.listener(|this, event: &KeyDownEvent, _, cx| {
+                                cx.stop_propagation();
+                                this.handle_ai_history_search_key_down(event, cx);
+                            }))
+                            .child(
+                                svg()
+                                    .size(px(14.))
+                                    .flex_none()
+                                    .path("icons/ai/search.svg")
+                                    .text_color(rgb(palette.text_dimmed)),
+                            )
+                            .child(
+                                div()
+                                    .min_w_0()
+                                    .flex_1()
+                                    .text_size(px(12.))
+                                    .text_color(if self.ai_history_query.is_empty() {
+                                        rgb(palette.text_dimmed)
+                                    } else {
+                                        rgb(palette.text)
+                                    })
+                                    .child(search_display),
+                            )
+                            .when(!self.ai_history_query.is_empty(), |this| {
+                                this.child(
+                                    div()
+                                        .id(SharedString::from("ai-history-search-clear"))
+                                        .size(px(18.))
+                                        .flex()
+                                        .items_center()
+                                        .justify_center()
+                                        .rounded_sm()
+                                        .text_size(px(10.))
+                                        .text_color(rgb(palette.text_muted))
+                                        .cursor_pointer()
+                                        .hover(|this| {
+                                            this.bg(rgb(palette.surface_elevated))
+                                                .text_color(rgb(palette.text))
+                                        })
+                                        .on_click(cx.listener(|this, _, window, cx| {
+                                            this.ai_history_query.clear();
+                                            window.focus(&this.ai_history_search_focus);
+                                            cx.notify();
+                                        }))
+                                        .child("×"),
+                                )
+                            }),
+                    ),
+            )
+            .child(
+                div()
+                    .h(px(32.))
+                    .px_2()
+                    .border_b_1()
+                    .border_color(rgb(palette.border))
+                    .flex()
+                    .items_center()
+                    .justify_between()
+                    .child(
+                        div()
+                            .text_size(px(11.))
+                            .font_weight(FontWeight(700.))
+                            .text_color(rgb(palette.text))
+                            .child("History"),
+                    )
+                    .child(
+                        div()
+                            .id(SharedString::from("ai-history-clear-all"))
+                            .h(px(22.))
+                            .px_2()
+                            .rounded_sm()
+                            .flex()
+                            .items_center()
+                            .text_size(px(11.))
+                            .text_color(if total_count == 0 {
+                                rgb(palette.border)
+                            } else {
+                                rgb(palette.text_muted)
+                            })
+                            .cursor_pointer()
+                            .hover(|this| {
+                                this.bg(rgb(palette.surface_elevated))
+                                    .text_color(rgb(palette.text))
+                            })
+                            .on_click(cx.listener(move |this, _, _, cx| {
+                                if this.ai_sessions.is_empty() {
+                                    return;
+                                }
+                                this.clear_all_ai_history(cx);
+                            }))
+                            .child("Clear All"),
+                    ),
+            )
+            .child(
+                div()
+                    .id(SharedString::from("ai-history-scroll"))
+                    .flex_1()
+                    .min_h_0()
+                    .max_h(px(280.))
+                    .overflow_scroll()
+                    .scrollbar_width(px(6.))
+                    .child(rows),
+            )
+    }
+
+
+}

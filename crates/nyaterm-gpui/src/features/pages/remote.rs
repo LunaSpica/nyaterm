@@ -3,7 +3,7 @@ use gpui::{
     Window, div, prelude::*, px, rgb, svg,
 };
 
-use crate::ui::components::{empty_panel, icon_button, small_button, status_pill};
+use crate::widgets::{empty_panel, icon_button, small_button, status_pill};
 use std::collections::{HashMap, HashSet};
 
 use super::super::{

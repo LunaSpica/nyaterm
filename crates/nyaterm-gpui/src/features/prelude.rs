@@ -48,10 +48,10 @@ pub(super) use nyaterm_transport::{
 };
 pub(super) use nyaterm_terminal::TerminalScreen;
 
-pub(super) use crate::ai_http::{
+pub(super) use crate::http::ai::{
     complete_native_chat, discover_openai_compatible_models, stream_native_chat,
 };
-pub(super) use crate::cloud_sync_http::{
+pub(super) use crate::http::cloud_sync::{
     NativeAliyunDriveRemote, NativeGoogleDriveRemote, NativeOneDriveRemote, NativeS3Remote,
     NativeSnippetHttpClient, NativeWebdavRemote,
 };
@@ -64,11 +64,11 @@ pub(super) use std::sync::{
 };
 pub(super) use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
-pub(super) use super::super::components::{
+pub(super) use crate::widgets::{
     capability_line, empty_panel, icon_button, mode_button, session_info_row, small_button,
     status_pill,
 };
-pub(super) use super::super::models::{
+pub(super) use crate::models::{
     ActionLinkMenuAction, ActionLinkMenuState, ActionLinkTooltipState, ActivityBarContextMenuState,
     ActivityBarEntry, ActivityBarLayoutState, ActivityBarZone, AiActionEditorField,
     AiActionListKind, AiCredentialEditorField, AiInputField, AiPreparedRequest, BottomPanelMode,
@@ -111,12 +111,12 @@ pub(super) use super::super::models::{
     WorkspacePaneNode, WorkspaceSplitDirection, WorkspaceSplitResizeState, WorkspaceSplitState,
     is_multi_line_paste, normalize_paste_newlines,
 };
-pub(super) use super::super::send_command::{
+pub(super) use crate::send_command::{
     SendCommandDataType, SendCommandLineEnding, SendCommandMode, SendCommandTarget,
     build_send_command_units_for, format_send_command_hex_display, parse_send_command_hex,
 };
-pub(super) use super::super::shortcuts::{event_to_hotkey_string, shortcut_matches};
-pub(super) use super::super::terminal::{
+pub(super) use crate::shortcuts::{event_to_hotkey_string, shortcut_matches};
+pub(super) use crate::terminal::{
     NyaTerminalElement, TerminalBufferMatch, TerminalLineDecorations, TerminalSearchFlags,
     initial_terminal_screen, terminal_buffer_matches, terminal_key_bytes,
 };

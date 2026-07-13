@@ -1,7 +1,7 @@
 use super::*;
 
-pub(in crate::ui::view::pages::remote) fn docker_details_panel(
-    palette: crate::ui::theme::ThemePalette,
+pub(in crate::features::pages::remote) fn docker_details_panel(
+    palette: crate::theme::ThemePalette,
     container_id: Option<String>,
     details: Option<DockerContainerDetails>,
     container: Option<DockerContainer>,
@@ -454,7 +454,7 @@ pub(in crate::ui::view::pages::remote) fn docker_details_panel(
 }
 
 fn docker_detail_line(
-    palette: crate::ui::theme::ThemePalette,
+    palette: crate::theme::ThemePalette,
     label: &'static str,
     value: String,
     display_value: String,

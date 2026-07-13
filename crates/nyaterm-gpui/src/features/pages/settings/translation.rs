@@ -32,7 +32,7 @@ impl NyaTermApp {
         }))
     }
 
-    pub(in crate::ui::view) fn translation_settings_section(
+    pub(in crate::features) fn translation_settings_section(
         &mut self,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
@@ -418,7 +418,7 @@ fn translation_provider_status(provider: &str) -> &'static str {
 }
 
 fn translation_provider_card(
-    palette: crate::ui::theme::ThemePalette,
+    palette: crate::theme::ThemePalette,
     title: &'static str,
     status_label: &'static str,
     ok: bool,

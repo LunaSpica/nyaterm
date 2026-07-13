@@ -1,70 +1,70 @@
 use super::*;
 
 #[derive(Debug)]
-pub(in crate::ui::view) struct SessionStartResult {
-    pub(in crate::ui::view) request_id: String,
-    pub(in crate::ui::view) connection_name: String,
-    pub(in crate::ui::view) result: Result<SessionStartSuccess, String>,
+pub(in crate::features) struct SessionStartResult {
+    pub(in crate::features) request_id: String,
+    pub(in crate::features) connection_name: String,
+    pub(in crate::features) result: Result<SessionStartSuccess, String>,
 }
 
 #[derive(Debug)]
-pub(in crate::ui::view) struct SessionStartSuccess {
-    pub(in crate::ui::view) session_id: String,
-    pub(in crate::ui::view) multiplex_handle: Option<SshMultiplexHandle>,
+pub(in crate::features) struct SessionStartSuccess {
+    pub(in crate::features) session_id: String,
+    pub(in crate::features) multiplex_handle: Option<SshMultiplexHandle>,
 }
 
 #[derive(Debug)]
-pub(in crate::ui::view) struct TunnelJobResult {
-    pub(in crate::ui::view) tunnel_id: String,
-    pub(in crate::ui::view) result: Result<TunnelJobOutput, String>,
+pub(in crate::features) struct TunnelJobResult {
+    pub(in crate::features) tunnel_id: String,
+    pub(in crate::features) result: Result<TunnelJobOutput, String>,
 }
 
 #[derive(Debug)]
-pub(in crate::ui::view) enum TunnelJobOutput {
+pub(in crate::features) enum TunnelJobOutput {
     Opened(SshTunnelInfo),
     Closed,
 }
 
 #[derive(Debug)]
-pub(in crate::ui::view) struct ProcessJobResult {
-    pub(in crate::ui::view) result: Result<ProcessJobOutput, String>,
+pub(in crate::features) struct ProcessJobResult {
+    pub(in crate::features) result: Result<ProcessJobOutput, String>,
 }
 
 #[derive(Debug)]
-pub(in crate::ui::view) struct StatsJobResult {
-    pub(in crate::ui::view) result: Result<RemoteStats, String>,
+pub(in crate::features) struct StatsJobResult {
+    pub(in crate::features) result: Result<RemoteStats, String>,
 }
 
 #[derive(Debug)]
-pub(in crate::ui::view) struct TranslateJobResult {
-    pub(in crate::ui::view) result: Result<TranslateResult, String>,
+pub(in crate::features) struct TranslateJobResult {
+    pub(in crate::features) result: Result<TranslateResult, String>,
 }
 
 #[derive(Debug)]
-pub(in crate::ui::view) struct UpdateJobResult {
-    pub(in crate::ui::view) result: Result<NativeUpdateInfo, String>,
+pub(in crate::features) struct UpdateJobResult {
+    pub(in crate::features) result: Result<NativeUpdateInfo, String>,
 }
 
 #[derive(Debug)]
-pub(in crate::ui::view) struct DockerJobResult {
-    pub(in crate::ui::view) result: Result<DockerJobOutput, String>,
+pub(in crate::features) struct DockerJobResult {
+    pub(in crate::features) result: Result<DockerJobOutput, String>,
 }
 
 #[derive(Debug)]
-pub(in crate::ui::view) struct AiDiscoveryJobResult {
-    pub(in crate::ui::view) profile_id: String,
-    pub(in crate::ui::view) result: Result<Vec<AiModelDiscovery>, String>,
+pub(in crate::features) struct AiDiscoveryJobResult {
+    pub(in crate::features) profile_id: String,
+    pub(in crate::features) result: Result<Vec<AiModelDiscovery>, String>,
 }
 
 #[derive(Debug)]
-pub(in crate::ui::view) struct AiChatJobResult {
-    pub(in crate::ui::view) job_id: u64,
-    pub(in crate::ui::view) session_id: String,
-    pub(in crate::ui::view) result: Result<AiChatJobOutput, String>,
+pub(in crate::features) struct AiChatJobResult {
+    pub(in crate::features) job_id: u64,
+    pub(in crate::features) session_id: String,
+    pub(in crate::features) result: Result<AiChatJobOutput, String>,
 }
 
 #[derive(Debug)]
-pub(in crate::ui::view) enum AiChatWorkerEvent {
+pub(in crate::features) enum AiChatWorkerEvent {
     Delta {
         job_id: u64,
         session_id: String,
@@ -86,50 +86,50 @@ pub(in crate::ui::view) enum AiChatWorkerEvent {
 }
 
 #[derive(Debug)]
-pub(in crate::ui::view) struct AiChatJobOutput {
-    pub(in crate::ui::view) mode: AiMode,
-    pub(in crate::ui::view) text: String,
-    pub(in crate::ui::view) reasoning: Option<String>,
-    pub(in crate::ui::view) command_cards: Vec<AiCommandCard>,
-    pub(in crate::ui::view) auto_execute_first: bool,
-    pub(in crate::ui::view) approval_note: Option<String>,
+pub(in crate::features) struct AiChatJobOutput {
+    pub(in crate::features) mode: AiMode,
+    pub(in crate::features) text: String,
+    pub(in crate::features) reasoning: Option<String>,
+    pub(in crate::features) command_cards: Vec<AiCommandCard>,
+    pub(in crate::features) auto_execute_first: bool,
+    pub(in crate::features) approval_note: Option<String>,
 }
 
 #[derive(Debug, Clone)]
-pub(in crate::ui::view) struct AiAgentLoopState {
-    pub(in crate::ui::view) ai_session_id: String,
-    pub(in crate::ui::view) terminal_session_id: String,
-    pub(in crate::ui::view) task_prompt: String,
-    pub(in crate::ui::view) command: String,
-    pub(in crate::ui::view) marker_id: Option<String>,
-    pub(in crate::ui::view) background_job_id: Option<u64>,
-    pub(in crate::ui::view) step_index: u16,
-    pub(in crate::ui::view) max_steps: u16,
-    pub(in crate::ui::view) output_start_len: usize,
-    pub(in crate::ui::view) started_at: Instant,
-    pub(in crate::ui::view) min_wait_until: Instant,
-    pub(in crate::ui::view) timeout_at: Instant,
-    pub(in crate::ui::view) last_seen_len: usize,
-    pub(in crate::ui::view) stable_since: Instant,
+pub(in crate::features) struct AiAgentLoopState {
+    pub(in crate::features) ai_session_id: String,
+    pub(in crate::features) terminal_session_id: String,
+    pub(in crate::features) task_prompt: String,
+    pub(in crate::features) command: String,
+    pub(in crate::features) marker_id: Option<String>,
+    pub(in crate::features) background_job_id: Option<u64>,
+    pub(in crate::features) step_index: u16,
+    pub(in crate::features) max_steps: u16,
+    pub(in crate::features) output_start_len: usize,
+    pub(in crate::features) started_at: Instant,
+    pub(in crate::features) min_wait_until: Instant,
+    pub(in crate::features) timeout_at: Instant,
+    pub(in crate::features) last_seen_len: usize,
+    pub(in crate::features) stable_since: Instant,
 }
 
 #[derive(Debug, Clone)]
-pub(in crate::ui::view) struct AiAgentStepView {
-    pub(in crate::ui::view) step_index: u16,
-    pub(in crate::ui::view) status: AiAgentStepStatus,
-    pub(in crate::ui::view) title: String,
+pub(in crate::features) struct AiAgentStepView {
+    pub(in crate::features) step_index: u16,
+    pub(in crate::features) status: AiAgentStepStatus,
+    pub(in crate::features) title: String,
     /// Short summary line (Tauri duration / status meta).
-    pub(in crate::ui::view) detail: String,
+    pub(in crate::features) detail: String,
     /// Collapsible thought text (Tauri AgentStepView.thought).
-    pub(in crate::ui::view) thought: Option<String>,
+    pub(in crate::features) thought: Option<String>,
     /// Shell command body when the step is execute_command-like.
-    pub(in crate::ui::view) command: Option<String>,
+    pub(in crate::features) command: Option<String>,
     /// Observation / terminal output snippet.
-    pub(in crate::ui::view) observation: Option<String>,
+    pub(in crate::features) observation: Option<String>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(in crate::ui::view) enum AiAgentStepStatus {
+pub(in crate::features) enum AiAgentStepStatus {
     Planning,
     Tool,
     NeedsApproval,
@@ -140,13 +140,13 @@ pub(in crate::ui::view) enum AiAgentStepStatus {
 }
 
 #[derive(Clone)]
-pub(in crate::ui::view) enum AiAgentBackgroundTarget {
+pub(in crate::features) enum AiAgentBackgroundTarget {
     Ssh(SshSessionConfig),
     Local { working_dir: Option<PathBuf> },
 }
 
 #[derive(Debug)]
-pub(in crate::ui::view) enum ProcessJobOutput {
+pub(in crate::features) enum ProcessJobOutput {
     Listed(Vec<RemoteProcess>),
     Signalled {
         pid: u32,
@@ -161,7 +161,7 @@ pub(in crate::ui::view) enum ProcessJobOutput {
 }
 
 #[derive(Debug)]
-pub(in crate::ui::view) enum DockerJobOutput {
+pub(in crate::features) enum DockerJobOutput {
     Overview(RemoteDockerOverview),
     Details {
         container_id: String,
@@ -198,7 +198,7 @@ pub(in crate::ui::view) enum DockerJobOutput {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(in crate::ui::view) enum ActivitySide {
+pub(in crate::features) enum ActivitySide {
     Left,
     Right,
 }

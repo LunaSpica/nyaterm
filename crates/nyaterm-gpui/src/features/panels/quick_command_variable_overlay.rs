@@ -1,7 +1,7 @@
 use super::*;
 
 impl NyaTermApp {
-    pub(in crate::ui::view) fn quick_command_variable_prompt_overlay(
+    pub(in crate::features) fn quick_command_variable_prompt_overlay(
         &mut self,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {

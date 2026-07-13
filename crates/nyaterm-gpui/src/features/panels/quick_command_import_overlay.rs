@@ -1,7 +1,7 @@
 use super::*;
 
 impl NyaTermApp {
-    pub(in crate::ui::view) fn quick_command_import_overlay(
+    pub(in crate::features) fn quick_command_import_overlay(
         &mut self,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
@@ -146,7 +146,7 @@ impl NyaTermApp {
 }
 
 fn quick_command_import_source_card(
-    palette: crate::ui::theme::ThemePalette,
+    palette: crate::theme::ThemePalette,
     id: &'static str,
     monogram: &'static str,
     label: &'static str,

@@ -2,7 +2,7 @@ use super::*;
 use gpui::SharedString;
 
 impl NyaTermApp {
-    pub(in crate::ui::view) fn stats_view(&mut self, cx: &mut Context<Self>) -> impl IntoElement {
+    pub(in crate::features) fn stats_view(&mut self, cx: &mut Context<Self>) -> impl IntoElement {
         let palette = self.theme_palette();
         let can_refresh = self.active_ssh_config.is_some() && !self.stats_pending;
         let stats = self.remote_stats.clone().unwrap_or_default();
@@ -391,7 +391,7 @@ impl NyaTermApp {
 }
 
 fn cpu_core_summary(
-    palette: crate::ui::theme::ThemePalette,
+    palette: crate::theme::ThemePalette,
     per_core: &[f64],
     expanded: bool,
     cx: &mut Context<NyaTermApp>,
@@ -442,7 +442,7 @@ fn cpu_core_summary(
     rows
 }
 
-fn cpu_core_row(palette: crate::ui::theme::ThemePalette, index: usize, usage: f64) -> gpui::Div {
+fn cpu_core_row(palette: crate::theme::ThemePalette, index: usize, usage: f64) -> gpui::Div {
     let ratio = (usage / 100.).clamp(0., 1.);
     div()
         .rounded_sm()

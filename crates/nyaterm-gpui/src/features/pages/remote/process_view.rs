@@ -2,7 +2,7 @@ use super::*;
 use gpui::SharedString;
 
 impl NyaTermApp {
-    pub(in crate::ui::view) fn processes_view(
+    pub(in crate::features) fn processes_view(
         &mut self,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {

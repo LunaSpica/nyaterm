@@ -1,22 +1,22 @@
-use crate::ui::theme::ThemePalette;
+use crate::theme::ThemePalette;
 use gpui::{FontWeight, IntoElement, div, prelude::*, px, rgb};
 use nyaterm_transport::SessionKind;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub(super) enum SendCommandTarget {
+pub(crate) enum SendCommandTarget {
     Current,
     AllCompatible,
     Group(String),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(super) enum SendCommandDataType {
+pub(crate) enum SendCommandDataType {
     Text,
     Hex,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(super) enum SendCommandMode {
+pub(crate) enum SendCommandMode {
     Line,
     Character,
     Packet,
@@ -24,7 +24,7 @@ pub(super) enum SendCommandMode {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(super) enum SendCommandLineEnding {
+pub(crate) enum SendCommandLineEnding {
     None,
     Cr,
     Lf,
@@ -46,7 +46,7 @@ fn normalize_send_command_text(value: &str) -> String {
     value.replace("\r\n", "\n").replace('\r', "\n")
 }
 
-pub(super) fn parse_send_command_hex(value: &str) -> Result<Vec<u8>, String> {
+pub(crate) fn parse_send_command_hex(value: &str) -> Result<Vec<u8>, String> {
     let cleaned: String = value.chars().filter(|ch| !ch.is_whitespace()).collect();
     if cleaned.is_empty() {
         return Ok(Vec::new());
@@ -67,7 +67,7 @@ pub(super) fn parse_send_command_hex(value: &str) -> Result<Vec<u8>, String> {
     Ok(bytes)
 }
 
-pub(super) fn format_send_command_hex_display(draft: &str) -> String {
+pub(crate) fn format_send_command_hex_display(draft: &str) -> String {
     let normalized = draft.replace("\r\n", "\n").replace("\r", "\n");
     normalized
         .split('\n')
@@ -102,7 +102,7 @@ pub(super) fn format_send_command_hex_display(draft: &str) -> String {
         .join("\n")
 }
 
-pub(super) fn build_send_command_units_for(
+pub(crate) fn build_send_command_units_for(
     draft: &str,
     data_type: SendCommandDataType,
     mode: SendCommandMode,
@@ -153,7 +153,7 @@ pub(super) fn build_send_command_units_for(
     }
 }
 
-pub(super) fn bottom_send_field(
+pub(crate) fn bottom_send_field(
     palette: ThemePalette,
     label: &'static str,
     value: impl Into<String>,

@@ -1,13 +1,13 @@
 use super::*;
 
-pub(in crate::ui::view::panels) struct QuickCommandCategoryOption {
+pub(in crate::features::panels) struct QuickCommandCategoryOption {
     pub id: String,
     pub label: String,
     pub count: usize,
     pub manageable: bool,
 }
 
-pub(in crate::ui::view::panels) fn quick_command_category_options(
+pub(in crate::features::panels) fn quick_command_category_options(
     commands: &[QuickCommand],
     categories: &[QuickCommandCategory],
 ) -> Vec<QuickCommandCategoryOption> {
@@ -50,7 +50,7 @@ pub(in crate::ui::view::panels) fn quick_command_category_options(
     options
 }
 
-pub(in crate::ui::view::panels) fn filtered_quick_commands(
+pub(in crate::features::panels) fn filtered_quick_commands(
     commands: &[QuickCommand],
     categories: &[QuickCommandCategory],
     query: &str,
@@ -118,8 +118,8 @@ pub(in crate::ui::view::panels) fn filtered_quick_commands(
     filtered
 }
 
-pub(in crate::ui::view::panels) fn quick_command_icon_mark(
-    palette: crate::ui::theme::ThemePalette,
+pub(in crate::features::panels) fn quick_command_icon_mark(
+    palette: crate::theme::ThemePalette,
     icon_tag: Option<&str>,
     color_tag: Option<&str>,
 ) -> impl IntoElement {
@@ -149,8 +149,8 @@ pub(in crate::ui::view::panels) fn quick_command_icon_mark(
     }
 }
 
-pub(in crate::ui::view::panels) fn quick_command_color(
-    palette: crate::ui::theme::ThemePalette,
+pub(in crate::features::panels) fn quick_command_color(
+    palette: crate::theme::ThemePalette,
     color_tag: Option<&str>,
 ) -> gpui::Rgba {
     match color_tag.unwrap_or_default() {
@@ -163,8 +163,8 @@ pub(in crate::ui::view::panels) fn quick_command_color(
     }
 }
 
-pub(in crate::ui::view::panels) fn quick_command_icon_label(
-    palette: crate::ui::theme::ThemePalette,
+pub(in crate::features::panels) fn quick_command_icon_label(
+    palette: crate::theme::ThemePalette,
     icon_tag: Option<&str>,
 ) -> String {
     icon_tag
@@ -174,7 +174,7 @@ pub(in crate::ui::view::panels) fn quick_command_icon_label(
 }
 
 fn quick_command_icon_def(
-    palette: crate::ui::theme::ThemePalette,
+    palette: crate::theme::ThemePalette,
     icon_tag: &str,
 ) -> Option<(&'static str, gpui::Rgba)> {
     match icon_tag.trim().to_ascii_lowercase().as_str() {
@@ -212,8 +212,8 @@ fn quick_command_icon_def(
     }
 }
 
-pub(in crate::ui::view::panels) fn quick_command_editor_field(
-    palette: crate::ui::theme::ThemePalette,
+pub(in crate::features::panels) fn quick_command_editor_field(
+    palette: crate::theme::ThemePalette,
     id: &'static str,
     label: &'static str,
     placeholder: &'static str,
@@ -266,8 +266,8 @@ pub(in crate::ui::view::panels) fn quick_command_editor_field(
         )
 }
 
-pub(in crate::ui::view::panels) fn quick_command_editor_script_field(
-    palette: crate::ui::theme::ThemePalette,
+pub(in crate::features::panels) fn quick_command_editor_script_field(
+    palette: crate::theme::ThemePalette,
     id: &'static str,
     label: &'static str,
     placeholder: &'static str,
@@ -333,7 +333,7 @@ pub(in crate::ui::view::panels) fn quick_command_editor_script_field(
         )
 }
 
-pub(in crate::ui::view::panels) fn send_command_hex_preview(draft: &str) -> String {
+pub(in crate::features::panels) fn send_command_hex_preview(draft: &str) -> String {
     match parse_send_command_hex(draft) {
         Ok(bytes) if bytes.is_empty() => String::new(),
         Ok(bytes) => bytes
@@ -351,12 +351,12 @@ pub(in crate::ui::view::panels) fn send_command_hex_preview(draft: &str) -> Stri
     }
 }
 
-pub(in crate::ui::view::panels) fn send_command_hex_byte_count(draft: &str) -> Option<usize> {
+pub(in crate::features::panels) fn send_command_hex_byte_count(draft: &str) -> Option<usize> {
     parse_send_command_hex(draft).ok().map(|bytes| bytes.len())
 }
 
 /// Format hex draft like Tauri: uppercase pairs spaced, double-space every 4 bytes.
-pub(in crate::ui::view::panels) fn send_command_hex_guide_count(draft: &str) -> usize {
+pub(in crate::features::panels) fn send_command_hex_guide_count(draft: &str) -> usize {
     let normalized = draft.replace("\r\n", "\n").replace("\r", "\n");
     normalized
         .split('\n')
@@ -368,8 +368,8 @@ pub(in crate::ui::view::panels) fn send_command_hex_guide_count(draft: &str) -> 
 }
 
 /// Per-line character offsets for 4-byte group boundaries (Tauri `buildHexGuideRows`).
-pub(in crate::ui::view::panels) fn send_command_hex_guide_rows(draft: &str) -> Vec<Vec<u32>> {
-    let display = crate::ui::send_command::format_send_command_hex_display(draft);
+pub(in crate::features::panels) fn send_command_hex_guide_rows(draft: &str) -> Vec<Vec<u32>> {
+    let display = crate::send_command::format_send_command_hex_display(draft);
     display
         .split('\n')
         .map(|line| {
@@ -386,14 +386,14 @@ pub(in crate::ui::view::panels) fn send_command_hex_guide_rows(draft: &str) -> V
 }
 
 /// First-line guide marks (compat helper).
-pub(in crate::ui::view::panels) fn send_command_hex_guide_marks(draft: &str) -> Vec<u32> {
+pub(in crate::features::panels) fn send_command_hex_guide_marks(draft: &str) -> Vec<u32> {
     send_command_hex_guide_rows(draft)
         .into_iter()
         .next()
         .unwrap_or_default()
 }
 
-pub(in crate::ui::view::panels) fn terminal_action_prompt_text(
+pub(in crate::features::panels) fn terminal_action_prompt_text(
     text: &str,
     max_chars: usize,
 ) -> String {

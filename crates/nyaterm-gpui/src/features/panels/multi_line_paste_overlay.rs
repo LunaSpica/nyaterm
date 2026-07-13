@@ -1,7 +1,7 @@
 use super::*;
 
 impl NyaTermApp {
-    pub(in crate::ui::view) fn multi_line_paste_overlay(
+    pub(in crate::features) fn multi_line_paste_overlay(
         &mut self,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {

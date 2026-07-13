@@ -1,7 +1,7 @@
 use super::*;
 
 impl NyaTermApp {
-    pub(in crate::ui::view::pages::transfers) fn handle_transfer_browser_key_down(
+    pub(in crate::features::pages::transfers) fn handle_transfer_browser_key_down(
         &mut self,
         event: &KeyDownEvent,
         window: &mut Window,
@@ -50,7 +50,7 @@ impl NyaTermApp {
             return;
         }
 
-        if crate::ui::shortcuts::shortcut_matches(
+        if crate::shortcuts::shortcut_matches(
             event,
             "fileExplorer.rename",
             &self.settings.keybindings,

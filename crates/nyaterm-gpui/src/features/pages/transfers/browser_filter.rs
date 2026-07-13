@@ -1,7 +1,7 @@
 use super::*;
 
 impl NyaTermApp {
-    pub(in crate::ui::view::pages::transfers) fn visible_transfer_browser_entries(
+    pub(in crate::features::pages::transfers) fn visible_transfer_browser_entries(
         &self,
     ) -> Vec<SftpFileEntry> {
         let query = self.transfer_browser_search.trim().to_lowercase();
@@ -22,7 +22,7 @@ impl NyaTermApp {
         entries
     }
 
-    pub(in crate::ui::view::pages::transfers) fn toggle_transfer_browser_sort(
+    pub(in crate::features::pages::transfers) fn toggle_transfer_browser_sort(
         &mut self,
         column: TransferBrowserSortColumn,
         cx: &mut Context<Self>,
@@ -42,7 +42,7 @@ impl NyaTermApp {
         cx.notify();
     }
 
-    pub(in crate::ui::view::pages::transfers) fn handle_transfer_browser_search_key_down(
+    pub(in crate::features::pages::transfers) fn handle_transfer_browser_search_key_down(
         &mut self,
         event: &KeyDownEvent,
         cx: &mut Context<Self>,

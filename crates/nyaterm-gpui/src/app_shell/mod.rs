@@ -12,7 +12,7 @@ use crate::{
         SessionStore, SettingsStore, StartupRestoreStore, TransferStore, UiStoreHandles,
         WindowRuntimeStore, WorkspaceStore,
     },
-    ui::NyaTermApp,
+    features::NyaTermApp,
 };
 
 #[allow(dead_code)]
@@ -40,11 +40,23 @@ impl AppShell {
         let workspace = cx.new(|_| WorkspaceStore::default());
         let sessions = cx.new(|_| SessionStore::default());
         let overlays = cx.new(|_| OverlayStore::default());
+        let settings = cx.new(|_| SettingsStore::default());
+        let connections = cx.new(|_| ConnectionsStore::default());
+        let transfers = cx.new(|_| TransferStore::default());
+        let ai = cx.new(|_| AiStore::default());
+        let cloud_sync = cx.new(|_| CloudSyncStore::default());
+        let remote_ops = cx.new(|_| RemoteOpsStore::default());
         let stores = UiStoreHandles {
             startup_restore: startup_restore.clone(),
             workspace: workspace.clone(),
             sessions: sessions.clone(),
             overlays: overlays.clone(),
+            settings: settings.clone(),
+            connections: connections.clone(),
+            transfers: transfers.clone(),
+            ai: ai.clone(),
+            cloud_sync: cloud_sync.clone(),
+            remote_ops: remote_ops.clone(),
         };
         let app = cx.new(|cx| NyaTermApp::new(runtime, stores, cx));
         let subscriptions = vec![
@@ -52,6 +64,12 @@ impl AppShell {
             cx.observe(&workspace, |_, _, cx| cx.notify()),
             cx.observe(&sessions, |_, _, cx| cx.notify()),
             cx.observe(&overlays, |_, _, cx| cx.notify()),
+            cx.observe(&settings, |_, _, cx| cx.notify()),
+            cx.observe(&connections, |_, _, cx| cx.notify()),
+            cx.observe(&transfers, |_, _, cx| cx.notify()),
+            cx.observe(&ai, |_, _, cx| cx.notify()),
+            cx.observe(&cloud_sync, |_, _, cx| cx.notify()),
+            cx.observe(&remote_ops, |_, _, cx| cx.notify()),
         ];
 
         Self {
@@ -61,12 +79,12 @@ impl AppShell {
             startup_restore,
             workspace,
             sessions,
-            settings: cx.new(|_| SettingsStore::default()),
-            connections: cx.new(|_| ConnectionsStore::default()),
-            transfers: cx.new(|_| TransferStore::default()),
-            ai: cx.new(|_| AiStore::default()),
-            cloud_sync: cx.new(|_| CloudSyncStore::default()),
-            remote_ops: cx.new(|_| RemoteOpsStore::default()),
+            settings,
+            connections,
+            transfers,
+            ai,
+            cloud_sync,
+            remote_ops,
             overlays,
             _subscriptions: subscriptions,
         }

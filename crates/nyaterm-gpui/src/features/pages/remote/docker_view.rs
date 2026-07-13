@@ -2,7 +2,7 @@ use super::*;
 use gpui::SharedString;
 
 impl NyaTermApp {
-    pub(in crate::ui::view) fn docker_view(&mut self, cx: &mut Context<Self>) -> impl IntoElement {
+    pub(in crate::features) fn docker_view(&mut self, cx: &mut Context<Self>) -> impl IntoElement {
         let can_run = self.active_ssh_config.is_some() && !self.docker_pending;
         let overview = self.docker_overview.clone().unwrap_or_default();
         let active_tab = if self.docker_tab == DockerTab::Compose && !overview.compose_available {

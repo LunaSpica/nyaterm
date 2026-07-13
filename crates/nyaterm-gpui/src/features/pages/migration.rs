@@ -1,11 +1,11 @@
 use gpui::{FontWeight, IntoElement, div, prelude::*, rgb};
 
-use crate::ui::components::section_header;
+use crate::widgets::section_header;
 
 use super::super::{NyaTermApp, metric, service_status};
 
 impl NyaTermApp {
-    pub(in crate::ui::view) fn migration_view(&self) -> impl IntoElement {
+    pub(in crate::features) fn migration_view(&self) -> impl IntoElement {
         let palette = self.theme_palette();
         let mut capabilities = div().flex().flex_col().gap_2();
         for capability in self.services.capabilities() {

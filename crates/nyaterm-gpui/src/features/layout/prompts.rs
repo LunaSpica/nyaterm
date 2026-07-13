@@ -1,7 +1,7 @@
 use super::*;
 
 impl NyaTermApp {
-    pub(in crate::ui::view) fn duplicate_prompt_banner(
+    pub(in crate::features) fn duplicate_prompt_banner(
         &mut self,
         prompt: SftpDuplicatePromptState,
         cx: &mut Context<Self>,
@@ -102,7 +102,7 @@ impl NyaTermApp {
             )
     }
 
-    pub(in crate::ui::view) fn host_key_prompt_banner(
+    pub(in crate::features) fn host_key_prompt_banner(
         &mut self,
         prompt: HostKeyPromptRequest,
         cx: &mut Context<Self>,
@@ -197,7 +197,7 @@ impl NyaTermApp {
             )
     }
 
-    pub(in crate::ui::view) fn credential_prompt_banner(
+    pub(in crate::features) fn credential_prompt_banner(
         &mut self,
         prompt: CredentialPromptState,
         cx: &mut Context<Self>,
@@ -326,7 +326,7 @@ impl NyaTermApp {
             )
     }
 
-    pub(in crate::ui::view) fn snapshot_password_prompt_banner(
+    pub(in crate::features) fn snapshot_password_prompt_banner(
         &mut self,
         prompt: SnapshotPasswordPromptState,
         cx: &mut Context<Self>,

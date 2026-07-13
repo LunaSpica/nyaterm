@@ -1,7 +1,7 @@
 use super::*;
 
 impl NyaTermApp {
-    pub(in crate::ui::view) fn lock_screen_overlay(
+    pub(in crate::features) fn lock_screen_overlay(
         &mut self,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {

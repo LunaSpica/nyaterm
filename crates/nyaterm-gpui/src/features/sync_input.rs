@@ -1,7 +1,7 @@
 use super::*;
 
 impl NyaTermApp {
-    pub(in crate::ui::view) fn open_sync_groups(
+    pub(in crate::features) fn open_sync_groups(
         &mut self,
         window: &mut Window,
         cx: &mut Context<Self>,
@@ -15,13 +15,13 @@ impl NyaTermApp {
         cx.notify();
     }
 
-    pub(in crate::ui::view) fn close_sync_groups(&mut self, cx: &mut Context<Self>) {
+    pub(in crate::features) fn close_sync_groups(&mut self, cx: &mut Context<Self>) {
         self.sync_groups_open = false;
         self.terminal_status = "sync groups closed".to_string();
         cx.notify();
     }
 
-    pub(in crate::ui::view) fn create_sync_group(&mut self, cx: &mut Context<Self>) {
+    pub(in crate::features) fn create_sync_group(&mut self, cx: &mut Context<Self>) {
         let index = self.sync_groups.len();
         let color = self.next_sync_group_color();
         let group = SyncInputGroup {
@@ -38,7 +38,7 @@ impl NyaTermApp {
         cx.notify();
     }
 
-    pub(in crate::ui::view) fn delete_selected_sync_group(&mut self, cx: &mut Context<Self>) {
+    pub(in crate::features) fn delete_selected_sync_group(&mut self, cx: &mut Context<Self>) {
         let Some(group_id) = self.sync_groups_selected_id.clone() else {
             self.terminal_status = "no sync group selected".to_string();
             cx.notify();
@@ -50,7 +50,7 @@ impl NyaTermApp {
         cx.notify();
     }
 
-    pub(in crate::ui::view) fn select_sync_group(
+    pub(in crate::features) fn select_sync_group(
         &mut self,
         group_id: String,
         cx: &mut Context<Self>,
@@ -62,7 +62,7 @@ impl NyaTermApp {
         }
     }
 
-    pub(in crate::ui::view) fn toggle_selected_sync_group_enabled(
+    pub(in crate::features) fn toggle_selected_sync_group_enabled(
         &mut self,
         cx: &mut Context<Self>,
     ) {
@@ -80,7 +80,7 @@ impl NyaTermApp {
         cx.notify();
     }
 
-    pub(in crate::ui::view) fn toggle_session_in_selected_sync_group(
+    pub(in crate::features) fn toggle_session_in_selected_sync_group(
         &mut self,
         session_id: String,
         cx: &mut Context<Self>,
@@ -101,7 +101,7 @@ impl NyaTermApp {
         cx.notify();
     }
 
-    pub(in crate::ui::view) fn toggle_session_paused_in_selected_sync_group(
+    pub(in crate::features) fn toggle_session_paused_in_selected_sync_group(
         &mut self,
         session_id: String,
         cx: &mut Context<Self>,
@@ -126,7 +126,7 @@ impl NyaTermApp {
         cx.notify();
     }
 
-    pub(in crate::ui::view) fn sync_peer_session_ids(&self, session_id: &str) -> Vec<String> {
+    pub(in crate::features) fn sync_peer_session_ids(&self, session_id: &str) -> Vec<String> {
         let live_ids = self
             .session_manager
             .list_sessions()
@@ -164,7 +164,7 @@ impl NyaTermApp {
         peers
     }
 
-    pub(in crate::ui::view) fn toggle_broadcast_to_all(&mut self, cx: &mut Context<Self>) {
+    pub(in crate::features) fn toggle_broadcast_to_all(&mut self, cx: &mut Context<Self>) {
         self.broadcast_to_all = !self.broadcast_to_all;
         self.terminal_status = if self.broadcast_to_all {
             "broadcast to all sessions enabled".to_string()
@@ -174,7 +174,7 @@ impl NyaTermApp {
         cx.notify();
     }
 
-    pub(in crate::ui::view) fn active_sync_group_label(&self, session_id: &str) -> Option<String> {
+    pub(in crate::features) fn active_sync_group_label(&self, session_id: &str) -> Option<String> {
         self.active_sync_group_for_session(session_id)
             .filter(|group| !group.paused_session_ids.iter().any(|id| id == session_id))
             .map(|group| group.name.clone())
@@ -182,7 +182,7 @@ impl NyaTermApp {
 
     /// First enabled group that includes this session (paused still counts for chrome).
     /// Matches Tauri `getActiveGroupForSession`.
-    pub(in crate::ui::view) fn active_sync_group_for_session(
+    pub(in crate::features) fn active_sync_group_for_session(
         &self,
         session_id: &str,
     ) -> Option<&SyncInputGroup> {
@@ -191,7 +191,7 @@ impl NyaTermApp {
             .find(|group| group.enabled && group.session_ids.iter().any(|id| id == session_id))
     }
 
-    pub(in crate::ui::view) fn is_session_paused_in_active_sync_group(
+    pub(in crate::features) fn is_session_paused_in_active_sync_group(
         &self,
         session_id: &str,
     ) -> bool {
@@ -200,7 +200,7 @@ impl NyaTermApp {
     }
 
     /// Pause/resume the current session inside its active enabled sync group.
-    pub(in crate::ui::view) fn toggle_session_paused_in_active_sync_group(
+    pub(in crate::features) fn toggle_session_paused_in_active_sync_group(
         &mut self,
         session_id: String,
         cx: &mut Context<Self>,
@@ -233,7 +233,7 @@ impl NyaTermApp {
     }
 
     /// Remove session from its active enabled sync group (Tauri Leave).
-    pub(in crate::ui::view) fn leave_active_sync_group(
+    pub(in crate::features) fn leave_active_sync_group(
         &mut self,
         session_id: String,
         cx: &mut Context<Self>,
@@ -268,7 +268,7 @@ impl NyaTermApp {
     }
 
     /// Disable the active enabled sync group without deleting it (Tauri Close Group).
-    pub(in crate::ui::view) fn close_active_sync_group_for_session(
+    pub(in crate::features) fn close_active_sync_group_for_session(
         &mut self,
         session_id: String,
         cx: &mut Context<Self>,
@@ -292,7 +292,7 @@ impl NyaTermApp {
         cx.notify();
     }
 
-    pub(in crate::ui::view) fn purge_session_from_sync_groups(&mut self, session_id: &str) {
+    pub(in crate::features) fn purge_session_from_sync_groups(&mut self, session_id: &str) {
         for group in &mut self.sync_groups {
             group.session_ids.retain(|id| id != session_id);
             group.paused_session_ids.retain(|id| id != session_id);
@@ -308,7 +308,7 @@ impl NyaTermApp {
         }
     }
 
-    pub(in crate::ui::view) fn selected_sync_group(&self) -> Option<&SyncInputGroup> {
+    pub(in crate::features) fn selected_sync_group(&self) -> Option<&SyncInputGroup> {
         self.sync_groups_selected_id
             .as_deref()
             .and_then(|id| self.sync_groups.iter().find(|group| group.id == id))

@@ -1,7 +1,7 @@
 use super::*;
 
 impl NyaTermApp {
-    pub(in crate::ui::view) fn terminal_actions_overlay(
+    pub(in crate::features) fn terminal_actions_overlay(
         &mut self,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {

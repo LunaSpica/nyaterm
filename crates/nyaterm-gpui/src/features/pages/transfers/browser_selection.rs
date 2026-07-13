@@ -1,7 +1,7 @@
 use super::*;
 
 impl NyaTermApp {
-    pub(in crate::ui::view::pages::transfers) fn select_transfer_browser_entry(
+    pub(in crate::features::pages::transfers) fn select_transfer_browser_entry(
         &mut self,
         path: String,
         cx: &mut Context<Self>,
@@ -15,7 +15,7 @@ impl NyaTermApp {
         cx.notify();
     }
 
-    pub(in crate::ui::view::pages::transfers) fn select_transfer_browser_entry_from_click(
+    pub(in crate::features::pages::transfers) fn select_transfer_browser_entry_from_click(
         &mut self,
         path: String,
         event: &ClickEvent,
@@ -43,7 +43,7 @@ impl NyaTermApp {
         }
     }
 
-    pub(in crate::ui::view::pages::transfers) fn handle_transfer_browser_entry_mouse_down(
+    pub(in crate::features::pages::transfers) fn handle_transfer_browser_entry_mouse_down(
         &mut self,
         path: String,
         event: &MouseDownEvent,
@@ -101,7 +101,7 @@ impl NyaTermApp {
         });
     }
 
-    pub(in crate::ui::view::pages::transfers) fn schedule_transfer_browser_name_rename(
+    pub(in crate::features::pages::transfers) fn schedule_transfer_browser_name_rename(
         &mut self,
         path: String,
         was_single_selected_on_mouse_down: bool,
@@ -158,7 +158,7 @@ impl NyaTermApp {
         cx.notify();
     }
 
-    pub(in crate::ui::view::pages::transfers) fn cancel_transfer_browser_pending_rename(
+    pub(in crate::features::pages::transfers) fn cancel_transfer_browser_pending_rename(
         &mut self,
         cx: &mut Context<Self>,
     ) {
@@ -167,7 +167,7 @@ impl NyaTermApp {
         }
     }
 
-    pub(in crate::ui::view) fn cancel_transfer_browser_pending_rename_without_notify(
+    pub(in crate::features) fn cancel_transfer_browser_pending_rename_without_notify(
         &mut self,
     ) -> bool {
         let cancelled = self.transfer_browser_pending_rename.take().is_some();
@@ -178,7 +178,7 @@ impl NyaTermApp {
         cancelled
     }
 
-    pub(in crate::ui::view::pages::transfers) fn handle_transfer_browser_entry_mouse_move(
+    pub(in crate::features::pages::transfers) fn handle_transfer_browser_entry_mouse_move(
         &mut self,
         path: String,
         event: &MouseMoveEvent,
@@ -202,7 +202,7 @@ impl NyaTermApp {
         );
     }
 
-    pub(in crate::ui::view::pages::transfers) fn finish_transfer_browser_selection_drag(
+    pub(in crate::features::pages::transfers) fn finish_transfer_browser_selection_drag(
         &mut self,
         _event: &MouseUpEvent,
         cx: &mut Context<Self>,
@@ -212,7 +212,7 @@ impl NyaTermApp {
         }
     }
 
-    pub(in crate::ui::view::pages::transfers) fn select_transfer_browser_entry_from_context(
+    pub(in crate::features::pages::transfers) fn select_transfer_browser_entry_from_context(
         &mut self,
         path: String,
         window: &mut Window,
@@ -235,7 +235,7 @@ impl NyaTermApp {
         self.select_transfer_browser_entry(path, cx);
     }
 
-    pub(in crate::ui::view::pages::transfers) fn open_transfer_browser_context_menu(
+    pub(in crate::features::pages::transfers) fn open_transfer_browser_context_menu(
         &mut self,
         path: String,
         event: &MouseDownEvent,
@@ -267,7 +267,7 @@ impl NyaTermApp {
         cx.notify();
     }
 
-    pub(in crate::ui::view::pages::transfers) fn open_transfer_browser_parent_context_menu(
+    pub(in crate::features::pages::transfers) fn open_transfer_browser_parent_context_menu(
         &mut self,
         current_path: String,
         event: &MouseDownEvent,
@@ -291,7 +291,7 @@ impl NyaTermApp {
         cx.notify();
     }
 
-    pub(in crate::ui::view::pages::transfers) fn open_transfer_browser_current_context_menu(
+    pub(in crate::features::pages::transfers) fn open_transfer_browser_current_context_menu(
         &mut self,
         event: &MouseDownEvent,
         window: &mut Window,
@@ -319,7 +319,7 @@ impl NyaTermApp {
         cx.notify();
     }
 
-    pub(in crate::ui::view) fn close_transfer_browser_context_menu(
+    pub(in crate::features) fn close_transfer_browser_context_menu(
         &mut self,
         cx: &mut Context<Self>,
     ) {
@@ -371,7 +371,7 @@ impl NyaTermApp {
         cx.notify();
     }
 
-    pub(in crate::ui::view::pages::transfers) fn toggle_transfer_browser_entry_marked(
+    pub(in crate::features::pages::transfers) fn toggle_transfer_browser_entry_marked(
         &mut self,
         path: String,
         cx: &mut Context<Self>,
@@ -391,7 +391,7 @@ impl NyaTermApp {
         cx.notify();
     }
 
-    pub(in crate::ui::view::pages::transfers) fn select_all_visible_transfer_entries(
+    pub(in crate::features::pages::transfers) fn select_all_visible_transfer_entries(
         &mut self,
         cx: &mut Context<Self>,
     ) {
@@ -409,7 +409,7 @@ impl NyaTermApp {
         cx.notify();
     }
 
-    pub(in crate::ui::view::pages::transfers) fn clear_transfer_browser_selection(
+    pub(in crate::features::pages::transfers) fn clear_transfer_browser_selection(
         &mut self,
         cx: &mut Context<Self>,
     ) {
@@ -419,7 +419,7 @@ impl NyaTermApp {
         cx.notify();
     }
 
-    pub(in crate::ui::view::pages::transfers) fn selected_transfer_path_part(
+    pub(in crate::features::pages::transfers) fn selected_transfer_path_part(
         &self,
         part: TransferPathPart,
     ) -> Option<String> {
@@ -427,7 +427,7 @@ impl NyaTermApp {
         Some(transfer_path_part_value(path, part))
     }
 
-    pub(in crate::ui::view::pages::transfers) fn copy_selected_transfer_path(
+    pub(in crate::features::pages::transfers) fn copy_selected_transfer_path(
         &mut self,
         part: TransferPathPart,
         cx: &mut Context<Self>,
@@ -443,7 +443,7 @@ impl NyaTermApp {
         cx.notify();
     }
 
-    pub(in crate::ui::view::pages::transfers) fn send_selected_transfer_path_to_terminal(
+    pub(in crate::features::pages::transfers) fn send_selected_transfer_path_to_terminal(
         &mut self,
         part: TransferPathPart,
         cx: &mut Context<Self>,
@@ -464,7 +464,7 @@ impl NyaTermApp {
         cx.notify();
     }
 
-    pub(in crate::ui::view::pages::transfers) fn selected_transfer_entry(
+    pub(in crate::features::pages::transfers) fn selected_transfer_entry(
         &self,
     ) -> Option<SftpFileEntry> {
         let selected = self.transfer_selected_remote_path.as_deref()?;
@@ -474,7 +474,7 @@ impl NyaTermApp {
             .cloned()
     }
 
-    pub(in crate::ui::view::pages::transfers) fn selected_transfer_entries(
+    pub(in crate::features::pages::transfers) fn selected_transfer_entries(
         &self,
     ) -> Vec<SftpFileEntry> {
         if self.transfer_selected_remote_paths.is_empty() {
@@ -486,7 +486,7 @@ impl NyaTermApp {
             .collect()
     }
 
-    pub(in crate::ui::view::pages::transfers) fn start_selected_sftp_download_jobs(
+    pub(in crate::features::pages::transfers) fn start_selected_sftp_download_jobs(
         &mut self,
         window: &mut Window,
         cx: &mut Context<Self>,

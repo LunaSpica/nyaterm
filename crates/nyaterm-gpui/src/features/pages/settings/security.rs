@@ -1,7 +1,7 @@
 use super::*;
 
 impl NyaTermApp {
-    pub(in crate::ui::view) fn security_settings_section(
+    pub(in crate::features) fn security_settings_section(
         &mut self,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
@@ -195,7 +195,7 @@ impl NyaTermApp {
 }
 
 fn security_hint(
-    palette: crate::ui::theme::ThemePalette,
+    palette: crate::theme::ThemePalette,
     title: &'static str,
     detail: &'static str,
 ) -> impl IntoElement {

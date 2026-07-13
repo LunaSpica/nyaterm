@@ -1,13 +1,13 @@
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub(in crate::ui) struct TemporarySshLinkConfig {
-    pub(in crate::ui) name: String,
-    pub(in crate::ui) host: String,
-    pub(in crate::ui) port: u16,
-    pub(in crate::ui) username: String,
+pub(crate) struct TemporarySshLinkConfig {
+    pub(crate) name: String,
+    pub(crate) host: String,
+    pub(crate) port: u16,
+    pub(crate) username: String,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(in crate::ui) enum TemporarySshLinkError {
+pub(crate) enum TemporarySshLinkError {
     Empty,
     UnsupportedOption,
     MissingHost,
@@ -17,7 +17,7 @@ pub(in crate::ui) enum TemporarySshLinkError {
 }
 
 impl TemporarySshLinkError {
-    pub(in crate::ui) fn message(self) -> &'static str {
+    pub(crate) fn message(self) -> &'static str {
         match self {
             Self::Empty => "Paste an ssh:// URL or an ssh command.",
             Self::UnsupportedOption => {
@@ -49,7 +49,7 @@ const UNSUPPORTED_LONG_OPTIONS: [&str; 7] = [
     "controlpath",
 ];
 
-pub(in crate::ui) fn parse_temporary_ssh_link(
+pub(crate) fn parse_temporary_ssh_link(
     input: &str,
 ) -> Result<TemporarySshLinkConfig, TemporarySshLinkError> {
     let text = input.trim();

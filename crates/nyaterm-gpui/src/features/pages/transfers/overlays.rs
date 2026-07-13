@@ -1,8 +1,8 @@
 use super::*;
-use crate::ui::view::TransferJobDeleteState;
+use crate::features::TransferJobDeleteState;
 
 impl NyaTermApp {
-    pub(in crate::ui::view) fn transfer_job_delete_overlay(
+    pub(in crate::features) fn transfer_job_delete_overlay(
         &mut self,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {

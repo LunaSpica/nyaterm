@@ -1,9 +1,9 @@
-use crate::ui::theme::ThemePalette;
+use crate::theme::ThemePalette;
 use gpui::{
     App, ClickEvent, FontWeight, Hsla, IntoElement, SharedString, Window, div, prelude::*, px, rgb,
 };
 
-pub(super) fn status_pill(
+pub(crate) fn status_pill(
     label: &'static str,
     fg: impl Into<Hsla>,
     bg: impl Into<Hsla>,
@@ -18,7 +18,7 @@ pub(super) fn status_pill(
         .child(label)
 }
 
-pub(super) fn empty_panel(text: &'static str, palette: ThemePalette) -> impl IntoElement {
+pub(crate) fn empty_panel(text: &'static str, palette: ThemePalette) -> impl IntoElement {
     div()
         .rounded_md()
         .border_1()
@@ -30,7 +30,7 @@ pub(super) fn empty_panel(text: &'static str, palette: ThemePalette) -> impl Int
         .child(text)
 }
 
-pub(super) fn section_header(
+pub(crate) fn section_header(
     title: &'static str,
     detail: &'static str,
     palette: ThemePalette,
@@ -48,7 +48,7 @@ pub(super) fn section_header(
         )
 }
 
-pub(super) fn capability_line(
+pub(crate) fn capability_line(
     palette: ThemePalette,
     label: &'static str,
     value: impl Into<SharedString>,
@@ -68,7 +68,7 @@ pub(super) fn capability_line(
         )
 }
 
-pub(super) fn session_info_row(
+pub(crate) fn session_info_row(
     palette: ThemePalette,
     label: &'static str,
     value: String,
@@ -103,7 +103,7 @@ pub(super) fn session_info_row(
         )
 }
 
-pub(super) fn small_button(
+pub(crate) fn small_button(
     palette: ThemePalette,
     id: impl Into<String>,
     label: &'static str,
@@ -129,7 +129,7 @@ pub(super) fn small_button(
         .on_click(on_click)
 }
 
-pub(super) fn mode_button(
+pub(crate) fn mode_button(
     id: impl Into<String>,
     label: &'static str,
     active: bool,
@@ -169,7 +169,7 @@ pub(super) fn mode_button(
         .on_click(on_click)
 }
 
-pub(super) fn icon_button(
+pub(crate) fn icon_button(
     id: impl Into<String>,
     label: &'static str,
     palette: ThemePalette,

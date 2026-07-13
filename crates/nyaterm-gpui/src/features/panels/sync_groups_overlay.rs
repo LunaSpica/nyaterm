@@ -1,7 +1,7 @@
 use super::*;
 
 impl NyaTermApp {
-    pub(in crate::ui::view) fn sync_groups_overlay(
+    pub(in crate::features) fn sync_groups_overlay(
         &mut self,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {

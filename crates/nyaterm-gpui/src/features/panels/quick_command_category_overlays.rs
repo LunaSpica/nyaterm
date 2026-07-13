@@ -1,7 +1,7 @@
 use super::*;
 
 impl NyaTermApp {
-    pub(in crate::ui::view) fn quick_command_category_delete_overlay(
+    pub(in crate::features) fn quick_command_category_delete_overlay(
         &mut self,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
@@ -81,7 +81,7 @@ impl NyaTermApp {
             )
     }
 
-    pub(in crate::ui::view) fn quick_command_category_rename_overlay(
+    pub(in crate::features) fn quick_command_category_rename_overlay(
         &mut self,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {

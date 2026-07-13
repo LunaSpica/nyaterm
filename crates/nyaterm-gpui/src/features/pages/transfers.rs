@@ -12,8 +12,8 @@ use std::cmp::Ordering;
 use std::collections::{HashSet, VecDeque};
 use std::time::Duration;
 
-use crate::ui::components::{small_button, status_pill};
-use crate::ui::models::{
+use crate::widgets::{small_button, status_pill};
+use crate::models::{
     TransferBrowserColumnResizeState, TransferBrowserColumnWidths, TransferBrowserContextMenuState,
     TransferBrowserDragSelectionState, TransferBrowserFavoritesMenuState,
     TransferBrowserPendingRenameState, TransferBrowserSessionCacheState, TransferBrowserSortColumn,
@@ -82,7 +82,7 @@ use helpers::*;
 const NATIVE_EDITOR_MAX_BYTES: u64 = 512 * 1024;
 
 impl NyaTermApp {
-    pub(in crate::ui::view) fn transfers_view(
+    pub(in crate::features) fn transfers_view(
         &mut self,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {

@@ -1,8 +1,8 @@
 use super::*;
-use crate::ui::temporary_ssh_link::parse_temporary_ssh_link;
+use crate::temporary_ssh_link::parse_temporary_ssh_link;
 
 impl NyaTermApp {
-    pub(in crate::ui::view) fn temporary_ssh_link_overlay(
+    pub(in crate::features) fn temporary_ssh_link_overlay(
         &mut self,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
