@@ -1,0 +1,14 @@
+[package]
+name = "nyaterm-terminal-gpui"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+gpui.workspace = true
+nyaterm-core.workspace = true
+nyaterm-terminal.workspace = true
+nyaterm-ui.workspace = true
+regex.workspace = true

@@ -3,7 +3,7 @@ mod assets;
 use anyhow::Context as _;
 use gpui::{App, AppContext, Application, Bounds, WindowBounds, WindowOptions, px, size};
 use nyaterm_core::{AppRuntime, LOG_FILE_PREFIX, LOG_FILE_SUFFIX};
-use nyaterm_gpui::AppShell;
+use nyaterm_desktop::AppShell;
 use tracing_appender::non_blocking::WorkerGuard;
 use tracing_subscriber::{EnvFilter, layer::SubscriberExt, util::SubscriberInitExt};
 

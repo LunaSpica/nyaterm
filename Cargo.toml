@@ -2,12 +2,14 @@
 members = [
     "crates/nyaterm-app",
     "crates/nyaterm-core",
-    "crates/nyaterm-gpui",
+    "crates/nyaterm-desktop",
     "crates/nyaterm-legacy",
     "crates/nyaterm-otp",
     "crates/nyaterm-store",
     "crates/nyaterm-terminal",
+    "crates/nyaterm-terminal-gpui",
     "crates/nyaterm-transport",
+    "crates/nyaterm-ui",
 ]
 resolver = "2"
 exclude = [
@@ -46,12 +48,14 @@ hmac = "0.13"
 log = "0.4.11"
 md5 = "0.8"
 nyaterm-core = { path = "crates/nyaterm-core" }
-nyaterm-gpui = { path = "crates/nyaterm-gpui" }
+nyaterm-desktop = { path = "crates/nyaterm-desktop" }
 nyaterm-legacy = { path = "crates/nyaterm-legacy" }
 nyaterm-otp = { path = "crates/nyaterm-otp" }
 nyaterm-store = { path = "crates/nyaterm-store" }
 nyaterm-terminal = { path = "crates/nyaterm-terminal" }
+nyaterm-terminal-gpui = { path = "crates/nyaterm-terminal-gpui" }
 nyaterm-transport = { path = "crates/nyaterm-transport" }
+nyaterm-ui = { path = "crates/nyaterm-ui" }
 portable-pty = "0.9"
 rand = { version = "0.10", features = ["thread_rng"] }
 redb = "4.1.0"

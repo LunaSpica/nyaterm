@@ -1,0 +1,11 @@
+[package]
+name = "nyaterm-ui"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+gpui.workspace = true
+nyaterm-terminal.workspace = true

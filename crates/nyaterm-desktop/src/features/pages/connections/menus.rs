@@ -1,0 +1,278 @@
+use super::*;
+
+impl NyaTermApp {
+    pub(in crate::features) fn connection_context_menu_overlay(
+        &mut self,
+        cx: &mut Context<Self>,
+    ) -> impl IntoElement {
+        let palette = self.theme_palette();
+        let state = self
+            .connection_context_menu
+            .clone()
+            .unwrap_or(ConnectionContextMenuState {
+                connection_id: String::new(),
+                x: px(24.),
+                y: px(24.),
+            });
+        let connection = self
+            .connections
+            .iter()
+            .find(|connection| connection.id == state.connection_id)
+            .cloned();
+        let selected_count = self.selected_connections().len();
+        let connect_label = if selected_count > 1
+            && connection
+                .as_ref()
+                .is_some_and(|conn| self.selected_connection_ids.contains(&conn.id))
+        {
+            format!("Connect selected ({selected_count})")
+        } else {
+            "Connect".to_string()
+        };
+        let connection_id = state.connection_id.clone();
+        let connection_for_connect = connection.clone();
+        let connection_for_edit = connection_id.clone();
+        let connection_for_rename = connection_id.clone();
+        let connection_for_copy = connection_id.clone();
+        let connection_for_delete = connection_id.clone();
+
+        div()
+            .id(SharedString::from("connection-context-menu-overlay"))
+            .absolute()
+            .top_0()
+            .bottom_0()
+            .left_0()
+            .right_0()
+            .on_click(cx.listener(|this, _, _, cx| {
+                this.close_connection_context_menus(cx);
+            }))
+            .child(
+                div()
+                    .id(SharedString::from("connection-context-menu"))
+                    .absolute()
+                    .top(state.y)
+                    .left(state.x)
+                    .w(px(180.))
+                    .rounded_md()
+                    .border_1()
+                    .border_color(rgb(palette.border))
+                    .bg(rgb(palette.bg))
+                    .shadow_lg()
+                    .py_1()
+                    .on_click(|_, _, cx| cx.stop_propagation())
+                    .child(menu_item_owned(
+                        palette,
+                        "connection-context-connect",
+                        connect_label,
+                        cx.listener(move |this, _, window, cx| {
+                            this.close_connection_context_menus(cx);
+                            let selected = this.selected_connections();
+                            if selected.len() > 1
+                                && selected.iter().any(|conn| conn.id == connection_id)
+                            {
+                                this.start_selected_saved_connections(window, cx);
+                            } else if let Some(connection) = connection_for_connect.clone() {
+                                this.start_saved_connection(connection, window, cx);
+                            }
+                        }),
+                    ))
+                    .child(menu_item(
+                        palette,
+                        "connection-context-edit",
+                        "Edit",
+                        cx.listener(move |this, _, window, cx| {
+                            this.close_connection_context_menus(cx);
+                            this.open_connection_editor(
+                                Some(connection_for_edit.clone()),
+                                None,
+                                false,
+                                window,
+                                cx,
+                            );
+                        }),
+                    ))
+                    .child(menu_separator(palette))
+                    .child(menu_item(
+                        palette,
+                        "connection-context-rename",
+                        "Rename",
+                        cx.listener(move |this, _, window, cx| {
+                            this.close_connection_context_menus(cx);
+                            this.rename_connection(connection_for_rename.clone(), window, cx);
+                        }),
+                    ))
+                    .child(menu_item(
+                        palette,
+                        "connection-context-copy",
+                        if selected_count > 1 {
+                            "Copy selected"
+                        } else {
+                            "Copy"
+                        },
+                        cx.listener(move |this, _, _, cx| {
+                            this.close_connection_context_menus(cx);
+                            if this.selected_connections().len() > 1 {
+                                this.copy_selected_connections(cx);
+                            } else {
+                                this.copy_connection_by_id(connection_for_copy.clone(), cx);
+                            }
+                        }),
+                    ))
+                    .child(menu_separator(palette))
+                    .child(menu_item(
+                        palette,
+                        "connection-context-delete",
+                        if selected_count > 1 {
+                            "Delete selected"
+                        } else {
+                            "Delete"
+                        },
+                        cx.listener(move |this, _, _, cx| {
+                            this.close_connection_context_menus(cx);
+                            if this.selected_connections().len() > 1 {
+                                this.delete_selected_connections(cx);
+                            } else {
+                                this.open_connection_delete_confirm(
+                                    connection_for_delete.clone(),
+                                    cx,
+                                );
+                            }
+                        }),
+                    )),
+            )
+    }
+
+    pub(in crate::features) fn connection_group_context_menu_overlay(
+        &mut self,
+        cx: &mut Context<Self>,
+    ) -> impl IntoElement {
+        let palette = self.theme_palette();
+        let state =
+            self.connection_group_context_menu
+                .clone()
+                .unwrap_or(ConnectionGroupContextMenuState {
+                    group_id: String::new(),
+                    x: px(24.),
+                    y: px(24.),
+                });
+        let group_id = state.group_id.clone();
+        let group_id_new = group_id.clone();
+        let group_id_folder = group_id.clone();
+        let group_id_open = group_id.clone();
+        let group_id_edit = group_id.clone();
+        let group_id_delete = group_id.clone();
+        let total_in_group = {
+            let mut group_ids = std::collections::HashSet::from([group_id.clone()]);
+            let mut changed = true;
+            while changed {
+                changed = false;
+                for group in &self.connection_groups {
+                    if let Some(parent) = group.parent_id.as_ref() {
+                        if group_ids.contains(parent) && group_ids.insert(group.id.clone()) {
+                            changed = true;
+                        }
+                    }
+                }
+            }
+            self.connections
+                .iter()
+                .filter(|connection| {
+                    connection
+                        .group_id
+                        .as_ref()
+                        .is_some_and(|id| group_ids.contains(id))
+                })
+                .count()
+        };
+
+        div()
+            .id(SharedString::from("connection-group-context-menu-overlay"))
+            .absolute()
+            .top_0()
+            .bottom_0()
+            .left_0()
+            .right_0()
+            .on_click(cx.listener(|this, _, _, cx| {
+                this.close_connection_context_menus(cx);
+            }))
+            .child(
+                div()
+                    .id(SharedString::from("connection-group-context-menu"))
+                    .absolute()
+                    .top(state.y)
+                    .left(state.x)
+                    .w(px(180.))
+                    .rounded_md()
+                    .border_1()
+                    .border_color(rgb(palette.border))
+                    .bg(rgb(palette.bg))
+                    .shadow_lg()
+                    .py_1()
+                    .on_click(|_, _, cx| cx.stop_propagation())
+                    .child(menu_item(
+                        palette,
+                        "connection-group-context-new",
+                        "New connection",
+                        cx.listener(move |this, _, window, cx| {
+                            this.close_connection_context_menus(cx);
+                            this.open_connection_editor(
+                                None,
+                                Some(group_id_new.clone()),
+                                false,
+                                window,
+                                cx,
+                            );
+                        }),
+                    ))
+                    .child(menu_item(
+                        palette,
+                        "connection-group-context-folder",
+                        "New folder",
+                        cx.listener(move |this, _, window, cx| {
+                            this.close_connection_context_menus(cx);
+                            this.open_connection_group_editor(
+                                None,
+                                Some(group_id_folder.clone()),
+                                window,
+                                cx,
+                            );
+                        }),
+                    ))
+                    .when(total_in_group > 0, |this| {
+                        this.child(menu_separator(palette)).child(menu_item(
+                            palette,
+                            "connection-group-context-open-all",
+                            "Open all",
+                            cx.listener(move |this, _, window, cx| {
+                                this.close_connection_context_menus(cx);
+                                this.start_group_connections(group_id_open.clone(), window, cx);
+                            }),
+                        ))
+                    })
+                    .child(menu_separator(palette))
+                    .child(menu_item(
+                        palette,
+                        "connection-group-context-rename",
+                        "Rename",
+                        cx.listener(move |this, _, window, cx| {
+                            this.close_connection_context_menus(cx);
+                            this.open_connection_group_editor(
+                                Some(group_id_edit.clone()),
+                                None,
+                                window,
+                                cx,
+                            );
+                        }),
+                    ))
+                    .child(menu_item(
+                        palette,
+                        "connection-group-context-delete",
+                        "Delete",
+                        cx.listener(move |this, _, _, cx| {
+                            this.close_connection_context_menus(cx);
+                            this.open_connection_group_delete_confirm(group_id_delete.clone(), cx);
+                        }),
+                    )),
+            )
+    }
+}

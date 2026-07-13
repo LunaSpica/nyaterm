@@ -2,29 +2,32 @@
 
 ## Goal
 
-Make `nyaterm-gpui` directory structure match a real module architecture:
+Make `nyaterm-desktop` directory structure match a real module architecture:
 eliminate dual-track empty shells, place code where the names claim it lives,
 and keep behavior identical (pure module move / path rewrite).
 
 ## Success criteria
 
 - No empty stub modules that only document “code lives elsewhere”.
-- Single home for theme, terminal, widgets, HTTP adapters, and app features.
+- Single home for theme/widgets, terminal GPUI rendering, HTTP adapters, and app features.
 - `crate::ui` removed; public surface remains `AppShell` + `NyaTermApp`.
-- `cargo check -p nyaterm-gpui` succeeds.
+- `cargo check -p nyaterm-desktop` succeeds.
 - No intentional behavior/logic changes.
 
 ## Target layout
 
 ```
-crates/nyaterm-gpui/src/
+crates/
+  nyaterm-ui/             # ThemePalette + reusable GPUI presentation widgets
+  nyaterm-terminal-gpui/  # GPUI terminal element, painting, input, search helpers
+  nyaterm-desktop/src/
   lib.rs
   app_shell/           # window root Entity, lifecycle
   entities/            # GPUI Entity stores (workspace/session/overlay/…)
   http/                # network adapters (ai, cloud_sync, translation, update)
-  theme/               # ThemePalette + presentation tokens
-  terminal/            # GPUI terminal painting/helpers
-  widgets/             # reusable presentational components
+  theme.rs             # crate-local shim for nyaterm-ui
+  terminal.rs          # crate-local shim for nyaterm-terminal-gpui + app banner
+  widgets.rs           # crate-local shim for nyaterm-ui
   models/              # UI-only view models / local state types
   features/            # NyaTermApp + pages/panels/layout/runtimes
     mod.rs
@@ -51,7 +54,7 @@ crates/nyaterm-gpui/src/
 8. **Entity wiring deferred as follow-up** — stores in `entities/` stay; full notify migration of `NyaTermApp` fields is out of this structural pass.
 9. **No file content splits** of 2k+ line files in this pass — only relocate modules.
 10. **Visibility** — `pub(in crate::ui::view)` → `pub(in crate::features)`.
-11. **External API** — `nyaterm_gpui::{AppShell, NyaTermApp}` unchanged for `nyaterm-app`.
+11. **External API** — `nyaterm_desktop::{AppShell, NyaTermApp}` unchanged for `nyaterm-app`.
 
 ## Non-goals (this pass)
 
@@ -68,7 +71,7 @@ crates/nyaterm-gpui/src/
 4. Move `ui/view` tree → `features/`.
 5. Delete empty `views/`, `overlays/`, and residual `ui/`.
 6. Rewrite `lib.rs` + bulk path/visibility updates.
-7. `cargo check -p nyaterm-gpui` and fix remaining references.
+7. `cargo check -p nyaterm-desktop` and fix remaining references.
 
 ## Follow-ups (not required for success of this pass)
 
@@ -198,7 +201,7 @@ Former 3.2k `sidebar.rs` was a mixed bag. Now:
 ## Phase 7 — Continued runtime / widget / HTTP splits (done)
 
 Unblocked and extended structural splits (no intentional behavior changes).
-Verified: `cargo check -p nyaterm-gpui -p nyaterm-app`.
+Verified: `cargo check -p nyaterm-desktop -p nyaterm-app`.
 
 ### Compile unblocks from mid-split state
 - `connections/connection_runtime/`: restored missing `ConnectionEditorToggle` +
@@ -250,7 +253,7 @@ Verified: `cargo check -p nyaterm-gpui -p nyaterm-app`.
 
 ## Phase 8 — Settings pages + formatting + more runtimes (done)
 
-Verified: `cargo check -p nyaterm-gpui -p nyaterm-app`.
+Verified: `cargo check -p nyaterm-desktop -p nyaterm-app`.
 
 ### Settings pages
 | Module | Layout |
@@ -293,9 +296,9 @@ Verified: `cargo check -p nyaterm-gpui -p nyaterm-app`.
 
 ## Phase 9 — Terminal module split + GPUI hardware-accel cleanup (done)
 
-Verified: `cargo check -p nyaterm-gpui -p nyaterm-app`.
+Verified: `cargo check -p nyaterm-desktop -p nyaterm-app`.
 
-### `crates/nyaterm-gpui/src/terminal/`
+### `crates/nyaterm-desktop/src/terminal/`
 Repaired incomplete split into a coherent paint stack (no behavior change):
 
 | File | Role |
@@ -330,7 +333,7 @@ not a second renderer.
 
 ## Phase 10 — Tunnel page split + cleanup (done)
 
-Verified: `cargo check -p nyaterm-gpui -p nyaterm-app`.
+Verified: `cargo check -p nyaterm-desktop -p nyaterm-app`.
 
 ### Warning cleanup
 - Removed split-generated unused `use super::*` imports in formatting/settings/runtime helpers
@@ -352,8 +355,8 @@ Former ~1k-line `tunnel.rs` is now a facade over focused free-function modules:
 
 Verified:
 
-- `cargo check -p nyaterm-gpui -p nyaterm-app`
-- `cargo check -p nyaterm-gpui --tests`
+- `cargo check -p nyaterm-desktop -p nyaterm-app`
+- `cargo check -p nyaterm-desktop --tests`
 
 ### Page and runtime splits
 
@@ -387,8 +390,8 @@ These need local builder/view-model extraction before another file-only split wo
 
 Verified:
 
-- `cargo check -p nyaterm-gpui -p nyaterm-app`
-- `cargo check -p nyaterm-gpui --tests`
+- `cargo check -p nyaterm-desktop -p nyaterm-app`
+- `cargo check -p nyaterm-desktop --tests`
 - `git diff --check`
 
 ### Connection editor builders
@@ -438,8 +441,8 @@ Cross-group helpers use parent-module visibility; the existing `pub(crate)` mode
 
 Verified:
 
-- `cargo check -p nyaterm-gpui -p nyaterm-app` (80 existing warnings)
-- `cargo check -p nyaterm-gpui --tests` (79 existing warnings)
+- `cargo check -p nyaterm-desktop -p nyaterm-app` (80 existing warnings)
+- `cargo check -p nyaterm-desktop --tests` (79 existing warnings)
 - `git diff --check`
 
 ### Quick Commands and AI Models
@@ -468,8 +471,8 @@ their feature-level APIs. Cross-sibling helpers remain scoped to the owning page
 
 Verified:
 
-- `cargo check -p nyaterm-gpui -p nyaterm-app` (80 existing warnings)
-- `cargo check -p nyaterm-gpui --tests` (79 existing warnings)
+- `cargo check -p nyaterm-desktop -p nyaterm-app` (80 existing warnings)
+- `cargo check -p nyaterm-desktop --tests` (79 existing warnings)
 - `git diff --check`
 
 ### Workspace page
@@ -500,8 +503,8 @@ All existing feature-level method signatures are unchanged.
 
 Verified:
 
-- `cargo check -p nyaterm-gpui -p nyaterm-app` (80 existing warnings)
-- `cargo check -p nyaterm-gpui --tests` (79 existing warnings)
+- `cargo check -p nyaterm-desktop -p nyaterm-app` (80 existing warnings)
+- `cargo check -p nyaterm-desktop --tests` (79 existing warnings)
 - `git diff --check`
 
 `ai/ai_runtime/settings.rs` is now an eight-line facade over three runtime domains:
@@ -519,8 +522,8 @@ All methods retain their existing `pub(in crate::features)` API and behavior.
 
 Verified:
 
-- `cargo check -p nyaterm-gpui -p nyaterm-app` (80 existing warnings)
-- `cargo check -p nyaterm-gpui --tests` (79 existing warnings)
+- `cargo check -p nyaterm-desktop -p nyaterm-app` (80 existing warnings)
+- `cargo check -p nyaterm-desktop --tests` (79 existing warnings)
 - `git diff --check`
 
 ### Send Command panel
@@ -548,3 +551,28 @@ OTP now have independent tab-body builders under `security_panel/panel/`. Each r
 allowing the coordinator to append the existing delete confirmation without adding a wrapper or
 changing flex/overflow behavior. Header tabs, status/actions, secret footer, and unlock overlay
 remain coordinated by the root panel method.
+
+## Phase 17 — Presentation crate rename + component crates (done)
+
+Verified:
+
+- `cargo check -p nyaterm-terminal-gpui -p nyaterm-ui -p nyaterm-desktop -p nyaterm-app`
+- `cargo check --tests -p nyaterm-terminal-gpui -p nyaterm-ui -p nyaterm-desktop`
+
+### Crate boundaries
+
+| Crate | Role |
+|-------|------|
+| `nyaterm-desktop` | GPUI desktop shell, app state, entities, features, pages, panels, and HTTP adapters |
+| `nyaterm-ui` | Shared `ThemePalette`, appearance theme list/labels, and reusable GPUI widgets |
+| `nyaterm-terminal-gpui` | GPUI terminal element, terminal painting helpers, key input mapping, and buffer search |
+
+`nyaterm-app` now depends on `nyaterm-desktop` instead of the former broad
+GPUI presentation crate name. `nyaterm-desktop` keeps tiny `theme.rs`, `widgets.rs`, and
+`terminal.rs` shims so existing feature code can continue using `crate::theme`,
+`crate::widgets`, and `crate::terminal` while the real component code lives in
+dedicated workspace crates.
+
+The only behavior-facing dependency cleanup is terminal bootstrap: the terminal
+renderer crate no longer reads the desktop banner constant directly; desktop
+passes the banner into `nyaterm_terminal_gpui::initial_terminal_screen`.

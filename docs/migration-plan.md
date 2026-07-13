@@ -7,12 +7,15 @@ been ported or replaced.
 ## Architecture
 
 - `crates/nyaterm-app`: thin GPUI binary entry (`main` + assets).
-- `crates/nyaterm-gpui`: GPUI presentation crate.
+- `crates/nyaterm-desktop`: GPUI desktop shell and presentation integration.
   - `app_shell/`: window root Entity and lifecycle.
   - `entities/`: GPUI Entity stores (workspace/session/overlay/…).
   - `features/`: `NyaTermApp`, pages, panels, layout, and runtimes.
   - `http/`: AI / cloud sync / translation / update HTTP adapters.
-  - `theme/`, `terminal/`, `widgets/`, `models/`: presentation building blocks.
+  - `models/`: UI-only view models and local state.
+- `crates/nyaterm-ui`: shared GPUI theme palette and reusable widgets.
+- `crates/nyaterm-terminal-gpui`: GPUI terminal element, painting, input, and
+  search/highlight helpers.
 - `crates/nyaterm-core`: UI-independent models, runtime paths, and service
   status contracts, plus the native redb-compatible connection store.
 - `crates/nyaterm-legacy`: inventory and legacy configuration loading helpers.
