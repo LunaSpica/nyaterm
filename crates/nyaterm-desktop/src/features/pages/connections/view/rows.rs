@@ -426,12 +426,8 @@ impl NyaTermApp {
             .on_hover(cx.listener(move |this, hovered: &bool, _, cx| {
                 if *hovered {
                     this.hovered_connection_id = Some(hover_id.clone());
-                    this.connection_details_tooltip_id = Some(hover_id.clone());
                 } else if this.hovered_connection_id.as_deref() == Some(hover_id.as_str()) {
                     this.hovered_connection_id = None;
-                    if this.connection_details_tooltip_id.as_deref() == Some(hover_id.as_str()) {
-                        this.connection_details_tooltip_id = None;
-                    }
                 }
                 cx.notify();
             }))
@@ -546,21 +542,14 @@ impl NyaTermApp {
             })
     }
 
-    pub(in crate::features) fn connection_details_tooltip(
+    pub(in crate::features) fn connection_details_panel(
         &self,
-        connection_id: String,
+        connection: SavedConnection,
         _cx: &mut Context<Self>,
-    ) -> gpui::AnyElement {
+    ) -> impl IntoElement {
         let palette = self.theme_palette();
-        let Some(connection) = self
-            .connections
-            .iter()
-            .find(|connection| connection.id == connection_id)
-        else {
-            return div().into_any_element();
-        };
-        let rows = connection_detail_rows(connection, &self.connections, &self.proxies);
-        let mut grid = div().flex().flex_col().gap_1();
+        let rows = connection_detail_rows(&connection, &self.connections, &self.proxies);
+        let mut grid = div().grid().gap_1();
         for (label, value) in rows {
             grid = grid.child(
                 div()
@@ -587,21 +576,40 @@ impl NyaTermApp {
         }
         div()
             .id(SharedString::from(format!(
-                "connection-details-tooltip-{}",
+                "connection-details-panel-{}",
                 connection.id
             )))
-            .absolute()
-            .left(px(8.))
-            .top(px(38.))
-            .w(px(220.))
-            .rounded_md()
-            .border_1()
+            .flex_none()
+            .max_h(px(156.))
+            .overflow_hidden()
+            .border_t_1()
             .border_color(rgb(palette.border))
-            .bg(rgb(palette.surface))
-            .shadow_lg()
-            .px_2()
+            .bg(rgb(palette.section_header))
+            .px_3()
             .py_2()
+            .child(
+                div()
+                    .mb_1()
+                    .flex()
+                    .items_center()
+                    .justify_between()
+                    .gap_2()
+                    .child(
+                        div()
+                            .min_w_0()
+                            .text_size(px(11.))
+                            .font_weight(FontWeight(700.))
+                            .text_color(rgb(palette.text))
+                            .child(truncate_preview(&connection.name, 32)),
+                    )
+                    .child(
+                        div()
+                            .flex_none()
+                            .text_size(px(10.))
+                            .text_color(rgb(palette.text_dimmed))
+                            .child(connection.kind_label()),
+                    ),
+            )
             .child(grid)
-            .into_any_element()
     }
 }

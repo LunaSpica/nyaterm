@@ -17,6 +17,11 @@ impl NyaTermApp {
             .map(|section| section.connections.len())
             .sum::<usize>();
         let selected_count = self.selected_connections().len();
+        let selected_detail_connection = if selected_count == 1 {
+            self.selected_connections().into_iter().next()
+        } else {
+            None
+        };
 
         // Flatten expanded tree for virtual window (group header 28px, connection 34px).
         let flat_rows = flatten_connection_rows(&sections, &self.expanded_connection_groups);
@@ -178,6 +183,9 @@ impl NyaTermApp {
                 this.child(self.connections_selection_strip(selected_count, cx))
             })
             .child(list)
+            .when_some(selected_detail_connection, |this, connection| {
+                this.child(self.connection_details_panel(connection, cx))
+            })
             .when_some(self.connection_editor.clone(), |this, editor| {
                 this.child(self.connection_editor_panel(editor, cx))
             })
@@ -196,9 +204,6 @@ impl NyaTermApp {
             })
             .when(self.connection_group_context_menu.is_some(), |this| {
                 this.child(self.connection_group_context_menu_overlay(cx))
-            })
-            .when_some(self.connection_details_tooltip_id.clone(), |this, id| {
-                this.child(self.connection_details_tooltip(id, cx))
             })
     }
 
