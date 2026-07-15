@@ -197,25 +197,10 @@ impl NyaTermApp {
         let desired_geometry =
             self.desired_terminal_resize_geometry_for_session_hint(geometry_session_hint);
         let build_context = self.ssh_session_config_build_context();
-        let request_id = uuid();
-        let requested_at = Instant::now();
-        self.pending_session_name = Some(connection_name.clone());
-        self.last_connect_failure_name = None;
-        self.last_connect_failure_error = None;
-        self.session_pane_states.insert(
-            request_id.clone(),
-            SessionPaneState::Connecting {
-                request_id: request_id.clone(),
-                name: connection_name.clone(),
-                kind: SessionKind::Ssh,
-            },
-        );
-        self.pending_session_starts.insert(
-            request_id.clone(),
-            PendingSessionStart {
+        let request_id = self.register_pending_session_start(
+            PendingSessionStartRegistration {
                 connection_name: connection_name.clone(),
                 launch_config: None,
-                requested_at,
                 kind: SessionKind::Ssh,
                 ai_execution_profile,
                 custom_name,
@@ -226,14 +211,11 @@ impl NyaTermApp {
                 startup_command,
                 multiplex_key: None,
                 source_connection_id,
+                status_message: format!("connecting to {connection_name}"),
+                append_start_log: true,
             },
+            cx,
         );
-        self.terminal_status = format!("connecting to {connection_name}");
-        if self.active_session_id.is_none() {
-            self.append_terminal_log(format!("\n# connecting to {connection_name}\n"));
-        }
-        self.selected_nav = NavItem::Workspace;
-        self.main_mode = MainMode::Workspace;
 
         let session_manager = self.session_manager.clone();
         let session_start_tx = self.session_start_tx.clone();
@@ -272,7 +254,6 @@ impl NyaTermApp {
                 result,
             });
         });
-        cx.notify();
     }
 
     pub(in crate::features) fn ssh_session_config_build_context(

@@ -3,23 +3,30 @@ use super::*;
 const SESSION_START_EVENT_DRAIN_LIMIT: usize = 8;
 
 impl NyaTermApp {
-    pub(in crate::features) fn begin_background_session_start(
+    pub(in crate::features) fn register_pending_session_start(
         &mut self,
-        connection_name: String,
-        launch_config: SessionLaunchConfig,
-        source_connection_id: Option<String>,
-        ai_execution_profile: AiExecutionProfile,
-        custom_name: Option<String>,
-        tab_color: Option<u32>,
-        after_session_id: Option<String>,
-        insert_index: Option<usize>,
-        seed_output: Option<String>,
-        startup_command: Option<StartupCommandRequest>,
+        registration: PendingSessionStartRegistration,
         cx: &mut Context<Self>,
-    ) {
-        let kind = session_kind_for_launch_config(&launch_config);
+    ) -> String {
         let request_id = uuid();
         let requested_at = Instant::now();
+        let PendingSessionStartRegistration {
+            connection_name,
+            launch_config,
+            kind,
+            ai_execution_profile,
+            custom_name,
+            tab_color,
+            after_session_id,
+            insert_index,
+            seed_output,
+            startup_command,
+            multiplex_key,
+            source_connection_id,
+            status_message,
+            append_start_log,
+        } = registration;
+
         self.pending_session_name = Some(connection_name.clone());
         self.last_connect_failure_name = None;
         self.last_connect_failure_error = None;
@@ -35,8 +42,49 @@ impl NyaTermApp {
             request_id.clone(),
             PendingSessionStart {
                 connection_name: connection_name.clone(),
-                launch_config: Some(launch_config.clone()),
+                launch_config,
                 requested_at,
+                kind,
+                ai_execution_profile,
+                custom_name,
+                tab_color,
+                after_session_id,
+                insert_index,
+                seed_output,
+                startup_command,
+                multiplex_key,
+                source_connection_id,
+            },
+        );
+        self.terminal_status = status_message;
+        if append_start_log && self.active_session_id.is_none() {
+            self.append_terminal_log(format!("\n# connecting to {connection_name}\n"));
+        }
+        self.selected_nav = NavItem::Workspace;
+        self.main_mode = MainMode::Workspace;
+        cx.notify();
+        request_id
+    }
+
+    pub(in crate::features) fn begin_background_session_start(
+        &mut self,
+        connection_name: String,
+        launch_config: SessionLaunchConfig,
+        source_connection_id: Option<String>,
+        ai_execution_profile: AiExecutionProfile,
+        custom_name: Option<String>,
+        tab_color: Option<u32>,
+        after_session_id: Option<String>,
+        insert_index: Option<usize>,
+        seed_output: Option<String>,
+        startup_command: Option<StartupCommandRequest>,
+        cx: &mut Context<Self>,
+    ) {
+        let kind = session_kind_for_launch_config(&launch_config);
+        let request_id = self.register_pending_session_start(
+            PendingSessionStartRegistration {
+                connection_name: connection_name.clone(),
+                launch_config: Some(launch_config.clone()),
                 kind,
                 ai_execution_profile,
                 custom_name,
@@ -47,14 +95,11 @@ impl NyaTermApp {
                 startup_command,
                 multiplex_key: None,
                 source_connection_id,
+                status_message: format!("connecting to {connection_name}"),
+                append_start_log: true,
             },
+            cx,
         );
-        self.terminal_status = format!("connecting to {connection_name}");
-        if self.active_session_id.is_none() {
-            self.append_terminal_log(format!("\n# connecting to {connection_name}\n"));
-        }
-        self.selected_nav = NavItem::Workspace;
-        self.main_mode = MainMode::Workspace;
 
         let session_manager = self.session_manager.clone();
         let session_start_tx = self.session_start_tx.clone();
@@ -78,7 +123,6 @@ impl NyaTermApp {
                 result,
             });
         });
-        cx.notify();
     }
 
     pub(in crate::features) fn begin_background_ssh_start(
@@ -107,25 +151,10 @@ impl NyaTermApp {
             config.pixel_width = geometry.pixel_width;
             config.pixel_height = geometry.pixel_height;
         }
-        let request_id = uuid();
-        let requested_at = Instant::now();
-        self.pending_session_name = Some(connection_name.clone());
-        self.last_connect_failure_name = None;
-        self.last_connect_failure_error = None;
-        self.session_pane_states.insert(
-            request_id.clone(),
-            SessionPaneState::Connecting {
-                request_id: request_id.clone(),
-                name: connection_name.clone(),
-                kind: SessionKind::Ssh,
-            },
-        );
-        self.pending_session_starts.insert(
-            request_id.clone(),
-            PendingSessionStart {
+        let request_id = self.register_pending_session_start(
+            PendingSessionStartRegistration {
                 connection_name: connection_name.clone(),
                 launch_config: Some(SessionLaunchConfig::Ssh(config.clone())),
-                requested_at,
                 kind: SessionKind::Ssh,
                 ai_execution_profile,
                 custom_name,
@@ -136,13 +165,11 @@ impl NyaTermApp {
                 startup_command,
                 multiplex_key: None,
                 source_connection_id,
+                status_message: format!("connecting to {connection_name}"),
+                append_start_log: true,
             },
+            cx,
         );
-        self.terminal_status = format!("connecting to {connection_name}");
-        if self.active_session_id.is_none() {
-            self.append_terminal_log(format!("\n# connecting to {connection_name}\n"));
-        }
-        self.selected_nav = NavItem::Workspace;
 
         let session_manager = self.session_manager.clone();
         let session_start_tx = self.session_start_tx.clone();
@@ -167,7 +194,6 @@ impl NyaTermApp {
                 result,
             });
         });
-        cx.notify();
     }
 
     pub(in crate::features) fn begin_background_multiplex_ssh_start(
@@ -196,25 +222,10 @@ impl NyaTermApp {
             config.pixel_height = geometry.pixel_height;
         }
         let multiplex_key = ssh_multiplex_key(&config);
-        let request_id = uuid();
-        let requested_at = Instant::now();
-        self.pending_session_name = Some(connection_name.clone());
-        self.last_connect_failure_name = None;
-        self.last_connect_failure_error = None;
-        self.session_pane_states.insert(
-            request_id.clone(),
-            SessionPaneState::Connecting {
-                request_id: request_id.clone(),
-                name: connection_name.clone(),
-                kind: SessionKind::Ssh,
-            },
-        );
-        self.pending_session_starts.insert(
-            request_id.clone(),
-            PendingSessionStart {
+        let request_id = self.register_pending_session_start(
+            PendingSessionStartRegistration {
                 connection_name: connection_name.clone(),
                 launch_config: Some(SessionLaunchConfig::Ssh(config.clone())),
-                requested_at,
                 kind: SessionKind::Ssh,
                 ai_execution_profile,
                 custom_name,
@@ -225,10 +236,11 @@ impl NyaTermApp {
                 startup_command,
                 multiplex_key: Some(multiplex_key.clone()),
                 source_connection_id,
+                status_message: format!("multiplexing SSH session {connection_name}"),
+                append_start_log: false,
             },
+            cx,
         );
-        self.terminal_status = format!("multiplexing SSH session {connection_name}");
-        self.selected_nav = NavItem::Workspace;
 
         let session_manager = self.session_manager.clone();
         let session_start_tx = self.session_start_tx.clone();
@@ -260,7 +272,6 @@ impl NyaTermApp {
                 result,
             });
         });
-        cx.notify();
     }
 
     pub(in crate::features) fn send_probe_command(&mut self, cx: &mut Context<Self>) {
