@@ -107,6 +107,7 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) -> bool {
         let mut dirty = self.drain_credential_autofill_match_events(cx);
+        let detection_was_pending = self.credential_autofill_detection_pending;
         if credential_autofill_snapshot_detection_can_run(
             self.active_session_id.as_deref(),
             !self.connection_saved_credentials.is_empty()
@@ -120,15 +121,18 @@ impl NyaTermApp {
         ) {
             dirty |= self.sync_credential_autofill_from_active_snapshot(cx);
         }
-        if !credential_autofill_pending_detection_can_run(
-            self.active_session_id.as_deref(),
-            self.credential_autofill_detection_pending,
-            self.terminal_runtime.session_event_queued_output_bytes,
-            self.pending_session_events.len(),
-            self.pending_terminal_frame_events.len(),
-            self.terminal_frame_pipeline.queued_event_count(),
-            self.terminal_frame_pipeline.queued_output_bytes(),
-            self.credential_autofill_pending_request.is_some(),
+        if !credential_autofill_detection_should_run_this_tick(
+            detection_was_pending,
+            credential_autofill_pending_detection_can_run(
+                self.active_session_id.as_deref(),
+                self.credential_autofill_detection_pending,
+                self.terminal_runtime.session_event_queued_output_bytes,
+                self.pending_session_events.len(),
+                self.pending_terminal_frame_events.len(),
+                self.terminal_frame_pipeline.queued_event_count(),
+                self.terminal_frame_pipeline.queued_output_bytes(),
+                self.credential_autofill_pending_request.is_some(),
+            ),
         ) {
             return dirty;
         }
@@ -141,29 +145,26 @@ impl NyaTermApp {
         let Some(session_id) = self.active_session_id.clone() else {
             return false;
         };
-        let Some(snapshot) = self
+        let Some(prompt_text) = self
             .terminal_views
             .get(&session_id)
             .and_then(|view| view.frame_snapshot.as_ref())
+            .and_then(credential_autofill_prompt_text_from_snapshot)
         else {
-            return false;
+            return self.sync_credential_autofill_prompt_text(&session_id, String::new(), cx);
         };
-        let Some(line) = credential_autofill_prompt_line_from_snapshot(snapshot) else {
-            return false;
-        };
-        self.sync_credential_autofill_visible_line(&session_id, &line, cx)
+        self.sync_credential_autofill_prompt_text(&session_id, prompt_text, cx)
     }
 
-    fn sync_credential_autofill_visible_line(
+    fn sync_credential_autofill_prompt_text(
         &mut self,
         session_id: &str,
-        line: &str,
+        prompt_text: String,
         cx: &mut Context<Self>,
     ) -> bool {
         if self.active_session_id.as_deref() != Some(session_id) {
             return false;
         }
-        let prompt_text = credential_autofill_prompt_text_from_visible(line);
         if prompt_text.is_empty() {
             if !self.credential_autofill_buffer.is_empty() {
                 self.credential_autofill_buffer.clear();
@@ -705,25 +706,37 @@ fn credential_autofill_pending_detection_can_run(
         && !match_request_pending
 }
 
-fn credential_autofill_prompt_line_from_snapshot(snapshot: &TerminalSnapshot) -> Option<String> {
+fn credential_autofill_detection_should_run_this_tick(
+    detection_was_pending: bool,
+    can_run: bool,
+) -> bool {
+    detection_was_pending && can_run
+}
+
+fn credential_autofill_prompt_text_from_snapshot(snapshot: &TerminalSnapshot) -> Option<String> {
+    let line = credential_autofill_prompt_line_from_snapshot(snapshot)?;
+    Some(credential_autofill_prompt_text_from_visible(line))
+}
+
+fn credential_autofill_prompt_line_from_snapshot(snapshot: &TerminalSnapshot) -> Option<&str> {
     credential_autofill_prompt_line_from_viewport(&snapshot.lines, snapshot.cursor_row)
 }
 
 fn credential_autofill_prompt_line_from_viewport(
     lines: &[String],
     cursor_row: usize,
-) -> Option<String> {
+) -> Option<&str> {
     if lines.is_empty() {
         return None;
     }
     if cursor_row != usize::MAX {
-        return lines.get(cursor_row).cloned();
+        return lines.get(cursor_row).map(String::as_str);
     }
     lines
         .iter()
         .rev()
         .find(|line| !line.trim().is_empty())
-        .cloned()
+        .map(String::as_str)
 }
 
 fn credential_autofill_visible_tail(text: &str) -> &str {
@@ -969,6 +982,19 @@ mod tests {
     }
 
     #[test]
+    fn credential_autofill_detection_waits_for_next_tick_after_snapshot_sync() {
+        assert!(!credential_autofill_detection_should_run_this_tick(
+            false, true
+        ));
+        assert!(credential_autofill_detection_should_run_this_tick(
+            true, true
+        ));
+        assert!(!credential_autofill_detection_should_run_this_tick(
+            true, false
+        ));
+    }
+
+    #[test]
     fn credential_autofill_prompt_line_uses_cursor_row() {
         let lines = vec![
             "Last login".to_string(),
@@ -977,7 +1003,7 @@ mod tests {
         ];
 
         assert_eq!(
-            credential_autofill_prompt_line_from_viewport(&lines, 1).as_deref(),
+            credential_autofill_prompt_line_from_viewport(&lines, 1),
             Some("Password:")
         );
     }
@@ -991,7 +1017,7 @@ mod tests {
         ];
 
         assert_eq!(
-            credential_autofill_prompt_line_from_viewport(&lines, usize::MAX).as_deref(),
+            credential_autofill_prompt_line_from_viewport(&lines, usize::MAX),
             Some("Password:")
         );
     }
