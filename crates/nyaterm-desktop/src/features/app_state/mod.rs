@@ -102,6 +102,7 @@ pub struct NyaTermApp {
     pub(in crate::features) credential_autofill_recent: HashMap<String, u64>,
     pub(in crate::features) credential_autofill_pending: Option<PendingCredentialAutofill>,
     pub(in crate::features) credential_autofill_sending: bool,
+    pub(in crate::features) credential_prompt_regex_cache: HashMap<String, regex::Regex>,
     /// Suppress command suggestions while a password/username prompt is active.
     pub(in crate::features) credential_prompt_input_until_ms: u64,
 

@@ -2,6 +2,7 @@ use super::*;
 
 const CREDENTIAL_AUTOFILL_BUFFER_LIMIT: usize = 4096;
 const CREDENTIAL_AUTOFILL_INPUT_TAIL_LIMIT: usize = 4096;
+const CREDENTIAL_PROMPT_REGEX_CACHE_LIMIT: usize = 512;
 const RECENT_PROMPT_TTL_MS: u64 = 30_000;
 const PENDING_PASSWORD_TTL_MS: u64 = 60_000;
 const CREDENTIAL_PROMPT_INPUT_TTL_MS: u64 = 120_000;
@@ -130,7 +131,9 @@ impl NyaTermApp {
             }
         }
 
-        let detected_prompt_kind = detect_credential_prompt_kind(&self.credential_autofill_buffer);
+        let prompt_text =
+            credential_autofill_prompt_text_from_visible(&self.credential_autofill_buffer);
+        let detected_prompt_kind = detect_credential_prompt_kind(&prompt_text);
         if detected_prompt_kind.is_some() {
             self.credential_prompt_input_until_ms =
                 Self::now_unix_ms().saturating_add(CREDENTIAL_PROMPT_INPUT_TTL_MS);
@@ -159,8 +162,8 @@ impl NyaTermApp {
         }
 
         let now = Self::now_unix_ms();
-        let snapshot = self.credential_autofill_buffer.clone();
-        let prompt_text = extract_credential_prompt_text(&snapshot);
+        let prompt_text =
+            credential_autofill_prompt_text_from_visible(&self.credential_autofill_buffer);
         if prompt_text.is_empty() {
             return;
         }
@@ -188,11 +191,11 @@ impl NyaTermApp {
                     .find(|entry| entry.id == pending.credential_id)
                     .cloned();
                 if let Some(pending_cred) = pending_cred {
-                    if credential_matches_prompt(
+                    if self.credential_matches_prompt_cached(
                         &pending_cred,
                         CredentialPromptKind::Password,
                         &current_line,
-                    ) || credential_matches_prompt(
+                    ) || self.credential_matches_prompt_cached(
                         &pending_cred,
                         CredentialPromptKind::Password,
                         &prompt_text,
@@ -223,7 +226,7 @@ impl NyaTermApp {
         }
 
         if prompt_kind == CredentialPromptKind::Password {
-            let password_matches = find_matching_credentials(
+            let password_matches = self.find_matching_credentials_cached(
                 &credentials,
                 CredentialPromptKind::Password,
                 &prompt_text,
@@ -253,8 +256,11 @@ impl NyaTermApp {
             return;
         }
 
-        let username_matches =
-            find_matching_credentials(&credentials, CredentialPromptKind::Username, &prompt_text);
+        let username_matches = self.find_matching_credentials_cached(
+            &credentials,
+            CredentialPromptKind::Username,
+            &prompt_text,
+        );
         if username_matches.is_empty() {
             return;
         }
@@ -264,6 +270,55 @@ impl NyaTermApp {
             prompt_text,
             cx,
         );
+    }
+
+    fn find_matching_credentials_cached(
+        &mut self,
+        credentials: &[SavedCredential],
+        kind: CredentialPromptKind,
+        output: &str,
+    ) -> Vec<SavedCredential> {
+        credentials
+            .iter()
+            .filter(|credential| self.credential_matches_prompt_cached(credential, kind, output))
+            .cloned()
+            .collect()
+    }
+
+    fn credential_matches_prompt_cached(
+        &mut self,
+        credential: &SavedCredential,
+        kind: CredentialPromptKind,
+        output: &str,
+    ) -> bool {
+        if !credential.enabled {
+            return false;
+        }
+        if kind == CredentialPromptKind::Username && credential.username.trim().is_empty() {
+            return false;
+        }
+        if kind == CredentialPromptKind::Password && !credential.has_password {
+            return false;
+        }
+
+        let pattern = get_credential_prompt_pattern(credential, kind);
+        if pattern.is_empty() {
+            return false;
+        }
+        let cache_key = format!("{}:{kind:?}:{pattern}", credential.id);
+        if !self.credential_prompt_regex_cache.contains_key(&cache_key) {
+            if self.credential_prompt_regex_cache.len() >= CREDENTIAL_PROMPT_REGEX_CACHE_LIMIT {
+                self.credential_prompt_regex_cache.clear();
+            }
+            let Some(regex) = compile_prompt_regex(&pattern) else {
+                return false;
+            };
+            self.credential_prompt_regex_cache
+                .insert(cache_key.clone(), regex);
+        }
+        self.credential_prompt_regex_cache
+            .get(&cache_key)
+            .is_some_and(|regex| regex.is_match(output))
     }
 
     fn send_credential_value(
@@ -611,6 +666,25 @@ fn credential_autofill_visible_tail(text: &str) -> &str {
     &text[start..]
 }
 
+fn credential_autofill_prompt_text_from_visible(output: &str) -> String {
+    if output
+        .chars()
+        .last()
+        .is_some_and(|ch| ch == '\r' || ch == '\n')
+    {
+        return String::new();
+    }
+
+    let normalized = output.replace('\r', "\n");
+    let prompt = normalized.rsplit('\n').next().unwrap_or("").trim();
+    let prompt_len = prompt.chars().count();
+    if prompt_len > 500 {
+        prompt.chars().skip(prompt_len - 500).collect::<String>()
+    } else {
+        prompt.to_string()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -623,5 +697,22 @@ mod tests {
         assert!(tail.len() <= CREDENTIAL_AUTOFILL_INPUT_TAIL_LIMIT);
         assert!(tail.is_char_boundary(0));
         assert!(tail.ends_with("密码："));
+    }
+
+    #[test]
+    fn credential_autofill_prompt_text_reads_visible_last_line() {
+        assert_eq!(
+            credential_autofill_prompt_text_from_visible("hello\nPassword: "),
+            "Password:"
+        );
+        assert_eq!(
+            credential_autofill_prompt_text_from_visible("Password:\n"),
+            ""
+        );
+
+        let long = format!("{}Password: ", "x".repeat(700));
+        let prompt = credential_autofill_prompt_text_from_visible(&long);
+        assert_eq!(prompt.chars().count(), 500);
+        assert!(prompt.ends_with("Password:"));
     }
 }
