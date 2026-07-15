@@ -11,9 +11,12 @@ impl NyaTermApp {
         }
         self.session_metadata
             .insert(session_id.to_string(), metadata);
-        self.terminal_views
+        let encoding = self.settings.interaction_default_encoding.clone();
+        let view = self
+            .terminal_views
             .entry(session_id.to_string())
             .or_insert_with(TerminalViewState::new);
+        view.set_encoding(&encoding);
         self.reconcile_terminal_windows();
         if self.startup_restore_complete {
             self.persist_open_tabs();

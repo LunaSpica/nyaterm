@@ -124,6 +124,8 @@ pub(in crate::features::pages::transfers) fn transfer_direction_label(
         TransferJobKind::AiFileAction { .. } => "AI",
         TransferJobKind::ZmodemUpload { .. } => "Z↑",
         TransferJobKind::ZmodemDownload { .. } => "Z↓",
+        TransferJobKind::TrzszDownload { .. } => "T↓",
+        TransferJobKind::TrzszUpload { .. } => "T↑",
         TransferJobKind::ZmodemConflictProbe { .. } => "Z?",
     }
 }
@@ -135,7 +137,10 @@ pub(in crate::features::pages::transfers) fn transfer_job_has_local_target(
         || job.progress.is_some()
         || matches!(
             job.kind,
-            TransferJobKind::Download { .. } | TransferJobKind::OpenExternal { .. }
+            TransferJobKind::Download { .. }
+                | TransferJobKind::OpenExternal { .. }
+                | TransferJobKind::TrzszDownload { .. }
+                | TransferJobKind::TrzszUpload { .. }
         )
 }
 

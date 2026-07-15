@@ -23,8 +23,20 @@ use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 use tokio::sync::{mpsc as tokio_mpsc, oneshot};
 
 mod recording;
+mod trzsz;
 mod zmodem;
 
+pub use trzsz::{
+    TrzszAction, TrzszConfig, TrzszDetectResult, TrzszDetector, TrzszDownloadEngine,
+    TrzszDownloadError, TrzszDownloadEvent, TrzszDownloadStep, TrzszFilteredOutput, TrzszMode,
+    TrzszOutputEvent, TrzszOutputScan, TrzszProtocolFilteredOutput, TrzszProtocolFrame,
+    TrzszProtocolPayload, TrzszProtocolStream, TrzszTransferEvent, TrzszTransferPhase,
+    TrzszTransferState, TrzszTrigger, TrzszUploadEngine, TrzszUploadEntry, TrzszUploadError,
+    TrzszUploadEvent, TrzszUploadSource, TrzszUploadStep, build_trzsz_action_frame,
+    build_trzsz_config_frame, build_trzsz_integer_frame, build_trzsz_string_frame,
+    parse_trzsz_action_frame, parse_trzsz_config_frame, parse_trzsz_json_frame,
+    parse_trzsz_protocol_frame, trzsz_fail_response,
+};
 pub use zmodem::{
     ZmodemAction, ZmodemDetectResult, ZmodemDetector, ZmodemDirection, ZmodemEvent, ZmodemTransfer,
     start_zmodem_transfer,
@@ -61,6 +73,10 @@ pub struct LocalSessionConfig {
     pub working_dir: Option<PathBuf>,
     pub cols: u16,
     pub rows: u16,
+    /// Total terminal pixel width (cols * cell_width). Zero means unknown.
+    pub pixel_width: u16,
+    /// Total terminal pixel height (rows * cell_height). Zero means unknown.
+    pub pixel_height: u16,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -118,8 +134,13 @@ pub struct SshSessionConfig {
     pub term: String,
     pub x11_forwarding: bool,
     pub x11_display: String,
+    pub deferred_pty: bool,
     pub cols: u16,
     pub rows: u16,
+    /// Total terminal pixel width (cols * cell_width). Zero means unknown.
+    pub pixel_width: u16,
+    /// Total terminal pixel height (rows * cell_height). Zero means unknown.
+    pub pixel_height: u16,
     pub host_key_verifier: Option<Arc<dyn SshHostKeyVerifier>>,
     pub credential_provider: Option<Arc<dyn SshCredentialProvider>>,
     pub otp_provider: Option<Arc<dyn SshOtpProvider>>,
@@ -173,8 +194,11 @@ impl std::fmt::Debug for SshSessionConfig {
             .field("term", &self.term)
             .field("x11_forwarding", &self.x11_forwarding)
             .field("x11_display", &self.x11_display)
+            .field("deferred_pty", &self.deferred_pty)
             .field("cols", &self.cols)
             .field("rows", &self.rows)
+            .field("pixel_width", &self.pixel_width)
+            .field("pixel_height", &self.pixel_height)
             .field("host_key_verifier", &self.host_key_verifier.is_some())
             .field("credential_provider", &self.credential_provider.is_some())
             .field("otp_provider", &self.otp_provider.is_some())
@@ -987,8 +1011,11 @@ impl Default for SshSessionConfig {
             term: "xterm-256color".to_string(),
             x11_forwarding: false,
             x11_display: String::new(),
+            deferred_pty: false,
             cols: 80,
             rows: 24,
+            pixel_width: 0,
+            pixel_height: 0,
             host_key_verifier: None,
             credential_provider: None,
             otp_provider: None,
@@ -2896,6 +2923,8 @@ impl Default for LocalSessionConfig {
             working_dir: None,
             cols: 80,
             rows: 24,
+            pixel_width: 0,
+            pixel_height: 0,
         }
     }
 }
@@ -3063,25 +3092,43 @@ impl SessionEventQueueInner {
                 if data.is_empty() {
                     return;
                 }
-                let mut dropped_by_session = Vec::new();
+                let mut leading_drop = 0usize;
                 if data.len() > SESSION_EVENT_QUEUE_OUTPUT_EVENT_LIMIT {
-                    let skip = data.len() - SESSION_EVENT_QUEUE_OUTPUT_EVENT_LIMIT;
-                    data.drain(..skip);
-                    record_output_drop(&mut dropped_by_session, session_id.clone(), skip);
+                    leading_drop = data.len() - SESSION_EVENT_QUEUE_OUTPUT_EVENT_LIMIT;
+                    data.drain(..leading_drop);
                 }
-                if let Some(SessionEvent::Output {
-                    session_id: last_session_id,
-                    data: last_data,
-                }) = self.events.back_mut()
-                    && last_session_id == &session_id
-                {
-                    last_data.extend_from_slice(&data);
+                if leading_drop > 0 {
+                    self.push_output_drop_event(session_id.clone(), leading_drop);
                     self.queued_output_bytes = self.queued_output_bytes.saturating_add(data.len());
-                    if last_data.len() > SESSION_EVENT_QUEUE_OUTPUT_EVENT_LIMIT {
-                        let skip = last_data.len() - SESSION_EVENT_QUEUE_OUTPUT_EVENT_LIMIT;
-                        last_data.drain(..skip);
-                        self.queued_output_bytes = self.queued_output_bytes.saturating_sub(skip);
-                        record_output_drop(&mut dropped_by_session, session_id.clone(), skip);
+                    self.events
+                        .push_back(SessionEvent::Output { session_id, data });
+                } else if self.events.back().is_some_and(|event| {
+                    matches!(
+                        event,
+                        SessionEvent::Output {
+                            session_id: last_session_id,
+                            ..
+                        } if last_session_id == &session_id
+                    )
+                }) {
+                    let last_index = self.events.len().saturating_sub(1);
+                    let mut dropped = 0usize;
+                    if let Some(SessionEvent::Output {
+                        data: last_data, ..
+                    }) = self.events.get_mut(last_index)
+                    {
+                        last_data.extend_from_slice(&data);
+                        self.queued_output_bytes =
+                            self.queued_output_bytes.saturating_add(data.len());
+                        if last_data.len() > SESSION_EVENT_QUEUE_OUTPUT_EVENT_LIMIT {
+                            dropped = last_data.len() - SESSION_EVENT_QUEUE_OUTPUT_EVENT_LIMIT;
+                            last_data.drain(..dropped);
+                            self.queued_output_bytes =
+                                self.queued_output_bytes.saturating_sub(dropped);
+                        }
+                    }
+                    if dropped > 0 {
+                        self.insert_output_drop_event(last_index, session_id.clone(), dropped);
                     }
                 } else {
                     self.queued_output_bytes = self.queued_output_bytes.saturating_add(data.len());
@@ -3090,18 +3137,49 @@ impl SessionEventQueueInner {
                         data,
                     });
                 }
-                dropped_by_session.extend(self.enforce_output_limit());
-                for (session_id, bytes) in dropped_by_session {
-                    self.events
-                        .push_back(SessionEvent::OutputDropped { session_id, bytes });
-                }
+                self.enforce_output_limit();
             }
             other => self.events.push_back(other),
         }
     }
 
-    fn enforce_output_limit(&mut self) -> Vec<(String, usize)> {
-        let mut dropped_by_session = Vec::new();
+    fn push_output_drop_event(&mut self, session_id: String, bytes: usize) {
+        if bytes == 0 {
+            return;
+        }
+        if let Some(SessionEvent::OutputDropped {
+            session_id: last_session_id,
+            bytes: last_bytes,
+        }) = self.events.back_mut()
+            && last_session_id == &session_id
+        {
+            *last_bytes = last_bytes.saturating_add(bytes);
+            return;
+        }
+        self.events
+            .push_back(SessionEvent::OutputDropped { session_id, bytes });
+    }
+
+    fn insert_output_drop_event(&mut self, index: usize, session_id: String, bytes: usize) {
+        if bytes == 0 {
+            return;
+        }
+        if index > 0
+            && let Some(SessionEvent::OutputDropped {
+                session_id: previous_session_id,
+                bytes: previous_bytes,
+            }) = self.events.get_mut(index - 1)
+            && previous_session_id == &session_id
+        {
+            *previous_bytes = previous_bytes.saturating_add(bytes);
+            return;
+        }
+        let index = index.min(self.events.len());
+        self.events
+            .insert(index, SessionEvent::OutputDropped { session_id, bytes });
+    }
+
+    fn enforce_output_limit(&mut self) {
         while self.queued_output_bytes > SESSION_EVENT_QUEUE_OUTPUT_LIMIT {
             let excess = self.queued_output_bytes - SESSION_EVENT_QUEUE_OUTPUT_LIMIT;
             let Some(index) = self
@@ -3113,19 +3191,26 @@ impl SessionEventQueueInner {
                 break;
             };
             let mut remove_event = false;
+            let mut dropped: Option<(String, usize)> = None;
             if let Some(SessionEvent::Output { session_id, data }) = self.events.get_mut(index) {
                 let remove = excess.min(data.len());
                 let dropped_session_id = session_id.clone();
                 data.drain(..remove);
                 self.queued_output_bytes = self.queued_output_bytes.saturating_sub(remove);
                 remove_event = data.is_empty();
-                record_output_drop(&mut dropped_by_session, dropped_session_id, remove);
+                dropped = Some((dropped_session_id, remove));
             }
-            if remove_event {
+            if let Some((session_id, bytes)) = dropped {
+                if remove_event {
+                    self.events.remove(index);
+                    self.insert_output_drop_event(index, session_id, bytes);
+                } else {
+                    self.insert_output_drop_event(index, session_id, bytes);
+                }
+            } else if remove_event {
                 self.events.remove(index);
             }
         }
-        dropped_by_session
     }
 
     fn drain(&mut self, max_events: usize, max_output_bytes: Option<usize>) -> SessionDrain {
@@ -3141,8 +3226,13 @@ impl SessionEventQueueInner {
                 if remaining_output_budget == 0 && stats.drained_events > 0 {
                     break;
                 }
+                if remaining_output_budget == 0
+                    && matches!(self.events.front(), Some(SessionEvent::Output { .. }))
+                {
+                    break;
+                }
                 if let Some(SessionEvent::Output { session_id, data }) = self.events.front_mut() {
-                    let take = data.len().min(remaining_output_budget.max(1));
+                    let take = data.len().min(remaining_output_budget);
                     if data.len() > take {
                         let remaining = data.split_off(take);
                         let chunk = std::mem::replace(data, remaining);
@@ -3180,24 +3270,6 @@ impl SessionEventQueueInner {
         stats.queued_events = self.events.len();
         stats.queued_output_bytes = self.queued_output_bytes;
         SessionDrain { events, stats }
-    }
-}
-
-fn record_output_drop(
-    dropped_by_session: &mut Vec<(String, usize)>,
-    session_id: String,
-    bytes: usize,
-) {
-    if bytes == 0 {
-        return;
-    }
-    if let Some((_, existing_bytes)) = dropped_by_session
-        .iter_mut()
-        .find(|(existing_session_id, _)| existing_session_id == &session_id)
-    {
-        *existing_bytes = existing_bytes.saturating_add(bytes);
-    } else {
-        dropped_by_session.push((session_id, bytes));
     }
 }
 
@@ -3241,7 +3313,12 @@ pub struct SerialTransport {
 
 enum SshCommand {
     Write(Vec<u8>),
-    Resize { cols: u16, rows: u16 },
+    Resize {
+        cols: u16,
+        rows: u16,
+        pixel_width: u16,
+        pixel_height: u16,
+    },
     Close,
 }
 
@@ -3252,6 +3329,36 @@ struct OpenSshShellSession {
     disconnect_on_close: bool,
     x11_forwarder: Option<X11Forwarder>,
     local_notice: Option<Vec<u8>>,
+}
+
+enum SshShellHandle {
+    Dedicated(client::Handle<SshClientHandler>),
+    Multiplexed(SharedSshHandle),
+}
+
+struct PendingOpenSshShellSession {
+    handle: SshShellHandle,
+    jump_handles: Vec<client::Handle<SshClientHandler>>,
+    disconnect_on_close: bool,
+    x11_config: Option<X11ForwardingConfig>,
+    x11_rx: Option<tokio_mpsc::UnboundedReceiver<X11ChannelOpen>>,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct SshPtyDimensions {
+    cols: u16,
+    rows: u16,
+    pixel_width: u16,
+    pixel_height: u16,
+}
+
+fn local_pty_size(cols: u16, rows: u16, pixel_width: u16, pixel_height: u16) -> PtySize {
+    PtySize {
+        rows,
+        cols,
+        pixel_width,
+        pixel_height,
+    }
 }
 
 impl SessionManager {
@@ -3269,12 +3376,12 @@ impl SessionManager {
         let session_id = uuid::Uuid::new_v4().to_string();
         let pty_system = native_pty_system();
         let pair = pty_system
-            .openpty(PtySize {
-                rows: config.rows,
-                cols: config.cols,
-                pixel_width: 0,
-                pixel_height: 0,
-            })
+            .openpty(local_pty_size(
+                config.cols,
+                config.rows,
+                config.pixel_width,
+                config.pixel_height,
+            ))
             .map_err(SessionError::OpenPty)?;
 
         let mut command = build_command(&config);
@@ -3570,6 +3677,19 @@ impl SessionManager {
     }
 
     pub fn resize(&self, session_id: &str, cols: u16, rows: u16) -> Result<(), SessionError> {
+        self.resize_with_pixels(session_id, cols, rows, 0, 0)
+    }
+
+    /// Resize the live session, including total pixel dimensions when known.
+    /// Pixel size is used by local PTY masters and SSH `window-change` / `request_pty`.
+    pub fn resize_with_pixels(
+        &self,
+        session_id: &str,
+        cols: u16,
+        rows: u16,
+        pixel_width: u16,
+        pixel_height: u16,
+    ) -> Result<(), SessionError> {
         let mut sessions = self
             .sessions
             .lock()
@@ -3578,7 +3698,7 @@ impl SessionManager {
             .get_mut(session_id)
             .ok_or_else(|| SessionError::NotFound(session_id.to_string()))?;
         session
-            .resize(cols, rows)
+            .resize(cols, rows, pixel_width, pixel_height)
             .map_err(|source| SessionError::Resize {
                 session_id: session_id.to_string(),
                 source,
@@ -3634,12 +3754,18 @@ impl ManagedSession {
         }
     }
 
-    fn resize(&mut self, cols: u16, rows: u16) -> anyhow::Result<()> {
+    fn resize(
+        &mut self,
+        cols: u16,
+        rows: u16,
+        pixel_width: u16,
+        pixel_height: u16,
+    ) -> anyhow::Result<()> {
         match self {
-            Self::Local(session) => session.resize(cols, rows, 0, 0),
-            Self::Tcp(session) => session.resize(cols, rows, 0, 0),
-            Self::Ssh(session) => session.resize(cols, rows, 0, 0),
-            Self::Serial(session) => session.resize(cols, rows, 0, 0),
+            Self::Local(session) => session.resize(cols, rows, pixel_width, pixel_height),
+            Self::Tcp(session) => session.resize(cols, rows, pixel_width, pixel_height),
+            Self::Ssh(session) => session.resize(cols, rows, pixel_width, pixel_height),
+            Self::Serial(session) => session.resize(cols, rows, pixel_width, pixel_height),
         }
     }
 
@@ -3675,12 +3801,8 @@ impl TerminalTransport for LocalPtyTransport {
         pixel_width: u16,
         pixel_height: u16,
     ) -> anyhow::Result<()> {
-        self.master.resize(PtySize {
-            rows,
-            cols,
-            pixel_width,
-            pixel_height,
-        })?;
+        self.master
+            .resize(local_pty_size(cols, rows, pixel_width, pixel_height))?;
         self.info.cols = cols;
         self.info.rows = rows;
         Ok(())
@@ -3753,13 +3875,18 @@ impl TerminalTransport for SshChannelTransport {
         &mut self,
         cols: u16,
         rows: u16,
-        _pixel_width: u16,
-        _pixel_height: u16,
+        pixel_width: u16,
+        pixel_height: u16,
     ) -> anyhow::Result<()> {
         self.info.cols = cols;
         self.info.rows = rows;
         self.command_tx
-            .send(SshCommand::Resize { cols, rows })
+            .send(SshCommand::Resize {
+                cols,
+                rows,
+                pixel_width,
+                pixel_height,
+            })
             .map_err(|_| anyhow::anyhow!("SSH worker stopped"))?;
         Ok(())
     }
@@ -3909,7 +4036,7 @@ fn spawn_tcp_reader_thread(
 fn run_ssh_worker(
     session_id: String,
     config: SshSessionConfig,
-    mut command_rx: tokio_mpsc::UnboundedReceiver<SshCommand>,
+    command_rx: tokio_mpsc::UnboundedReceiver<SshCommand>,
     ready_tx: mpsc::Sender<Result<(), String>>,
     event_queue: SessionEventQueue,
     multiplex: Option<SshMultiplexHandle>,
@@ -3927,6 +4054,19 @@ fn run_ssh_worker(
     };
 
     runtime.block_on(async move {
+        if config.deferred_pty {
+            run_deferred_ssh_worker(
+                session_id,
+                config,
+                command_rx,
+                ready_tx,
+                event_queue,
+                multiplex,
+            )
+            .await;
+            return;
+        }
+
         let open_session = match open_ssh_shell(&config, multiplex.as_ref()).await {
             Ok(session) => {
                 let _ = ready_tx.send(Ok(()));
@@ -3937,89 +4077,223 @@ fn run_ssh_worker(
                 return;
             }
         };
-        let OpenSshShellSession {
-            handle,
-            mut channel,
-            jump_handles,
-            disconnect_on_close,
-            x11_forwarder,
-            local_notice,
-        } = open_session;
-        if let Some(notice) = local_notice {
-            event_queue.push(SessionEvent::Output {
-                session_id: session_id.clone(),
-                data: notice,
-            });
-        }
-        if let Some(forwarder) = x11_forwarder {
-            spawn_x11_forwarder(event_queue.clone(), session_id.clone(), forwarder);
-        }
-
-        loop {
-            tokio::select! {
-                command = command_rx.recv() => {
-                    match command {
-                        Some(SshCommand::Write(data)) => {
-                            if let Err(error) = channel.data_bytes(data).await {
-                                send_session_error(&event_queue, &session_id, error);
-                                break;
-                            }
-                        }
-                        Some(SshCommand::Resize { cols, rows }) => {
-                            if let Err(error) = channel
-                                .window_change(cols.into(), rows.into(), 0, 0)
-                                .await
-                            {
-                                send_session_error(&event_queue, &session_id, error);
-                                break;
-                            }
-                        }
-                        Some(SshCommand::Close) | None => {
-                            let _ = channel.eof().await;
-                            let _ = channel.close().await;
-                            break;
-                        }
-                    }
-                }
-                message = channel.wait() => {
-                    match message {
-                        Some(ChannelMsg::Data { data }) | Some(ChannelMsg::ExtendedData { data, .. }) => {
-                            event_queue.push(SessionEvent::Output {
-                                session_id: session_id.clone(),
-                                data: data.to_vec(),
-                            });
-                        }
-                        Some(ChannelMsg::ExitStatus { .. }) | Some(ChannelMsg::Eof) | Some(ChannelMsg::Close) | None => {
-                            event_queue.push(SessionEvent::Exited {
-                                session_id: session_id.clone(),
-                            });
-                            break;
-                        }
-                        Some(_) => {}
-                    }
-                }
-            }
-        }
-
-        if disconnect_on_close {
-            if let Some(handle) = handle {
-                let _ = handle
-                    .disconnect(Disconnect::ByApplication, "session closed", "en")
-                    .await;
-            }
-            for jump_handle in jump_handles {
-                let _ = jump_handle
-                    .disconnect(Disconnect::ByApplication, "session closed", "en")
-                    .await;
-            }
-        }
+        run_open_ssh_shell_session(
+            session_id,
+            open_session,
+            command_rx,
+            event_queue,
+            VecDeque::new(),
+        )
+        .await;
     });
+}
+
+async fn run_deferred_ssh_worker(
+    session_id: String,
+    config: SshSessionConfig,
+    mut command_rx: tokio_mpsc::UnboundedReceiver<SshCommand>,
+    ready_tx: mpsc::Sender<Result<(), String>>,
+    event_queue: SessionEventQueue,
+    multiplex: Option<SshMultiplexHandle>,
+) {
+    let pending_session = match open_pending_ssh_shell(&config, multiplex.as_ref()).await {
+        Ok(session) => {
+            let _ = ready_tx.send(Ok(()));
+            session
+        }
+        Err(error) => {
+            let _ = ready_tx.send(Err(error.to_string()));
+            return;
+        }
+    };
+    let mut pending_session = Some(pending_session);
+    let mut dimensions = SshPtyDimensions::from_config(&config);
+    let mut pending_writes = VecDeque::new();
+    let mut fallback = Box::pin(tokio::time::sleep(Duration::from_millis(750)));
+
+    loop {
+        tokio::select! {
+            command = command_rx.recv() => {
+                match command {
+                    Some(SshCommand::Write(data)) => {
+                        pending_writes.push_back(data);
+                    }
+                    Some(SshCommand::Resize {
+                        cols,
+                        rows,
+                        pixel_width,
+                        pixel_height,
+                    }) => {
+                        dimensions = SshPtyDimensions::new(cols, rows, pixel_width, pixel_height);
+                        break;
+                    }
+                    Some(SshCommand::Close) | None => {
+                        if let Some(session) = pending_session.take() {
+                            disconnect_pending_ssh_shell(session).await;
+                        }
+                        return;
+                    }
+                }
+            }
+            _ = &mut fallback => {
+                break;
+            }
+        }
+    }
+
+    let Some(pending_session) = pending_session.take() else {
+        return;
+    };
+    if drain_deferred_ssh_open_commands(&mut command_rx, &mut dimensions, &mut pending_writes) {
+        disconnect_pending_ssh_shell(pending_session).await;
+        return;
+    }
+    match open_ssh_shell_from_pending(&config, pending_session, dimensions).await {
+        Ok(open_session) => {
+            run_open_ssh_shell_session(
+                session_id,
+                open_session,
+                command_rx,
+                event_queue,
+                pending_writes,
+            )
+            .await;
+        }
+        Err(error) => {
+            send_session_error(&event_queue, &session_id, error);
+        }
+    }
+}
+
+fn drain_deferred_ssh_open_commands(
+    command_rx: &mut tokio_mpsc::UnboundedReceiver<SshCommand>,
+    dimensions: &mut SshPtyDimensions,
+    pending_writes: &mut VecDeque<Vec<u8>>,
+) -> bool {
+    loop {
+        match command_rx.try_recv() {
+            Ok(SshCommand::Write(data)) => {
+                pending_writes.push_back(data);
+            }
+            Ok(SshCommand::Resize {
+                cols,
+                rows,
+                pixel_width,
+                pixel_height,
+            }) => {
+                *dimensions = SshPtyDimensions::new(cols, rows, pixel_width, pixel_height);
+            }
+            Ok(SshCommand::Close) => return true,
+            Err(tokio_mpsc::error::TryRecvError::Empty) => return false,
+            Err(tokio_mpsc::error::TryRecvError::Disconnected) => return true,
+        }
+    }
+}
+
+async fn run_open_ssh_shell_session(
+    session_id: String,
+    open_session: OpenSshShellSession,
+    mut command_rx: tokio_mpsc::UnboundedReceiver<SshCommand>,
+    event_queue: SessionEventQueue,
+    mut pending_writes: VecDeque<Vec<u8>>,
+) {
+    let OpenSshShellSession {
+        handle,
+        mut channel,
+        jump_handles,
+        disconnect_on_close,
+        x11_forwarder,
+        local_notice,
+    } = open_session;
+    if let Some(notice) = local_notice {
+        event_queue.push(SessionEvent::Output {
+            session_id: session_id.clone(),
+            data: notice,
+        });
+    }
+    if let Some(forwarder) = x11_forwarder {
+        spawn_x11_forwarder(event_queue.clone(), session_id.clone(), forwarder);
+    }
+
+    while let Some(data) = pending_writes.pop_front() {
+        if let Err(error) = channel.data_bytes(data).await {
+            send_session_error(&event_queue, &session_id, error);
+            disconnect_open_ssh_shell(handle, jump_handles, disconnect_on_close).await;
+            return;
+        }
+    }
+
+    loop {
+        tokio::select! {
+            command = command_rx.recv() => {
+                match command {
+                    Some(SshCommand::Write(data)) => {
+                        if let Err(error) = channel.data_bytes(data).await {
+                            send_session_error(&event_queue, &session_id, error);
+                            break;
+                        }
+                    }
+                    Some(SshCommand::Resize {
+                        cols,
+                        rows,
+                        pixel_width,
+                        pixel_height,
+                    }) => {
+                        if let Err(error) = channel
+                            .window_change(
+                                cols.into(),
+                                rows.into(),
+                                pixel_width.into(),
+                                pixel_height.into(),
+                            )
+                            .await
+                        {
+                            send_session_error(&event_queue, &session_id, error);
+                            break;
+                        }
+                    }
+                    Some(SshCommand::Close) | None => {
+                        let _ = channel.eof().await;
+                        let _ = channel.close().await;
+                        break;
+                    }
+                }
+            }
+            message = channel.wait() => {
+                match message {
+                    Some(ChannelMsg::Data { data }) | Some(ChannelMsg::ExtendedData { data, .. }) => {
+                        event_queue.push(SessionEvent::Output {
+                            session_id: session_id.clone(),
+                            data: data.to_vec(),
+                        });
+                    }
+                    Some(ChannelMsg::ExitStatus { .. }) | Some(ChannelMsg::Eof) | Some(ChannelMsg::Close) | None => {
+                        event_queue.push(SessionEvent::Exited {
+                            session_id: session_id.clone(),
+                        });
+                        break;
+                    }
+                    Some(_) => {}
+                }
+            }
+        }
+    }
+
+    disconnect_open_ssh_shell(handle, jump_handles, disconnect_on_close).await;
 }
 
 async fn open_ssh_shell(
     config: &SshSessionConfig,
     multiplex: Option<&SshMultiplexHandle>,
 ) -> anyhow::Result<OpenSshShellSession> {
+    let pending = open_pending_ssh_shell(config, multiplex).await?;
+    open_ssh_shell_from_pending(config, pending, SshPtyDimensions::from_config(config)).await
+}
+
+async fn open_pending_ssh_shell(
+    config: &SshSessionConfig,
+    multiplex: Option<&SshMultiplexHandle>,
+) -> anyhow::Result<PendingOpenSshShellSession> {
     let x11_config = if config.x11_forwarding {
         Some(prepare_x11_forwarding(&config.x11_display).await)
     } else {
@@ -4031,21 +4305,44 @@ async fn open_ssh_shell(
     } else {
         (None, None)
     };
-    let (handle, channel, jump_handles, disconnect_on_close) = if let Some(multiplex) = multiplex {
+    let (handle, jump_handles, disconnect_on_close) = if let Some(multiplex) = multiplex {
         multiplex.ensure_matches_config(config)?;
         if x11_tx.is_some() {
             anyhow::bail!("X11 forwarding is not supported for multiplexed SSH shell sessions");
         }
         let handle = multiplex.target_handle();
-        let channel = handle.lock().await.channel_open_session().await?;
-        (None, channel, Vec::new(), false)
+        (SshShellHandle::Multiplexed(handle), Vec::new(), false)
     } else {
         let (handle, jump_handles) =
             open_authenticated_ssh_handle_with_channel_senders(config, None, x11_tx).await?;
-        let channel = handle.channel_open_session().await?;
-        (Some(handle), channel, jump_handles, true)
+        (SshShellHandle::Dedicated(handle), jump_handles, true)
     };
 
+    Ok(PendingOpenSshShellSession {
+        handle,
+        jump_handles,
+        disconnect_on_close,
+        x11_config,
+        x11_rx,
+    })
+}
+
+async fn open_ssh_shell_from_pending(
+    config: &SshSessionConfig,
+    pending: PendingOpenSshShellSession,
+    dimensions: SshPtyDimensions,
+) -> anyhow::Result<OpenSshShellSession> {
+    let PendingOpenSshShellSession {
+        mut handle,
+        jump_handles,
+        disconnect_on_close,
+        x11_config,
+        x11_rx,
+    } = pending;
+    let channel = match &mut handle {
+        SshShellHandle::Dedicated(handle) => handle.channel_open_session().await?,
+        SshShellHandle::Multiplexed(handle) => handle.lock().await.channel_open_session().await?,
+    };
     let (x11_forwarder, local_notice) = if let (Some(config), Some(rx)) = (x11_config, x11_rx) {
         match channel
             .request_x11(true, false, MIT_MAGIC_COOKIE, &config.fake_cookie_hex, 0)
@@ -4061,14 +4358,18 @@ async fn open_ssh_shell(
         .request_pty(
             false,
             &config.term,
-            config.cols.into(),
-            config.rows.into(),
-            0,
-            0,
+            dimensions.cols.into(),
+            dimensions.rows.into(),
+            dimensions.pixel_width.into(),
+            dimensions.pixel_height.into(),
             &[],
         )
         .await?;
     channel.request_shell(true).await?;
+    let handle = match handle {
+        SshShellHandle::Dedicated(handle) => Some(handle),
+        SshShellHandle::Multiplexed(_) => None,
+    };
     Ok(OpenSshShellSession {
         handle,
         channel,
@@ -4077,6 +4378,60 @@ async fn open_ssh_shell(
         x11_forwarder,
         local_notice,
     })
+}
+
+async fn disconnect_pending_ssh_shell(session: PendingOpenSshShellSession) {
+    if session.disconnect_on_close {
+        if let SshShellHandle::Dedicated(handle) = session.handle {
+            let _ = handle
+                .disconnect(Disconnect::ByApplication, "session closed", "en")
+                .await;
+        }
+        for jump_handle in session.jump_handles {
+            let _ = jump_handle
+                .disconnect(Disconnect::ByApplication, "session closed", "en")
+                .await;
+        }
+    }
+}
+
+async fn disconnect_open_ssh_shell(
+    handle: Option<client::Handle<SshClientHandler>>,
+    jump_handles: Vec<client::Handle<SshClientHandler>>,
+    disconnect_on_close: bool,
+) {
+    if disconnect_on_close {
+        if let Some(handle) = handle {
+            let _ = handle
+                .disconnect(Disconnect::ByApplication, "session closed", "en")
+                .await;
+        }
+        for jump_handle in jump_handles {
+            let _ = jump_handle
+                .disconnect(Disconnect::ByApplication, "session closed", "en")
+                .await;
+        }
+    }
+}
+
+impl SshPtyDimensions {
+    fn new(cols: u16, rows: u16, pixel_width: u16, pixel_height: u16) -> Self {
+        Self {
+            cols: cols.max(1),
+            rows: rows.max(1),
+            pixel_width,
+            pixel_height,
+        }
+    }
+
+    fn from_config(config: &SshSessionConfig) -> Self {
+        Self::new(
+            config.cols,
+            config.rows,
+            config.pixel_width,
+            config.pixel_height,
+        )
+    }
 }
 
 fn ssh_client_config() -> Arc<russh::client::Config> {
@@ -6674,6 +7029,8 @@ mod tests {
                 working_dir: None,
                 cols: 80,
                 rows: 24,
+                pixel_width: 0,
+                pixel_height: 0,
             })
             .expect("local session");
 
@@ -6708,6 +7065,8 @@ mod tests {
                 working_dir: Some(dir.clone()),
                 cols: 80,
                 rows: 24,
+                pixel_width: 0,
+                pixel_height: 0,
             })
             .expect("local session");
         let sessions = manager.list_sessions().expect("sessions");
@@ -7245,6 +7604,122 @@ mod tests {
     }
 
     #[test]
+    fn local_config_defaults_to_unknown_pixel_dimensions() {
+        let config = LocalSessionConfig::default();
+        assert_eq!(config.cols, 80);
+        assert_eq!(config.rows, 24);
+        assert_eq!(config.pixel_width, 0);
+        assert_eq!(config.pixel_height, 0);
+    }
+
+    #[test]
+    fn local_pty_size_preserves_cell_and_pixel_dimensions() {
+        let size = local_pty_size(132, 43, 1056, 688);
+        assert_eq!(size.cols, 132);
+        assert_eq!(size.rows, 43);
+        assert_eq!(size.pixel_width, 1056);
+        assert_eq!(size.pixel_height, 688);
+    }
+
+    #[test]
+    fn ssh_pty_dimensions_clamp_to_positive_cells() {
+        let dimensions = SshPtyDimensions::new(0, 0, 0, 0);
+        assert_eq!(dimensions.cols, 1);
+        assert_eq!(dimensions.rows, 1);
+        assert_eq!(dimensions.pixel_width, 0);
+        assert_eq!(dimensions.pixel_height, 0);
+
+        let dimensions = SshPtyDimensions::new(132, 43, 1056, 688);
+        assert_eq!(dimensions.cols, 132);
+        assert_eq!(dimensions.rows, 43);
+        assert_eq!(dimensions.pixel_width, 1056);
+        assert_eq!(dimensions.pixel_height, 688);
+    }
+
+    #[test]
+    fn ssh_pty_dimensions_use_config_size() {
+        let config = SshSessionConfig {
+            cols: 101,
+            rows: 37,
+            pixel_width: 808,
+            pixel_height: 592,
+            ..Default::default()
+        };
+        let dimensions = SshPtyDimensions::from_config(&config);
+        assert_eq!(dimensions.cols, 101);
+        assert_eq!(dimensions.rows, 37);
+        assert_eq!(dimensions.pixel_width, 808);
+        assert_eq!(dimensions.pixel_height, 592);
+    }
+
+    #[test]
+    fn deferred_ssh_open_drain_keeps_writes_and_latest_resize() {
+        let (tx, mut rx) = tokio_mpsc::unbounded_channel();
+        tx.send(SshCommand::Write(b"before".to_vec())).unwrap();
+        tx.send(SshCommand::Resize {
+            cols: 100,
+            rows: 30,
+            pixel_width: 800,
+            pixel_height: 600,
+        })
+        .unwrap();
+        tx.send(SshCommand::Resize {
+            cols: 132,
+            rows: 43,
+            pixel_width: 1056,
+            pixel_height: 688,
+        })
+        .unwrap();
+        tx.send(SshCommand::Write(b"after".to_vec())).unwrap();
+
+        let mut dimensions = SshPtyDimensions::new(80, 24, 0, 0);
+        let mut pending_writes = VecDeque::new();
+        let should_close =
+            drain_deferred_ssh_open_commands(&mut rx, &mut dimensions, &mut pending_writes);
+
+        assert!(!should_close);
+        assert_eq!(dimensions, SshPtyDimensions::new(132, 43, 1056, 688));
+        assert_eq!(
+            pending_writes.into_iter().collect::<Vec<_>>(),
+            vec![b"before".to_vec(), b"after".to_vec()]
+        );
+    }
+
+    #[test]
+    fn deferred_ssh_open_drain_closes_before_shell_open() {
+        let (tx, mut rx) = tokio_mpsc::unbounded_channel();
+        tx.send(SshCommand::Write(b"queued".to_vec())).unwrap();
+        tx.send(SshCommand::Close).unwrap();
+
+        let mut dimensions = SshPtyDimensions::new(80, 24, 0, 0);
+        let mut pending_writes = VecDeque::new();
+        let should_close =
+            drain_deferred_ssh_open_commands(&mut rx, &mut dimensions, &mut pending_writes);
+
+        assert!(should_close);
+        assert_eq!(
+            pending_writes.into_iter().collect::<Vec<_>>(),
+            vec![b"queued".to_vec()]
+        );
+    }
+
+    #[test]
+    fn deferred_ssh_open_drain_closes_on_disconnected_command_channel() {
+        let (tx, mut rx) = tokio_mpsc::unbounded_channel();
+        drop(tx);
+
+        let mut dimensions = SshPtyDimensions::new(80, 24, 0, 0);
+        let mut pending_writes = VecDeque::new();
+
+        assert!(drain_deferred_ssh_open_commands(
+            &mut rx,
+            &mut dimensions,
+            &mut pending_writes
+        ));
+        assert!(pending_writes.is_empty());
+    }
+
+    #[test]
     fn proxy_command_expansion_replaces_ssh_tokens() {
         let expanded = expand_proxy_command(
             Some("nc %h %p --user %r --literal %%"),
@@ -7563,6 +8038,54 @@ host/unix:1  MIT-MAGIC-COOKIE-1  ffeeddccbbaa99887766554433221100
     }
 
     #[test]
+    fn session_event_queue_zero_output_budget_does_not_drain_output() {
+        let queue = SessionEventQueue::new();
+        queue.push(SessionEvent::Output {
+            session_id: "a".to_string(),
+            data: b"hello".to_vec(),
+        });
+
+        let drain = queue.drain_with_output_budget(8, Some(0));
+        assert!(drain.events.is_empty());
+        assert_eq!(drain.stats.drained_output_bytes, 0);
+        assert_eq!(drain.stats.queued_output_bytes, 5);
+
+        let drain = queue.drain_with_output_budget(8, Some(8));
+        assert_eq!(drain.events.len(), 1);
+        assert_eq!(drain.stats.drained_output_bytes, 5);
+        assert_eq!(drain.stats.queued_output_bytes, 0);
+    }
+
+    #[test]
+    fn session_event_queue_zero_output_budget_can_drain_drop_marker() {
+        let queue = SessionEventQueue::new();
+        queue.push(SessionEvent::Output {
+            session_id: "a".to_string(),
+            data: vec![b'x'; SESSION_EVENT_QUEUE_OUTPUT_EVENT_LIMIT + 32],
+        });
+
+        let drain = queue.drain_with_output_budget(8, Some(0));
+        assert_eq!(drain.events.len(), 1);
+        assert!(matches!(
+            &drain.events[0],
+            SessionEvent::OutputDropped { session_id, bytes } if session_id == "a" && *bytes == 32
+        ));
+        assert_eq!(drain.stats.drained_output_bytes, 0);
+        assert_eq!(
+            drain.stats.queued_output_bytes,
+            SESSION_EVENT_QUEUE_OUTPUT_EVENT_LIMIT
+        );
+
+        let drain = queue.drain_with_output_budget(8, Some(8));
+        assert_eq!(drain.events.len(), 1);
+        assert_eq!(drain.stats.drained_output_bytes, 8);
+        assert_eq!(
+            drain.stats.queued_output_bytes,
+            SESSION_EVENT_QUEUE_OUTPUT_EVENT_LIMIT - 8
+        );
+    }
+
+    #[test]
     fn session_event_queue_trims_oversized_output_and_reports_drop() {
         let queue = SessionEventQueue::new();
         queue.push(SessionEvent::Output {
@@ -7574,13 +8097,41 @@ host/unix:1  MIT-MAGIC-COOKIE-1  ffeeddccbbaa99887766554433221100
         assert_eq!(drain.events.len(), 2);
         assert!(matches!(
             &drain.events[0],
-            SessionEvent::Output { data, .. } if data.len() == SESSION_EVENT_QUEUE_OUTPUT_EVENT_LIMIT
+            SessionEvent::OutputDropped { session_id, bytes } if session_id == "a" && *bytes == 32
         ));
         assert!(matches!(
             &drain.events[1],
-            SessionEvent::OutputDropped { session_id, bytes } if session_id == "a" && *bytes == 32
+            SessionEvent::Output { data, .. } if data.len() == SESSION_EVENT_QUEUE_OUTPUT_EVENT_LIMIT
         ));
         assert_eq!(drain.stats.dropped_output_bytes, 32);
+    }
+
+    #[test]
+    fn session_event_queue_reports_drop_before_coalesced_retained_output() {
+        let queue = SessionEventQueue::new();
+        queue.push(SessionEvent::Output {
+            session_id: "a".to_string(),
+            data: vec![b'a'; SESSION_EVENT_QUEUE_OUTPUT_EVENT_LIMIT - 8],
+        });
+        queue.push(SessionEvent::Output {
+            session_id: "a".to_string(),
+            data: vec![b'b'; 16],
+        });
+
+        let drain = queue.drain(8);
+        assert_eq!(drain.events.len(), 2);
+        assert!(matches!(
+            &drain.events[0],
+            SessionEvent::OutputDropped { session_id, bytes } if session_id == "a" && *bytes == 8
+        ));
+        assert!(matches!(
+            &drain.events[1],
+            SessionEvent::Output { session_id, data } if session_id == "a"
+                && data.len() == SESSION_EVENT_QUEUE_OUTPUT_EVENT_LIMIT
+                && data[0] == b'a'
+                && *data.last().unwrap() == b'b'
+        ));
+        assert_eq!(drain.stats.dropped_output_bytes, 8);
     }
 
     #[test]

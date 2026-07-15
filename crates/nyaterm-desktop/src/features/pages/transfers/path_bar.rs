@@ -234,10 +234,11 @@ impl NyaTermApp {
             return;
         }
         let path = normalized_transfer_browser_path(&self.transfer_browser_path);
-        self.send_terminal_input(path.clone().into_bytes(), cx);
-        self.terminal_status = "sent current remote directory to terminal".to_string();
-        self.transfer_browser_status = truncate_preview(&path, 92);
-        cx.notify();
+        if self.send_terminal_input(path.clone().into_bytes(), cx) {
+            self.terminal_status = "sent current remote directory to terminal".to_string();
+            self.transfer_browser_status = truncate_preview(&path, 92);
+            cx.notify();
+        }
     }
 
     pub(super) fn begin_transfer_browser_path_edit(

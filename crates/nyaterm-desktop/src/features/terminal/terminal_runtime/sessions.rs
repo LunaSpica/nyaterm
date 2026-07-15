@@ -18,9 +18,10 @@ impl NyaTermApp {
                 Timer::after(Duration::from_millis(delay_ms)).await;
             }
             let _ = this.update(cx, |this, cx| {
-                this.send_terminal_input_to_session(session_id, command.into_bytes(), cx);
-                this.terminal_status = "startup command sent".to_string();
-                cx.notify();
+                if this.send_terminal_input_to_session(session_id, command.into_bytes(), cx) {
+                    this.terminal_status = "startup command sent".to_string();
+                    cx.notify();
+                }
             });
         })
         .detach();
@@ -80,7 +81,10 @@ impl NyaTermApp {
                 self.active_ssh_config = None;
                 self.active_ai_execution_profile = AiExecutionProfile::SendOnly;
                 self.terminal_output = String::from(INITIAL_TERMINAL_BANNER);
+                self.terminal_output_decoder.reset_decoder();
                 self.terminal_screen = initial_terminal_screen();
+                self.terminal_screen
+                    .set_encoding(&self.settings.interaction_default_encoding);
                 self.terminal_status = "session closed".to_string();
             }
         } else {
@@ -143,7 +147,10 @@ impl NyaTermApp {
                 self.active_ssh_config = None;
                 self.active_ai_execution_profile = AiExecutionProfile::SendOnly;
                 self.terminal_output = String::from(INITIAL_TERMINAL_BANNER);
+                self.terminal_output_decoder.reset_decoder();
                 self.terminal_screen = initial_terminal_screen();
+                self.terminal_screen
+                    .set_encoding(&self.settings.interaction_default_encoding);
             }
         }
 
@@ -300,6 +307,7 @@ impl NyaTermApp {
             view.clear();
         }
         self.terminal_output.clear();
+        self.terminal_output_decoder.reset_decoder();
         self.terminal_screen.clear();
         self.terminal_status = "terminal cleared".to_string();
         cx.notify();

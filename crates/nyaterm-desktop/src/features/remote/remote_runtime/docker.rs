@@ -218,10 +218,13 @@ impl NyaTermApp {
             command.push('\n');
         }
         self.selected_nav = NavItem::Workspace;
-        self.send_terminal_input(command.into_bytes(), cx);
-        self.docker_status = status;
-        self.terminal_status = self.docker_status.clone();
-        cx.notify();
+        if self.send_terminal_input(command.into_bytes(), cx) {
+            self.docker_status = status;
+            self.terminal_status = self.docker_status.clone();
+            cx.notify();
+        } else {
+            self.docker_status = self.terminal_status.clone();
+        }
     }
 
     pub(in crate::features) fn toggle_docker_compose_project(

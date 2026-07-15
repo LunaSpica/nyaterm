@@ -458,10 +458,11 @@ impl NyaTermApp {
             cx.notify();
             return;
         }
-        self.send_terminal_input(value.clone().into_bytes(), cx);
-        self.terminal_status = format!("sent remote {} to terminal", part.label());
-        self.transfer_browser_status = truncate_preview(&value, 92);
-        cx.notify();
+        if self.send_terminal_input(value.clone().into_bytes(), cx) {
+            self.terminal_status = format!("sent remote {} to terminal", part.label());
+            self.transfer_browser_status = truncate_preview(&value, 92);
+            cx.notify();
+        }
     }
 
     pub(in crate::features::pages::transfers) fn selected_transfer_entry(

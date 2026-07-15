@@ -221,6 +221,10 @@ impl NyaTermApp {
             .collect::<HashMap<_, _>>();
         let panel_multi_open = settings.ui_panel_multi_open;
         let translate_target_language = translation_settings.target_language.clone();
+        let mut terminal_output_decoder = TerminalOutputDecoder::default();
+        terminal_output_decoder.set_encoding(&settings.interaction_default_encoding);
+        let mut terminal_screen = initial_terminal_screen();
+        terminal_screen.set_encoding(&settings.interaction_default_encoding);
 
         Self {
             stores,
@@ -339,6 +343,7 @@ impl NyaTermApp {
             search_engine_edit_field: SearchEngineEditorField::Name,
             search_engine_focus: cx.focus_handle(),
             terminal_scrollbar_dragging: false,
+            terminal_scrollbar_drag_session_id: None,
             terminal_actions_open: false,
             terminal_actions_focus: cx.focus_handle(),
             terminal_context_menu: None,
@@ -616,6 +621,7 @@ impl NyaTermApp {
             session_dynamic_titles: HashMap::new(),
             session_cwds: HashMap::new(),
             zmodem_sessions: HashMap::new(),
+            trzsz_sessions: HashMap::new(),
             session_tab_colors: HashMap::new(),
             ssh_multiplex_handles: HashMap::new(),
             terminal_views: HashMap::new(),
@@ -645,17 +651,26 @@ impl NyaTermApp {
             multi_line_paste: None,
             multi_line_paste_focus: cx.focus_handle(),
             terminal_focus: cx.focus_handle(),
+            terminal_focus_active: false,
+            terminal_focus_subscriptions: Vec::new(),
+            terminal_ime_marked_text: String::new(),
             lock_focus: cx.focus_handle(),
             lock_password_draft: String::new(),
             lock_status: String::new(),
             terminal_output: String::from(INITIAL_TERMINAL_BANNER),
-            terminal_screen: initial_terminal_screen(),
+            terminal_output_decoder,
+            terminal_screen,
             terminal_scroll_offset: 0,
             terminal_status: "idle".to_string(),
             terminal_runtime: TerminalRuntimeUiState::default(),
             terminal_selection: None,
             terminal_selection_dragging: false,
+            terminal_mouse_report_button: None,
+            terminal_mouse_report_session_id: None,
+            terminal_mouse_report_peer_session_ids: Vec::new(),
+            terminal_mouse_report_position: None,
             terminal_surface_bounds: None,
+            terminal_session_surface_bounds: HashMap::new(),
             terminal_cell_metrics: None,
             terminal_file_drop_hover: None,
             last_viewport_size: (1280., 800.),

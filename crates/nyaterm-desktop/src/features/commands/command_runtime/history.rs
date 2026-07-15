@@ -297,6 +297,17 @@ impl NyaTermApp {
         session_id: Option<&str>,
         bytes: &[u8],
     ) {
+        let sessions: Vec<&str> = session_id.into_iter().collect();
+        self.record_command_history_for_sessions(&sessions, bytes);
+    }
+
+    /// Resolve a submitted command once and attach it to every successful session.
+    /// Global command history is appended only once per submission.
+    pub(in crate::features) fn record_command_history_for_sessions(
+        &mut self,
+        session_ids: &[&str],
+        bytes: &[u8],
+    ) {
         let Ok(text) = std::str::from_utf8(bytes) else {
             return;
         };
@@ -316,7 +327,7 @@ impl NyaTermApp {
         if submitted.is_empty() {
             return;
         }
-        if let Some(session_id) = session_id {
+        for session_id in session_ids {
             for command in &submitted {
                 self.record_session_command_history(session_id, command);
             }

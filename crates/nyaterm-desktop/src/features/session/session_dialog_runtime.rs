@@ -223,6 +223,7 @@ impl NyaTermApp {
     }
 
     pub(in crate::features) fn remove_session_state(&mut self, session_id: &str) {
+        self.clear_terminal_mouse_report_for_session(session_id);
         self.session_order.retain(|id| id != session_id);
         self.session_tab_owner.remove(session_id);
         // If this leaf was a tab root, drop its pane tree (prune will rekey survivors).
@@ -235,8 +236,10 @@ impl NyaTermApp {
         self.session_dynamic_titles.remove(session_id);
         self.session_cwds.remove(session_id);
         self.clear_zmodem_session(session_id);
+        self.clear_trzsz_session(session_id);
         self.session_tab_colors.remove(session_id);
         self.terminal_views.remove(session_id);
+        self.terminal_session_surface_bounds.remove(session_id);
         self.session_command_history.remove(session_id);
         self.transfer_browser_session_cache.remove(session_id);
         self.purge_session_from_sync_groups(session_id);

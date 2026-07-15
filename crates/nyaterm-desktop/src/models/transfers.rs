@@ -81,6 +81,16 @@ pub(crate) enum TransferJobKind {
         session_id: String,
         file_name: String,
     },
+    /// In-band trzsz download (remote `tsz` -> local download directory).
+    TrzszDownload {
+        session_id: String,
+        file_name: String,
+    },
+    /// In-band trzsz upload (local files -> remote `trz`).
+    TrzszUpload {
+        session_id: String,
+        file_name: String,
+    },
     /// Pre-upload SFTP name conflict probe before remote `rz` (Tauri parity).
     ZmodemConflictProbe {
         session_id: String,

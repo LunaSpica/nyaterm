@@ -1,4 +1,7 @@
 use super::*;
+use std::collections::hash_map::DefaultHasher;
+use std::hash::{Hash, Hasher};
+use std::sync::{Arc, Mutex};
 
 #[derive(Debug, Clone)]
 pub struct TerminalBufferMatch {
@@ -15,18 +18,153 @@ pub struct TerminalSearchFlags {
     pub whole_word: bool,
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Hash)]
 pub struct TerminalLineDecorations {
     pub search_ranges: Vec<(usize, usize)>,
     pub active_search_ranges: Vec<(usize, usize)>,
     pub selection_cols: Option<(usize, usize)>,
     pub link_ranges: Vec<(usize, usize)>,
+    /// OSC 133 shell-integration mark for this viewport row.
+    pub command_mark: Option<nyaterm_terminal::ShellCommandMark>,
+}
+
+#[derive(Debug, Clone)]
+struct CachedTerminalPaintRow {
+    key: u64,
+    line: ShapedLine,
+}
+
+#[derive(Debug, Default)]
+pub struct NyaTerminalLayoutCache {
+    rows: Vec<Option<CachedTerminalPaintRow>>,
+    pub hits: u64,
+    pub misses: u64,
+}
+
+impl NyaTerminalLayoutCache {
+    pub fn clear(&mut self) {
+        self.rows.clear();
+        self.hits = 0;
+        self.misses = 0;
+    }
+
+    fn shaped_line(
+        &mut self,
+        row: usize,
+        key: u64,
+        shape: impl FnOnce() -> ShapedLine,
+    ) -> ShapedLine {
+        if self.rows.len() <= row {
+            self.rows.resize_with(row + 1, || None);
+        }
+        if let Some(cached) = self.rows[row].as_ref()
+            && cached.key == key
+        {
+            self.hits = self.hits.saturating_add(1);
+            return cached.line.clone();
+        }
+        self.misses = self.misses.saturating_add(1);
+        let line = shape();
+        self.rows[row] = Some(CachedTerminalPaintRow {
+            key,
+            line: line.clone(),
+        });
+        line
+    }
+}
+
+#[cfg(test)]
+mod layout_cache_tests {
+    use super::*;
+
+    #[test]
+    fn shaped_line_cache_reuses_matching_row_key() {
+        let mut cache = NyaTerminalLayoutCache::default();
+
+        let _ = cache.shaped_line(0, 42, ShapedLine::default);
+        let _ = cache.shaped_line(0, 42, || panic!("matching key should reuse cached row"));
+
+        assert_eq!(cache.misses, 1);
+        assert_eq!(cache.hits, 1);
+    }
+
+    #[test]
+    fn clear_resets_shaped_line_cache() {
+        let mut cache = NyaTerminalLayoutCache::default();
+        let _ = cache.shaped_line(0, 42, ShapedLine::default);
+
+        cache.clear();
+
+        assert_eq!(cache.misses, 0);
+        assert_eq!(cache.hits, 0);
+        let _ = cache.shaped_line(0, 42, ShapedLine::default);
+        assert_eq!(cache.misses, 1);
+    }
+
+    #[test]
+    fn styled_span_hash_tracks_style_changes() {
+        let plain = vec![nyaterm_terminal::StyledSpan {
+            text: "same".to_string(),
+            style: nyaterm_terminal::CellStyle::default(),
+        }];
+        let mut bold_style = nyaterm_terminal::CellStyle::default();
+        bold_style.bold = true;
+        let bold = vec![nyaterm_terminal::StyledSpan {
+            text: "same".to_string(),
+            style: bold_style,
+        }];
+
+        let mut plain_hasher = DefaultHasher::new();
+        hash_styled_spans(Some(&plain), &mut plain_hasher);
+        let mut bold_hasher = DefaultHasher::new();
+        hash_styled_spans(Some(&bold), &mut bold_hasher);
+
+        assert_ne!(plain_hasher.finish(), bold_hasher.finish());
+    }
+
+    #[test]
+    fn row_layout_key_tracks_styled_spans() {
+        let mut snapshot = TerminalScreen::default().snapshot();
+        snapshot.lines[0] = "same".to_string();
+        snapshot.line_signatures[0] = 7;
+        let element = NyaTerminalElement::new(
+            snapshot,
+            Vec::new(),
+            Vec::new(),
+            false,
+            "block",
+            8.0,
+            16.0,
+            nyaterm_ui::theme_palette("github-dark"),
+            "monospace".to_string(),
+            14.0,
+            400.0,
+            700.0,
+        );
+        let decorations = TerminalLineDecorations::default();
+        let plain = vec![nyaterm_terminal::StyledSpan {
+            text: "same".to_string(),
+            style: nyaterm_terminal::CellStyle::default(),
+        }];
+        let mut bold_style = nyaterm_terminal::CellStyle::default();
+        bold_style.bold = true;
+        let bold = vec![nyaterm_terminal::StyledSpan {
+            text: "same".to_string(),
+            style: bold_style,
+        }];
+
+        assert_ne!(
+            element.row_layout_key(0, "same", Some(&plain), &decorations),
+            element.row_layout_key(0, "same", Some(&bold), &decorations)
+        );
+    }
 }
 
 pub struct NyaTerminalElement {
     snapshot: TerminalSnapshot,
     keyword_rules: Vec<ResolvedKeywordHighlightRule>,
     decorations: Vec<TerminalLineDecorations>,
+    layout_cache: Option<Arc<Mutex<NyaTerminalLayoutCache>>>,
     show_cursor: bool,
     cursor_style: String,
     cell_width: f32,
@@ -43,12 +181,44 @@ struct TerminalPaintRow {
     line: ShapedLine,
 }
 
+pub struct TerminalImagePaint {
+    bounds: Bounds<Pixels>,
+    image: std::sync::Arc<gpui::RenderImage>,
+}
+
 #[derive(Default)]
 pub struct NyaTerminalPaintPlan {
+    /// Cell / keyword backgrounds (under protocol images).
     backgrounds: Vec<PaintQuad>,
+    /// Decoded graphics protocol images painted under terminal text.
+    images_under: Vec<TerminalImagePaint>,
+    /// Accent placeholders for undecodable under-text images.
+    placeholders_under: Vec<PaintQuad>,
+    /// Search match + selection washes (over under-text images, under glyphs).
+    decoration_backgrounds: Vec<PaintQuad>,
+    /// Active-search gutter + OSC 133 command marks (under glyphs).
     active_markers: Vec<PaintQuad>,
     rows: Vec<TerminalPaintRow>,
+    /// Decoded graphics with Kitty z>0, painted above terminal text.
+    images_above: Vec<TerminalImagePaint>,
+    /// Accent placeholders for undecodable above-text images.
+    placeholders_above: Vec<PaintQuad>,
     cursor: Option<PaintQuad>,
+}
+
+fn image_mask(
+    bounds: Bounds<Pixels>,
+    cols: usize,
+    rows: usize,
+    cell_w: f32,
+    cell_h: f32,
+) -> ContentMask<Pixels> {
+    ContentMask {
+        bounds: Bounds::new(
+            bounds.origin,
+            size(px(cols as f32 * cell_w), px(rows as f32 * cell_h)),
+        ),
+    }
 }
 
 impl NyaTerminalElement {
@@ -71,6 +241,7 @@ impl NyaTerminalElement {
             snapshot,
             keyword_rules,
             decorations,
+            layout_cache: None,
             show_cursor,
             cursor_style: cursor_style.into(),
             cell_width,
@@ -81,6 +252,63 @@ impl NyaTerminalElement {
             normal_weight,
             bold_weight,
         }
+    }
+
+    pub fn with_layout_cache(mut self, cache: Arc<Mutex<NyaTerminalLayoutCache>>) -> Self {
+        self.layout_cache = Some(cache);
+        self
+    }
+
+    fn row_layout_key(
+        &self,
+        row: usize,
+        display_line: &str,
+        ansi_spans: Option<&[nyaterm_terminal::StyledSpan]>,
+        decorations: &TerminalLineDecorations,
+    ) -> u64 {
+        let mut hasher = DefaultHasher::new();
+        self.snapshot
+            .line_signatures
+            .get(row)
+            .copied()
+            .unwrap_or_default()
+            .hash(&mut hasher);
+        display_line.hash(&mut hasher);
+        hash_styled_spans(ansi_spans, &mut hasher);
+        decorations.hash(&mut hasher);
+        for rule in &self.keyword_rules {
+            rule.id.hash(&mut hasher);
+            rule.name.hash(&mut hasher);
+            rule.patterns.hash(&mut hasher);
+            rule.color.hash(&mut hasher);
+            rule.enabled.hash(&mut hasher);
+        }
+        self.palette.bg.hash(&mut hasher);
+        self.palette.surface.hash(&mut hasher);
+        self.palette.accent.hash(&mut hasher);
+        self.palette.terminal_fg.hash(&mut hasher);
+        self.palette.terminal_bg.hash(&mut hasher);
+        self.palette.terminal_ansi.hash(&mut hasher);
+        self.font_family.hash(&mut hasher);
+        self.font_size.to_bits().hash(&mut hasher);
+        self.normal_weight.to_bits().hash(&mut hasher);
+        self.bold_weight.to_bits().hash(&mut hasher);
+        hasher.finish()
+    }
+}
+
+fn hash_styled_spans<H: Hasher>(
+    ansi_spans: Option<&[nyaterm_terminal::StyledSpan]>,
+    hasher: &mut H,
+) {
+    if let Some(spans) = ansi_spans {
+        spans.len().hash(hasher);
+        for span in spans {
+            span.text.hash(hasher);
+            span.style.hash(hasher);
+        }
+    } else {
+        0usize.hash(hasher);
     }
 }
 
@@ -142,6 +370,18 @@ impl Element for NyaTerminalElement {
             let display_line = if line.is_empty() { " " } else { line };
             let ansi = self.snapshot.styled_lines.get(row).map(Vec::as_slice);
             let decorations = self.decorations.get(row).cloned().unwrap_or_default();
+            // Base spans drive cell/keyword backgrounds only (under images).
+            let base_spans = terminal_highlight_spans(
+                display_line,
+                ansi,
+                &self.keyword_rules,
+                &[],
+                &[],
+                None,
+                &decorations.link_ranges,
+                self.palette,
+            );
+            // Full spans include search/selection fg tweaks for the glyph layer.
             let spans = terminal_highlight_spans(
                 display_line,
                 ansi,
@@ -160,16 +400,37 @@ impl Element for NyaTerminalElement {
                     rgb(self.palette.warning),
                 ));
             }
+            // OSC 133 command marks: left gutter bar (under glyphs, with other marks).
+            if let Some(mark) = decorations.command_mark {
+                use nyaterm_terminal::ShellCommandMark;
+                let color = match mark {
+                    ShellCommandMark::Prompt => self.palette.accent,
+                    ShellCommandMark::Output => self.palette.text_muted,
+                    ShellCommandMark::Finished {
+                        exit_code: Some(code),
+                    } if code != 0 => self.palette.danger,
+                    ShellCommandMark::Finished { .. } => self.palette.success,
+                };
+                // Offset 1px when active-search mark is also present so both remain visible.
+                let x = if decorations.active_search_ranges.is_empty() {
+                    bounds.left()
+                } else {
+                    px(f32::from(bounds.left()) + 2.)
+                };
+                plan.active_markers.push(fill(
+                    Bounds::new(point(x, y), size(px(2.), px(cell_h))),
+                    rgb(color),
+                ));
+            }
 
-            let mut text = String::new();
-            let mut text_runs = Vec::new();
+            // Cell / keyword backgrounds (OxideTerm layers 2–3).
             let mut col = 0usize;
             let mut pending_bg: Option<(u32, usize, usize)> = None;
-            for span in spans {
+            for span in &base_spans {
                 let bg = span
                     .bg
                     .or_else(|| span.keyword.then_some(self.palette.surface));
-                let span_cols = span.text.chars().count().max(1);
+                let span_cols = terminal_cell_count(&span.text).max(1);
                 if let Some(bg) = bg {
                     match pending_bg.as_mut() {
                         Some((current_bg, _start, end)) if *current_bg == bg && *end == col => {
@@ -197,7 +458,58 @@ impl Element for NyaTerminalElement {
                         &mut plan.backgrounds,
                     );
                 }
+                col += span_cols;
+            }
+            flush_bg(
+                pending_bg.take(),
+                row,
+                bounds,
+                cell_w,
+                cell_h,
+                &mut plan.backgrounds,
+            );
 
+            // Search + selection washes (OxideTerm layers 5/7) — filled after under-images.
+            for &(start, end) in &decorations.search_ranges {
+                push_col_range_bg(
+                    row,
+                    start,
+                    end,
+                    self.palette.terminal_selection,
+                    bounds,
+                    cell_w,
+                    cell_h,
+                    &mut plan.decoration_backgrounds,
+                );
+            }
+            for &(start, end) in &decorations.active_search_ranges {
+                push_col_range_bg(
+                    row,
+                    start,
+                    end,
+                    self.palette.warning,
+                    bounds,
+                    cell_w,
+                    cell_h,
+                    &mut plan.decoration_backgrounds,
+                );
+            }
+            if let Some((start, end)) = decorations.selection_cols {
+                push_col_range_bg(
+                    row,
+                    start,
+                    end,
+                    self.palette.terminal_selection,
+                    bounds,
+                    cell_w,
+                    cell_h,
+                    &mut plan.decoration_backgrounds,
+                );
+            }
+
+            let mut text = String::new();
+            let mut text_runs = Vec::new();
+            for span in spans {
                 let run_len = span.text.len();
                 text.push_str(&span.text);
                 if run_len > 0 {
@@ -234,16 +546,7 @@ impl Element for NyaTerminalElement {
                         }),
                     });
                 }
-                col += span_cols;
             }
-            flush_bg(
-                pending_bg.take(),
-                row,
-                bounds,
-                cell_w,
-                cell_h,
-                &mut plan.backgrounds,
-            );
 
             if text.is_empty() {
                 text.push(' ');
@@ -262,13 +565,64 @@ impl Element for NyaTerminalElement {
                     strikethrough: None,
                 });
             }
-            let shaped = window.text_system().shape_line(
-                SharedString::from(text),
-                font_size,
-                &text_runs,
-                None,
-            );
+            let row_key = self.row_layout_key(row, display_line, ansi, &decorations);
+            let shape_row = |window: &mut Window| {
+                window.text_system().shape_line(
+                    SharedString::from(text.clone()),
+                    font_size,
+                    &text_runs,
+                    None,
+                )
+            };
+            let shaped = if let Some(cache) = self.layout_cache.as_ref() {
+                match cache.lock() {
+                    Ok(mut cache) => cache.shaped_line(row, row_key, || shape_row(window)),
+                    Err(_) => shape_row(window),
+                }
+            } else {
+                shape_row(window)
+            };
             plan.rows.push(TerminalPaintRow { y, line: shaped });
+        }
+
+        // Graphics protocol placements (Kitty / iTerm2 / Sixel).
+        // Kitty z>0 places above text; everything else stays under the glyph layer.
+        for image in &self.snapshot.images {
+            if image.width_cells == 0 || image.height_cells == 0 {
+                continue;
+            }
+            let x = px(f32::from(bounds.left())
+                + (image.col as f32 - image.source_col_cells as f32) * cell_w);
+            let y = px(f32::from(bounds.top())
+                + (image.row as f32 - image.source_row_cells as f32) * cell_h);
+            let w = px(image.image_width_cells as f32 * cell_w);
+            let h = px(image.image_height_cells as f32 * cell_h);
+            let rect = Bounds::new(point(x, y), size(w, h));
+            if let Some(decoded) = crate::cached_render_image(image.id, &image.data) {
+                let paint = TerminalImagePaint {
+                    bounds: rect,
+                    image: decoded,
+                };
+                if image.above_text {
+                    plan.images_above.push(paint);
+                } else {
+                    plan.images_under.push(paint);
+                }
+            } else {
+                // Dim accent wash when payload is missing/undecodable (e.g. raw Sixel).
+                let mut wash = rgb(self.palette.accent);
+                wash.a = 0.18;
+                let bar = Bounds::new(point(x, y), size(w, px(2.)));
+                let mut bar_color = rgb(self.palette.accent);
+                bar_color.a = 0.55;
+                if image.above_text {
+                    plan.placeholders_above.push(fill(rect, wash));
+                    plan.placeholders_above.push(fill(bar, bar_color));
+                } else {
+                    plan.placeholders_under.push(fill(rect, wash));
+                    plan.placeholders_under.push(fill(bar, bar_color));
+                }
+            }
         }
 
         if self.show_cursor
@@ -301,7 +655,36 @@ impl Element for NyaTerminalElement {
         window: &mut Window,
         cx: &mut App,
     ) {
+        // OxideTerm-aligned layers:
+        // cell/keyword bg → under images → search/selection → marks → text → above images → cursor
         for quad in prepaint.backgrounds.drain(..) {
+            window.paint_quad(quad);
+        }
+        let image_mask = image_mask(
+            bounds,
+            self.snapshot.cols,
+            self.snapshot.rows,
+            self.cell_width.max(1.),
+            self.cell_height.max(1.),
+        );
+        window.with_content_mask(Some(image_mask.clone()), |window| {
+            for image in prepaint.images_under.drain(..) {
+                let _ = window.paint_image(
+                    image.bounds,
+                    gpui::Corners::default(),
+                    image.image,
+                    0,
+                    false,
+                );
+            }
+            for quad in prepaint.placeholders_under.drain(..) {
+                window.paint_quad(quad);
+            }
+        });
+        for quad in prepaint.decoration_backgrounds.drain(..) {
+            window.paint_quad(quad);
+        }
+        for quad in prepaint.active_markers.drain(..) {
             window.paint_quad(quad);
         }
         for row in prepaint.rows.drain(..) {
@@ -312,9 +695,20 @@ impl Element for NyaTerminalElement {
                 cx,
             );
         }
-        for quad in prepaint.active_markers.drain(..) {
-            window.paint_quad(quad);
-        }
+        window.with_content_mask(Some(image_mask), |window| {
+            for image in prepaint.images_above.drain(..) {
+                let _ = window.paint_image(
+                    image.bounds,
+                    gpui::Corners::default(),
+                    image.image,
+                    0,
+                    false,
+                );
+            }
+            for quad in prepaint.placeholders_above.drain(..) {
+                window.paint_quad(quad);
+            }
+        });
         if let Some(cursor) = prepaint.cursor.take() {
             window.paint_quad(cursor);
         }

@@ -13,7 +13,11 @@ pub mod runtime;
 pub mod services;
 pub mod storage;
 pub mod terminal_file_drop;
+pub mod terminal_input_fanout;
 pub mod terminal_input_tracker;
+pub mod terminal_mouse;
+pub mod terminal_resize;
+pub mod terminal_wire_write;
 pub mod translation;
 pub mod updater;
 
@@ -101,12 +105,21 @@ pub use storage::{ConfigBackupInfo, ConnectionStore, KnownHostCheck, StorageErro
 pub use terminal_file_drop::{
     format_local_terminal_drop_input, quote_local_path, terminal_drop_overlay_copy,
 };
+pub use terminal_input_fanout::terminal_input_fanout_status;
 pub use terminal_input_tracker::{
     InputSelectionRange, TerminalInputState, apply_terminal_input_data,
     build_move_input_cursor_data, byte_index_to_char, can_register_command_from_tracker,
     can_suggest_from_tracker, char_index_to_byte, delete_terminal_input_range, get_tracked_command,
     get_tracked_submission_command, resync_from_terminal_line, sanitize_terminal_command,
     strip_terminal_command_prompt,
+};
+pub use terminal_mouse::{TerminalMouseReportEligibility, terminal_mouse_report_should_send};
+pub use terminal_resize::{
+    TerminalBackendResize, TerminalResizeGeometry, terminal_backend_resize_changed,
+    terminal_resize_geometry_for_size,
+};
+pub use terminal_wire_write::{
+    TerminalWireWriteDisposition, TerminalWireWriteKind, terminal_wire_write_disposition,
 };
 pub use translation::{
     AliSignature, TranslateResult, TranslationError, TranslationSettings, ali_content_sha256,

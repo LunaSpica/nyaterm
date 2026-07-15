@@ -160,6 +160,14 @@ pub(in crate::features) fn transfer_job_title(kind: &TransferJobKind) -> String 
             file_name,
             session_id,
         } => format!("ZMODEM ↓ {file_name} ({session_id})"),
+        TransferJobKind::TrzszDownload {
+            file_name,
+            session_id,
+        } => format!("trzsz ↓ {file_name} ({session_id})"),
+        TransferJobKind::TrzszUpload {
+            file_name,
+            session_id,
+        } => format!("trzsz ↑ {file_name} ({session_id})"),
         TransferJobKind::ZmodemConflictProbe {
             session_id,
             remote_dir,

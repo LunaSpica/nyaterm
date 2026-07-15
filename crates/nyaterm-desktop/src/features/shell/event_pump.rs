@@ -1,3 +1,5 @@
+use std::fmt::Write as _;
+
 use super::*;
 
 impl NyaTermApp {
@@ -176,6 +178,10 @@ impl NyaTermApp {
         let vs = window.viewport_size();
         self.last_viewport_size = (f32::from(vs.width), f32::from(vs.height));
         self.refresh_terminal_cell_metrics(cx);
+        if self.terminal_cell_metrics != before_metrics {
+            self.sync_terminal_cell_metrics_to_screens();
+            self.resize_all_known_terminal_surfaces();
+        }
         self.last_viewport_size != before_viewport || self.terminal_cell_metrics != before_metrics
     }
 
@@ -240,42 +246,68 @@ impl NyaTermApp {
             for event in events {
                 match event {
                     SessionEvent::Output { session_id, data } => {
-                        // Intercept ZMODEM protocol bytes before terminal paint (Tauri parity).
                         let data = self.process_zmodem_output(&session_id, &data, cx);
                         if data.is_empty() {
                             continue;
                         }
-                        if self.active_session_id.as_deref() == Some(session_id.as_str()) {
-                            let text = String::from_utf8_lossy(&data);
-                            if self.ai_agent_capture.has_active() {
-                                let result = self.ai_agent_capture.process(&text);
-                                if !result.visible_text.is_empty() {
-                                    self.recording_manager
-                                        .write_output(&session_id, &result.visible_text);
-                                    self.append_terminal_log(&result.visible_text);
-                                    self.feed_credential_autofill_output(
-                                        result.visible_text.as_bytes(),
-                                        cx,
-                                    );
+                        // Consume side-band markers after active transfer payloads are removed.
+                        let data = self.process_trzsz_output(&session_id, &data, cx);
+                        if data.is_empty() {
+                            continue;
+                        }
+                        let is_active =
+                            self.active_session_id.as_deref() == Some(session_id.as_str());
+                        let text = self.decode_session_output_for_recording(&session_id, &data);
+                        if self.session_has_active_ai_capture(&session_id) {
+                            let result = self.ai_agent_capture.process(&text);
+                            if !result.visible_text.is_empty() {
+                                self.recording_manager
+                                    .write_output(&session_id, &result.visible_text);
+                                let visible_bytes = self.encode_visible_terminal_text_for_output(
+                                    &session_id,
+                                    &result.visible_text,
+                                );
+                                self.append_terminal_bytes_for_session(
+                                    Some(&session_id),
+                                    &visible_bytes,
+                                    !is_active,
+                                    Some(cx),
+                                );
+                                if is_active {
+                                    self.feed_credential_autofill_output(&result.visible_text, cx);
                                 }
-                                for captured in result.completed {
-                                    self.handle_ai_agent_captured_output(captured, cx);
-                                }
-                            } else {
-                                self.recording_manager.write_output(&session_id, &text);
-                                self.append_terminal_bytes(&data);
-                                self.feed_credential_autofill_output(&data, cx);
                             }
-                        } else {
-                            let text = String::from_utf8_lossy(&data);
+                            for captured in result.completed {
+                                self.handle_ai_agent_captured_output(captured, cx);
+                            }
+                        } else if is_active {
                             self.recording_manager.write_output(&session_id, &text);
-                            self.append_terminal_bytes_for_session(Some(&session_id), &data, true);
+                            self.append_terminal_bytes(&data, cx);
+                            self.feed_credential_autofill_output(&text, cx);
+                        } else {
+                            self.recording_manager.write_output(&session_id, &text);
+                            self.append_terminal_bytes_for_session(
+                                Some(&session_id),
+                                &data,
+                                true,
+                                Some(cx),
+                            );
                         }
                     }
                     SessionEvent::OutputDropped { session_id, bytes } => {
-                        if let Some(view) = self.terminal_views.get_mut(&session_id) {
-                            view.note_skipped_output(bytes);
-                        }
+                        self.note_trzsz_output_discontinuity(&session_id);
+                        self.note_zmodem_output_discontinuity(&session_id, bytes, cx);
+                        self.note_ai_agent_output_discontinuity(&session_id, bytes, cx);
+                        let encoding = self.settings.interaction_default_encoding.clone();
+                        let view = self
+                            .terminal_views
+                            .entry(session_id.clone())
+                            .or_insert_with(TerminalViewState::new);
+                        view.set_encoding(&encoding);
+                        view.note_output_discontinuity(bytes);
+                        let marker = terminal_output_dropped_marker(bytes);
+                        self.recording_manager.write_output(&session_id, &marker);
+                        self.append_terminal_log_for_session(Some(&session_id), &marker, true);
                         if self.active_session_id.as_deref() == Some(session_id.as_str()) {
                             self.terminal_status = format!(
                                 "terminal output overloaded; dropped {} queued byte(s)",
@@ -300,17 +332,18 @@ impl NyaTermApp {
                         session_id,
                         message,
                     } => {
+                        let log_message = terminal_log_plain_text(&message);
+                        let log = format!("\n# session error: {log_message}\n");
+                        if !session_id.is_empty() {
+                            self.recording_manager.write_output(&session_id, &log);
+                        }
                         if session_id.is_empty()
                             || self.active_session_id.as_deref() == Some(session_id.as_str())
                         {
                             self.terminal_status = format!("session error: {message}");
-                            self.append_terminal_log(format!("\n# session error: {message}\n"));
+                            self.append_terminal_log(log);
                         } else {
-                            self.append_terminal_log_for_session(
-                                Some(&session_id),
-                                &format!("\n# session error: {message}\n"),
-                                true,
-                            );
+                            self.append_terminal_log_for_session(Some(&session_id), &log, true);
                         }
                     }
                 }
@@ -514,6 +547,14 @@ impl NyaTermApp {
         }
         dirty
     }
+
+    fn session_has_active_ai_capture(&self, session_id: &str) -> bool {
+        self.ai_agent_capture.has_active()
+            && self
+                .ai_agent_loop
+                .as_ref()
+                .is_some_and(|state| state.terminal_session_id == session_id)
+    }
 }
 
 const TRANSFER_AUTO_SYNC_CWD_INTERVAL_SECONDS: u32 = 3;
@@ -524,4 +565,53 @@ fn remote_refresh_due(last_refresh_at: Option<Instant>, interval_seconds: u32) -
     last_refresh_at.is_none_or(|last_refresh_at| {
         last_refresh_at.elapsed() >= Duration::from_secs(u64::from(interval_seconds))
     })
+}
+
+fn terminal_output_dropped_marker(bytes: usize) -> String {
+    format!("\r\n[nyaterm: dropped {bytes} queued output byte(s)]\r\n")
+}
+
+fn terminal_log_plain_text(text: &str) -> String {
+    let mut out = String::with_capacity(text.len());
+    for ch in text.chars() {
+        match ch {
+            '\n' => out.push_str("\\n"),
+            '\r' => out.push_str("\\r"),
+            '\t' => out.push_str("\\t"),
+            '\x1b' => out.push_str("\\x1b"),
+            ch if ch.is_control() => {
+                let _ = write!(out, "\\u{{{:x}}}", ch as u32);
+            }
+            ch => out.push(ch),
+        }
+    }
+    out
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn output_dropped_marker_is_plain_terminal_text() {
+        let marker = terminal_output_dropped_marker(42);
+        assert_eq!(
+            marker,
+            "\r\n[nyaterm: dropped 42 queued output byte(s)]\r\n"
+        );
+        assert!(marker.is_ascii());
+        assert!(!marker.contains('\x1b'));
+    }
+
+    #[test]
+    fn terminal_log_plain_text_escapes_control_sequences() {
+        let message = "失败\x1b]52;c;AAAA\x07\nnext\tfield";
+        let escaped = terminal_log_plain_text(message);
+
+        assert_eq!(escaped, "失败\\x1b]52;c;AAAA\\u{7}\\nnext\\tfield");
+        assert!(!escaped.contains('\x1b'));
+        assert!(!escaped.contains('\x07'));
+        assert!(!escaped.contains('\n'));
+        assert!(escaped.contains("失败"));
+    }
 }

@@ -12,7 +12,8 @@ impl NyaTermApp {
             return;
         }
 
-        let config = LocalSessionConfig::default();
+        let mut config = LocalSessionConfig::default();
+        self.apply_desired_geometry_to_local_config(&mut config);
         match self.session_manager.create_local_session(config.clone()) {
             Ok(info) => {
                 self.register_session(
@@ -60,7 +61,7 @@ impl NyaTermApp {
                 working_dir,
                 ai_execution_profile,
             } => {
-                let config = LocalSessionConfig {
+                let mut config = LocalSessionConfig {
                     name: connection.name.clone(),
                     shell_path: non_empty_string(shell_path),
                     shell_args: split_shell_args(&shell_args),
@@ -69,7 +70,10 @@ impl NyaTermApp {
                         .map(Into::into),
                     cols: 80,
                     rows: 24,
+                    pixel_width: 0,
+                    pixel_height: 0,
                 };
+                self.apply_desired_geometry_to_local_config(&mut config);
                 match self.session_manager.create_local_session(config.clone()) {
                     Ok(info) => self.activate_started_session(
                         connection.name,
@@ -265,8 +269,11 @@ impl NyaTermApp {
             term: "xterm-256color".to_string(),
             x11_forwarding,
             x11_display: self.settings.x11_display.clone(),
+            deferred_pty: true,
             cols: 80,
             rows: 24,
+            pixel_width: 0,
+            pixel_height: 0,
             host_key_verifier: Some(Arc::new(NativeHostKeyVerifier {
                 config_dir: self.runtime.config_dir().to_path_buf(),
                 portable_key_path: self.runtime.portable_key_path().map(ToOwned::to_owned),
@@ -313,6 +320,18 @@ impl NyaTermApp {
             username: proxy.username.filter(|value| !value.trim().is_empty()),
             password: proxy.password.filter(|value| !value.is_empty()),
         }))
+    }
+
+    pub(in crate::features) fn apply_desired_geometry_to_local_config(
+        &self,
+        config: &mut LocalSessionConfig,
+    ) {
+        if let Some(geometry) = self.desired_terminal_resize_geometry() {
+            config.cols = geometry.cols;
+            config.rows = geometry.rows;
+            config.pixel_width = geometry.pixel_width;
+            config.pixel_height = geometry.pixel_height;
+        }
     }
 
     pub(in crate::features) fn load_proxy_jump_config(

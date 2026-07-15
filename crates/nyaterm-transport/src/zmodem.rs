@@ -406,11 +406,15 @@ impl ZmodemTransfer {
 
     /// Called when the user cancels the transfer from the frontend.
     pub fn cancel(&mut self) -> Vec<ZmodemAction> {
+        self.cancel_with_reason("cancelled")
+    }
+
+    pub fn cancel_with_reason(&mut self, reason: impl Into<String>) -> Vec<ZmodemAction> {
         self.state = TransferState::Done;
         vec![
             ZmodemAction::SendToRemote(cancel_sequence()),
             ZmodemAction::EmitEvent(ZmodemEvent::Failed {
-                reason: "cancelled".to_string(),
+                reason: reason.into(),
             }),
         ]
     }
@@ -953,8 +957,9 @@ fn cancel_sequence() -> Vec<u8> {
 #[cfg(test)]
 mod tests {
     use super::{
-        ProgressThrottle, ZMODEM_PROGRESS_BYTES, ZMODEM_PROGRESS_INTERVAL, ZmodemDetectResult,
-        ZmodemDetector, ZmodemDirection,
+        ProgressThrottle, ZMODEM_PROGRESS_BYTES, ZMODEM_PROGRESS_INTERVAL, ZmodemAction,
+        ZmodemDetectResult, ZmodemDetector, ZmodemDirection, ZmodemEvent, ZmodemTransfer,
+        cancel_sequence,
     };
     use std::time::{Duration, Instant};
 
@@ -1090,6 +1095,24 @@ mod tests {
             detected_direction(detector.feed(b"A\x01payload")),
             ZmodemDirection::Upload
         );
+    }
+
+    #[test]
+    fn cancel_with_reason_sends_abort_and_reports_reason() {
+        let mut transfer = ZmodemTransfer::new(ZmodemDirection::Download, b"**\x18B00");
+
+        let actions = transfer.cancel_with_reason("terminal output dropped 8 byte(s)");
+
+        assert!(transfer.is_done());
+        assert!(matches!(
+            actions.first(),
+            Some(ZmodemAction::SendToRemote(bytes)) if bytes == &cancel_sequence()
+        ));
+        assert!(matches!(
+            actions.get(1),
+            Some(ZmodemAction::EmitEvent(ZmodemEvent::Failed { reason }))
+                if reason == "terminal output dropped 8 byte(s)"
+        ));
     }
 
     #[test]

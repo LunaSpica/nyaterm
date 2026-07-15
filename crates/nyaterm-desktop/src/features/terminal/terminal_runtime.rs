@@ -6,6 +6,7 @@ mod buffer;
 mod paste;
 #[path = "terminal_runtime/scroll.rs"]
 mod scroll;
+pub(in crate::features) use scroll::terminal_scroll_track_ratio;
 #[path = "terminal_runtime/sessions.rs"]
 mod sessions;
 #[path = "terminal_runtime/view_io.rs"]

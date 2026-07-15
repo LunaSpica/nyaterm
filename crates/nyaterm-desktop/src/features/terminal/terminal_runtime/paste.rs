@@ -39,23 +39,53 @@ impl NyaTermApp {
                 return;
             }
         }
-        self.send_terminal_input(self.wrap_terminal_paste_bytes(&payload), cx);
+        self.send_terminal_paste_input(&payload, cx);
+    }
+
+    pub(in crate::features) fn session_bracketed_paste(&self, session_id: &str) -> bool {
+        self.terminal_views
+            .get(session_id)
+            .map(|view| view.screen.bracketed_paste())
+            .unwrap_or(false)
     }
 
     pub(in crate::features) fn active_terminal_bracketed_paste(&self) -> bool {
         if let Some(session_id) = self.active_session_id.as_deref() {
-            self.terminal_views
-                .get(session_id)
-                .map(|view| view.screen.bracketed_paste())
-                .unwrap_or(false)
+            self.session_bracketed_paste(session_id)
         } else {
             self.terminal_screen.bracketed_paste()
         }
     }
 
     pub(in crate::features) fn wrap_terminal_paste_bytes(&self, text: &str) -> Vec<u8> {
-        let body = text.as_bytes();
-        if self.active_terminal_bracketed_paste() {
+        self.wrap_terminal_paste_bytes_for_bracketed(text, self.active_terminal_bracketed_paste())
+    }
+
+    pub(in crate::features) fn wrap_terminal_paste_bytes_for_session(
+        &self,
+        session_id: &str,
+        text: &str,
+    ) -> Vec<u8> {
+        let body = self.encode_session_outgoing(session_id, text.as_bytes());
+        Self::wrap_terminal_paste_wire_bytes_for_bracketed(
+            &body,
+            self.session_bracketed_paste(session_id),
+        )
+    }
+
+    pub(in crate::features) fn wrap_terminal_paste_bytes_for_bracketed(
+        &self,
+        text: &str,
+        bracketed: bool,
+    ) -> Vec<u8> {
+        Self::wrap_terminal_paste_wire_bytes_for_bracketed(text.as_bytes(), bracketed)
+    }
+
+    pub(in crate::features) fn wrap_terminal_paste_wire_bytes_for_bracketed(
+        body: &[u8],
+        bracketed: bool,
+    ) -> Vec<u8> {
+        if bracketed {
             let mut out = Vec::with_capacity(body.len() + 12);
             out.extend_from_slice(b"\x1b[200~");
             out.extend_from_slice(body);
@@ -64,6 +94,71 @@ impl NyaTermApp {
         } else {
             body.to_vec()
         }
+    }
+
+    /// Paste fan-out wraps bracketed-paste mode per target session so sync peers
+    /// with different DECBPM state receive correct framing.
+    pub(in crate::features) fn send_terminal_paste_input(
+        &mut self,
+        text: &str,
+        cx: &mut Context<Self>,
+    ) {
+        if text.is_empty() {
+            return;
+        }
+        let Some(session_id) = self.active_session_id.clone() else {
+            self.terminal_status = "no active session for paste".to_string();
+            cx.notify();
+            return;
+        };
+        if self.is_session_disconnected(&session_id) {
+            self.terminal_status = "session disconnected — press Enter to reconnect".to_string();
+            cx.notify();
+            return;
+        }
+        if self.active_terminal_scroll_offset() > 0 {
+            self.scroll_terminal_to_bottom(cx);
+        }
+
+        let peers = self.sync_peer_session_ids(&session_id);
+        let mut ok_sessions = Vec::new();
+        let recording_bytes = text.as_bytes();
+        let primary_bytes = self.wrap_terminal_paste_bytes_for_session(&session_id, text);
+        let byte_count = primary_bytes.len();
+        match self.write_session_wire_input_recorded_as(
+            &session_id,
+            &primary_bytes,
+            recording_bytes,
+        ) {
+            Ok(()) => ok_sessions.push(session_id),
+            Err(error) => {
+                self.terminal_status = format!("paste failed: {error}");
+                cx.notify();
+                return;
+            }
+        }
+
+        let mut synced = 0usize;
+        let mut failed = 0usize;
+        for peer_id in peers {
+            let peer_bytes = self.wrap_terminal_paste_bytes_for_session(&peer_id, text);
+            match self.write_session_wire_input_recorded_as(&peer_id, &peer_bytes, recording_bytes)
+            {
+                Ok(()) => {
+                    ok_sessions.push(peer_id);
+                    synced += 1;
+                }
+                Err(_) => failed += 1,
+            }
+        }
+
+        // History tracks the logical pasted text, not per-session framing bytes.
+        let history_bytes = text.as_bytes();
+        let session_refs: Vec<&str> = ok_sessions.iter().map(String::as_str).collect();
+        self.record_command_history_for_sessions(&session_refs, history_bytes);
+
+        self.terminal_status = terminal_input_fanout_status("pasted", byte_count, synced, failed);
+        cx.notify();
     }
 
     pub(in crate::features) fn close_multi_line_paste(&mut self, cx: &mut Context<Self>) {
@@ -79,10 +174,7 @@ impl NyaTermApp {
             return;
         };
         let text = draft.normalized_text();
-        let byte_count = text.len();
-        self.send_terminal_input(self.wrap_terminal_paste_bytes(&text), cx);
-        self.terminal_status = format!("direct pasted {byte_count} byte(s)");
-        cx.notify();
+        self.send_terminal_paste_input(&text, cx);
     }
 
     pub(in crate::features) fn send_multi_line_paste_by_line(&mut self, cx: &mut Context<Self>) {
@@ -93,16 +185,12 @@ impl NyaTermApp {
         };
         let text = draft.normalized_text();
         let mut bytes = Vec::new();
-        let mut line_count = 0usize;
         for line in text.split('\n') {
-            line_count += 1;
             bytes.extend_from_slice(line.as_bytes());
             bytes.push(b'\n');
         }
         // Line-by-line send intentionally skips bracketed paste framing.
         self.send_terminal_input(bytes, cx);
-        self.terminal_status = format!("sent {line_count} pasted line(s)");
-        cx.notify();
     }
 
     pub(in crate::features) fn handle_multi_line_paste_key_down(
@@ -153,5 +241,32 @@ impl NyaTermApp {
                 }
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn bracketed_paste_wraps_wire_bytes_without_reencoding_body() {
+        let body = [0xb2, 0xe2, b'\n'];
+        let wrapped = NyaTermApp::wrap_terminal_paste_wire_bytes_for_bracketed(&body, true);
+
+        assert!(wrapped.starts_with(b"\x1b[200~"));
+        assert!(wrapped.ends_with(b"\x1b[201~"));
+        assert_eq!(
+            &wrapped[b"\x1b[200~".len()..wrapped.len() - b"\x1b[201~".len()],
+            &body
+        );
+    }
+
+    #[test]
+    fn plain_paste_wire_bytes_are_body_only() {
+        let body = b"plain";
+        assert_eq!(
+            NyaTermApp::wrap_terminal_paste_wire_bytes_for_bracketed(body, false),
+            body
+        );
     }
 }

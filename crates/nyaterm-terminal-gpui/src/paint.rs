@@ -25,6 +25,23 @@ pub(super) fn flush_bg(
         rgb(bg),
     ));
 }
+/// Solid background over a half-open [start, end) column range on a viewport row.
+pub(super) fn push_col_range_bg(
+    row: usize,
+    start: usize,
+    end: usize,
+    color: u32,
+    bounds: Bounds<Pixels>,
+    cell_w: f32,
+    cell_h: f32,
+    out: &mut Vec<PaintQuad>,
+) {
+    if end <= start {
+        return;
+    }
+    flush_bg(Some((color, start, end)), row, bounds, cell_w, cell_h, out);
+}
+
 pub(super) fn terminal_run_font(
     mut font: Font,
     bold: bool,
@@ -168,24 +185,7 @@ pub(super) fn apply_action_link_ranges(
     if ranges.is_empty() {
         return spans;
     }
-    let mut flat: Vec<FlatTerminalCell> = Vec::new();
-    for span in spans {
-        if span.text.is_empty() {
-            continue;
-        }
-        for ch in span.text.chars() {
-            flat.push(FlatTerminalCell {
-                ch,
-                color: span.color,
-                bg: span.bg,
-                keyword: span.keyword,
-                underline: span.underline,
-                strikeout: span.strikeout,
-                bold: span.bold,
-                italic: span.italic,
-            });
-        }
-    }
+    let mut flat = flatten_highlight_spans(spans);
     for &(start, end) in ranges {
         if start >= end {
             continue;
@@ -213,24 +213,7 @@ pub(super) fn apply_selection_range(
     if start >= end {
         return spans;
     }
-    let mut flat: Vec<FlatTerminalCell> = Vec::new();
-    for span in spans {
-        if span.text.is_empty() {
-            continue;
-        }
-        for ch in span.text.chars() {
-            flat.push(FlatTerminalCell {
-                ch,
-                color: span.color,
-                bg: span.bg,
-                keyword: span.keyword,
-                underline: span.underline,
-                strikeout: span.strikeout,
-                bold: span.bold,
-                italic: span.italic,
-            });
-        }
-    }
+    let mut flat = flatten_highlight_spans(spans);
     while flat.len() < end {
         flat.push(FlatTerminalCell::blank());
     }
@@ -252,24 +235,7 @@ pub(super) fn apply_search_ranges(
     if ranges.is_empty() {
         return spans;
     }
-    let mut flat: Vec<FlatTerminalCell> = Vec::new();
-    for span in spans {
-        if span.text.is_empty() {
-            continue;
-        }
-        for ch in span.text.chars() {
-            flat.push(FlatTerminalCell {
-                ch,
-                color: span.color,
-                bg: span.bg,
-                keyword: span.keyword,
-                underline: span.underline,
-                strikeout: span.strikeout,
-                bold: span.bold,
-                italic: span.italic,
-            });
-        }
-    }
+    let mut flat = flatten_highlight_spans(spans);
     let max_end = ranges.iter().map(|(_, end)| *end).max().unwrap_or(0);
     while flat.len() < max_end {
         flat.push(FlatTerminalCell::blank());
@@ -303,9 +269,9 @@ pub(super) fn apply_search_ranges(
     }
     compress_flat_cells(flat)
 }
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 pub(super) struct FlatTerminalCell {
-    pub(super) ch: char,
+    pub(super) text: String,
     pub(super) color: Option<u32>,
     pub(super) bg: Option<u32>,
     pub(super) keyword: bool,
@@ -318,7 +284,7 @@ pub(super) struct FlatTerminalCell {
 impl FlatTerminalCell {
     fn blank() -> Self {
         Self {
-            ch: ' ',
+            text: " ".to_string(),
             color: None,
             bg: None,
             keyword: false,
@@ -328,17 +294,54 @@ impl FlatTerminalCell {
             italic: false,
         }
     }
+
+    fn from_span_char(span: &TerminalHighlightSpan, ch: char) -> Self {
+        Self {
+            text: ch.to_string(),
+            color: span.color,
+            bg: span.bg,
+            keyword: span.keyword,
+            underline: span.underline,
+            strikeout: span.strikeout,
+            bold: span.bold,
+            italic: span.italic,
+        }
+    }
 }
+
+fn flatten_highlight_spans(spans: Vec<TerminalHighlightSpan>) -> Vec<FlatTerminalCell> {
+    let mut flat: Vec<FlatTerminalCell> = Vec::new();
+    for span in spans {
+        if span.text.is_empty() {
+            continue;
+        }
+        for ch in span.text.chars() {
+            if terminal_is_zero_width_mark(ch)
+                && let Some(previous) = flat.last_mut()
+            {
+                previous.text.push(ch);
+                continue;
+            }
+            flat.push(FlatTerminalCell::from_span_char(&span, ch));
+            for _ in 1..terminal_char_cell_width(ch) {
+                let mut spacer = FlatTerminalCell::from_span_char(&span, ' ');
+                spacer.text.clear();
+                flat.push(spacer);
+            }
+        }
+    }
+    flat
+}
+
 pub(super) fn compress_flat_cells(flat: Vec<FlatTerminalCell>) -> Vec<TerminalHighlightSpan> {
     let mut out = Vec::new();
     let mut i = 0;
     while i < flat.len() {
-        let cell = flat[i];
-        let mut text = String::new();
-        text.push(cell.ch);
+        let cell = flat[i].clone();
+        let mut text = cell.text.clone();
         let mut j = i + 1;
         while j < flat.len() {
-            let next = flat[j];
+            let next = &flat[j];
             if next.color == cell.color
                 && next.bg == cell.bg
                 && next.keyword == cell.keyword
@@ -347,7 +350,7 @@ pub(super) fn compress_flat_cells(flat: Vec<FlatTerminalCell>) -> Vec<TerminalHi
                 && next.bold == cell.bold
                 && next.italic == cell.italic
             {
-                text.push(next.ch);
+                text.push_str(&next.text);
                 j += 1;
             } else {
                 break;
@@ -374,24 +377,7 @@ pub(super) fn apply_cursor_style(
     cursor_style: &str,
     palette: nyaterm_ui::ThemePalette,
 ) -> Vec<TerminalHighlightSpan> {
-    let mut flat: Vec<FlatTerminalCell> = Vec::new();
-    for span in spans {
-        if span.text.is_empty() {
-            continue;
-        }
-        for ch in span.text.chars() {
-            flat.push(FlatTerminalCell {
-                ch,
-                color: span.color,
-                bg: span.bg,
-                keyword: span.keyword,
-                underline: span.underline,
-                strikeout: span.strikeout,
-                bold: span.bold,
-                italic: span.italic,
-            });
-        }
-    }
+    let mut flat = flatten_highlight_spans(spans);
     // Ensure the cursor column exists even on a short/empty line.
     while flat.len() <= cursor_col {
         flat.push(FlatTerminalCell::blank());
@@ -408,7 +394,7 @@ pub(super) fn apply_cursor_style(
             }
             "bar" => {
                 // Approximate bar caret: thin visual via inverted narrow space marker.
-                cell.ch = '|';
+                cell.text = "|".to_string();
                 cell.color = Some(palette.terminal_cursor);
                 cell.bg = None;
                 cell.keyword = false;
@@ -423,4 +409,147 @@ pub(super) fn apply_cursor_style(
     }
 
     compress_flat_cells(flat)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn plain_span(text: &str) -> TerminalHighlightSpan {
+        TerminalHighlightSpan {
+            text: text.to_string(),
+            color: None,
+            bg: None,
+            keyword: false,
+            underline: false,
+            strikeout: false,
+            bold: false,
+            italic: false,
+        }
+    }
+
+    #[test]
+    fn selection_columns_treat_combining_mark_as_same_cell() {
+        let palette = nyaterm_ui::theme_palette("github-dark");
+        let spans = apply_selection_range(vec![plain_span("e\u{301}x")], 1, 2, palette);
+
+        assert_eq!(spans.len(), 2);
+        assert_eq!(spans[0].text, "e\u{301}");
+        assert_eq!(spans[0].bg, None);
+        assert_eq!(spans[1].text, "x");
+        assert_eq!(spans[1].bg, Some(palette.terminal_selection));
+    }
+
+    #[test]
+    fn cursor_columns_treat_combining_mark_as_same_cell() {
+        let palette = nyaterm_ui::theme_palette("github-dark");
+        let spans = apply_cursor_style(vec![plain_span("e\u{301}x")], 1, "block", palette);
+
+        assert_eq!(spans.len(), 2);
+        assert_eq!(spans[0].text, "e\u{301}");
+        assert_eq!(spans[0].bg, None);
+        assert_eq!(spans[1].text, "x");
+        assert_eq!(spans[1].bg, Some(palette.terminal_cursor));
+    }
+
+    #[test]
+    fn action_link_columns_treat_combining_mark_as_same_cell() {
+        let palette = nyaterm_ui::theme_palette("github-dark");
+        let spans = apply_action_link_ranges(vec![plain_span("e\u{301}x")], &[(1, 2)], palette);
+
+        assert_eq!(spans.len(), 2);
+        assert_eq!(spans[0].text, "e\u{301}");
+        assert!(!spans[0].underline);
+        assert_eq!(spans[1].text, "x");
+        assert!(spans[1].underline);
+    }
+
+    #[test]
+    fn action_link_columns_count_wide_chars_as_two_cells() {
+        let palette = nyaterm_ui::theme_palette("github-dark");
+        let spans = apply_action_link_ranges(vec![plain_span("界x")], &[(2, 3)], palette);
+
+        assert_eq!(spans.len(), 2);
+        assert_eq!(spans[0].text, "界");
+        assert!(!spans[0].underline);
+        assert_eq!(spans[1].text, "x");
+        assert!(spans[1].underline);
+    }
+
+    #[test]
+    fn terminal_cell_count_keeps_combining_mark_with_previous_cell() {
+        assert_eq!(terminal_cell_count("e\u{301}x"), 2);
+        assert_eq!(terminal_cell_count("\u{301}x"), 2);
+        assert_eq!(terminal_cell_count(""), 0);
+    }
+
+    #[test]
+    fn terminal_cell_count_treats_wide_char_as_two_cells() {
+        assert_eq!(terminal_cell_count("界x"), 3);
+        assert_eq!(terminal_cell_count("界\u{301}x"), 3);
+    }
+
+    #[test]
+    fn terminal_cell_count_keeps_variation_selector_with_previous_cell() {
+        assert!(terminal_is_zero_width_mark('\u{fe0f}'));
+        assert_eq!(terminal_cell_count("a\u{fe0f}x"), 2);
+    }
+
+    #[test]
+    fn terminal_cell_col_for_byte_index_keeps_combining_mark_with_previous_cell() {
+        let text = "e\u{301}x";
+
+        assert_eq!(terminal_cell_col_for_byte_index(text, 0), 0);
+        assert_eq!(terminal_cell_col_for_byte_index(text, "e".len()), 1);
+        assert_eq!(terminal_cell_col_for_byte_index(text, "e\u{301}".len()), 1);
+        assert_eq!(terminal_cell_col_for_byte_index(text, text.len()), 2);
+    }
+
+    #[test]
+    fn terminal_cell_col_for_byte_index_counts_wide_char_columns() {
+        let text = "界x";
+
+        assert_eq!(terminal_cell_col_for_byte_index(text, 0), 0);
+        assert_eq!(terminal_cell_col_for_byte_index(text, "界".len()), 2);
+        assert_eq!(terminal_cell_col_for_byte_index(text, text.len()), 3);
+    }
+
+    #[test]
+    fn terminal_cell_col_for_byte_index_keeps_variation_selector_with_previous_cell() {
+        let text = "a\u{fe0f}x";
+
+        assert_eq!(terminal_cell_col_for_byte_index(text, 0), 0);
+        assert_eq!(terminal_cell_col_for_byte_index(text, "a".len()), 1);
+        assert_eq!(terminal_cell_col_for_byte_index(text, "a\u{fe0f}".len()), 1);
+        assert_eq!(terminal_cell_col_for_byte_index(text, text.len()), 2);
+    }
+
+    #[test]
+    fn terminal_byte_index_for_cell_col_skips_attached_combining_marks() {
+        let text = "e\u{301}x";
+
+        assert_eq!(terminal_byte_index_for_cell_col(text, 0), 0);
+        assert_eq!(terminal_byte_index_for_cell_col(text, 1), "e\u{301}".len());
+        assert_eq!(terminal_byte_index_for_cell_col(text, 2), text.len());
+        assert_eq!(terminal_byte_index_for_cell_col(text, 99), text.len());
+    }
+
+    #[test]
+    fn terminal_byte_index_for_cell_col_maps_wide_char_spacer_to_base() {
+        let text = "界x";
+
+        assert_eq!(terminal_byte_index_for_cell_col(text, 0), 0);
+        assert_eq!(terminal_byte_index_for_cell_col(text, 1), 0);
+        assert_eq!(terminal_byte_index_for_cell_col(text, 2), "界".len());
+        assert_eq!(terminal_byte_index_for_cell_col(text, 3), text.len());
+    }
+
+    #[test]
+    fn terminal_byte_index_for_cell_col_skips_attached_variation_selector() {
+        let text = "a\u{fe0f}x";
+
+        assert_eq!(terminal_byte_index_for_cell_col(text, 0), 0);
+        assert_eq!(terminal_byte_index_for_cell_col(text, 1), "a\u{fe0f}".len());
+        assert_eq!(terminal_byte_index_for_cell_col(text, 2), text.len());
+    }
 }

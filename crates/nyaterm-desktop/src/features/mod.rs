@@ -109,6 +109,8 @@ mod transfer_paths;
 mod transfer_widgets;
 #[path = "translation/translation_runtime.rs"]
 mod translation_runtime;
+#[path = "session/trzsz_runtime.rs"]
+mod trzsz_runtime;
 #[path = "tunnels/tunnel_runtime.rs"]
 mod tunnel_runtime;
 #[path = "settings/update_runtime.rs"]

@@ -256,8 +256,10 @@ impl NyaTermApp {
         if !bytes.ends_with(b"\n") {
             bytes.push(b'\n');
         }
-        self.send_terminal_input(bytes, cx);
-        self.terminal_status = "action link command sent".to_string();
+        if self.send_terminal_input(bytes, cx) {
+            self.terminal_status = "action link command sent".to_string();
+            cx.notify();
+        }
     }
 
     pub(in crate::features) fn normalize_search_engines(&mut self) {

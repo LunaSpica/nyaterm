@@ -101,6 +101,17 @@ impl NyaTermApp {
         }
         let target_session_ids = self.send_command_target_session_ids();
         if target_session_ids.is_empty() {
+            if matches!(self.send_command_target, SendCommandTarget::Current)
+                && self
+                    .active_session_id
+                    .as_deref()
+                    .is_some_and(|session_id| self.is_session_disconnected(session_id))
+            {
+                self.terminal_status =
+                    "session disconnected — reconnect before sending".to_string();
+                cx.notify();
+                return;
+            }
             self.terminal_status = "start a session before sending".to_string();
             cx.notify();
             return;
@@ -117,6 +128,8 @@ impl NyaTermApp {
             units_per_round.saturating_mul(rounds)
         };
         let cancel = Arc::new(AtomicBool::new(false));
+        let failed_writes = Arc::new(AtomicUsize::new(0));
+        let raw_units = self.send_command_data_type == SendCommandDataType::Hex;
         self.send_command_cancel = Some(cancel.clone());
         self.send_command_sending = true;
         self.send_command_progress_completed = 0;
@@ -134,6 +147,7 @@ impl NyaTermApp {
             let mut first = true;
             let mut aborted = false;
             let mut round = 0u32;
+            let failed_writes_for_send = failed_writes.clone();
             'outer: loop {
                 if !infinite && round >= rounds {
                     break;
@@ -162,13 +176,25 @@ impl NyaTermApp {
                     first = false;
                     let unit = unit.clone();
                     let targets = target_session_ids.clone();
+                    let failed_writes = failed_writes_for_send.clone();
                     let _ = this.update(cx, |this, cx| {
                         for session_id in &targets {
-                            this.send_terminal_input_to_session(
-                                session_id.clone(),
-                                unit.clone(),
-                                cx,
-                            );
+                            let sent = if raw_units {
+                                this.send_terminal_raw_input_to_session(
+                                    session_id.clone(),
+                                    unit.clone(),
+                                    cx,
+                                )
+                            } else {
+                                this.send_terminal_input_to_session(
+                                    session_id.clone(),
+                                    unit.clone(),
+                                    cx,
+                                )
+                            };
+                            if !sent {
+                                failed_writes.fetch_add(1, Ordering::SeqCst);
+                            }
                         }
                         this.send_command_progress_completed =
                             this.send_command_progress_completed.saturating_add(1);
@@ -179,6 +205,7 @@ impl NyaTermApp {
             let _ = this.update(cx, |this, cx| {
                 this.send_command_sending = false;
                 this.send_command_cancel = None;
+                let failed_writes = failed_writes.load(Ordering::SeqCst);
                 if aborted {
                     this.terminal_status = if infinite {
                         format!(
@@ -191,13 +218,30 @@ impl NyaTermApp {
                             this.send_command_progress_completed, this.send_command_progress_total
                         )
                     };
+                    if failed_writes > 0 {
+                        this.terminal_status =
+                            format!("{}, {failed_writes} failed write(s)", this.terminal_status);
+                    }
                 } else if infinite {
-                    this.terminal_status = format!(
-                        "command send completed: {} unit(s)",
-                        this.send_command_progress_completed
-                    );
+                    this.terminal_status = if failed_writes == 0 {
+                        format!(
+                            "command send completed: {} unit(s)",
+                            this.send_command_progress_completed
+                        )
+                    } else {
+                        format!(
+                            "command send completed: {} unit(s), {failed_writes} failed write(s)",
+                            this.send_command_progress_completed
+                        )
+                    };
                 } else {
-                    this.terminal_status = format!("command send completed: {rounds} round(s)");
+                    this.terminal_status = if failed_writes == 0 {
+                        format!("command send completed: {rounds} round(s)")
+                    } else {
+                        format!(
+                            "command send completed: {rounds} round(s), {failed_writes} failed write(s)"
+                        )
+                    };
                 }
                 cx.notify();
             });
@@ -215,6 +259,10 @@ impl NyaTermApp {
 
     pub(in crate::features) fn send_command_target_session_ids(&self) -> Vec<String> {
         let sessions = self.session_manager.list_sessions().unwrap_or_default();
+        let live_session_ids = sessions
+            .iter()
+            .map(|session| session.id.as_str())
+            .collect::<std::collections::HashSet<_>>();
         let active_kind = self.active_session_kind();
         let is_compatible = |kind: SessionKind| -> bool {
             match active_kind {
@@ -224,7 +272,13 @@ impl NyaTermApp {
             }
         };
         match &self.send_command_target {
-            SendCommandTarget::Current => self.active_session_id.clone().into_iter().collect(),
+            SendCommandTarget::Current => self
+                .active_session_id
+                .as_ref()
+                .filter(|session_id| live_session_ids.contains(session_id.as_str()))
+                .cloned()
+                .into_iter()
+                .collect(),
             SendCommandTarget::AllCompatible => {
                 if active_kind.is_none() {
                     return Vec::new();

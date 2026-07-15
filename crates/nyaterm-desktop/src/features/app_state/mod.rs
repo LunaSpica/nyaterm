@@ -131,6 +131,7 @@ pub struct NyaTermApp {
     pub(in crate::features) search_engine_focus: FocusHandle,
     /// Dragging the terminal scrollback scrollbar thumb.
     pub(in crate::features) terminal_scrollbar_dragging: bool,
+    pub(in crate::features) terminal_scrollbar_drag_session_id: Option<String>,
     pub(in crate::features) terminal_actions_open: bool,
     pub(in crate::features) terminal_actions_focus: FocusHandle,
     pub(in crate::features) terminal_context_menu: Option<TerminalContextMenuState>,
@@ -425,6 +426,9 @@ pub struct NyaTermApp {
     /// Per-session ZMODEM detector / transfer state (UI-layer interception).
     pub(in crate::features) zmodem_sessions:
         HashMap<String, crate::features::zmodem_runtime::ZmodemSessionState>,
+    /// Per-session trzsz trigger detector state (pre-parser protocol slot).
+    pub(in crate::features) trzsz_sessions:
+        HashMap<String, crate::features::trzsz_runtime::TrzszSessionState>,
     pub(in crate::features) session_tab_colors: HashMap<String, u32>,
     pub(in crate::features) ssh_multiplex_handles: HashMap<String, SshMultiplexHandle>,
     pub(in crate::features) terminal_views: HashMap<String, TerminalViewState>,
@@ -454,10 +458,17 @@ pub struct NyaTermApp {
     pub(in crate::features) multi_line_paste: Option<MultiLinePasteDraft>,
     pub(in crate::features) multi_line_paste_focus: FocusHandle,
     pub(in crate::features) terminal_focus: FocusHandle,
+    /// True while the terminal surface owns keyboard focus.
+    pub(in crate::features) terminal_focus_active: bool,
+    /// Keep focus report subscriptions alive for DECSET 1004.
+    pub(in crate::features) terminal_focus_subscriptions: Vec<Subscription>,
+    /// Current IME preedit text for the terminal input handler.
+    pub(in crate::features) terminal_ime_marked_text: String,
     pub(in crate::features) lock_focus: FocusHandle,
     pub(in crate::features) lock_password_draft: String,
     pub(in crate::features) lock_status: String,
     pub(in crate::features) terminal_output: String,
+    pub(in crate::features) terminal_output_decoder: TerminalOutputDecoder,
     pub(in crate::features) terminal_screen: TerminalScreen,
     /// Scroll offset for the fallback/global terminal screen (no session view).
     pub(in crate::features) terminal_scroll_offset: usize,
@@ -467,8 +478,19 @@ pub struct NyaTermApp {
     pub(in crate::features) terminal_selection: Option<TerminalSelection>,
     /// True while the user is dragging a left-button text selection.
     pub(in crate::features) terminal_selection_dragging: bool,
+    /// X10/SGR mouse button currently captured by the remote application.
+    pub(in crate::features) terminal_mouse_report_button: Option<u8>,
+    /// Session that owns the current remote mouse capture.
+    pub(in crate::features) terminal_mouse_report_session_id: Option<String>,
+    /// Sync peers that accepted the current remote mouse capture.
+    pub(in crate::features) terminal_mouse_report_peer_session_ids: Vec<String>,
+    /// Last reported terminal cell for release events that land outside the grid.
+    pub(in crate::features) terminal_mouse_report_position: Option<(u16, u16)>,
     /// Last painted bounds of the active terminal text area (window coords).
     pub(in crate::features) terminal_surface_bounds: Option<gpui::Bounds<gpui::Pixels>>,
+    /// Last painted terminal text-area bounds per live session pane.
+    pub(in crate::features) terminal_session_surface_bounds:
+        HashMap<String, gpui::Bounds<gpui::Pixels>>,
     /// Measured monospaced cell size (width, height) from the terminal font when available.
     pub(in crate::features) terminal_cell_metrics: Option<(f32, f32)>,
     /// Session id currently under an external file drag (drop overlay).

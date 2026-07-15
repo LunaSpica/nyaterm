@@ -1,7 +1,8 @@
 pub(super) use gpui::{
     App, ClickEvent, ClipboardItem, Context, FocusHandle, FontWeight, IntoElement, KeyDownEvent,
-    MouseButton, PathPromptOptions, Render, ScrollDelta, ScrollHandle, ScrollWheelEvent,
-    SharedString, Timer, Window, WindowControlArea, div, prelude::*, px, rgb, rgba, svg,
+    KeyUpEvent, MouseButton, PathPromptOptions, Render, ScrollDelta, ScrollHandle,
+    ScrollWheelEvent, SharedString, Subscription, Timer, Window, WindowControlArea, div,
+    prelude::*, px, rgb, rgba, svg,
 };
 pub(super) use nyaterm_core::{
     AgentApprovalDecision, AgentCapturedOutput, AgentCommandExecutionMode,
@@ -17,7 +18,8 @@ pub(super) use nyaterm_core::{
     NativeServices, NativeUpdateInfo, OtpEntry, ProxyConfig, ProxyGroup, QuickCommand,
     QuickCommandCategory, QuickCommandsConfig, RiskLevel, RuntimeMode, SavedConnection,
     SavedCredential, SavedPassword, SearchEngineConfig, SnippetRemote, SshKey, StorageError,
-    TerminalInputState, TranslateResult, TranslationSettings, TunnelConfig, TunnelGroup,
+    TerminalInputState, TerminalMouseReportEligibility, TerminalResizeGeometry,
+    TerminalWireWriteKind, TranslateResult, TranslationSettings, TunnelConfig, TunnelGroup,
     agent_response_action, ai_model_id_for_credential, ai_model_id_for_provider,
     append_cloud_sync_history, apply_terminal_input_data, assess_agent_command_risk,
     build_agent_capture_command, build_move_input_cursor_data, build_observation_message,
@@ -30,10 +32,12 @@ pub(super) use nyaterm_core::{
     now_rfc3339, parse_agent_model_output, parse_agent_tool_call, parse_model_output,
     pull_local_snapshot, pull_snapshot_with_remote, push_local_snapshot, push_snapshot_with_remote,
     read_cloud_sync_history, redact_context, redact_sensitive_text, resync_from_terminal_line,
-    search_command_sources, strip_terminal_control_sequences, truncate_preview, uuid,
+    search_command_sources, strip_terminal_control_sequences, terminal_input_fanout_status,
+    terminal_mouse_report_should_send, terminal_resize_geometry_for_size,
+    terminal_wire_write_disposition, truncate_preview, uuid,
 };
 pub(super) use nyaterm_legacy::{LegacyProject, MigrationInventory};
-pub(super) use nyaterm_terminal::TerminalScreen;
+pub(super) use nyaterm_terminal::{TerminalOutputDecoder, TerminalScreen};
 pub(super) use nyaterm_transport::{
     DockerComposeService, DockerContainerDetails, DockerService, LocalSessionConfig,
     RecordingManager, RemoteCommandOutput, RemoteDockerOverview, RemoteProcess, RemoteStats,
@@ -59,7 +63,7 @@ pub(super) use std::collections::{HashMap, HashSet, VecDeque};
 pub(super) use std::path::PathBuf;
 pub(super) use std::sync::{
     Arc, Mutex,
-    atomic::{AtomicBool, Ordering},
+    atomic::{AtomicBool, AtomicUsize, Ordering},
     mpsc,
 };
 pub(super) use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
@@ -105,7 +109,7 @@ pub(super) use crate::models::{
     TransferPathPromptResult, TransferPropertiesState, TransferRenameState,
     TransferUnknownFileState, TranslateInputField, TranslationDialogState, TranslationSecretDraft,
     WorkspacePaneNode, WorkspaceSplitDirection, WorkspaceSplitResizeState, WorkspaceSplitState,
-    is_multi_line_paste, normalize_paste_newlines,
+    is_multi_line_paste, normalize_paste_newlines, protect_terminal_output_burst,
 };
 pub(super) use crate::send_command::{
     SendCommandDataType, SendCommandLineEnding, SendCommandMode, SendCommandTarget,
@@ -113,8 +117,11 @@ pub(super) use crate::send_command::{
 };
 pub(super) use crate::shortcuts::{event_to_hotkey_string, shortcut_matches};
 pub(super) use crate::terminal::{
-    NyaTerminalElement, TerminalBufferMatch, TerminalLineDecorations, TerminalSearchFlags,
-    initial_terminal_screen, terminal_buffer_matches, terminal_key_bytes,
+    NyaTerminalElement, TerminalBufferMatch, TerminalKeyMode, TerminalLineDecorations,
+    TerminalSearchFlags, TerminalTextCell, initial_terminal_screen, terminal_buffer_matches,
+    terminal_byte_index_for_cell_col, terminal_cell_col_for_byte_index, terminal_cell_count,
+    terminal_is_zero_width_mark, terminal_key_bytes_with_mode,
+    terminal_key_release_bytes_with_mode, terminal_text_cell_slice, terminal_text_cells,
 };
 pub(super) use crate::widgets::{
     capability_line, empty_panel, icon_button, mode_button, session_info_row, small_button,

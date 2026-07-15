@@ -197,7 +197,9 @@ impl NyaTermApp {
                 }
                 None => (None, None),
             };
-        let output_start_len = self.terminal_output.len();
+        let output_start_len = self
+            .terminal_buffer_text_for_session(&terminal_session_id)
+            .len();
         self.ai_agent_loop = Some(AiAgentLoopState {
             ai_session_id: self.ai_chat_session_id.clone(),
             terminal_session_id,
@@ -286,6 +288,9 @@ impl NyaTermApp {
             .map(Duration::from_millis)
             .unwrap_or(AI_AGENT_DEFAULT_STEP_TIMEOUT);
         let (job_id, cancel) = self.begin_ai_chat_job();
+        let output_start_len = self
+            .terminal_buffer_text_for_session(&terminal_session_id)
+            .len();
         let state = AiAgentLoopState {
             ai_session_id: self.ai_chat_session_id.clone(),
             terminal_session_id,
@@ -295,11 +300,11 @@ impl NyaTermApp {
             background_job_id: Some(job_id),
             step_index,
             max_steps,
-            output_start_len: self.terminal_output.len(),
+            output_start_len,
             started_at: now,
             min_wait_until: now,
             timeout_at: now + timeout,
-            last_seen_len: self.terminal_output.len(),
+            last_seen_len: output_start_len,
             stable_since: now,
         };
         self.ai_agent_loop = Some(state.clone());
@@ -371,7 +376,11 @@ impl NyaTermApp {
         }
 
         let now = Instant::now();
-        let current_len = self.terminal_output.len();
+        let current_len = self
+            .terminal_views
+            .get(&state.terminal_session_id)
+            .map(|view| view.output.len())
+            .unwrap_or_else(|| self.terminal_output.len());
         if current_len != state.last_seen_len {
             state.last_seen_len = current_len;
             state.stable_since = now;
@@ -420,11 +429,11 @@ impl NyaTermApp {
         let Some(state) = self.ai_agent_loop.take() else {
             return false;
         };
-        let output = if self.terminal_output.len() > state.output_start_len {
-            self.terminal_output[state.output_start_len..].to_string()
-        } else {
-            String::new()
-        };
+        let terminal_output = self.terminal_buffer_text_for_session(&state.terminal_session_id);
+        let output = terminal_output
+            .get(state.output_start_len..)
+            .unwrap_or_default()
+            .to_string();
         let duration_ms = now
             .duration_since(state.started_at)
             .as_millis()
@@ -475,6 +484,50 @@ impl NyaTermApp {
         self.start_ai_agent_continuation(state, observation, cx);
     }
 
+    pub(in crate::features) fn note_ai_agent_output_discontinuity(
+        &mut self,
+        session_id: &str,
+        dropped_bytes: usize,
+        cx: &mut Context<Self>,
+    ) -> bool {
+        if !self
+            .ai_agent_loop
+            .as_ref()
+            .is_some_and(|state| state.terminal_session_id == session_id)
+        {
+            return false;
+        }
+        let Some(state) = self.ai_agent_loop.take() else {
+            return false;
+        };
+        if let Some(marker_id) = state.marker_id.as_deref() {
+            self.ai_agent_capture.cancel(marker_id);
+        }
+        let duration_ms = state
+            .started_at
+            .elapsed()
+            .as_millis()
+            .try_into()
+            .unwrap_or(u64::MAX);
+        let observation = CommandObservation {
+            output: format!(
+                "(terminal output dropped {dropped_bytes} byte(s); command output is incomplete)"
+            ),
+            exit_code: None,
+            duration_ms,
+        };
+        self.ai_status =
+            "AI Agent command observation stopped because terminal output was dropped".to_string();
+        self.upsert_ai_agent_step(
+            state.step_index,
+            AiAgentStepStatus::Failed,
+            "Output dropped",
+            observation_summary(&observation),
+        );
+        self.start_ai_agent_continuation(state, observation, cx);
+        true
+    }
+
     fn active_ai_execution_profile(&self) -> AiExecutionProfile {
         if self.active_ai_execution_profile != AiExecutionProfile::Auto {
             return self.active_ai_execution_profile;
@@ -513,11 +566,12 @@ impl NyaTermApp {
         let observation_message =
             build_observation_message(&observation, &state.command, &self.settings.language);
         let settings = self.ai_settings.clone();
+        let terminal_session_id = state.terminal_session_id.clone();
         let request = AiChatRequest {
             stream_id: None,
             session_id: Some(state.ai_session_id.clone()),
-            connection_id: self.active_session_id.clone(),
-            terminal_session_id: self.active_session_id.clone(),
+            connection_id: Some(terminal_session_id.clone()),
+            terminal_session_id: Some(terminal_session_id.clone()),
             mode: AiMode::Agent,
             model_id: settings.default_model_id.clone(),
             model_name: None,
@@ -526,7 +580,7 @@ impl NyaTermApp {
                 "Continue the same Agent task.\n\nOriginal task:\n{}\n\n{}",
                 state.task_prompt, observation_message
             ),
-            context: self.ai_terminal_context(),
+            context: self.ai_terminal_context_for_session(Some(&terminal_session_id)),
             options: Default::default(),
         };
         let config_dir = self.runtime.config_dir().to_path_buf();

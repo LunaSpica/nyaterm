@@ -148,8 +148,7 @@ impl NyaTermApp {
             return None;
         }
         let line = snapshot.lines.get(snapshot.cursor_row)?;
-        let end = snapshot.cursor_col.min(line.chars().count());
-        Some(line.chars().take(end).collect())
+        Some(terminal_line_prefix_for_cell_col(line, snapshot.cursor_col))
     }
 
     pub(in crate::features) fn refresh_command_suggestions(&mut self, cx: &mut Context<Self>) {
@@ -564,5 +563,32 @@ impl NyaTermApp {
                     .child("↑↓ select · Enter run · Tab fill · Esc dismiss"),
             )
             .into_any_element()
+    }
+}
+
+fn terminal_line_prefix_for_cell_col(line: &str, cell_col: usize) -> String {
+    let end = terminal_byte_index_for_cell_col(line, cell_col);
+    line.get(..end).unwrap_or(line).to_string()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn terminal_line_prefix_uses_terminal_cells_for_wide_chars() {
+        assert_eq!(terminal_line_prefix_for_cell_col("界x", 0), "");
+        assert_eq!(terminal_line_prefix_for_cell_col("界x", 1), "");
+        assert_eq!(terminal_line_prefix_for_cell_col("界x", 2), "界");
+        assert_eq!(terminal_line_prefix_for_cell_col("界x", 3), "界x");
+    }
+
+    #[test]
+    fn terminal_line_prefix_keeps_combining_mark_with_base_char() {
+        let text = "e\u{301}x";
+
+        assert_eq!(terminal_line_prefix_for_cell_col(text, 0), "");
+        assert_eq!(terminal_line_prefix_for_cell_col(text, 1), "e\u{301}");
+        assert_eq!(terminal_line_prefix_for_cell_col(text, 2), "e\u{301}x");
     }
 }

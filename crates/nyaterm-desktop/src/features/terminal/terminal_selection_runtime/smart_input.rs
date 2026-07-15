@@ -52,49 +52,23 @@ impl NyaTermApp {
             .get(cell.row)
             .map(String::as_str)
             .unwrap_or("");
-        let line_chars: Vec<char> = line.chars().collect();
-        let value_chars: Vec<char> = state.value.chars().collect();
-        if value_chars.is_empty() || value_chars.len() > line_chars.len() {
+        let line_cells = smart_input_cells(line);
+        let value_cells = smart_input_cells(&state.value);
+        if value_cells.is_empty() || value_cells.len() > line_cells.len() {
             return None;
         }
-        let mut input_start_col: Option<usize> = None;
-        if snapshot.cursor_col >= value_chars.len() {
-            let candidate = snapshot.cursor_col - value_chars.len();
-            if line_chars
-                .get(candidate..snapshot.cursor_col)
-                .map(|slice| slice == value_chars.as_slice())
-                .unwrap_or(false)
-            {
-                input_start_col = Some(candidate);
-            }
-        }
-        if input_start_col.is_none() {
-            let max_start = line_chars.len().saturating_sub(value_chars.len());
-            for start_col in (0..=max_start).rev() {
-                if line_chars[start_col..start_col + value_chars.len()] == value_chars[..] {
-                    input_start_col = Some(start_col);
-                    break;
-                }
-            }
-        }
-        let input_start_col = input_start_col?;
-        let input_end_col = input_start_col + value_chars.len();
+        let input_start_col =
+            find_smart_input_start_col(&line_cells, &value_cells, snapshot.cursor_col)?;
+        let input_end_col = input_start_col + value_cells.len();
         if cell.col < input_start_col {
             return None;
         }
-        let char_index = if cell.col >= input_end_col {
-            value_chars.len()
+        let cell_index = if cell.col >= input_end_col {
+            value_cells.len()
         } else {
             cell.col - input_start_col
         };
-        Some(
-            state
-                .value
-                .char_indices()
-                .nth(char_index)
-                .map(|(i, _)| i)
-                .unwrap_or(state.value.len()),
-        )
+        Some(byte_for_smart_input_cell_index(&value_cells, cell_index))
     }
 
     pub(in crate::features) fn move_smart_input_cursor(
@@ -183,9 +157,9 @@ impl NyaTermApp {
             .get(start.row)
             .map(String::as_str)
             .unwrap_or("");
-        let line_chars: Vec<char> = line.chars().collect();
+        let line_cells = smart_input_cells(line);
         let (col_start, col_end_excl) = selection.cols_for_row(start.row)?;
-        let col_end = col_end_excl.min(line_chars.len().max(col_start));
+        let col_end = col_end_excl.min(line_cells.len().max(col_start));
         let col_start = col_start.min(col_end);
         if col_end <= col_start {
             return None;
@@ -196,35 +170,15 @@ impl NyaTermApp {
         if value.is_empty() {
             return None;
         }
-        let value_chars: Vec<char> = value.chars().collect();
-        if value_chars.len() > line_chars.len() {
+        let value_cells = smart_input_cells(value);
+        if value_cells.len() > line_cells.len() {
             return None;
         }
         // Prefer alignment ending at cursor_col (input ends at cursor when typing at end).
         // Fall back to last occurrence of value as a contiguous span on the line.
-        let mut input_start_col: Option<usize> = None;
-        if snapshot.cursor_col >= value_chars.len() {
-            let candidate = snapshot.cursor_col - value_chars.len();
-            if line_chars
-                .get(candidate..snapshot.cursor_col)
-                .map(|slice| slice == value_chars.as_slice())
-                .unwrap_or(false)
-            {
-                input_start_col = Some(candidate);
-            }
-        }
-        if input_start_col.is_none() {
-            // Scan for last match of value on the line.
-            let max_start = line_chars.len().saturating_sub(value_chars.len());
-            for start_col in (0..=max_start).rev() {
-                if line_chars[start_col..start_col + value_chars.len()] == value_chars[..] {
-                    input_start_col = Some(start_col);
-                    break;
-                }
-            }
-        }
-        let input_start_col = input_start_col?;
-        let input_end_col = input_start_col + value_chars.len();
+        let input_start_col =
+            find_smart_input_start_col(&line_cells, &value_cells, snapshot.cursor_col)?;
+        let input_end_col = input_start_col + value_cells.len();
 
         if col_start < input_start_col || col_end > input_end_col {
             return None;
@@ -232,20 +186,12 @@ impl NyaTermApp {
 
         let sel_start_char = col_start - input_start_col;
         let sel_end_char = col_end - input_start_col;
-        if sel_end_char <= sel_start_char || sel_end_char > value_chars.len() {
+        if sel_end_char <= sel_start_char || sel_end_char > value_cells.len() {
             return None;
         }
 
-        let byte_start = value
-            .char_indices()
-            .nth(sel_start_char)
-            .map(|(i, _)| i)
-            .unwrap_or(0);
-        let byte_end = value
-            .char_indices()
-            .nth(sel_end_char)
-            .map(|(i, _)| i)
-            .unwrap_or(value.len());
+        let byte_start = byte_for_smart_input_cell_index(&value_cells, sel_start_char);
+        let byte_end = byte_end_for_smart_input_cell_index(&value_cells, sel_end_char);
         InputSelectionRange::new(byte_start, byte_end)
     }
 
@@ -377,5 +323,159 @@ impl NyaTermApp {
             }
         }
         false
+    }
+}
+
+type SmartInputCell = TerminalTextCell;
+
+fn smart_input_cells(text: &str) -> Vec<SmartInputCell> {
+    terminal_text_cells(text)
+}
+
+fn find_smart_input_start_col(
+    line_cells: &[SmartInputCell],
+    value_cells: &[SmartInputCell],
+    cursor_col: usize,
+) -> Option<usize> {
+    if value_cells.is_empty() || value_cells.len() > line_cells.len() {
+        return None;
+    }
+    if cursor_col >= value_cells.len() {
+        let candidate = cursor_col - value_cells.len();
+        if smart_input_cells_match(line_cells, value_cells, candidate) {
+            return Some(candidate);
+        }
+    }
+    let max_start = line_cells.len().saturating_sub(value_cells.len());
+    (0..=max_start)
+        .rev()
+        .find(|start_col| smart_input_cells_match(line_cells, value_cells, *start_col))
+}
+
+fn smart_input_cells_match(
+    line_cells: &[SmartInputCell],
+    value_cells: &[SmartInputCell],
+    start_col: usize,
+) -> bool {
+    line_cells
+        .get(start_col..start_col + value_cells.len())
+        .map(|slice| {
+            slice
+                .iter()
+                .zip(value_cells)
+                .all(|(line, value)| line.text == value.text)
+        })
+        .unwrap_or(false)
+}
+
+fn byte_for_smart_input_cell_index(cells: &[SmartInputCell], cell_index: usize) -> usize {
+    if cell_index == 0 {
+        0
+    } else {
+        cells
+            .get(cell_index)
+            .map(|cell| cell.byte_start)
+            .or_else(|| cells.last().map(|cell| cell.byte_end))
+            .unwrap_or(0)
+    }
+}
+
+fn byte_end_for_smart_input_cell_index(cells: &[SmartInputCell], cell_index: usize) -> usize {
+    if cell_index == 0 {
+        0
+    } else {
+        cells
+            .get(cell_index.saturating_sub(1))
+            .map(|cell| cell.byte_end)
+            .or_else(|| cells.last().map(|cell| cell.byte_end))
+            .unwrap_or(0)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn smart_input_cells_keep_combining_mark_with_previous_cell() {
+        let cells = smart_input_cells("e\u{301}x");
+
+        assert_eq!(cells.len(), 2);
+        assert_eq!(cells[0].text, "e\u{301}");
+        assert_eq!(byte_for_smart_input_cell_index(&cells, 1), "e\u{301}".len());
+        assert_eq!(
+            byte_for_smart_input_cell_index(&cells, 2),
+            "e\u{301}x".len()
+        );
+    }
+
+    #[test]
+    fn smart_input_start_prefers_cursor_aligned_combining_cells() {
+        let line_cells = smart_input_cells("$ e\u{301}x");
+        let value_cells = smart_input_cells("e\u{301}x");
+
+        assert_eq!(
+            find_smart_input_start_col(&line_cells, &value_cells, 4),
+            Some(2)
+        );
+    }
+
+    #[test]
+    fn smart_input_cells_count_wide_char_as_two_terminal_cells() {
+        let cells = smart_input_cells("界x");
+
+        assert_eq!(cells.len(), 3);
+        assert_eq!(cells[0].text, "界");
+        assert_eq!(cells[1].text, "界");
+        assert_eq!(cells[0].byte_start, cells[1].byte_start);
+        assert_eq!(cells[0].byte_end, cells[1].byte_end);
+        assert_eq!(byte_for_smart_input_cell_index(&cells, 1), 0);
+        assert_eq!(byte_end_for_smart_input_cell_index(&cells, 1), "界".len());
+        assert_eq!(byte_for_smart_input_cell_index(&cells, 2), "界".len());
+        assert_eq!(byte_for_smart_input_cell_index(&cells, 3), "界x".len());
+    }
+
+    #[test]
+    fn smart_input_start_prefers_cursor_aligned_wide_cells() {
+        let line_cells = smart_input_cells("$ 界x");
+        let value_cells = smart_input_cells("界x");
+
+        assert_eq!(
+            find_smart_input_start_col(&line_cells, &value_cells, 5),
+            Some(2)
+        );
+    }
+
+    #[test]
+    fn smart_input_cells_attach_combining_mark_to_all_wide_halves() {
+        let cells = smart_input_cells("界\u{301}x");
+
+        assert_eq!(cells.len(), 3);
+        assert_eq!(cells[0].text, "界\u{301}");
+        assert_eq!(cells[1].text, "界\u{301}");
+        assert_eq!(cells[0].byte_end, "界\u{301}".len());
+        assert_eq!(cells[1].byte_end, "界\u{301}".len());
+        assert_eq!(byte_for_smart_input_cell_index(&cells, 1), 0);
+        assert_eq!(
+            byte_end_for_smart_input_cell_index(&cells, 1),
+            "界\u{301}".len()
+        );
+    }
+
+    #[test]
+    fn smart_input_cells_attach_variation_selector_to_previous_cell() {
+        let cells = smart_input_cells("a\u{fe0f}x");
+
+        assert_eq!(cells.len(), 2);
+        assert_eq!(cells[0].text, "a\u{fe0f}");
+        assert_eq!(cells[0].byte_end, "a\u{fe0f}".len());
+        assert_eq!(
+            byte_end_for_smart_input_cell_index(&cells, 1),
+            "a\u{fe0f}".len()
+        );
+        assert_eq!(
+            byte_for_smart_input_cell_index(&cells, 1),
+            "a\u{fe0f}".len()
+        );
     }
 }

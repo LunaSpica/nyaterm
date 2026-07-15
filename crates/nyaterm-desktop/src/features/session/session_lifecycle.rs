@@ -34,7 +34,10 @@ impl NyaTermApp {
         let custom_color = self.session_tab_colors.get(&source_session_id).copied();
 
         match metadata.launch_config.clone() {
-            SessionLaunchConfig::Local(config) => {
+            SessionLaunchConfig::Local(mut config) => {
+                self.apply_desired_geometry_to_local_config(&mut config);
+                let mut metadata = metadata.clone();
+                metadata.launch_config = SessionLaunchConfig::Local(config.clone());
                 match self.session_manager.create_local_session(config.clone()) {
                     Ok(info) => {
                         self.register_session(&info.id, metadata);
@@ -271,6 +274,7 @@ impl NyaTermApp {
         session_id: &str,
         cx: &mut Context<Self>,
     ) {
+        self.clear_terminal_mouse_report_for_session(session_id);
         let Some(metadata) = self.session_metadata.get_mut(session_id) else {
             return;
         };
@@ -298,6 +302,7 @@ impl NyaTermApp {
             view.append_text(banner);
         } else {
             let mut view = TerminalViewState::new();
+            view.set_encoding(&self.settings.interaction_default_encoding);
             view.append_text(banner);
             self.terminal_views.insert(session_id.to_string(), view);
         }
@@ -371,12 +376,14 @@ impl NyaTermApp {
         // Soft-remove UI state without dropping order/metadata, then recreate under same id path:
         // We allocate a new backend id and migrate UI maps to the new id.
         let old_id = session_id;
+        self.clear_terminal_mouse_report_for_session(&old_id);
         self.session_order.retain(|id| id != &old_id);
         let metadata = self
             .session_metadata
             .remove(&old_id)
             .expect("metadata present");
         let view = self.terminal_views.remove(&old_id);
+        let bounds = self.terminal_session_surface_bounds.remove(&old_id);
         let history = self.session_command_history.remove(&old_id);
         self.session_custom_names.remove(&old_id);
         let dynamic_title = self.session_dynamic_titles.remove(&old_id);
@@ -397,6 +404,10 @@ impl NyaTermApp {
 
         let restore_maps = |this: &mut Self, new_id: &str| {
             this.move_session_to_index(new_id, source_index);
+            if let Some(bounds) = bounds {
+                this.terminal_session_surface_bounds
+                    .insert(new_id.to_string(), bounds);
+            }
             if let Some(custom_name) = custom_name.clone() {
                 this.session_custom_names
                     .insert(new_id.to_string(), custom_name);
@@ -419,13 +430,21 @@ impl NyaTermApp {
         };
 
         match metadata.launch_config.clone() {
-            SessionLaunchConfig::Local(config) => {
+            SessionLaunchConfig::Local(mut config) => {
+                self.apply_desired_geometry_to_local_config(&mut config);
+                let mut metadata = metadata.clone();
+                metadata.launch_config = SessionLaunchConfig::Local(config.clone());
                 match self.session_manager.create_local_session(config.clone()) {
                     Ok(info) => {
                         self.register_session(&info.id, metadata);
                         self.terminal_views.insert(
                             info.id.clone(),
-                            view.unwrap_or_else(|| TerminalViewState::from_output(seed_output)),
+                            view.unwrap_or_else(|| {
+                                TerminalViewState::from_output_with_encoding(
+                                    seed_output,
+                                    &self.settings.interaction_default_encoding,
+                                )
+                            }),
                         );
                         restore_maps(self, &info.id);
                         self.activate_session_id(&info.id);
@@ -446,6 +465,7 @@ impl NyaTermApp {
                             source_index,
                             custom_name,
                             custom_color,
+                            bounds,
                             history,
                             error.to_string(),
                             was_active,
@@ -460,7 +480,12 @@ impl NyaTermApp {
                         self.register_session(&info.id, metadata);
                         self.terminal_views.insert(
                             info.id.clone(),
-                            view.unwrap_or_else(|| TerminalViewState::from_output(seed_output)),
+                            view.unwrap_or_else(|| {
+                                TerminalViewState::from_output_with_encoding(
+                                    seed_output,
+                                    &self.settings.interaction_default_encoding,
+                                )
+                            }),
                         );
                         restore_maps(self, &info.id);
                         self.activate_session_id(&info.id);
@@ -480,6 +505,7 @@ impl NyaTermApp {
                             source_index,
                             custom_name,
                             custom_color,
+                            bounds,
                             history,
                             error.to_string(),
                             was_active,
@@ -494,7 +520,12 @@ impl NyaTermApp {
                         self.register_session(&info.id, metadata);
                         self.terminal_views.insert(
                             info.id.clone(),
-                            view.unwrap_or_else(|| TerminalViewState::from_output(seed_output)),
+                            view.unwrap_or_else(|| {
+                                TerminalViewState::from_output_with_encoding(
+                                    seed_output,
+                                    &self.settings.interaction_default_encoding,
+                                )
+                            }),
                         );
                         restore_maps(self, &info.id);
                         self.activate_session_id(&info.id);
@@ -514,6 +545,7 @@ impl NyaTermApp {
                             source_index,
                             custom_name,
                             custom_color,
+                            bounds,
                             history,
                             error.to_string(),
                             was_active,
@@ -542,8 +574,13 @@ impl NyaTermApp {
                 if let Some(view) = view {
                     self.terminal_views.insert(old_id.clone(), view);
                 } else {
-                    self.terminal_views
-                        .insert(old_id.clone(), TerminalViewState::from_output(seed_output));
+                    self.terminal_views.insert(
+                        old_id.clone(),
+                        TerminalViewState::from_output_with_encoding(
+                            seed_output,
+                            &self.settings.interaction_default_encoding,
+                        ),
+                    );
                 }
                 if let Some(custom_name_keep) = custom_name.clone() {
                     self.session_custom_names
@@ -563,6 +600,10 @@ impl NyaTermApp {
                 if let Some(history_keep) = history.clone() {
                     self.session_command_history
                         .insert(old_id.clone(), history_keep);
+                }
+                if let Some(bounds) = bounds {
+                    self.terminal_session_surface_bounds
+                        .insert(old_id.clone(), bounds);
                 }
                 if was_active {
                     self.activate_session_id(&old_id);
@@ -601,6 +642,7 @@ impl NyaTermApp {
         source_index: usize,
         custom_name: Option<String>,
         custom_color: Option<u32>,
+        bounds: Option<gpui::Bounds<gpui::Pixels>>,
         history: Option<Vec<String>>,
         error: String,
         was_active: bool,
@@ -617,8 +659,13 @@ impl NyaTermApp {
         if let Some(view) = view {
             self.terminal_views.insert(old_id.clone(), view);
         } else {
-            self.terminal_views
-                .insert(old_id.clone(), TerminalViewState::from_output(seed_output));
+            self.terminal_views.insert(
+                old_id.clone(),
+                TerminalViewState::from_output_with_encoding(
+                    seed_output,
+                    &self.settings.interaction_default_encoding,
+                ),
+            );
         }
         if let Some(custom_name) = custom_name {
             self.session_custom_names
@@ -626,6 +673,10 @@ impl NyaTermApp {
         }
         if let Some(custom_color) = custom_color {
             self.session_tab_colors.insert(old_id.clone(), custom_color);
+        }
+        if let Some(bounds) = bounds {
+            self.terminal_session_surface_bounds
+                .insert(old_id.clone(), bounds);
         }
         if let Some(history) = history {
             self.session_command_history.insert(old_id.clone(), history);

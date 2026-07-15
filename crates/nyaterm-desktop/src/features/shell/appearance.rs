@@ -73,8 +73,18 @@ impl NyaTermApp {
         family: &'static str,
         cx: &mut Context<Self>,
     ) {
+        if self.settings.terminal_font_family == family {
+            return;
+        }
         self.settings.terminal_font_family = family.to_string();
+        self.invalidate_terminal_cell_metrics();
         self.save_appearance_settings(cx);
+    }
+
+    fn invalidate_terminal_cell_metrics(&mut self) {
+        self.terminal_cell_metrics = None;
+        self.sync_terminal_cell_metrics_to_screens();
+        self.resize_all_known_terminal_surfaces();
     }
 
     pub(in crate::features) fn adjust_terminal_font_size(
@@ -84,14 +94,21 @@ impl NyaTermApp {
     ) {
         let next = (self.settings.terminal_font_size as i16 + delta)
             .clamp(TERMINAL_FONT_SIZE_MIN, TERMINAL_FONT_SIZE_MAX);
+        if self.settings.terminal_font_size == next as u16 {
+            return;
+        }
         self.settings.terminal_font_size = next as u16;
-        self.terminal_cell_metrics = None;
+        self.invalidate_terminal_cell_metrics();
         self.save_appearance_settings(cx);
     }
 
     pub(in crate::features) fn reset_terminal_font_size(&mut self, cx: &mut Context<Self>) {
-        self.settings.terminal_font_size = AppSettingsSummary::default().terminal_font_size;
-        self.terminal_cell_metrics = None;
+        let default_size = AppSettingsSummary::default().terminal_font_size;
+        if self.settings.terminal_font_size == default_size {
+            return;
+        }
+        self.settings.terminal_font_size = default_size;
+        self.invalidate_terminal_cell_metrics();
         self.save_appearance_settings(cx);
     }
 
@@ -183,6 +200,7 @@ impl NyaTermApp {
             return;
         }
         self.settings.terminal_font_weight = weight;
+        self.invalidate_terminal_cell_metrics();
         self.save_appearance_settings(cx);
     }
 
@@ -199,6 +217,7 @@ impl NyaTermApp {
             return;
         }
         self.settings.terminal_font_weight_bold = weight;
+        self.invalidate_terminal_cell_metrics();
         self.save_appearance_settings(cx);
     }
 

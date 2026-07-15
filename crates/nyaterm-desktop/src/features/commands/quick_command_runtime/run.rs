@@ -292,17 +292,18 @@ impl NyaTermApp {
             }
             let mut sent = 0usize;
             let mut failed = 0usize;
+            let mut ok_sessions = Vec::new();
             for session in sessions {
-                match self.session_manager.write(&session.id, &command_bytes) {
+                match self.write_session_input_recorded(&session.id, &command_bytes) {
                     Ok(()) => {
                         sent += 1;
-                        self.recording_manager
-                            .write_input(&session.id, &command_bytes);
-                        self.record_command_history_from_bytes(Some(&session.id), &command_bytes);
+                        ok_sessions.push(session.id);
                     }
                     Err(_) => failed += 1,
                 }
             }
+            let session_refs: Vec<&str> = ok_sessions.iter().map(String::as_str).collect();
+            self.record_command_history_for_sessions(&session_refs, &command_bytes);
             self.terminal_status = if failed == 0 {
                 format!("sent quick command '{label}' to {sent} session(s)")
             } else {
@@ -312,12 +313,13 @@ impl NyaTermApp {
             return;
         }
 
-        self.send_terminal_input(command_bytes, cx);
-        self.terminal_status = if execute {
-            format!("ran quick command '{label}'")
-        } else {
-            format!("inserted quick command '{label}'")
-        };
-        cx.notify();
+        if self.send_terminal_input(command_bytes, cx) {
+            self.terminal_status = if execute {
+                format!("ran quick command '{label}'")
+            } else {
+                format!("inserted quick command '{label}'")
+            };
+            cx.notify();
+        }
     }
 }

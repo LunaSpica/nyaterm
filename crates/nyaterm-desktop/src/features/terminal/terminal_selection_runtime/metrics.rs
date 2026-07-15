@@ -126,18 +126,32 @@ impl NyaTermApp {
     }
 
     pub(in crate::features) fn active_terminal_grid_size(&self) -> (usize, usize) {
-        let offset = self.active_terminal_scroll_offset();
-        let snapshot = self
-            .active_session_id
-            .as_deref()
-            .and_then(|session_id| self.terminal_views.get(session_id))
-            .map(|view| view.screen.viewport_snapshot(offset))
-            .unwrap_or_else(|| self.terminal_screen.viewport_snapshot(offset));
+        self.terminal_grid_size_for_session(self.active_session_id.as_deref())
+    }
+
+    pub(in crate::features) fn terminal_grid_size_for_session(
+        &self,
+        session_id: Option<&str>,
+    ) -> (usize, usize) {
+        let snapshot = if let Some(session_id) = session_id.filter(|id| !id.is_empty()) {
+            let offset = self
+                .terminal_views
+                .get(session_id)
+                .map(|view| view.scroll_offset)
+                .unwrap_or(0);
+            self.terminal_views
+                .get(session_id)
+                .map(|view| view.screen.viewport_snapshot(offset))
+                .unwrap_or_else(|| self.terminal_screen.viewport_snapshot(offset))
+        } else {
+            self.terminal_screen
+                .viewport_snapshot(self.terminal_scroll_offset)
+        };
         let rows = snapshot.lines.len().max(1);
         let cols = snapshot
             .lines
             .iter()
-            .map(|line| line.chars().count())
+            .map(|line| terminal_cell_count(line))
             .max()
             .unwrap_or(80)
             .max(80);
@@ -148,7 +162,18 @@ impl NyaTermApp {
         &self,
         position: Point<Pixels>,
     ) -> Option<TerminalCellPos> {
-        let bounds = self.terminal_surface_bounds?;
+        self.point_to_terminal_cell_for_session(self.active_session_id.as_deref(), position)
+    }
+
+    pub(in crate::features) fn point_to_terminal_cell_for_session(
+        &self,
+        session_id: Option<&str>,
+        position: Point<Pixels>,
+    ) -> Option<TerminalCellPos> {
+        let session_id = session_id.filter(|id| !id.is_empty());
+        let bounds = session_id
+            .and_then(|id| self.terminal_session_surface_bounds.get(id).copied())
+            .or(self.terminal_surface_bounds)?;
         let (cell_w, cell_h) = self.terminal_cell_size();
         let pad = self.terminal_content_padding_px();
         let gutter = self.terminal_gutter_width_px();
@@ -157,7 +182,7 @@ impl NyaTermApp {
         if local_y < -cell_h || local_x < -cell_w {
             // Still allow clamping when slightly outside.
         }
-        let (rows, cols) = self.active_terminal_grid_size();
+        let (rows, cols) = self.terminal_grid_size_for_session(session_id);
         let row = (local_y / cell_h).floor().max(0.) as usize;
         let col = (local_x / cell_w).floor().max(0.) as usize;
         Some(TerminalCellPos::new(
@@ -169,5 +194,25 @@ impl NyaTermApp {
     /// Capture painted bounds for hit-testing; called from a canvas prepaint under the output area.
     pub(in crate::features) fn remember_terminal_surface_bounds(&mut self, bounds: Bounds<Pixels>) {
         self.terminal_surface_bounds = Some(bounds);
+    }
+
+    /// Capture painted bounds for a specific terminal pane and keep that pane's
+    /// terminal model/backend PTY sized to its own viewport.
+    pub(in crate::features) fn remember_terminal_surface_bounds_for_session(
+        &mut self,
+        session_id: Option<&str>,
+        bounds: Bounds<Pixels>,
+    ) -> bool {
+        let session_id = session_id.filter(|id| !id.is_empty());
+        if session_id.is_none() || session_id == self.active_session_id.as_deref() {
+            self.remember_terminal_surface_bounds(bounds);
+        }
+        if let Some(session_id) = session_id {
+            self.terminal_session_surface_bounds
+                .insert(session_id.to_string(), bounds);
+            self.resize_terminal_to_bounds_for_session(Some(session_id), bounds)
+        } else {
+            self.resize_terminal_to_bounds_for_session(None, bounds)
+        }
     }
 }

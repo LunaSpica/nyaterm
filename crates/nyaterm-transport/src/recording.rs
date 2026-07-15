@@ -1,6 +1,7 @@
 use regex::RegexBuilder;
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, VecDeque};
+use std::fmt::Write as FmtWrite;
 use std::fs::{self, File};
 use std::io::{BufWriter, Write};
 use std::mem;
@@ -137,6 +138,7 @@ struct SessionCaptureState {
     records: VecDeque<TranscriptRecord>,
     record_bytes: usize,
     memory_limit_bytes: usize,
+    pending_input_escape: Option<TerminalInputEscapeState>,
     input_buffer: String,
     output_buffer: String,
     live_echo_buffer: String,
@@ -152,6 +154,7 @@ impl SessionCaptureState {
             records: VecDeque::new(),
             record_bytes: 0,
             memory_limit_bytes,
+            pending_input_escape: None,
             input_buffer: String::new(),
             output_buffer: String::new(),
             live_echo_buffer: String::new(),
@@ -203,23 +206,74 @@ impl SessionCaptureState {
     }
 
     fn write_input(&mut self, data: &[u8]) {
-        let text = String::from_utf8_lossy(data);
+        let mut index = 0;
 
-        for ch in text.chars() {
-            match ch {
-                '\r' | '\n' => self.commit_input_line(),
-                '\u{8}' | '\u{7f}' => self.handle_backspace(),
-                '\t' => {
+        while index < data.len() {
+            if let Some(state) = self.pending_input_escape.take() {
+                let (next_index, next_state) =
+                    consume_terminal_input_escape_state(data, index, state);
+                self.pending_input_escape = next_state;
+                index = next_index;
+                continue;
+            }
+
+            match data[index] {
+                b'\r' | b'\n' => {
+                    self.commit_input_line();
+                    index += 1;
+                }
+                b'\x08' | b'\x7f' => {
+                    self.handle_backspace();
+                    index += 1;
+                }
+                b'\t' => {
                     self.input_buffer.push('\t');
                     self.live_echo_buffer.push('\t');
+                    index += 1;
                 }
-                c if !c.is_control() => {
-                    self.input_buffer.push(c);
-                    self.live_echo_buffer.push(c);
+                b'\x1b' => {
+                    let (next_index, next_state) = consume_terminal_input_escape_state(
+                        data,
+                        index + 1,
+                        TerminalInputEscapeState::Esc,
+                    );
+                    self.pending_input_escape = next_state;
+                    index = next_index;
                 }
-                _ => {}
+                byte if byte.is_ascii_control() => {
+                    index += 1;
+                }
+                byte if byte.is_ascii() => {
+                    let ch = byte as char;
+                    self.input_buffer.push(ch);
+                    self.live_echo_buffer.push(ch);
+                    index += 1;
+                }
+                _ => match next_utf8_char(data, index) {
+                    Some((ch, next_index)) if !ch.is_control() => {
+                        self.input_buffer.push(ch);
+                        self.live_echo_buffer.push(ch);
+                        index = next_index;
+                    }
+                    Some((_ch, next_index)) => {
+                        index = next_index;
+                    }
+                    None => {
+                        index += 1;
+                    }
+                },
             }
         }
+    }
+
+    fn write_raw_input(&mut self, data: &[u8]) {
+        if data.is_empty() {
+            return;
+        }
+
+        self.commit_partial_input();
+        self.flush_output_lines(true);
+        self.append_record("RAW_INPUT", format_raw_input_bytes(data));
     }
 
     fn write_output(&mut self, data: &str) {
@@ -555,6 +609,16 @@ impl RecordingManager {
         state.write_input(data);
     }
 
+    pub fn write_raw_input(&self, session_id: &str, data: &[u8]) {
+        let memory_limit_bytes = *lock_recover(&self.memory_limit_bytes);
+        let mut sessions = lock_recover(&self.sessions);
+        let state = sessions
+            .entry(session_id.to_string())
+            .or_insert_with(|| SessionCaptureState::new(memory_limit_bytes));
+        state.set_memory_limit(memory_limit_bytes);
+        state.write_raw_input(data);
+    }
+
     pub fn cleanup_session(&self, session_id: &str) {
         let removed = {
             let mut sessions = lock_recover(&self.sessions);
@@ -625,6 +689,102 @@ fn chrono_timestamp() -> String {
         "[year]-[month]-[day] [hour]:[minute]:[second].[subsecond digits:3]"
     ))
     .unwrap_or_else(|_| "1970-01-01 00:00:00.000".to_string())
+}
+
+fn format_raw_input_bytes(data: &[u8]) -> String {
+    let mut out = String::with_capacity(data.len().saturating_mul(3).saturating_sub(1));
+    for (index, byte) in data.iter().enumerate() {
+        if index > 0 {
+            out.push(' ');
+        }
+        let _ = write!(&mut out, "{byte:02x}");
+    }
+    out
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum TerminalInputEscapeState {
+    Esc,
+    Csi,
+    Ss3,
+    String,
+    StringEsc,
+}
+
+fn consume_terminal_input_escape_state(
+    data: &[u8],
+    mut index: usize,
+    mut state: TerminalInputEscapeState,
+) -> (usize, Option<TerminalInputEscapeState>) {
+    loop {
+        match state {
+            TerminalInputEscapeState::Esc => {
+                let Some(byte) = data.get(index).copied() else {
+                    return (index, Some(TerminalInputEscapeState::Esc));
+                };
+                index += 1;
+                match byte {
+                    b'[' => state = TerminalInputEscapeState::Csi,
+                    b'O' => state = TerminalInputEscapeState::Ss3,
+                    b']' | b'P' | b'X' | b'^' | b'_' => state = TerminalInputEscapeState::String,
+                    _ => return (index, None),
+                }
+            }
+            TerminalInputEscapeState::Csi => {
+                while let Some(byte) = data.get(index).copied() {
+                    index += 1;
+                    if (0x40..=0x7e).contains(&byte) {
+                        return (index, None);
+                    }
+                }
+                return (index, Some(TerminalInputEscapeState::Csi));
+            }
+            TerminalInputEscapeState::Ss3 => {
+                if index < data.len() {
+                    return (index + 1, None);
+                }
+                return (index, Some(TerminalInputEscapeState::Ss3));
+            }
+            TerminalInputEscapeState::String => {
+                while let Some(byte) = data.get(index).copied() {
+                    index += 1;
+                    if byte == b'\x07' {
+                        return (index, None);
+                    }
+                    if byte == b'\x1b' {
+                        state = TerminalInputEscapeState::StringEsc;
+                        break;
+                    }
+                }
+                if index >= data.len() && state == TerminalInputEscapeState::String {
+                    return (index, Some(TerminalInputEscapeState::String));
+                }
+            }
+            TerminalInputEscapeState::StringEsc => {
+                let Some(byte) = data.get(index).copied() else {
+                    return (index, Some(TerminalInputEscapeState::StringEsc));
+                };
+                index += 1;
+                if byte == b'\\' || byte == b'\x07' {
+                    return (index, None);
+                }
+                state = TerminalInputEscapeState::String;
+            }
+        }
+    }
+}
+
+fn next_utf8_char(data: &[u8], index: usize) -> Option<(char, usize)> {
+    let suffix = &data[index..];
+    let text = match std::str::from_utf8(suffix) {
+        Ok(text) => text,
+        Err(error) if error.valid_up_to() > 0 => {
+            std::str::from_utf8(&suffix[..error.valid_up_to()]).ok()?
+        }
+        Err(_) => return None,
+    };
+    let ch = text.chars().next()?;
+    Some((ch, index + ch.len_utf8()))
 }
 
 fn consume_matching_prefix(prefix_buffer: &mut String, text: &str) -> usize {
@@ -998,6 +1158,95 @@ mod tests {
 
         let _ = fs::remove_file(labeled_path);
         let _ = fs::remove_file(plain_path);
+    }
+
+    #[test]
+    fn text_input_records_logical_utf8_text() {
+        let manager = RecordingManager::new();
+        let path = unique_path("logical-input");
+
+        manager.start("s1", &path, true, false).unwrap();
+        manager.write_input("s1", "echo 测试\r".as_bytes());
+        manager.stop("s1").unwrap();
+
+        let recorded = fs::read_to_string(&path).unwrap();
+        assert_eq!(recorded, "[INPUT] echo 测试\n");
+        assert!(!recorded.contains(char::REPLACEMENT_CHARACTER));
+
+        let _ = fs::remove_file(path);
+    }
+
+    #[test]
+    fn raw_input_records_exact_bytes_as_hex() {
+        let manager = RecordingManager::new();
+        let path = unique_path("raw-input");
+        let bytes = [0x00, 0xff, 0x1b, b'[', b'A'];
+
+        manager.start("s1", &path, true, false).unwrap();
+        manager.write_raw_input("s1", &bytes);
+        manager.stop("s1").unwrap();
+
+        let recorded = fs::read_to_string(&path).unwrap();
+        assert_eq!(recorded, "[RAW_INPUT] 00 ff 1b 5b 41\n");
+        assert!(!recorded.contains(char::REPLACEMENT_CHARACTER));
+
+        manager.write_raw_input("s2", &bytes);
+        let transcript_path = unique_path("raw-input-transcript");
+        manager
+            .save_transcript("s2", &transcript_path, true, false)
+            .unwrap();
+        let transcript = fs::read_to_string(&transcript_path).unwrap();
+        assert_eq!(transcript, "[RAW_INPUT] 00 ff 1b 5b 41\n");
+        assert!(!transcript.contains(char::REPLACEMENT_CHARACTER));
+
+        let _ = fs::remove_file(path);
+        let _ = fs::remove_file(transcript_path);
+    }
+
+    #[test]
+    fn terminal_protocol_input_sequences_do_not_pollute_recorded_text() {
+        let manager = RecordingManager::new();
+        let path = unique_path("protocol-input");
+
+        manager.write_input("s1", b"\x1b[A");
+        manager.write_input("s1", b"echo ");
+        manager.write_input("s1", b"\x1b[<0;12;5M");
+        manager.write_input("s1", "界".as_bytes());
+        manager.write_input("s1", b"\r");
+        manager.save_transcript("s1", &path, true, false).unwrap();
+
+        let transcript = fs::read_to_string(&path).unwrap();
+        assert_eq!(transcript, "[INPUT] echo 界\n");
+        assert!(!transcript.contains("[A"));
+        assert!(!transcript.contains("<0;12;5M"));
+
+        let _ = fs::remove_file(path);
+    }
+
+    #[test]
+    fn split_terminal_protocol_input_sequences_do_not_pollute_recorded_text() {
+        let manager = RecordingManager::new();
+        let path = unique_path("split-protocol-input");
+
+        manager.write_input("s1", b"echo ");
+        manager.write_input("s1", b"\x1b[<0;");
+        manager.write_input("s1", b"12;5M");
+        manager.write_input("s1", b"\x1b]");
+        manager.write_input("s1", b"52;c;clipboard");
+        manager.write_input("s1", b"\x1b");
+        manager.write_input("s1", b"\\");
+        manager.write_input("s1", b"\x1bO");
+        manager.write_input("s1", b"A");
+        manager.write_input("s1", b"done\r");
+        manager.save_transcript("s1", &path, true, false).unwrap();
+
+        let transcript = fs::read_to_string(&path).unwrap();
+        assert_eq!(transcript, "[INPUT] echo done\n");
+        assert!(!transcript.contains("<0;"));
+        assert!(!transcript.contains("clipboard"));
+        assert!(!transcript.contains("\x1b"));
+
+        let _ = fs::remove_file(path);
     }
 
     #[test]

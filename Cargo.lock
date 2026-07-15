@@ -4237,6 +4237,9 @@ name = "nyaterm-terminal"
 version = "1.1.12"
 dependencies = [
  "alacritty_terminal",
+ "encoding_rs",
+ "flate2",
+ "unicode-width",
 ]
 
 [[package]]
@@ -4244,10 +4247,12 @@ name = "nyaterm-terminal-gpui"
 version = "1.1.12"
 dependencies = [
  "gpui",
+ "image",
  "nyaterm-core",
  "nyaterm-terminal",
  "nyaterm-ui",
  "regex",
+ "smallvec",
 ]
 
 [[package]]
@@ -4256,6 +4261,9 @@ version = "1.1.12"
 dependencies = [
  "anyhow",
  "async-http-proxy",
+ "base64 0.22.1",
+ "flate2",
+ "md5",
  "portable-pty",
  "regex",
  "russh",

@@ -16,6 +16,7 @@ impl NyaTermApp {
             self.pump_startup_restore_queue(window, cx);
         }
 
+        self.ensure_terminal_focus_reporting(window, cx);
         self.publish_store_snapshots(cx);
     }
 
@@ -63,6 +64,9 @@ impl NyaTermApp {
                 this.update_transfer_height_resize(event, cx);
                 this.update_panel_stack_resize(event, cx);
                 this.update_workspace_split_resize(event, cx);
+                if this.maybe_send_terminal_any_motion_report(event, cx) {
+                    return;
+                }
                 this.update_terminal_selection_drag(event, cx);
                 this.update_terminal_scrollbar_drag(event, cx);
                 this.update_action_link_hover(event, cx);
@@ -95,6 +99,22 @@ impl NyaTermApp {
                     if this.current_left_panel() == Some(NavItem::Transfers) {
                         cx.stop_propagation();
                         this.open_transfer_browser_history(-1, window, cx);
+                    }
+                }),
+            )
+            .on_mouse_up(
+                MouseButton::Right,
+                cx.listener(|this, event: &MouseUpEvent, _, cx| {
+                    if this.finish_terminal_mouse_report(event, cx) {
+                        cx.stop_propagation();
+                    }
+                }),
+            )
+            .on_mouse_up(
+                MouseButton::Middle,
+                cx.listener(|this, event: &MouseUpEvent, _, cx| {
+                    if this.finish_terminal_mouse_report(event, cx) {
+                        cx.stop_propagation();
                     }
                 }),
             )

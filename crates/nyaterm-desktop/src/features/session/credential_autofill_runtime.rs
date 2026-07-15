@@ -69,9 +69,13 @@ impl NyaTermApp {
         if matches.is_empty() {
             return;
         }
+        let Some(session_id) = self.active_session_id.clone() else {
+            return;
+        };
         let (cursor_row, cursor_col) = self.active_terminal_cursor_cell_for_autofill();
         self.dismiss_command_suggestions(cx);
         self.credential_suggestions = Some(CredentialSuggestionState {
+            session_id,
             kind,
             matches,
             prompt_text,
@@ -100,17 +104,16 @@ impl NyaTermApp {
 
     pub(in crate::features) fn feed_credential_autofill_output(
         &mut self,
-        data: &[u8],
+        text: &str,
         cx: &mut Context<Self>,
     ) {
         if self.active_session_id.is_none() {
             return;
         }
-        let text = String::from_utf8_lossy(data);
         if text.is_empty() {
             return;
         }
-        let visible = strip_terminal_control_sequences(&text);
+        let visible = strip_terminal_control_sequences(text);
         if visible.is_empty() {
             return;
         }
@@ -166,32 +169,44 @@ impl NyaTermApp {
         }
 
         if let Some(pending) = self.credential_autofill_pending.clone() {
-            let pending_cred = credentials
-                .iter()
-                .find(|entry| entry.id == pending.credential_id)
-                .cloned();
-            if let Some(pending_cred) = pending_cred {
-                if credential_matches_prompt(
-                    &pending_cred,
-                    CredentialPromptKind::Password,
-                    &current_line,
-                ) || credential_matches_prompt(
-                    &pending_cred,
-                    CredentialPromptKind::Password,
-                    &prompt_text,
-                ) {
-                    self.credential_autofill_pending = None;
-                    self.credential_autofill_buffer.clear();
-                    self.credential_autofill_recent.clear();
-                    self.send_credential_value(&pending_cred, CredentialPromptKind::Password, cx);
-                    return;
-                }
-            }
-
-            if is_default_password_prompt(&current_line) {
+            let Some(active_session_id) = self.active_session_id.clone() else {
+                return;
+            };
+            if pending.session_id != active_session_id {
                 self.credential_autofill_pending = None;
             } else {
-                return;
+                let pending_cred = credentials
+                    .iter()
+                    .find(|entry| entry.id == pending.credential_id)
+                    .cloned();
+                if let Some(pending_cred) = pending_cred {
+                    if credential_matches_prompt(
+                        &pending_cred,
+                        CredentialPromptKind::Password,
+                        &current_line,
+                    ) || credential_matches_prompt(
+                        &pending_cred,
+                        CredentialPromptKind::Password,
+                        &prompt_text,
+                    ) {
+                        self.credential_autofill_pending = None;
+                        self.credential_autofill_buffer.clear();
+                        self.credential_autofill_recent.clear();
+                        self.send_credential_value(
+                            &pending_cred,
+                            CredentialPromptKind::Password,
+                            &active_session_id,
+                            cx,
+                        );
+                        return;
+                    }
+                }
+
+                if is_default_password_prompt(&current_line) {
+                    self.credential_autofill_pending = None;
+                } else {
+                    return;
+                }
             }
         }
 
@@ -250,10 +265,20 @@ impl NyaTermApp {
         &mut self,
         credential: &SavedCredential,
         kind: CredentialPromptKind,
+        session_id: &str,
         cx: &mut Context<Self>,
     ) {
-        if self.active_session_id.is_none() {
+        if session_id.is_empty() {
             return;
+        }
+        if self.is_session_disconnected(session_id) {
+            self.terminal_status =
+                "session disconnected - reconnect before filling credentials".to_string();
+            cx.notify();
+            return;
+        }
+        if self.active_session_id.as_deref() != Some(session_id) {
+            self.activate_session_id(session_id);
         }
         match kind {
             CredentialPromptKind::Username => {
@@ -318,9 +343,10 @@ impl NyaTermApp {
         }
         let was_username = state.kind == CredentialPromptKind::Username;
         self.credential_autofill_sending = true;
-        self.send_credential_value(&credential, state.kind, cx);
+        self.send_credential_value(&credential, state.kind, &state.session_id, cx);
         if was_username {
             self.credential_autofill_pending = Some(PendingCredentialAutofill {
+                session_id: state.session_id.clone(),
                 credential_id: credential.id,
                 expires_at_ms: Self::now_unix_ms().saturating_add(PENDING_PASSWORD_TTL_MS),
             });
@@ -407,7 +433,7 @@ impl NyaTermApp {
             return div().into_any_element();
         }
 
-        let bounds = self.terminal_surface_bounds;
+        let bounds = self.terminal_surface_bounds_for_session(Some(&state.session_id));
         let (cell_w, cell_h) = self.terminal_cell_size();
         let pad = self.terminal_content_padding_px();
         let gutter = self.terminal_gutter_width_px();

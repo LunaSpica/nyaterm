@@ -1,5 +1,8 @@
 use super::*;
-use gpui::{Bounds, ClickEvent, MouseDownEvent, MouseMoveEvent, MouseUpEvent, Pixels, Point};
+use gpui::{
+    Bounds, ClickEvent, ElementInputHandler, EntityInputHandler, MouseDownEvent, MouseMoveEvent,
+    MouseUpEvent, Pixels, Point, Size, UTF16Selection,
+};
 
 /// Approximate monospaced cell metrics used for hit-testing the painted terminal grid.
 /// Keep in sync with `terminal_line_element` row height and surface font size.

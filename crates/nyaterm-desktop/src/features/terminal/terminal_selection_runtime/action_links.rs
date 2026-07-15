@@ -125,8 +125,10 @@ impl NyaTermApp {
         &self,
         position: Point<Pixels>,
     ) -> Option<(ActionLinkMatch, Vec<ActionLinkAction>)> {
+        let session_id = self.terminal_session_at_point(position)?;
+        let session_id = session_id.as_deref();
         // Only hit-test when the pointer is over the painted terminal content area.
-        let bounds = self.terminal_surface_bounds?;
+        let bounds = self.terminal_surface_bounds_for_session(session_id)?;
         let (cell_w, cell_h) = self.terminal_cell_size();
         let pad = self.terminal_content_padding_px();
         let gutter = self.terminal_gutter_width_px();
@@ -135,29 +137,59 @@ impl NyaTermApp {
         if local_x < 0. || local_y < 0. {
             return None;
         }
-        let (rows, cols) = self.active_terminal_grid_size();
+        let (rows, cols) = self.terminal_grid_size_for_session(session_id);
         if local_y >= cell_h * rows as f32 || local_x >= cell_w * cols as f32 {
             return None;
         }
-        let cell = self.point_to_terminal_cell(position)?;
-        let offset = self.active_terminal_scroll_offset();
-        let snapshot = self
-            .active_session_id
-            .as_deref()
-            .and_then(|session_id| self.terminal_views.get(session_id))
-            .map(|view| view.screen.viewport_snapshot(offset))
-            .unwrap_or_else(|| self.terminal_screen.viewport_snapshot(offset));
+        let cell = self.point_to_terminal_cell_for_session(session_id, position)?;
+        let snapshot = if let Some(session_id) = session_id.filter(|id| !id.is_empty()) {
+            let view = self.terminal_views.get(session_id)?;
+            view.screen.viewport_snapshot(view.scroll_offset)
+        } else {
+            self.terminal_screen
+                .viewport_snapshot(self.terminal_scroll_offset)
+        };
         let line = snapshot.lines.get(cell.row)?;
-        let chars: Vec<char> = line.chars().collect();
-        if chars.is_empty() {
+        if line.is_empty() {
             return None;
         }
-        let char_offset = cell.col.min(chars.len().saturating_sub(1));
-        let byte_offset: usize = chars.iter().take(char_offset).map(|ch| ch.len_utf8()).sum();
+        let byte_offset = terminal_byte_index_for_cell_col(line, cell.col);
         let matchers = &self.settings.terminal_action_links_matchers;
         let item = match_at_offset(line, byte_offset, matchers)?;
         let actions = actions_for_match(&item);
         Some((item, actions))
+    }
+
+    pub(in crate::features) fn terminal_session_at_point(
+        &self,
+        position: Point<Pixels>,
+    ) -> Option<Option<String>> {
+        let visible_session_ids = self.visible_terminal_surface_session_ids();
+        for session_id in &visible_session_ids {
+            if let Some(bounds) = self.terminal_session_surface_bounds.get(session_id)
+                && terminal_bounds_contains(*bounds, position)
+            {
+                return Some(Some(session_id.clone()));
+            }
+        }
+        let bounds = self.terminal_surface_bounds?;
+        if terminal_bounds_contains(bounds, position) {
+            return Some(self.active_session_id.clone());
+        }
+        None
+    }
+
+    fn visible_terminal_surface_session_ids(&self) -> Vec<String> {
+        if let Some(window_root) = self.terminal_windows.as_ref()
+            && matches!(window_root, TerminalWindowNode::Split { .. })
+        {
+            return window_root.active_tabs();
+        }
+        self.workspace_split
+            .as_ref()
+            .map(|root| root.session_ids())
+            .or_else(|| self.active_session_id.clone().map(|id| vec![id]))
+            .unwrap_or_default()
     }
 
     pub(in crate::features) fn close_action_link_menu(&mut self, cx: &mut Context<Self>) {
@@ -298,4 +330,14 @@ impl NyaTermApp {
         }
         false
     }
+}
+
+fn terminal_bounds_contains(bounds: Bounds<Pixels>, position: Point<Pixels>) -> bool {
+    let min_x = f32::from(bounds.origin.x);
+    let min_y = f32::from(bounds.origin.y);
+    let max_x = min_x + f32::from(bounds.size.width);
+    let max_y = min_y + f32::from(bounds.size.height);
+    let x = f32::from(position.x);
+    let y = f32::from(position.y);
+    x >= min_x && x <= max_x && y >= min_y && y <= max_y
 }

@@ -9,6 +9,9 @@ repository.workspace = true
 [dependencies]
 anyhow.workspace = true
 async-http-proxy.workspace = true
+base64.workspace = true
+flate2 = { version = "1", default-features = false, features = ["rust_backend"] }
+md5.workspace = true
 portable-pty.workspace = true
 regex.workspace = true
 russh.workspace = true
@@ -22,4 +25,3 @@ tokio.workspace = true
 tokio-socks.workspace = true
 uuid.workspace = true
 zmodem2.workspace = true
-

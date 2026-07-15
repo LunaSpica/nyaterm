@@ -1,4 +1,5 @@
 use super::*;
+use crate::features::terminal_runtime::terminal_scroll_track_ratio;
 
 impl NyaTermApp {
     pub(in crate::features) fn terminal_scrollbar_element(
@@ -69,14 +70,25 @@ impl NyaTermApp {
                             if !session_id.is_empty() {
                                 this.activate_workspace_pane(session_id.clone(), cx);
                             }
-                            this.begin_terminal_scrollbar_drag(cx);
-                            let Some(bounds) = this.terminal_surface_bounds else {
+                            let drag_session_id =
+                                (!session_id.is_empty()).then_some(session_id.clone());
+                            this.begin_terminal_scrollbar_drag(drag_session_id.clone(), cx);
+                            let Some(bounds) = (if session_id.is_empty() {
+                                this.terminal_surface_bounds
+                            } else {
+                                this.terminal_session_surface_bounds
+                                    .get(&session_id)
+                                    .copied()
+                                    .or(this.terminal_surface_bounds)
+                            }) else {
                                 return;
                             };
-                            let height = f32::from(bounds.size.height).max(1.0);
-                            let local_y = f32::from(event.position.y - bounds.origin.y);
-                            let ratio = (local_y / height).clamp(0.0, 1.0);
-                            this.set_terminal_scroll_from_track_ratio(ratio, cx);
+                            let ratio = terminal_scroll_track_ratio(bounds, event.position.y);
+                            this.set_terminal_scroll_from_track_ratio_for_session(
+                                drag_session_id.as_deref(),
+                                ratio,
+                                cx,
+                            );
                             cx.stop_propagation();
                         })
                     })

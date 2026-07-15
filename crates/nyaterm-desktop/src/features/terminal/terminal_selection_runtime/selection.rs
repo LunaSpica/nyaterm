@@ -41,14 +41,11 @@ impl NyaTermApp {
         let mut parts = Vec::new();
         for row in start.row..=end.row {
             let line = snapshot.lines.get(row).map(String::as_str).unwrap_or("");
-            let chars: Vec<char> = line.chars().collect();
+            let cells = terminal_text_cells(line);
             let (col_start, col_end_excl) = selection.cols_for_row(row)?;
-            let col_end = col_end_excl.min(chars.len().max(col_start));
+            let col_end = col_end_excl.min(cells.len().max(col_start));
             let col_start = col_start.min(col_end);
-            let slice: String = chars
-                .get(col_start..col_end)
-                .map(|slice| slice.iter().collect())
-                .unwrap_or_default();
+            let slice = terminal_text_cell_slice(&cells, col_start, col_end);
             parts.push(slice.trim_end().to_string());
         }
         let text = parts.join("\n");
@@ -92,7 +89,15 @@ impl NyaTermApp {
             return;
         };
         // Applications with mouse tracking (vim/less/tmux) consume left presses.
-        if self.maybe_send_mouse_report(0, cell.col as u16, cell.row as u16, true, cx) {
+        if self.maybe_send_mouse_report(
+            0,
+            cell.col as u16,
+            cell.row as u16,
+            true,
+            false,
+            event.modifiers,
+            cx,
+        ) {
             self.clear_terminal_selection(cx);
             return;
         }
@@ -139,6 +144,28 @@ impl NyaTermApp {
         event: &MouseMoveEvent,
         cx: &mut Context<Self>,
     ) {
+        if let Some(button) = self.terminal_mouse_report_button {
+            let captured_session_id = self
+                .terminal_mouse_report_session_id
+                .clone()
+                .or_else(|| self.active_session_id.clone());
+            if let Some(session_id) = captured_session_id
+                && let Some(cell) = self
+                    .point_to_terminal_cell_for_session(Some(session_id.as_str()), event.position)
+                && self.maybe_send_mouse_report_for_session(
+                    &session_id,
+                    button,
+                    cell.col as u16,
+                    cell.row as u16,
+                    true,
+                    true,
+                    event.modifiers,
+                    cx,
+                )
+            {
+                return;
+            }
+        }
         if !self.terminal_selection_dragging {
             return;
         }
@@ -161,12 +188,9 @@ impl NyaTermApp {
         if event.button != MouseButton::Left {
             return;
         }
-        if let Some(cell) = self.point_to_terminal_cell(event.position) {
-            // Mouse tracking release (button 0 / SGR m).
-            if self.maybe_send_mouse_report(0, cell.col as u16, cell.row as u16, false, cx) {
-                self.clear_terminal_selection(cx);
-                return;
-            }
+        if self.finish_terminal_mouse_report(event, cx) {
+            self.clear_terminal_selection(cx);
+            return;
         }
         if !self.terminal_selection_dragging {
             // Stationary click without an active drag can still reposition the
@@ -223,25 +247,110 @@ impl NyaTermApp {
             .get(cell.row)
             .map(String::as_str)
             .unwrap_or("");
-        let chars: Vec<char> = line.chars().collect();
-        if chars.is_empty() {
+        let cells = terminal_text_cells(line);
+        if cells.is_empty() {
             return (cell.col, cell.col.saturating_add(1));
         }
-        let idx = cell.col.min(chars.len().saturating_sub(1));
+        let idx = cell.col.min(cells.len().saturating_sub(1));
         // xterm wordSeparator semantics: characters listed are separators, not word body.
         let separators = self.settings.interaction_word_separators.as_str();
-        let is_word = |ch: char| !separators.contains(ch);
-        if !is_word(chars[idx]) {
+        let is_word = |cell: &TerminalTextCell| terminal_text_cell_is_word(cell, separators);
+        if !is_word(&cells[idx]) {
             return (idx, idx.saturating_add(1));
         }
         let mut start = idx;
-        while start > 0 && is_word(chars[start - 1]) {
+        while start > 0 && is_word(&cells[start - 1]) {
             start -= 1;
         }
         let mut end = idx + 1;
-        while end < chars.len() && is_word(chars[end]) {
+        while end < cells.len() && is_word(&cells[end]) {
             end += 1;
         }
         (start, end)
+    }
+}
+
+fn terminal_text_cell_is_word(cell: &TerminalTextCell, separators: &str) -> bool {
+    cell.text
+        .chars()
+        .find(|ch| !terminal_is_zero_width_mark(*ch))
+        .is_some_and(|ch| !separators.contains(ch))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn terminal_text_cells_keep_combining_mark_with_previous_cell() {
+        let cells = terminal_text_cells("e\u{301}x");
+
+        assert_eq!(
+            cells,
+            vec![
+                TerminalTextCell {
+                    text: "e\u{301}".to_string(),
+                    byte_start: 0,
+                    byte_end: "e\u{301}".len(),
+                },
+                TerminalTextCell {
+                    text: "x".to_string(),
+                    byte_start: "e\u{301}".len(),
+                    byte_end: "e\u{301}x".len(),
+                },
+            ]
+        );
+        assert_eq!(terminal_text_cell_slice(&cells, 0, 1), "e\u{301}");
+        assert_eq!(terminal_text_cell_slice(&cells, 1, 2), "x");
+    }
+
+    #[test]
+    fn terminal_text_word_cells_use_base_character_for_separators() {
+        let cells = terminal_text_cells("e\u{301}/x");
+
+        assert!(terminal_text_cell_is_word(&cells[0], "/"));
+        assert!(!terminal_text_cell_is_word(&cells[1], "/"));
+        assert!(terminal_text_cell_is_word(&cells[2], "/"));
+    }
+
+    #[test]
+    fn terminal_text_cells_count_wide_char_as_two_terminal_cells() {
+        let cells = terminal_text_cells("界x");
+
+        assert_eq!(cells.len(), 3);
+        assert_eq!(cells[0].text, "界");
+        assert_eq!(cells[1].text, "界");
+        assert_eq!(cells[0].byte_start, cells[1].byte_start);
+        assert_eq!(cells[0].byte_end, cells[1].byte_end);
+        assert_eq!(terminal_text_cell_slice(&cells, 0, 1), "界");
+        assert_eq!(terminal_text_cell_slice(&cells, 1, 2), "界");
+        assert_eq!(terminal_text_cell_slice(&cells, 0, 2), "界");
+        assert_eq!(terminal_text_cell_slice(&cells, 2, 3), "x");
+    }
+
+    #[test]
+    fn terminal_text_cells_attach_combining_mark_to_all_wide_halves() {
+        let text = "界\u{301}x";
+        let cells = terminal_text_cells(text);
+
+        assert_eq!(cells.len(), 3);
+        assert_eq!(cells[0].text, "界\u{301}");
+        assert_eq!(cells[1].text, "界\u{301}");
+        assert_eq!(cells[0].byte_end, "界\u{301}".len());
+        assert_eq!(cells[1].byte_end, "界\u{301}".len());
+        assert_eq!(terminal_text_cell_slice(&cells, 0, 2), "界\u{301}");
+        assert_eq!(terminal_text_cell_slice(&cells, 1, 2), "界\u{301}");
+    }
+
+    #[test]
+    fn terminal_text_cells_attach_variation_selector_to_previous_cell() {
+        let text = "a\u{fe0f}x";
+        let cells = terminal_text_cells(text);
+
+        assert_eq!(cells.len(), 2);
+        assert_eq!(cells[0].text, "a\u{fe0f}");
+        assert_eq!(cells[0].byte_end, "a\u{fe0f}".len());
+        assert_eq!(terminal_text_cell_slice(&cells, 0, 1), "a\u{fe0f}");
+        assert_eq!(terminal_text_cell_slice(&cells, 1, 2), "x");
     }
 }

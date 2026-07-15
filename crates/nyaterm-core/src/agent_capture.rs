@@ -456,4 +456,22 @@ mod tests {
         assert_eq!(result.completed[0].output, "hello");
         assert_eq!(result.completed[0].exit_code, Some(9));
     }
+
+    #[test]
+    fn cancel_clears_pending_marker_tail() {
+        let mut processor = AgentOutputCaptureProcessor::new();
+        processor.register("m4".to_string());
+
+        assert!(processor.process("__DF_CMD_STA").visible_text.is_empty());
+        assert!(!processor.pending_marker_tail.is_empty());
+
+        let cancelled = processor.cancel("m4").unwrap();
+        assert_eq!(cancelled.marker_id, "m4");
+        assert!(!processor.has_active());
+        assert!(processor.pending_marker_tail.is_empty());
+        let result = processor.process("plain output");
+
+        assert_eq!(result.visible_text, "plain output");
+        assert!(result.completed.is_empty());
+    }
 }

@@ -4,7 +4,7 @@ impl NyaTermApp {
     pub(in crate::features) fn begin_background_ssh_start(
         &mut self,
         connection_name: String,
-        config: SshSessionConfig,
+        mut config: SshSessionConfig,
         source_connection_id: Option<String>,
         ai_execution_profile: AiExecutionProfile,
         custom_name: Option<String>,
@@ -15,6 +15,18 @@ impl NyaTermApp {
         startup_command: Option<StartupCommandRequest>,
         cx: &mut Context<Self>,
     ) {
+        config.deferred_pty = true;
+        let geometry_session_hint = after_session_id
+            .as_deref()
+            .or(self.pending_reconnect_replace_id.as_deref());
+        if let Some(geometry) =
+            self.desired_terminal_resize_geometry_for_session_hint(geometry_session_hint)
+        {
+            config.cols = geometry.cols;
+            config.rows = geometry.rows;
+            config.pixel_width = geometry.pixel_width;
+            config.pixel_height = geometry.pixel_height;
+        }
         let request_id = uuid();
         self.pending_session_name = Some(connection_name.clone());
         self.last_connect_failure_name = None;
@@ -72,7 +84,7 @@ impl NyaTermApp {
     pub(in crate::features) fn begin_background_multiplex_ssh_start(
         &mut self,
         connection_name: String,
-        config: SshSessionConfig,
+        mut config: SshSessionConfig,
         source_connection_id: Option<String>,
         ai_execution_profile: AiExecutionProfile,
         custom_name: Option<String>,
@@ -82,6 +94,18 @@ impl NyaTermApp {
         existing_multiplex: Option<SshMultiplexHandle>,
         cx: &mut Context<Self>,
     ) {
+        config.deferred_pty = true;
+        let geometry_session_hint = after_session_id
+            .as_deref()
+            .or(self.pending_reconnect_replace_id.as_deref());
+        if let Some(geometry) =
+            self.desired_terminal_resize_geometry_for_session_hint(geometry_session_hint)
+        {
+            config.cols = geometry.cols;
+            config.rows = geometry.rows;
+            config.pixel_width = geometry.pixel_width;
+            config.pixel_height = geometry.pixel_height;
+        }
         let multiplex_key = ssh_multiplex_key(&config);
         let request_id = uuid();
         self.pending_session_name = Some(connection_name.clone());
@@ -142,18 +166,23 @@ impl NyaTermApp {
     }
 
     pub(in crate::features) fn send_probe_command(&mut self, cx: &mut Context<Self>) {
-        let Some(session_id) = self.active_session_id.as_deref() else {
+        let Some(session_id) = self.active_session_id.clone() else {
             self.terminal_status = "start a session first".to_string();
             cx.notify();
             return;
         };
+        if self.is_session_disconnected(&session_id) {
+            self.terminal_status = "session disconnected — reconnect before probing".to_string();
+            cx.notify();
+            return;
+        }
 
         let command = if cfg!(target_os = "windows") {
             "echo nyaterm-app-ready\r\n"
         } else {
             "printf 'nyaterm-app-ready\\n'\n"
         };
-        match self.session_manager.write(session_id, command.as_bytes()) {
+        match self.write_session_input_recorded(&session_id, command.as_bytes()) {
             Ok(()) => {
                 self.terminal_status = "probe command sent".to_string();
             }
@@ -228,7 +257,10 @@ impl NyaTermApp {
                     {
                         self.terminal_views.insert(
                             session_id.clone(),
-                            TerminalViewState::from_output(seed_output),
+                            TerminalViewState::from_output_with_encoding(
+                                seed_output,
+                                &self.settings.interaction_default_encoding,
+                            ),
                         );
                     }
                     if let Some(after_session_id) = pending
@@ -244,6 +276,12 @@ impl NyaTermApp {
                     }
                     if let Some(stale_id) = self.pending_reconnect_replace_id.take() {
                         if stale_id != session_id {
+                            if let Some(bounds) =
+                                self.terminal_session_surface_bounds.get(&stale_id).copied()
+                            {
+                                self.terminal_session_surface_bounds
+                                    .insert(session_id.clone(), bounds);
+                            }
                             self.remove_session_state(&stale_id);
                         }
                     }
@@ -270,6 +308,7 @@ impl NyaTermApp {
                     self.selected_nav = NavItem::Workspace;
                 }
                 Err(error) => {
+                    let _ = self.pending_reconnect_replace_id.take();
                     self.last_connect_failure_name = Some(event.connection_name.clone());
                     self.last_connect_failure_error = Some(error.clone());
                     self.session_pane_states.insert(

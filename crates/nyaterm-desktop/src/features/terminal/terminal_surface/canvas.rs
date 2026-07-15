@@ -20,6 +20,10 @@ impl NyaTermApp {
         let action_link_matchers = self.settings.terminal_action_links_matchers.clone();
         let is_active = self.active_session_id.as_deref() == Some(session_id.as_str());
         let is_disconnected = !session_id.is_empty() && self.is_session_disconnected(&session_id);
+        let layout_cache = self
+            .terminal_views
+            .get(&session_id)
+            .map(|view| view.render_cache.layout_cache.clone());
         let scroll_offset = self
             .terminal_views
             .get(&session_id)
@@ -34,17 +38,31 @@ impl NyaTermApp {
         let line_timestamps_ms = snapshot.line_timestamps_ms.clone();
         let hyperlink_lines = snapshot.hyperlink_lines.clone();
         let cursor_row = snapshot.cursor_row;
+        let cursor_col = snapshot.cursor_col;
+        let snapshot_rows = snapshot.rows;
+        let snapshot_cols = snapshot.cols;
         let show_line_numbers = self.settings.terminal_show_line_numbers;
         let show_timestamps = self.settings.terminal_show_timestamps;
         let show_timestamp_ms = self.settings.terminal_show_timestamp_milliseconds;
         let gutter_enabled = show_line_numbers || show_timestamps;
+        // Prefer remote cursor visibility/shape from the terminal model; settings
+        // supply the default paint style when the model reports a block cursor.
+        let remote_cursor_visible = snapshot.cursor.visible
+            && snapshot.cursor.shape != nyaterm_terminal::CursorShape::Hidden
+            && cursor_row != usize::MAX;
+        let blink_enabled = self.settings.cursor_blink || snapshot.cursor.blinking;
         let show_cursor = is_active
             && !session_id.is_empty()
             && !is_disconnected
             && scroll_offset == 0
-            && cursor_row != usize::MAX
-            && (!self.settings.cursor_blink || self.terminal_runtime.cursor_blink_on);
-        let cursor_style = self.settings.cursor_style.as_str();
+            && remote_cursor_visible
+            && (!blink_enabled || self.terminal_runtime.cursor_blink_on);
+        let cursor_style = match snapshot.cursor.shape {
+            nyaterm_terminal::CursorShape::Underline => "underline",
+            nyaterm_terminal::CursorShape::Beam => "bar",
+            nyaterm_terminal::CursorShape::Hidden => self.settings.cursor_style.as_str(),
+            nyaterm_terminal::CursorShape::Block => self.settings.cursor_style.as_str(),
+        };
         let search_matches = if is_active
             && self.terminal_search_open
             && self.terminal_search_mode == TerminalSearchMode::Buffer
@@ -113,10 +131,9 @@ impl NyaTermApp {
                         find_action_links(&line, &action_link_matchers, true)
                             .into_iter()
                             .map(|item| {
-                                let start_chars =
-                                    line[..item.start.min(line.len())].chars().count();
-                                let end_chars = line[..item.end.min(line.len())].chars().count();
-                                (start_chars, end_chars)
+                                let start_col = terminal_cell_col_for_byte_index(&line, item.start);
+                                let end_col = terminal_cell_col_for_byte_index(&line, item.end);
+                                (start_col, end_col)
                             })
                             .collect()
                     }
@@ -142,15 +159,36 @@ impl NyaTermApp {
                 .get(&line_index)
                 .map(|ranges| ranges.as_slice())
                 .unwrap_or(&empty_ranges);
+            let command_mark = snapshot.command_marks.get(line_index).copied().flatten();
             line_decorations.push(TerminalLineDecorations {
                 search_ranges: line_search_ranges.to_vec(),
                 active_search_ranges: line_active_search_ranges.to_vec(),
                 selection_cols,
                 link_ranges,
+                command_mark,
             });
         }
         let (cell_w, cell_h) = self.terminal_cell_size();
-        let grid = NyaTerminalElement::new(
+        let ime_preedit_text = (is_active
+            && !session_id.is_empty()
+            && self.settings.interaction_mac_ime_compatibility
+            && !self.terminal_ime_marked_text.is_empty())
+        .then(|| self.terminal_ime_marked_text.clone());
+        let ime_preedit_position = ime_preedit_text.as_ref().map(|_| {
+            let pad = self.terminal_content_padding_px();
+            let gutter = self.terminal_gutter_width_px();
+            let row = if cursor_row == usize::MAX {
+                lines.len().saturating_sub(1)
+            } else {
+                cursor_row.min(snapshot_rows.saturating_sub(1))
+            };
+            let col = cursor_col.min(snapshot_cols.saturating_sub(1));
+            (
+                pad + gutter + col as f32 * cell_w,
+                pad + row as f32 * cell_h,
+            )
+        });
+        let mut grid = NyaTerminalElement::new(
             snapshot,
             keyword_rules,
             line_decorations,
@@ -164,6 +202,9 @@ impl NyaTermApp {
             self.settings.terminal_font_weight as f32,
             self.settings.terminal_font_weight_bold as f32,
         );
+        if let Some(cache) = layout_cache {
+            grid = grid.with_layout_cache(cache);
+        }
         let output = if gutter_enabled {
             let ts_w = self.terminal_timestamp_gutter_width_px();
             let ln_w = self.terminal_line_number_gutter_width_px();
@@ -245,6 +286,17 @@ impl NyaTermApp {
             .terminal_views
             .get(&session_id)
             .map(|view| (view.render_cache.hits, view.render_cache.misses))
+            .unwrap_or((0, 0));
+        let (layout_cache_hits, layout_cache_misses) = self
+            .terminal_views
+            .get(&session_id)
+            .and_then(|view| {
+                view.render_cache
+                    .layout_cache
+                    .lock()
+                    .ok()
+                    .map(|cache| (cache.hits, cache.misses))
+            })
             .unwrap_or((0, 0));
         let show_scroll_to_bottom = is_active && scroll_offset > 0;
         let show_visual_bell = is_active && self.terminal_runtime.visual_bell_ticks > 0;
@@ -339,26 +391,31 @@ impl NyaTermApp {
                     })
                     .track_focus(&self.terminal_focus)
                     .on_key_down(cx.listener(|this, event: &KeyDownEvent, window, cx| {
-                        cx.stop_propagation();
                         this.mark_user_activity();
                         if this.handle_global_shortcut(event, window, cx) {
+                            cx.stop_propagation();
                             return;
                         }
                         if this.handle_credential_suggestion_key(event, cx) {
+                            cx.stop_propagation();
                             return;
                         }
                         if this.handle_command_suggestion_key(event, cx) {
+                            cx.stop_propagation();
                             return;
                         }
                         if this.handle_terminal_scroll_key(event, cx) {
+                            cx.stop_propagation();
                             return;
                         }
                         if this.handle_smart_input_selection_key(event, cx) {
+                            cx.stop_propagation();
                             return;
                         }
                         // Disconnected tab: Enter reconnects; other keys show status (Tauri).
                         if let Some(session_id) = this.active_session_id.clone() {
                             if this.is_session_disconnected(&session_id) {
+                                cx.stop_propagation();
                                 let keystroke = &event.keystroke;
                                 if !keystroke.modifiers.control
                                     && !keystroke.modifiers.platform
@@ -389,20 +446,29 @@ impl NyaTermApp {
                             && !keystroke.modifiers.function
                             && matches!(keystroke.key.as_str(), "v" | "V")
                         {
+                            cx.stop_propagation();
                             this.paste_from_clipboard(window, cx);
                             return;
                         }
-                        if let Some(bytes) = this.terminal_key_bytes_for_event(event) {
-                            // When a non-smart buffer selection is painted, still send
-                            // keystrokes but skip suggestion tracking so the selection
-                            // edit path stays isolated (Tauri preserves selection).
-                            let has_buffer_selection = this.terminal_selection.is_some()
-                                && this.smart_cursor_selected_input_range().is_none();
-                            if has_buffer_selection {
-                                this.send_terminal_input_without_suggestion_track(bytes, cx);
-                            } else {
-                                this.send_terminal_input(bytes, cx);
-                            }
+                        if this.terminal_should_defer_key_text_to_input_handler(event) {
+                            return;
+                        }
+                        cx.stop_propagation();
+                        // When a non-smart buffer selection is painted, still send
+                        // keystrokes but skip suggestion tracking so the selection
+                        // edit path stays isolated (Tauri preserves selection).
+                        let has_buffer_selection = this.terminal_selection.is_some()
+                            && this.smart_cursor_selected_input_range().is_none();
+                        if has_buffer_selection {
+                            this.send_terminal_key_event(event, false, cx);
+                        } else {
+                            this.send_terminal_key_event(event, true, cx);
+                        }
+                    }))
+                    .on_key_up(cx.listener(|this, event: &KeyUpEvent, _window, cx| {
+                        if this.send_terminal_key_release_event(event, cx) {
+                            cx.stop_propagation();
+                            this.mark_user_activity();
                         }
                     }))
                     .when(is_disconnected, |this| {
@@ -535,8 +601,15 @@ impl NyaTermApp {
                                     },
                                 )
                             })
-                            .on_scroll_wheel(cx.listener(
-                                move |this, event: &ScrollWheelEvent, _, cx| {
+                            .on_scroll_wheel({
+                                let session_id = output_session_id.clone();
+                                cx.listener(move |this, event: &ScrollWheelEvent, _, cx| {
+                                    if !session_id.is_empty()
+                                        && this.active_session_id.as_deref()
+                                            != Some(session_id.as_str())
+                                    {
+                                        this.activate_workspace_pane(session_id.clone(), cx);
+                                    }
                                     // Positive wheel delta.y scrolls into history (larger offset).
                                     let delta = match event.delta {
                                         ScrollDelta::Lines(delta) => delta.y.round() as i32,
@@ -550,16 +623,22 @@ impl NyaTermApp {
                                         return;
                                     }
                                     // Mouse tracking: wheel becomes button 64/65 reports.
-                                    if let Some(cell) = this.point_to_terminal_cell(event.position) {
+                                    if let Some(cell) = this.point_to_terminal_cell_for_session(
+                                        Some(session_id.as_str()),
+                                        event.position,
+                                    ) {
                                         let button = if delta > 0 { 64u8 } else { 65u8 };
                                         let steps = delta.unsigned_abs().min(8);
                                         let mut reported = false;
                                         for _ in 0..steps {
-                                            if this.maybe_send_mouse_report(
+                                            if this.maybe_send_mouse_report_for_session(
+                                                &session_id,
                                                 button,
                                                 cell.col as u16,
                                                 cell.row as u16,
                                                 true,
+                                                false,
+                                                event.modifiers,
                                                 cx,
                                             ) {
                                                 reported = true;
@@ -572,10 +651,14 @@ impl NyaTermApp {
                                             return;
                                         }
                                     }
-                                    this.scroll_terminal_by(delta, cx);
+                                    if this.maybe_send_alternate_scroll_for_session(&session_id, delta, cx) {
+                                        cx.stop_propagation();
+                                        return;
+                                    }
+                                    this.scroll_terminal_by_for_session(Some(&session_id), delta, cx);
                                     cx.stop_propagation();
-                                },
-                            ))
+                                })
+                            })
                             .on_mouse_down(
                                 MouseButton::Left,
                                 {
@@ -602,12 +685,18 @@ impl NyaTermApp {
                                     cx.listener(move |this, event: &gpui::MouseDownEvent, window, cx| {
                                         this.activate_workspace_pane(session_id.clone(), cx);
                                         window.focus(&this.terminal_focus);
-                                        if let Some(cell) = this.point_to_terminal_cell(event.position) {
-                                            if this.maybe_send_mouse_report(
+                                        if let Some(cell) = this.point_to_terminal_cell_for_session(
+                                            Some(session_id.as_str()),
+                                            event.position,
+                                        ) {
+                                            if this.maybe_send_mouse_report_for_session(
+                                                &session_id,
                                                 2,
                                                 cell.col as u16,
                                                 cell.row as u16,
                                                 true,
+                                                false,
+                                                event.modifiers,
                                                 cx,
                                             ) {
                                                 cx.stop_propagation();
@@ -633,12 +722,18 @@ impl NyaTermApp {
                                         window.focus(&this.terminal_focus);
                                         this.close_terminal_context_menu(cx);
                                         this.close_action_link_menu(cx);
-                                        if let Some(cell) = this.point_to_terminal_cell(event.position) {
-                                            if this.maybe_send_mouse_report(
+                                        if let Some(cell) = this.point_to_terminal_cell_for_session(
+                                            Some(session_id.as_str()),
+                                            event.position,
+                                        ) {
+                                            if this.maybe_send_mouse_report_for_session(
+                                                &session_id,
                                                 1,
                                                 cell.col as u16,
                                                 cell.row as u16,
                                                 true,
+                                                false,
+                                                event.modifiers,
                                                 cx,
                                             ) {
                                                 cx.stop_propagation();
@@ -711,6 +806,33 @@ impl NyaTermApp {
                                         .rounded_sm(),
                                 )
                             })
+                            .when_some(
+                                ime_preedit_text
+                                    .clone()
+                                    .zip(ime_preedit_position),
+                                |this, (marked_text, (x, y))| {
+                                    this.child(
+                                        div()
+                                            .absolute()
+                                            .left(px(x))
+                                            .top(px(y))
+                                            .h(px(cell_h))
+                                            .max_w(px(360.))
+                                            .px_1()
+                                            .flex()
+                                            .items_center()
+                                            .overflow_hidden()
+                                            .whitespace_nowrap()
+                                            .border_b_2()
+                                            .border_color(rgb(palette.accent))
+                                            .bg(rgba((palette.terminal_cursor << 8) | 0x33))
+                                            .text_color(rgb(palette.terminal_fg))
+                                            .font_family(self.settings.terminal_font_family.clone())
+                                            .text_size(px(self.settings.terminal_font_size as f32))
+                                            .child(marked_text),
+                                    )
+                                },
+                            )
                             .when(file_drop_hover && !session_id.is_empty(), |this| {
                                 this.child(
                                     div()
@@ -860,13 +982,15 @@ impl NyaTermApp {
                             })
                             .when_some(performance_overlay, |this, overlay| {
                                 let stats_detail = format!(
-                                    "Queued {} in {} event(s). Dropped {} total. Last drain {}. Link cache {}/{} hit/miss.",
+                                    "Queued {} in {} event(s). Dropped {} total. Last drain {}. Link cache {}/{} hit/miss. Layout cache {}/{} hit/miss.",
                                     format_bytes(self.terminal_runtime.session_event_queued_output_bytes as u64),
                                     format_skipped_count(self.terminal_runtime.session_event_queued_events as u64),
                                     format_bytes(self.terminal_runtime.session_event_dropped_output_bytes),
                                     format_bytes(self.terminal_runtime.session_event_last_drained_output_bytes as u64),
                                     format_skipped_count(render_cache_hits),
                                     format_skipped_count(render_cache_misses),
+                                    format_skipped_count(layout_cache_hits),
+                                    format_skipped_count(layout_cache_misses),
                                 );
                                 let (title, detail) = match overlay {
                                     TerminalPerformanceOverlay::Overloaded => (
@@ -970,7 +1094,11 @@ impl NyaTermApp {
                                         ),
                                 )
                             })
-                            .child(terminal_bounds_tracker(cx.entity())),
+                            .child(terminal_bounds_tracker(
+                                cx.entity(),
+                                (!output_session_id.is_empty()).then_some(output_session_id),
+                                is_active,
+                            )),
                     )
                     .when(is_active && self.terminal_search_open, |this| {
                         this.child(self.terminal_search_bar(cx))

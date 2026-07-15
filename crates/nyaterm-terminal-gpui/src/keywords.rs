@@ -181,8 +181,8 @@ pub fn terminal_buffer_matches(
                 if flags.whole_word && !is_whole_word_match(line, found.start(), found.end()) {
                     continue;
                 }
-                let start_col = line[..found.start()].chars().count();
-                let end_col = line[..found.end()].chars().count();
+                let start_col = terminal_cell_col_for_byte_index(line, found.start());
+                let end_col = terminal_cell_col_for_byte_index(line, found.end());
                 matches.push(TerminalBufferMatch {
                     line_index,
                     start_col,
@@ -215,8 +215,8 @@ pub fn terminal_buffer_matches(
             let start = cursor + relative_start;
             let end = start + needle.len();
             if !flags.whole_word || is_whole_word_match(line, start, end) {
-                let start_col = line[..start.min(line.len())].chars().count();
-                let end_col = line[..end.min(line.len())].chars().count();
+                let start_col = terminal_cell_col_for_byte_index(line, start);
+                let end_col = terminal_cell_col_for_byte_index(line, end);
                 matches.push(TerminalBufferMatch {
                     line_index,
                     start_col,
@@ -245,4 +245,69 @@ pub(super) fn parse_hex_rgb(value: &str) -> Option<u32> {
         return None;
     }
     u32::from_str_radix(hex, 16).ok()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn terminal_buffer_matches_count_combining_marks_with_previous_cell() {
+        let flags = TerminalSearchFlags {
+            case_sensitive: true,
+            regex: false,
+            whole_word: false,
+        };
+
+        let matches = terminal_buffer_matches("e\u{301}x", "x", &flags, 10).unwrap();
+
+        assert_eq!(matches.len(), 1);
+        assert_eq!(matches[0].start_col, 1);
+        assert_eq!(matches[0].end_col, 2);
+    }
+
+    #[test]
+    fn terminal_buffer_matches_count_wide_chars_as_two_cells() {
+        let flags = TerminalSearchFlags {
+            case_sensitive: true,
+            regex: false,
+            whole_word: false,
+        };
+
+        let matches = terminal_buffer_matches("界x", "x", &flags, 10).unwrap();
+
+        assert_eq!(matches.len(), 1);
+        assert_eq!(matches[0].start_col, 2);
+        assert_eq!(matches[0].end_col, 3);
+    }
+
+    #[test]
+    fn regex_terminal_buffer_matches_count_combining_marks_with_previous_cell() {
+        let flags = TerminalSearchFlags {
+            case_sensitive: true,
+            regex: true,
+            whole_word: false,
+        };
+
+        let matches = terminal_buffer_matches("e\u{301}x", "x", &flags, 10).unwrap();
+
+        assert_eq!(matches.len(), 1);
+        assert_eq!(matches[0].start_col, 1);
+        assert_eq!(matches[0].end_col, 2);
+    }
+
+    #[test]
+    fn regex_terminal_buffer_matches_count_wide_chars_as_two_cells() {
+        let flags = TerminalSearchFlags {
+            case_sensitive: true,
+            regex: true,
+            whole_word: false,
+        };
+
+        let matches = terminal_buffer_matches("界x", "x", &flags, 10).unwrap();
+
+        assert_eq!(matches.len(), 1);
+        assert_eq!(matches[0].start_col, 2);
+        assert_eq!(matches[0].end_col, 3);
+    }
 }

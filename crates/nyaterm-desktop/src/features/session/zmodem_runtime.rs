@@ -35,6 +35,28 @@ impl NyaTermApp {
         self.zmodem_sessions.remove(session_id);
     }
 
+    pub(in crate::features) fn note_zmodem_output_discontinuity(
+        &mut self,
+        session_id: &str,
+        dropped_bytes: usize,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(state) = self.zmodem_sessions.get_mut(session_id) else {
+            return;
+        };
+        let mut actions = Vec::new();
+        if let Some(transfer) = state.transfer.as_mut() {
+            let reason = format!("terminal output dropped {dropped_bytes} byte(s)");
+            actions = transfer.cancel_with_reason(reason);
+        }
+        state.transfer = None;
+        state.detector = ZmodemDetector::new();
+        state.pending_download = false;
+        if !actions.is_empty() {
+            self.apply_zmodem_actions(session_id, actions, cx);
+        }
+    }
+
     /// Queue local files for ZMODEM upload (remote `rz`) after optional SFTP conflict probe.
     pub(in crate::features) fn start_zmodem_upload(
         &mut self,
@@ -158,7 +180,7 @@ impl NyaTermApp {
         state.pending_download = false;
         // Remote side runs `rz` and emits ZMODEM upload (local send) headers.
         let cmd = b"rz\r".to_vec();
-        match self.session_manager.write(&session_id, &cmd) {
+        match self.write_session_input_recorded(&session_id, &cmd) {
             Ok(()) => {
                 self.terminal_status = format!(
                     "ZMODEM upload prepared ({} file(s)) — waiting for remote rz",
@@ -305,7 +327,7 @@ impl NyaTermApp {
         for action in actions {
             match action {
                 ZmodemAction::SendToRemote(bytes) => {
-                    if let Err(error) = self.session_manager.write(session_id, &bytes) {
+                    if let Err(error) = self.write_session_protocol_response(session_id, &bytes) {
                         self.terminal_status = format!("ZMODEM write failed: {error}");
                     }
                 }

@@ -194,8 +194,20 @@ impl NyaTermApp {
     }
 
     pub(in crate::features) fn ai_terminal_context(&self) -> AiContext {
-        let ssh = self.active_ssh_config.as_ref();
-        let active_session = self.active_session_id.as_deref().and_then(|session_id| {
+        self.ai_terminal_context_for_session(self.active_session_id.as_deref())
+    }
+
+    pub(in crate::features) fn ai_terminal_context_for_session(
+        &self,
+        session_id: Option<&str>,
+    ) -> AiContext {
+        let metadata = session_id.and_then(|session_id| self.session_metadata.get(session_id));
+        let ssh = match metadata.map(|metadata| &metadata.launch_config) {
+            Some(SessionLaunchConfig::Ssh(config)) => Some(config),
+            _ if session_id == self.active_session_id.as_deref() => self.active_ssh_config.as_ref(),
+            _ => None,
+        };
+        let session = session_id.and_then(|session_id| {
             self.session_manager
                 .list_sessions()
                 .ok()
@@ -205,18 +217,30 @@ impl NyaTermApp {
                         .find(|session| session.id == session_id)
                 })
         });
+        let cwd = metadata
+            .and_then(|metadata| match &metadata.launch_config {
+                SessionLaunchConfig::Local(config) => config.working_dir.as_ref(),
+                _ => None,
+            })
+            .or_else(|| {
+                session
+                    .as_ref()
+                    .and_then(|session| session.working_dir.as_ref())
+            });
+        let recent_output = session_id
+            .map(|session_id| self.terminal_buffer_text_for_session(session_id))
+            .unwrap_or_else(|| self.active_terminal_buffer_text());
         AiContext {
-            connection_name: ssh.map(|config| config.name.clone()),
+            connection_name: ssh
+                .map(|config| config.name.clone())
+                .or_else(|| session.as_ref().map(|session| session.name.clone())),
             host: ssh.map(|config| config.host.clone()),
             port: ssh.map(|config| config.port),
             username: ssh.map(|config| config.username.clone()),
-            cwd: active_session
-                .as_ref()
-                .and_then(|session| session.working_dir.as_ref())
-                .map(|path| path.display().to_string()),
+            cwd: cwd.map(|path| path.display().to_string()),
             os: None,
             arch: Some(std::env::consts::ARCH.to_string()),
-            recent_output: recent_terminal_output(&self.terminal_output, 80),
+            recent_output: recent_terminal_output(&recent_output, 80),
             selected_text: String::new(),
             input_buffer: String::new(),
         }

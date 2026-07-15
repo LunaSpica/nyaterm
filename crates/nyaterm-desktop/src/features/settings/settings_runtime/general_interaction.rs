@@ -200,6 +200,7 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         self.settings.interaction_default_encoding = encoding.to_string();
+        self.sync_terminal_encodings_from_settings();
         self.save_interaction_settings(cx);
     }
 

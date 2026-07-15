@@ -222,6 +222,7 @@ pub(crate) struct CommandSuggestionState {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct CredentialSuggestionState {
+    pub(crate) session_id: String,
     pub(crate) kind: CredentialPromptKind,
     pub(crate) matches: Vec<SavedCredential>,
     pub(crate) prompt_text: String,
@@ -232,6 +233,7 @@ pub(crate) struct CredentialSuggestionState {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct PendingCredentialAutofill {
+    pub(crate) session_id: String,
     pub(crate) credential_id: String,
     pub(crate) expires_at_ms: u64,
 }

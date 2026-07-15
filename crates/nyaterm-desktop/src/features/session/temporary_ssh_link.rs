@@ -133,8 +133,11 @@ impl NyaTermApp {
             term: "xterm-256color".to_string(),
             x11_forwarding: false,
             x11_display: String::new(),
+            deferred_pty: true,
             cols: 80,
             rows: 24,
+            pixel_width: 0,
+            pixel_height: 0,
             host_key_verifier: Some(Arc::new(NativeHostKeyVerifier {
                 config_dir: self.runtime.config_dir().to_path_buf(),
                 portable_key_path: self.runtime.portable_key_path().map(ToOwned::to_owned),

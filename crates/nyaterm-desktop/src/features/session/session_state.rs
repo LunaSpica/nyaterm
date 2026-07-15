@@ -246,6 +246,7 @@ impl NyaTermApp {
         self.pending_command_history_entry = None;
         self.command_suggestion_search_gen = self.command_suggestion_search_gen.saturating_add(1);
         let previous_session_id = self.active_session_id.clone();
+        let switching_sessions = previous_session_id.as_deref() != Some(session_id);
         if previous_session_id.as_deref() != Some(session_id)
             && let Some(previous_session_id) = previous_session_id.as_deref()
         {
@@ -272,7 +273,14 @@ impl NyaTermApp {
             view.has_unread = false;
         } else {
             self.terminal_output.clear();
+            self.terminal_output_decoder.reset_decoder();
             self.terminal_screen.clear();
+        }
+        if switching_sessions && self.terminal_focus_active {
+            if let Some(previous_session_id) = previous_session_id.as_deref() {
+                self.write_terminal_focus_report_to_session(previous_session_id, false);
+            }
+            self.write_terminal_focus_report_to_session(session_id, true);
         }
         self.sync_terminal_windows_active_tab(session_id);
     }

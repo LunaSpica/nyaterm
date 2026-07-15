@@ -28,6 +28,8 @@ been ported or replaced.
 - `vendor/`: protocol dependencies copied from the Tauri source tree.
 
 See also `docs/gpui-structure-refactor.md` for the GPUI module layout decisions.
+See `docs/terminal-pipeline.md` for the native terminal byte-flow, terminal
+model, and GPUI rendering chain.
 
 ## Migration Boundary
 
