@@ -1,4 +1,4 @@
-use std::io::Write;
+use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
@@ -114,20 +114,7 @@ pub fn export_diagnostics_archive(
         SimpleFileOptions::default().compression_method(zip::CompressionMethod::Stored);
 
     for log_file in &log_files {
-        let contents = std::fs::read(log_file).map_err(|source| DiagnosticsError::ReadLogFile {
-            path: log_file.clone(),
-            source,
-        })?;
-        let file_name = log_file
-            .file_name()
-            .and_then(|value| value.to_str())
-            .unwrap_or("diagnostics-log.jsonl");
-        zip.start_file(format!("logs/{file_name}"), file_options)?;
-        zip.write_all(&contents)
-            .map_err(|source| DiagnosticsError::WriteArchive {
-                path: output_path.clone(),
-                source,
-            })?;
+        write_log_file_entry(&mut zip, &output_path, log_file, file_options)?;
     }
 
     let manifest = json!({
@@ -202,6 +189,43 @@ fn write_json_entry<W: Write + std::io::Seek>(
             path: output_path.to_path_buf(),
             source,
         })
+}
+
+fn write_log_file_entry<W: Write + std::io::Seek>(
+    zip: &mut zip::ZipWriter<W>,
+    output_path: &Path,
+    log_file: &Path,
+    file_options: SimpleFileOptions,
+) -> Result<(), DiagnosticsError> {
+    let file = std::fs::File::open(log_file).map_err(|source| DiagnosticsError::ReadLogFile {
+        path: log_file.to_path_buf(),
+        source,
+    })?;
+    let file_name = log_file
+        .file_name()
+        .and_then(|value| value.to_str())
+        .unwrap_or("diagnostics-log.jsonl");
+    zip.start_file(format!("logs/{file_name}"), file_options)?;
+
+    let mut reader = std::io::BufReader::new(file);
+    let mut buffer = [0u8; 64 * 1024];
+    loop {
+        let read = reader
+            .read(&mut buffer)
+            .map_err(|source| DiagnosticsError::ReadLogFile {
+                path: log_file.to_path_buf(),
+                source,
+            })?;
+        if read == 0 {
+            break;
+        }
+        zip.write_all(&buffer[..read])
+            .map_err(|source| DiagnosticsError::WriteArchive {
+                path: output_path.to_path_buf(),
+                source,
+            })?;
+    }
+    Ok(())
 }
 
 fn collect_log_files(
