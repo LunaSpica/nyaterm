@@ -832,6 +832,10 @@ impl TerminalFramePipeline {
     ) -> usize {
         self.event_queue.drain_into(events, limit)
     }
+
+    pub(crate) fn queued_event_count(&self) -> usize {
+        self.event_queue.len()
+    }
 }
 
 impl Default for TerminalFramePipeline {
@@ -944,6 +948,10 @@ impl TerminalFrameEventQueue {
             drained += 1;
         }
         drained
+    }
+
+    fn len(&self) -> usize {
+        self.inner.lock().map(|queue| queue.len()).unwrap_or(0)
     }
 }
 
@@ -1959,6 +1967,7 @@ mod tests {
             queue.try_recv(),
             Some(TerminalFrameEvent::Output(frame)) if frame.revision == 3
         ));
+        assert_eq!(queue.len(), 0);
     }
 
     #[test]

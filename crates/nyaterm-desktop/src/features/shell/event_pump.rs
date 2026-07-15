@@ -446,6 +446,7 @@ impl NyaTermApp {
         let drained_output_bytes = processed_output_bytes;
         self.terminal_runtime.session_event_queued_events = queued_events;
         self.terminal_runtime.session_event_queued_output_bytes = queued_output_bytes;
+        self.terminal_runtime.session_event_last_output_event_count = output_event_count;
         self.terminal_runtime
             .session_event_last_drained_output_bytes = drained_output_bytes;
 
@@ -466,44 +467,6 @@ impl NyaTermApp {
             dirty = true;
         }
 
-        let background_started_at = Instant::now();
-        let mut background_timings = RuntimeBackgroundDrainTimings::default();
-        let critical_background_only = self.runtime_output_pressure_active();
-        let defer_terminal_frame_apply = runtime_background_should_defer_terminal_frames(
-            output_event_count,
-            drained_output_bytes,
-        );
-        dirty |= self.drain_runtime_background_events(
-            cx,
-            background_started_at,
-            &mut background_timings,
-            critical_background_only,
-            defer_terminal_frame_apply,
-        );
-        self.terminal_runtime.last_session_start_drain_duration = background_timings.session_start;
-        let background_total = background_started_at.elapsed();
-        if (background_timings.budget_exhausted
-            || background_total >= RUNTIME_BACKGROUND_EVENT_DRAIN_SLOW)
-            && self.should_log_slow_diagnostic("runtime_background_event_drain", Instant::now())
-        {
-            tracing::warn!(
-                diagnostic = "runtime_background_event_drain",
-                total_ms = background_total.as_millis(),
-                session_start_ms = background_timings.session_start.as_millis(),
-                prompts_ms = background_timings.prompts.as_millis(),
-                terminal_frames_ms = background_timings.terminal_frames.as_millis(),
-                terminal_frames_deferred = background_timings.terminal_frames_deferred,
-                credential_autofill_ms = background_timings.credential_autofill.as_millis(),
-                recording_ms = background_timings.recording.as_millis(),
-                startup_restore_ms = background_timings.startup_restore.as_millis(),
-                transfer_ms = background_timings.transfer.as_millis(),
-                ai_ms = background_timings.ai.as_millis(),
-                remote_ms = background_timings.remote.as_millis(),
-                maintenance_ms = background_timings.maintenance.as_millis(),
-                budget_exhausted = background_timings.budget_exhausted,
-                "slow runtime background event drain"
-            );
-        }
         if session_event_drain_is_slow(drain_timings.output_total, max_output_chunk_duration)
             && self.should_log_slow_diagnostic("session_event_drain", Instant::now())
         {
@@ -562,6 +525,7 @@ impl NyaTermApp {
         );
         if defer_terminal_frames {
             timings.terminal_frames_deferred = true;
+            return dirty;
         } else {
             drain_stage!(terminal_frames, self.drain_terminal_frame_events(cx));
         }
@@ -694,6 +658,7 @@ impl NyaTermApp {
             || self.terminal_runtime.session_event_queued_output_bytes > 0
             || !self.pending_session_events.is_empty()
             || !self.pending_terminal_frame_events.is_empty()
+            || self.terminal_frame_pipeline.queued_event_count() > 0
             || !self.pending_session_starts.is_empty()
     }
 
@@ -709,7 +674,47 @@ impl NyaTermApp {
         let stage_started_at = Instant::now();
         dirty |= self.drain_session_events(cx);
         let session_events_duration = stage_started_at.elapsed();
-        let session_start_duration = self.terminal_runtime.last_session_start_drain_duration;
+        let background_started_at = Instant::now();
+        let mut background_timings = RuntimeBackgroundDrainTimings::default();
+        let critical_background_only = self.runtime_output_pressure_active();
+        let defer_terminal_frame_apply = runtime_background_should_defer_terminal_frames(
+            self.terminal_runtime.session_event_last_output_event_count,
+            self.terminal_runtime
+                .session_event_last_drained_output_bytes,
+        );
+        dirty |= self.drain_runtime_background_events(
+            cx,
+            background_started_at,
+            &mut background_timings,
+            critical_background_only,
+            defer_terminal_frame_apply,
+        );
+        self.terminal_runtime.last_session_start_drain_duration = background_timings.session_start;
+        let background_total = background_started_at.elapsed();
+        if (background_timings.budget_exhausted
+            || background_total >= RUNTIME_BACKGROUND_EVENT_DRAIN_SLOW)
+            && self.should_log_slow_diagnostic("runtime_background_event_drain", Instant::now())
+        {
+            tracing::warn!(
+                diagnostic = "runtime_background_event_drain",
+                total_ms = background_total.as_millis(),
+                session_start_ms = background_timings.session_start.as_millis(),
+                prompts_ms = background_timings.prompts.as_millis(),
+                terminal_frames_ms = background_timings.terminal_frames.as_millis(),
+                terminal_frames_deferred = background_timings.terminal_frames_deferred,
+                credential_autofill_ms = background_timings.credential_autofill.as_millis(),
+                recording_ms = background_timings.recording.as_millis(),
+                startup_restore_ms = background_timings.startup_restore.as_millis(),
+                transfer_ms = background_timings.transfer.as_millis(),
+                ai_ms = background_timings.ai.as_millis(),
+                remote_ms = background_timings.remote.as_millis(),
+                maintenance_ms = background_timings.maintenance.as_millis(),
+                budget_exhausted = background_timings.budget_exhausted,
+                "slow runtime background event drain"
+            );
+        }
+        let background_runtime_duration = background_total;
+        let session_start_duration = background_timings.session_start;
         let stage_started_at = Instant::now();
         let output_pressure_after_events = self.runtime_output_pressure_active();
         if !output_pressure_after_events {
@@ -810,7 +815,9 @@ impl NyaTermApp {
                 total_ms = tick_duration.as_millis(),
                 render_input_ms = render_input_duration.as_millis(),
                 session_events_ms = session_events_duration.as_millis(),
+                background_runtime_ms = background_runtime_duration.as_millis(),
                 session_start_ms = session_start_duration.as_millis(),
+                terminal_frames_deferred = background_timings.terminal_frames_deferred,
                 startup_restore_ms = startup_restore_duration.as_millis(),
                 terminal_resize_ms = terminal_resize_duration.as_millis(),
                 render_requests_ms = render_requests_duration.as_millis(),
