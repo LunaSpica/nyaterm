@@ -9,6 +9,7 @@ impl NyaTermApp {
     ) {
         self.connections_more_menu_open = false;
         self.connection_group_context_menu = None;
+        self.connection_details_hover_pending = None;
         self.connection_details_tooltip_id = None;
         if !self.selected_connection_ids.contains(&connection_id) {
             self.selected_connection_ids.clear();

@@ -17,11 +17,22 @@ impl NyaTermApp {
             .map(|section| section.connections.len())
             .sum::<usize>();
         let selected_count = self.selected_connections().len();
-        let selected_detail_connection = if selected_count == 1 {
-            self.selected_connections().into_iter().next()
-        } else {
-            None
-        };
+        let selected_detail_connection = self
+            .connection_details_tooltip_id
+            .as_ref()
+            .and_then(|id| {
+                self.connections
+                    .iter()
+                    .find(|connection| connection.id == *id)
+                    .cloned()
+            })
+            .or_else(|| {
+                if selected_count == 1 {
+                    self.selected_connections().into_iter().next()
+                } else {
+                    None
+                }
+            });
 
         // Flatten expanded tree for virtual window (group header 28px, connection 34px).
         let flat_rows = flatten_connection_rows(&sections, &self.expanded_connection_groups);

@@ -22,6 +22,7 @@ pub struct NyaTermApp {
     pub(in crate::features) connection_group_context_menu: Option<ConnectionGroupContextMenuState>,
     pub(in crate::features) hovered_connection_id: Option<String>,
     pub(in crate::features) connection_details_tooltip_id: Option<String>,
+    pub(in crate::features) connection_details_hover_pending: Option<(String, Instant)>,
     pub(in crate::features) connection_drop_target: Option<crate::features::ConnectionDropTarget>,
     pub(in crate::features) ai_execution_menu_open: bool,
     pub(in crate::features) hovered_connection_group_id: Option<String>,
