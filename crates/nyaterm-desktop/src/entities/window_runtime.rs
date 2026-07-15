@@ -23,7 +23,10 @@ impl WindowRuntimeStore {
         window
             .spawn(cx, async move |cx| {
                 loop {
-                    Timer::after(Duration::from_millis(50)).await;
+                    let delay = app
+                        .update(cx, |app, _| app.window_runtime_tick_delay())
+                        .unwrap_or_else(|_| Duration::from_millis(50));
+                    Timer::after(delay).await;
                     let keep_running = cx
                         .update(|window, cx| {
                             app.update(cx, |app, cx| app.drive_window_runtime_tick(window, cx))

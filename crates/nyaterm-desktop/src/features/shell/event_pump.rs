@@ -646,6 +646,18 @@ impl NyaTermApp {
         self.terminal_runtime.event_pump_started = true;
     }
 
+    pub(crate) fn window_runtime_tick_delay(&self) -> Duration {
+        runtime_tick_interval_for_pressure(self.runtime_output_pressure_active())
+    }
+
+    fn runtime_output_pressure_active(&self) -> bool {
+        self.terminal_runtime.session_event_backlog_active
+            || self.terminal_runtime.session_event_queued_output_bytes > 0
+            || !self.pending_session_events.is_empty()
+            || !self.pending_terminal_frame_events.is_empty()
+            || !self.pending_session_starts.is_empty()
+    }
+
     pub(crate) fn drive_window_runtime_tick(
         &mut self,
         window: &mut Window,
@@ -671,8 +683,11 @@ impl NyaTermApp {
         let stage_started_at = Instant::now();
         dirty |= self.poll_action_link_tooltip_delay(cx);
         let action_link_tooltip_duration = stage_started_at.elapsed();
+        let output_pressure = self.runtime_output_pressure_active();
         let stage_started_at = Instant::now();
-        dirty |= self.drive_remote_auto_refresh(window, cx);
+        if !output_pressure {
+            dirty |= self.drive_remote_auto_refresh(window, cx);
+        }
         let remote_refresh_duration = stage_started_at.elapsed();
         let stage_started_at = Instant::now();
         dirty |= self.drive_idle_lock();
@@ -753,6 +768,8 @@ impl NyaTermApp {
                 queued_events = self.terminal_runtime.session_event_queued_events,
                 queued_output_bytes = self.terminal_runtime.session_event_queued_output_bytes,
                 pending_session_starts = self.pending_session_starts.len(),
+                output_pressure,
+                next_tick_delay_ms = self.window_runtime_tick_delay().as_millis(),
                 dirty,
                 "slow runtime tick"
             );
@@ -832,10 +849,12 @@ impl NyaTermApp {
 
 const TRANSFER_AUTO_SYNC_CWD_INTERVAL_SECONDS: u32 = 3;
 const SESSION_EVENT_DRAIN_BATCH: usize = 256;
-const SESSION_EVENT_DRAIN_OUTPUT_BUDGET: usize = 8 * 1024;
+const SESSION_EVENT_DRAIN_OUTPUT_BUDGET: usize = 32 * 1024;
 const SESSION_EVENT_DRAIN_WALL_BUDGET: Duration = Duration::from_millis(8);
 const RUNTIME_BACKGROUND_EVENT_DRAIN_WALL_BUDGET: Duration = Duration::from_millis(6);
 const RUNTIME_BACKGROUND_EVENT_DRAIN_SLOW: Duration = Duration::from_millis(12);
+const RUNTIME_IDLE_TICK_INTERVAL: Duration = Duration::from_millis(50);
+const RUNTIME_PRESSURE_TICK_INTERVAL: Duration = Duration::from_millis(8);
 const SLOW_DIAGNOSTIC_THROTTLE: Duration = Duration::from_secs(2);
 const RUNTIME_TICK_SLOW_THRESHOLD: Duration = Duration::from_millis(40);
 const SESSION_EVENT_DRAIN_SLOW_TOTAL: Duration = Duration::from_millis(20);
@@ -877,6 +896,14 @@ fn diagnostic_log_due(last_at: Option<Instant>, now: Instant, throttle: Duration
 
 fn store_snapshot_publish_due(last_at: Option<Instant>, now: Instant) -> bool {
     diagnostic_log_due(last_at, now, STORE_SNAPSHOT_HEARTBEAT)
+}
+
+fn runtime_tick_interval_for_pressure(output_pressure: bool) -> Duration {
+    if output_pressure {
+        RUNTIME_PRESSURE_TICK_INTERVAL
+    } else {
+        RUNTIME_IDLE_TICK_INTERVAL
+    }
 }
 
 fn session_event_drain_is_slow(total: Duration, max_chunk: Duration) -> bool {
@@ -985,6 +1012,18 @@ mod tests {
             Some(start),
             start + STORE_SNAPSHOT_HEARTBEAT
         ));
+    }
+
+    #[test]
+    fn runtime_tick_interval_uses_fast_cadence_under_output_pressure() {
+        assert_eq!(
+            runtime_tick_interval_for_pressure(false),
+            RUNTIME_IDLE_TICK_INTERVAL
+        );
+        assert_eq!(
+            runtime_tick_interval_for_pressure(true),
+            RUNTIME_PRESSURE_TICK_INTERVAL
+        );
     }
 
     #[test]
