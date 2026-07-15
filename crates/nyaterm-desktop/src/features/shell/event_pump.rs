@@ -882,7 +882,8 @@ impl NyaTermApp {
             self.terminal_runtime.last_pending_session_status_at = None;
             return false;
         };
-        if requested_at.elapsed() < PENDING_SESSION_STILL_CONNECTING_AFTER {
+        let auth_wait = self.pending_session_auth_wait();
+        if auth_wait.is_none() && requested_at.elapsed() < PENDING_SESSION_STILL_CONNECTING_AFTER {
             return false;
         }
         let now = Instant::now();
@@ -896,7 +897,7 @@ impl NyaTermApp {
             return false;
         }
         self.terminal_runtime.last_pending_session_status_at = Some(now);
-        let message = format!("still connecting to {name}");
+        let message = pending_session_status_message(&name, auth_wait.as_ref());
         if self.terminal_status == message {
             return false;
         }
@@ -977,6 +978,37 @@ impl NyaTermApp {
         !self.pending_terminal_frame_events.is_empty()
             || self.terminal_frame_pipeline.queued_event_count() > 0
     }
+
+    pub(in crate::features) fn pending_session_status_label(&self) -> Option<String> {
+        let name = self.pending_session_name.as_ref()?;
+        Some(pending_session_status_message(
+            name,
+            self.pending_session_auth_wait().as_ref(),
+        ))
+    }
+
+    pub(in crate::features) fn pending_session_tab_detail(&self) -> Option<&'static str> {
+        let _ = self.pending_session_name.as_ref()?;
+        Some(match self.pending_session_auth_wait() {
+            Some(PendingSessionAuthWait::Credential { .. }) => "Credential required",
+            Some(PendingSessionAuthWait::HostKey { .. }) => "Host key required",
+            None => "Connecting...",
+        })
+    }
+
+    fn pending_session_auth_wait(&self) -> Option<PendingSessionAuthWait> {
+        if let Some(prompt) = self.active_credential_prompt.as_ref() {
+            return Some(PendingSessionAuthWait::Credential {
+                target: credential_prompt_target(&prompt.prompt),
+            });
+        }
+        if let Some(prompt) = self.active_host_key_prompt.as_ref() {
+            return Some(PendingSessionAuthWait::HostKey {
+                host: prompt.host_key.host_identifier.clone(),
+            });
+        }
+        None
+    }
 }
 
 const TRANSFER_AUTO_SYNC_CWD_INTERVAL_SECONDS: u32 = 3;
@@ -1032,6 +1064,12 @@ struct SessionEventDrainBudget {
     wall_budget: Duration,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum PendingSessionAuthWait {
+    Credential { target: String },
+    HostKey { host: String },
+}
+
 fn diagnostic_log_due(last_at: Option<Instant>, now: Instant, throttle: Duration) -> bool {
     last_at.is_none_or(|last_at| {
         now.checked_duration_since(last_at)
@@ -1049,6 +1087,21 @@ fn should_publish_store_snapshots(
     heartbeat_due: bool,
 ) -> bool {
     !output_pressure && (visual_dirty || heartbeat_due)
+}
+
+fn pending_session_status_message(
+    name: &str,
+    auth_wait: Option<&PendingSessionAuthWait>,
+) -> String {
+    match auth_wait {
+        Some(PendingSessionAuthWait::Credential { target }) => {
+            format!("waiting for SSH credential for {target}")
+        }
+        Some(PendingSessionAuthWait::HostKey { host }) => {
+            format!("waiting for SSH host key decision for {host}")
+        }
+        None => format!("still connecting to {name}"),
+    }
 }
 
 fn runtime_tick_interval_for_pressure(output_pressure: bool) -> Duration {
@@ -1229,6 +1282,32 @@ mod tests {
         assert!(!should_publish_store_snapshots(false, false, false));
         assert!(!should_publish_store_snapshots(true, true, false));
         assert!(!should_publish_store_snapshots(false, true, true));
+    }
+
+    #[test]
+    fn pending_session_status_reports_auth_wait_reason() {
+        assert_eq!(
+            pending_session_status_message("server", None),
+            "still connecting to server"
+        );
+        assert_eq!(
+            pending_session_status_message(
+                "server",
+                Some(&PendingSessionAuthWait::Credential {
+                    target: "user@example:22 (attempt 1)".to_string(),
+                }),
+            ),
+            "waiting for SSH credential for user@example:22 (attempt 1)"
+        );
+        assert_eq!(
+            pending_session_status_message(
+                "server",
+                Some(&PendingSessionAuthWait::HostKey {
+                    host: "example:22".to_string(),
+                }),
+            ),
+            "waiting for SSH host key decision for example:22"
+        );
     }
 
     #[test]

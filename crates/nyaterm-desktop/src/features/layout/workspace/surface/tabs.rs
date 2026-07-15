@@ -46,6 +46,7 @@ impl NyaTermApp {
             .track_scroll(&self.session_tab_strip_scroll);
 
         if let Some(pending_name) = self.pending_session_name.clone() {
+            let pending_detail = self.pending_session_tab_detail().unwrap_or("Connecting...");
             tabs = tabs.child(
                 div()
                     .h_full()
@@ -100,7 +101,7 @@ impl NyaTermApp {
                                 div()
                                     .text_size(px(10.))
                                     .text_color(rgb(palette.warning))
-                                    .child("Connecting…"),
+                                    .child(pending_detail),
                             ),
                     ),
             );

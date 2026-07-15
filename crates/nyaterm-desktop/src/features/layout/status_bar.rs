@@ -4,8 +4,8 @@ impl NyaTermApp {
     pub(in crate::features) fn status_bar(&mut self, cx: &mut Context<Self>) -> impl IntoElement {
         let tab_count = self.ordered_tab_sessions().len();
         let pane_count = self.ordered_sessions().len();
-        let session_status = if let Some(pending) = self.pending_session_name.as_ref() {
-            format!("connecting {pending}")
+        let session_status = if let Some(pending) = self.pending_session_status_label() {
+            pending
         } else if let Some(session_id) = self.active_session_id.as_deref() {
             let tab_root = self.tab_root_for_session(session_id);
             let leaf_name = self

@@ -20,7 +20,7 @@ impl NyaTermApp {
         } else {
             None
         };
-        let connecting_name = self.pending_session_name.clone();
+        let connecting_status = self.pending_session_status_label();
         let terminal_palette = self.terminal_theme_palette();
         div()
             .flex_1()
@@ -42,7 +42,7 @@ impl NyaTermApp {
                             .mb_9()
                             .child(nyaterm_logo_mark(terminal_palette, 256., 0.13)),
                     )
-                    .when_some(connecting_name, |this, name| {
+                    .when_some(connecting_status, |this, status| {
                         this.child(
                             div()
                                 .mb_4()
@@ -59,7 +59,7 @@ impl NyaTermApp {
                                         .text_size(px(12.))
                                         .font_weight(FontWeight(700.))
                                         .text_color(rgb(palette.warning))
-                                        .child(format!("Connecting {name}…")),
+                                        .child(status),
                                 ),
                         )
                     })

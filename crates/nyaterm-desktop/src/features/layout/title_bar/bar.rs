@@ -134,8 +134,8 @@ impl NyaTermApp {
             }
             return parts.join(" · ");
         }
-        if let Some(pending) = self.pending_session_name.as_ref() {
-            return format!("Connecting {pending}");
+        if let Some(pending) = self.pending_session_status_label() {
+            return pending;
         }
         if let (Some(failed), Some(error)) = (
             self.last_connect_failure_name.as_ref(),
