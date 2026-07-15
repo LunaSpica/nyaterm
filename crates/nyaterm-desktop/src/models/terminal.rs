@@ -697,20 +697,23 @@ impl KeywordHighlightEditorField {
 #[derive(Debug)]
 pub(crate) struct TerminalFramePipeline {
     command_tx: mpsc::Sender<TerminalFrameCommand>,
-    event_rx: mpsc::Receiver<TerminalFrameEvent>,
+    event_queue: TerminalFrameEventQueue,
 }
 
 impl TerminalFramePipeline {
     pub(crate) fn spawn(recording_writer: RecordingWriteHandle) -> Self {
         let (command_tx, command_rx) = mpsc::channel();
-        let (event_tx, event_rx) = mpsc::sync_channel(TERMINAL_FRAME_EVENT_CHANNEL_CAP);
+        let event_queue = TerminalFrameEventQueue::new(TERMINAL_FRAME_EVENT_QUEUE_CAP);
+        let event_queue_for_worker = event_queue.clone();
         thread::Builder::new()
             .name("nyaterm-terminal-frame-processor".to_string())
-            .spawn(move || run_terminal_frame_processor(command_rx, event_tx, recording_writer))
+            .spawn(move || {
+                run_terminal_frame_processor(command_rx, event_queue_for_worker, recording_writer)
+            })
             .expect("failed to spawn terminal frame processor");
         Self {
             command_tx,
-            event_rx,
+            event_queue,
         }
     }
 
@@ -762,8 +765,6 @@ impl TerminalFramePipeline {
         data: Vec<u8>,
         encoding: impl Into<String>,
         scrollback_limit: usize,
-        action_links_enabled: bool,
-        action_link_matchers: ActionLinksMatcherSettings,
     ) {
         if data.is_empty() {
             return;
@@ -773,8 +774,6 @@ impl TerminalFramePipeline {
             data,
             encoding: encoding.into(),
             scrollback_limit,
-            action_links_enabled,
-            action_link_matchers,
         });
     }
 
@@ -823,11 +822,7 @@ impl TerminalFramePipeline {
     }
 
     pub(crate) fn try_recv_event(&self) -> Option<TerminalFrameEvent> {
-        match self.event_rx.try_recv() {
-            Ok(event) => Some(event),
-            Err(mpsc::TryRecvError::Empty) => None,
-            Err(mpsc::TryRecvError::Disconnected) => None,
-        }
+        self.event_queue.try_recv()
     }
 }
 
@@ -865,8 +860,6 @@ enum TerminalFrameCommand {
         data: Vec<u8>,
         encoding: String,
         scrollback_limit: usize,
-        action_links_enabled: bool,
-        action_link_matchers: ActionLinksMatcherSettings,
     },
     RequestSnapshot {
         session_id: String,
@@ -891,6 +884,40 @@ pub(crate) enum TerminalFrameEvent {
     Snapshot(TerminalFrameSnapshotEvent),
     Search(TerminalFrameSearchEvent),
     BufferText(TerminalFrameBufferTextEvent),
+}
+
+#[derive(Clone, Debug)]
+struct TerminalFrameEventQueue {
+    inner: Arc<Mutex<VecDeque<TerminalFrameEvent>>>,
+    cap: usize,
+}
+
+impl TerminalFrameEventQueue {
+    fn new(cap: usize) -> Self {
+        Self {
+            inner: Arc::new(Mutex::new(VecDeque::with_capacity(cap.min(1024)))),
+            cap,
+        }
+    }
+
+    fn push(&self, event: TerminalFrameEvent) {
+        let Ok(mut queue) = self.inner.lock() else {
+            return;
+        };
+        compact_terminal_frame_event_queue(&mut queue, &event);
+        while queue.len() >= self.cap.max(1) {
+            let drop_index = queue
+                .iter()
+                .position(terminal_frame_event_can_drop_under_pressure)
+                .unwrap_or(0);
+            queue.remove(drop_index);
+        }
+        queue.push_back(event);
+    }
+
+    fn try_recv(&self) -> Option<TerminalFrameEvent> {
+        self.inner.lock().ok()?.pop_front()
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -933,6 +960,48 @@ pub(crate) struct TerminalFrameBufferTextEvent {
     pub(crate) text: String,
     pub(crate) truncated: bool,
     pub(crate) process_duration: Duration,
+}
+
+fn compact_terminal_frame_event_queue(
+    queue: &mut VecDeque<TerminalFrameEvent>,
+    incoming: &TerminalFrameEvent,
+) {
+    let TerminalFrameEvent::Output(incoming) = incoming else {
+        return;
+    };
+    if !terminal_frame_output_event_can_drop_under_pressure(incoming) {
+        return;
+    }
+    queue.retain(|event| {
+        let TerminalFrameEvent::Output(queued) = event else {
+            return true;
+        };
+        queued.session_id != incoming.session_id
+            || !terminal_frame_output_event_can_drop_under_pressure(queued)
+    });
+}
+
+fn terminal_frame_event_can_drop_under_pressure(event: &TerminalFrameEvent) -> bool {
+    match event {
+        TerminalFrameEvent::Output(frame) => {
+            terminal_frame_output_event_can_drop_under_pressure(frame)
+        }
+        TerminalFrameEvent::Snapshot(_)
+        | TerminalFrameEvent::Search(_)
+        | TerminalFrameEvent::BufferText(_) => false,
+    }
+}
+
+fn terminal_frame_output_event_can_drop_under_pressure(frame: &TerminalFrameOutputEvent) -> bool {
+    !frame.effects.bell
+        && frame.effects.title.is_none()
+        && !frame.effects.reset_title
+        && frame.effects.cwd.is_none()
+        && !frame.effects.shell_command_started
+        && !frame.effects.shell_command_finished
+        && frame.effects.pty_write.is_empty()
+        && frame.effects.clipboard_store.is_none()
+        && frame.effects.clipboard_loads.is_empty()
 }
 
 struct TerminalFrameSession {
@@ -990,8 +1059,6 @@ impl TerminalFrameSession {
         data: Vec<u8>,
         encoding: String,
         scrollback_limit: usize,
-        action_links_enabled: bool,
-        action_link_matchers: ActionLinksMatcherSettings,
         recording_writer: &RecordingWriteHandle,
     ) -> TerminalFrameOutputEvent {
         let started_at = Instant::now();
@@ -1011,17 +1078,12 @@ impl TerminalFrameSession {
         let command_running = self.screen.command_running();
         let protocol_state = TerminalProtocolState::from_screen(&self.screen);
         let snapshot = self.screen.viewport_snapshot(0);
-        let action_links = prepare_terminal_frame_action_links(
-            &snapshot,
-            action_links_enabled,
-            &action_link_matchers,
-        );
         TerminalFrameOutputEvent {
             session_id,
             visible_text,
             recording_text_bytes,
             snapshot,
-            action_links,
+            action_links: None,
             protocol_state,
             effects,
             command_running,
@@ -1100,7 +1162,7 @@ impl TerminalFrameSession {
 
 fn run_terminal_frame_processor(
     command_rx: mpsc::Receiver<TerminalFrameCommand>,
-    event_tx: mpsc::SyncSender<TerminalFrameEvent>,
+    event_queue: TerminalFrameEventQueue,
     recording_writer: RecordingWriteHandle,
 ) {
     let mut sessions: HashMap<String, TerminalFrameSession> = HashMap::new();
@@ -1145,26 +1207,16 @@ fn run_terminal_frame_processor(
                 data,
                 encoding,
                 scrollback_limit,
-                action_links_enabled,
-                action_link_matchers,
             } => {
-                let (
-                    session_id,
-                    data,
-                    encoding,
-                    scrollback_limit,
-                    action_links_enabled,
-                    action_link_matchers,
-                ) = coalesce_terminal_frame_output_command(
-                    &command_rx,
-                    &mut pending_commands,
-                    session_id,
-                    data,
-                    encoding,
-                    scrollback_limit,
-                    action_links_enabled,
-                    action_link_matchers,
-                );
+                let (session_id, data, encoding, scrollback_limit) =
+                    coalesce_terminal_frame_output_command(
+                        &command_rx,
+                        &mut pending_commands,
+                        session_id,
+                        data,
+                        encoding,
+                        scrollback_limit,
+                    );
                 let session = sessions
                     .entry(session_id.clone())
                     .or_insert_with(|| TerminalFrameSession::new(&encoding, scrollback_limit));
@@ -1173,11 +1225,9 @@ fn run_terminal_frame_processor(
                     data,
                     encoding,
                     scrollback_limit,
-                    action_links_enabled,
-                    action_link_matchers,
                     &recording_writer,
                 );
-                let _ = event_tx.send(TerminalFrameEvent::Output(event));
+                event_queue.push(TerminalFrameEvent::Output(event));
             }
             TerminalFrameCommand::RequestSnapshot {
                 session_id,
@@ -1192,13 +1242,13 @@ fn run_terminal_frame_processor(
                         action_links_enabled,
                         action_link_matchers,
                     );
-                    let _ = event_tx.send(TerminalFrameEvent::Snapshot(event));
+                    event_queue.push(TerminalFrameEvent::Snapshot(event));
                 }
             }
             TerminalFrameCommand::RequestSearch { session_id, key } => {
                 if let Some(session) = sessions.get(&session_id) {
                     let event = session.search_event(session_id, key);
-                    let _ = event_tx.send(TerminalFrameEvent::Search(event));
+                    event_queue.push(TerminalFrameEvent::Search(event));
                 }
             }
             TerminalFrameCommand::RequestBufferText {
@@ -1208,7 +1258,7 @@ fn run_terminal_frame_processor(
             } => {
                 if let Some(session) = sessions.get(&session_id) {
                     let event = session.buffer_text_event(session_id, request_id, max_bytes);
-                    let _ = event_tx.send(TerminalFrameEvent::BufferText(event));
+                    event_queue.push(TerminalFrameEvent::BufferText(event));
                 }
             }
         }
@@ -1224,7 +1274,6 @@ fn next_terminal_frame_command(
         .or_else(|| command_rx.recv().ok())
 }
 
-#[allow(clippy::too_many_arguments)]
 fn coalesce_terminal_frame_output_command(
     command_rx: &mpsc::Receiver<TerminalFrameCommand>,
     pending_commands: &mut VecDeque<TerminalFrameCommand>,
@@ -1232,16 +1281,7 @@ fn coalesce_terminal_frame_output_command(
     mut data: Vec<u8>,
     encoding: String,
     scrollback_limit: usize,
-    action_links_enabled: bool,
-    action_link_matchers: ActionLinksMatcherSettings,
-) -> (
-    String,
-    Vec<u8>,
-    String,
-    usize,
-    bool,
-    ActionLinksMatcherSettings,
-) {
+) -> (String, Vec<u8>, String, usize) {
     loop {
         let next = pending_commands
             .pop_front()
@@ -1255,19 +1295,13 @@ fn coalesce_terminal_frame_output_command(
                 data: next_data,
                 encoding: next_encoding,
                 scrollback_limit: next_scrollback_limit,
-                action_links_enabled: next_action_links_enabled,
-                action_link_matchers: next_action_link_matchers,
             } if terminal_frame_output_commands_can_merge(
                 &session_id,
                 &encoding,
                 scrollback_limit,
-                action_links_enabled,
-                &action_link_matchers,
                 &next_session_id,
                 &next_encoding,
                 next_scrollback_limit,
-                next_action_links_enabled,
-                &next_action_link_matchers,
             ) =>
             {
                 data.extend(next_data);
@@ -1279,37 +1313,23 @@ fn coalesce_terminal_frame_output_command(
         }
     }
 
-    (
-        session_id,
-        data,
-        encoding,
-        scrollback_limit,
-        action_links_enabled,
-        action_link_matchers,
-    )
+    (session_id, data, encoding, scrollback_limit)
 }
 
-#[allow(clippy::too_many_arguments)]
 fn terminal_frame_output_commands_can_merge(
     session_id: &str,
     encoding: &str,
     scrollback_limit: usize,
-    action_links_enabled: bool,
-    action_link_matchers: &ActionLinksMatcherSettings,
     next_session_id: &str,
     next_encoding: &str,
     next_scrollback_limit: usize,
-    next_action_links_enabled: bool,
-    next_action_link_matchers: &ActionLinksMatcherSettings,
 ) -> bool {
     session_id == next_session_id
         && encoding == next_encoding
         && scrollback_limit == next_scrollback_limit
-        && action_links_enabled == next_action_links_enabled
-        && action_link_matchers == next_action_link_matchers
 }
 
-const TERMINAL_FRAME_EVENT_CHANNEL_CAP: usize = 1024;
+const TERMINAL_FRAME_EVENT_QUEUE_CAP: usize = 1024;
 
 #[cfg(test)]
 mod tests {
@@ -1546,8 +1566,6 @@ mod tests {
             input.into_bytes(),
             "UTF-8".to_string(),
             1000,
-            false,
-            ActionLinksMatcherSettings::default(),
             &recording_pipeline.writer(),
         );
 
@@ -1695,6 +1713,47 @@ mod tests {
     }
 
     #[test]
+    fn terminal_frame_event_queue_coalesces_pure_output_to_latest() {
+        let queue = TerminalFrameEventQueue::new(8);
+        let mut first = output_frame_with_sizes(1, 0);
+        first.revision = 1;
+        let mut second = output_frame_with_sizes(2, 0);
+        second.revision = 2;
+
+        queue.push(TerminalFrameEvent::Output(first));
+        queue.push(TerminalFrameEvent::Output(second));
+
+        assert!(matches!(
+            queue.try_recv(),
+            Some(TerminalFrameEvent::Output(frame)) if frame.revision == 2
+        ));
+        assert!(queue.try_recv().is_none());
+    }
+
+    #[test]
+    fn terminal_frame_event_queue_preserves_output_effects() {
+        let queue = TerminalFrameEventQueue::new(8);
+        let mut effect_frame = output_frame_with_sizes(1, 0);
+        effect_frame.revision = 1;
+        effect_frame.effects.bell = true;
+        let mut latest = output_frame_with_sizes(2, 0);
+        latest.revision = 2;
+
+        queue.push(TerminalFrameEvent::Output(effect_frame));
+        queue.push(TerminalFrameEvent::Output(latest));
+
+        assert!(matches!(
+            queue.try_recv(),
+            Some(TerminalFrameEvent::Output(frame)) if frame.revision == 1 && frame.effects.bell
+        ));
+        assert!(matches!(
+            queue.try_recv(),
+            Some(TerminalFrameEvent::Output(frame)) if frame.revision == 2
+        ));
+        assert!(queue.try_recv().is_none());
+    }
+
+    #[test]
     fn terminal_frame_action_links_align_with_snapshot_lines() {
         let mut screen = TerminalScreen::default();
         screen.advance_decoded_text("visit http://example.com\nping 10.0.0.1");
@@ -1736,28 +1795,23 @@ mod tests {
     #[test]
     fn terminal_frame_worker_coalesces_adjacent_matching_output() {
         let (tx, rx) = mpsc::channel();
-        let matchers = ActionLinksMatcherSettings::default();
         tx.send(TerminalFrameCommand::Output {
             session_id: "s1".to_string(),
             data: b"bc".to_vec(),
             encoding: "UTF-8".to_string(),
             scrollback_limit: 1000,
-            action_links_enabled: true,
-            action_link_matchers: matchers.clone(),
         })
         .unwrap();
         drop(tx);
 
         let mut pending = VecDeque::new();
-        let (_, data, _, _, _, _) = coalesce_terminal_frame_output_command(
+        let (_, data, _, _) = coalesce_terminal_frame_output_command(
             &rx,
             &mut pending,
             "s1".to_string(),
             b"a".to_vec(),
             "UTF-8".to_string(),
             1000,
-            true,
-            matchers,
         );
 
         assert_eq!(data, b"abc");
@@ -1767,7 +1821,6 @@ mod tests {
     #[test]
     fn terminal_frame_worker_does_not_coalesce_across_resize() {
         let (tx, rx) = mpsc::channel();
-        let matchers = ActionLinksMatcherSettings::default();
         tx.send(TerminalFrameCommand::ResizeSession {
             session_id: "s1".to_string(),
             cols: 100,
@@ -1779,22 +1832,18 @@ mod tests {
             data: b"bc".to_vec(),
             encoding: "UTF-8".to_string(),
             scrollback_limit: 1000,
-            action_links_enabled: true,
-            action_link_matchers: matchers.clone(),
         })
         .unwrap();
         drop(tx);
 
         let mut pending = VecDeque::new();
-        let (_, data, _, _, _, _) = coalesce_terminal_frame_output_command(
+        let (_, data, _, _) = coalesce_terminal_frame_output_command(
             &rx,
             &mut pending,
             "s1".to_string(),
             b"a".to_vec(),
             "UTF-8".to_string(),
             1000,
-            true,
-            matchers,
         );
 
         assert_eq!(data, b"a");

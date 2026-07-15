@@ -158,26 +158,20 @@ impl NyaTermApp {
             self.terminal_scroll_offset
         };
         let snapshot = self.terminal_snapshot_for_session(session_id, offset);
-        let (frame_action_links, has_prepared_snapshot) =
+        let frame_action_links =
             if let Some(session_id) = session_id.filter(|id| !id.is_empty()) {
                 let Some(view) = self.terminal_views.get(session_id) else {
                     return None;
                 };
-                let links = if offset == 0 {
+                if offset == 0 {
                     view.frame_action_links.as_ref()
                 } else {
                     view.scrollback_action_links.get(&offset)
                 }
                 .filter(|links| links.matcher_key == action_link_matcher_key)
-                .cloned();
-                let prepared = if offset == 0 {
-                    view.frame_snapshot.is_some()
-                } else {
-                    view.scrollback_snapshots.contains_key(&offset)
-                };
-                (links, prepared)
+                .cloned()
             } else {
-                (None, false)
+                None
             };
         let line = snapshot.lines.get(cell.row)?;
         if line.is_empty() {
@@ -191,8 +185,6 @@ impl NyaTermApp {
                 .iter()
                 .find(|item| byte_offset >= item.start && byte_offset < item.end)
                 .cloned()?
-        } else if has_prepared_snapshot {
-            return None;
         } else {
             let matchers = &self.settings.terminal_action_links_matchers;
             match_at_offset(line, byte_offset, matchers)?

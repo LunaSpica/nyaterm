@@ -36,8 +36,6 @@ impl NyaTermApp {
             data,
             self.settings.interaction_default_encoding.clone(),
             self.terminal_scrollback_line_limit(),
-            self.settings.terminal_action_links_enabled,
-            self.settings.terminal_action_links_matchers.clone(),
         );
     }
 
