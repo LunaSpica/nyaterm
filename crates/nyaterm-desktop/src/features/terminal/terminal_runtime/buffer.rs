@@ -669,25 +669,112 @@ fn pop_terminal_frame_events_for_apply(
         };
         output_run.push(event);
     }
+    coalesce_terminal_output_run_for_apply(output_run)
+}
+
+fn coalesce_terminal_output_run_for_apply(
+    output_run: Vec<TerminalFrameEvent>,
+) -> (Vec<TerminalFrameEvent>, usize) {
+    let mut frames = Vec::new();
+    let mut segment = Vec::new();
+    let mut coalesced = 0usize;
+
+    for event in output_run {
+        let TerminalFrameEvent::Output(frame) = event else {
+            continue;
+        };
+        if terminal_output_frame_is_apply_barrier(&frame) {
+            let (mut coalesced_segment, segment_coalesced) =
+                coalesce_terminal_pure_output_segment_for_apply(segment);
+            frames.append(&mut coalesced_segment);
+            coalesced = coalesced.saturating_add(segment_coalesced);
+            segment = Vec::new();
+            frames.push(TerminalFrameEvent::Output(frame));
+        } else {
+            segment.push(TerminalFrameEvent::Output(frame));
+        }
+    }
+
+    let (mut coalesced_segment, segment_coalesced) =
+        coalesce_terminal_pure_output_segment_for_apply(segment);
+    frames.append(&mut coalesced_segment);
+    coalesced = coalesced.saturating_add(segment_coalesced);
+
+    (frames, coalesced)
+}
+
+fn coalesce_terminal_pure_output_segment_for_apply(
+    output_run: Vec<TerminalFrameEvent>,
+) -> (Vec<TerminalFrameEvent>, usize) {
+    if output_run.is_empty() {
+        return (Vec::new(), 0);
+    }
     let original_count = output_run.len();
-    let mut latest_by_session: HashMap<String, (usize, TerminalFrameEvent)> = HashMap::new();
+    let mut latest_by_session: HashMap<String, (usize, TerminalFrameOutputEvent)> = HashMap::new();
     for (index, event) in output_run.into_iter().enumerate() {
         let TerminalFrameEvent::Output(frame) = event else {
             continue;
         };
-        latest_by_session.insert(
-            frame.session_id.clone(),
-            (index, TerminalFrameEvent::Output(frame)),
-        );
+        if let Some((stored_index, stored)) = latest_by_session.get_mut(&frame.session_id) {
+            *stored_index = index;
+            merge_terminal_output_frame_for_apply(stored, frame);
+        } else {
+            latest_by_session.insert(frame.session_id.clone(), (index, frame));
+        }
     }
     let mut latest = latest_by_session.into_values().collect::<Vec<_>>();
     latest.sort_by_key(|(index, _)| *index);
     let events = latest
         .into_iter()
-        .map(|(_, event)| event)
+        .map(|(_, frame)| TerminalFrameEvent::Output(frame))
         .collect::<Vec<_>>();
     let coalesced = original_count.saturating_sub(events.len());
     (events, coalesced)
+}
+
+fn terminal_output_frame_is_apply_barrier(frame: &TerminalFrameOutputEvent) -> bool {
+    terminal_effects_need_ui_apply(&frame.effects)
+}
+
+fn merge_terminal_output_frame_for_apply(
+    older: &mut TerminalFrameOutputEvent,
+    newer: TerminalFrameOutputEvent,
+) {
+    older.recording_text_bytes = older
+        .recording_text_bytes
+        .saturating_add(newer.recording_text_bytes);
+    older.accepted_bytes = older.accepted_bytes.saturating_add(newer.accepted_bytes);
+    older.skipped_output_bytes = older
+        .skipped_output_bytes
+        .saturating_add(newer.skipped_output_bytes);
+    append_terminal_apply_visible_tail(&mut older.visible_text, &newer.visible_text);
+    older.snapshot = newer.snapshot;
+    older.action_links = newer.action_links;
+    older.protocol_state = newer.protocol_state;
+    older.command_running = newer.command_running;
+    older.revision = newer.revision;
+    older.process_duration = older
+        .process_duration
+        .saturating_add(newer.process_duration);
+}
+
+fn append_terminal_apply_visible_tail(output: &mut String, text: &str) {
+    if text.is_empty() {
+        return;
+    }
+    output.push_str(text);
+    trim_terminal_apply_string_to_tail(output, TERMINAL_FRAME_APPLY_VISIBLE_TEXT_TAIL_CAP);
+}
+
+fn trim_terminal_apply_string_to_tail(output: &mut String, max_bytes: usize) {
+    if output.len() <= max_bytes {
+        return;
+    }
+    let mut start = output.len().saturating_sub(max_bytes);
+    while start < output.len() && !output.is_char_boundary(start) {
+        start += 1;
+    }
+    output.drain(..start);
 }
 
 fn terminal_frame_snapshot_request_candidates(
@@ -800,8 +887,45 @@ mod frame_event_queue_tests {
             TerminalFrameEvent::Output(frame) if frame.session_id == "a" && frame.revision == 2
         ));
         assert!(matches!(
+            &frames[0],
+            TerminalFrameEvent::Output(frame)
+                if frame.accepted_bytes == 3 && frame.visible_text == "rev-1rev-2"
+        ));
+        assert!(matches!(
             &frames[1],
             TerminalFrameEvent::Output(frame) if frame.session_id == "b" && frame.revision == 3
+        ));
+    }
+
+    #[test]
+    fn terminal_frame_apply_preserves_output_effect_barriers() {
+        let mut effect = output_frame("a", 3);
+        if let TerminalFrameEvent::Output(frame) = &mut effect {
+            frame.effects.bell = true;
+        }
+        let mut events = VecDeque::from([
+            output_frame("a", 1),
+            output_frame("a", 2),
+            effect,
+            output_frame("a", 4),
+        ]);
+
+        let (frames, coalesced) = pop_terminal_frame_events_for_apply(&mut events);
+
+        assert_eq!(coalesced, 1);
+        assert!(events.is_empty());
+        assert_eq!(frames.len(), 3);
+        assert!(matches!(
+            &frames[0],
+            TerminalFrameEvent::Output(frame) if frame.revision == 2
+        ));
+        assert!(matches!(
+            &frames[1],
+            TerminalFrameEvent::Output(frame) if frame.revision == 3 && frame.effects.bell
+        ));
+        assert!(matches!(
+            &frames[2],
+            TerminalFrameEvent::Output(frame) if frame.revision == 4
         ));
     }
 
@@ -837,6 +961,7 @@ const TERMINAL_FRAME_EVENT_DRAIN_BATCH: usize = 64;
 const TERMINAL_FRAME_EVENT_DRAIN_WALL_BUDGET: Duration = Duration::from_millis(4);
 const TERMINAL_FRAME_EVENT_DRAIN_SLOW_TOTAL: Duration = Duration::from_millis(12);
 const TERMINAL_FRAME_EVENT_APPLY_SLOW: Duration = Duration::from_millis(8);
+const TERMINAL_FRAME_APPLY_VISIBLE_TEXT_TAIL_CAP: usize = 16 * 1024;
 
 fn terminal_local_log_text(text: &str) -> Cow<'_, str> {
     if !text.chars().any(terminal_local_log_control_needs_escape) {
