@@ -45,17 +45,17 @@ impl NyaTermApp {
         &mut self,
         session_id: &str,
         offset: usize,
-    ) {
+    ) -> bool {
         if session_id.is_empty() || offset == 0 {
-            return;
+            return false;
         }
         let Some(view) = self.terminal_views.get_mut(session_id) else {
-            return;
+            return false;
         };
         if view.scrollback_snapshots.contains_key(&offset)
             || !view.pending_snapshot_offsets.insert(offset)
         {
-            return;
+            return false;
         }
         self.terminal_frame_pipeline.request_snapshot(
             session_id.to_string(),
@@ -63,18 +63,19 @@ impl NyaTermApp {
             self.settings.terminal_action_links_enabled,
             self.settings.terminal_action_links_matchers.clone(),
         );
+        true
     }
 
     pub(in crate::features) fn request_terminal_frame_search(
         &mut self,
         session_id: &str,
         key: TerminalFrameSearchKey,
-    ) {
+    ) -> bool {
         if session_id.is_empty() {
-            return;
+            return false;
         }
         let Some(view) = self.terminal_views.get_mut(session_id) else {
-            return;
+            return false;
         };
         if view
             .search_result
@@ -82,11 +83,12 @@ impl NyaTermApp {
             .is_some_and(|result| result.key == key)
             || view.pending_search_key.as_ref() == Some(&key)
         {
-            return;
+            return false;
         }
         view.pending_search_key = Some(key.clone());
         self.terminal_frame_pipeline
             .request_search(session_id.to_string(), key);
+        true
     }
 
     pub(in crate::features) fn seed_terminal_frame_session(
@@ -100,6 +102,22 @@ impl NyaTermApp {
             self.settings.interaction_default_encoding.clone(),
             self.terminal_scrollback_line_limit(),
         );
+    }
+
+    pub(in crate::features) fn drive_terminal_render_requests(&mut self) -> bool {
+        let snapshot_requests = self
+            .terminal_views
+            .iter()
+            .filter_map(|(session_id, view)| {
+                (view.scroll_offset > 0).then(|| (session_id.clone(), view.scroll_offset))
+            })
+            .collect::<Vec<_>>();
+        let mut requested = false;
+        for (session_id, offset) in snapshot_requests {
+            requested |= self.request_terminal_frame_snapshot(&session_id, offset);
+        }
+        requested |= self.request_active_terminal_buffer_search();
+        requested
     }
 
     pub(in crate::features) fn drain_terminal_frame_events(

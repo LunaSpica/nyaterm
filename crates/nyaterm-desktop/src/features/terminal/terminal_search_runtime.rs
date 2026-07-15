@@ -41,21 +41,21 @@ impl NyaTermApp {
         })
     }
 
-    pub(in crate::features) fn request_active_terminal_buffer_search(&mut self) {
+    pub(in crate::features) fn request_active_terminal_buffer_search(&mut self) -> bool {
         if !self.terminal_search_open || self.terminal_search_mode != TerminalSearchMode::Buffer {
-            return;
+            return false;
         }
         let Some(session_id) = self.active_session_id.clone() else {
-            return;
+            return false;
         };
         let Some(key) = self.terminal_search_key() else {
-            return;
+            return false;
         };
-        self.request_terminal_frame_search(&session_id, key);
+        self.request_terminal_frame_search(&session_id, key)
     }
 
     pub(in crate::features) fn request_active_terminal_search(&mut self) {
-        self.request_active_terminal_buffer_search();
+        let _ = self.request_active_terminal_buffer_search();
         self.request_active_terminal_history_search();
     }
 

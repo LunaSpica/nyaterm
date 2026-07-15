@@ -43,9 +43,6 @@ impl NyaTermApp {
             .get(&session_id)
             .map(|view| view.scroll_offset)
             .unwrap_or(self.terminal_scroll_offset);
-        if scroll_offset > 0 {
-            self.request_terminal_frame_snapshot(&session_id, scroll_offset);
-        }
         let frame_action_links = self
             .terminal_views
             .get(&session_id)
@@ -98,7 +95,6 @@ impl NyaTermApp {
             && self.terminal_search_open
             && self.terminal_search_mode == TerminalSearchMode::Buffer
         {
-            self.request_active_terminal_buffer_search();
             self.terminal_buffer_matches().unwrap_or_default()
         } else {
             Vec::new()
