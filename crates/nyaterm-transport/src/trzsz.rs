@@ -18,6 +18,7 @@ use serde::{Deserialize, Serialize};
 const TRZSZ_PREFIX: &[u8] = b"::TRZSZ:TRANSFER:";
 const TRZSZ_MAX_TRIGGER_LEN: usize = 96;
 const TRZSZ_MAX_PROTOCOL_LINE_LEN: usize = 1024 * 1024;
+const TRZSZ_MAX_DECODED_PAYLOAD_BYTES: usize = 8 * 1024 * 1024;
 const TRZSZ_UPLOAD_DATA_CHUNK_SIZE: usize = 256 * 1024;
 const TRZSZ_STALE_TRIGGER_MARKERS: [&[u8]; 5] =
     [b"#CFG:", b"Saved", b"Cancelled", b"Stopped", b"Interrupted"];
@@ -1855,9 +1856,15 @@ fn decode_trzsz_string(encoded: &[u8]) -> Option<Vec<u8>> {
     let compressed = base64::engine::general_purpose::STANDARD
         .decode(encoded)
         .ok()?;
-    let mut decoder = ZlibDecoder::new(compressed.as_slice());
+    let decoder = ZlibDecoder::new(compressed.as_slice());
     let mut decoded = Vec::new();
-    decoder.read_to_end(&mut decoded).ok()?;
+    decoder
+        .take((TRZSZ_MAX_DECODED_PAYLOAD_BYTES + 1) as u64)
+        .read_to_end(&mut decoded)
+        .ok()?;
+    if decoded.len() > TRZSZ_MAX_DECODED_PAYLOAD_BYTES {
+        return None;
+    }
     Some(decoded)
 }
 
@@ -2430,6 +2437,15 @@ mod tests {
             frame.payload,
             TrzszProtocolPayload::Raw("not-base64".to_string())
         );
+    }
+
+    #[test]
+    fn rejects_encoded_payloads_that_expand_past_limit() {
+        let payload = vec![0; TRZSZ_MAX_DECODED_PAYLOAD_BYTES + 1];
+        let line = format!("#META:{}\n", encode_trzsz_string(&payload));
+        let frame = parse_trzsz_protocol_frame(line.as_bytes()).expect("frame");
+
+        assert!(matches!(frame.payload, TrzszProtocolPayload::Raw(_)));
     }
 
     #[test]
