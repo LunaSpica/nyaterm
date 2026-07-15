@@ -244,8 +244,6 @@ impl NyaTermApp {
             connection_context_menu: None,
             connection_group_context_menu: None,
             hovered_connection_id: None,
-            connection_details_tooltip_id: None,
-            connection_details_hover_pending: None,
             connection_drop_target: None,
             ai_execution_menu_open: false,
             hovered_connection_group_id: None,

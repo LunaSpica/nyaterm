@@ -1,9 +1,8 @@
 use super::*;
 
 impl NyaTermApp {
-    pub(in crate::features) fn dismiss_connection_details_hover(&mut self, cx: &mut Context<Self>) {
-        let changed = self.connection_details_hover_pending.take().is_some()
-            | self.connection_details_tooltip_id.take().is_some();
+    pub(in crate::features) fn dismiss_connection_hover(&mut self, cx: &mut Context<Self>) {
+        let changed = self.hovered_connection_id.take().is_some();
         if changed {
             cx.notify();
         }
@@ -388,8 +387,6 @@ impl NyaTermApp {
                     };
                     if this.connection_drop_target.as_ref() != Some(&next) {
                         this.connection_drop_target = Some(next);
-                        this.connection_details_hover_pending = None;
-                        this.connection_details_tooltip_id = None;
                         cx.notify();
                     }
                 }
