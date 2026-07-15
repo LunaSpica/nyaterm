@@ -2,8 +2,8 @@ use super::*;
 use nyaterm_transport::{
     TrzszAction, TrzszDetector, TrzszDownloadEngine, TrzszDownloadEvent, TrzszMode,
     TrzszOutputEvent, TrzszProtocolFrame, TrzszProtocolStream, TrzszTransferEvent,
-    TrzszTransferState, TrzszUploadEngine, TrzszUploadEntry, TrzszUploadEvent, TrzszUploadSource,
-    build_trzsz_action_frame, build_trzsz_string_frame, trzsz_fail_response,
+    TrzszTransferState, TrzszUploadEngine, TrzszUploadEntry, TrzszUploadEvent, TrzszUploadPayload,
+    TrzszUploadSource, build_trzsz_action_frame, build_trzsz_string_frame, trzsz_fail_response,
 };
 use std::{
     collections::{HashMap, HashSet},
@@ -1093,19 +1093,17 @@ fn prepare_trzsz_upload_entries(
             ));
         }
         let name = unique_trzsz_upload_name(&path, &mut used_names);
-        let data = std::fs::read(&path)
-            .map_err(|error| format!("failed to read {}: {error}", path.display()))?;
-        let size = data.len() as u64;
-        entries.push(TrzszUploadEntry {
-            name: name.clone(),
-            data,
-            source: None,
-        });
+        let size = trzsz_upload_size(&path, metadata.len())?;
+        entries.push(TrzszUploadEntry::from_file(
+            name.clone(),
+            path.clone(),
+            size,
+        ));
         files.insert(
             name,
             TrzszUploadFile {
                 local_path: path,
-                size,
+                size: size as u64,
                 is_dir: false,
             },
         );
@@ -1138,7 +1136,8 @@ fn append_trzsz_upload_path(
         }
         entries.push(TrzszUploadEntry {
             name: entry_name.clone(),
-            data: Vec::new(),
+            size: 0,
+            payload: TrzszUploadPayload::Memory(Vec::new()),
             source: Some(TrzszUploadSource {
                 path_id,
                 path_name: components.clone(),
@@ -1190,25 +1189,21 @@ fn append_trzsz_upload_path(
         ));
     }
 
-    let data = std::fs::read(path)
-        .map_err(|error| format!("failed to read {}: {error}", path.display()))?;
-    let size = data.len() as u64;
-    entries.push(TrzszUploadEntry {
-        name: entry_name.clone(),
-        data,
-        source: Some(TrzszUploadSource {
-            path_id,
-            path_name: components,
-            is_dir: false,
-            size: size as i64,
-            perm,
-        }),
+    let size = trzsz_upload_size(path, metadata.len())?;
+    let mut entry = TrzszUploadEntry::from_file(entry_name.clone(), path.to_path_buf(), size);
+    entry.source = Some(TrzszUploadSource {
+        path_id,
+        path_name: components,
+        is_dir: false,
+        size,
+        perm,
     });
+    entries.push(entry);
     files.insert(
         entry_name,
         TrzszUploadFile {
             local_path: path.to_path_buf(),
-            size,
+            size: size as u64,
             is_dir: false,
         },
     );
@@ -1224,6 +1219,10 @@ fn trzsz_upload_perm(metadata: &std::fs::Metadata) -> Option<u32> {
 #[cfg(not(unix))]
 fn trzsz_upload_perm(_metadata: &std::fs::Metadata) -> Option<u32> {
     None
+}
+
+fn trzsz_upload_size(path: &Path, size: u64) -> Result<i64, String> {
+    i64::try_from(size).map_err(|_| format!("trzsz upload file is too large: {}", path.display()))
 }
 
 fn unique_trzsz_upload_name(path: &Path, used_names: &mut HashSet<String>) -> String {

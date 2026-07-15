@@ -32,10 +32,10 @@ pub use trzsz::{
     TrzszOutputEvent, TrzszOutputScan, TrzszProtocolFilteredOutput, TrzszProtocolFrame,
     TrzszProtocolPayload, TrzszProtocolStream, TrzszTransferEvent, TrzszTransferPhase,
     TrzszTransferState, TrzszTrigger, TrzszUploadEngine, TrzszUploadEntry, TrzszUploadError,
-    TrzszUploadEvent, TrzszUploadSource, TrzszUploadStep, build_trzsz_action_frame,
-    build_trzsz_config_frame, build_trzsz_integer_frame, build_trzsz_string_frame,
-    parse_trzsz_action_frame, parse_trzsz_config_frame, parse_trzsz_json_frame,
-    parse_trzsz_protocol_frame, trzsz_fail_response,
+    TrzszUploadEvent, TrzszUploadPayload, TrzszUploadSource, TrzszUploadStep,
+    build_trzsz_action_frame, build_trzsz_config_frame, build_trzsz_integer_frame,
+    build_trzsz_string_frame, parse_trzsz_action_frame, parse_trzsz_config_frame,
+    parse_trzsz_json_frame, parse_trzsz_protocol_frame, trzsz_fail_response,
 };
 pub use zmodem::{
     ZmodemAction, ZmodemDetectResult, ZmodemDetector, ZmodemDirection, ZmodemEvent, ZmodemTransfer,

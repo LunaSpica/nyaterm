@@ -6,7 +6,9 @@
 
 use std::{
     collections::HashMap,
+    fs::File,
     io::{Read, Write},
+    path::PathBuf,
 };
 
 use base64::Engine as _;
@@ -16,6 +18,7 @@ use serde::{Deserialize, Serialize};
 const TRZSZ_PREFIX: &[u8] = b"::TRZSZ:TRANSFER:";
 const TRZSZ_MAX_TRIGGER_LEN: usize = 96;
 const TRZSZ_MAX_PROTOCOL_LINE_LEN: usize = 1024 * 1024;
+const TRZSZ_UPLOAD_DATA_CHUNK_SIZE: usize = 256 * 1024;
 const TRZSZ_STALE_TRIGGER_MARKERS: [&[u8]; 5] =
     [b"#CFG:", b"Saved", b"Cancelled", b"Stopped", b"Interrupted"];
 
@@ -958,8 +961,15 @@ impl TrzszDownloadDataState {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TrzszUploadEntry {
     pub name: String,
-    pub data: Vec<u8>,
+    pub size: i64,
+    pub payload: TrzszUploadPayload,
     pub source: Option<TrzszUploadSource>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum TrzszUploadPayload {
+    Memory(Vec<u8>),
+    File(PathBuf),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -1021,6 +1031,10 @@ pub enum TrzszUploadError {
     InvalidSource {
         name: String,
     },
+    PayloadRead {
+        name: String,
+        message: String,
+    },
     AckMismatch {
         expected: TrzszProtocolPayload,
         actual: TrzszProtocolPayload,
@@ -1049,7 +1063,10 @@ enum TrzszUploadPhase {
         index: usize,
         remote_names: Vec<String>,
         remote_name: String,
-        digest: Vec<u8>,
+        sent: i64,
+        chunk: i64,
+        md5: md5::Context,
+        reader: TrzszUploadReader,
     },
     AwaitMd5Ack {
         index: usize,
@@ -1059,6 +1076,11 @@ enum TrzszUploadPhase {
     Completed {
         names: Vec<String>,
     },
+}
+
+enum TrzszUploadReader {
+    Memory,
+    File(File),
 }
 
 impl TrzszUploadEngine {
@@ -1111,8 +1133,20 @@ impl TrzszUploadEngine {
                 index,
                 remote_names,
                 remote_name,
-                digest,
-            } => self.observe_data_ack(frame, index, remote_names, remote_name, digest),
+                sent,
+                chunk,
+                md5,
+                reader,
+            } => self.observe_data_ack(
+                frame,
+                index,
+                remote_names,
+                remote_name,
+                sent,
+                chunk,
+                md5,
+                reader,
+            ),
             TrzszUploadPhase::AwaitMd5Ack {
                 index,
                 remote_names,
@@ -1183,7 +1217,7 @@ impl TrzszUploadEngine {
             return Ok(step);
         }
 
-        let size = entry.data.len() as i64;
+        let size = entry.size;
         self.phase = TrzszUploadPhase::AwaitSizeAck {
             index,
             remote_names,
@@ -1207,12 +1241,12 @@ impl TrzszUploadEngine {
         remote_name: String,
     ) -> Result<TrzszUploadStep, TrzszUploadError> {
         let entry = &self.entries[index];
-        let size = entry.data.len() as i64;
+        let size = entry.size;
         let expected = TrzszProtocolPayload::Integer(size);
         expect_upload_ack(&frame, &expected)?;
 
-        let digest = md5::compute(&entry.data).0.to_vec();
-        if entry.data.is_empty() {
+        if size <= 0 {
+            let digest = md5::compute([]).0.to_vec();
             self.phase = TrzszUploadPhase::AwaitMd5Ack {
                 index,
                 remote_names,
@@ -1224,36 +1258,42 @@ impl TrzszUploadEngine {
             });
         }
 
-        self.phase = TrzszUploadPhase::AwaitDataAck {
+        let reader = self.open_upload_reader(index)?;
+        self.send_upload_data_chunk(
             index,
             remote_names,
             remote_name,
-            digest,
-        };
-        Ok(TrzszUploadStep {
-            events: vec![TrzszUploadEvent::Data {
-                name: entry.display_name().to_string(),
-                sent: size,
-                size,
-            }],
-            responses: vec![build_trzsz_string_frame(
-                "DATA",
-                &entry.data,
-                self.newline(),
-            )],
-        })
+            0,
+            md5::Context::new(),
+            reader,
+        )
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn observe_data_ack(
         &mut self,
         frame: TrzszProtocolFrame,
         index: usize,
         remote_names: Vec<String>,
-        _remote_name: String,
-        digest: Vec<u8>,
+        remote_name: String,
+        sent: i64,
+        chunk: i64,
+        md5: md5::Context,
+        reader: TrzszUploadReader,
     ) -> Result<TrzszUploadStep, TrzszUploadError> {
-        let expected = TrzszProtocolPayload::Integer(self.entries[index].data.len() as i64);
+        let expected = TrzszProtocolPayload::Integer(chunk);
         expect_upload_ack(&frame, &expected)?;
+        if sent < self.entries[index].size {
+            return self.send_upload_data_chunk(
+                index,
+                remote_names,
+                remote_name,
+                sent,
+                md5,
+                reader,
+            );
+        }
+        let digest = md5.finalize().0.to_vec();
         self.phase = TrzszUploadPhase::AwaitMd5Ack {
             index,
             remote_names,
@@ -1298,6 +1338,62 @@ impl TrzszUploadEngine {
         Ok(step)
     }
 
+    fn open_upload_reader(&self, index: usize) -> Result<TrzszUploadReader, TrzszUploadError> {
+        let entry = self.entries.get(index).ok_or(TrzszUploadError::NoFiles)?;
+        match &entry.payload {
+            TrzszUploadPayload::Memory(_) => Ok(TrzszUploadReader::Memory),
+            TrzszUploadPayload::File(path) => File::open(path)
+                .map(TrzszUploadReader::File)
+                .map_err(|error| TrzszUploadError::PayloadRead {
+                    name: entry.display_name().to_string(),
+                    message: error.to_string(),
+                }),
+        }
+    }
+
+    fn send_upload_data_chunk(
+        &mut self,
+        index: usize,
+        remote_names: Vec<String>,
+        remote_name: String,
+        sent: i64,
+        mut md5: md5::Context,
+        mut reader: TrzszUploadReader,
+    ) -> Result<TrzszUploadStep, TrzszUploadError> {
+        let entry = self.entries.get(index).ok_or(TrzszUploadError::NoFiles)?;
+        let size = entry.size;
+        let chunk = read_upload_chunk(entry, sent, &mut reader)?;
+        let chunk_len = chunk.len() as i64;
+        if chunk_len <= 0 || sent + chunk_len > size {
+            return Err(TrzszUploadError::PayloadRead {
+                name: entry.display_name().to_string(),
+                message: format!(
+                    "unexpected upload payload length: sent {sent}, chunk {chunk_len}, size {size}"
+                ),
+            });
+        }
+        md5.consume(&chunk);
+        let sent = sent + chunk_len;
+        let display_name = entry.display_name().to_string();
+        self.phase = TrzszUploadPhase::AwaitDataAck {
+            index,
+            remote_names,
+            remote_name,
+            sent,
+            chunk: chunk_len,
+            md5,
+            reader,
+        };
+        Ok(TrzszUploadStep {
+            events: vec![TrzszUploadEvent::Data {
+                name: display_name,
+                sent,
+                size,
+            }],
+            responses: vec![build_trzsz_string_frame("DATA", &chunk, self.newline())],
+        })
+    }
+
     fn send_name(
         &mut self,
         index: usize,
@@ -1325,6 +1421,24 @@ impl TrzszUploadEngine {
 }
 
 impl TrzszUploadEntry {
+    pub fn from_bytes(name: impl Into<String>, data: Vec<u8>) -> Self {
+        Self {
+            name: name.into(),
+            size: data.len() as i64,
+            payload: TrzszUploadPayload::Memory(data),
+            source: None,
+        }
+    }
+
+    pub fn from_file(name: impl Into<String>, path: PathBuf, size: i64) -> Self {
+        Self {
+            name: name.into(),
+            size,
+            payload: TrzszUploadPayload::File(path),
+            source: None,
+        }
+    }
+
     fn display_name(&self) -> &str {
         self.source
             .as_ref()
@@ -1344,6 +1458,37 @@ impl TrzszUploadEntry {
             });
         }
         Ok(self.name.clone())
+    }
+}
+
+fn read_upload_chunk(
+    entry: &TrzszUploadEntry,
+    sent: i64,
+    reader: &mut TrzszUploadReader,
+) -> Result<Vec<u8>, TrzszUploadError> {
+    let remaining = entry.size.saturating_sub(sent) as usize;
+    let chunk_size = remaining.min(TRZSZ_UPLOAD_DATA_CHUNK_SIZE);
+    match (&entry.payload, reader) {
+        (TrzszUploadPayload::Memory(data), TrzszUploadReader::Memory) => {
+            let start = sent.max(0) as usize;
+            let end = start.saturating_add(chunk_size).min(data.len());
+            Ok(data.get(start..end).unwrap_or_default().to_vec())
+        }
+        (TrzszUploadPayload::File(_), TrzszUploadReader::File(file)) => {
+            let mut chunk = vec![0; chunk_size];
+            let read = file
+                .read(&mut chunk)
+                .map_err(|error| TrzszUploadError::PayloadRead {
+                    name: entry.display_name().to_string(),
+                    message: error.to_string(),
+                })?;
+            chunk.truncate(read);
+            Ok(chunk)
+        }
+        _ => Err(TrzszUploadError::PayloadRead {
+            name: entry.display_name().to_string(),
+            message: "upload payload reader mismatch".to_string(),
+        }),
     }
 }
 
@@ -2643,11 +2788,7 @@ mod tests {
     fn upload_engine_sends_regular_file_after_acks() {
         let mut engine = TrzszUploadEngine::new(
             false,
-            vec![TrzszUploadEntry {
-                name: "hello.txt".to_string(),
-                data: b"hello".to_vec(),
-                source: None,
-            }],
+            vec![TrzszUploadEntry::from_bytes("hello.txt", b"hello".to_vec())],
         );
         let digest = md5::compute(b"hello").0.to_vec();
 
@@ -2728,14 +2869,79 @@ mod tests {
     }
 
     #[test]
+    fn upload_engine_streams_file_data_in_chunks() {
+        let mut payload = vec![b'a'; TRZSZ_UPLOAD_DATA_CHUNK_SIZE + 13];
+        payload[TRZSZ_UPLOAD_DATA_CHUNK_SIZE..].copy_from_slice(b"tail-payload!");
+        let digest = md5::compute(&payload).0.to_vec();
+        let mut engine = TrzszUploadEngine::new(
+            false,
+            vec![TrzszUploadEntry::from_bytes("large.bin", payload)],
+        );
+
+        engine.begin().unwrap();
+        engine
+            .observe_frame(parse_trzsz_protocol_frame(b"#SUCC:1\n").unwrap())
+            .unwrap();
+        let remote_name = build_trzsz_string_frame("SUCC", b"large.bin", "\n");
+        engine
+            .observe_frame(parse_trzsz_protocol_frame(&remote_name).unwrap())
+            .unwrap();
+
+        let step = engine
+            .observe_frame(
+                parse_trzsz_protocol_frame(
+                    format!("#SUCC:{}\n", TRZSZ_UPLOAD_DATA_CHUNK_SIZE + 13).as_bytes(),
+                )
+                .unwrap(),
+            )
+            .unwrap();
+        let first = parse_trzsz_protocol_frame(&step.responses[0]).unwrap();
+        assert_eq!(first.frame_type, "DATA");
+        assert_eq!(
+            bytes_payload(&first).unwrap().len(),
+            TRZSZ_UPLOAD_DATA_CHUNK_SIZE
+        );
+        assert_eq!(
+            step.events,
+            vec![TrzszUploadEvent::Data {
+                name: "large.bin".to_string(),
+                sent: TRZSZ_UPLOAD_DATA_CHUNK_SIZE as i64,
+                size: (TRZSZ_UPLOAD_DATA_CHUNK_SIZE + 13) as i64,
+            }]
+        );
+
+        let step = engine
+            .observe_frame(
+                parse_trzsz_protocol_frame(
+                    format!("#SUCC:{TRZSZ_UPLOAD_DATA_CHUNK_SIZE}\n").as_bytes(),
+                )
+                .unwrap(),
+            )
+            .unwrap();
+        let second = parse_trzsz_protocol_frame(&step.responses[0]).unwrap();
+        assert_eq!(bytes_payload(&second).unwrap(), b"tail-payload!".to_vec());
+        assert_eq!(
+            step.events,
+            vec![TrzszUploadEvent::Data {
+                name: "large.bin".to_string(),
+                sent: (TRZSZ_UPLOAD_DATA_CHUNK_SIZE + 13) as i64,
+                size: (TRZSZ_UPLOAD_DATA_CHUNK_SIZE + 13) as i64,
+            }]
+        );
+
+        let step = engine
+            .observe_frame(parse_trzsz_protocol_frame(b"#SUCC:13\n").unwrap())
+            .unwrap();
+        let md5_frame = parse_trzsz_protocol_frame(&step.responses[0]).unwrap();
+        assert_eq!(md5_frame.frame_type, "MD5");
+        assert_eq!(bytes_payload(&md5_frame).unwrap(), digest);
+    }
+
+    #[test]
     fn upload_engine_handles_empty_file_and_windows_newlines() {
         let mut engine = TrzszUploadEngine::new(
             true,
-            vec![TrzszUploadEntry {
-                name: "empty.txt".to_string(),
-                data: Vec::new(),
-                source: None,
-            }],
+            vec![TrzszUploadEntry::from_bytes("empty.txt", Vec::new())],
         );
         let digest = md5::compute(b"").0.to_vec();
 
@@ -2772,11 +2978,7 @@ mod tests {
     fn upload_engine_rejects_mismatched_ack() {
         let mut engine = TrzszUploadEngine::new(
             false,
-            vec![TrzszUploadEntry {
-                name: "hello.txt".to_string(),
-                data: b"hello".to_vec(),
-                source: None,
-            }],
+            vec![TrzszUploadEntry::from_bytes("hello.txt", b"hello".to_vec())],
         );
         engine.begin().unwrap();
         let error = engine
@@ -2798,7 +3000,8 @@ mod tests {
             vec![
                 TrzszUploadEntry {
                     name: "folder".to_string(),
-                    data: Vec::new(),
+                    size: 0,
+                    payload: TrzszUploadPayload::Memory(Vec::new()),
                     source: Some(TrzszUploadSource {
                         path_id: 0,
                         path_name: vec!["folder".to_string()],
@@ -2807,16 +3010,16 @@ mod tests {
                         perm: Some(0o755),
                     }),
                 },
-                TrzszUploadEntry {
-                    name: "note.txt".to_string(),
-                    data: b"note".to_vec(),
-                    source: Some(TrzszUploadSource {
+                {
+                    let mut entry = TrzszUploadEntry::from_bytes("note.txt", b"note".to_vec());
+                    entry.source = Some(TrzszUploadSource {
                         path_id: 0,
                         path_name: vec!["folder".to_string(), "note.txt".to_string()],
                         is_dir: false,
                         size: 4,
                         perm: Some(0o644),
-                    }),
+                    });
+                    entry
                 },
             ],
         );
