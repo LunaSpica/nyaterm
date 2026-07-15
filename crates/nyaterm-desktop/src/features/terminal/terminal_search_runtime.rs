@@ -10,6 +10,7 @@ impl NyaTermApp {
         self.terminal_search_open = true;
         self.terminal_search_active_index = 0;
         self.terminal_status = "terminal search opened".to_string();
+        self.request_active_terminal_buffer_search();
         window.focus(&self.terminal_search_focus);
         cx.notify();
     }
@@ -26,30 +27,46 @@ impl NyaTermApp {
         cx.notify();
     }
 
-    pub(in crate::features) fn terminal_search_flags(&self) -> TerminalSearchFlags {
-        TerminalSearchFlags {
+    pub(in crate::features) fn terminal_search_key(&self) -> Option<TerminalFrameSearchKey> {
+        let query = self.terminal_search_query.trim();
+        if query.is_empty() {
+            return None;
+        }
+        Some(TerminalFrameSearchKey {
+            query: query.to_string(),
             case_sensitive: self.terminal_search_case_sensitive,
             regex: self.terminal_search_regex,
             whole_word: self.terminal_search_whole_word,
+            limit: 1000,
+        })
+    }
+
+    pub(in crate::features) fn request_active_terminal_buffer_search(&mut self) {
+        if !self.terminal_search_open || self.terminal_search_mode != TerminalSearchMode::Buffer {
+            return;
         }
+        let Some(session_id) = self.active_session_id.clone() else {
+            return;
+        };
+        let Some(key) = self.terminal_search_key() else {
+            return;
+        };
+        self.request_terminal_frame_search(&session_id, key);
     }
 
     pub(in crate::features) fn terminal_buffer_matches(
         &self,
     ) -> Result<Vec<TerminalBufferMatch>, String> {
-        let query = self.terminal_search_query.trim();
-        if query.is_empty() {
+        let Some(key) = self.terminal_search_key() else {
             return Ok(Vec::new());
-        }
-        let flags = self.terminal_search_flags();
-        // Search absolute scrollback + live screen (Tauri xterm buffer find).
-        let buffer_text = self
-            .active_session_id
+        };
+        self.active_session_id
             .as_deref()
             .and_then(|session_id| self.terminal_views.get(session_id))
-            .map(|view| view.screen.all_lines().join("\n"))
-            .unwrap_or_else(|| self.terminal_screen.all_lines().join("\n"));
-        terminal_buffer_matches(&buffer_text, query, &flags, 1000)
+            .and_then(|view| view.search_result.as_ref())
+            .filter(|result| result.key == key)
+            .map(|result| result.matches.clone())
+            .unwrap_or_else(|| Ok(Vec::new()))
     }
 
     /// Ensure the absolute buffer line is visible by adjusting scroll_offset.
@@ -60,12 +77,12 @@ impl NyaTermApp {
     ) {
         if let Some(session_id) = self.active_session_id.clone() {
             if let Some(view) = self.terminal_views.get_mut(&session_id) {
-                let total = view.screen.total_rows().max(1);
-                let rows = view.screen.viewport_snapshot(0).lines.len().max(1);
+                let total = view.total_rows_for_ui();
+                let rows = view.viewport_rows_for_ui();
                 let max_start = total.saturating_sub(rows);
                 let start = abs_line.min(max_start);
                 let offset = total.saturating_sub(start + rows);
-                view.scroll_offset = offset.min(view.screen.scrollback_len());
+                view.scroll_offset = offset.min(view.scrollback_len_for_ui());
             }
         } else {
             let total = self.terminal_screen.total_rows().max(1);
@@ -175,6 +192,7 @@ impl NyaTermApp {
             "backspace" => {
                 self.terminal_search_query.pop();
                 self.terminal_search_active_index = 0;
+                self.request_active_terminal_buffer_search();
                 cx.notify();
             }
             "tab" => {
@@ -185,6 +203,7 @@ impl NyaTermApp {
                         TerminalSearchMode::Buffer
                     };
                 self.terminal_search_active_index = 0;
+                self.request_active_terminal_buffer_search();
                 cx.notify();
             }
             _ => {
@@ -195,6 +214,7 @@ impl NyaTermApp {
                 {
                     self.terminal_search_query.push_str(input);
                     self.terminal_search_active_index = 0;
+                    self.request_active_terminal_buffer_search();
                     cx.notify();
                 }
             }

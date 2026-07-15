@@ -14,7 +14,7 @@ impl NyaTermApp {
         let max = self
             .terminal_views
             .get(session_id)
-            .map(|view| view.screen.scrollback_len())
+            .map(|view| view.scrollback_len_for_ui())
             .unwrap_or_else(|| {
                 if session_id.is_empty() {
                     self.terminal_screen.scrollback_len()
@@ -27,7 +27,7 @@ impl NyaTermApp {
             .get(session_id)
             .map(|view| {
                 // viewport height equals live screen rows
-                view.screen.viewport_snapshot(0).lines.len().max(1)
+                view.viewport_rows_for_ui()
             })
             .unwrap_or_else(|| self.active_terminal_page_rows().max(1));
         let show = max > 0;
@@ -308,6 +308,7 @@ impl NyaTermApp {
                         cx.listener(|this, _, _, cx| {
                             this.terminal_search_mode = TerminalSearchMode::Buffer;
                             this.terminal_search_active_index = 0;
+                            this.request_active_terminal_buffer_search();
                             cx.notify();
                         }),
                     ))
@@ -378,6 +379,7 @@ impl NyaTermApp {
                             this.terminal_search_case_sensitive =
                                 !this.terminal_search_case_sensitive;
                             this.terminal_search_active_index = 0;
+                            this.request_active_terminal_buffer_search();
                             cx.notify();
                         }),
                     ))
@@ -389,6 +391,7 @@ impl NyaTermApp {
                         cx.listener(|this, _, _, cx| {
                             this.terminal_search_regex = !this.terminal_search_regex;
                             this.terminal_search_active_index = 0;
+                            this.request_active_terminal_buffer_search();
                             cx.notify();
                         }),
                     ))
@@ -400,6 +403,7 @@ impl NyaTermApp {
                         cx.listener(|this, _, _, cx| {
                             this.terminal_search_whole_word = !this.terminal_search_whole_word;
                             this.terminal_search_active_index = 0;
+                            this.request_active_terminal_buffer_search();
                             cx.notify();
                         }),
                     ))

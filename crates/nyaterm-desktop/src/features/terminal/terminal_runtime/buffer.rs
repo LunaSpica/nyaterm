@@ -41,6 +41,54 @@ impl NyaTermApp {
         );
     }
 
+    pub(in crate::features) fn request_terminal_frame_snapshot(
+        &mut self,
+        session_id: &str,
+        offset: usize,
+    ) {
+        if session_id.is_empty() || offset == 0 {
+            return;
+        }
+        let Some(view) = self.terminal_views.get_mut(session_id) else {
+            return;
+        };
+        if view.scrollback_snapshots.contains_key(&offset)
+            || !view.pending_snapshot_offsets.insert(offset)
+        {
+            return;
+        }
+        self.terminal_frame_pipeline.request_snapshot(
+            session_id.to_string(),
+            offset,
+            self.settings.terminal_action_links_enabled,
+            self.settings.terminal_action_links_matchers.clone(),
+        );
+    }
+
+    pub(in crate::features) fn request_terminal_frame_search(
+        &mut self,
+        session_id: &str,
+        key: TerminalFrameSearchKey,
+    ) {
+        if session_id.is_empty() {
+            return;
+        }
+        let Some(view) = self.terminal_views.get_mut(session_id) else {
+            return;
+        };
+        if view
+            .search_result
+            .as_ref()
+            .is_some_and(|result| result.key == key)
+            || view.pending_search_key.as_ref() == Some(&key)
+        {
+            return;
+        }
+        view.pending_search_key = Some(key.clone());
+        self.terminal_frame_pipeline
+            .request_search(session_id.to_string(), key);
+    }
+
     pub(in crate::features) fn seed_terminal_frame_session(
         &self,
         session_id: &str,
@@ -67,7 +115,19 @@ impl NyaTermApp {
 
     fn apply_terminal_frame_event(
         &mut self,
-        frame: TerminalFrameEvent,
+        event: TerminalFrameEvent,
+        cx: &mut Context<Self>,
+    ) -> bool {
+        match event {
+            TerminalFrameEvent::Output(frame) => self.apply_terminal_output_frame(frame, cx),
+            TerminalFrameEvent::Snapshot(snapshot) => self.apply_terminal_snapshot_frame(snapshot),
+            TerminalFrameEvent::Search(search) => self.apply_terminal_search_frame(search),
+        }
+    }
+
+    fn apply_terminal_output_frame(
+        &mut self,
+        frame: TerminalFrameOutputEvent,
         cx: &mut Context<Self>,
     ) -> bool {
         let session_id = frame.session_id.clone();
@@ -100,6 +160,78 @@ impl NyaTermApp {
                 recording_text_bytes = frame.recording_text.len(),
                 process_ms = frame.process_duration.as_millis(),
                 "slow terminal frame processing"
+            );
+        }
+        if is_active {
+            self.request_active_terminal_buffer_search();
+        }
+        true
+    }
+
+    fn apply_terminal_snapshot_frame(&mut self, frame: TerminalFrameSnapshotEvent) -> bool {
+        let Some(view) = self.terminal_views.get_mut(&frame.session_id) else {
+            return false;
+        };
+        view.pending_snapshot_offsets.remove(&frame.offset);
+        view.scrollback_snapshots
+            .insert(frame.offset, frame.snapshot.clone());
+        if let Some(action_links) = frame.action_links {
+            view.scrollback_action_links
+                .insert(frame.offset, action_links);
+        } else {
+            view.scrollback_action_links.remove(&frame.offset);
+        }
+        while view.scrollback_snapshots.len() > 16 {
+            let Some(drop_offset) = view
+                .scrollback_snapshots
+                .keys()
+                .copied()
+                .find(|offset| *offset != frame.offset)
+            else {
+                break;
+            };
+            view.scrollback_snapshots.remove(&drop_offset);
+            view.scrollback_action_links.remove(&drop_offset);
+        }
+        if frame.process_duration >= Duration::from_millis(20)
+            && self.should_log_slow_diagnostic("terminal_frame_snapshot", Instant::now())
+        {
+            tracing::warn!(
+                diagnostic = "terminal_frame_snapshot",
+                session_id = %frame.session_id,
+                offset = frame.offset,
+                revision = frame.revision,
+                process_ms = frame.process_duration.as_millis(),
+                "slow terminal frame snapshot"
+            );
+        }
+        true
+    }
+
+    fn apply_terminal_search_frame(&mut self, frame: TerminalFrameSearchEvent) -> bool {
+        let Some(view) = self.terminal_views.get_mut(&frame.session_id) else {
+            return false;
+        };
+        if view.pending_search_key.as_ref() == Some(&frame.result.key) {
+            view.pending_search_key = None;
+        }
+        view.search_result = Some(frame.result.clone());
+        if frame.process_duration >= Duration::from_millis(20)
+            && self.should_log_slow_diagnostic("terminal_frame_search", Instant::now())
+        {
+            let match_count = frame
+                .result
+                .matches
+                .as_ref()
+                .map(|matches| matches.len())
+                .unwrap_or(0);
+            tracing::warn!(
+                diagnostic = "terminal_frame_search",
+                session_id = %frame.session_id,
+                query_len = frame.result.key.query.len(),
+                match_count,
+                process_ms = frame.process_duration.as_millis(),
+                "slow terminal frame search"
             );
         }
         true

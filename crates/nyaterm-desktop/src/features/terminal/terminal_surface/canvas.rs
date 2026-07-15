@@ -43,6 +43,9 @@ impl NyaTermApp {
             .get(&session_id)
             .map(|view| view.scroll_offset)
             .unwrap_or(self.terminal_scroll_offset);
+        if scroll_offset > 0 {
+            self.request_terminal_frame_snapshot(&session_id, scroll_offset);
+        }
         let live_frame_has_snapshot = scroll_offset == 0
             && self
                 .terminal_views
@@ -51,7 +54,13 @@ impl NyaTermApp {
         let frame_action_links = self
             .terminal_views
             .get(&session_id)
-            .and_then(|view| view.frame_action_links.as_ref())
+            .and_then(|view| {
+                if scroll_offset == 0 {
+                    view.frame_action_links.as_ref()
+                } else {
+                    view.scrollback_action_links.get(&scroll_offset)
+                }
+            })
             .filter(|links| links.matcher_key == action_link_matcher_key)
             .cloned();
         let snapshot = self
@@ -63,7 +72,11 @@ impl NyaTermApp {
                         .clone()
                         .unwrap_or_else(|| view.screen.viewport_snapshot(scroll_offset))
                 } else {
-                    view.screen.viewport_snapshot(scroll_offset)
+                    view.scrollback_snapshots
+                        .get(&scroll_offset)
+                        .cloned()
+                        .or_else(|| view.frame_snapshot.clone())
+                        .unwrap_or_else(|| view.screen.viewport_snapshot(scroll_offset))
                 }
             })
             .unwrap_or_else(|| self.terminal_screen.viewport_snapshot(scroll_offset));
@@ -92,10 +105,10 @@ impl NyaTermApp {
             && remote_cursor_visible
             && (!blink_enabled || self.terminal_runtime.cursor_blink_on);
         let cursor_style = match snapshot.cursor.shape {
-            nyaterm_terminal::CursorShape::Underline => "underline",
-            nyaterm_terminal::CursorShape::Beam => "bar",
-            nyaterm_terminal::CursorShape::Hidden => self.settings.cursor_style.as_str(),
-            nyaterm_terminal::CursorShape::Block => self.settings.cursor_style.as_str(),
+            nyaterm_terminal::CursorShape::Underline => "underline".to_string(),
+            nyaterm_terminal::CursorShape::Beam => "bar".to_string(),
+            nyaterm_terminal::CursorShape::Hidden => self.settings.cursor_style.clone(),
+            nyaterm_terminal::CursorShape::Block => self.settings.cursor_style.clone(),
         };
         let search_stage_started_at = Instant::now();
         let search_matches = if !render_degraded
@@ -103,16 +116,13 @@ impl NyaTermApp {
             && self.terminal_search_open
             && self.terminal_search_mode == TerminalSearchMode::Buffer
         {
+            self.request_active_terminal_buffer_search();
             self.terminal_buffer_matches().unwrap_or_default()
         } else {
             Vec::new()
         };
         // Buffer matches use absolute history indices; map into current viewport rows.
-        let (abs_start, abs_end) = self
-            .terminal_views
-            .get(&session_id)
-            .map(|view| view.screen.viewport_absolute_range(scroll_offset))
-            .unwrap_or_else(|| self.terminal_screen.viewport_absolute_range(scroll_offset));
+        let (abs_start, abs_end) = terminal_snapshot_absolute_range(&snapshot);
         let active_match_abs = search_matches
             .get(
                 self.terminal_search_active_index
@@ -1212,6 +1222,14 @@ impl NyaTermApp {
         }
         canvas
     }
+}
+
+fn terminal_snapshot_absolute_range(
+    snapshot: &nyaterm_terminal::TerminalSnapshot,
+) -> (usize, usize) {
+    let end = snapshot.total_rows.saturating_sub(snapshot.display_offset);
+    let start = end.saturating_sub(snapshot.rows);
+    (start, end)
 }
 
 const TERMINAL_RENDER_SLOW_STAGE: Duration = Duration::from_millis(12);

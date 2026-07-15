@@ -2,7 +2,7 @@ use nyaterm_core::{
     ActionLinksMatcherSettings, TerminalBackendResize, terminal_backend_resize_changed,
 };
 use nyaterm_terminal::{TerminalEffects, TerminalOutputDecoder, TerminalScreen, TerminalSnapshot};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::hash::{Hash, Hasher};
 use std::sync::mpsc;
 use std::sync::{Arc, Mutex};
@@ -12,8 +12,8 @@ use std::time::{Duration, Instant};
 use crate::{
     action_links::{ActionLinkMatch, find_action_links},
     terminal::{
-        NyaTerminalLayoutCache, terminal_cell_col_for_byte_index, terminal_screen_from_output,
-        trim_terminal_output,
+        NyaTerminalLayoutCache, TerminalBufferMatch, TerminalSearchFlags, terminal_buffer_matches,
+        terminal_cell_col_for_byte_index, terminal_screen_from_output, trim_terminal_output,
     },
 };
 
@@ -45,6 +45,31 @@ pub(crate) const TERMINAL_RENDER_DEGRADATION_RECOVERY_TICKS: u8 = 8;
 pub(crate) struct TerminalFrameActionLinks {
     pub(crate) matcher_key: u64,
     pub(crate) matches_by_line: Vec<Vec<ActionLinkMatch>>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct TerminalFrameSearchKey {
+    pub(crate) query: String,
+    pub(crate) case_sensitive: bool,
+    pub(crate) regex: bool,
+    pub(crate) whole_word: bool,
+    pub(crate) limit: usize,
+}
+
+impl TerminalFrameSearchKey {
+    pub(crate) fn flags(&self) -> TerminalSearchFlags {
+        TerminalSearchFlags {
+            case_sensitive: self.case_sensitive,
+            regex: self.regex,
+            whole_word: self.whole_word,
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
+pub(crate) struct TerminalFrameSearchResult {
+    pub(crate) key: TerminalFrameSearchKey,
+    pub(crate) matches: Result<Vec<TerminalBufferMatch>, String>,
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -259,6 +284,11 @@ pub(crate) struct TerminalViewState {
     /// Latest live viewport prepared by the background terminal frame processor.
     pub(crate) frame_snapshot: Option<TerminalSnapshot>,
     pub(crate) frame_action_links: Option<TerminalFrameActionLinks>,
+    pub(crate) scrollback_snapshots: HashMap<usize, TerminalSnapshot>,
+    pub(crate) scrollback_action_links: HashMap<usize, TerminalFrameActionLinks>,
+    pub(crate) pending_snapshot_offsets: HashSet<usize>,
+    pub(crate) search_result: Option<TerminalFrameSearchResult>,
+    pub(crate) pending_search_key: Option<TerminalFrameSearchKey>,
     pub(crate) protocol_state: TerminalProtocolState,
     pub(crate) output_decoder: TerminalOutputDecoder,
     pub(crate) recording_decoder: TerminalOutputDecoder,
@@ -292,6 +322,11 @@ impl TerminalViewState {
             screen: TerminalScreen::default(),
             frame_snapshot: None,
             frame_action_links: None,
+            scrollback_snapshots: HashMap::new(),
+            scrollback_action_links: HashMap::new(),
+            pending_snapshot_offsets: HashSet::new(),
+            search_result: None,
+            pending_search_key: None,
             protocol_state: TerminalProtocolState::default(),
             output_decoder: TerminalOutputDecoder::default(),
             recording_decoder: TerminalOutputDecoder::default(),
@@ -319,6 +354,11 @@ impl TerminalViewState {
             screen,
             frame_snapshot: None,
             frame_action_links: None,
+            scrollback_snapshots: HashMap::new(),
+            scrollback_action_links: HashMap::new(),
+            pending_snapshot_offsets: HashSet::new(),
+            search_result: None,
+            pending_search_key: None,
             protocol_state,
             output_decoder: TerminalOutputDecoder::default(),
             recording_decoder: TerminalOutputDecoder::default(),
@@ -358,6 +398,7 @@ impl TerminalViewState {
         self.screen_revision = self.screen_revision.saturating_add(1);
         self.frame_snapshot = Some(self.screen.viewport_snapshot(0));
         self.frame_action_links = None;
+        self.clear_frame_query_caches();
         self.protocol_state = TerminalProtocolState::from_screen(&self.screen);
         self.output.push_str(text);
         trim_terminal_output(&mut self.output);
@@ -377,6 +418,7 @@ impl TerminalViewState {
         self.screen_revision = self.screen_revision.saturating_add(1);
         self.frame_snapshot = Some(self.screen.viewport_snapshot(0));
         self.frame_action_links = None;
+        self.clear_frame_query_caches();
         self.protocol_state = TerminalProtocolState::from_screen(&self.screen);
         self.output
             .push_str(&self.output_decoder.decode_output_text(data));
@@ -481,6 +523,7 @@ impl TerminalViewState {
         self.screen.clear();
         self.frame_snapshot = None;
         self.frame_action_links = None;
+        self.clear_frame_query_caches();
         self.protocol_state = TerminalProtocolState::default();
         self.output_decoder.reset_decoder();
         self.recording_decoder.reset_decoder();
@@ -509,13 +552,14 @@ impl TerminalViewState {
         }
     }
 
-    pub(crate) fn apply_terminal_frame(&mut self, frame: &TerminalFrameEvent) {
+    pub(crate) fn apply_terminal_frame(&mut self, frame: &TerminalFrameOutputEvent) {
         if !frame.visible_text.is_empty() {
             self.output.push_str(&frame.visible_text);
             trim_terminal_output(&mut self.output);
         }
         self.frame_snapshot = Some(frame.snapshot.clone());
         self.frame_action_links = frame.action_links.clone();
+        self.clear_frame_query_caches();
         self.protocol_state = frame.protocol_state;
         self.screen_revision = frame.revision;
         self.output_burst_bytes = self.output_burst_bytes.saturating_add(frame.accepted_bytes);
@@ -558,6 +602,35 @@ impl TerminalViewState {
             pixel_width,
             pixel_height,
         ));
+    }
+
+    fn clear_frame_query_caches(&mut self) {
+        self.scrollback_snapshots.clear();
+        self.scrollback_action_links.clear();
+        self.pending_snapshot_offsets.clear();
+        self.search_result = None;
+        self.pending_search_key = None;
+    }
+
+    pub(crate) fn scrollback_len_for_ui(&self) -> usize {
+        self.frame_snapshot
+            .as_ref()
+            .map(|snapshot| snapshot.scrollback_len)
+            .unwrap_or_else(|| self.screen.scrollback_len())
+    }
+
+    pub(crate) fn viewport_rows_for_ui(&self) -> usize {
+        self.frame_snapshot
+            .as_ref()
+            .map(|snapshot| snapshot.lines.len().max(1))
+            .unwrap_or_else(|| self.screen.viewport_snapshot(0).lines.len().max(1))
+    }
+
+    pub(crate) fn total_rows_for_ui(&self) -> usize {
+        self.frame_snapshot
+            .as_ref()
+            .map(|snapshot| snapshot.total_rows.max(1))
+            .unwrap_or_else(|| self.screen.total_rows().max(1))
     }
 }
 
@@ -670,6 +743,35 @@ impl TerminalFramePipeline {
         });
     }
 
+    pub(crate) fn request_snapshot(
+        &self,
+        session_id: impl Into<String>,
+        offset: usize,
+        action_links_enabled: bool,
+        action_link_matchers: ActionLinksMatcherSettings,
+    ) {
+        let _ = self.command_tx.send(TerminalFrameCommand::RequestSnapshot {
+            session_id: session_id.into(),
+            offset,
+            action_links_enabled,
+            action_link_matchers,
+        });
+    }
+
+    pub(crate) fn request_search(
+        &self,
+        session_id: impl Into<String>,
+        key: TerminalFrameSearchKey,
+    ) {
+        if key.query.trim().is_empty() || key.limit == 0 {
+            return;
+        }
+        let _ = self.command_tx.send(TerminalFrameCommand::RequestSearch {
+            session_id: session_id.into(),
+            key,
+        });
+    }
+
     pub(crate) fn drain_events(&self, max_events: usize) -> Vec<TerminalFrameEvent> {
         let mut events = Vec::new();
         for _ in 0..max_events {
@@ -718,10 +820,27 @@ enum TerminalFrameCommand {
         action_links_enabled: bool,
         action_link_matchers: ActionLinksMatcherSettings,
     },
+    RequestSnapshot {
+        session_id: String,
+        offset: usize,
+        action_links_enabled: bool,
+        action_link_matchers: ActionLinksMatcherSettings,
+    },
+    RequestSearch {
+        session_id: String,
+        key: TerminalFrameSearchKey,
+    },
 }
 
 #[derive(Clone, Debug)]
-pub(crate) struct TerminalFrameEvent {
+pub(crate) enum TerminalFrameEvent {
+    Output(TerminalFrameOutputEvent),
+    Snapshot(TerminalFrameSnapshotEvent),
+    Search(TerminalFrameSearchEvent),
+}
+
+#[derive(Clone, Debug)]
+pub(crate) struct TerminalFrameOutputEvent {
     pub(crate) session_id: String,
     pub(crate) visible_text: String,
     pub(crate) recording_text: String,
@@ -733,6 +852,23 @@ pub(crate) struct TerminalFrameEvent {
     pub(crate) accepted_bytes: usize,
     pub(crate) skipped_output_bytes: usize,
     pub(crate) revision: u64,
+    pub(crate) process_duration: Duration,
+}
+
+#[derive(Clone, Debug)]
+pub(crate) struct TerminalFrameSnapshotEvent {
+    pub(crate) session_id: String,
+    pub(crate) offset: usize,
+    pub(crate) snapshot: TerminalSnapshot,
+    pub(crate) action_links: Option<TerminalFrameActionLinks>,
+    pub(crate) revision: u64,
+    pub(crate) process_duration: Duration,
+}
+
+#[derive(Clone, Debug)]
+pub(crate) struct TerminalFrameSearchEvent {
+    pub(crate) session_id: String,
+    pub(crate) result: TerminalFrameSearchResult,
     pub(crate) process_duration: Duration,
 }
 
@@ -793,7 +929,7 @@ impl TerminalFrameSession {
         scrollback_limit: usize,
         action_links_enabled: bool,
         action_link_matchers: ActionLinksMatcherSettings,
-    ) -> TerminalFrameEvent {
+    ) -> TerminalFrameOutputEvent {
         let started_at = Instant::now();
         self.set_encoding_and_limit(&encoding, scrollback_limit);
         let recording_text = self.recording_decoder.decode_output_text(&data);
@@ -811,7 +947,7 @@ impl TerminalFrameSession {
             action_links_enabled,
             &action_link_matchers,
         );
-        TerminalFrameEvent {
+        TerminalFrameOutputEvent {
             session_id,
             visible_text,
             recording_text,
@@ -823,6 +959,46 @@ impl TerminalFrameSession {
             accepted_bytes: feed.len(),
             skipped_output_bytes,
             revision: self.revision,
+            process_duration: started_at.elapsed(),
+        }
+    }
+
+    fn snapshot_event(
+        &self,
+        session_id: String,
+        offset: usize,
+        action_links_enabled: bool,
+        action_link_matchers: ActionLinksMatcherSettings,
+    ) -> TerminalFrameSnapshotEvent {
+        let started_at = Instant::now();
+        let snapshot = self.screen.viewport_snapshot(offset);
+        let action_links = prepare_terminal_frame_action_links(
+            &snapshot,
+            action_links_enabled,
+            &action_link_matchers,
+        );
+        TerminalFrameSnapshotEvent {
+            session_id,
+            offset: snapshot.display_offset,
+            snapshot,
+            action_links,
+            revision: self.revision,
+            process_duration: started_at.elapsed(),
+        }
+    }
+
+    fn search_event(
+        &self,
+        session_id: String,
+        key: TerminalFrameSearchKey,
+    ) -> TerminalFrameSearchEvent {
+        let started_at = Instant::now();
+        let flags = key.flags();
+        let buffer_text = self.screen.all_lines().join("\n");
+        let matches = terminal_buffer_matches(&buffer_text, &key.query, &flags, key.limit);
+        TerminalFrameSearchEvent {
+            session_id,
+            result: TerminalFrameSearchResult { key, matches },
             process_duration: started_at.elapsed(),
         }
     }
@@ -887,7 +1063,29 @@ fn run_terminal_frame_processor(
                     action_links_enabled,
                     action_link_matchers,
                 );
-                let _ = event_tx.send(event);
+                let _ = event_tx.send(TerminalFrameEvent::Output(event));
+            }
+            TerminalFrameCommand::RequestSnapshot {
+                session_id,
+                offset,
+                action_links_enabled,
+                action_link_matchers,
+            } => {
+                if let Some(session) = sessions.get(&session_id) {
+                    let event = session.snapshot_event(
+                        session_id,
+                        offset,
+                        action_links_enabled,
+                        action_link_matchers,
+                    );
+                    let _ = event_tx.send(TerminalFrameEvent::Snapshot(event));
+                }
+            }
+            TerminalFrameCommand::RequestSearch { session_id, key } => {
+                if let Some(session) = sessions.get(&session_id) {
+                    let event = session.search_event(session_id, key);
+                    let _ = event_tx.send(TerminalFrameEvent::Search(event));
+                }
             }
         }
     }

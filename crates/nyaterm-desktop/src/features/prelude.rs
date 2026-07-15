@@ -94,10 +94,11 @@ pub(super) use crate::models::{
     SecurityPasswordEditorState, SessionLaunchConfig, SessionRuntimeMetadata, SettingsTab,
     SmartSplitMode, SnapshotPasswordPromptKind, SnapshotPasswordPromptState, SplitEdge,
     StartupCommandAction, StartupCommandRequest, StoreStatus, SyncInputGroup, TabDockZone,
-    TerminalCellPos, TerminalContextMenuState, TerminalFrameEvent, TerminalFramePipeline,
-    TerminalPerformanceOverlay, TerminalProtocolState, TerminalSearchMode, TerminalSelection,
-    TerminalViewState, TerminalWindowNode, TitleMenu, TransferBrowserColumnResizeState,
-    TransferBrowserColumnWidths, TransferBrowserContextMenuState,
+    TerminalCellPos, TerminalContextMenuState, TerminalFrameEvent, TerminalFrameOutputEvent,
+    TerminalFramePipeline, TerminalFrameSearchEvent, TerminalFrameSearchKey,
+    TerminalFrameSnapshotEvent, TerminalPerformanceOverlay, TerminalProtocolState,
+    TerminalSearchMode, TerminalSelection, TerminalViewState, TerminalWindowNode, TitleMenu,
+    TransferBrowserColumnResizeState, TransferBrowserColumnWidths, TransferBrowserContextMenuState,
     TransferBrowserDragSelectionState, TransferBrowserFavoritesMenuState,
     TransferBrowserPendingRenameState, TransferBrowserSessionCacheState, TransferBrowserSortColumn,
     TransferBrowserSortDirection, TransferBrowserUploadMenuState, TransferDeleteState,
@@ -118,10 +119,10 @@ pub(super) use crate::send_command::{
 pub(super) use crate::shortcuts::{event_to_hotkey_string, shortcut_matches};
 pub(super) use crate::terminal::{
     NyaTerminalElement, TerminalBufferMatch, TerminalKeyMode, TerminalLineDecorations,
-    TerminalSearchFlags, TerminalTextCell, initial_terminal_screen, terminal_buffer_matches,
-    terminal_byte_index_for_cell_col, terminal_cell_col_for_byte_index, terminal_cell_count,
-    terminal_is_zero_width_mark, terminal_key_bytes_with_mode,
-    terminal_key_release_bytes_with_mode, terminal_text_cell_slice, terminal_text_cells,
+    TerminalTextCell, initial_terminal_screen, terminal_byte_index_for_cell_col,
+    terminal_cell_col_for_byte_index, terminal_cell_count, terminal_is_zero_width_mark,
+    terminal_key_bytes_with_mode, terminal_key_release_bytes_with_mode, terminal_text_cell_slice,
+    terminal_text_cells,
 };
 pub(super) use crate::widgets::{
     capability_line, empty_panel, icon_button, mode_button, session_info_row, small_button,

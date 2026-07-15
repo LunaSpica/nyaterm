@@ -56,15 +56,19 @@ impl NyaTermApp {
         if delta_lines == 0 {
             return;
         }
+        let mut snapshot_request: Option<(String, usize)> = None;
         if let Some(session_id) = session_id.filter(|id| !id.is_empty()) {
             if let Some(view) = self.terminal_views.get_mut(session_id) {
-                let max = view.screen.scrollback_len();
+                let max = view.scrollback_len_for_ui();
                 let next = if delta_lines > 0 {
                     view.scroll_offset.saturating_add(delta_lines as usize)
                 } else {
                     view.scroll_offset.saturating_sub((-delta_lines) as usize)
                 };
                 view.scroll_offset = next.min(max);
+                if view.scroll_offset > 0 {
+                    snapshot_request = Some((session_id.to_string(), view.scroll_offset));
+                }
             }
         } else {
             let max = self.terminal_screen.scrollback_len();
@@ -89,6 +93,9 @@ impl NyaTermApp {
             {
                 view.has_new_while_scrolled = false;
             }
+        }
+        if let Some((session_id, offset)) = snapshot_request {
+            self.request_terminal_frame_snapshot(&session_id, offset);
         }
         cx.notify();
     }
@@ -248,12 +255,19 @@ impl NyaTermApp {
     }
 
     pub(in crate::features) fn scroll_terminal_to_top(&mut self, cx: &mut Context<Self>) {
+        let mut snapshot_request: Option<(String, usize)> = None;
         if let Some(session_id) = self.active_session_id.clone() {
             if let Some(view) = self.terminal_views.get_mut(&session_id) {
-                view.scroll_offset = view.screen.scrollback_len();
+                view.scroll_offset = view.scrollback_len_for_ui();
+                if view.scroll_offset > 0 {
+                    snapshot_request = Some((session_id.clone(), view.scroll_offset));
+                }
             }
         } else {
             self.terminal_scroll_offset = self.terminal_screen.scrollback_len();
+        }
+        if let Some((session_id, offset)) = snapshot_request {
+            self.request_terminal_frame_snapshot(&session_id, offset);
         }
         cx.notify();
     }
@@ -263,17 +277,23 @@ impl NyaTermApp {
         offset: usize,
         cx: &mut Context<Self>,
     ) {
+        let mut snapshot_request: Option<(String, usize)> = None;
         if let Some(session_id) = self.active_session_id.clone() {
             if let Some(view) = self.terminal_views.get_mut(&session_id) {
-                let max = view.screen.scrollback_len();
+                let max = view.scrollback_len_for_ui();
                 view.scroll_offset = offset.min(max);
                 if view.scroll_offset == 0 {
                     view.has_new_while_scrolled = false;
+                } else {
+                    snapshot_request = Some((session_id.clone(), view.scroll_offset));
                 }
             }
         } else {
             let max = self.terminal_screen.scrollback_len();
             self.terminal_scroll_offset = offset.min(max);
+        }
+        if let Some((session_id, offset)) = snapshot_request {
+            self.request_terminal_frame_snapshot(&session_id, offset);
         }
         cx.notify();
     }
@@ -282,7 +302,7 @@ impl NyaTermApp {
         if let Some(session_id) = self.active_session_id.as_deref() {
             self.terminal_views
                 .get(session_id)
-                .map(|view| view.screen.scrollback_len())
+                .map(|view| view.scrollback_len_for_ui())
                 .unwrap_or(0)
         } else {
             self.terminal_screen.scrollback_len()
@@ -296,7 +316,7 @@ impl NyaTermApp {
         if let Some(session_id) = session_id.filter(|id| !id.is_empty()) {
             self.terminal_views
                 .get(session_id)
-                .map(|view| view.screen.scrollback_len())
+                .map(|view| view.scrollback_len_for_ui())
                 .unwrap_or(0)
         } else {
             self.terminal_screen.scrollback_len()
@@ -309,17 +329,23 @@ impl NyaTermApp {
         offset: usize,
         cx: &mut Context<Self>,
     ) {
+        let mut snapshot_request: Option<(String, usize)> = None;
         if let Some(session_id) = session_id.filter(|id| !id.is_empty()) {
             if let Some(view) = self.terminal_views.get_mut(session_id) {
-                let max = view.screen.scrollback_len();
+                let max = view.scrollback_len_for_ui();
                 view.scroll_offset = offset.min(max);
                 if view.scroll_offset == 0 {
                     view.has_new_while_scrolled = false;
+                } else {
+                    snapshot_request = Some((session_id.to_string(), view.scroll_offset));
                 }
             }
         } else {
             let max = self.terminal_screen.scrollback_len();
             self.terminal_scroll_offset = offset.min(max);
+        }
+        if let Some((session_id, offset)) = snapshot_request {
+            self.request_terminal_frame_snapshot(&session_id, offset);
         }
         cx.notify();
     }
@@ -419,7 +445,7 @@ impl NyaTermApp {
         // Prefer live screen rows when available; fall back to classic 24-row page.
         if let Some(session_id) = self.active_session_id.as_deref() {
             if let Some(view) = self.terminal_views.get(session_id) {
-                let rows = view.screen.viewport_snapshot(0).lines.len();
+                let rows = view.viewport_rows_for_ui();
                 if rows > 0 {
                     return rows;
                 }
