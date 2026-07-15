@@ -1,5 +1,7 @@
 use super::*;
 
+const MAX_KEYWORD_HIGHLIGHT_IMPORT_BYTES: u64 = 4 * 1024 * 1024;
+
 impl NyaTermApp {
     pub(in crate::features) fn toggle_keyword_highlights(&mut self, cx: &mut Context<Self>) {
         self.keyword_highlights.enabled = !self.keyword_highlights.enabled;
@@ -58,7 +60,7 @@ impl NyaTermApp {
         cx.spawn(async move |this, cx| {
             let result = match receiver.await {
                 Ok(Ok(Some(paths))) => match paths.into_iter().next() {
-                    Some(path) => match std::fs::read_to_string(&path) {
+                    Some(path) => match read_keyword_highlight_import_text(&path) {
                         Ok(raw) => match ConnectionStore::open_with_portable_key_path(
                             &config_dir,
                             portable_key_path.clone(),
@@ -429,4 +431,16 @@ impl NyaTermApp {
             self.save_keyword_highlights(cx);
         }
     }
+}
+
+fn read_keyword_highlight_import_text(path: &std::path::Path) -> Result<String, String> {
+    let metadata = std::fs::metadata(path).map_err(|error| error.to_string())?;
+    if metadata.len() > MAX_KEYWORD_HIGHLIGHT_IMPORT_BYTES {
+        return Err(format!(
+            "import file is too large to import ({} bytes > {} bytes)",
+            metadata.len(),
+            MAX_KEYWORD_HIGHLIGHT_IMPORT_BYTES
+        ));
+    }
+    std::fs::read_to_string(path).map_err(|error| error.to_string())
 }
