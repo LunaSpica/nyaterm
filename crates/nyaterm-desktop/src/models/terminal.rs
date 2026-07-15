@@ -455,7 +455,11 @@ impl TerminalViewState {
         self.render_degraded_calm_ticks = 0;
     }
 
-    fn tick_render_degradation(&mut self) {
+    fn tick_render_degradation(&mut self, output_pressure: bool) {
+        if output_pressure {
+            self.enter_render_degraded_mode();
+            return;
+        }
         if !self.render_degraded {
             return;
         }
@@ -470,10 +474,10 @@ impl TerminalViewState {
         }
     }
 
-    pub(crate) fn tick_performance_overlay(&mut self) {
+    pub(crate) fn tick_performance_overlay(&mut self, output_pressure: bool) {
         // End-of-tick calm accounting for recovery.
         self.maybe_exit_overloaded_mode();
-        self.tick_render_degradation();
+        self.tick_render_degradation(output_pressure);
         self.output_burst_bytes = 0;
         if self.performance_overlay_ticks > 0 {
             self.performance_overlay_ticks = self.performance_overlay_ticks.saturating_sub(1);
@@ -1490,6 +1494,36 @@ mod tests {
             next_terminal_frame_command(&rx, &mut pending),
             Some(TerminalFrameCommand::Output { .. })
         ));
+    }
+
+    #[test]
+    fn render_degradation_stays_active_while_output_pressure_is_present() {
+        let mut view = TerminalViewState::new();
+
+        view.tick_performance_overlay(true);
+
+        assert!(view.render_degraded);
+        assert_eq!(view.render_degraded_calm_ticks, 0);
+        for _ in 0..TERMINAL_RENDER_DEGRADATION_RECOVERY_TICKS {
+            view.tick_performance_overlay(true);
+        }
+        assert!(view.render_degraded);
+        assert_eq!(view.render_degraded_calm_ticks, 0);
+    }
+
+    #[test]
+    fn render_degradation_recovers_after_consecutive_calm_ticks() {
+        let mut view = TerminalViewState::new();
+        view.enter_render_degraded_mode();
+
+        for _ in 0..TERMINAL_RENDER_DEGRADATION_RECOVERY_TICKS.saturating_sub(1) {
+            view.tick_performance_overlay(false);
+            assert!(view.render_degraded);
+        }
+        view.tick_performance_overlay(false);
+
+        assert!(!view.render_degraded);
+        assert_eq!(view.render_degraded_calm_ticks, 0);
     }
 }
 

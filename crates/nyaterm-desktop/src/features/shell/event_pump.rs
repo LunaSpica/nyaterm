@@ -725,11 +725,13 @@ impl NyaTermApp {
                 self.terminal_runtime.visual_bell_ticks.saturating_sub(1);
             dirty = true;
         }
+        let output_pressure_for_visuals = self.runtime_output_pressure_active();
         // Large-output protection recovery accounting.
         for view in self.terminal_views.values_mut() {
             let before = view.performance_overlay;
-            view.tick_performance_overlay();
-            if view.performance_overlay != before {
+            let was_render_degraded = view.render_degraded;
+            view.tick_performance_overlay(output_pressure_for_visuals);
+            if view.performance_overlay != before || view.render_degraded != was_render_degraded {
                 dirty = true;
             }
         }
