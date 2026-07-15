@@ -825,8 +825,12 @@ impl TerminalFramePipeline {
             });
     }
 
-    pub(crate) fn try_recv_event(&self) -> Option<TerminalFrameEvent> {
-        self.event_queue.try_recv()
+    pub(crate) fn drain_events_into(
+        &self,
+        events: &mut VecDeque<TerminalFrameEvent>,
+        limit: usize,
+    ) -> usize {
+        self.event_queue.drain_into(events, limit)
     }
 }
 
@@ -919,8 +923,27 @@ impl TerminalFrameEventQueue {
         queue.push_back(event);
     }
 
+    #[cfg(test)]
     fn try_recv(&self) -> Option<TerminalFrameEvent> {
         self.inner.lock().ok()?.pop_front()
+    }
+
+    fn drain_into(&self, events: &mut VecDeque<TerminalFrameEvent>, limit: usize) -> usize {
+        if limit == 0 {
+            return 0;
+        }
+        let Ok(mut queue) = self.inner.lock() else {
+            return 0;
+        };
+        let mut drained = 0usize;
+        while drained < limit {
+            let Some(event) = queue.pop_front() else {
+                break;
+            };
+            events.push_back(event);
+            drained += 1;
+        }
+        drained
     }
 }
 
@@ -1902,6 +1925,40 @@ mod tests {
             Some(TerminalFrameEvent::Output(frame)) if frame.revision == 2
         ));
         assert!(queue.try_recv().is_none());
+    }
+
+    #[test]
+    fn terminal_frame_event_queue_drains_batch_with_limit() {
+        let queue = TerminalFrameEventQueue::new(8);
+        let mut first = output_frame_with_sizes(1, 0);
+        first.revision = 1;
+        first.effects.bell = true;
+        let mut second = output_frame_with_sizes(2, 0);
+        second.revision = 2;
+        second.effects.bell = true;
+        let mut third = output_frame_with_sizes(3, 0);
+        third.revision = 3;
+        third.effects.bell = true;
+
+        queue.push(TerminalFrameEvent::Output(first));
+        queue.push(TerminalFrameEvent::Output(second));
+        queue.push(TerminalFrameEvent::Output(third));
+
+        let mut drained = VecDeque::new();
+        assert_eq!(queue.drain_into(&mut drained, 2), 2);
+        assert_eq!(drained.len(), 2);
+        assert!(matches!(
+            drained.pop_front(),
+            Some(TerminalFrameEvent::Output(frame)) if frame.revision == 1
+        ));
+        assert!(matches!(
+            drained.pop_front(),
+            Some(TerminalFrameEvent::Output(frame)) if frame.revision == 2
+        ));
+        assert!(matches!(
+            queue.try_recv(),
+            Some(TerminalFrameEvent::Output(frame)) if frame.revision == 3
+        ));
     }
 
     #[test]

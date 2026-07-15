@@ -134,19 +134,13 @@ impl NyaTermApp {
         let mut accepted_bytes = 0usize;
         let mut max_apply_duration = Duration::ZERO;
 
-        while self.pending_terminal_frame_events.len() < TERMINAL_FRAME_EVENT_DRAIN_BATCH {
-            let Some(event) = self.terminal_frame_pipeline.try_recv_event() else {
-                break;
-            };
-            self.pending_terminal_frame_events.push_back(event);
-        }
+        self.fill_pending_terminal_frame_events();
 
         while drained_events < TERMINAL_FRAME_EVENT_DRAIN_BATCH {
             if self.pending_terminal_frame_events.is_empty() {
-                let Some(event) = self.terminal_frame_pipeline.try_recv_event() else {
+                if self.fill_pending_terminal_frame_events() == 0 {
                     break;
-                };
-                self.pending_terminal_frame_events.push_back(event);
+                }
             }
 
             let (frames, coalesced) =
@@ -199,6 +193,13 @@ impl NyaTermApp {
             );
         }
         dirty
+    }
+
+    fn fill_pending_terminal_frame_events(&mut self) -> usize {
+        let room = TERMINAL_FRAME_EVENT_DRAIN_BATCH
+            .saturating_sub(self.pending_terminal_frame_events.len());
+        self.terminal_frame_pipeline
+            .drain_events_into(&mut self.pending_terminal_frame_events, room)
     }
 
     fn apply_terminal_frame_event(
