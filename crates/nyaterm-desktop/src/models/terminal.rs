@@ -37,8 +37,6 @@ pub(crate) enum TerminalPerformanceOverlay {
     Recovered,
 }
 
-/// Match Tauri `XTERM_PERFORMANCE_CONFIG.output` thresholds (bytes).
-pub(crate) const TERMINAL_OUTPUT_WRITE_CHUNK: usize = 32 * 1024;
 pub(crate) const TERMINAL_OUTPUT_VISIBLE_BACKLOG_CAP: usize = 1_000_000;
 pub(crate) const TERMINAL_OUTPUT_VISIBLE_BURST_OVERLOAD: usize = 256 * 1024;
 /// UI-only text mirror cap. The authoritative terminal screen/scrollback lives
@@ -476,7 +474,7 @@ impl TerminalViewState {
         }
         self.output_burst_bytes = self.output_burst_bytes.saturating_add(feed.len());
         if self.output_burst_bytes > TERMINAL_OUTPUT_VISIBLE_BURST_OVERLOAD
-            || feed.len() > TERMINAL_OUTPUT_WRITE_CHUNK
+            || feed.len() > 32 * 1024
         {
             self.enter_overloaded_mode();
         }
@@ -602,10 +600,6 @@ impl TerminalViewState {
         self.output_burst_bytes = self.output_burst_bytes.saturating_add(frame.accepted_bytes);
         if frame.skipped_output_bytes > 0 {
             self.note_skipped_output(frame.skipped_output_bytes);
-        } else if self.output_burst_bytes > TERMINAL_OUTPUT_VISIBLE_BURST_OVERLOAD
-            || frame.accepted_bytes > TERMINAL_OUTPUT_WRITE_CHUNK
-        {
-            self.enter_overloaded_mode();
         }
         if self.scroll_offset > 0 {
             self.has_new_while_scrolled = true;
@@ -1321,6 +1315,26 @@ const TERMINAL_FRAME_EVENT_CHANNEL_CAP: usize = 1024;
 mod tests {
     use super::*;
 
+    fn output_frame_with_sizes(
+        accepted_bytes: usize,
+        skipped_output_bytes: usize,
+    ) -> TerminalFrameOutputEvent {
+        TerminalFrameOutputEvent {
+            session_id: "s1".to_string(),
+            visible_text: "x".to_string(),
+            recording_text_bytes: 1,
+            snapshot: TerminalScreen::default().viewport_snapshot(0),
+            action_links: None,
+            protocol_state: TerminalProtocolState::default(),
+            effects: TerminalEffects::default(),
+            command_running: false,
+            accepted_bytes,
+            skipped_output_bytes,
+            revision: 1,
+            process_duration: Duration::ZERO,
+        }
+    }
+
     #[test]
     fn terminal_view_output_decodes_session_charset() {
         let mut view = TerminalViewState::new();
@@ -1422,6 +1436,33 @@ mod tests {
         assert!(!output.contains('测'), "output={output:?}");
         let grid = screen.lines().join("");
         assert!(!grid.contains('测'), "grid={grid:?}");
+    }
+
+    #[test]
+    fn terminal_frame_large_accepted_output_does_not_show_protection_overlay() {
+        let mut view = TerminalViewState::new();
+        let frame = output_frame_with_sizes((32 * 1024) + 1, 0);
+
+        view.apply_terminal_frame(&frame);
+
+        assert_eq!(view.performance_mode, TerminalPerformanceMode::Normal);
+        assert_eq!(view.performance_overlay, None);
+        assert_eq!(view.skipped_output_chars, 0);
+    }
+
+    #[test]
+    fn terminal_frame_skipped_output_shows_protection_overlay() {
+        let mut view = TerminalViewState::new();
+        let frame = output_frame_with_sizes(1, 7);
+
+        view.apply_terminal_frame(&frame);
+
+        assert_eq!(view.performance_mode, TerminalPerformanceMode::Overloaded);
+        assert_eq!(
+            view.performance_overlay,
+            Some(TerminalPerformanceOverlay::Overloaded)
+        );
+        assert_eq!(view.skipped_output_chars, 7);
     }
 
     #[test]
