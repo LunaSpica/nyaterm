@@ -64,7 +64,7 @@ impl NyaTermApp {
             cx.notify();
             return;
         }
-        if self.pending_session_name.is_some() {
+        if self.has_pending_session_start() {
             self.enqueue_saved_connection_start_with_options(connection, options, cx);
             return;
         }

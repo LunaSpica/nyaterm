@@ -90,7 +90,7 @@ impl NyaTermApp {
             cx.notify();
             return;
         }
-        if self.active_session_id.is_some() || self.pending_session_name.is_some() {
+        if self.active_session_id.is_some() || self.has_pending_session_start() {
             self.terminal_status = "close active session before importing config".to_string();
             cx.notify();
             return;
@@ -140,7 +140,7 @@ impl NyaTermApp {
             cx.notify();
             return;
         }
-        if self.active_session_id.is_some() || self.pending_session_name.is_some() {
+        if self.active_session_id.is_some() || self.has_pending_session_start() {
             self.terminal_status = "close active session before importing config".to_string();
             cx.notify();
             return;
@@ -188,7 +188,7 @@ impl NyaTermApp {
         &mut self,
         cx: &mut Context<Self>,
     ) {
-        if self.active_session_id.is_some() || self.pending_session_name.is_some() {
+        if self.active_session_id.is_some() || self.has_pending_session_start() {
             self.terminal_status = "close active session before importing config".to_string();
             cx.notify();
             return;

@@ -274,7 +274,7 @@ impl NyaTermApp {
         {
             return;
         }
-        if self.pending_session_name.is_some() {
+        if self.has_pending_session_start() {
             return;
         }
         let Some(tab) = self

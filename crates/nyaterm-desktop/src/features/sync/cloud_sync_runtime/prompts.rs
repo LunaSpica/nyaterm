@@ -6,7 +6,7 @@ impl NyaTermApp {
     }
 
     pub(in crate::features) fn prompt_local_cloud_sync_pull(&mut self, cx: &mut Context<Self>) {
-        if self.active_session_id.is_some() || self.pending_session_name.is_some() {
+        if self.active_session_id.is_some() || self.has_pending_session_start() {
             self.terminal_status = "close active session before pulling cloud sync".to_string();
             cx.notify();
             return;
@@ -19,7 +19,7 @@ impl NyaTermApp {
     }
 
     pub(in crate::features) fn prompt_provider_cloud_sync_pull(&mut self, cx: &mut Context<Self>) {
-        if self.active_session_id.is_some() || self.pending_session_name.is_some() {
+        if self.active_session_id.is_some() || self.has_pending_session_start() {
             self.terminal_status =
                 "close active session before pulling provider cloud sync".to_string();
             cx.notify();
@@ -46,7 +46,7 @@ impl NyaTermApp {
         provider_action: bool,
         cx: &mut Context<Self>,
     ) {
-        if self.active_session_id.is_some() || self.pending_session_name.is_some() {
+        if self.active_session_id.is_some() || self.has_pending_session_start() {
             self.terminal_status = if provider_action {
                 "close active session before force pulling provider cloud sync"
             } else {

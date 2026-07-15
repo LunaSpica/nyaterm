@@ -148,7 +148,7 @@ impl NyaTermApp {
                         "status-session",
                         "Session",
                         session_status,
-                        if self.pending_session_name.is_some() {
+                        if self.has_pending_session_start() {
                             rgb(palette.warning)
                         } else if self
                             .active_session_id

@@ -401,7 +401,6 @@ pub struct NyaTermApp {
     pub(in crate::features) transfer_focused_field: TransferInputField,
     pub(in crate::features) duplicate_prompts: Arc<SftpDuplicatePromptBroker>,
     pub(in crate::features) active_duplicate_prompt: Option<SftpDuplicatePromptState>,
-    pub(in crate::features) pending_session_name: Option<String>,
     pub(in crate::features) pending_session_starts: HashMap<String, PendingSessionStart>,
     pub(in crate::features) session_pane_states: HashMap<String, SessionPaneState>,
     /// Disconnected session id being replaced by an in-flight reconnect.

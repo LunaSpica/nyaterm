@@ -24,7 +24,7 @@ impl NyaTermApp {
 
     pub(in crate::features) fn quick_switch_items(&self) -> Vec<QuickSwitchItem> {
         let mut items = Vec::new();
-        if let Some(pending_name) = self.pending_session_name.clone() {
+        if let Some(pending_name) = self.pending_session_display_name() {
             items.push(QuickSwitchItem::Pending {
                 title: format!("Connecting {pending_name}"),
                 subtitle: "pending SSH session".to_string(),

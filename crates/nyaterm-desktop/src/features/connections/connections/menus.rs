@@ -187,11 +187,11 @@ impl NyaTermApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> bool {
-        if self.pending_session_name.is_some() {
+        if self.has_pending_session_start() {
             return false;
         }
         let mut dirty = false;
-        while self.pending_session_name.is_none() {
+        while !self.has_pending_session_start() {
             let Some(start) = self.pending_saved_connection_queue.pop_front() else {
                 return dirty;
             };
@@ -202,7 +202,7 @@ impl NyaTermApp {
             let before_pending_count = self.pending_session_starts.len();
             self.start_saved_connection_with_options(start.connection, start.options, window, cx);
             dirty = true;
-            if self.pending_session_name.is_some()
+            if self.has_pending_session_start()
                 || self.pending_session_starts.len() > before_pending_count
             {
                 return true;

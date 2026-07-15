@@ -388,7 +388,7 @@ impl NyaTermApp {
         let busy_action = self.active_session_busy_actions.get(&session.id).cloned();
         let is_busy = busy_action.is_some();
         let menu_open = self.active_session_menu_id.as_deref() == Some(session.id.as_str());
-        let can_reconnect = !is_busy && self.pending_session_name.is_none();
+        let can_reconnect = !is_busy && !self.has_pending_session_start();
         let can_disconnect = !is_busy && !is_disconnected;
         let accent = if let Some(custom_color) = custom_color {
             rgb(custom_color)
@@ -576,7 +576,7 @@ impl NyaTermApp {
                                                         if this
                                                             .active_session_busy_actions
                                                             .contains_key(&reconnect_session_id)
-                                                            || this.pending_session_name.is_some()
+                                                            || this.has_pending_session_start()
                                                         {
                                                             cx.notify();
                                                             return;

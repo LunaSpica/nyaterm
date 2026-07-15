@@ -3,6 +3,21 @@ use super::*;
 const SESSION_START_EVENT_DRAIN_LIMIT: usize = 8;
 
 impl NyaTermApp {
+    pub(in crate::features) fn has_pending_session_start(&self) -> bool {
+        !self.pending_session_starts.is_empty()
+    }
+
+    pub(in crate::features) fn pending_session_display_name(&self) -> Option<String> {
+        self.pending_session_starts
+            .values()
+            .min_by(|left, right| {
+                left.requested_at
+                    .cmp(&right.requested_at)
+                    .then_with(|| left.connection_name.cmp(&right.connection_name))
+            })
+            .map(|pending| pending.connection_name.clone())
+    }
+
     pub(in crate::features) fn register_pending_session_start(
         &mut self,
         registration: PendingSessionStartRegistration,
@@ -27,7 +42,6 @@ impl NyaTermApp {
             append_start_log,
         } = registration;
 
-        self.pending_session_name = Some(connection_name.clone());
         self.last_connect_failure_name = None;
         self.last_connect_failure_error = None;
         self.session_pane_states.insert(
@@ -503,17 +517,8 @@ impl NyaTermApp {
                     );
                 }
             }
-            self.refresh_pending_session_name();
         }
         dirty
-    }
-
-    pub(in crate::features) fn refresh_pending_session_name(&mut self) {
-        self.pending_session_name = self
-            .pending_session_starts
-            .values()
-            .next()
-            .map(|pending| pending.connection_name.clone());
     }
 }
 

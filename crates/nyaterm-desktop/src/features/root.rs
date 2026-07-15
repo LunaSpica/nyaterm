@@ -10,7 +10,7 @@ impl NyaTermApp {
         self.refresh_window_render_inputs(window, cx);
         self.try_restore_open_tabs(window, cx);
         let should_pump = self.stores.startup_restore.update(cx, |store, _| {
-            store.can_pump_queue(self.pending_session_name.is_some())
+            store.can_pump_queue(self.has_pending_session_start())
         });
         if should_pump {
             self.pump_startup_restore_queue(window, cx);

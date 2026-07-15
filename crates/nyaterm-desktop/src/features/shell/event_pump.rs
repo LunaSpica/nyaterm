@@ -194,7 +194,7 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) -> bool {
         let should_pump = self.stores.startup_restore.update(cx, |store, _| {
-            store.can_pump_queue(self.pending_session_name.is_some())
+            store.can_pump_queue(self.has_pending_session_start())
         });
         if !should_pump {
             return false;
@@ -586,7 +586,7 @@ impl NyaTermApp {
         drain_stage!(
             startup_restore,
             self.stores.startup_restore.update(cx, |store, _| {
-                store.can_pump_queue(self.pending_session_name.is_some())
+                store.can_pump_queue(self.has_pending_session_start())
             })
         );
         drain_stage!(transfer, self.drain_transfer_events(cx));
@@ -1079,15 +1079,17 @@ impl NyaTermApp {
     }
 
     pub(in crate::features) fn pending_session_status_label(&self) -> Option<String> {
-        let name = self.pending_session_name.as_ref()?;
+        let name = self.pending_session_display_name()?;
         Some(pending_session_status_message(
-            name,
+            &name,
             self.pending_session_auth_wait().as_ref(),
         ))
     }
 
     pub(in crate::features) fn pending_session_tab_detail(&self) -> Option<&'static str> {
-        let _ = self.pending_session_name.as_ref()?;
+        if !self.has_pending_session_start() {
+            return None;
+        }
         Some(match self.pending_session_auth_wait() {
             Some(PendingSessionAuthWait::Credential { .. }) => "Credential required",
             Some(PendingSessionAuthWait::HostKey { .. }) => "Host key required",

@@ -612,7 +612,6 @@ impl NyaTermApp {
             transfer_focused_field: TransferInputField::Remote,
             duplicate_prompts: Arc::new(SftpDuplicatePromptBroker::default()),
             active_duplicate_prompt: None,
-            pending_session_name: None,
             pending_session_starts: HashMap::new(),
             session_pane_states: HashMap::new(),
             pending_reconnect_replace_id: None,

@@ -7,7 +7,7 @@ impl NyaTermApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        if self.pending_session_name.is_some() {
+        if self.has_pending_session_start() {
             self.terminal_status = "wait for the pending session to finish connecting".to_string();
             cx.notify();
             return;
@@ -32,7 +32,7 @@ impl NyaTermApp {
         _window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        if self.pending_session_name.is_some() {
+        if self.has_pending_session_start() {
             self.temporary_ssh_link_error =
                 Some("A session is already connecting. Try again after it finishes.".to_string());
             self.terminal_status = "wait for the pending session to finish connecting".to_string();

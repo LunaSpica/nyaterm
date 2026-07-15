@@ -23,7 +23,7 @@ impl NyaTermApp {
         let session_count = sessions.len();
         // Child index layout for ScrollHandle: optional connecting tab, then sessions,
         // then optional end drop zone. Failed chrome is trailing after sessions.
-        let connecting_tab_present = self.pending_session_name.is_some();
+        let connecting_tab_present = self.has_pending_session_start();
         if self.session_tab_scroll_into_view_pending {
             if let Some(active_id) = self.active_session_id.as_deref() {
                 if let Some(index) = sessions.iter().position(|session| session.id == active_id) {
@@ -45,7 +45,7 @@ impl NyaTermApp {
             .overflow_y_hidden()
             .track_scroll(&self.session_tab_strip_scroll);
 
-        if let Some(pending_name) = self.pending_session_name.clone() {
+        if let Some(pending_name) = self.pending_session_display_name() {
             let pending_detail = self.pending_session_tab_detail().unwrap_or("Connecting...");
             tabs = tabs.child(
                 div()
@@ -107,7 +107,7 @@ impl NyaTermApp {
             );
         }
 
-        if sessions.is_empty() && self.pending_session_name.is_none() {
+        if sessions.is_empty() && !self.has_pending_session_start() {
             tabs = tabs.child(
                 div()
                     .h_full()
@@ -398,7 +398,7 @@ impl NyaTermApp {
         }
 
         // Tauri connectError tab chrome: ephemeral failed connect pill after sessions.
-        if self.pending_session_name.is_none() {
+        if !self.has_pending_session_start() {
             if let (Some(failed_name), Some(failed_error)) = (
                 self.last_connect_failure_name.clone(),
                 self.last_connect_failure_error.clone(),
