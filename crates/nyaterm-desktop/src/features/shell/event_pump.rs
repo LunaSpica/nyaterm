@@ -661,6 +661,7 @@ impl NyaTermApp {
             self.pending_session_events.len(),
             self.pending_terminal_frame_events.len(),
             self.terminal_frame_pipeline.queued_event_count(),
+            self.terminal_frame_pipeline.queued_output_bytes(),
         )
     }
 
@@ -838,6 +839,10 @@ impl NyaTermApp {
                 publish_snapshots_ms = publish_duration.as_millis(),
                 queued_events = self.terminal_runtime.session_event_queued_events,
                 queued_output_bytes = self.terminal_runtime.session_event_queued_output_bytes,
+                frame_command_count = self.terminal_frame_pipeline.queued_command_count(),
+                frame_command_output_bytes = self.terminal_frame_pipeline.queued_output_bytes(),
+                frame_event_count = self.terminal_frame_pipeline.queued_event_count(),
+                pending_frame_events = self.pending_terminal_frame_events.len(),
                 pending_session_starts = self.pending_session_starts.len(),
                 output_pressure,
                 next_tick_delay_ms = self.window_runtime_tick_delay().as_millis(),
@@ -1037,12 +1042,14 @@ fn runtime_output_pressure_active_from_counts(
     pending_session_events: usize,
     pending_terminal_frame_events: usize,
     queued_terminal_frame_events: usize,
+    queued_terminal_frame_output_bytes: usize,
 ) -> bool {
     session_event_backlog_active
         || session_event_queued_output_bytes > 0
         || pending_session_events > 0
         || pending_terminal_frame_events > 0
         || queued_terminal_frame_events > 0
+        || queued_terminal_frame_output_bytes > 0
 }
 
 fn session_event_drain_is_slow(total: Duration, max_chunk: Duration) -> bool {
@@ -1205,20 +1212,25 @@ mod tests {
     #[test]
     fn runtime_output_pressure_tracks_output_and_frame_backlog_only() {
         assert!(!runtime_output_pressure_active_from_counts(
-            false, 0, 0, 0, 0
-        ));
-        assert!(runtime_output_pressure_active_from_counts(true, 0, 0, 0, 0));
-        assert!(runtime_output_pressure_active_from_counts(
-            false, 1, 0, 0, 0
+            false, 0, 0, 0, 0, 0
         ));
         assert!(runtime_output_pressure_active_from_counts(
-            false, 0, 1, 0, 0
+            true, 0, 0, 0, 0, 0
         ));
         assert!(runtime_output_pressure_active_from_counts(
-            false, 0, 0, 1, 0
+            false, 1, 0, 0, 0, 0
         ));
         assert!(runtime_output_pressure_active_from_counts(
-            false, 0, 0, 0, 1
+            false, 0, 1, 0, 0, 0
+        ));
+        assert!(runtime_output_pressure_active_from_counts(
+            false, 0, 0, 1, 0, 0
+        ));
+        assert!(runtime_output_pressure_active_from_counts(
+            false, 0, 0, 0, 1, 0
+        ));
+        assert!(runtime_output_pressure_active_from_counts(
+            false, 0, 0, 0, 0, 1
         ));
     }
 

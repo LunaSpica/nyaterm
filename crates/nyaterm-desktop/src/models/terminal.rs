@@ -887,6 +887,14 @@ impl TerminalFramePipeline {
     pub(crate) fn queued_event_count(&self) -> usize {
         self.event_queue.len()
     }
+
+    pub(crate) fn queued_command_count(&self) -> usize {
+        self.command_tx.len()
+    }
+
+    pub(crate) fn queued_output_bytes(&self) -> usize {
+        self.command_tx.queued_output_bytes()
+    }
 }
 
 impl Default for TerminalFramePipeline {
@@ -1293,6 +1301,22 @@ impl TerminalFrameCommandSender {
         self.shared.ready.notify_one();
         true
     }
+
+    fn len(&self) -> usize {
+        self.shared
+            .inner
+            .lock()
+            .map(|inner| inner.commands.len())
+            .unwrap_or(0)
+    }
+
+    fn queued_output_bytes(&self) -> usize {
+        self.shared
+            .inner
+            .lock()
+            .map(|inner| terminal_frame_command_queue_output_bytes(&inner.commands))
+            .unwrap_or(0)
+    }
 }
 
 impl Drop for TerminalFrameCommandSender {
@@ -1363,8 +1387,87 @@ fn push_terminal_frame_command(
                 scrollback_limit,
             });
         }
+        TerminalFrameCommand::ResizeSession {
+            session_id,
+            cols,
+            rows,
+        } => {
+            if let Some(TerminalFrameCommand::ResizeSession {
+                session_id: last_session_id,
+                cols: last_cols,
+                rows: last_rows,
+            }) = commands.back_mut()
+                && *last_session_id == session_id
+            {
+                *last_cols = cols;
+                *last_rows = rows;
+                return;
+            }
+            commands.push_back(TerminalFrameCommand::ResizeSession {
+                session_id,
+                cols,
+                rows,
+            });
+        }
         other => commands.push_back(other),
     }
+    compact_terminal_frame_command_queue(commands, TERMINAL_FRAME_COMMAND_QUEUE_CAP);
+}
+
+fn compact_terminal_frame_command_queue(commands: &mut VecDeque<TerminalFrameCommand>, cap: usize) {
+    compact_stale_terminal_frame_commands(commands);
+    while commands.len() > cap {
+        let Some(drop_index) = commands
+            .iter()
+            .position(terminal_frame_command_can_drop_under_pressure)
+        else {
+            break;
+        };
+        commands.remove(drop_index);
+    }
+}
+
+fn compact_stale_terminal_frame_commands(commands: &mut VecDeque<TerminalFrameCommand>) {
+    if commands.len() <= 1 {
+        return;
+    }
+    let mut seen_snapshots: HashSet<(String, usize)> = HashSet::new();
+    let mut seen_searches: HashSet<String> = HashSet::new();
+    let mut compacted = VecDeque::with_capacity(commands.len());
+
+    for command in commands.drain(..).rev() {
+        let keep = match &command {
+            TerminalFrameCommand::RequestSnapshot {
+                session_id, offset, ..
+            } => seen_snapshots.insert((session_id.clone(), *offset)),
+            TerminalFrameCommand::RequestSearch { session_id, .. } => {
+                seen_searches.insert(session_id.clone())
+            }
+            _ => true,
+        };
+        if keep {
+            compacted.push_front(command);
+        }
+    }
+
+    *commands = compacted;
+}
+
+fn terminal_frame_command_can_drop_under_pressure(command: &TerminalFrameCommand) -> bool {
+    matches!(
+        command,
+        TerminalFrameCommand::RequestSnapshot { .. } | TerminalFrameCommand::RequestSearch { .. }
+    )
+}
+
+fn terminal_frame_command_queue_output_bytes(commands: &VecDeque<TerminalFrameCommand>) -> usize {
+    commands
+        .iter()
+        .map(|command| match command {
+            TerminalFrameCommand::Output { data, .. } => data.len(),
+            _ => 0,
+        })
+        .sum()
 }
 
 fn run_terminal_frame_processor(
@@ -1540,6 +1643,7 @@ fn terminal_frame_output_commands_can_merge(
 }
 
 const TERMINAL_FRAME_EVENT_QUEUE_CAP: usize = 1024;
+const TERMINAL_FRAME_COMMAND_QUEUE_CAP: usize = 512;
 const TERMINAL_FRAME_OUTPUT_COALESCE_BYTE_LIMIT: usize = 64 * 1024;
 
 #[cfg(test)]
@@ -2206,6 +2310,153 @@ mod tests {
             rx.try_recv(),
             Some(TerminalFrameCommand::Output { data, .. }) if data == b"bc"
         ));
+    }
+
+    #[test]
+    fn terminal_frame_command_queue_keeps_latest_search_per_session() {
+        let (tx, rx) = terminal_frame_command_channel();
+        assert!(tx.send(TerminalFrameCommand::RequestSearch {
+            session_id: "s1".to_string(),
+            key: TerminalFrameSearchKey {
+                query: "old".to_string(),
+                case_sensitive: false,
+                regex: false,
+                whole_word: false,
+                limit: 100,
+            },
+        }));
+        assert!(tx.send(TerminalFrameCommand::RequestSearch {
+            session_id: "s1".to_string(),
+            key: TerminalFrameSearchKey {
+                query: "new".to_string(),
+                case_sensitive: false,
+                regex: false,
+                whole_word: false,
+                limit: 100,
+            },
+        }));
+
+        assert!(matches!(
+            rx.try_recv(),
+            Some(TerminalFrameCommand::RequestSearch { key, .. }) if key.query == "new"
+        ));
+        assert!(rx.try_recv().is_none());
+    }
+
+    #[test]
+    fn terminal_frame_command_queue_keeps_latest_resize_per_session() {
+        let (tx, rx) = terminal_frame_command_channel();
+        assert!(tx.send(TerminalFrameCommand::ResizeSession {
+            session_id: "s1".to_string(),
+            cols: 80,
+            rows: 24,
+        }));
+        assert!(tx.send(TerminalFrameCommand::ResizeSession {
+            session_id: "s1".to_string(),
+            cols: 120,
+            rows: 40,
+        }));
+
+        assert!(matches!(
+            rx.try_recv(),
+            Some(TerminalFrameCommand::ResizeSession {
+                cols: 120,
+                rows: 40,
+                ..
+            })
+        ));
+        assert!(rx.try_recv().is_none());
+    }
+
+    #[test]
+    fn terminal_frame_command_queue_keeps_resize_when_output_intervenes() {
+        let (tx, rx) = terminal_frame_command_channel();
+        assert!(tx.send(TerminalFrameCommand::ResizeSession {
+            session_id: "s1".to_string(),
+            cols: 80,
+            rows: 24,
+        }));
+        assert!(tx.send(TerminalFrameCommand::Output {
+            session_id: "s1".to_string(),
+            data: b"a".to_vec(),
+            encoding: "UTF-8".to_string(),
+            scrollback_limit: 1000,
+        }));
+        assert!(tx.send(TerminalFrameCommand::ResizeSession {
+            session_id: "s1".to_string(),
+            cols: 120,
+            rows: 40,
+        }));
+
+        assert!(matches!(
+            rx.try_recv(),
+            Some(TerminalFrameCommand::ResizeSession {
+                cols: 80,
+                rows: 24,
+                ..
+            })
+        ));
+        assert!(matches!(
+            rx.try_recv(),
+            Some(TerminalFrameCommand::Output { data, .. }) if data == b"a"
+        ));
+        assert!(matches!(
+            rx.try_recv(),
+            Some(TerminalFrameCommand::ResizeSession {
+                cols: 120,
+                rows: 40,
+                ..
+            })
+        ));
+        assert!(rx.try_recv().is_none());
+    }
+
+    #[test]
+    fn terminal_frame_command_queue_caps_rebuildable_render_requests() {
+        let (tx, rx) = terminal_frame_command_channel();
+        for offset in 0..TERMINAL_FRAME_COMMAND_QUEUE_CAP + 32 {
+            assert!(tx.send(TerminalFrameCommand::RequestSnapshot {
+                session_id: format!("s{offset}"),
+                offset,
+                action_links_enabled: false,
+                action_link_matchers: ActionLinksMatcherSettings::default(),
+            }));
+        }
+
+        assert_eq!(tx.len(), TERMINAL_FRAME_COMMAND_QUEUE_CAP);
+        let mut drained = 0usize;
+        while let Some(command) = rx.try_recv() {
+            assert!(matches!(
+                command,
+                TerminalFrameCommand::RequestSnapshot { .. }
+            ));
+            drained += 1;
+        }
+        assert_eq!(drained, TERMINAL_FRAME_COMMAND_QUEUE_CAP);
+    }
+
+    #[test]
+    fn terminal_frame_command_queue_reports_queued_output_bytes() {
+        let (tx, _rx) = terminal_frame_command_channel();
+        assert!(tx.send(TerminalFrameCommand::Output {
+            session_id: "s1".to_string(),
+            data: b"abc".to_vec(),
+            encoding: "UTF-8".to_string(),
+            scrollback_limit: 1000,
+        }));
+        assert!(tx.send(TerminalFrameCommand::ResizeSession {
+            session_id: "s1".to_string(),
+            cols: 100,
+            rows: 30,
+        }));
+        assert!(tx.send(TerminalFrameCommand::Output {
+            session_id: "s1".to_string(),
+            data: b"de".to_vec(),
+            encoding: "UTF-8".to_string(),
+            scrollback_limit: 1000,
+        }));
+
+        assert_eq!(tx.queued_output_bytes(), 5);
     }
 
     #[test]
