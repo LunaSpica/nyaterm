@@ -2,7 +2,7 @@ use nyaterm_core::{
     ActionLinksMatcherSettings, TerminalBackendResize, terminal_backend_resize_changed,
 };
 use nyaterm_terminal::{TerminalEffects, TerminalOutputDecoder, TerminalScreen, TerminalSnapshot};
-use std::collections::{HashMap, HashSet};
+use std::collections::{HashMap, HashSet, VecDeque};
 use std::hash::{Hash, Hasher};
 use std::sync::mpsc;
 use std::sync::{Arc, Mutex};
@@ -970,7 +970,8 @@ fn run_terminal_frame_processor(
     event_tx: mpsc::SyncSender<TerminalFrameEvent>,
 ) {
     let mut sessions: HashMap<String, TerminalFrameSession> = HashMap::new();
-    while let Ok(command) = command_rx.recv() {
+    let mut pending_commands = VecDeque::new();
+    while let Some(command) = next_terminal_frame_command(&command_rx, &mut pending_commands) {
         match command {
             TerminalFrameCommand::EnsureSession {
                 session_id,
@@ -1013,6 +1014,23 @@ fn run_terminal_frame_processor(
                 action_links_enabled,
                 action_link_matchers,
             } => {
+                let (
+                    session_id,
+                    data,
+                    encoding,
+                    scrollback_limit,
+                    action_links_enabled,
+                    action_link_matchers,
+                ) = coalesce_terminal_frame_output_command(
+                    &command_rx,
+                    &mut pending_commands,
+                    session_id,
+                    data,
+                    encoding,
+                    scrollback_limit,
+                    action_links_enabled,
+                    action_link_matchers,
+                );
                 let session = sessions
                     .entry(session_id.clone())
                     .or_insert_with(|| TerminalFrameSession::new(&encoding, scrollback_limit));
@@ -1050,6 +1068,100 @@ fn run_terminal_frame_processor(
             }
         }
     }
+}
+
+fn next_terminal_frame_command(
+    command_rx: &mpsc::Receiver<TerminalFrameCommand>,
+    pending_commands: &mut VecDeque<TerminalFrameCommand>,
+) -> Option<TerminalFrameCommand> {
+    pending_commands
+        .pop_front()
+        .or_else(|| command_rx.recv().ok())
+}
+
+#[allow(clippy::too_many_arguments)]
+fn coalesce_terminal_frame_output_command(
+    command_rx: &mpsc::Receiver<TerminalFrameCommand>,
+    pending_commands: &mut VecDeque<TerminalFrameCommand>,
+    session_id: String,
+    mut data: Vec<u8>,
+    encoding: String,
+    scrollback_limit: usize,
+    action_links_enabled: bool,
+    action_link_matchers: ActionLinksMatcherSettings,
+) -> (
+    String,
+    Vec<u8>,
+    String,
+    usize,
+    bool,
+    ActionLinksMatcherSettings,
+) {
+    loop {
+        let next = pending_commands
+            .pop_front()
+            .or_else(|| command_rx.try_recv().ok());
+        let Some(next) = next else {
+            break;
+        };
+        match next {
+            TerminalFrameCommand::Output {
+                session_id: next_session_id,
+                data: next_data,
+                encoding: next_encoding,
+                scrollback_limit: next_scrollback_limit,
+                action_links_enabled: next_action_links_enabled,
+                action_link_matchers: next_action_link_matchers,
+            } if terminal_frame_output_commands_can_merge(
+                &session_id,
+                &encoding,
+                scrollback_limit,
+                action_links_enabled,
+                &action_link_matchers,
+                &next_session_id,
+                &next_encoding,
+                next_scrollback_limit,
+                next_action_links_enabled,
+                &next_action_link_matchers,
+            ) =>
+            {
+                data.extend(next_data);
+            }
+            other => {
+                pending_commands.push_front(other);
+                break;
+            }
+        }
+    }
+
+    (
+        session_id,
+        data,
+        encoding,
+        scrollback_limit,
+        action_links_enabled,
+        action_link_matchers,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+fn terminal_frame_output_commands_can_merge(
+    session_id: &str,
+    encoding: &str,
+    scrollback_limit: usize,
+    action_links_enabled: bool,
+    action_link_matchers: &ActionLinksMatcherSettings,
+    next_session_id: &str,
+    next_encoding: &str,
+    next_scrollback_limit: usize,
+    next_action_links_enabled: bool,
+    next_action_link_matchers: &ActionLinksMatcherSettings,
+) -> bool {
+    session_id == next_session_id
+        && encoding == next_encoding
+        && scrollback_limit == next_scrollback_limit
+        && action_links_enabled == next_action_links_enabled
+        && action_link_matchers == next_action_link_matchers
 }
 
 const TERMINAL_FRAME_EVENT_CHANNEL_CAP: usize = 1024;
@@ -1301,6 +1413,81 @@ mod tests {
         let disabled = prepare_terminal_frame_action_links(&snapshot, false, &matchers).unwrap();
         assert!(disabled.matches_by_line.iter().all(Vec::is_empty));
         assert_ne!(links.matcher_key, disabled.matcher_key);
+    }
+
+    #[test]
+    fn terminal_frame_worker_coalesces_adjacent_matching_output() {
+        let (tx, rx) = mpsc::channel();
+        let matchers = ActionLinksMatcherSettings::default();
+        tx.send(TerminalFrameCommand::Output {
+            session_id: "s1".to_string(),
+            data: b"bc".to_vec(),
+            encoding: "UTF-8".to_string(),
+            scrollback_limit: 1000,
+            action_links_enabled: true,
+            action_link_matchers: matchers.clone(),
+        })
+        .unwrap();
+        drop(tx);
+
+        let mut pending = VecDeque::new();
+        let (_, data, _, _, _, _) = coalesce_terminal_frame_output_command(
+            &rx,
+            &mut pending,
+            "s1".to_string(),
+            b"a".to_vec(),
+            "UTF-8".to_string(),
+            1000,
+            true,
+            matchers,
+        );
+
+        assert_eq!(data, b"abc");
+        assert!(pending.is_empty());
+    }
+
+    #[test]
+    fn terminal_frame_worker_does_not_coalesce_across_resize() {
+        let (tx, rx) = mpsc::channel();
+        let matchers = ActionLinksMatcherSettings::default();
+        tx.send(TerminalFrameCommand::ResizeSession {
+            session_id: "s1".to_string(),
+            cols: 100,
+            rows: 30,
+        })
+        .unwrap();
+        tx.send(TerminalFrameCommand::Output {
+            session_id: "s1".to_string(),
+            data: b"bc".to_vec(),
+            encoding: "UTF-8".to_string(),
+            scrollback_limit: 1000,
+            action_links_enabled: true,
+            action_link_matchers: matchers.clone(),
+        })
+        .unwrap();
+        drop(tx);
+
+        let mut pending = VecDeque::new();
+        let (_, data, _, _, _, _) = coalesce_terminal_frame_output_command(
+            &rx,
+            &mut pending,
+            "s1".to_string(),
+            b"a".to_vec(),
+            "UTF-8".to_string(),
+            1000,
+            true,
+            matchers,
+        );
+
+        assert_eq!(data, b"a");
+        assert!(matches!(
+            next_terminal_frame_command(&rx, &mut pending),
+            Some(TerminalFrameCommand::ResizeSession { .. })
+        ));
+        assert!(matches!(
+            next_terminal_frame_command(&rx, &mut pending),
+            Some(TerminalFrameCommand::Output { .. })
+        ));
     }
 }
 
