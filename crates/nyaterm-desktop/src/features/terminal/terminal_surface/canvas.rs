@@ -17,7 +17,6 @@ impl NyaTermApp {
     ) -> impl IntoElement {
         let render_started_at = Instant::now();
         let palette = self.terminal_theme_palette();
-        let action_link_matchers = self.settings.terminal_action_links_matchers.clone();
         let is_active = self.active_session_id.as_deref() == Some(session_id.as_str());
         let is_disconnected = !session_id.is_empty() && self.is_session_disconnected(&session_id);
         let render_degraded = self
@@ -26,7 +25,7 @@ impl NyaTermApp {
             .is_some_and(|view| view.render_degraded);
         let action_link_matcher_key = terminal_action_link_matcher_key(
             self.settings.terminal_action_links_enabled,
-            &action_link_matchers,
+            &self.settings.terminal_action_links_matchers,
         );
         let keyword_rules = if render_degraded {
             Vec::new()
@@ -53,8 +52,7 @@ impl NyaTermApp {
                     view.scrollback_action_links.get(&scroll_offset)
                 }
             })
-            .filter(|links| links.matcher_key == action_link_matcher_key)
-            .cloned();
+            .filter(|links| links.matcher_key == action_link_matcher_key);
         let snapshot = self.terminal_snapshot_for_session(
             (!session_id.is_empty()).then_some(session_id.as_str()),
             scroll_offset,
@@ -147,7 +145,7 @@ impl NyaTermApp {
             let action_link_started_at = Instant::now();
             let mut link_ranges: Vec<(usize, usize)> =
                 if !render_degraded && self.settings.terminal_action_links_enabled {
-                    if let Some(links) = frame_action_links.as_ref() {
+                    if let Some(links) = frame_action_links {
                         links
                             .cell_ranges_by_line
                             .get(line_index)

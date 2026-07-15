@@ -369,7 +369,13 @@ impl Element for NyaTerminalElement {
                 .unwrap_or("");
             let display_line = if line.is_empty() { " " } else { line };
             let ansi = self.snapshot.styled_lines.get(row).map(Vec::as_slice);
-            let decorations = self.decorations.get(row).cloned().unwrap_or_default();
+            let default_decorations;
+            let decorations = if let Some(decorations) = self.decorations.get(row) {
+                decorations
+            } else {
+                default_decorations = TerminalLineDecorations::default();
+                &default_decorations
+            };
             // Base spans drive cell/keyword backgrounds only (under images).
             let base_spans = terminal_highlight_spans(
                 display_line,
@@ -565,7 +571,7 @@ impl Element for NyaTerminalElement {
                     strikethrough: None,
                 });
             }
-            let row_key = self.row_layout_key(row, display_line, ansi, &decorations);
+            let row_key = self.row_layout_key(row, display_line, ansi, decorations);
             let shape_row = |window: &mut Window| {
                 window.text_system().shape_line(
                     SharedString::from(text.clone()),
