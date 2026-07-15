@@ -19,6 +19,7 @@ impl NyaTermApp {
         let had_panel = self.credential_suggestions.take().is_some();
         self.credential_autofill_buffer.clear();
         self.credential_autofill_recent.clear();
+        self.credential_autofill_detection_pending = false;
         if had_panel {
             cx.notify();
         }
@@ -29,6 +30,7 @@ impl NyaTermApp {
         self.credential_autofill_buffer.clear();
         self.credential_autofill_recent.clear();
         self.credential_autofill_pending = None;
+        self.credential_autofill_detection_pending = false;
         self.credential_autofill_sending = false;
         self.credential_prompt_input_until_ms = 0;
         cx.notify();
@@ -102,10 +104,11 @@ impl NyaTermApp {
 
     pub(in crate::features) fn feed_credential_autofill_output(
         &mut self,
+        session_id: &str,
         text: &str,
         cx: &mut Context<Self>,
     ) {
-        if self.active_session_id.is_none() {
+        if self.active_session_id.as_deref() != Some(session_id) {
             return;
         }
         if text.is_empty() {
@@ -153,25 +156,43 @@ impl NyaTermApp {
         if detected_prompt_kind.is_none() && self.credential_autofill_pending.is_none() {
             return;
         }
-        self.detect_credential_prompt(cx);
+        self.credential_autofill_detection_pending = true;
+        cx.notify();
     }
 
-    pub(in crate::features) fn should_feed_credential_autofill_frame(&self, text: &str) -> bool {
-        if self.active_session_id.is_none() || text.is_empty() {
+    pub(in crate::features) fn drain_pending_credential_autofill_detection(
+        &mut self,
+        cx: &mut Context<Self>,
+    ) -> bool {
+        if !credential_autofill_pending_detection_can_run(
+            self.active_session_id.as_deref(),
+            self.credential_autofill_detection_pending,
+            self.terminal_runtime.session_event_queued_output_bytes,
+            self.pending_session_events.len(),
+            self.pending_terminal_frame_events.len(),
+        ) {
             return false;
         }
-        if self.connection_saved_credentials.is_empty()
-            && self.credential_autofill_pending.is_none()
-        {
-            return false;
-        }
-        if self.terminal_runtime.session_event_queued_output_bytes > 0
-            || !self.pending_session_events.is_empty()
-            || !self.pending_terminal_frame_events.is_empty()
-        {
-            return false;
-        }
-        credential_autofill_visible_may_complete_prompt(credential_autofill_visible_tail(text))
+        self.credential_autofill_detection_pending = false;
+        self.detect_credential_prompt(cx);
+        true
+    }
+
+    pub(in crate::features) fn should_feed_credential_autofill_frame_for_session(
+        &self,
+        session_id: &str,
+        text: &str,
+    ) -> bool {
+        credential_autofill_should_queue_detection(
+            self.active_session_id.as_deref(),
+            session_id,
+            text,
+            !self.connection_saved_credentials.is_empty()
+                || self.credential_autofill_pending.is_some(),
+            self.terminal_runtime.session_event_queued_output_bytes,
+            self.pending_session_events.len(),
+            self.pending_terminal_frame_events.len(),
+        )
     }
 
     pub(in crate::features) fn detect_credential_prompt(&mut self, cx: &mut Context<Self>) {
@@ -680,6 +701,38 @@ impl NyaTermApp {
     }
 }
 
+fn credential_autofill_should_queue_detection(
+    active_session_id: Option<&str>,
+    output_session_id: &str,
+    text: &str,
+    has_credentials_or_pending: bool,
+    queued_output_bytes: usize,
+    pending_session_events: usize,
+    pending_terminal_frame_events: usize,
+) -> bool {
+    active_session_id == Some(output_session_id)
+        && !text.is_empty()
+        && has_credentials_or_pending
+        && queued_output_bytes == 0
+        && pending_session_events == 0
+        && pending_terminal_frame_events == 0
+        && credential_autofill_visible_may_complete_prompt(credential_autofill_visible_tail(text))
+}
+
+fn credential_autofill_pending_detection_can_run(
+    active_session_id: Option<&str>,
+    detection_pending: bool,
+    queued_output_bytes: usize,
+    pending_session_events: usize,
+    pending_terminal_frame_events: usize,
+) -> bool {
+    active_session_id.is_some()
+        && detection_pending
+        && queued_output_bytes == 0
+        && pending_session_events == 0
+        && pending_terminal_frame_events == 0
+}
+
 fn credential_autofill_visible_tail(text: &str) -> &str {
     if text.len() <= CREDENTIAL_AUTOFILL_INPUT_TAIL_LIMIT {
         return text;
@@ -806,6 +859,87 @@ fn credential_autofill_detect_prompt_kind(prompt: &str) -> Option<CredentialProm
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn credential_autofill_queue_detection_only_for_active_session() {
+        assert!(credential_autofill_should_queue_detection(
+            Some("active"),
+            "active",
+            "Password: ",
+            true,
+            0,
+            0,
+            0
+        ));
+        assert!(!credential_autofill_should_queue_detection(
+            Some("active"),
+            "background",
+            "Password: ",
+            true,
+            0,
+            0,
+            0
+        ));
+    }
+
+    #[test]
+    fn credential_autofill_queue_detection_waits_for_output_backlog() {
+        assert!(!credential_autofill_should_queue_detection(
+            Some("active"),
+            "active",
+            "Password: ",
+            true,
+            1,
+            0,
+            0
+        ));
+        assert!(!credential_autofill_should_queue_detection(
+            Some("active"),
+            "active",
+            "Password: ",
+            true,
+            0,
+            1,
+            0
+        ));
+        assert!(!credential_autofill_should_queue_detection(
+            Some("active"),
+            "active",
+            "Password: ",
+            true,
+            0,
+            0,
+            1
+        ));
+    }
+
+    #[test]
+    fn credential_autofill_pending_detection_runs_only_when_idle() {
+        assert!(credential_autofill_pending_detection_can_run(
+            Some("active"),
+            true,
+            0,
+            0,
+            0
+        ));
+        assert!(!credential_autofill_pending_detection_can_run(
+            None, true, 0, 0, 0
+        ));
+        assert!(!credential_autofill_pending_detection_can_run(
+            Some("active"),
+            false,
+            0,
+            0,
+            0
+        ));
+        assert!(!credential_autofill_pending_detection_can_run(
+            Some("active"),
+            true,
+            1,
+            0,
+            0
+        ));
+    }
 
     #[test]
     fn credential_autofill_visible_tail_caps_input_on_boundary() {

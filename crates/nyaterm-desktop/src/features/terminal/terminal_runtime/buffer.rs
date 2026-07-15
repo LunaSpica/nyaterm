@@ -192,8 +192,11 @@ impl NyaTermApp {
             view.has_unread = true;
         }
         self.apply_terminal_effects(&session_id, frame.effects, frame.command_running, cx);
-        if is_active && self.should_feed_credential_autofill_frame(&frame.visible_text) {
-            self.feed_credential_autofill_output(&frame.visible_text, cx);
+        if is_active
+            && self
+                .should_feed_credential_autofill_frame_for_session(&session_id, &frame.visible_text)
+        {
+            self.feed_credential_autofill_output(&session_id, &frame.visible_text, cx);
         }
         if frame.process_duration >= Duration::from_millis(20)
             && self.should_log_slow_diagnostic("terminal_frame_processor", Instant::now())
