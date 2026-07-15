@@ -326,6 +326,17 @@ impl TrzszDetector {
         Self::default()
     }
 
+    pub fn is_idle(&self) -> bool {
+        self.pending.is_empty()
+    }
+
+    pub fn output_may_contain_trigger(data: &[u8]) -> bool {
+        data.windows(TRZSZ_PREFIX.len())
+            .any(|window| window == TRZSZ_PREFIX)
+            || (1..TRZSZ_PREFIX.len())
+                .any(|len| data.len() >= len && TRZSZ_PREFIX.starts_with(&data[data.len() - len..]))
+    }
+
     pub fn feed(&mut self, data: &[u8]) -> TrzszDetectResult {
         self.pending.extend_from_slice(data);
 
@@ -1923,6 +1934,23 @@ mod tests {
         let mut decoded = String::new();
         decoder.read_to_string(&mut decoded).expect("zlib");
         decoded
+    }
+
+    #[test]
+    fn fast_scan_predicate_skips_ordinary_output() {
+        assert!(!TrzszDetector::output_may_contain_trigger(
+            b"Last login: Wed Jul 15\n$ "
+        ));
+        assert!(TrzszDetector::new().is_idle());
+    }
+
+    #[test]
+    fn fast_scan_predicate_keeps_split_trigger_prefixes() {
+        assert!(TrzszDetector::output_may_contain_trigger(b":"));
+        assert!(TrzszDetector::output_may_contain_trigger(b"::TRZSZ"));
+        assert!(TrzszDetector::output_may_contain_trigger(
+            b"noise\n::TRZSZ:TRANSFER:"
+        ));
     }
 
     #[test]

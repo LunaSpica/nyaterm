@@ -120,6 +120,17 @@ impl ZmodemDetector {
         }
     }
 
+    pub fn is_idle(&self) -> bool {
+        self.pending.is_empty()
+    }
+
+    pub fn output_may_contain_trigger(data: &[u8]) -> bool {
+        data.contains(&ZDLE)
+            || data.ends_with(&[ZPAD])
+            || data.ends_with(&[ZPAD, ZPAD])
+            || data.ends_with(&[ZPAD, ZPAD, ZDLE])
+    }
+
     /// Feed raw bytes and return whether a ZMODEM header was found.
     ///
     /// The direction is inferred from the frame type byte that follows the
@@ -968,6 +979,21 @@ mod tests {
             ZmodemDetectResult::Detected { direction, .. } => direction,
             ZmodemDetectResult::NoMatch { .. } => panic!("expected ZMODEM detection"),
         }
+    }
+
+    #[test]
+    fn fast_scan_predicate_skips_ordinary_output() {
+        assert!(!ZmodemDetector::output_may_contain_trigger(
+            b"Last login: Wed Jul 15\r\n$ "
+        ));
+        assert!(ZmodemDetector::new().is_idle());
+    }
+
+    #[test]
+    fn fast_scan_predicate_keeps_split_header_prefixes() {
+        assert!(ZmodemDetector::output_may_contain_trigger(b"*"));
+        assert!(ZmodemDetector::output_may_contain_trigger(b"**"));
+        assert!(ZmodemDetector::output_may_contain_trigger(b"**\x18"));
     }
 
     #[test]

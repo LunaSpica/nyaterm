@@ -122,6 +122,9 @@ impl NyaTermApp {
         if data.is_empty() {
             return Vec::new();
         }
+        if self.trzsz_output_can_bypass_detector(session_id, data) {
+            return data.to_vec();
+        }
         let events = {
             let state = self.trzsz_state_mut(session_id);
             state.detector.scan_terminal_output(data).events
@@ -287,6 +290,16 @@ impl NyaTermApp {
             cx.notify();
         }
         passthrough
+    }
+
+    fn trzsz_output_can_bypass_detector(&self, session_id: &str, data: &[u8]) -> bool {
+        let state_is_idle = self.trzsz_sessions.get(session_id).is_none_or(|state| {
+            !state.protocol_active
+                && state.download.is_none()
+                && state.upload.is_none()
+                && state.detector.is_idle()
+        });
+        state_is_idle && !TrzszDetector::output_may_contain_trigger(data)
     }
 
     fn prepare_trzsz_download_dir(&mut self, cx: &mut Context<Self>) -> Option<PathBuf> {

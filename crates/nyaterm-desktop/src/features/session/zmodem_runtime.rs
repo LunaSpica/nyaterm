@@ -249,6 +249,9 @@ impl NyaTermApp {
         if data.is_empty() {
             return Vec::new();
         }
+        if self.zmodem_output_can_bypass_detector(session_id, data) {
+            return data.to_vec();
+        }
         let state = self.zmodem_state_mut(session_id);
 
         // Active transfer: consume all raw bytes.
@@ -316,6 +319,16 @@ impl NyaTermApp {
                 passthrough
             }
         }
+    }
+
+    fn zmodem_output_can_bypass_detector(&self, session_id: &str, data: &[u8]) -> bool {
+        let state_is_idle = self.zmodem_sessions.get(session_id).is_none_or(|state| {
+            state.transfer.is_none()
+                && state.pending_upload.is_none()
+                && !state.pending_download
+                && state.detector.is_idle()
+        });
+        state_is_idle && !ZmodemDetector::output_may_contain_trigger(data)
     }
 
     fn apply_zmodem_actions(
