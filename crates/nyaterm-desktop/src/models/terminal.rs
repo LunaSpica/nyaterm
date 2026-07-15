@@ -358,6 +358,32 @@ fn terminal_text_tail(mut text: String, max_bytes: usize) -> String {
     text
 }
 
+fn append_terminal_frame_visible_tail(output: &mut String, text: &str) {
+    if text.is_empty() {
+        return;
+    }
+    output.push_str(text);
+    trim_string_to_tail(output, TERMINAL_FRAME_VISIBLE_TEXT_TAIL_CAP);
+}
+
+fn merge_terminal_effects(target: &mut TerminalEffects, mut incoming: TerminalEffects) {
+    if incoming.title.is_some() {
+        target.title = incoming.title.take();
+    }
+    target.reset_title |= incoming.reset_title;
+    target.bell |= incoming.bell;
+    if incoming.cwd.is_some() {
+        target.cwd = incoming.cwd.take();
+    }
+    target.shell_command_started |= incoming.shell_command_started;
+    target.shell_command_finished |= incoming.shell_command_finished;
+    target.pty_write.append(&mut incoming.pty_write);
+    if incoming.clipboard_store.is_some() {
+        target.clipboard_store = incoming.clipboard_store.take();
+    }
+    target.clipboard_loads.append(&mut incoming.clipboard_loads);
+}
+
 pub(crate) struct TerminalViewState {
     pub(crate) output: String,
     pub(crate) screen: TerminalScreen,
@@ -1147,6 +1173,7 @@ impl TerminalFrameSession {
         }
     }
 
+    #[cfg(test)]
     fn process_output(
         &mut self,
         session_id: String,
@@ -1156,10 +1183,29 @@ impl TerminalFrameSession {
         recording_writer: &RecordingWriteHandle,
     ) -> TerminalFrameOutputEvent {
         let started_at = Instant::now();
-        self.set_encoding_and_limit(&encoding, scrollback_limit);
+        let mut batch = TerminalFrameOutputBatch::default();
+        batch.absorb(self.process_output_chunk(
+            &session_id,
+            &data,
+            &encoding,
+            scrollback_limit,
+            recording_writer,
+        ));
+        self.output_event_from_batch(session_id, batch, started_at)
+    }
+
+    fn process_output_chunk(
+        &mut self,
+        session_id: &str,
+        data: &[u8],
+        encoding: &str,
+        scrollback_limit: usize,
+        recording_writer: &RecordingWriteHandle,
+    ) -> TerminalFrameOutputChunk {
+        self.set_encoding_and_limit(encoding, scrollback_limit);
         let recording_text = self.recording_decoder.decode_output_text(&data);
         let recording_text_bytes = recording_text.len();
-        recording_writer.write_output(session_id.clone(), recording_text);
+        recording_writer.write_output(session_id.to_string(), recording_text);
         let (feed, skipped_output_bytes) =
             protect_terminal_output_burst(&mut self.screen, &mut self.output_decoder, &data);
         self.screen.advance(feed);
@@ -1169,20 +1215,35 @@ impl TerminalFrameSession {
         );
         self.revision = self.revision.saturating_add(1);
         let effects = self.screen.take_effects();
+        TerminalFrameOutputChunk {
+            visible_text,
+            recording_text_bytes,
+            effects,
+            accepted_bytes: feed.len(),
+            skipped_output_bytes,
+        }
+    }
+
+    fn output_event_from_batch(
+        &self,
+        session_id: String,
+        batch: TerminalFrameOutputBatch,
+        started_at: Instant,
+    ) -> TerminalFrameOutputEvent {
         let command_running = self.screen.command_running();
         let protocol_state = TerminalProtocolState::from_screen(&self.screen);
         let snapshot = self.screen.viewport_snapshot(0);
         TerminalFrameOutputEvent {
             session_id,
-            visible_text,
-            recording_text_bytes,
+            visible_text: batch.visible_text,
+            recording_text_bytes: batch.recording_text_bytes,
             snapshot,
             action_links: None,
             protocol_state,
-            effects,
+            effects: batch.effects,
             command_running,
-            accepted_bytes: feed.len(),
-            skipped_output_bytes,
+            accepted_bytes: batch.accepted_bytes,
+            skipped_output_bytes: batch.skipped_output_bytes,
             revision: self.revision,
             process_duration: started_at.elapsed(),
         }
@@ -1251,6 +1312,38 @@ impl TerminalFrameSession {
             truncated,
             process_duration: started_at.elapsed(),
         }
+    }
+}
+
+#[derive(Debug)]
+struct TerminalFrameOutputChunk {
+    visible_text: String,
+    recording_text_bytes: usize,
+    effects: TerminalEffects,
+    accepted_bytes: usize,
+    skipped_output_bytes: usize,
+}
+
+#[derive(Debug, Default)]
+struct TerminalFrameOutputBatch {
+    visible_text: String,
+    recording_text_bytes: usize,
+    effects: TerminalEffects,
+    accepted_bytes: usize,
+    skipped_output_bytes: usize,
+}
+
+impl TerminalFrameOutputBatch {
+    fn absorb(&mut self, chunk: TerminalFrameOutputChunk) {
+        append_terminal_frame_visible_tail(&mut self.visible_text, &chunk.visible_text);
+        self.recording_text_bytes = self
+            .recording_text_bytes
+            .saturating_add(chunk.recording_text_bytes);
+        self.accepted_bytes = self.accepted_bytes.saturating_add(chunk.accepted_bytes);
+        self.skipped_output_bytes = self
+            .skipped_output_bytes
+            .saturating_add(chunk.skipped_output_bytes);
+        merge_terminal_effects(&mut self.effects, chunk.effects);
     }
 }
 
@@ -1375,6 +1468,7 @@ fn push_terminal_frame_command(
                     scrollback_limit,
                     last_data.len(),
                     data.len(),
+                    TERMINAL_FRAME_OUTPUT_COALESCE_BYTE_LIMIT,
                 ) {
                     last_data.extend(data);
                     return;
@@ -1518,24 +1612,15 @@ fn run_terminal_frame_processor(
                 encoding,
                 scrollback_limit,
             } => {
-                let (session_id, data, encoding, scrollback_limit) =
-                    coalesce_terminal_frame_output_command(
-                        &command_rx,
-                        &mut pending_commands,
-                        session_id,
-                        data,
-                        encoding,
-                        scrollback_limit,
-                    );
-                let session = sessions
-                    .entry(session_id.clone())
-                    .or_insert_with(|| TerminalFrameSession::new(&encoding, scrollback_limit));
-                let event = session.process_output(
+                let event = process_terminal_frame_output_burst(
+                    &command_rx,
+                    &mut pending_commands,
+                    &mut sessions,
+                    &recording_writer,
                     session_id,
                     data,
                     encoding,
                     scrollback_limit,
-                    &recording_writer,
                 );
                 event_queue.push(TerminalFrameEvent::Output(event));
             }
@@ -1575,6 +1660,83 @@ fn run_terminal_frame_processor(
     }
 }
 
+fn process_terminal_frame_output_burst(
+    command_rx: &TerminalFrameCommandReceiver,
+    pending_commands: &mut VecDeque<TerminalFrameCommand>,
+    sessions: &mut HashMap<String, TerminalFrameSession>,
+    recording_writer: &RecordingWriteHandle,
+    session_id: String,
+    data: Vec<u8>,
+    encoding: String,
+    scrollback_limit: usize,
+) -> TerminalFrameOutputEvent {
+    let started_at = Instant::now();
+    let mut batch = TerminalFrameOutputBatch::default();
+    let mut processed_bytes = 0usize;
+    {
+        let session = sessions
+            .entry(session_id.clone())
+            .or_insert_with(|| TerminalFrameSession::new(&encoding, scrollback_limit));
+        processed_bytes = processed_bytes.saturating_add(data.len());
+        batch.absorb(session.process_output_chunk(
+            &session_id,
+            &data,
+            &encoding,
+            scrollback_limit,
+            recording_writer,
+        ));
+    }
+
+    loop {
+        let next = pending_commands
+            .pop_front()
+            .or_else(|| command_rx.try_recv());
+        let Some(next) = next else {
+            break;
+        };
+        match next {
+            TerminalFrameCommand::Output {
+                session_id: next_session_id,
+                data: next_data,
+                encoding: next_encoding,
+                scrollback_limit: next_scrollback_limit,
+            } if terminal_frame_output_commands_can_merge(
+                &session_id,
+                &encoding,
+                scrollback_limit,
+                &next_session_id,
+                &next_encoding,
+                next_scrollback_limit,
+                processed_bytes,
+                next_data.len(),
+                TERMINAL_FRAME_OUTPUT_BURST_BYTE_LIMIT,
+            ) =>
+            {
+                processed_bytes = processed_bytes.saturating_add(next_data.len());
+                let session = sessions
+                    .entry(session_id.clone())
+                    .or_insert_with(|| TerminalFrameSession::new(&encoding, scrollback_limit));
+                batch.absorb(session.process_output_chunk(
+                    &session_id,
+                    &next_data,
+                    &encoding,
+                    scrollback_limit,
+                    recording_writer,
+                ));
+            }
+            other => {
+                pending_commands.push_front(other);
+                break;
+            }
+        }
+    }
+
+    let session = sessions
+        .entry(session_id.clone())
+        .or_insert_with(|| TerminalFrameSession::new(&encoding, scrollback_limit));
+    session.output_event_from_batch(session_id, batch, started_at)
+}
+
 fn next_terminal_frame_command(
     command_rx: &TerminalFrameCommandReceiver,
     pending_commands: &mut VecDeque<TerminalFrameCommand>,
@@ -1582,6 +1744,7 @@ fn next_terminal_frame_command(
     pending_commands.pop_front().or_else(|| command_rx.recv())
 }
 
+#[cfg(test)]
 fn coalesce_terminal_frame_output_command(
     command_rx: &TerminalFrameCommandReceiver,
     pending_commands: &mut VecDeque<TerminalFrameCommand>,
@@ -1612,6 +1775,7 @@ fn coalesce_terminal_frame_output_command(
                 next_scrollback_limit,
                 data.len(),
                 next_data.len(),
+                TERMINAL_FRAME_OUTPUT_COALESCE_BYTE_LIMIT,
             ) =>
             {
                 data.extend(next_data);
@@ -1635,16 +1799,18 @@ fn terminal_frame_output_commands_can_merge(
     next_scrollback_limit: usize,
     current_bytes: usize,
     next_bytes: usize,
+    byte_limit: usize,
 ) -> bool {
     session_id == next_session_id
         && encoding == next_encoding
         && scrollback_limit == next_scrollback_limit
-        && current_bytes.saturating_add(next_bytes) <= TERMINAL_FRAME_OUTPUT_COALESCE_BYTE_LIMIT
+        && current_bytes.saturating_add(next_bytes) <= byte_limit
 }
 
 const TERMINAL_FRAME_EVENT_QUEUE_CAP: usize = 1024;
 const TERMINAL_FRAME_COMMAND_QUEUE_CAP: usize = 512;
 const TERMINAL_FRAME_OUTPUT_COALESCE_BYTE_LIMIT: usize = 64 * 1024;
+const TERMINAL_FRAME_OUTPUT_BURST_BYTE_LIMIT: usize = 512 * 1024;
 
 #[cfg(test)]
 mod tests {
@@ -2244,6 +2410,84 @@ mod tests {
         );
 
         assert_eq!(data, b"a");
+        assert!(matches!(
+            next_terminal_frame_command(&rx, &mut pending),
+            Some(TerminalFrameCommand::ResizeSession { .. })
+        ));
+        assert!(matches!(
+            next_terminal_frame_command(&rx, &mut pending),
+            Some(TerminalFrameCommand::Output { .. })
+        ));
+    }
+
+    #[test]
+    fn terminal_frame_worker_batches_output_burst_into_single_frame() {
+        let (tx, rx) = terminal_frame_command_channel();
+        assert!(tx.send(TerminalFrameCommand::Output {
+            session_id: "s1".to_string(),
+            data: b"bc".to_vec(),
+            encoding: "UTF-8".to_string(),
+            scrollback_limit: 1000,
+        }));
+        drop(tx);
+
+        let recording_manager = Arc::new(nyaterm_transport::RecordingManager::new());
+        let recording_pipeline =
+            super::super::RecordingWritePipeline::spawn(Arc::clone(&recording_manager));
+        let mut pending = VecDeque::new();
+        let mut sessions = HashMap::new();
+        let event = process_terminal_frame_output_burst(
+            &rx,
+            &mut pending,
+            &mut sessions,
+            &recording_pipeline.writer(),
+            "s1".to_string(),
+            b"a".to_vec(),
+            "UTF-8".to_string(),
+            1000,
+        );
+
+        assert_eq!(event.visible_text, "abc");
+        assert_eq!(event.recording_text_bytes, 3);
+        assert_eq!(event.accepted_bytes, 3);
+        assert_eq!(event.revision, 2);
+        assert!(event.snapshot.lines.join("").contains("abc"));
+        assert!(pending.is_empty());
+    }
+
+    #[test]
+    fn terminal_frame_worker_batch_stops_at_resize_boundary() {
+        let (tx, rx) = terminal_frame_command_channel();
+        assert!(tx.send(TerminalFrameCommand::ResizeSession {
+            session_id: "s1".to_string(),
+            cols: 100,
+            rows: 30,
+        }));
+        assert!(tx.send(TerminalFrameCommand::Output {
+            session_id: "s1".to_string(),
+            data: b"bc".to_vec(),
+            encoding: "UTF-8".to_string(),
+            scrollback_limit: 1000,
+        }));
+        drop(tx);
+
+        let recording_manager = Arc::new(nyaterm_transport::RecordingManager::new());
+        let recording_pipeline =
+            super::super::RecordingWritePipeline::spawn(Arc::clone(&recording_manager));
+        let mut pending = VecDeque::new();
+        let mut sessions = HashMap::new();
+        let event = process_terminal_frame_output_burst(
+            &rx,
+            &mut pending,
+            &mut sessions,
+            &recording_pipeline.writer(),
+            "s1".to_string(),
+            b"a".to_vec(),
+            "UTF-8".to_string(),
+            1000,
+        );
+
+        assert_eq!(event.visible_text, "a");
         assert!(matches!(
             next_terminal_frame_command(&rx, &mut pending),
             Some(TerminalFrameCommand::ResizeSession { .. })
