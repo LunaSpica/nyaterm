@@ -263,19 +263,29 @@ impl NyaTermApp {
             .entry(session_id.clone())
             .or_insert_with(TerminalViewState::new);
         let had_unread = view.has_unread;
-        view.apply_terminal_frame_parts(
-            &visible_text,
-            snapshot,
-            action_links,
-            protocol_state,
-            accepted_bytes,
-            skipped_output_bytes,
-            revision,
-        );
         if !is_active {
             view.has_unread = true;
         }
         let unread_changed = !is_active && !had_unread;
+        if is_visible {
+            view.apply_terminal_frame_parts(
+                &visible_text,
+                snapshot,
+                action_links,
+                protocol_state,
+                accepted_bytes,
+                skipped_output_bytes,
+                revision,
+            );
+        } else {
+            view.apply_terminal_background_frame_parts(
+                snapshot,
+                action_links,
+                protocol_state,
+                skipped_output_bytes,
+                revision,
+            );
+        }
         if effects_need_ui_apply {
             self.apply_terminal_effects(&session_id, effects, command_running, cx);
         }

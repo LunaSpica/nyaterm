@@ -712,6 +712,24 @@ impl TerminalViewState {
         self.clamp_scroll_offset();
     }
 
+    pub(crate) fn apply_terminal_background_frame_parts(
+        &mut self,
+        snapshot: TerminalSnapshot,
+        action_links: Option<TerminalFrameActionLinks>,
+        protocol_state: TerminalProtocolState,
+        skipped_output_bytes: usize,
+        revision: u64,
+    ) {
+        self.frame_snapshot = Some(snapshot);
+        self.frame_action_links = action_links;
+        self.protocol_state = protocol_state;
+        self.screen_revision = revision;
+        if skipped_output_bytes > 0 {
+            self.note_skipped_output(skipped_output_bytes);
+        }
+        self.clamp_scroll_offset();
+    }
+
     pub(crate) fn backend_resize_changed(
         &self,
         cols: u16,
@@ -2043,6 +2061,29 @@ mod tests {
         assert_eq!(view.performance_mode, TerminalPerformanceMode::Normal);
         assert_eq!(view.performance_overlay, None);
         assert_eq!(view.skipped_output_chars, 0);
+    }
+
+    #[test]
+    fn terminal_background_frame_apply_skips_render_work() {
+        let mut view = TerminalViewState::new();
+        view.render_degraded = false;
+        let frame = output_frame_with_sizes((32 * 1024) + 1, 0);
+
+        view.apply_terminal_background_frame_parts(
+            frame.snapshot.clone(),
+            frame.action_links.clone(),
+            frame.protocol_state,
+            frame.skipped_output_bytes,
+            frame.revision,
+        );
+
+        assert_eq!(view.output, "");
+        assert_eq!(view.screen_revision, frame.revision);
+        assert!(view.frame_snapshot.is_some());
+        assert_eq!(view.output_burst_bytes, 0);
+        assert!(!view.render_degraded);
+        assert_eq!(view.performance_mode, TerminalPerformanceMode::Normal);
+        assert_eq!(view.performance_overlay, None);
     }
 
     #[test]
