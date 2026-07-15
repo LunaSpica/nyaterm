@@ -214,6 +214,11 @@ impl NyaTermApp {
             self.transfer_rename_focus_pending = false;
             dirty = true;
         }
+        if self.credential_prompt_focus_pending && self.active_credential_prompt.is_some() {
+            window.focus(&self.credential_focus);
+            self.credential_prompt_focus_pending = false;
+            dirty = true;
+        }
         dirty
     }
 

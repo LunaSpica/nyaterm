@@ -65,6 +65,7 @@ impl NyaTermApp {
         };
         let host = credential_prompt_target(&state.prompt);
         let _ = state.response_tx.send(Some(state.value));
+        self.credential_prompt_focus_pending = false;
         self.terminal_status = format!("submitted SSH credential for {host}");
         cx.notify();
     }
@@ -75,6 +76,7 @@ impl NyaTermApp {
         };
         let host = credential_prompt_target(&state.prompt);
         let _ = state.response_tx.send(None);
+        self.credential_prompt_focus_pending = false;
         self.terminal_status = format!("cancelled SSH credential prompt for {host}");
         cx.notify();
     }
@@ -149,6 +151,7 @@ impl NyaTermApp {
                 response_tx: request.response_tx,
                 value: String::new(),
             });
+            self.credential_prompt_focus_pending = true;
             return true;
         }
         false

@@ -622,6 +622,7 @@ impl NyaTermApp {
             active_host_key_prompt: None,
             credential_prompts: Arc::new(CredentialPromptBroker::default()),
             active_credential_prompt: None,
+            credential_prompt_focus_pending: false,
             credential_focus: cx.focus_handle(),
             snapshot_password_focus: cx.focus_handle(),
             otp_provider,
