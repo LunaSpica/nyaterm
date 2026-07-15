@@ -231,7 +231,9 @@ impl NyaTermApp {
         if !is_active {
             view.has_unread = true;
         }
-        self.apply_terminal_effects(&session_id, frame.effects, frame.command_running, cx);
+        if terminal_effects_need_ui_apply(&frame.effects) {
+            self.apply_terminal_effects(&session_id, frame.effects, frame.command_running, cx);
+        }
         if is_active
             && self
                 .should_feed_credential_autofill_frame_for_session(&session_id, &frame.visible_text)
@@ -756,6 +758,18 @@ fn queue_osc52_clipboard_load_replies(
     }
 }
 
+fn terminal_effects_need_ui_apply(effects: &TerminalEffects) -> bool {
+    effects.bell
+        || effects.title.is_some()
+        || effects.reset_title
+        || effects.cwd.is_some()
+        || effects.shell_command_started
+        || effects.shell_command_finished
+        || !effects.pty_write.is_empty()
+        || effects.clipboard_store.is_some()
+        || !effects.clipboard_loads.is_empty()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -788,6 +802,23 @@ mod tests {
 
         assert!(formatters.is_empty());
         assert_eq!(replies, vec![b"reply:".to_vec()]);
+    }
+
+    #[test]
+    fn terminal_effects_skip_ui_apply_for_plain_output() {
+        assert!(!terminal_effects_need_ui_apply(&TerminalEffects::default()));
+
+        let mut effects = TerminalEffects::default();
+        effects.bell = true;
+        assert!(terminal_effects_need_ui_apply(&effects));
+
+        let mut effects = TerminalEffects::default();
+        effects.pty_write.push(b"\x1b[6n".to_vec());
+        assert!(terminal_effects_need_ui_apply(&effects));
+
+        let mut effects = TerminalEffects::default();
+        effects.shell_command_finished = true;
+        assert!(terminal_effects_need_ui_apply(&effects));
     }
 
     #[test]
