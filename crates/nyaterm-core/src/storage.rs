@@ -33,6 +33,7 @@ const SSH_KEY_PREFIX: &str = "credentials/key/";
 const CREDENTIAL_PREFIX: &str = "credentials/credential/";
 const PASSWORD_PREFIX: &str = "credentials/password/";
 const CONNECTION_PASSWORD_PREFIX: &str = "credentials/connection-password/";
+const SSH_KEY_FILE_IMPORT_MAX_BYTES: u64 = 1024 * 1024;
 const OTP_PREFIX: &str = "otp_accounts/";
 const PROXY_PREFIX: &str = "proxies/";
 const KNOWN_HOST_PREFIX: &str = "known_hosts/";
@@ -630,11 +631,7 @@ impl ConnectionStore {
             .map(str::trim)
             .filter(|path| !path.is_empty())
         {
-            let content = std::fs::read_to_string(path).map_err(|source| {
-                StorageError::InvalidData(format!(
-                    "failed to read key material from {path}: {source}"
-                ))
-            })?;
+            let content = read_limited_ssh_key_file(path, "key material")?;
             let token = self.get_or_create_master_key_token(&crypto)?;
             Some(crypto.encrypt_secret(&token, &content)?)
         } else if let Some(plain) = key
@@ -656,11 +653,7 @@ impl ConnectionStore {
             .map(str::trim)
             .filter(|path| !path.is_empty())
         {
-            let content = std::fs::read_to_string(path).map_err(|source| {
-                StorageError::InvalidData(format!(
-                    "failed to read certificate from {path}: {source}"
-                ))
-            })?;
+            let content = read_limited_ssh_key_file(path, "certificate")?;
             let token = self.get_or_create_master_key_token(&crypto)?;
             Some(crypto.encrypt_secret(&token, &content)?)
         } else if let Some(plain) = key
@@ -4058,6 +4051,23 @@ fn apply_ssh_key_status_flags(key: &mut SshKey) {
     key.has_cert_data = key.cert.is_some();
 }
 
+fn read_limited_ssh_key_file(path: &str, label: &str) -> Result<String, StorageError> {
+    let metadata = std::fs::metadata(path).map_err(|source| {
+        StorageError::InvalidData(format!("failed to read {label} from {path}: {source}"))
+    })?;
+    if metadata.len() > SSH_KEY_FILE_IMPORT_MAX_BYTES {
+        return Err(StorageError::InvalidData(format!(
+            "{label} file is too large to import ({} bytes > {} bytes)",
+            metadata.len(),
+            SSH_KEY_FILE_IMPORT_MAX_BYTES
+        )));
+    }
+
+    std::fs::read_to_string(path).map_err(|source| {
+        StorageError::InvalidData(format!("failed to read {label} from {path}: {source}"))
+    })
+}
+
 fn decrypt_optional_secret(
     crypto: &CredentialCrypto,
     master_key_token: Option<&str>,
@@ -5708,6 +5718,62 @@ mod tests {
         );
         assert_eq!(decrypted.passphrase.as_deref(), Some("passphrase"));
 
+        std::fs::remove_dir_all(dir).ok();
+    }
+
+    #[test]
+    fn save_ssh_key_rejects_oversized_key_file_import() {
+        let dir = unique_temp_dir("ssh-key-large-key-file");
+        std::fs::create_dir_all(&dir).expect("dir");
+        let key_path = dir.join("too-large.key");
+        let file = std::fs::File::create(&key_path).expect("create key file");
+        file.set_len(SSH_KEY_FILE_IMPORT_MAX_BYTES + 1)
+            .expect("grow key file");
+
+        let store = ConnectionStore::open(&dir).expect("store");
+        let error = store
+            .save_ssh_key(SshKey {
+                id: "key-1".to_string(),
+                name: "Large Key".to_string(),
+                key: None,
+                cert: None,
+                passphrase: None,
+                key_file_path: Some(key_path.display().to_string()),
+                cert_file_path: None,
+                has_key_data: false,
+                has_cert_data: false,
+            })
+            .expect_err("large key import should fail");
+
+        assert!(error.to_string().contains("key material file is too large"));
+        std::fs::remove_dir_all(dir).ok();
+    }
+
+    #[test]
+    fn save_ssh_key_rejects_oversized_cert_file_import() {
+        let dir = unique_temp_dir("ssh-key-large-cert-file");
+        std::fs::create_dir_all(&dir).expect("dir");
+        let cert_path = dir.join("too-large-cert.pub");
+        let file = std::fs::File::create(&cert_path).expect("create cert file");
+        file.set_len(SSH_KEY_FILE_IMPORT_MAX_BYTES + 1)
+            .expect("grow cert file");
+
+        let store = ConnectionStore::open(&dir).expect("store");
+        let error = store
+            .save_ssh_key(SshKey {
+                id: "key-1".to_string(),
+                name: "Large Cert".to_string(),
+                key: Some("-----BEGIN PRIVATE KEY-----\nsmall\n".to_string()),
+                cert: None,
+                passphrase: None,
+                key_file_path: None,
+                cert_file_path: Some(cert_path.display().to_string()),
+                has_key_data: false,
+                has_cert_data: false,
+            })
+            .expect_err("large cert import should fail");
+
+        assert!(error.to_string().contains("certificate file is too large"));
         std::fs::remove_dir_all(dir).ok();
     }
 
