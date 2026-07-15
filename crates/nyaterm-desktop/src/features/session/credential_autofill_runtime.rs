@@ -94,7 +94,19 @@ impl NyaTermApp {
             .active_session_id
             .as_deref()
             .and_then(|session_id| self.terminal_views.get(session_id))
-            .map(|view| view.screen.viewport_snapshot(offset))
+            .map(|view| {
+                if offset == 0 {
+                    view.frame_snapshot
+                        .clone()
+                        .unwrap_or_else(|| view.screen.viewport_snapshot(offset))
+                } else {
+                    view.scrollback_snapshots
+                        .get(&offset)
+                        .cloned()
+                        .or_else(|| view.frame_snapshot.clone())
+                        .unwrap_or_else(|| view.screen.viewport_snapshot(offset))
+                }
+            })
             .unwrap_or_else(|| self.terminal_screen.viewport_snapshot(offset));
         let row = if snapshot.cursor_row == usize::MAX {
             snapshot.lines.len().saturating_sub(1)
@@ -120,6 +132,8 @@ impl NyaTermApp {
         if visible.is_empty() {
             return;
         }
+        let may_complete_prompt = credential_autofill_visible_may_complete_prompt(&visible);
+        let clears_prompt_input = visible.contains('\r') || visible.contains('\n');
 
         self.credential_autofill_buffer.push_str(&visible);
         if self.credential_autofill_buffer.len() > CREDENTIAL_AUTOFILL_BUFFER_LIMIT {
@@ -132,6 +146,10 @@ impl NyaTermApp {
             }
         }
 
+        if !may_complete_prompt {
+            return;
+        }
+
         let prompt_text =
             credential_autofill_prompt_text_from_visible(&self.credential_autofill_buffer);
         let detected_prompt_kind = credential_autofill_detect_prompt_kind(&prompt_text);
@@ -141,7 +159,7 @@ impl NyaTermApp {
             // Suppress command suggestions while a credential prompt is live.
             self.command_suggestions = None;
             self.command_input_tracker = TerminalInputState::new();
-        } else if visible.contains('\r') || visible.contains('\n') {
+        } else if clears_prompt_input {
             self.credential_prompt_input_until_ms = 0;
         }
 
@@ -710,6 +728,10 @@ fn credential_autofill_strip_controls_fast(text: &str) -> String {
     out
 }
 
+fn credential_autofill_visible_may_complete_prompt(text: &str) -> bool {
+    text.contains(':') || text.contains('：') || text.contains('\r') || text.contains('\n')
+}
+
 fn credential_autofill_prompt_text_from_visible(output: &str) -> String {
     if output
         .chars()
@@ -719,8 +741,12 @@ fn credential_autofill_prompt_text_from_visible(output: &str) -> String {
         return String::new();
     }
 
-    let normalized = output.replace('\r', "\n");
-    let prompt = normalized.rsplit('\n').next().unwrap_or("").trim();
+    let tail = credential_autofill_visible_tail(output);
+    let prompt_start = tail
+        .rfind(|ch| ch == '\r' || ch == '\n')
+        .map(|index| index + 1)
+        .unwrap_or(0);
+    let prompt = tail[prompt_start..].trim();
     let prompt_len = prompt.chars().count();
     if prompt_len > 500 {
         prompt.chars().skip(prompt_len - 500).collect::<String>()
