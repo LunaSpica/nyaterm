@@ -115,7 +115,8 @@ impl NyaTermApp {
         if text.is_empty() {
             return;
         }
-        let visible = strip_terminal_control_sequences(credential_autofill_visible_tail(text));
+        let visible =
+            credential_autofill_strip_controls_fast(credential_autofill_visible_tail(text));
         if visible.is_empty() {
             return;
         }
@@ -133,7 +134,7 @@ impl NyaTermApp {
 
         let prompt_text =
             credential_autofill_prompt_text_from_visible(&self.credential_autofill_buffer);
-        let detected_prompt_kind = detect_credential_prompt_kind(&prompt_text);
+        let detected_prompt_kind = credential_autofill_detect_prompt_kind(&prompt_text);
         if detected_prompt_kind.is_some() {
             self.credential_prompt_input_until_ms =
                 Self::now_unix_ms().saturating_add(CREDENTIAL_PROMPT_INPUT_TTL_MS);
@@ -167,7 +168,7 @@ impl NyaTermApp {
         if prompt_text.is_empty() {
             return;
         }
-        let Some(prompt_kind) = detect_credential_prompt_kind(&prompt_text) else {
+        let Some(prompt_kind) = credential_autofill_detect_prompt_kind(&prompt_text) else {
             return;
         };
         let current_line = prompt_text.trim().to_string();
@@ -213,7 +214,9 @@ impl NyaTermApp {
                     }
                 }
 
-                if is_default_password_prompt(&current_line) {
+                if credential_autofill_detect_prompt_kind(&current_line)
+                    == Some(CredentialPromptKind::Password)
+                {
                     self.credential_autofill_pending = None;
                 } else {
                     return;
@@ -241,7 +244,9 @@ impl NyaTermApp {
                 return;
             }
 
-            if is_default_password_prompt(&prompt_text) {
+            if credential_autofill_detect_prompt_kind(&prompt_text)
+                == Some(CredentialPromptKind::Password)
+            {
                 let fallback = find_password_only_fallback_credentials(&credentials);
                 if !fallback.is_empty() {
                     self.show_credential_panel(
@@ -666,6 +671,45 @@ fn credential_autofill_visible_tail(text: &str) -> &str {
     &text[start..]
 }
 
+fn credential_autofill_strip_controls_fast(text: &str) -> String {
+    let mut out = String::with_capacity(text.len());
+    let mut iter = text.chars().peekable();
+    while let Some(ch) = iter.next() {
+        if ch != '\x1b' {
+            out.push(ch);
+            continue;
+        }
+        match iter.peek().copied() {
+            Some('[') => {
+                iter.next();
+                for next in iter.by_ref() {
+                    if ('@'..='~').contains(&next) {
+                        break;
+                    }
+                }
+            }
+            Some(']') => {
+                iter.next();
+                let mut saw_esc = false;
+                for next in iter.by_ref() {
+                    if next == '\x07' {
+                        break;
+                    }
+                    if saw_esc && next == '\\' {
+                        break;
+                    }
+                    saw_esc = next == '\x1b';
+                }
+            }
+            Some('@'..='Z' | '\\' | '_' | '^') => {
+                iter.next();
+            }
+            _ => {}
+        }
+    }
+    out
+}
+
 fn credential_autofill_prompt_text_from_visible(output: &str) -> String {
     if output
         .chars()
@@ -683,6 +727,52 @@ fn credential_autofill_prompt_text_from_visible(output: &str) -> String {
     } else {
         prompt.to_string()
     }
+}
+
+fn credential_autofill_detect_prompt_kind(prompt: &str) -> Option<CredentialPromptKind> {
+    let trimmed = prompt.trim();
+    if trimmed.is_empty()
+        || !trimmed
+            .chars()
+            .last()
+            .is_some_and(|ch| ch == ':' || ch == '：')
+    {
+        return None;
+    }
+    let lower = trimmed.to_ascii_lowercase();
+    if lower.contains("password")
+        || lower.contains("passphrase")
+        || lower.contains("passcode")
+        || lower.contains("pin")
+        || lower.contains("otp")
+        || lower.contains("verification code")
+        || lower.contains("authentication code")
+        || lower.contains("auth code")
+        || lower.contains("2fa")
+        || lower.contains("mfa")
+        || trimmed.contains("密码")
+        || trimmed.contains("口令")
+        || trimmed.contains("验证码")
+        || trimmed.contains("动态码")
+        || trimmed.contains("动态口令")
+    {
+        return Some(CredentialPromptKind::Password);
+    }
+    if lower.contains("username")
+        || lower.contains("user name")
+        || lower.contains("login as")
+        || lower.contains("login")
+        || lower.contains("account")
+        || lower.contains("user")
+        || trimmed.contains("用户名")
+        || trimmed.contains("用户")
+        || trimmed.contains("账号")
+        || trimmed.contains("账户")
+        || trimmed.contains("登录名")
+    {
+        return Some(CredentialPromptKind::Username);
+    }
+    None
 }
 
 #[cfg(test)]
@@ -714,5 +804,35 @@ mod tests {
         let prompt = credential_autofill_prompt_text_from_visible(&long);
         assert_eq!(prompt.chars().count(), 500);
         assert!(prompt.ends_with("Password:"));
+    }
+
+    #[test]
+    fn credential_autofill_fast_strip_removes_common_controls() {
+        let text = "\x1b[32mhello\x1b[0m\x1b]0;title\x07\nPassword: ";
+
+        assert_eq!(
+            credential_autofill_strip_controls_fast(text),
+            "hello\nPassword: "
+        );
+    }
+
+    #[test]
+    fn credential_autofill_detect_prompt_kind_without_regex() {
+        assert_eq!(
+            credential_autofill_detect_prompt_kind("Password:"),
+            Some(CredentialPromptKind::Password)
+        );
+        assert_eq!(
+            credential_autofill_detect_prompt_kind("login as:"),
+            Some(CredentialPromptKind::Username)
+        );
+        assert_eq!(
+            credential_autofill_detect_prompt_kind("密码："),
+            Some(CredentialPromptKind::Password)
+        );
+        assert_eq!(
+            credential_autofill_detect_prompt_kind("Password accepted"),
+            None
+        );
     }
 }

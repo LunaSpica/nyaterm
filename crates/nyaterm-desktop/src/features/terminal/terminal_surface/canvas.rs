@@ -20,11 +20,11 @@ impl NyaTermApp {
         let action_link_matchers = self.settings.terminal_action_links_matchers.clone();
         let is_active = self.active_session_id.as_deref() == Some(session_id.as_str());
         let is_disconnected = !session_id.is_empty() && self.is_session_disconnected(&session_id);
-        let render_overloaded = self
+        let render_degraded = self
             .terminal_views
             .get(&session_id)
-            .is_some_and(|view| view.performance_mode == TerminalPerformanceMode::Overloaded);
-        let keyword_rules = if render_overloaded {
+            .is_some_and(|view| view.render_degraded);
+        let keyword_rules = if render_degraded {
             Vec::new()
         } else {
             self.resolved_keyword_highlight_rules()
@@ -75,7 +75,7 @@ impl NyaTermApp {
             nyaterm_terminal::CursorShape::Block => self.settings.cursor_style.as_str(),
         };
         let search_stage_started_at = Instant::now();
-        let search_matches = if !render_overloaded
+        let search_matches = if !render_degraded
             && is_active
             && self.terminal_search_open
             && self.terminal_search_mode == TerminalSearchMode::Buffer
@@ -140,7 +140,7 @@ impl NyaTermApp {
             };
             let action_link_started_at = Instant::now();
             let mut link_ranges: Vec<(usize, usize)> =
-                if !render_overloaded && self.settings.terminal_action_links_enabled {
+                if !render_degraded && self.settings.terminal_action_links_enabled {
                     if let Some(view) = self.terminal_views.get_mut(&session_id) {
                         view.render_cache
                             .action_link_ranges(&line, &action_link_matchers)
@@ -159,7 +159,7 @@ impl NyaTermApp {
                 };
             action_link_duration += action_link_started_at.elapsed();
             // OSC 8 hyperlinks from the terminal model (always paint when present).
-            if !render_overloaded && let Some(spans) = hyperlink_lines.get(line_index) {
+            if !render_degraded && let Some(spans) = hyperlink_lines.get(line_index) {
                 for span in spans {
                     let start = span.start_col;
                     let end = span.end_col.saturating_add(1);
@@ -1133,13 +1133,13 @@ impl NyaTermApp {
             || element_construction_duration >= TERMINAL_RENDER_SLOW_STAGE
             || total_duration >= TERMINAL_RENDER_SLOW_TOTAL;
         if render_slow
-            && !render_overloaded
+            && !render_degraded
             && (search_mapping_duration >= TERMINAL_RENDER_SLOW_STAGE
                 || action_link_duration >= TERMINAL_RENDER_SLOW_STAGE
                 || decorations_duration >= TERMINAL_RENDER_SLOW_STAGE)
             && let Some(view) = self.terminal_views.get_mut(&session_id)
         {
-            view.enter_overloaded_mode();
+            view.enter_render_degraded_mode();
         }
         if render_slow && self.should_log_slow_diagnostic("terminal_render", Instant::now()) {
             tracing::warn!(
@@ -1149,7 +1149,7 @@ impl NyaTermApp {
                 cols = snapshot_cols,
                 line_count = lines.len(),
                 is_active,
-                render_overloaded,
+                render_degraded,
                 action_links_enabled = self.settings.terminal_action_links_enabled,
                 search_open = self.terminal_search_open,
                 search_matches = search_matches.len(),

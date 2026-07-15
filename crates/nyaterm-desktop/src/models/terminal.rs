@@ -31,7 +31,7 @@ pub(crate) const TERMINAL_OUTPUT_VISIBLE_BURST_OVERLOAD: usize = 256 * 1024;
 /// ~3s recovery notice at the 50ms event-pump cadence.
 pub(crate) const TERMINAL_PERFORMANCE_RECOVERY_TICKS: u8 = 60;
 /// Require a short calm window before re-enabling expensive render decorations.
-pub(crate) const TERMINAL_PERFORMANCE_RENDER_RECOVERY_TICKS: u8 = 8;
+pub(crate) const TERMINAL_RENDER_DEGRADATION_RECOVERY_TICKS: u8 = 8;
 
 #[derive(Debug, Clone, Default)]
 pub(crate) struct TerminalRenderedLine {
@@ -125,8 +125,10 @@ pub(crate) struct TerminalViewState {
     pub(crate) skipped_output_chars: u64,
     /// Bytes accepted in the current calm window (reset each event-pump tick).
     pub(crate) output_burst_bytes: usize,
-    /// Consecutive low-pressure ticks before leaving overloaded mode.
-    pub(crate) render_overload_calm_ticks: u8,
+    /// True while expensive render decorations are temporarily skipped.
+    pub(crate) render_degraded: bool,
+    /// Consecutive low-pressure ticks before re-enabling render decorations.
+    pub(crate) render_degraded_calm_ticks: u8,
     /// Last size sent to the PTY/backend for this session.
     pub(crate) last_backend_resize: Option<TerminalBackendResize>,
 }
@@ -148,7 +150,8 @@ impl TerminalViewState {
             performance_overlay_ticks: 0,
             skipped_output_chars: 0,
             output_burst_bytes: 0,
-            render_overload_calm_ticks: 0,
+            render_degraded: false,
+            render_degraded_calm_ticks: 0,
             last_backend_resize: None,
         }
     }
@@ -170,7 +173,8 @@ impl TerminalViewState {
             performance_overlay_ticks: 0,
             skipped_output_chars: 0,
             output_burst_bytes: 0,
-            render_overload_calm_ticks: 0,
+            render_degraded: false,
+            render_degraded_calm_ticks: 0,
             last_backend_resize: None,
         }
     }
@@ -257,7 +261,6 @@ impl TerminalViewState {
         self.performance_mode = TerminalPerformanceMode::Overloaded;
         self.performance_overlay = Some(TerminalPerformanceOverlay::Overloaded);
         self.performance_overlay_ticks = 0;
-        self.render_overload_calm_ticks = 0;
     }
 
     pub(crate) fn maybe_exit_overloaded_mode(&mut self) {
@@ -266,22 +269,37 @@ impl TerminalViewState {
         }
         // Calm window: no large burst this tick.
         if self.output_burst_bytes > TERMINAL_OUTPUT_VISIBLE_BURST_OVERLOAD / 4 {
-            self.render_overload_calm_ticks = 0;
-            return;
-        }
-        self.render_overload_calm_ticks = self.render_overload_calm_ticks.saturating_add(1);
-        if self.render_overload_calm_ticks < TERMINAL_PERFORMANCE_RENDER_RECOVERY_TICKS {
             return;
         }
         self.performance_mode = TerminalPerformanceMode::Normal;
         self.performance_overlay = Some(TerminalPerformanceOverlay::Recovered);
         self.performance_overlay_ticks = TERMINAL_PERFORMANCE_RECOVERY_TICKS;
-        self.render_overload_calm_ticks = 0;
+    }
+
+    pub(crate) fn enter_render_degraded_mode(&mut self) {
+        self.render_degraded = true;
+        self.render_degraded_calm_ticks = 0;
+    }
+
+    fn tick_render_degradation(&mut self) {
+        if !self.render_degraded {
+            return;
+        }
+        if self.output_burst_bytes > 0 {
+            self.render_degraded_calm_ticks = 0;
+            return;
+        }
+        self.render_degraded_calm_ticks = self.render_degraded_calm_ticks.saturating_add(1);
+        if self.render_degraded_calm_ticks >= TERMINAL_RENDER_DEGRADATION_RECOVERY_TICKS {
+            self.render_degraded = false;
+            self.render_degraded_calm_ticks = 0;
+        }
     }
 
     pub(crate) fn tick_performance_overlay(&mut self) {
         // End-of-tick calm accounting for recovery.
         self.maybe_exit_overloaded_mode();
+        self.tick_render_degradation();
         self.output_burst_bytes = 0;
         if self.performance_overlay_ticks > 0 {
             self.performance_overlay_ticks = self.performance_overlay_ticks.saturating_sub(1);
@@ -308,7 +326,8 @@ impl TerminalViewState {
         self.performance_overlay_ticks = 0;
         self.skipped_output_chars = 0;
         self.output_burst_bytes = 0;
-        self.render_overload_calm_ticks = 0;
+        self.render_degraded = false;
+        self.render_degraded_calm_ticks = 0;
     }
 
     pub(crate) fn clamp_scroll_offset(&mut self) {
