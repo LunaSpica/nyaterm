@@ -21,6 +21,7 @@ pub(in crate::features) struct TrzszSessionState {
     pub(in crate::features) protocol_active: bool,
     download: Option<TrzszDownloadRuntime>,
     download_worker: Option<TrzszDownloadWorker>,
+    upload_prepare_worker: Option<TrzszUploadPrepareWorker>,
     upload: Option<TrzszUploadRuntime>,
 }
 
@@ -97,6 +98,16 @@ struct TrzszUploadProgressUpdate {
     fail_reason: Option<String>,
 }
 
+struct TrzszUploadPrepareWorker {
+    event_rx: mpsc::Receiver<TrzszUploadPrepareEvent>,
+}
+
+struct TrzszUploadPrepareEvent {
+    remote_is_windows: bool,
+    directory_mode: bool,
+    result: Result<(Vec<TrzszUploadEntry>, HashMap<String, TrzszUploadFile>), String>,
+}
+
 impl TrzszDownloadWorker {
     fn spawn(download: TrzszDownloadRuntime, remote_is_windows: bool) -> Self {
         let (command_tx, command_rx) = mpsc::channel();
@@ -134,6 +145,31 @@ impl TrzszDownloadWorker {
     }
 }
 
+impl TrzszUploadPrepareWorker {
+    fn spawn(paths: Vec<PathBuf>, directory_mode: bool, remote_is_windows: bool) -> Self {
+        let (event_tx, event_rx) = mpsc::sync_channel(1);
+        thread::Builder::new()
+            .name("nyaterm-trzsz-upload-prepare".to_string())
+            .spawn(move || {
+                let result = prepare_trzsz_upload_entries(paths, directory_mode);
+                let _ = event_tx.send(TrzszUploadPrepareEvent {
+                    remote_is_windows,
+                    directory_mode,
+                    result,
+                });
+            })
+            .expect("failed to spawn trzsz upload prepare worker");
+        Self { event_rx }
+    }
+
+    fn try_recv_event(&self) -> Option<TrzszUploadPrepareEvent> {
+        match self.event_rx.try_recv() {
+            Ok(event) => Some(event),
+            Err(mpsc::TryRecvError::Empty) | Err(mpsc::TryRecvError::Disconnected) => None,
+        }
+    }
+}
+
 impl Default for TrzszSessionState {
     fn default() -> Self {
         Self {
@@ -143,6 +179,7 @@ impl Default for TrzszSessionState {
             protocol_active: false,
             download: None,
             download_worker: None,
+            upload_prepare_worker: None,
             upload: None,
         }
     }
@@ -177,6 +214,7 @@ impl NyaTermApp {
             state.protocol_active = false;
             state.download = None;
             state.stop_download_worker();
+            state.upload_prepare_worker = None;
             state.upload = None;
         }
     }
@@ -277,6 +315,7 @@ impl NyaTermApp {
                                 },
                                 trigger.remote_is_windows,
                             ));
+                            state.upload_prepare_worker = None;
                             state.upload = None;
                         }
                         protocol_responses.push(action_frame);
@@ -292,6 +331,7 @@ impl NyaTermApp {
                             state.protocol_active = true;
                             state.download = None;
                             state.stop_download_worker();
+                            state.upload_prepare_worker = None;
                             state.upload = None;
                         }
                         if self.prompt_trzsz_upload_paths(
@@ -313,6 +353,7 @@ impl NyaTermApp {
                                 state.protocol.reset();
                                 state.download = None;
                                 state.stop_download_worker();
+                                state.upload_prepare_worker = None;
                                 state.upload = None;
                             }
                             latest_trigger_status = Some(format!(
@@ -327,6 +368,7 @@ impl NyaTermApp {
                             state.protocol_active = true;
                             state.download = None;
                             state.stop_download_worker();
+                            state.upload_prepare_worker = None;
                             state.upload = None;
                         }
                         if self.prompt_trzsz_upload_paths(
@@ -348,6 +390,7 @@ impl NyaTermApp {
                                 state.protocol.reset();
                                 state.download = None;
                                 state.stop_download_worker();
+                                state.upload_prepare_worker = None;
                                 state.upload = None;
                             }
                             latest_trigger_status = Some(format!(
@@ -618,18 +661,36 @@ impl NyaTermApp {
         paths: Vec<PathBuf>,
         cx: &mut Context<Self>,
     ) {
-        let (entries, files) = match prepare_trzsz_upload_entries(paths, directory_mode) {
-            Ok(value) => value,
-            Err(error) => {
-                self.reject_trzsz_upload_prompt(session_id, remote_is_windows, &error, cx);
-                return;
-            }
-        };
+        let state = self.trzsz_state_mut(session_id);
+        state.protocol_active = true;
+        state.download = None;
+        state.stop_download_worker();
+        state.upload = None;
+        state.upload_prepare_worker = Some(TrzszUploadPrepareWorker::spawn(
+            paths,
+            directory_mode,
+            remote_is_windows,
+        ));
+        self.terminal_status = "preparing trzsz upload".to_string();
+        cx.notify();
+    }
+
+    fn accept_prepared_trzsz_upload(
+        &mut self,
+        session_id: &str,
+        remote_is_windows: bool,
+        directory_mode: bool,
+        entries: Vec<TrzszUploadEntry>,
+        files: HashMap<String, TrzszUploadFile>,
+        cx: &mut Context<Self>,
+    ) {
         let file_count = entries.len();
         {
             let state = self.trzsz_state_mut(session_id);
             state.protocol_active = true;
             state.download = None;
+            state.stop_download_worker();
+            state.upload_prepare_worker = None;
             state.upload = Some(TrzszUploadRuntime {
                 engine: TrzszUploadEngine::new(remote_is_windows, entries),
                 files,
@@ -648,6 +709,7 @@ impl NyaTermApp {
             Err(error) => {
                 if let Some(state) = self.trzsz_sessions.get_mut(session_id) {
                     state.upload = None;
+                    state.upload_prepare_worker = None;
                     state.protocol_active = false;
                     state.protocol.reset();
                 }
@@ -672,10 +734,48 @@ impl NyaTermApp {
         }
         if let Some(state) = self.trzsz_sessions.get_mut(session_id) {
             state.upload = None;
+            state.upload_prepare_worker = None;
             state.protocol_active = false;
             state.protocol.reset();
         }
         cx.notify();
+    }
+
+    pub(in crate::features) fn drain_trzsz_upload_prepare_events(
+        &mut self,
+        cx: &mut Context<Self>,
+    ) -> bool {
+        let mut events = Vec::new();
+        for (session_id, state) in &mut self.trzsz_sessions {
+            let Some(worker) = state.upload_prepare_worker.as_ref() else {
+                continue;
+            };
+            if let Some(event) = worker.try_recv_event() {
+                events.push((session_id.clone(), event));
+            }
+        }
+        if events.is_empty() {
+            return false;
+        }
+        for (session_id, event) in events {
+            match event.result {
+                Ok((entries, files)) => self.accept_prepared_trzsz_upload(
+                    &session_id,
+                    event.remote_is_windows,
+                    event.directory_mode,
+                    entries,
+                    files,
+                    cx,
+                ),
+                Err(error) => self.reject_trzsz_upload_prompt(
+                    &session_id,
+                    event.remote_is_windows,
+                    &error,
+                    cx,
+                ),
+            }
+        }
+        true
     }
 
     fn handle_trzsz_protocol_frame(
@@ -730,6 +830,7 @@ impl NyaTermApp {
                 self.finish_trzsz_upload_jobs(session_id, false, Some(&message), cx);
                 if let Some(state) = self.trzsz_sessions.get_mut(session_id) {
                     state.download = None;
+                    state.upload_prepare_worker = None;
                     state.upload = None;
                     state.protocol_active = false;
                     state.protocol.reset();
@@ -950,6 +1051,7 @@ impl NyaTermApp {
             self.finish_trzsz_upload_jobs(session_id, true, None, cx);
             if let Some(state) = self.trzsz_sessions.get_mut(session_id) {
                 state.upload = None;
+                state.upload_prepare_worker = None;
                 state.protocol_active = false;
                 state.protocol.reset();
             }
@@ -974,6 +1076,7 @@ impl NyaTermApp {
         self.finish_trzsz_upload_jobs(session_id, false, Some(reason), cx);
         if let Some(state) = self.trzsz_sessions.get_mut(session_id) {
             state.upload = None;
+            state.upload_prepare_worker = None;
             state.protocol_active = false;
             state.protocol.reset();
         }
@@ -1987,6 +2090,37 @@ mod tests {
         assert_eq!(
             std::fs::read(directory.join("hello.txt")).expect("download file should exist"),
             data
+        );
+
+        let _ = std::fs::remove_dir_all(directory);
+    }
+
+    #[test]
+    fn trzsz_upload_prepare_worker_returns_entries_off_ui_state() {
+        let directory = unique_test_dir("trzsz-worker-upload");
+        std::fs::create_dir_all(&directory).expect("test directory should be created");
+        let file_path = directory.join("hello.txt");
+        std::fs::write(&file_path, b"hello").expect("test file should be written");
+
+        let worker = TrzszUploadPrepareWorker::spawn(vec![file_path.clone()], false, false);
+        let event = loop {
+            if let Some(event) = worker.try_recv_event() {
+                break event;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(5));
+        };
+        let (entries, files) = event.result.expect("upload prepare should succeed");
+
+        assert!(!event.remote_is_windows);
+        assert!(!event.directory_mode);
+        assert_eq!(entries.len(), 1);
+        assert_eq!(entries[0].name, "hello.txt");
+        assert_eq!(
+            files
+                .get("hello.txt")
+                .expect("file metadata should be tracked")
+                .local_path,
+            file_path
         );
 
         let _ = std::fs::remove_dir_all(directory);

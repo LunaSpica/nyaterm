@@ -221,6 +221,7 @@ impl NyaTermApp {
         let drain_started_at = Instant::now();
         let mut dirty = self.drain_terminal_frame_events(cx);
         dirty |= self.drain_trzsz_download_worker_events(cx);
+        dirty |= self.drain_trzsz_upload_prepare_events(cx);
         let mut drained_events = 0usize;
         let mut output_event_count = 0usize;
         let mut drain_timings = SessionEventDrainTimings::default();
