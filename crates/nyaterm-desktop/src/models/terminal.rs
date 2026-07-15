@@ -1452,28 +1452,6 @@ fn push_terminal_frame_command(
             encoding,
             scrollback_limit,
         } => {
-            if let Some(TerminalFrameCommand::Output {
-                session_id: last_session_id,
-                data: last_data,
-                encoding: last_encoding,
-                scrollback_limit: last_scrollback_limit,
-            }) = commands.back_mut()
-            {
-                if terminal_frame_output_commands_can_merge(
-                    last_session_id,
-                    last_encoding,
-                    *last_scrollback_limit,
-                    &session_id,
-                    &encoding,
-                    scrollback_limit,
-                    last_data.len(),
-                    data.len(),
-                    TERMINAL_FRAME_OUTPUT_COALESCE_BYTE_LIMIT,
-                ) {
-                    last_data.extend(data);
-                    return;
-                }
-            }
             commands.push_back(TerminalFrameCommand::Output {
                 session_id,
                 data,
@@ -1817,6 +1795,7 @@ fn terminal_frame_output_commands_can_merge(
 
 const TERMINAL_FRAME_EVENT_QUEUE_CAP: usize = 1024;
 const TERMINAL_FRAME_COMMAND_QUEUE_CAP: usize = 512;
+#[cfg(test)]
 const TERMINAL_FRAME_OUTPUT_COALESCE_BYTE_LIMIT: usize = 32 * 1024;
 const TERMINAL_FRAME_OUTPUT_BURST_BYTE_LIMIT: usize = 64 * 1024;
 const TERMINAL_FRAME_OUTPUT_BURST_WALL_BUDGET: Duration = Duration::from_millis(4);
@@ -2543,7 +2522,7 @@ mod tests {
     }
 
     #[test]
-    fn terminal_frame_command_queue_coalesces_adjacent_matching_output() {
+    fn terminal_frame_command_queue_keeps_output_chunks_separate_for_worker() {
         let (tx, rx) = terminal_frame_command_channel();
         assert!(tx.send(TerminalFrameCommand::Output {
             session_id: "s1".to_string(),
@@ -2560,7 +2539,11 @@ mod tests {
 
         assert!(matches!(
             rx.try_recv(),
-            Some(TerminalFrameCommand::Output { data, .. }) if data == b"abc"
+            Some(TerminalFrameCommand::Output { data, .. }) if data == b"a"
+        ));
+        assert!(matches!(
+            rx.try_recv(),
+            Some(TerminalFrameCommand::Output { data, .. }) if data == b"bc"
         ));
         assert!(rx.try_recv().is_none());
     }
