@@ -469,11 +469,16 @@ impl NyaTermApp {
         let background_started_at = Instant::now();
         let mut background_timings = RuntimeBackgroundDrainTimings::default();
         let critical_background_only = self.runtime_output_pressure_active();
+        let defer_terminal_frame_apply = runtime_background_should_defer_terminal_frames(
+            output_event_count,
+            drained_output_bytes,
+        );
         dirty |= self.drain_runtime_background_events(
             cx,
             background_started_at,
             &mut background_timings,
             critical_background_only,
+            defer_terminal_frame_apply,
         );
         self.terminal_runtime.last_session_start_drain_duration = background_timings.session_start;
         let background_total = background_started_at.elapsed();
@@ -487,6 +492,7 @@ impl NyaTermApp {
                 session_start_ms = background_timings.session_start.as_millis(),
                 prompts_ms = background_timings.prompts.as_millis(),
                 terminal_frames_ms = background_timings.terminal_frames.as_millis(),
+                terminal_frames_deferred = background_timings.terminal_frames_deferred,
                 credential_autofill_ms = background_timings.credential_autofill.as_millis(),
                 recording_ms = background_timings.recording.as_millis(),
                 startup_restore_ms = background_timings.startup_restore.as_millis(),
@@ -532,6 +538,7 @@ impl NyaTermApp {
         started_at: Instant,
         timings: &mut RuntimeBackgroundDrainTimings,
         critical_only: bool,
+        defer_terminal_frames: bool,
     ) -> bool {
         let mut dirty = false;
         macro_rules! drain_stage {
@@ -553,7 +560,11 @@ impl NyaTermApp {
                 | self.drain_credential_prompts()
                 | self.drain_duplicate_prompts()
         );
-        drain_stage!(terminal_frames, self.drain_terminal_frame_events(cx));
+        if defer_terminal_frames {
+            timings.terminal_frames_deferred = true;
+        } else {
+            drain_stage!(terminal_frames, self.drain_terminal_frame_events(cx));
+        }
         drain_stage!(
             credential_autofill,
             self.drain_pending_credential_autofill_detection(cx)
@@ -960,6 +971,7 @@ struct RuntimeBackgroundDrainTimings {
     session_start: Duration,
     prompts: Duration,
     terminal_frames: Duration,
+    terminal_frames_deferred: bool,
     credential_autofill: Duration,
     recording: Duration,
     startup_restore: Duration,
@@ -1010,6 +1022,13 @@ fn session_event_drain_budget(output_pressure: bool) -> SessionEventDrainBudget 
         },
         wall_budget: SESSION_EVENT_DRAIN_WALL_BUDGET,
     }
+}
+
+fn runtime_background_should_defer_terminal_frames(
+    output_event_count: usize,
+    drained_output_bytes: usize,
+) -> bool {
+    output_event_count > 0 || drained_output_bytes > 0
 }
 
 fn session_event_drain_should_yield(
@@ -1170,6 +1189,13 @@ mod tests {
         );
         assert!(pressure.max_output_bytes < idle.max_output_bytes);
         assert_eq!(pressure.wall_budget, SESSION_EVENT_DRAIN_WALL_BUDGET);
+    }
+
+    #[test]
+    fn runtime_background_defers_terminal_frames_after_output() {
+        assert!(!runtime_background_should_defer_terminal_frames(0, 0));
+        assert!(runtime_background_should_defer_terminal_frames(1, 0));
+        assert!(runtime_background_should_defer_terminal_frames(0, 1));
     }
 
     #[test]
