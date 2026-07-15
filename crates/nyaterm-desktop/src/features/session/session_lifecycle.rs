@@ -36,99 +36,49 @@ impl NyaTermApp {
         match metadata.launch_config.clone() {
             SessionLaunchConfig::Local(mut config) => {
                 self.apply_desired_geometry_to_local_config(&mut config);
-                let mut metadata = metadata.clone();
-                metadata.launch_config = SessionLaunchConfig::Local(config.clone());
-                match self.session_manager.create_local_session(config.clone()) {
-                    Ok(info) => {
-                        self.register_session(&info.id, metadata);
-                        self.move_session_after(&info.id, &source_session_id);
-                        if let Some(custom_name) = custom_name {
-                            self.session_custom_names
-                                .insert(info.id.clone(), custom_name);
-                        }
-                        if let Some(custom_color) = custom_color {
-                            self.session_tab_colors
-                                .insert(info.id.clone(), custom_color);
-                        }
-                        self.activate_session_id(&info.id);
-                        self.terminal_status = format!("duplicated {}", short_id(&info.id));
-                        self.append_terminal_log(format!(
-                            "\n# duplicated local PTY {}\n",
-                            short_id(&info.id)
-                        ));
-                        self.maybe_auto_start_recording(&info.id, &info.name);
-                        if let Some(startup_command) = startup_command.clone() {
-                            self.schedule_startup_command(info.id.clone(), startup_command, cx);
-                        }
-                        self.apply_pending_workspace_split_for_duplicate(&info.id);
-                    }
-                    Err(error) => {
-                        self.pending_workspace_split = None;
-                        self.terminal_status = format!("duplicate failed: {error}");
-                    }
-                }
+                self.begin_background_session_start(
+                    format!("{} duplicate", config.name),
+                    SessionLaunchConfig::Local(config),
+                    metadata.source_connection_id.clone(),
+                    metadata.ai_execution_profile,
+                    custom_name,
+                    custom_color,
+                    Some(source_session_id),
+                    None,
+                    None,
+                    startup_command,
+                    cx,
+                );
             }
             SessionLaunchConfig::Telnet(config) => {
-                match self.session_manager.create_telnet_session(config.clone()) {
-                    Ok(info) => {
-                        self.register_session(&info.id, metadata);
-                        self.move_session_after(&info.id, &source_session_id);
-                        if let Some(custom_name) = custom_name {
-                            self.session_custom_names
-                                .insert(info.id.clone(), custom_name);
-                        }
-                        if let Some(custom_color) = custom_color {
-                            self.session_tab_colors
-                                .insert(info.id.clone(), custom_color);
-                        }
-                        self.activate_session_id(&info.id);
-                        self.terminal_status = format!("duplicated {}", short_id(&info.id));
-                        self.append_terminal_log(format!(
-                            "\n# duplicated telnet session {}\n",
-                            short_id(&info.id)
-                        ));
-                        self.maybe_auto_start_recording(&info.id, &info.name);
-                        if let Some(startup_command) = startup_command.clone() {
-                            self.schedule_startup_command(info.id.clone(), startup_command, cx);
-                        }
-                        self.apply_pending_workspace_split_for_duplicate(&info.id);
-                    }
-                    Err(error) => {
-                        self.pending_workspace_split = None;
-                        self.terminal_status = format!("duplicate failed: {error}");
-                    }
-                }
+                self.begin_background_session_start(
+                    format!("{} duplicate", config.name),
+                    SessionLaunchConfig::Telnet(config),
+                    metadata.source_connection_id.clone(),
+                    metadata.ai_execution_profile,
+                    custom_name,
+                    custom_color,
+                    Some(source_session_id),
+                    None,
+                    None,
+                    startup_command,
+                    cx,
+                );
             }
             SessionLaunchConfig::Serial(config) => {
-                match self.session_manager.create_serial_session(config.clone()) {
-                    Ok(info) => {
-                        self.register_session(&info.id, metadata);
-                        self.move_session_after(&info.id, &source_session_id);
-                        if let Some(custom_name) = custom_name {
-                            self.session_custom_names
-                                .insert(info.id.clone(), custom_name);
-                        }
-                        if let Some(custom_color) = custom_color {
-                            self.session_tab_colors
-                                .insert(info.id.clone(), custom_color);
-                        }
-                        self.activate_session_id(&info.id);
-                        self.terminal_status = format!("duplicated {}", short_id(&info.id));
-                        self.append_terminal_log(format!(
-                            "\n# duplicated serial session {}\n",
-                            short_id(&info.id)
-                        ));
-                        self.maybe_auto_start_recording(&info.id, &info.name);
-                        if let Some(startup_command) = startup_command.clone() {
-                            self.schedule_startup_command(info.id.clone(), startup_command, cx);
-                        }
-                        self.apply_pending_workspace_split_for_duplicate(&info.id);
-                    }
-                    Err(error) => {
-                        self.pending_workspace_split = None;
-                        self.terminal_status = format!("duplicate failed: {error}");
-                    }
-                }
+                self.begin_background_session_start(
+                    format!("{} duplicate", config.name),
+                    SessionLaunchConfig::Serial(config),
+                    metadata.source_connection_id.clone(),
+                    metadata.ai_execution_profile,
+                    custom_name,
+                    custom_color,
+                    Some(source_session_id),
+                    None,
+                    None,
+                    startup_command,
+                    cx,
+                );
             }
             SessionLaunchConfig::Ssh(config) => {
                 self.begin_background_ssh_start(
