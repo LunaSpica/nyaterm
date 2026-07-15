@@ -140,3 +140,11 @@ fn decodes_xshell_text_with_utf_bom_and_gbk_fallback() {
     let gbk = [0xb2, 0xe2, 0xca, 0xd4];
     assert_eq!(decode_text(&gbk), "测试");
 }
+
+#[test]
+fn rejects_import_payloads_over_size_budget() {
+    assert!(ensure_quick_command_import_size(MAX_QUICK_COMMAND_IMPORT_BYTES, "import").is_ok());
+    let error = ensure_quick_command_import_size(MAX_QUICK_COMMAND_IMPORT_BYTES + 1, "import")
+        .expect_err("oversized import fails");
+    assert!(error.contains("too large to import"));
+}

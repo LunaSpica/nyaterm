@@ -1,5 +1,7 @@
 use super::*;
 
+pub(super) const MAX_QUICK_COMMAND_IMPORT_BYTES: u64 = 4 * 1024 * 1024;
+
 pub(super) fn import_quick_commands_from_path(
     config_dir: &std::path::Path,
     portable_key_path: Option<PathBuf>,
@@ -13,11 +15,11 @@ pub(super) fn import_quick_commands_from_path(
         .map_err(|error| error.to_string())?;
     let import_config = match kind {
         QuickCommandImportPathPromptKind::NyatermJson => {
-            let raw = std::fs::read_to_string(path).map_err(|error| error.to_string())?;
+            let raw = read_quick_command_import_text(path)?;
             parse_nyaterm_import(&raw)?
         }
         QuickCommandImportPathPromptKind::WindTermQuickbar => {
-            let raw = std::fs::read_to_string(path).map_err(|error| error.to_string())?;
+            let raw = read_quick_command_import_text(path)?;
             parse_windterm_quickbar(&raw)?
         }
         QuickCommandImportPathPromptKind::XshellXts => parse_xshell_xts_quick_buttons(path)?,
@@ -110,6 +112,8 @@ pub(super) fn parse_windterm_quickbar(raw: &str) -> Result<ImportConfig, String>
 pub(super) fn parse_xshell_xts_quick_buttons(
     path: &std::path::Path,
 ) -> Result<ImportConfig, String> {
+    let metadata = std::fs::metadata(path).map_err(|error| error.to_string())?;
+    ensure_quick_command_import_size(metadata.len(), "import file")?;
     let file = std::fs::File::open(path)
         .map_err(|error| format!("Cannot open Xshell XTS file: {error}"))?;
     let mut archive =
@@ -128,6 +132,7 @@ pub(super) fn parse_xshell_xts_quick_buttons(
             continue;
         }
 
+        ensure_quick_command_import_size(entry.size(), &entry_path)?;
         let mut raw = Vec::new();
         entry
             .read_to_end(&mut raw)
@@ -136,6 +141,21 @@ pub(super) fn parse_xshell_xts_quick_buttons(
     }
 
     Err("Xshell quick button file not found: xsl/QuickButton Files/commands.qbl".to_string())
+}
+
+fn read_quick_command_import_text(path: &std::path::Path) -> Result<String, String> {
+    let metadata = std::fs::metadata(path).map_err(|error| error.to_string())?;
+    ensure_quick_command_import_size(metadata.len(), "import file")?;
+    std::fs::read_to_string(path).map_err(|error| error.to_string())
+}
+
+pub(super) fn ensure_quick_command_import_size(size: u64, label: &str) -> Result<(), String> {
+    if size > MAX_QUICK_COMMAND_IMPORT_BYTES {
+        return Err(format!(
+            "{label} is too large to import ({size} bytes > {MAX_QUICK_COMMAND_IMPORT_BYTES} bytes)"
+        ));
+    }
+    Ok(())
 }
 
 pub(super) fn parse_xshell_quick_buttons_content(raw: &str) -> ImportConfig {
