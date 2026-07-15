@@ -34,13 +34,6 @@ impl NyaTermApp {
             workspace = workspace.child(self.session_tab_strip(cx));
         }
 
-        if let Some(prompt) = self.active_host_key_prompt.clone() {
-            workspace = workspace.child(self.host_key_prompt_banner(prompt, cx));
-        }
-        if let Some(prompt) = self.active_credential_prompt.clone() {
-            workspace = workspace.child(self.credential_prompt_banner(prompt, cx));
-        }
-
         workspace
             .child(self.workspace_terminal_area(cx))
             .child(self.bottom_panel_view(cx))

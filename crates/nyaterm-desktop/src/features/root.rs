@@ -201,6 +201,10 @@ impl NyaTermApp {
             });
 
         content
+            .when(
+                self.active_host_key_prompt.is_some() || self.active_credential_prompt.is_some(),
+                |this| this.child(self.ssh_auth_prompt_overlay(cx)),
+            )
             .when(overlay.tab_actions_open, |this| {
                 this.child(self.tab_actions_overlay(cx))
             })
@@ -322,6 +326,32 @@ impl NyaTermApp {
             .when(overlay.locked, |this| {
                 this.child(self.lock_screen_overlay(cx))
             })
+    }
+
+    fn ssh_auth_prompt_overlay(&mut self, cx: &mut Context<Self>) -> impl IntoElement {
+        let host_key_prompt = self.active_host_key_prompt.clone();
+        let credential_prompt = self.active_credential_prompt.clone();
+        div()
+            .id(SharedString::from("ssh-auth-prompt-overlay"))
+            .absolute()
+            .top(px(34.))
+            .left_0()
+            .right_0()
+            .flex()
+            .flex_col()
+            .gap_2()
+            .child(
+                div()
+                    .mx_auto()
+                    .w_full()
+                    .max_w(px(920.))
+                    .when_some(host_key_prompt, |this, prompt| {
+                        this.child(self.host_key_prompt_banner(prompt, cx))
+                    })
+                    .when_some(credential_prompt, |this, prompt| {
+                        this.child(self.credential_prompt_banner(prompt, cx))
+                    }),
+            )
     }
 }
 
