@@ -237,10 +237,13 @@ impl NyaTermApp {
             process_duration,
         } = frame;
         let is_active = self.active_session_id.as_deref() == Some(session_id.as_str());
+        let is_visible = self.terminal_session_has_visible_surface(&session_id);
+        let effects_need_ui_apply = terminal_effects_need_ui_apply(&effects);
         let view = self
             .terminal_views
             .entry(session_id.clone())
             .or_insert_with(TerminalViewState::new);
+        let had_unread = view.has_unread;
         view.apply_terminal_frame_parts(
             &visible_text,
             snapshot,
@@ -253,7 +256,8 @@ impl NyaTermApp {
         if !is_active {
             view.has_unread = true;
         }
-        if terminal_effects_need_ui_apply(&effects) {
+        let unread_changed = !is_active && !had_unread;
+        if effects_need_ui_apply {
             self.apply_terminal_effects(&session_id, effects, command_running, cx);
         }
         if process_duration >= Duration::from_millis(20)
@@ -270,7 +274,24 @@ impl NyaTermApp {
                 "slow terminal frame processing"
             );
         }
-        true
+        terminal_output_frame_needs_notify(is_visible, unread_changed, effects_need_ui_apply)
+    }
+
+    fn terminal_session_has_visible_surface(&self, session_id: &str) -> bool {
+        if session_id.is_empty() || self.main_mode != MainMode::Workspace {
+            return false;
+        }
+        if let Some(root) = self.terminal_windows.as_ref()
+            && matches!(root, TerminalWindowNode::Split { .. })
+        {
+            return terminal_window_node_visible_tab_ids(root)
+                .into_iter()
+                .any(|id| id == session_id);
+        }
+        if let Some(root) = self.workspace_split.as_ref() {
+            return root.contains_session(session_id);
+        }
+        self.active_session_id.as_deref() == Some(session_id)
     }
 
     fn apply_terminal_snapshot_frame(&mut self, frame: TerminalFrameSnapshotEvent) -> bool {
@@ -786,6 +807,37 @@ fn terminal_effects_need_ui_apply(effects: &TerminalEffects) -> bool {
         || !effects.clipboard_loads.is_empty()
 }
 
+fn terminal_output_frame_needs_notify(
+    is_visible: bool,
+    unread_changed: bool,
+    effects_need_ui_apply: bool,
+) -> bool {
+    is_visible || unread_changed || effects_need_ui_apply
+}
+
+fn terminal_window_node_visible_tab_ids(root: &TerminalWindowNode) -> Vec<&str> {
+    let mut ids = Vec::new();
+    collect_terminal_window_node_visible_tab_ids(root, &mut ids);
+    ids
+}
+
+fn collect_terminal_window_node_visible_tab_ids<'a>(
+    node: &'a TerminalWindowNode,
+    ids: &mut Vec<&'a str>,
+) {
+    match node {
+        TerminalWindowNode::Leaf { active_tab_id, .. } => {
+            if let Some(id) = active_tab_id.as_deref() {
+                ids.push(id);
+            }
+        }
+        TerminalWindowNode::Split { first, second, .. } => {
+            collect_terminal_window_node_visible_tab_ids(first, ids);
+            collect_terminal_window_node_visible_tab_ids(second, ids);
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -835,6 +887,35 @@ mod tests {
         let mut effects = TerminalEffects::default();
         effects.shell_command_finished = true;
         assert!(terminal_effects_need_ui_apply(&effects));
+    }
+
+    #[test]
+    fn terminal_output_frame_notify_tracks_visible_unread_or_effects() {
+        assert!(!terminal_output_frame_needs_notify(false, false, false));
+        assert!(terminal_output_frame_needs_notify(true, false, false));
+        assert!(terminal_output_frame_needs_notify(false, true, false));
+        assert!(terminal_output_frame_needs_notify(false, false, true));
+    }
+
+    #[test]
+    fn terminal_window_visible_tab_ids_returns_leaf_active_tabs() {
+        let root = TerminalWindowNode::Split {
+            id: "split".to_string(),
+            direction: WorkspaceSplitDirection::Vertical,
+            ratio_percent: 50,
+            first: Box::new(TerminalWindowNode::Leaf {
+                id: "left".to_string(),
+                tab_ids: vec!["a".to_string(), "b".to_string()],
+                active_tab_id: Some("b".to_string()),
+            }),
+            second: Box::new(TerminalWindowNode::Leaf {
+                id: "right".to_string(),
+                tab_ids: vec!["c".to_string()],
+                active_tab_id: Some("c".to_string()),
+            }),
+        };
+
+        assert_eq!(terminal_window_node_visible_tab_ids(&root), vec!["b", "c"]);
     }
 
     #[test]
