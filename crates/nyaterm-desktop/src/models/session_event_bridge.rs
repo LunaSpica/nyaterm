@@ -412,6 +412,14 @@ fn run_session_event_bridge(
     state: Arc<SessionEventBridgeState>,
 ) {
     while !state.stop.load(Ordering::Relaxed) {
+        let Some(control) = state.control_snapshot() else {
+            thread::sleep(SESSION_EVENT_BRIDGE_IDLE_SLEEP);
+            continue;
+        };
+        if bridge_should_pause_source_drain(&control, frame_pipeline.queued_output_bytes()) {
+            thread::sleep(SESSION_EVENT_BRIDGE_BUSY_SLEEP);
+            continue;
+        }
         let Ok(drain) = session_manager.drain_events_with_output_budget(
             SESSION_EVENT_BRIDGE_DRAIN_BATCH,
             SESSION_EVENT_BRIDGE_OUTPUT_BUDGET,
@@ -430,10 +438,6 @@ fn run_session_event_bridge(
             );
             continue;
         }
-        let Some(control) = state.control_snapshot() else {
-            thread::sleep(SESSION_EVENT_BRIDGE_IDLE_SLEEP);
-            continue;
-        };
         let mut pending_direct_outputs = Vec::new();
         for event in drain.events {
             match event {
@@ -455,20 +459,25 @@ fn run_session_event_bridge(
                             encoding: control.encoding.clone(),
                             scrollback_limit: control.scrollback_limit,
                         });
+                    } else if bridge_output_is_backpressured(
+                        frame_queued_output_bytes,
+                        &control,
+                        &session_id,
+                        &data,
+                    ) {
+                        state
+                            .direct_backpressure_events
+                            .fetch_add(1, Ordering::Relaxed);
+                        state
+                            .direct_backpressure_bytes
+                            .fetch_add(data.len() as u64, Ordering::Relaxed);
+                        pending_direct_outputs.push(TerminalFrameOutputSubmission {
+                            session_id,
+                            data,
+                            encoding: control.encoding.clone(),
+                            scrollback_limit: control.scrollback_limit,
+                        });
                     } else {
-                        if bridge_output_is_backpressured(
-                            frame_queued_output_bytes,
-                            &control,
-                            &session_id,
-                            &data,
-                        ) {
-                            state
-                                .direct_backpressure_events
-                                .fetch_add(1, Ordering::Relaxed);
-                            state
-                                .direct_backpressure_bytes
-                                .fetch_add(data.len() as u64, Ordering::Relaxed);
-                        }
                         flush_bridge_direct_outputs(&frame_pipeline, &mut pending_direct_outputs);
                         if bridge_output_may_contain_sideband_trigger(&data) {
                             state.route_session_to_ui(&session_id);
@@ -503,6 +512,15 @@ fn run_session_event_bridge(
         }
         flush_bridge_direct_outputs(&frame_pipeline, &mut pending_direct_outputs);
     }
+}
+
+fn bridge_should_pause_source_drain(
+    control: &SessionEventBridgeControlSnapshot,
+    frame_pipeline_queued_output_bytes: usize,
+) -> bool {
+    !control.force_ui_all_output
+        && control.ui_routed_sessions.is_empty()
+        && frame_pipeline_queued_output_bytes >= SESSION_EVENT_BRIDGE_DIRECT_OUTPUT_BACKPRESSURE
 }
 
 fn flush_bridge_direct_outputs(
@@ -600,6 +618,44 @@ mod tests {
             &control,
             "s1",
             b"hello\n"
+        ));
+    }
+
+    #[test]
+    fn bridge_pauses_source_drain_only_for_pure_direct_backpressure() {
+        let control = SessionEventBridgeControlSnapshot {
+            force_ui_all_output: false,
+            ui_routed_sessions: HashSet::new(),
+            encoding: "UTF-8".to_string(),
+            scrollback_limit: 1000,
+        };
+        assert!(bridge_should_pause_source_drain(
+            &control,
+            SESSION_EVENT_BRIDGE_DIRECT_OUTPUT_BACKPRESSURE
+        ));
+        assert!(!bridge_should_pause_source_drain(
+            &control,
+            SESSION_EVENT_BRIDGE_DIRECT_OUTPUT_BACKPRESSURE - 1
+        ));
+
+        let forced_ui = SessionEventBridgeControlSnapshot {
+            force_ui_all_output: true,
+            ..control.clone()
+        };
+        assert!(!bridge_should_pause_source_drain(
+            &forced_ui,
+            SESSION_EVENT_BRIDGE_DIRECT_OUTPUT_BACKPRESSURE
+        ));
+
+        let mut routed = HashSet::new();
+        routed.insert("s1".to_string());
+        let routed_ui = SessionEventBridgeControlSnapshot {
+            ui_routed_sessions: routed,
+            ..control
+        };
+        assert!(!bridge_should_pause_source_drain(
+            &routed_ui,
+            SESSION_EVENT_BRIDGE_DIRECT_OUTPUT_BACKPRESSURE
         ));
     }
 }
