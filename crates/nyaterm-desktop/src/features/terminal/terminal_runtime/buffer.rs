@@ -172,6 +172,9 @@ impl NyaTermApp {
             }
         }
 
+        if drained_events > 0 {
+            self.terminal_runtime.last_terminal_frame_apply_at = Some(started_at);
+        }
         let total_duration = started_at.elapsed();
         if (total_duration >= TERMINAL_FRAME_EVENT_DRAIN_SLOW_TOTAL
             || max_apply_duration >= TERMINAL_FRAME_EVENT_APPLY_SLOW)

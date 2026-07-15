@@ -680,11 +680,19 @@ impl NyaTermApp {
         let background_started_at = Instant::now();
         let mut background_timings = RuntimeBackgroundDrainTimings::default();
         let critical_background_only = self.runtime_output_pressure_active();
-        let defer_terminal_frame_apply = runtime_background_should_defer_terminal_frames(
+        let defer_terminal_frame_after_output = runtime_background_should_defer_terminal_frames(
             self.terminal_runtime.session_event_last_output_event_count,
             self.terminal_runtime
                 .session_event_last_drained_output_bytes,
         );
+        let terminal_frame_apply_paced = self.terminal_frame_backlog_active()
+            && terminal_frame_apply_should_defer(
+                self.terminal_runtime.last_terminal_frame_apply_at,
+                tick_started_at,
+                critical_background_only,
+            );
+        let defer_terminal_frame_apply =
+            defer_terminal_frame_after_output || terminal_frame_apply_paced;
         dirty |= self.drain_runtime_background_events(
             cx,
             background_started_at,
@@ -705,6 +713,8 @@ impl NyaTermApp {
                 prompts_ms = background_timings.prompts.as_millis(),
                 terminal_frames_ms = background_timings.terminal_frames.as_millis(),
                 terminal_frames_deferred = background_timings.terminal_frames_deferred,
+                terminal_frames_deferred_after_output = defer_terminal_frame_after_output,
+                terminal_frames_deferred_for_pacing = terminal_frame_apply_paced,
                 credential_autofill_ms = background_timings.credential_autofill.as_millis(),
                 recording_ms = background_timings.recording.as_millis(),
                 startup_restore_ms = background_timings.startup_restore.as_millis(),
@@ -825,6 +835,8 @@ impl NyaTermApp {
                 background_runtime_ms = background_runtime_duration.as_millis(),
                 session_start_ms = session_start_duration.as_millis(),
                 terminal_frames_deferred = background_timings.terminal_frames_deferred,
+                terminal_frames_deferred_after_output = defer_terminal_frame_after_output,
+                terminal_frames_deferred_for_pacing = terminal_frame_apply_paced,
                 startup_restore_ms = startup_restore_duration.as_millis(),
                 terminal_resize_ms = terminal_resize_duration.as_millis(),
                 render_requests_ms = render_requests_duration.as_millis(),
@@ -955,6 +967,11 @@ impl NyaTermApp {
                 .as_ref()
                 .is_some_and(|state| state.terminal_session_id == session_id)
     }
+
+    fn terminal_frame_backlog_active(&self) -> bool {
+        !self.pending_terminal_frame_events.is_empty()
+            || self.terminal_frame_pipeline.queued_event_count() > 0
+    }
 }
 
 const TRANSFER_AUTO_SYNC_CWD_INTERVAL_SECONDS: u32 = 3;
@@ -966,6 +983,7 @@ const RUNTIME_BACKGROUND_EVENT_DRAIN_WALL_BUDGET: Duration = Duration::from_mill
 const RUNTIME_BACKGROUND_EVENT_DRAIN_SLOW: Duration = Duration::from_millis(12);
 const RUNTIME_IDLE_TICK_INTERVAL: Duration = Duration::from_millis(50);
 const RUNTIME_PRESSURE_TICK_INTERVAL: Duration = Duration::from_millis(8);
+const TERMINAL_FRAME_APPLY_PRESSURE_INTERVAL: Duration = Duration::from_millis(16);
 const SLOW_DIAGNOSTIC_THROTTLE: Duration = Duration::from_secs(2);
 const RUNTIME_TICK_SLOW_THRESHOLD: Duration = Duration::from_millis(40);
 const SESSION_EVENT_DRAIN_SLOW_TOTAL: Duration = Duration::from_millis(20);
@@ -1073,6 +1091,17 @@ fn runtime_background_should_defer_terminal_frames(
     drained_output_bytes: usize,
 ) -> bool {
     output_event_count > 0 || drained_output_bytes > 0
+}
+
+fn terminal_frame_apply_should_defer(
+    last_apply_at: Option<Instant>,
+    now: Instant,
+    output_pressure: bool,
+) -> bool {
+    output_pressure
+        && last_apply_at.is_some_and(|last_apply_at| {
+            now.saturating_duration_since(last_apply_at) < TERMINAL_FRAME_APPLY_PRESSURE_INTERVAL
+        })
 }
 
 fn session_event_drain_should_yield(
@@ -1274,6 +1303,20 @@ mod tests {
         assert!(!runtime_background_should_defer_terminal_frames(0, 0));
         assert!(runtime_background_should_defer_terminal_frames(1, 0));
         assert!(runtime_background_should_defer_terminal_frames(0, 1));
+    }
+
+    #[test]
+    fn terminal_frame_apply_pacing_only_defers_under_recent_pressure() {
+        let now = Instant::now();
+
+        assert!(!terminal_frame_apply_should_defer(None, now, true));
+        assert!(!terminal_frame_apply_should_defer(Some(now), now, false));
+        assert!(terminal_frame_apply_should_defer(Some(now), now, true));
+        assert!(!terminal_frame_apply_should_defer(
+            Some(now),
+            now + TERMINAL_FRAME_APPLY_PRESSURE_INTERVAL,
+            true
+        ));
     }
 
     #[test]
