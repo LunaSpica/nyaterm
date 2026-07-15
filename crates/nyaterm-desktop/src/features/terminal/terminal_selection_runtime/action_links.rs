@@ -125,6 +125,9 @@ impl NyaTermApp {
         &self,
         position: Point<Pixels>,
     ) -> Option<(ActionLinkMatch, Vec<ActionLinkAction>)> {
+        if !self.settings.terminal_action_links_enabled {
+            return None;
+        }
         let session_id = self.terminal_session_at_point(position)?;
         let session_id = session_id.as_deref();
         // Only hit-test when the pointer is over the painted terminal content area.
@@ -142,20 +145,54 @@ impl NyaTermApp {
             return None;
         }
         let cell = self.point_to_terminal_cell_for_session(session_id, position)?;
-        let snapshot = if let Some(session_id) = session_id.filter(|id| !id.is_empty()) {
+        let action_link_matcher_key = terminal_action_link_matcher_key(
+            self.settings.terminal_action_links_enabled,
+            &self.settings.terminal_action_links_matchers,
+        );
+        let (snapshot, frame_action_links, live_frame_has_snapshot) = if let Some(session_id) =
+            session_id.filter(|id| !id.is_empty())
+        {
             let view = self.terminal_views.get(session_id)?;
-            view.screen.viewport_snapshot(view.scroll_offset)
+            let live_frame_has_snapshot = view.scroll_offset == 0 && view.frame_snapshot.is_some();
+            let snapshot = if view.scroll_offset == 0 {
+                view.frame_snapshot
+                    .clone()
+                    .unwrap_or_else(|| view.screen.viewport_snapshot(view.scroll_offset))
+            } else {
+                view.screen.viewport_snapshot(view.scroll_offset)
+            };
+            let frame_action_links = view
+                .frame_action_links
+                .as_ref()
+                .filter(|links| links.matcher_key == action_link_matcher_key)
+                .cloned();
+            (snapshot, frame_action_links, live_frame_has_snapshot)
         } else {
-            self.terminal_screen
-                .viewport_snapshot(self.terminal_scroll_offset)
+            (
+                self.terminal_screen
+                    .viewport_snapshot(self.terminal_scroll_offset),
+                None,
+                false,
+            )
         };
         let line = snapshot.lines.get(cell.row)?;
         if line.is_empty() {
             return None;
         }
         let byte_offset = terminal_byte_index_for_cell_col(line, cell.col);
-        let matchers = &self.settings.terminal_action_links_matchers;
-        let item = match_at_offset(line, byte_offset, matchers)?;
+        let item = if let Some(links) = frame_action_links.as_ref() {
+            links
+                .matches_by_line
+                .get(cell.row)?
+                .iter()
+                .find(|item| byte_offset >= item.start && byte_offset < item.end)
+                .cloned()?
+        } else if live_frame_has_snapshot {
+            return None;
+        } else {
+            let matchers = &self.settings.terminal_action_links_matchers;
+            match_at_offset(line, byte_offset, matchers)?
+        };
         let actions = actions_for_match(&item);
         Some((item, actions))
     }
@@ -265,7 +302,15 @@ impl NyaTermApp {
         let snapshot = self
             .terminal_views
             .get(&session_id)
-            .map(|view| view.screen.viewport_snapshot(scroll_offset))
+            .map(|view| {
+                if scroll_offset == 0 {
+                    view.frame_snapshot
+                        .clone()
+                        .unwrap_or_else(|| view.screen.viewport_snapshot(scroll_offset))
+                } else {
+                    view.screen.viewport_snapshot(scroll_offset)
+                }
+            })
             .unwrap_or_else(|| self.terminal_screen.viewport_snapshot(scroll_offset));
         let Some(spans) = snapshot.hyperlink_lines.get(pos.row) else {
             return false;

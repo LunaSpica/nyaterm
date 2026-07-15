@@ -1,4 +1,6 @@
-use nyaterm_core::{TerminalBackendResize, terminal_backend_resize_changed};
+use nyaterm_core::{
+    ActionLinksMatcherSettings, TerminalBackendResize, terminal_backend_resize_changed,
+};
 use nyaterm_terminal::{TerminalEffects, TerminalOutputDecoder, TerminalScreen, TerminalSnapshot};
 use std::collections::HashMap;
 use std::hash::{Hash, Hasher};
@@ -7,9 +9,12 @@ use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::{Duration, Instant};
 
-use crate::terminal::{
-    NyaTerminalLayoutCache, terminal_cell_col_for_byte_index, terminal_screen_from_output,
-    trim_terminal_output,
+use crate::{
+    action_links::{ActionLinkMatch, find_action_links},
+    terminal::{
+        NyaTerminalLayoutCache, terminal_cell_col_for_byte_index, terminal_screen_from_output,
+        trim_terminal_output,
+    },
 };
 
 /// Large-output protection modes (Tauri XTerminal performanceMode).
@@ -37,9 +42,9 @@ pub(crate) const TERMINAL_PERFORMANCE_RECOVERY_TICKS: u8 = 60;
 pub(crate) const TERMINAL_RENDER_DEGRADATION_RECOVERY_TICKS: u8 = 8;
 
 #[derive(Debug, Clone, Default)]
-pub(crate) struct TerminalRenderedLine {
-    pub(crate) text: String,
-    pub(crate) action_link_ranges: Vec<(usize, usize)>,
+pub(crate) struct TerminalFrameActionLinks {
+    pub(crate) matcher_key: u64,
+    pub(crate) matches_by_line: Vec<Vec<ActionLinkMatch>>,
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -194,6 +199,46 @@ fn terminal_line_cache_key(line: &str, matchers: &nyaterm_core::ActionLinksMatch
     hasher.finish()
 }
 
+pub(crate) fn terminal_action_link_matcher_key(
+    enabled: bool,
+    matchers: &ActionLinksMatcherSettings,
+) -> u64 {
+    let mut hasher = std::collections::hash_map::DefaultHasher::new();
+    enabled.hash(&mut hasher);
+    matchers.ipv4.hash(&mut hasher);
+    matchers.archive.hash(&mut hasher);
+    matchers.host_port.hash(&mut hasher);
+    hasher.finish()
+}
+
+fn prepare_terminal_frame_action_links(
+    snapshot: &TerminalSnapshot,
+    enabled: bool,
+    matchers: &ActionLinksMatcherSettings,
+) -> Option<TerminalFrameActionLinks> {
+    if !enabled {
+        return Some(TerminalFrameActionLinks {
+            matcher_key: terminal_action_link_matcher_key(false, matchers),
+            matches_by_line: vec![Vec::new(); snapshot.lines.len()],
+        });
+    }
+    let matches_by_line = snapshot
+        .lines
+        .iter()
+        .map(|line| {
+            if line.is_empty() {
+                Vec::new()
+            } else {
+                find_action_links(line, matchers, true)
+            }
+        })
+        .collect::<Vec<_>>();
+    Some(TerminalFrameActionLinks {
+        matcher_key: terminal_action_link_matcher_key(true, matchers),
+        matches_by_line,
+    })
+}
+
 pub(crate) fn protect_terminal_output_burst<'a>(
     screen: &mut TerminalScreen,
     output_decoder: &mut TerminalOutputDecoder,
@@ -213,6 +258,7 @@ pub(crate) struct TerminalViewState {
     pub(crate) screen: TerminalScreen,
     /// Latest live viewport prepared by the background terminal frame processor.
     pub(crate) frame_snapshot: Option<TerminalSnapshot>,
+    pub(crate) frame_action_links: Option<TerminalFrameActionLinks>,
     pub(crate) protocol_state: TerminalProtocolState,
     pub(crate) output_decoder: TerminalOutputDecoder,
     pub(crate) recording_decoder: TerminalOutputDecoder,
@@ -245,6 +291,7 @@ impl TerminalViewState {
             output: String::new(),
             screen: TerminalScreen::default(),
             frame_snapshot: None,
+            frame_action_links: None,
             protocol_state: TerminalProtocolState::default(),
             output_decoder: TerminalOutputDecoder::default(),
             recording_decoder: TerminalOutputDecoder::default(),
@@ -271,6 +318,7 @@ impl TerminalViewState {
             output,
             screen,
             frame_snapshot: None,
+            frame_action_links: None,
             protocol_state,
             output_decoder: TerminalOutputDecoder::default(),
             recording_decoder: TerminalOutputDecoder::default(),
@@ -309,6 +357,7 @@ impl TerminalViewState {
         self.screen.advance_decoded_text(text);
         self.screen_revision = self.screen_revision.saturating_add(1);
         self.frame_snapshot = Some(self.screen.viewport_snapshot(0));
+        self.frame_action_links = None;
         self.protocol_state = TerminalProtocolState::from_screen(&self.screen);
         self.output.push_str(text);
         trim_terminal_output(&mut self.output);
@@ -327,6 +376,7 @@ impl TerminalViewState {
         self.screen.advance(data);
         self.screen_revision = self.screen_revision.saturating_add(1);
         self.frame_snapshot = Some(self.screen.viewport_snapshot(0));
+        self.frame_action_links = None;
         self.protocol_state = TerminalProtocolState::from_screen(&self.screen);
         self.output
             .push_str(&self.output_decoder.decode_output_text(data));
@@ -430,6 +480,7 @@ impl TerminalViewState {
         self.output.clear();
         self.screen.clear();
         self.frame_snapshot = None;
+        self.frame_action_links = None;
         self.protocol_state = TerminalProtocolState::default();
         self.output_decoder.reset_decoder();
         self.recording_decoder.reset_decoder();
@@ -464,6 +515,7 @@ impl TerminalViewState {
             trim_terminal_output(&mut self.output);
         }
         self.frame_snapshot = Some(frame.snapshot.clone());
+        self.frame_action_links = frame.action_links.clone();
         self.protocol_state = frame.protocol_state;
         self.screen_revision = frame.revision;
         self.output_burst_bytes = self.output_burst_bytes.saturating_add(frame.accepted_bytes);
@@ -602,6 +654,8 @@ impl TerminalFramePipeline {
         data: Vec<u8>,
         encoding: impl Into<String>,
         scrollback_limit: usize,
+        action_links_enabled: bool,
+        action_link_matchers: ActionLinksMatcherSettings,
     ) {
         if data.is_empty() {
             return;
@@ -611,6 +665,8 @@ impl TerminalFramePipeline {
             data,
             encoding: encoding.into(),
             scrollback_limit,
+            action_links_enabled,
+            action_link_matchers,
         });
     }
 
@@ -659,6 +715,8 @@ enum TerminalFrameCommand {
         data: Vec<u8>,
         encoding: String,
         scrollback_limit: usize,
+        action_links_enabled: bool,
+        action_link_matchers: ActionLinksMatcherSettings,
     },
 }
 
@@ -668,6 +726,7 @@ pub(crate) struct TerminalFrameEvent {
     pub(crate) visible_text: String,
     pub(crate) recording_text: String,
     pub(crate) snapshot: TerminalSnapshot,
+    pub(crate) action_links: Option<TerminalFrameActionLinks>,
     pub(crate) protocol_state: TerminalProtocolState,
     pub(crate) effects: TerminalEffects,
     pub(crate) command_running: bool,
@@ -732,6 +791,8 @@ impl TerminalFrameSession {
         data: Vec<u8>,
         encoding: String,
         scrollback_limit: usize,
+        action_links_enabled: bool,
+        action_link_matchers: ActionLinksMatcherSettings,
     ) -> TerminalFrameEvent {
         let started_at = Instant::now();
         self.set_encoding_and_limit(&encoding, scrollback_limit);
@@ -744,11 +805,18 @@ impl TerminalFrameSession {
         let effects = self.screen.take_effects();
         let command_running = self.screen.command_running();
         let protocol_state = TerminalProtocolState::from_screen(&self.screen);
+        let snapshot = self.screen.viewport_snapshot(0);
+        let action_links = prepare_terminal_frame_action_links(
+            &snapshot,
+            action_links_enabled,
+            &action_link_matchers,
+        );
         TerminalFrameEvent {
             session_id,
             visible_text,
             recording_text,
-            snapshot: self.screen.viewport_snapshot(0),
+            snapshot,
+            action_links,
             protocol_state,
             effects,
             command_running,
@@ -758,7 +826,6 @@ impl TerminalFrameSession {
             process_duration: started_at.elapsed(),
         }
     }
-
 }
 
 fn run_terminal_frame_processor(
@@ -806,11 +873,20 @@ fn run_terminal_frame_processor(
                 data,
                 encoding,
                 scrollback_limit,
+                action_links_enabled,
+                action_link_matchers,
             } => {
                 let session = sessions
                     .entry(session_id.clone())
                     .or_insert_with(|| TerminalFrameSession::new(&encoding, scrollback_limit));
-                let event = session.process_output(session_id, data, encoding, scrollback_limit);
+                let event = session.process_output(
+                    session_id,
+                    data,
+                    encoding,
+                    scrollback_limit,
+                    action_links_enabled,
+                    action_link_matchers,
+                );
                 let _ = event_tx.send(event);
             }
         }
@@ -1034,6 +1110,36 @@ mod tests {
             protocol.alternate_scroll_payload(1),
             Some(b"\x1bOA".to_vec())
         );
+    }
+
+    #[test]
+    fn terminal_frame_action_links_align_with_snapshot_lines() {
+        let mut screen = TerminalScreen::default();
+        screen.advance_decoded_text("visit http://example.com\nping 10.0.0.1");
+        let snapshot = screen.viewport_snapshot(0);
+        let matchers = ActionLinksMatcherSettings::default();
+
+        let links = prepare_terminal_frame_action_links(&snapshot, true, &matchers).unwrap();
+
+        assert_eq!(links.matches_by_line.len(), snapshot.lines.len());
+        assert!(
+            links
+                .matches_by_line
+                .iter()
+                .flatten()
+                .any(|item| item.value == "http://example.com")
+        );
+        assert!(
+            links
+                .matches_by_line
+                .iter()
+                .flatten()
+                .any(|item| item.value == "10.0.0.1")
+        );
+
+        let disabled = prepare_terminal_frame_action_links(&snapshot, false, &matchers).unwrap();
+        assert!(disabled.matches_by_line.iter().all(Vec::is_empty));
+        assert_ne!(links.matcher_key, disabled.matcher_key);
     }
 }
 

@@ -24,6 +24,10 @@ impl NyaTermApp {
             .terminal_views
             .get(&session_id)
             .is_some_and(|view| view.render_degraded);
+        let action_link_matcher_key = terminal_action_link_matcher_key(
+            self.settings.terminal_action_links_enabled,
+            &action_link_matchers,
+        );
         let keyword_rules = if render_degraded {
             Vec::new()
         } else {
@@ -39,6 +43,17 @@ impl NyaTermApp {
             .get(&session_id)
             .map(|view| view.scroll_offset)
             .unwrap_or(self.terminal_scroll_offset);
+        let live_frame_has_snapshot = scroll_offset == 0
+            && self
+                .terminal_views
+                .get(&session_id)
+                .is_some_and(|view| view.frame_snapshot.is_some());
+        let frame_action_links = self
+            .terminal_views
+            .get(&session_id)
+            .and_then(|view| view.frame_action_links.as_ref())
+            .filter(|links| links.matcher_key == action_link_matcher_key)
+            .cloned();
         let snapshot = self
             .terminal_views
             .get(&session_id)
@@ -147,8 +162,26 @@ impl NyaTermApp {
                 None
             };
             let action_link_started_at = Instant::now();
-            let mut link_ranges: Vec<(usize, usize)> =
-                if !render_degraded && self.settings.terminal_action_links_enabled {
+            let mut link_ranges: Vec<(usize, usize)> = if !render_degraded
+                && self.settings.terminal_action_links_enabled
+            {
+                if let Some(links) = frame_action_links.as_ref() {
+                    links
+                        .matches_by_line
+                        .get(line_index)
+                        .map(|items| {
+                            items
+                                .iter()
+                                .map(|item| {
+                                    let start_col =
+                                        terminal_cell_col_for_byte_index(&line, item.start);
+                                    let end_col = terminal_cell_col_for_byte_index(&line, item.end);
+                                    (start_col, end_col)
+                                })
+                                .collect()
+                        })
+                        .unwrap_or_default()
+                } else if !live_frame_has_snapshot {
                     if let Some(view) = self.terminal_views.get_mut(&session_id) {
                         view.render_cache
                             .action_link_ranges(&line, &action_link_matchers)
@@ -164,7 +197,10 @@ impl NyaTermApp {
                     }
                 } else {
                     Vec::new()
-                };
+                }
+            } else {
+                Vec::new()
+            };
             action_link_duration += action_link_started_at.elapsed();
             // OSC 8 hyperlinks from the terminal model (always paint when present).
             if !render_degraded && let Some(spans) = hyperlink_lines.get(line_index) {
