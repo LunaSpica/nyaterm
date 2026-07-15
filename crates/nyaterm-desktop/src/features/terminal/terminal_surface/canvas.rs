@@ -262,6 +262,7 @@ impl NyaTermApp {
                 pad + row as f32 * cell_h,
             )
         });
+        let terminal_font_family = self.gpui_terminal_font_family();
         let mut grid = NyaTerminalElement::new(
             snapshot,
             keyword_rules,
@@ -271,7 +272,7 @@ impl NyaTermApp {
             cell_w,
             cell_h,
             palette,
-            self.settings.terminal_font_family.clone(),
+            terminal_font_family.clone(),
             self.settings.terminal_font_size as f32,
             self.settings.terminal_font_weight as f32,
             self.settings.terminal_font_weight_bold as f32,
@@ -315,7 +316,7 @@ impl NyaTermApp {
                         .flex_none()
                         .pr_1()
                         .text_color(rgb(palette.text_dimmed))
-                        .font_family(self.settings.terminal_font_family.clone())
+                        .font_family(terminal_font_family.clone())
                         .text_size(px(self.settings.terminal_font_size as f32 * 0.85))
                         .when(show_timestamps, |this| {
                             this.child(div().w(px(ts_w)).flex_none().child(ts_label))
@@ -341,7 +342,6 @@ impl NyaTermApp {
             .unwrap_or(palette.accent);
         let sync_status_label = if sync_is_paused { "Paused" } else { "Syncing" };
         let output_session_id = session_id.clone();
-        let terminal_font_family = self.settings.terminal_font_family.clone();
         let terminal_font_size = self.settings.terminal_font_size as f32;
         let has_new_while_scrolled = self
             .terminal_views
@@ -389,7 +389,7 @@ impl NyaTermApp {
         let canvas = div()
             .flex_1()
             .min_h_0()
-            .font_family(terminal_font_family)
+            .font_family(terminal_font_family.clone())
             .text_size(px(terminal_font_size))
             .font_weight(FontWeight(self.settings.terminal_font_weight as f32))
             .text_color(rgb(palette.terminal_fg))
@@ -901,7 +901,7 @@ impl NyaTermApp {
                                             .border_color(rgb(palette.accent))
                                             .bg(rgba((palette.terminal_cursor << 8) | 0x33))
                                             .text_color(rgb(palette.terminal_fg))
-                                            .font_family(self.settings.terminal_font_family.clone())
+                                            .font_family(terminal_font_family.clone())
                                             .text_size(px(self.settings.terminal_font_size as f32))
                                             .child(marked_text),
                                     )

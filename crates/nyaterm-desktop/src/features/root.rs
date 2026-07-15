@@ -44,11 +44,7 @@ impl NyaTermApp {
             .relative()
             .bg(rgb(palette.bg))
             .text_color(rgb(palette.text))
-            .font_family(if self.settings.ui_font_family.trim().is_empty() {
-                self.settings.terminal_font_family.clone()
-            } else {
-                self.settings.ui_font_family.clone()
-            })
+            .font_family(self.gpui_ui_font_family())
             .text_size(px(self.settings.ui_font_size.clamp(12, 24) as f32))
             .on_click(cx.listener(|this, _, _, _| {
                 this.mark_user_activity();

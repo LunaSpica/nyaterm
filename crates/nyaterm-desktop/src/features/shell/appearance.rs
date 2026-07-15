@@ -6,6 +6,23 @@ const TERMINAL_FONT_SIZE_MIN: i16 = 8;
 const TERMINAL_FONT_SIZE_MAX: i16 = 72;
 
 impl NyaTermApp {
+    pub(in crate::features) fn gpui_terminal_font_family(&self) -> String {
+        gpui_platform_font_family(
+            &self.settings.terminal_font_family,
+            gpui_terminal_font_fallback(),
+            true,
+        )
+    }
+
+    pub(in crate::features) fn gpui_ui_font_family(&self) -> String {
+        let raw = if self.settings.ui_font_family.trim().is_empty() {
+            self.settings.terminal_font_family.as_str()
+        } else {
+            self.settings.ui_font_family.as_str()
+        };
+        gpui_platform_font_family(raw, gpui_ui_font_fallback(), false)
+    }
+
     pub(in crate::features) fn theme_palette(&self) -> ThemePalette {
         theme_palette(&self.settings.theme)
     }
@@ -336,5 +353,61 @@ fn parse_minimum_contrast_ratio(raw: &str) -> f32 {
         "7" => 7.0,
         "21" => 21.0,
         _ => 1.0,
+    }
+}
+
+fn gpui_platform_font_family(raw: &str, fallback: &str, monospace: bool) -> String {
+    let primary = raw
+        .split(',')
+        .map(trim_gpui_font_family)
+        .find(|family| !family.is_empty())
+        .unwrap_or(fallback);
+    if cfg!(target_os = "windows")
+        && (raw.contains(',') || windows_gpui_font_should_fallback(primary, monospace))
+    {
+        fallback.to_string()
+    } else {
+        primary.to_string()
+    }
+}
+
+fn trim_gpui_font_family(value: &str) -> &str {
+    value.trim().trim_matches(|ch| ch == '"' || ch == '\'')
+}
+
+fn gpui_terminal_font_fallback() -> &'static str {
+    if cfg!(target_os = "windows") {
+        "Consolas"
+    } else {
+        "monospace"
+    }
+}
+
+fn gpui_ui_font_fallback() -> &'static str {
+    if cfg!(target_os = "windows") {
+        "Microsoft YaHei UI"
+    } else {
+        "system-ui"
+    }
+}
+
+fn windows_gpui_font_should_fallback(family: &str, monospace: bool) -> bool {
+    if matches!(family, "monospace" | "system-ui" | "sans-serif") {
+        return true;
+    }
+    if monospace {
+        matches!(
+            family,
+            "JetBrains Mono"
+                | "Fira Code"
+                | "FiraCode Nerd Font Mono"
+                | "Iosevka"
+                | "Maple Mono CN"
+        )
+    } else {
+        matches!(
+            family,
+            "Inter" | "JetBrains Mono" | "Noto Sans SC Variable" | "微软雅黑"
+        )
     }
 }
