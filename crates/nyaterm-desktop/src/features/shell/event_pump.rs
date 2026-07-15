@@ -654,7 +654,7 @@ impl NyaTermApp {
         runtime_tick_interval_for_pressure(self.runtime_output_pressure_active())
     }
 
-    fn runtime_output_pressure_active(&self) -> bool {
+    pub(in crate::features) fn runtime_output_pressure_active(&self) -> bool {
         runtime_output_pressure_active_from_counts(
             self.terminal_runtime.session_event_backlog_active,
             self.terminal_runtime.session_event_queued_output_bytes,

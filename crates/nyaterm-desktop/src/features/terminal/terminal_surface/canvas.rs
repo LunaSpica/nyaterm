@@ -1,4 +1,5 @@
 use super::*;
+use crate::models::TerminalPerformanceMode;
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
 
@@ -21,10 +22,25 @@ impl NyaTermApp {
         let palette = self.terminal_theme_palette();
         let is_active = self.active_session_id.as_deref() == Some(session_id.as_str());
         let is_disconnected = !session_id.is_empty() && self.is_session_disconnected(&session_id);
+        let render_output_pressure = self.runtime_output_pressure_active();
+        let render_pressure = self
+            .terminal_views
+            .get(&session_id)
+            .map(|view| {
+                terminal_render_pressure_active(
+                    render_output_pressure,
+                    view.output_burst_bytes,
+                    view.performance_mode,
+                )
+            })
+            .unwrap_or(render_output_pressure);
+        if render_pressure && let Some(view) = self.terminal_views.get_mut(&session_id) {
+            view.enter_render_degraded_mode();
+        }
         let render_degraded = self
             .terminal_views
             .get(&session_id)
-            .is_some_and(|view| view.render_degraded);
+            .is_some_and(|view| view.render_degraded || render_pressure);
         let action_link_matcher_key = terminal_action_link_matcher_key(
             self.settings.terminal_action_links_enabled,
             &self.settings.terminal_action_links_matchers,
@@ -1164,6 +1180,7 @@ impl NyaTermApp {
                 line_count,
                 is_active,
                 render_degraded,
+                render_output_pressure,
                 action_links_enabled = self.settings.terminal_action_links_enabled,
                 search_open = self.terminal_search_open,
                 search_matches = search_matches.len(),
@@ -1316,6 +1333,16 @@ fn terminal_line_decorations_needed(
         || has_command_marks
 }
 
+fn terminal_render_pressure_active(
+    runtime_output_pressure: bool,
+    output_burst_bytes: usize,
+    performance_mode: TerminalPerformanceMode,
+) -> bool {
+    runtime_output_pressure
+        || output_burst_bytes > 0
+        || performance_mode == TerminalPerformanceMode::Overloaded
+}
+
 const TERMINAL_RENDER_SLOW_STAGE: Duration = Duration::from_millis(12);
 const TERMINAL_RENDER_SLOW_TOTAL: Duration = Duration::from_millis(25);
 
@@ -1346,6 +1373,30 @@ mod tests {
         ));
         assert!(terminal_line_decorations_needed(
             false, false, false, false, true
+        ));
+    }
+
+    #[test]
+    fn terminal_render_pressure_tracks_runtime_bursts_and_overload() {
+        assert!(terminal_render_pressure_active(
+            true,
+            0,
+            TerminalPerformanceMode::Normal
+        ));
+        assert!(terminal_render_pressure_active(
+            false,
+            1,
+            TerminalPerformanceMode::Normal
+        ));
+        assert!(terminal_render_pressure_active(
+            false,
+            0,
+            TerminalPerformanceMode::Overloaded
+        ));
+        assert!(!terminal_render_pressure_active(
+            false,
+            0,
+            TerminalPerformanceMode::Normal
         ));
     }
 
