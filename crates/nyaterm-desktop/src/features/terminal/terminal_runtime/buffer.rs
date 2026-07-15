@@ -110,8 +110,16 @@ impl NyaTermApp {
         let mut dirty = false;
         let mut drained_events = 0usize;
         let mut output_events = 0usize;
+        let mut coalesced_output_events = 0usize;
         let mut accepted_bytes = 0usize;
         let mut max_apply_duration = Duration::ZERO;
+
+        while self.pending_terminal_frame_events.len() < TERMINAL_FRAME_EVENT_DRAIN_BATCH {
+            let Some(event) = self.terminal_frame_pipeline.try_recv_event() else {
+                break;
+            };
+            self.pending_terminal_frame_events.push_back(event);
+        }
 
         while drained_events < TERMINAL_FRAME_EVENT_DRAIN_BATCH {
             if self.pending_terminal_frame_events.is_empty() {
@@ -121,19 +129,31 @@ impl NyaTermApp {
                 self.pending_terminal_frame_events.push_back(event);
             }
 
-            let Some(frame) = self.pending_terminal_frame_events.pop_front() else {
+            let (frames, coalesced) =
+                pop_terminal_frame_events_for_apply(&mut self.pending_terminal_frame_events);
+            if frames.is_empty() {
                 break;
-            };
-            if let TerminalFrameEvent::Output(output) = &frame {
-                output_events += 1;
-                accepted_bytes = accepted_bytes.saturating_add(output.accepted_bytes);
             }
-            let apply_started_at = Instant::now();
-            dirty |= self.apply_terminal_frame_event(frame, cx);
-            max_apply_duration = max_apply_duration.max(apply_started_at.elapsed());
-            drained_events += 1;
+            coalesced_output_events = coalesced_output_events.saturating_add(coalesced);
+            for frame in frames {
+                if let TerminalFrameEvent::Output(output) = &frame {
+                    output_events += 1;
+                    accepted_bytes = accepted_bytes.saturating_add(output.accepted_bytes);
+                }
+                let apply_started_at = Instant::now();
+                dirty |= self.apply_terminal_frame_event(frame, cx);
+                max_apply_duration = max_apply_duration.max(apply_started_at.elapsed());
+                drained_events += 1;
 
-            if started_at.elapsed() >= TERMINAL_FRAME_EVENT_DRAIN_WALL_BUDGET {
+                if drained_events >= TERMINAL_FRAME_EVENT_DRAIN_BATCH
+                    || started_at.elapsed() >= TERMINAL_FRAME_EVENT_DRAIN_WALL_BUDGET
+                {
+                    break;
+                }
+            }
+            if drained_events >= TERMINAL_FRAME_EVENT_DRAIN_BATCH
+                || started_at.elapsed() >= TERMINAL_FRAME_EVENT_DRAIN_WALL_BUDGET
+            {
                 break;
             }
         }
@@ -150,6 +170,7 @@ impl NyaTermApp {
                 diagnostic = "terminal_frame_event_drain",
                 drained_events,
                 output_events,
+                coalesced_output_events,
                 accepted_bytes,
                 pending_events = self.pending_terminal_frame_events.len(),
                 total_ms = total_duration.as_millis(),
@@ -535,6 +556,126 @@ impl NyaTermApp {
                 queue_osc52_clipboard_load_replies(clipboard_loads, "", pending_pty_writes);
             }
         }
+    }
+}
+
+fn pop_terminal_frame_events_for_apply(
+    events: &mut VecDeque<TerminalFrameEvent>,
+) -> (Vec<TerminalFrameEvent>, usize) {
+    let Some(first) = events.pop_front() else {
+        return (Vec::new(), 0);
+    };
+    if !matches!(first, TerminalFrameEvent::Output(_)) {
+        return (vec![first], 0);
+    }
+
+    let mut output_run = vec![first];
+    while matches!(events.front(), Some(TerminalFrameEvent::Output(_))) {
+        let Some(event) = events.pop_front() else {
+            break;
+        };
+        output_run.push(event);
+    }
+    let original_count = output_run.len();
+    let mut latest_by_session: HashMap<String, (usize, TerminalFrameEvent)> = HashMap::new();
+    for (index, event) in output_run.into_iter().enumerate() {
+        let TerminalFrameEvent::Output(frame) = event else {
+            continue;
+        };
+        latest_by_session.insert(
+            frame.session_id.clone(),
+            (index, TerminalFrameEvent::Output(frame)),
+        );
+    }
+    let mut latest = latest_by_session.into_values().collect::<Vec<_>>();
+    latest.sort_by_key(|(index, _)| *index);
+    let events = latest
+        .into_iter()
+        .map(|(_, event)| event)
+        .collect::<Vec<_>>();
+    let coalesced = original_count.saturating_sub(events.len());
+    (events, coalesced)
+}
+
+#[cfg(test)]
+mod frame_event_queue_tests {
+    use super::*;
+
+    fn output_frame(session_id: &str, revision: u64) -> TerminalFrameEvent {
+        TerminalFrameEvent::Output(TerminalFrameOutputEvent {
+            session_id: session_id.to_string(),
+            visible_text: format!("rev-{revision}"),
+            recording_text_bytes: 0,
+            snapshot: nyaterm_terminal::TerminalScreen::default().viewport_snapshot(0),
+            action_links: None,
+            protocol_state: TerminalProtocolState::default(),
+            effects: TerminalEffects::default(),
+            command_running: false,
+            accepted_bytes: revision as usize,
+            skipped_output_bytes: 0,
+            revision,
+            process_duration: Duration::ZERO,
+        })
+    }
+
+    fn buffer_text_frame(session_id: &str) -> TerminalFrameEvent {
+        TerminalFrameEvent::BufferText(TerminalFrameBufferTextEvent {
+            session_id: session_id.to_string(),
+            request_id: "request".to_string(),
+            text: "buffer".to_string(),
+            truncated: false,
+            process_duration: Duration::ZERO,
+        })
+    }
+
+    #[test]
+    fn terminal_frame_apply_coalesces_consecutive_output_to_latest_per_session() {
+        let mut events = VecDeque::from([
+            output_frame("a", 1),
+            output_frame("a", 2),
+            output_frame("b", 3),
+        ]);
+
+        let (frames, coalesced) = pop_terminal_frame_events_for_apply(&mut events);
+
+        assert_eq!(coalesced, 1);
+        assert!(events.is_empty());
+        assert_eq!(frames.len(), 2);
+        assert!(matches!(
+            &frames[0],
+            TerminalFrameEvent::Output(frame) if frame.session_id == "a" && frame.revision == 2
+        ));
+        assert!(matches!(
+            &frames[1],
+            TerminalFrameEvent::Output(frame) if frame.session_id == "b" && frame.revision == 3
+        ));
+    }
+
+    #[test]
+    fn terminal_frame_apply_does_not_coalesce_across_non_output_events() {
+        let mut events = VecDeque::from([
+            output_frame("a", 1),
+            buffer_text_frame("a"),
+            output_frame("a", 2),
+        ]);
+
+        let (first, first_coalesced) = pop_terminal_frame_events_for_apply(&mut events);
+        let (second, second_coalesced) = pop_terminal_frame_events_for_apply(&mut events);
+        let (third, third_coalesced) = pop_terminal_frame_events_for_apply(&mut events);
+
+        assert_eq!(first_coalesced, 0);
+        assert!(matches!(
+            &first[0],
+            TerminalFrameEvent::Output(frame) if frame.revision == 1
+        ));
+        assert_eq!(second_coalesced, 0);
+        assert!(matches!(second[0], TerminalFrameEvent::BufferText(_)));
+        assert_eq!(third_coalesced, 0);
+        assert!(matches!(
+            &third[0],
+            TerminalFrameEvent::Output(frame) if frame.revision == 2
+        ));
+        assert!(events.is_empty());
     }
 }
 
