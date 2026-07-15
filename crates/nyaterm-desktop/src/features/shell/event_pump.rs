@@ -842,11 +842,16 @@ impl NyaTermApp {
             dirty = true;
         }
         let output_pressure_for_visuals = self.runtime_output_pressure_active();
+        let render_work_pressure = terminal_render_work_pressure_active(
+            output_pressure_for_visuals,
+            self.has_pending_session_start(),
+            !self.pending_saved_connection_queue.is_empty(),
+        );
         // Large-output protection recovery accounting.
         for view in self.terminal_views.values_mut() {
             let before = view.performance_overlay;
             let was_render_degraded = view.render_degraded;
-            view.tick_performance_overlay(output_pressure_for_visuals);
+            view.tick_performance_overlay(render_work_pressure);
             if view.performance_overlay != before || view.render_degraded != was_render_degraded {
                 dirty = true;
             }
@@ -1276,6 +1281,14 @@ fn terminal_frame_apply_should_defer(
         })
 }
 
+fn terminal_render_work_pressure_active(
+    runtime_output_pressure: bool,
+    pending_session_start: bool,
+    queued_saved_connection_start: bool,
+) -> bool {
+    runtime_output_pressure || pending_session_start || queued_saved_connection_start
+}
+
 fn session_event_drain_should_yield(
     started_at: Instant,
     has_pending_events: bool,
@@ -1557,6 +1570,14 @@ mod tests {
             now + TERMINAL_FRAME_APPLY_PRESSURE_INTERVAL,
             true
         ));
+    }
+
+    #[test]
+    fn terminal_render_work_pressure_includes_pending_connection_work() {
+        assert!(!terminal_render_work_pressure_active(false, false, false));
+        assert!(terminal_render_work_pressure_active(true, false, false));
+        assert!(terminal_render_work_pressure_active(false, true, false));
+        assert!(terminal_render_work_pressure_active(false, false, true));
     }
 
     #[test]

@@ -462,7 +462,7 @@ impl TerminalViewState {
             performance_overlay_ticks: 0,
             skipped_output_chars: 0,
             output_burst_bytes: 0,
-            render_degraded: false,
+            render_degraded: true,
             render_degraded_calm_ticks: 0,
             last_backend_resize: None,
         }
@@ -494,7 +494,7 @@ impl TerminalViewState {
             performance_overlay_ticks: 0,
             skipped_output_chars: 0,
             output_burst_bytes: 0,
-            render_degraded: false,
+            render_degraded: true,
             render_degraded_calm_ticks: 0,
             last_backend_resize: None,
         }
@@ -520,6 +520,7 @@ impl TerminalViewState {
         self.screen_revision = self.screen_revision.saturating_add(1);
         self.frame_snapshot = Some(self.screen.viewport_snapshot(0));
         self.frame_action_links = None;
+        self.enter_render_degraded_mode();
         self.clear_scrollback_query_caches();
         self.protocol_state = TerminalProtocolState::from_screen(&self.screen);
         append_terminal_ui_output_tail(&mut self.output, text);
@@ -540,6 +541,7 @@ impl TerminalViewState {
         self.screen_revision = self.screen_revision.saturating_add(1);
         self.frame_snapshot = Some(self.screen.viewport_snapshot(0));
         self.frame_action_links = None;
+        self.enter_render_degraded_mode();
         self.clear_scrollback_query_caches();
         self.protocol_state = TerminalProtocolState::from_screen(&self.screen);
         append_terminal_ui_output_tail(
@@ -569,6 +571,8 @@ impl TerminalViewState {
             || feed.len() > 32 * 1024
         {
             self.enter_overloaded_mode();
+        } else if !feed.is_empty() {
+            self.enter_render_degraded_mode();
         }
         feed
     }
@@ -592,6 +596,7 @@ impl TerminalViewState {
         self.performance_mode = TerminalPerformanceMode::Overloaded;
         self.performance_overlay = Some(TerminalPerformanceOverlay::Overloaded);
         self.performance_overlay_ticks = 0;
+        self.enter_render_degraded_mode();
     }
 
     pub(crate) fn maybe_exit_overloaded_mode(&mut self) {
@@ -661,7 +666,7 @@ impl TerminalViewState {
         self.performance_overlay_ticks = 0;
         self.skipped_output_chars = 0;
         self.output_burst_bytes = 0;
-        self.render_degraded = false;
+        self.render_degraded = true;
         self.render_degraded_calm_ticks = 0;
     }
 
@@ -695,6 +700,9 @@ impl TerminalViewState {
         self.protocol_state = protocol_state;
         self.screen_revision = revision;
         self.output_burst_bytes = self.output_burst_bytes.saturating_add(accepted_bytes);
+        if accepted_bytes > 0 {
+            self.enter_render_degraded_mode();
+        }
         if skipped_output_bytes > 0 {
             self.note_skipped_output(skipped_output_bytes);
         }
@@ -2917,6 +2925,8 @@ mod tests {
     fn render_degradation_stays_active_while_output_pressure_is_present() {
         let mut view = TerminalViewState::new();
 
+        assert!(view.render_degraded);
+
         view.tick_performance_overlay(true);
 
         assert!(view.render_degraded);
@@ -2929,8 +2939,24 @@ mod tests {
     }
 
     #[test]
+    fn render_degradation_is_initial_view_profile() {
+        let mut view = TerminalViewState::new();
+
+        assert!(view.render_degraded);
+        for _ in 0..TERMINAL_RENDER_DEGRADATION_RECOVERY_TICKS {
+            view.tick_performance_overlay(false);
+        }
+
+        assert!(!view.render_degraded);
+    }
+
+    #[test]
     fn render_degradation_starts_after_output_frame_applies() {
         let mut view = TerminalViewState::new();
+        for _ in 0..TERMINAL_RENDER_DEGRADATION_RECOVERY_TICKS {
+            view.tick_performance_overlay(false);
+        }
+        assert!(!view.render_degraded);
         let frame = output_frame_with_sizes(1, 0);
 
         apply_output_frame_to_view(&mut view, frame);
