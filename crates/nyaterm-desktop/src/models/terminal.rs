@@ -520,15 +520,11 @@ impl TerminalViewState {
     }
 
     fn tick_render_degradation(&mut self, output_pressure: bool) {
-        if output_pressure {
+        if output_pressure || self.output_burst_bytes > 0 {
             self.enter_render_degraded_mode();
             return;
         }
         if !self.render_degraded {
-            return;
-        }
-        if self.output_burst_bytes > 0 {
-            self.render_degraded_calm_ticks = 0;
             return;
         }
         self.render_degraded_calm_ticks = self.render_degraded_calm_ticks.saturating_add(1);
@@ -2114,6 +2110,18 @@ mod tests {
         for _ in 0..TERMINAL_RENDER_DEGRADATION_RECOVERY_TICKS {
             view.tick_performance_overlay(true);
         }
+        assert!(view.render_degraded);
+        assert_eq!(view.render_degraded_calm_ticks, 0);
+    }
+
+    #[test]
+    fn render_degradation_starts_after_output_frame_applies() {
+        let mut view = TerminalViewState::new();
+        let frame = output_frame_with_sizes(1, 0);
+
+        apply_output_frame_to_view(&mut view, frame);
+        view.tick_performance_overlay(false);
+
         assert!(view.render_degraded);
         assert_eq!(view.render_degraded_calm_ticks, 0);
     }
