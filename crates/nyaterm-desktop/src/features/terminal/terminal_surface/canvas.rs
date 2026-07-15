@@ -140,12 +140,7 @@ impl NyaTermApp {
         let mut line_decorations = Vec::with_capacity(lines.len());
         let decoration_stage_started_at = Instant::now();
         let mut action_link_duration = Duration::ZERO;
-        for (line_index, line) in lines.iter().enumerate() {
-            let line = if line.is_empty() {
-                " ".to_string()
-            } else {
-                line.clone()
-            };
+        for line_index in 0..lines.len() {
             let selection_cols = if is_active {
                 self.terminal_selection
                     .as_ref()
@@ -154,31 +149,20 @@ impl NyaTermApp {
                 None
             };
             let action_link_started_at = Instant::now();
-            let mut link_ranges: Vec<(usize, usize)> = if !render_degraded
-                && self.settings.terminal_action_links_enabled
-            {
-                if let Some(links) = frame_action_links.as_ref() {
-                    links
-                        .matches_by_line
-                        .get(line_index)
-                        .map(|items| {
-                            items
-                                .iter()
-                                .map(|item| {
-                                    let start_col =
-                                        terminal_cell_col_for_byte_index(&line, item.start);
-                                    let end_col = terminal_cell_col_for_byte_index(&line, item.end);
-                                    (start_col, end_col)
-                                })
-                                .collect()
-                        })
-                        .unwrap_or_default()
+            let mut link_ranges: Vec<(usize, usize)> =
+                if !render_degraded && self.settings.terminal_action_links_enabled {
+                    if let Some(links) = frame_action_links.as_ref() {
+                        links
+                            .cell_ranges_by_line
+                            .get(line_index)
+                            .cloned()
+                            .unwrap_or_default()
+                    } else {
+                        Vec::new()
+                    }
                 } else {
                     Vec::new()
-                }
-            } else {
-                Vec::new()
-            };
+                };
             action_link_duration += action_link_started_at.elapsed();
             // OSC 8 hyperlinks from the terminal model (always paint when present).
             if !render_degraded && let Some(spans) = hyperlink_lines.get(line_index) {

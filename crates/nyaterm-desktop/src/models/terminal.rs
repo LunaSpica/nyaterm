@@ -1,7 +1,10 @@
 use nyaterm_core::{
     ActionLinksMatcherSettings, TerminalBackendResize, terminal_backend_resize_changed,
 };
-use nyaterm_terminal::{TerminalEffects, TerminalOutputDecoder, TerminalScreen, TerminalSnapshot};
+use nyaterm_terminal::{
+    TerminalEffects, TerminalOutputDecoder, TerminalScreen, TerminalSnapshot,
+    terminal_cell_col_for_byte_index,
+};
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::hash::{Hash, Hasher};
 use std::sync::mpsc;
@@ -45,6 +48,7 @@ pub(crate) const TERMINAL_RENDER_DEGRADATION_RECOVERY_TICKS: u8 = 8;
 pub(crate) struct TerminalFrameActionLinks {
     pub(crate) matcher_key: u64,
     pub(crate) matches_by_line: Vec<Vec<ActionLinkMatch>>,
+    pub(crate) cell_ranges_by_line: Vec<Vec<(usize, usize)>>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -210,6 +214,7 @@ fn prepare_terminal_frame_action_links(
         return Some(TerminalFrameActionLinks {
             matcher_key: terminal_action_link_matcher_key(false, matchers),
             matches_by_line: vec![Vec::new(); snapshot.lines.len()],
+            cell_ranges_by_line: vec![Vec::new(); snapshot.lines.len()],
         });
     }
     let matches_by_line = snapshot
@@ -223,9 +228,26 @@ fn prepare_terminal_frame_action_links(
             }
         })
         .collect::<Vec<_>>();
+    let cell_ranges_by_line = snapshot
+        .lines
+        .iter()
+        .zip(matches_by_line.iter())
+        .map(|(line, matches)| {
+            matches
+                .iter()
+                .map(|item| {
+                    (
+                        terminal_cell_col_for_byte_index(line, item.start),
+                        terminal_cell_col_for_byte_index(line, item.end),
+                    )
+                })
+                .collect()
+        })
+        .collect();
     Some(TerminalFrameActionLinks {
         matcher_key: terminal_action_link_matcher_key(true, matchers),
         matches_by_line,
+        cell_ranges_by_line,
     })
 }
 
@@ -1401,12 +1423,20 @@ mod tests {
         let links = prepare_terminal_frame_action_links(&snapshot, true, &matchers).unwrap();
 
         assert_eq!(links.matches_by_line.len(), snapshot.lines.len());
+        assert_eq!(links.cell_ranges_by_line.len(), snapshot.lines.len());
         assert!(
             links
                 .matches_by_line
                 .iter()
                 .flatten()
                 .any(|item| item.value == "http://example.com")
+        );
+        assert!(
+            links
+                .cell_ranges_by_line
+                .iter()
+                .flatten()
+                .any(|range| *range == (6, 24))
         );
         assert!(
             links
@@ -1418,6 +1448,7 @@ mod tests {
 
         let disabled = prepare_terminal_frame_action_links(&snapshot, false, &matchers).unwrap();
         assert!(disabled.matches_by_line.iter().all(Vec::is_empty));
+        assert!(disabled.cell_ranges_by_line.iter().all(Vec::is_empty));
         assert_ne!(links.matcher_key, disabled.matcher_key);
     }
 
