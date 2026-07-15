@@ -598,7 +598,9 @@ impl NyaTermApp {
                         self.command_history = store.list_command_history(64).unwrap_or_default();
                         self.keyword_highlights =
                             store.load_keyword_highlights().unwrap_or_default();
-                        self.settings = store.load_app_settings_summary().unwrap_or_default();
+                        self.apply_gpui_settings(
+                            store.load_app_settings_summary().unwrap_or_default(),
+                        );
                         self.apply_ui_layout_from_settings();
                         self.translation_settings = store
                             .load_translation_settings()

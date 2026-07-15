@@ -126,7 +126,7 @@ impl NyaTermApp {
         ) {
             match store.save_ui_layout_settings(&self.settings) {
                 Ok(summary) => {
-                    self.settings = summary;
+                    self.apply_gpui_settings(summary);
                     self.store_status.ready = true;
                     self.store_status.message = "panel layout saved".to_string();
                 }
