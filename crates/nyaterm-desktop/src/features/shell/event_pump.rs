@@ -180,7 +180,9 @@ impl NyaTermApp {
         let before_metrics = self.terminal_cell_metrics;
         let vs = window.viewport_size();
         self.last_viewport_size = (f32::from(vs.width), f32::from(vs.height));
-        self.refresh_terminal_cell_metrics(cx);
+        if terminal_cell_metrics_refresh_needed(self.terminal_cell_metrics) {
+            self.refresh_terminal_cell_metrics(cx);
+        }
         if self.terminal_cell_metrics != before_metrics {
             self.sync_terminal_cell_metrics_to_screens();
             self.resize_all_known_terminal_surfaces();
@@ -1224,6 +1226,10 @@ fn store_snapshot_publish_due(last_at: Option<Instant>, now: Instant) -> bool {
     diagnostic_log_due(last_at, now, STORE_SNAPSHOT_HEARTBEAT)
 }
 
+fn terminal_cell_metrics_refresh_needed(metrics: Option<(f32, f32)>) -> bool {
+    metrics.is_none()
+}
+
 fn should_publish_store_snapshots(
     visual_dirty: bool,
     output_pressure: bool,
@@ -1469,6 +1475,12 @@ mod tests {
         assert!(!should_publish_store_snapshots(false, false, false));
         assert!(!should_publish_store_snapshots(true, true, false));
         assert!(!should_publish_store_snapshots(false, true, true));
+    }
+
+    #[test]
+    fn terminal_cell_metrics_refreshes_only_after_invalidation() {
+        assert!(terminal_cell_metrics_refresh_needed(None));
+        assert!(!terminal_cell_metrics_refresh_needed(Some((8.4, 18.0))));
     }
 
     #[test]
