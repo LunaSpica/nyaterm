@@ -77,11 +77,9 @@ impl NyaTermApp {
         let Some(view) = self.terminal_views.get_mut(session_id) else {
             return false;
         };
-        if view
-            .search_result
-            .as_ref()
-            .is_some_and(|result| result.key == key)
-            || view.pending_search_key.as_ref() == Some(&key)
+        if view.search_result.as_ref().is_some_and(|result| {
+            terminal_frame_search_result_is_current(result, &key, view.screen_revision)
+        }) || view.pending_search_key.as_ref() == Some(&key)
         {
             return false;
         }
@@ -104,7 +102,10 @@ impl NyaTermApp {
         );
     }
 
-    pub(in crate::features) fn drive_terminal_render_requests(&mut self) -> bool {
+    pub(in crate::features) fn drive_terminal_render_requests(
+        &mut self,
+        allow_search: bool,
+    ) -> bool {
         let snapshot_requests = self
             .terminal_views
             .iter()
@@ -116,7 +117,9 @@ impl NyaTermApp {
         for (session_id, offset) in snapshot_requests {
             requested |= self.request_terminal_frame_snapshot(&session_id, offset);
         }
-        requested |= self.request_active_terminal_buffer_search();
+        if allow_search {
+            requested |= self.request_active_terminal_buffer_search();
+        }
         requested
     }
 
@@ -250,9 +253,6 @@ impl NyaTermApp {
                 "slow terminal frame processing"
             );
         }
-        if is_active {
-            self.request_active_terminal_buffer_search();
-        }
         true
     }
 
@@ -297,13 +297,21 @@ impl NyaTermApp {
     }
 
     fn apply_terminal_search_frame(&mut self, frame: TerminalFrameSearchEvent) -> bool {
-        let Some(view) = self.terminal_views.get_mut(&frame.session_id) else {
+        let Some((current_revision, is_current_revision)) =
+            self.terminal_views.get_mut(&frame.session_id).map(|view| {
+                if view.pending_search_key.as_ref() == Some(&frame.result.key) {
+                    view.pending_search_key = None;
+                }
+                let current_revision = view.screen_revision;
+                let is_current_revision = frame.result.revision == current_revision;
+                if is_current_revision {
+                    view.search_result = Some(frame.result.clone());
+                }
+                (current_revision, is_current_revision)
+            })
+        else {
             return false;
         };
-        if view.pending_search_key.as_ref() == Some(&frame.result.key) {
-            view.pending_search_key = None;
-        }
-        view.search_result = Some(frame.result.clone());
         if frame.process_duration >= Duration::from_millis(20)
             && self.should_log_slow_diagnostic("terminal_frame_search", Instant::now())
         {
@@ -317,12 +325,15 @@ impl NyaTermApp {
                 diagnostic = "terminal_frame_search",
                 session_id = %frame.session_id,
                 query_len = frame.result.key.query.len(),
+                revision = frame.result.revision,
+                current_revision,
+                stale = !is_current_revision,
                 match_count,
                 process_ms = frame.process_duration.as_millis(),
                 "slow terminal frame search"
             );
         }
-        true
+        is_current_revision
     }
 
     fn apply_terminal_buffer_text_frame(

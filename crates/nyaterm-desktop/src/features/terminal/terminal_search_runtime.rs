@@ -65,11 +65,18 @@ impl NyaTermApp {
         let Some(key) = self.terminal_search_key() else {
             return Ok(Vec::new());
         };
-        self.active_session_id
+        let Some(view) = self
+            .active_session_id
             .as_deref()
             .and_then(|session_id| self.terminal_views.get(session_id))
-            .and_then(|view| view.search_result.as_ref())
-            .filter(|result| result.key == key)
+        else {
+            return Ok(Vec::new());
+        };
+        view.search_result
+            .as_ref()
+            .filter(|result| {
+                terminal_frame_search_result_is_current(result, &key, view.screen_revision)
+            })
             .map(|result| result.matches.clone())
             .unwrap_or_else(|| Ok(Vec::new()))
     }

@@ -80,7 +80,16 @@ impl TerminalFrameSearchKey {
 #[derive(Clone, Debug)]
 pub(crate) struct TerminalFrameSearchResult {
     pub(crate) key: TerminalFrameSearchKey,
+    pub(crate) revision: u64,
     pub(crate) matches: Result<Vec<TerminalBufferMatch>, String>,
+}
+
+pub(crate) fn terminal_frame_search_result_is_current(
+    result: &TerminalFrameSearchResult,
+    key: &TerminalFrameSearchKey,
+    revision: u64,
+) -> bool {
+    result.key == *key && result.revision == revision
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -421,7 +430,7 @@ impl TerminalViewState {
         self.screen_revision = self.screen_revision.saturating_add(1);
         self.frame_snapshot = Some(self.screen.viewport_snapshot(0));
         self.frame_action_links = None;
-        self.clear_frame_query_caches();
+        self.clear_scrollback_query_caches();
         self.protocol_state = TerminalProtocolState::from_screen(&self.screen);
         append_terminal_ui_output_tail(&mut self.output, text);
         if self.scroll_offset > 0 {
@@ -441,7 +450,7 @@ impl TerminalViewState {
         self.screen_revision = self.screen_revision.saturating_add(1);
         self.frame_snapshot = Some(self.screen.viewport_snapshot(0));
         self.frame_action_links = None;
-        self.clear_frame_query_caches();
+        self.clear_scrollback_query_caches();
         self.protocol_state = TerminalProtocolState::from_screen(&self.screen);
         append_terminal_ui_output_tail(
             &mut self.output,
@@ -552,7 +561,7 @@ impl TerminalViewState {
         self.screen.clear();
         self.frame_snapshot = None;
         self.frame_action_links = None;
-        self.clear_frame_query_caches();
+        self.clear_terminal_query_caches();
         self.protocol_state = TerminalProtocolState::default();
         self.output_decoder.reset_decoder();
         self.recording_decoder.reset_decoder();
@@ -587,7 +596,7 @@ impl TerminalViewState {
         }
         self.frame_snapshot = Some(frame.snapshot.clone());
         self.frame_action_links = frame.action_links.clone();
-        self.clear_frame_query_caches();
+        self.clear_scrollback_query_caches();
         self.protocol_state = frame.protocol_state;
         self.screen_revision = frame.revision;
         self.output_burst_bytes = self.output_burst_bytes.saturating_add(frame.accepted_bytes);
@@ -632,10 +641,14 @@ impl TerminalViewState {
         ));
     }
 
-    fn clear_frame_query_caches(&mut self) {
+    fn clear_scrollback_query_caches(&mut self) {
         self.scrollback_snapshots.clear();
         self.scrollback_action_links.clear();
         self.pending_snapshot_offsets.clear();
+    }
+
+    fn clear_terminal_query_caches(&mut self) {
+        self.clear_scrollback_query_caches();
         self.search_result = None;
         self.pending_search_key = None;
     }
@@ -1060,7 +1073,11 @@ impl TerminalFrameSession {
         let matches = terminal_buffer_matches(&buffer_text, &key.query, &flags, key.limit);
         TerminalFrameSearchEvent {
             session_id,
-            result: TerminalFrameSearchResult { key, matches },
+            result: TerminalFrameSearchResult {
+                key,
+                revision: self.revision,
+                matches,
+            },
             process_duration: started_at.elapsed(),
         }
     }
@@ -1529,6 +1546,53 @@ mod tests {
         assert!(event.truncated);
         assert!(event.text.len() <= 64);
         assert!(event.text.ends_with('x'));
+    }
+
+    #[test]
+    fn terminal_frame_search_result_current_requires_matching_revision() {
+        let key = TerminalFrameSearchKey {
+            query: "alpha".to_string(),
+            case_sensitive: false,
+            regex: false,
+            whole_word: false,
+            limit: 100,
+        };
+        let result = TerminalFrameSearchResult {
+            key: key.clone(),
+            revision: 7,
+            matches: Ok(Vec::new()),
+        };
+        let other_key = TerminalFrameSearchKey {
+            query: "beta".to_string(),
+            ..key.clone()
+        };
+
+        assert!(terminal_frame_search_result_is_current(&result, &key, 7));
+        assert!(!terminal_frame_search_result_is_current(&result, &key, 8));
+        assert!(!terminal_frame_search_result_is_current(
+            &result, &other_key, 7
+        ));
+    }
+
+    #[test]
+    fn terminal_frame_search_event_carries_current_session_revision() {
+        let mut session = TerminalFrameSession::new("UTF-8", 1000);
+        session.screen.advance_decoded_text("alpha\nbeta");
+        session.revision = 3;
+        let key = TerminalFrameSearchKey {
+            query: "alpha".to_string(),
+            case_sensitive: false,
+            regex: false,
+            whole_word: false,
+            limit: 100,
+        };
+
+        let event = session.search_event("s1".to_string(), key.clone());
+
+        assert_eq!(event.session_id, "s1");
+        assert_eq!(event.result.key, key);
+        assert_eq!(event.result.revision, 3);
+        assert_eq!(event.result.matches.unwrap().len(), 1);
     }
 
     #[test]

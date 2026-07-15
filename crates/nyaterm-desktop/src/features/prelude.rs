@@ -115,6 +115,7 @@ pub(super) use crate::models::{
     TransferUnknownFileState, TranslateInputField, TranslationDialogState, TranslationSecretDraft,
     WorkspacePaneNode, WorkspaceSplitDirection, WorkspaceSplitResizeState, WorkspaceSplitState,
     is_multi_line_paste, normalize_paste_newlines, terminal_action_link_matcher_key,
+    terminal_frame_search_result_is_current,
 };
 pub(super) use crate::send_command::{
     SendCommandDataType, SendCommandLineEnding, SendCommandMode, SendCommandTarget,

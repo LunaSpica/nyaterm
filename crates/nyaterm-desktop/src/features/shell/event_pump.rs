@@ -689,7 +689,8 @@ impl NyaTermApp {
         dirty |= self.drive_terminal_resize();
         let terminal_resize_duration = stage_started_at.elapsed();
         let stage_started_at = Instant::now();
-        dirty |= self.drive_terminal_render_requests();
+        let render_request_output_pressure = self.runtime_output_pressure_active();
+        dirty |= self.drive_terminal_render_requests(!render_request_output_pressure);
         let render_requests_duration = stage_started_at.elapsed();
         let stage_started_at = Instant::now();
         dirty |= self.drive_pending_focus(window);
@@ -775,6 +776,7 @@ impl NyaTermApp {
                 startup_restore_ms = startup_restore_duration.as_millis(),
                 terminal_resize_ms = terminal_resize_duration.as_millis(),
                 render_requests_ms = render_requests_duration.as_millis(),
+                render_requests_output_pressure = render_request_output_pressure,
                 pending_focus_ms = pending_focus_duration.as_millis(),
                 action_link_tooltip_ms = action_link_tooltip_duration.as_millis(),
                 remote_refresh_ms = remote_refresh_duration.as_millis(),
