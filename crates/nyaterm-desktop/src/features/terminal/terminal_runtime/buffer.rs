@@ -102,8 +102,11 @@ impl NyaTermApp {
 
     pub(in crate::features) fn drive_terminal_render_requests(
         &mut self,
-        allow_search: bool,
+        allow_deferred_work: bool,
     ) -> bool {
+        if !allow_deferred_work {
+            return false;
+        }
         let snapshot_requests = self
             .terminal_views
             .iter()
@@ -115,9 +118,7 @@ impl NyaTermApp {
         for (session_id, offset) in snapshot_requests {
             requested |= self.request_terminal_frame_snapshot(&session_id, offset);
         }
-        if allow_search {
-            requested |= self.request_active_terminal_buffer_search();
-        }
+        requested |= self.request_active_terminal_buffer_search();
         requested
     }
 
