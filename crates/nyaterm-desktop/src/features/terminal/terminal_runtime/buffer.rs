@@ -322,7 +322,7 @@ impl NyaTermApp {
             .any(|id| *id == session_id)
     }
 
-    fn visible_terminal_session_ids(&self) -> Vec<&str> {
+    pub(in crate::features) fn visible_terminal_session_ids(&self) -> Vec<&str> {
         if self.main_mode != MainMode::Workspace {
             return Vec::new();
         }

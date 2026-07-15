@@ -860,12 +860,16 @@ impl NyaTermApp {
             !self.pending_saved_connection_queue.is_empty(),
         );
         // Large-output protection recovery accounting.
-        for view in self.terminal_views.values_mut() {
-            let before = view.performance_overlay;
-            let was_render_degraded = view.render_degraded;
-            view.tick_performance_overlay(render_work_pressure);
-            if view.performance_overlay != before || view.render_degraded != was_render_degraded {
-                dirty = true;
+        let visible_session_ids = self.visible_terminal_session_ids();
+        for session_id in terminal_performance_tick_session_ids(&visible_session_ids) {
+            if let Some(view) = self.terminal_views.get_mut(&session_id) {
+                let before = view.performance_overlay;
+                let was_render_degraded = view.render_degraded;
+                view.tick_performance_overlay(render_work_pressure);
+                if view.performance_overlay != before || view.render_degraded != was_render_degraded
+                {
+                    dirty = true;
+                }
             }
         }
         // Drop overlay only while a platform drag is active.
@@ -1321,6 +1325,16 @@ fn terminal_render_work_pressure_active(
     runtime_output_pressure || pending_session_start || queued_saved_connection_start
 }
 
+fn terminal_performance_tick_session_ids(visible_session_ids: &[&str]) -> Vec<String> {
+    let mut ids = Vec::with_capacity(visible_session_ids.len());
+    for session_id in visible_session_ids {
+        if !session_id.is_empty() && !ids.iter().any(|id| id == session_id) {
+            ids.push((*session_id).to_string());
+        }
+    }
+    ids
+}
+
 fn session_event_drain_should_yield(
     started_at: Instant,
     has_pending_events: bool,
@@ -1610,6 +1624,15 @@ mod tests {
         assert!(terminal_render_work_pressure_active(true, false, false));
         assert!(terminal_render_work_pressure_active(false, true, false));
         assert!(terminal_render_work_pressure_active(false, false, true));
+    }
+
+    #[test]
+    fn terminal_performance_ticks_only_visible_sessions() {
+        assert_eq!(
+            terminal_performance_tick_session_ids(&["a", "b", "a", ""]),
+            vec!["a".to_string(), "b".to_string()]
+        );
+        assert!(terminal_performance_tick_session_ids(&[]).is_empty());
     }
 
     #[test]
