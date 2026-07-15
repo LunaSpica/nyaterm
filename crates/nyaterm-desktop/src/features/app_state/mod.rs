@@ -178,6 +178,7 @@ pub struct NyaTermApp {
     pub(in crate::features) store_status: StoreStatus,
     pub(in crate::features) session_manager: Arc<SessionManager>,
     pub(in crate::features) recording_manager: Arc<RecordingManager>,
+    pub(in crate::features) recording_write_pipeline: RecordingWritePipeline,
     pub(in crate::features) recording_search_draft: String,
     pub(in crate::features) recording_search_focus: FocusHandle,
     /// Per-session recording panel busy state ("record" | "save").

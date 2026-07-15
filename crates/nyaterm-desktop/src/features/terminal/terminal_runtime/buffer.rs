@@ -180,8 +180,8 @@ impl NyaTermApp {
         let session_id = frame.session_id.clone();
         let is_active = self.active_session_id.as_deref() == Some(session_id.as_str());
         if !frame.recording_text.is_empty() {
-            self.recording_manager
-                .write_output(&session_id, &frame.recording_text);
+            self.recording_write_pipeline
+                .write_output(session_id.clone(), frame.recording_text.clone());
         }
         let view = self
             .terminal_views

@@ -370,7 +370,8 @@ impl NyaTermApp {
                         view.set_encoding(&encoding);
                         view.note_output_discontinuity(bytes);
                         let marker = terminal_output_dropped_marker(bytes);
-                        self.recording_manager.write_output(&session_id, &marker);
+                        self.recording_write_pipeline
+                            .write_output(session_id.clone(), marker.clone());
                         self.append_terminal_log_for_session(Some(&session_id), &marker, true);
                         if self.active_session_id.as_deref() == Some(session_id.as_str()) {
                             self.terminal_status = format!(
@@ -380,7 +381,8 @@ impl NyaTermApp {
                         }
                     }
                     SessionEvent::Exited { session_id } => {
-                        self.recording_manager.cleanup_session(&session_id);
+                        self.recording_write_pipeline
+                            .cleanup_session(session_id.clone());
                         let _ = self.session_manager.close(&session_id);
                         if self.session_metadata.contains_key(&session_id) {
                             // Keep the tab so the user can reconnect (Tauri disconnected pane).
@@ -399,7 +401,8 @@ impl NyaTermApp {
                         let log_message = terminal_log_plain_text(&message);
                         let log = format!("\n# session error: {log_message}\n");
                         if !session_id.is_empty() {
-                            self.recording_manager.write_output(&session_id, &log);
+                            self.recording_write_pipeline
+                                .write_output(session_id.clone(), log.clone());
                         }
                         if session_id.is_empty()
                             || self.active_session_id.as_deref() == Some(session_id.as_str())

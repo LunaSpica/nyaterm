@@ -690,7 +690,8 @@ impl NyaTermApp {
             .write(session_id, &encoded)
             .map_err(|error| error.to_string())?;
         if disposition.record_logical_input {
-            self.recording_manager.write_input(session_id, bytes);
+            self.recording_write_pipeline
+                .write_input(session_id.to_string(), bytes.to_vec());
         }
         Ok(())
     }
@@ -708,7 +709,8 @@ impl NyaTermApp {
             .write(session_id, bytes)
             .map_err(|error| error.to_string())?;
         if disposition.record_raw_input {
-            self.recording_manager.write_raw_input(session_id, bytes);
+            self.recording_write_pipeline
+                .write_raw_input(session_id.to_string(), bytes.to_vec());
         }
         Ok(())
     }
@@ -728,8 +730,8 @@ impl NyaTermApp {
             .write(session_id, wire_bytes)
             .map_err(|error| error.to_string())?;
         if disposition.record_logical_input {
-            self.recording_manager
-                .write_input(session_id, recording_bytes);
+            self.recording_write_pipeline
+                .write_input(session_id.to_string(), recording_bytes.to_vec());
         }
         Ok(())
     }

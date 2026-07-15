@@ -180,6 +180,8 @@ impl NyaTermApp {
             SftpDuplicatePolicy::from_legacy_value(&settings.transfer_duplicate_strategy);
         let recording_manager = Arc::new(RecordingManager::new());
         recording_manager.set_memory_limit(settings.recording_memory_limit_bytes as usize);
+        let recording_write_pipeline =
+            RecordingWritePipeline::spawn(Arc::clone(&recording_manager));
         let cloud_sync_history = read_cloud_sync_history(
             runtime.log_dir(),
             settings.diagnostics_retention_days,
@@ -386,6 +388,7 @@ impl NyaTermApp {
             store_status,
             session_manager: Arc::new(SessionManager::new()),
             recording_manager,
+            recording_write_pipeline,
             recording_search_draft: String::new(),
             recording_search_focus: cx.focus_handle(),
             recording_busy_actions: HashMap::new(),

@@ -114,6 +114,7 @@ impl NyaTermApp {
     fn start_recording_to_path(&mut self, session_id: &str, path: String) {
         self.recording_busy_actions
             .insert(session_id.to_string(), "record".to_string());
+        self.recording_write_pipeline.flush();
         self.recording_manager
             .set_memory_limit(self.settings.recording_memory_limit_bytes as usize);
         match self.recording_manager.start(
@@ -149,6 +150,7 @@ impl NyaTermApp {
     ) {
         self.recording_busy_actions
             .insert(session_id.to_string(), "record".to_string());
+        self.recording_write_pipeline.flush();
         match self.recording_manager.stop(session_id) {
             Ok(path) => {
                 self.terminal_status = format!("recording saved: {path}");
@@ -165,6 +167,7 @@ impl NyaTermApp {
     fn save_transcript_to_path(&mut self, session_id: &str, path: String) {
         self.recording_busy_actions
             .insert(session_id.to_string(), "save".to_string());
+        self.recording_write_pipeline.flush();
         self.recording_manager
             .set_memory_limit(self.settings.recording_memory_limit_bytes as usize);
         match self.recording_manager.save_transcript(

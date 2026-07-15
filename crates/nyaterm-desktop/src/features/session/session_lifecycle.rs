@@ -253,7 +253,8 @@ impl NyaTermApp {
         self.active_session_menu_id = None;
         // Backend may already be gone (race with Exited); still mark disconnected.
         let _ = self.session_manager.close(&session_id);
-        self.recording_manager.cleanup_session(&session_id);
+        self.recording_write_pipeline
+            .cleanup_session(session_id.clone());
         self.mark_session_disconnected(&session_id, cx);
         self.active_session_busy_actions.remove(&session_id);
         self.terminal_status = format!("disconnected {}", short_id(&session_id));
@@ -371,7 +372,8 @@ impl NyaTermApp {
 
         // Close live backend if still present.
         let _ = self.session_manager.close(&session_id);
-        self.recording_manager.cleanup_session(&session_id);
+        self.recording_write_pipeline
+            .cleanup_session(session_id.clone());
 
         // Soft-remove UI state without dropping order/metadata, then recreate under same id path:
         // We allocate a new backend id and migrate UI maps to the new id.
