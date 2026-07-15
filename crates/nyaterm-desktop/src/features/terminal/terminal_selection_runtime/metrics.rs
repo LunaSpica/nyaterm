@@ -25,14 +25,9 @@ impl NyaTermApp {
 
     pub(in crate::features) fn refresh_terminal_cell_metrics(&mut self, cx: &App) {
         let font_size = self.settings.terminal_font_size.max(8) as f32;
-        let family = self.settings.terminal_font_family.trim();
-        let family = if family.is_empty() {
-            "JetBrains Mono"
-        } else {
-            family
-        };
+        let family = self.gpui_terminal_font_family();
         let text_system = cx.text_system();
-        let font_id = text_system.resolve_font(&gpui::font(SharedString::from(family.to_string())));
+        let font_id = text_system.resolve_font(&gpui::font(SharedString::from(family)));
         let size = px(font_size);
         let measured_w = text_system
             .ch_advance(font_id, size)
