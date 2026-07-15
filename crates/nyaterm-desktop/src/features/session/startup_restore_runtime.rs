@@ -378,49 +378,35 @@ impl NyaTermApp {
                     format!("restore skipped missing connection {connection_id}");
                 return false;
             };
-            match connection.config.clone() {
-                ConnectionType::Ssh {
-                    ai_execution_profile,
-                    ..
-                } => {
-                    self.begin_background_saved_ssh_start(
-                        connection,
-                        ai_execution_profile,
-                        custom_name,
-                        tab_color,
-                        None,
-                        None,
-                        None,
-                        None,
-                        cx,
-                    );
-                    return true;
-                }
-                _ => {
-                    self.start_saved_connection(connection, window, cx);
-                    if let Some(session_id) = self.active_session_id.clone() {
-                        if let Some(name) = custom_name {
-                            self.session_custom_names.insert(session_id.clone(), name);
-                        }
-                        if let Some(color) = tab_color {
-                            self.session_tab_colors.insert(session_id, color);
-                        }
-                    }
-                    return true;
-                }
-            }
+            self.start_saved_connection_with_options(
+                connection,
+                SavedConnectionStartOptions {
+                    custom_name,
+                    tab_color,
+                    ..Default::default()
+                },
+                window,
+                cx,
+            );
+            return true;
         }
 
         if session_type == "local" || session_type.is_empty() {
-            self.start_local_session(window, cx);
-            if let Some(session_id) = self.active_session_id.clone() {
-                if let Some(name) = custom_name {
-                    self.session_custom_names.insert(session_id.clone(), name);
-                }
-                if let Some(color) = tab_color {
-                    self.session_tab_colors.insert(session_id, color);
-                }
-            }
+            let mut config = LocalSessionConfig::default();
+            self.apply_desired_geometry_to_local_config(&mut config);
+            self.begin_background_session_start(
+                config.name.clone(),
+                SessionLaunchConfig::Local(config),
+                None,
+                AiExecutionProfile::Posix,
+                custom_name,
+                tab_color,
+                None,
+                None,
+                None,
+                None,
+                cx,
+            );
             return true;
         }
 

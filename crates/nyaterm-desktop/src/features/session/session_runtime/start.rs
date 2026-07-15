@@ -38,6 +38,21 @@ impl NyaTermApp {
     pub(in crate::features) fn start_saved_connection(
         &mut self,
         connection: SavedConnection,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.start_saved_connection_with_options(
+            connection,
+            SavedConnectionStartOptions::default(),
+            window,
+            cx,
+        );
+    }
+
+    pub(in crate::features) fn start_saved_connection_with_options(
+        &mut self,
+        connection: SavedConnection,
+        options: SavedConnectionStartOptions,
         _window: &mut Window,
         cx: &mut Context<Self>,
     ) {
@@ -50,7 +65,7 @@ impl NyaTermApp {
             return;
         }
         if self.pending_session_name.is_some() {
-            self.enqueue_saved_connection_start(connection, cx);
+            self.enqueue_saved_connection_start_with_options(connection, options, cx);
             return;
         }
 
@@ -79,12 +94,12 @@ impl NyaTermApp {
                     SessionLaunchConfig::Local(config),
                     Some(connection.id),
                     ai_execution_profile,
-                    None,
-                    None,
-                    None,
-                    None,
-                    None,
-                    None,
+                    options.custom_name,
+                    options.tab_color,
+                    options.after_session_id,
+                    options.insert_index,
+                    options.seed_output,
+                    options.startup_command,
                     cx,
                 );
             }
@@ -116,12 +131,12 @@ impl NyaTermApp {
                     SessionLaunchConfig::Telnet(config),
                     Some(connection.id),
                     ai_execution_profile,
-                    None,
-                    None,
-                    None,
-                    None,
-                    None,
-                    None,
+                    options.custom_name,
+                    options.tab_color,
+                    options.after_session_id,
+                    options.insert_index,
+                    options.seed_output,
+                    options.startup_command,
                     cx,
                 );
             }
@@ -132,12 +147,12 @@ impl NyaTermApp {
                 self.begin_background_saved_ssh_start(
                     connection,
                     ai_execution_profile,
-                    None,
-                    None,
-                    None,
-                    None,
-                    None,
-                    None,
+                    options.custom_name,
+                    options.tab_color,
+                    options.after_session_id,
+                    options.insert_index,
+                    options.seed_output,
+                    options.startup_command,
                     cx,
                 );
             }
@@ -164,12 +179,12 @@ impl NyaTermApp {
                     SessionLaunchConfig::Serial(config),
                     Some(connection.id),
                     ai_execution_profile,
-                    None,
-                    None,
-                    None,
-                    None,
-                    None,
-                    None,
+                    options.custom_name,
+                    options.tab_color,
+                    options.after_session_id,
+                    options.insert_index,
+                    options.seed_output,
+                    options.startup_command,
                     cx,
                 );
             }
@@ -193,7 +208,7 @@ impl NyaTermApp {
             || self
                 .pending_saved_connection_queue
                 .iter()
-                .any(|queued| queued.id == connection.id)
+                .any(|queued| queued.connection.id == connection.id)
     }
 
     pub(in crate::features) fn begin_background_saved_ssh_start(

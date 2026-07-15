@@ -53,6 +53,22 @@ pub(in crate::features) struct PendingSessionStart {
     pub source_connection_id: Option<String>,
 }
 
+#[derive(Clone, Default)]
+pub(in crate::features) struct SavedConnectionStartOptions {
+    pub custom_name: Option<String>,
+    pub tab_color: Option<u32>,
+    pub after_session_id: Option<String>,
+    pub insert_index: Option<usize>,
+    pub seed_output: Option<String>,
+    pub startup_command: Option<StartupCommandRequest>,
+}
+
+#[derive(Clone)]
+pub(in crate::features) struct PendingSavedConnectionStart {
+    pub connection: SavedConnection,
+    pub options: SavedConnectionStartOptions,
+}
+
 impl Default for TerminalRuntimeUiState {
     fn default() -> Self {
         Self {

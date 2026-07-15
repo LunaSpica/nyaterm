@@ -132,6 +132,19 @@ impl NyaTermApp {
         connection: SavedConnection,
         cx: &mut Context<Self>,
     ) -> bool {
+        self.enqueue_saved_connection_start_with_options(
+            connection,
+            SavedConnectionStartOptions::default(),
+            cx,
+        )
+    }
+
+    pub(in crate::features) fn enqueue_saved_connection_start_with_options(
+        &mut self,
+        connection: SavedConnection,
+        options: SavedConnectionStartOptions,
+        cx: &mut Context<Self>,
+    ) -> bool {
         if self.saved_connection_start_is_pending_or_queued(&connection) {
             self.terminal_status = format!("{} is already queued", connection.name);
             self.selected_nav = NavItem::Workspace;
@@ -140,7 +153,11 @@ impl NyaTermApp {
             return false;
         }
         let name = connection.name.clone();
-        self.pending_saved_connection_queue.push_back(connection);
+        self.pending_saved_connection_queue
+            .push_back(PendingSavedConnectionStart {
+                connection,
+                options,
+            });
         self.terminal_status = format!(
             "queued {name} ({} pending)",
             self.pending_saved_connection_queue.len()
@@ -175,15 +192,15 @@ impl NyaTermApp {
         }
         let mut dirty = false;
         while self.pending_session_name.is_none() {
-            let Some(connection) = self.pending_saved_connection_queue.pop_front() else {
+            let Some(start) = self.pending_saved_connection_queue.pop_front() else {
                 return dirty;
             };
-            if self.saved_connection_start_is_pending(&connection) {
+            if self.saved_connection_start_is_pending(&start.connection) {
                 dirty = true;
                 continue;
             }
             let before_pending_count = self.pending_session_starts.len();
-            self.start_saved_connection(connection, window, cx);
+            self.start_saved_connection_with_options(start.connection, start.options, window, cx);
             dirty = true;
             if self.pending_session_name.is_some()
                 || self.pending_session_starts.len() > before_pending_count

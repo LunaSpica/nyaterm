@@ -135,7 +135,9 @@ pub(in crate::features) use ai_jobs::{
     is_agent_command_card, observation_summary, remote_command_observation, run_ai_ask_job,
 };
 pub use app_state::NyaTermApp;
-pub(in crate::features) use app_state::{PendingSessionStart, SessionPaneState};
+pub(in crate::features) use app_state::{
+    PendingSavedConnectionStart, PendingSessionStart, SavedConnectionStartOptions, SessionPaneState,
+};
 pub(in crate::features) use appearance::{
     gpui_code_font_family, normalize_gpui_font_settings_for_platform,
 };
