@@ -34,7 +34,7 @@ pub(in crate::features) enum SessionPaneState {
 
 pub(in crate::features) struct PendingSessionStart {
     pub connection_name: String,
-    pub ssh_config: Option<SshSessionConfig>,
+    pub launch_config: SessionLaunchConfig,
     pub ai_execution_profile: AiExecutionProfile,
     pub custom_name: Option<String>,
     pub tab_color: Option<u32>,

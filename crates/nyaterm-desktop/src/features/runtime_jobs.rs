@@ -9,7 +9,7 @@ pub(in crate::features) struct SessionStartResult {
 
 #[derive(Debug)]
 pub(in crate::features) struct SessionStartSuccess {
-    pub(in crate::features) session_id: String,
+    pub(in crate::features) session_info: SessionInfo,
     pub(in crate::features) multiplex_handle: Option<SshMultiplexHandle>,
 }
 

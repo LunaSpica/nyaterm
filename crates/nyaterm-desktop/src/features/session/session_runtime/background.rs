@@ -1,6 +1,75 @@
 use super::*;
 
 impl NyaTermApp {
+    pub(in crate::features) fn begin_background_session_start(
+        &mut self,
+        connection_name: String,
+        launch_config: SessionLaunchConfig,
+        source_connection_id: Option<String>,
+        ai_execution_profile: AiExecutionProfile,
+        custom_name: Option<String>,
+        tab_color: Option<u32>,
+        after_session_id: Option<String>,
+        insert_index: Option<usize>,
+        seed_output: Option<String>,
+        startup_command: Option<StartupCommandRequest>,
+        cx: &mut Context<Self>,
+    ) {
+        let kind = session_kind_for_launch_config(&launch_config);
+        let request_id = uuid();
+        self.pending_session_name = Some(connection_name.clone());
+        self.last_connect_failure_name = None;
+        self.last_connect_failure_error = None;
+        self.session_pane_states.insert(
+            request_id.clone(),
+            SessionPaneState::Connecting {
+                request_id: request_id.clone(),
+                name: connection_name.clone(),
+                kind,
+            },
+        );
+        self.pending_session_starts.insert(
+            request_id.clone(),
+            PendingSessionStart {
+                connection_name: connection_name.clone(),
+                launch_config: launch_config.clone(),
+                ai_execution_profile,
+                custom_name,
+                tab_color,
+                after_session_id,
+                insert_index,
+                seed_output,
+                startup_command,
+                multiplex_key: None,
+                source_connection_id,
+            },
+        );
+        self.terminal_status = format!("connecting to {connection_name}");
+        if self.active_session_id.is_none() {
+            self.append_terminal_log(format!("\n# connecting to {connection_name}\n"));
+        }
+        self.selected_nav = NavItem::Workspace;
+        self.main_mode = MainMode::Workspace;
+
+        let session_manager = self.session_manager.clone();
+        let session_start_tx = self.session_start_tx.clone();
+        let request_id_for_worker = request_id.clone();
+        std::thread::spawn(move || {
+            let result = create_session_from_launch_config(&session_manager, launch_config)
+                .map(|session_info| SessionStartSuccess {
+                    session_info,
+                    multiplex_handle: None,
+                })
+                .map_err(|error| error.to_string());
+            let _ = session_start_tx.send(SessionStartResult {
+                request_id: request_id_for_worker,
+                connection_name,
+                result,
+            });
+        });
+        cx.notify();
+    }
+
     pub(in crate::features) fn begin_background_ssh_start(
         &mut self,
         connection_name: String,
@@ -43,7 +112,7 @@ impl NyaTermApp {
             request_id.clone(),
             PendingSessionStart {
                 connection_name: connection_name.clone(),
-                ssh_config: Some(config.clone()),
+                launch_config: SessionLaunchConfig::Ssh(config.clone()),
                 ai_execution_profile,
                 custom_name,
                 tab_color,
@@ -68,7 +137,7 @@ impl NyaTermApp {
             let result = session_manager
                 .create_ssh_session(config)
                 .map(|info| SessionStartSuccess {
-                    session_id: info.id,
+                    session_info: info,
                     multiplex_handle: None,
                 })
                 .map_err(|error| error.to_string());
@@ -123,7 +192,7 @@ impl NyaTermApp {
             request_id.clone(),
             PendingSessionStart {
                 connection_name: connection_name.clone(),
-                ssh_config: Some(config.clone()),
+                launch_config: SessionLaunchConfig::Ssh(config.clone()),
                 ai_execution_profile,
                 custom_name,
                 tab_color,
@@ -152,7 +221,7 @@ impl NyaTermApp {
                     .create_ssh_session_with_multiplex(config, multiplex.clone())
                     .map_err(|error| error.to_string())?;
                 Ok(SessionStartSuccess {
-                    session_id: info.id,
+                    session_info: info,
                     multiplex_handle: Some(multiplex),
                 })
             })();
@@ -205,14 +274,16 @@ impl NyaTermApp {
                 Ok(success) => {
                     self.last_connect_failure_name = None;
                     self.last_connect_failure_error = None;
-                    let session_id = success.session_id;
-                    let ssh_config = pending
+                    let session_info = success.session_info;
+                    let session_id = session_info.id.clone();
+                    let launch_config = pending
                         .as_ref()
-                        .and_then(|pending| pending.ssh_config.clone());
-                    let launch_config = ssh_config
-                        .clone()
-                        .map(SessionLaunchConfig::Ssh)
-                        .unwrap_or_else(|| SessionLaunchConfig::Ssh(SshSessionConfig::default()));
+                        .map(|pending| pending.launch_config.clone())
+                        .unwrap_or_else(|| launch_config_for_session_info(&session_info));
+                    let ssh_config = match &launch_config {
+                        SessionLaunchConfig::Ssh(config) => Some(config.clone()),
+                        _ => None,
+                    };
                     let ssh_multiplex_key = pending
                         .as_ref()
                         .and_then(|pending| pending.multiplex_key.clone());
@@ -298,7 +369,7 @@ impl NyaTermApp {
                         event.connection_name,
                         short_id(&session_id)
                     ));
-                    self.maybe_auto_start_recording(&session_id, &event.connection_name);
+                    self.maybe_auto_start_recording(&session_id, &session_info.name);
                     if let Some(startup_command) =
                         pending.and_then(|pending| pending.startup_command)
                     {
@@ -340,5 +411,66 @@ impl NyaTermApp {
             .values()
             .next()
             .map(|pending| pending.connection_name.clone());
+    }
+}
+
+fn session_kind_for_launch_config(config: &SessionLaunchConfig) -> SessionKind {
+    match config {
+        SessionLaunchConfig::Local(_) => SessionKind::LocalPty,
+        SessionLaunchConfig::Ssh(_) => SessionKind::Ssh,
+        SessionLaunchConfig::Telnet(config) if config.raw_tcp => SessionKind::RawTcp,
+        SessionLaunchConfig::Telnet(_) => SessionKind::Telnet,
+        SessionLaunchConfig::Serial(_) => SessionKind::Serial,
+    }
+}
+
+fn create_session_from_launch_config(
+    session_manager: &SessionManager,
+    launch_config: SessionLaunchConfig,
+) -> Result<SessionInfo, nyaterm_transport::SessionError> {
+    match launch_config {
+        SessionLaunchConfig::Local(config) => session_manager.create_local_session(config),
+        SessionLaunchConfig::Ssh(config) => session_manager.create_ssh_session(config),
+        SessionLaunchConfig::Telnet(config) => session_manager.create_telnet_session(config),
+        SessionLaunchConfig::Serial(config) => session_manager.create_serial_session(config),
+    }
+}
+
+fn launch_config_for_session_info(info: &SessionInfo) -> SessionLaunchConfig {
+    match info.kind {
+        SessionKind::LocalPty => SessionLaunchConfig::Local(LocalSessionConfig {
+            name: info.name.clone(),
+            shell_path: None,
+            shell_args: Vec::new(),
+            working_dir: info.working_dir.clone(),
+            cols: info.cols,
+            rows: info.rows,
+            pixel_width: 0,
+            pixel_height: 0,
+        }),
+        SessionKind::Ssh => SessionLaunchConfig::Ssh(SshSessionConfig::default()),
+        SessionKind::Telnet | SessionKind::RawTcp => SessionLaunchConfig::Telnet(
+            TelnetSessionConfig {
+                name: info.name.clone(),
+                host: String::new(),
+                port: 23,
+                raw_tcp: info.kind == SessionKind::RawTcp,
+                enter_mode: nyaterm_transport::TelnetEnterMode::default(),
+                force_character_at_a_time: false,
+                send_naws: false,
+                send_sga: false,
+                cols: info.cols,
+                rows: info.rows,
+            },
+        ),
+        SessionKind::Serial => SessionLaunchConfig::Serial(SerialSessionConfig {
+            name: info.name.clone(),
+            port_name: String::new(),
+            baud_rate: 9600,
+            data_bits: 8,
+            parity: "none".to_string(),
+            stop_bits: "1".to_string(),
+            backspace_mode: "delete".to_string(),
+        }),
     }
 }

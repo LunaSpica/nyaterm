@@ -6,43 +6,28 @@ impl NyaTermApp {
         _window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        if self.pending_session_name.is_some() {
-            self.terminal_status = "wait for the pending session to finish connecting".to_string();
-            cx.notify();
-            return;
-        }
-
         let mut config = LocalSessionConfig::default();
         self.apply_desired_geometry_to_local_config(&mut config);
-        match self.session_manager.create_local_session(config.clone()) {
-            Ok(info) => {
-                self.register_session(
-                    &info.id,
-                    SessionRuntimeMetadata {
-                        ssh_config: None,
-                        ssh_multiplex_key: None,
-                        source_connection_id: None,
-                        ai_execution_profile: AiExecutionProfile::Posix,
-                        launch_config: SessionLaunchConfig::Local(config),
-                        disconnected: false,
-                    },
-                );
-                self.activate_session_id(&info.id);
-                self.terminal_status = format!("running {}", short_id(&info.id));
-                self.append_terminal_log(format!("\n# started local PTY {}\n", short_id(&info.id)));
-                self.maybe_auto_start_recording(&info.id, &info.name);
-            }
-            Err(error) => {
-                self.terminal_status = format!("failed to start local PTY: {error}");
-            }
-        }
-        cx.notify();
+        let name = config.name.clone();
+        self.begin_background_session_start(
+            name,
+            SessionLaunchConfig::Local(config),
+            None,
+            AiExecutionProfile::Posix,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            cx,
+        );
     }
 
     pub(in crate::features) fn start_saved_connection(
         &mut self,
         connection: SavedConnection,
-        window: &mut Window,
+        _window: &mut Window,
         cx: &mut Context<Self>,
     ) {
         if self.pending_session_name.is_some()
@@ -74,22 +59,19 @@ impl NyaTermApp {
                     pixel_height: 0,
                 };
                 self.apply_desired_geometry_to_local_config(&mut config);
-                match self.session_manager.create_local_session(config.clone()) {
-                    Ok(info) => self.activate_started_session(
-                        connection.name,
-                        info.id,
-                        Some(connection.id),
-                        ai_execution_profile,
-                        SessionLaunchConfig::Local(config),
-                        window,
-                        cx,
-                    ),
-                    Err(error) => {
-                        self.terminal_status = format!("failed to start local session: {error}");
-                        self.selected_nav = NavItem::Workspace;
-                        cx.notify();
-                    }
-                }
+                self.begin_background_session_start(
+                    connection.name,
+                    SessionLaunchConfig::Local(config),
+                    Some(connection.id),
+                    ai_execution_profile,
+                    None,
+                    None,
+                    None,
+                    None,
+                    None,
+                    None,
+                    cx,
+                );
             }
             ConnectionType::Telnet {
                 host,
@@ -114,22 +96,19 @@ impl NyaTermApp {
                     cols: 80,
                     rows: 24,
                 };
-                match self.session_manager.create_telnet_session(config.clone()) {
-                    Ok(info) => self.activate_started_session(
-                        connection.name,
-                        info.id,
-                        Some(connection.id),
-                        ai_execution_profile,
-                        SessionLaunchConfig::Telnet(config),
-                        window,
-                        cx,
-                    ),
-                    Err(error) => {
-                        self.terminal_status = format!("failed to start telnet session: {error}");
-                        self.selected_nav = NavItem::Workspace;
-                        cx.notify();
-                    }
-                }
+                self.begin_background_session_start(
+                    connection.name,
+                    SessionLaunchConfig::Telnet(config),
+                    Some(connection.id),
+                    ai_execution_profile,
+                    None,
+                    None,
+                    None,
+                    None,
+                    None,
+                    None,
+                    cx,
+                );
             }
             ConnectionType::Ssh {
                 ai_execution_profile,
@@ -176,22 +155,19 @@ impl NyaTermApp {
                     stop_bits,
                     backspace_mode,
                 };
-                match self.session_manager.create_serial_session(config.clone()) {
-                    Ok(info) => self.activate_started_session(
-                        connection.name,
-                        info.id,
-                        Some(connection.id),
-                        ai_execution_profile,
-                        SessionLaunchConfig::Serial(config),
-                        window,
-                        cx,
-                    ),
-                    Err(error) => {
-                        self.terminal_status = format!("failed to start serial session: {error}");
-                        self.selected_nav = NavItem::Workspace;
-                        cx.notify();
-                    }
-                }
+                self.begin_background_session_start(
+                    connection.name,
+                    SessionLaunchConfig::Serial(config),
+                    Some(connection.id),
+                    ai_execution_profile,
+                    None,
+                    None,
+                    None,
+                    None,
+                    None,
+                    None,
+                    cx,
+                );
             }
         }
     }
@@ -373,32 +349,4 @@ impl NyaTermApp {
         Ok(Some(Box::new(jump_config)))
     }
 
-    pub(in crate::features) fn activate_started_session(
-        &mut self,
-        name: String,
-        session_id: String,
-        source_connection_id: Option<String>,
-        ai_execution_profile: AiExecutionProfile,
-        launch_config: SessionLaunchConfig,
-        _window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        self.register_session(
-            &session_id,
-            SessionRuntimeMetadata {
-                ssh_config: None,
-                ssh_multiplex_key: None,
-                source_connection_id,
-                ai_execution_profile,
-                launch_config,
-                disconnected: false,
-            },
-        );
-        self.activate_session_id(&session_id);
-        self.terminal_status = format!("running {}", short_id(&session_id));
-        self.append_terminal_log(format!("\n# started {name} ({})\n", short_id(&session_id)));
-        self.selected_nav = NavItem::Workspace;
-        self.maybe_auto_start_recording(&session_id, &name);
-        cx.notify();
-    }
 }
