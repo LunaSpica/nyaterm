@@ -719,6 +719,22 @@ impl NyaTermApp {
         let stage_started_at = Instant::now();
         let mut dirty = self.refresh_window_render_inputs(window, cx);
         let render_input_duration = stage_started_at.elapsed();
+
+        let control_plane_started_at = Instant::now();
+        let mut control_plane_timings = RuntimeControlPlaneDrainTimings::default();
+        let stage_started_at = Instant::now();
+        dirty |= self.drain_session_start_events(cx);
+        control_plane_timings.session_start = stage_started_at.elapsed();
+        let stage_started_at = Instant::now();
+        dirty |= self.drain_host_key_prompts()
+            | self.drain_credential_prompts()
+            | self.drain_duplicate_prompts();
+        control_plane_timings.prompts = stage_started_at.elapsed();
+        let stage_started_at = Instant::now();
+        dirty |= self.drive_saved_connection_start_queue(window, cx);
+        control_plane_timings.saved_connection_queue = stage_started_at.elapsed();
+        let control_plane_duration = control_plane_started_at.elapsed();
+
         let stage_started_at = Instant::now();
         dirty |= self.drain_session_events(cx);
         let session_events_duration = stage_started_at.elapsed();
@@ -748,7 +764,8 @@ impl NyaTermApp {
             critical_background_only,
             defer_terminal_frame_apply,
         );
-        self.terminal_runtime.last_session_start_drain_duration = background_timings.session_start;
+        self.terminal_runtime.last_session_start_drain_duration =
+            control_plane_timings.session_start + background_timings.session_start;
         let background_total = background_started_at.elapsed();
         if (background_timings.budget_exhausted
             || background_total >= RUNTIME_BACKGROUND_EVENT_DRAIN_SLOW)
@@ -782,12 +799,7 @@ impl NyaTermApp {
             dirty |= self.drive_startup_restore_queue_tick(window, cx);
         }
         let startup_restore_duration = stage_started_at.elapsed();
-        let stage_started_at = Instant::now();
-        let output_pressure_after_startup = self.runtime_output_pressure_active();
-        if !output_pressure_after_startup {
-            dirty |= self.drive_saved_connection_start_queue(window, cx);
-        }
-        let saved_connection_queue_duration = stage_started_at.elapsed();
+        let saved_connection_queue_duration = control_plane_timings.saved_connection_queue;
         let stage_started_at = Instant::now();
         dirty |= self.drive_terminal_resize();
         let terminal_resize_duration = stage_started_at.elapsed();
@@ -893,6 +905,11 @@ impl NyaTermApp {
                 diagnostic = "runtime_tick",
                 total_ms = tick_duration.as_millis(),
                 render_input_ms = render_input_duration.as_millis(),
+                control_plane_ms = control_plane_duration.as_millis(),
+                control_session_start_ms = control_plane_timings.session_start.as_millis(),
+                control_prompts_ms = control_plane_timings.prompts.as_millis(),
+                control_saved_connection_queue_ms =
+                    control_plane_timings.saved_connection_queue.as_millis(),
                 session_events_ms = session_events_duration.as_millis(),
                 background_runtime_ms = background_runtime_duration.as_millis(),
                 session_start_ms = session_start_duration.as_millis(),
@@ -1156,6 +1173,13 @@ struct RuntimeBackgroundDrainTimings {
     remote: Duration,
     maintenance: Duration,
     budget_exhausted: bool,
+}
+
+#[derive(Default)]
+struct RuntimeControlPlaneDrainTimings {
+    session_start: Duration,
+    prompts: Duration,
+    saved_connection_queue: Duration,
 }
 
 #[derive(Clone, Copy)]
