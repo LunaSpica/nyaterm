@@ -158,21 +158,20 @@ impl NyaTermApp {
             self.terminal_scroll_offset
         };
         let snapshot = self.terminal_snapshot_for_session(session_id, offset);
-        let frame_action_links =
-            if let Some(session_id) = session_id.filter(|id| !id.is_empty()) {
-                let Some(view) = self.terminal_views.get(session_id) else {
-                    return None;
-                };
-                if offset == 0 {
-                    view.frame_action_links.as_ref()
-                } else {
-                    view.scrollback_action_links.get(&offset)
-                }
-                .filter(|links| links.matcher_key == action_link_matcher_key)
-                .cloned()
-            } else {
-                None
+        let frame_action_links = if let Some(session_id) = session_id.filter(|id| !id.is_empty()) {
+            let Some(view) = self.terminal_views.get(session_id) else {
+                return None;
             };
+            if offset == 0 {
+                view.frame_action_links.as_ref()
+            } else {
+                view.scrollback_action_links.get(&offset)
+            }
+            .filter(|links| links.matcher_key == action_link_matcher_key)
+            .cloned()
+        } else {
+            None
+        };
         let line = snapshot.lines.get(cell.row)?;
         if line.is_empty() {
             return None;
