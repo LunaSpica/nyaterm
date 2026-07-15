@@ -115,6 +115,7 @@ impl NyaTermApp {
             self.pending_session_events.len(),
             self.pending_terminal_frame_events.len(),
             self.terminal_frame_pipeline.queued_event_count(),
+            self.terminal_frame_pipeline.queued_output_bytes(),
             self.credential_autofill_pending_request.is_some(),
         ) {
             dirty |= self.sync_credential_autofill_from_active_snapshot(cx);
@@ -126,6 +127,7 @@ impl NyaTermApp {
             self.pending_session_events.len(),
             self.pending_terminal_frame_events.len(),
             self.terminal_frame_pipeline.queued_event_count(),
+            self.terminal_frame_pipeline.queued_output_bytes(),
             self.credential_autofill_pending_request.is_some(),
         ) {
             return dirty;
@@ -670,6 +672,7 @@ fn credential_autofill_snapshot_detection_can_run(
     pending_session_events: usize,
     pending_terminal_frame_events: usize,
     queued_terminal_frame_events: usize,
+    queued_terminal_frame_output_bytes: usize,
     match_request_pending: bool,
 ) -> bool {
     active_session_id.is_some()
@@ -678,6 +681,7 @@ fn credential_autofill_snapshot_detection_can_run(
         && pending_session_events == 0
         && pending_terminal_frame_events == 0
         && queued_terminal_frame_events == 0
+        && queued_terminal_frame_output_bytes == 0
         && !match_request_pending
 }
 
@@ -688,6 +692,7 @@ fn credential_autofill_pending_detection_can_run(
     pending_session_events: usize,
     pending_terminal_frame_events: usize,
     queued_terminal_frame_events: usize,
+    queued_terminal_frame_output_bytes: usize,
     match_request_pending: bool,
 ) -> bool {
     active_session_id.is_some()
@@ -696,6 +701,7 @@ fn credential_autofill_pending_detection_can_run(
         && pending_session_events == 0
         && pending_terminal_frame_events == 0
         && queued_terminal_frame_events == 0
+        && queued_terminal_frame_output_bytes == 0
         && !match_request_pending
 }
 
@@ -813,14 +819,16 @@ mod tests {
             0,
             0,
             0,
+            0,
             false
         ));
         assert!(!credential_autofill_snapshot_detection_can_run(
-            None, true, 0, 0, 0, 0, false
+            None, true, 0, 0, 0, 0, 0, false
         ));
         assert!(!credential_autofill_snapshot_detection_can_run(
             Some("active"),
             false,
+            0,
             0,
             0,
             0,
@@ -830,6 +838,7 @@ mod tests {
         assert!(!credential_autofill_snapshot_detection_can_run(
             Some("active"),
             true,
+            0,
             0,
             0,
             0,
@@ -847,11 +856,23 @@ mod tests {
             0,
             0,
             0,
+            0,
             false
         ));
         assert!(!credential_autofill_snapshot_detection_can_run(
             Some("active"),
             true,
+            0,
+            1,
+            0,
+            0,
+            0,
+            false
+        ));
+        assert!(!credential_autofill_snapshot_detection_can_run(
+            Some("active"),
+            true,
+            0,
             0,
             1,
             0,
@@ -863,6 +884,7 @@ mod tests {
             true,
             0,
             0,
+            0,
             1,
             0,
             false
@@ -870,6 +892,7 @@ mod tests {
         assert!(!credential_autofill_snapshot_detection_can_run(
             Some("active"),
             true,
+            0,
             0,
             0,
             0,
@@ -887,10 +910,11 @@ mod tests {
             0,
             0,
             0,
+            0,
             false
         ));
         assert!(!credential_autofill_pending_detection_can_run(
-            None, true, 0, 0, 0, 0, false
+            None, true, 0, 0, 0, 0, 0, false
         ));
         assert!(!credential_autofill_pending_detection_can_run(
             Some("active"),
@@ -899,6 +923,7 @@ mod tests {
             0,
             0,
             0,
+            0,
             false
         ));
         assert!(!credential_autofill_pending_detection_can_run(
@@ -908,6 +933,7 @@ mod tests {
             0,
             0,
             0,
+            0,
             false
         ));
         assert!(!credential_autofill_pending_detection_can_run(
@@ -917,11 +943,23 @@ mod tests {
             0,
             0,
             1,
+            0,
             false
         ));
         assert!(!credential_autofill_pending_detection_can_run(
             Some("active"),
             true,
+            0,
+            0,
+            0,
+            0,
+            1,
+            false
+        ));
+        assert!(!credential_autofill_pending_detection_can_run(
+            Some("active"),
+            true,
+            0,
             0,
             0,
             0,
