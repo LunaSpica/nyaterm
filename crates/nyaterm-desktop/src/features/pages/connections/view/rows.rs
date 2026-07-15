@@ -48,6 +48,14 @@ impl NyaTermApp {
         }
     }
 
+    pub(in crate::features) fn dismiss_connection_details_hover(&mut self, cx: &mut Context<Self>) {
+        let changed = self.connection_details_hover_pending.take().is_some()
+            | self.connection_details_tooltip_id.take().is_some();
+        if changed {
+            cx.notify();
+        }
+    }
+
     pub(in crate::features) fn connection_section(
         &mut self,
         section: ConnectionSection,
@@ -664,4 +672,4 @@ impl NyaTermApp {
     }
 }
 
-const CONNECTION_DETAILS_HOVER_DELAY: Duration = Duration::from_millis(450);
+const CONNECTION_DETAILS_HOVER_DELAY: Duration = Duration::from_millis(900);

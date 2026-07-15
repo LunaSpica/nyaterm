@@ -30,6 +30,7 @@ impl NyaTermApp {
         _window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        self.dismiss_connection_details_hover(cx);
         if self.saved_connection_start_is_pending(&connection) {
             self.terminal_status = format!("{} is already connecting", connection.name);
             self.selected_nav = NavItem::Workspace;
