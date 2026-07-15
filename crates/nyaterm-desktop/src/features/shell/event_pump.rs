@@ -220,6 +220,7 @@ impl NyaTermApp {
     pub(in crate::features) fn drain_session_events(&mut self, cx: &mut Context<Self>) -> bool {
         let drain_started_at = Instant::now();
         let mut dirty = self.drain_terminal_frame_events(cx);
+        dirty |= self.drain_trzsz_download_worker_events(cx);
         let mut drained_events = 0usize;
         let mut output_event_count = 0usize;
         let mut drain_timings = SessionEventDrainTimings::default();
@@ -381,6 +382,8 @@ impl NyaTermApp {
                         }
                     }
                     SessionEvent::Exited { session_id } => {
+                        self.clear_trzsz_session(&session_id);
+                        self.clear_zmodem_session(&session_id);
                         self.recording_write_pipeline
                             .cleanup_session(session_id.clone());
                         let _ = self.session_manager.close(&session_id);

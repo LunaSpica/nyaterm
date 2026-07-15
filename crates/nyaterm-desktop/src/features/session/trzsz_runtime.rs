@@ -10,6 +10,7 @@ use std::{
     fs::{File, OpenOptions},
     io::Write,
     path::{Path, PathBuf},
+    thread,
     time::{SystemTime, UNIX_EPOCH},
 };
 
@@ -19,6 +20,7 @@ pub(in crate::features) struct TrzszSessionState {
     pub(in crate::features) protocol: TrzszProtocolStream,
     pub(in crate::features) protocol_active: bool,
     download: Option<TrzszDownloadRuntime>,
+    download_worker: Option<TrzszDownloadWorker>,
     upload: Option<TrzszUploadRuntime>,
 }
 
@@ -41,6 +43,26 @@ struct TrzszDownloadFile {
     path: PathBuf,
     file: File,
     size: u64,
+}
+
+struct TrzszDownloadWorker {
+    command_tx: mpsc::Sender<TrzszDownloadWorkerCommand>,
+    event_rx: mpsc::Receiver<TrzszDownloadWorkerEvent>,
+}
+
+enum TrzszDownloadWorkerCommand {
+    Output(Vec<u8>),
+    Stop,
+}
+
+#[derive(Default)]
+struct TrzszDownloadWorkerEvent {
+    passthrough: Vec<u8>,
+    responses: Vec<Vec<u8>>,
+    progress: Vec<TrzszDownloadProgressUpdate>,
+    status: Option<String>,
+    completed: Option<String>,
+    failed: Option<String>,
 }
 
 struct TrzszDownloadProgressUpdate {
@@ -75,6 +97,43 @@ struct TrzszUploadProgressUpdate {
     fail_reason: Option<String>,
 }
 
+impl TrzszDownloadWorker {
+    fn spawn(download: TrzszDownloadRuntime, remote_is_windows: bool) -> Self {
+        let (command_tx, command_rx) = mpsc::channel();
+        let (event_tx, event_rx) = mpsc::sync_channel(TRZSZ_DOWNLOAD_WORKER_EVENT_CHANNEL_CAP);
+        thread::Builder::new()
+            .name("nyaterm-trzsz-download".to_string())
+            .spawn(move || {
+                run_trzsz_download_worker(download, remote_is_windows, command_rx, event_tx)
+            })
+            .expect("failed to spawn trzsz download worker");
+        Self {
+            command_tx,
+            event_rx,
+        }
+    }
+
+    fn send_output(&self, data: Vec<u8>) {
+        if data.is_empty() {
+            return;
+        }
+        let _ = self
+            .command_tx
+            .send(TrzszDownloadWorkerCommand::Output(data));
+    }
+
+    fn try_recv_event(&self) -> Option<TrzszDownloadWorkerEvent> {
+        match self.event_rx.try_recv() {
+            Ok(event) => Some(event),
+            Err(mpsc::TryRecvError::Empty) | Err(mpsc::TryRecvError::Disconnected) => None,
+        }
+    }
+
+    fn stop(self) {
+        let _ = self.command_tx.send(TrzszDownloadWorkerCommand::Stop);
+    }
+}
+
 impl Default for TrzszSessionState {
     fn default() -> Self {
         Self {
@@ -83,7 +142,16 @@ impl Default for TrzszSessionState {
             protocol: TrzszProtocolStream::new(),
             protocol_active: false,
             download: None,
+            download_worker: None,
             upload: None,
+        }
+    }
+}
+
+impl TrzszSessionState {
+    fn stop_download_worker(&mut self) {
+        if let Some(worker) = self.download_worker.take() {
+            worker.stop();
         }
     }
 }
@@ -96,7 +164,9 @@ impl NyaTermApp {
     }
 
     pub(in crate::features) fn clear_trzsz_session(&mut self, session_id: &str) {
-        self.trzsz_sessions.remove(session_id);
+        if let Some(mut state) = self.trzsz_sessions.remove(session_id) {
+            state.stop_download_worker();
+        }
     }
 
     pub(in crate::features) fn note_trzsz_output_discontinuity(&mut self, session_id: &str) {
@@ -106,6 +176,7 @@ impl NyaTermApp {
             state.protocol.reset();
             state.protocol_active = false;
             state.download = None;
+            state.stop_download_worker();
             state.upload = None;
         }
     }
@@ -140,6 +211,9 @@ impl NyaTermApp {
             match event {
                 TrzszOutputEvent::Passthrough(bytes) => {
                     let mut protocol_status = None;
+                    if self.queue_trzsz_download_worker_output(session_id, &bytes) {
+                        continue;
+                    }
                     let protocol_output = {
                         let state = self.trzsz_state_mut(session_id);
                         if !state.protocol_active {
@@ -192,13 +266,17 @@ impl NyaTermApp {
                             state.transfer.observe_trigger(&trigger);
                             state.protocol.reset();
                             state.protocol_active = true;
-                            state.download = Some(TrzszDownloadRuntime {
-                                engine: TrzszDownloadEngine::new(trigger.remote_is_windows),
-                                directory: directory.clone(),
-                                directory_roots: HashMap::new(),
-                                pending_path: None,
-                                current_file: None,
-                            });
+                            state.download = None;
+                            state.download_worker = Some(TrzszDownloadWorker::spawn(
+                                TrzszDownloadRuntime {
+                                    engine: TrzszDownloadEngine::new(trigger.remote_is_windows),
+                                    directory: directory.clone(),
+                                    directory_roots: HashMap::new(),
+                                    pending_path: None,
+                                    current_file: None,
+                                },
+                                trigger.remote_is_windows,
+                            ));
                             state.upload = None;
                         }
                         protocol_responses.push(action_frame);
@@ -213,6 +291,7 @@ impl NyaTermApp {
                             state.protocol.reset();
                             state.protocol_active = true;
                             state.download = None;
+                            state.stop_download_worker();
                             state.upload = None;
                         }
                         if self.prompt_trzsz_upload_paths(
@@ -233,6 +312,7 @@ impl NyaTermApp {
                                 state.protocol_active = false;
                                 state.protocol.reset();
                                 state.download = None;
+                                state.stop_download_worker();
                                 state.upload = None;
                             }
                             latest_trigger_status = Some(format!(
@@ -246,6 +326,7 @@ impl NyaTermApp {
                             state.protocol.reset();
                             state.protocol_active = true;
                             state.download = None;
+                            state.stop_download_worker();
                             state.upload = None;
                         }
                         if self.prompt_trzsz_upload_paths(
@@ -266,6 +347,7 @@ impl NyaTermApp {
                                 state.protocol_active = false;
                                 state.protocol.reset();
                                 state.download = None;
+                                state.stop_download_worker();
                                 state.upload = None;
                             }
                             latest_trigger_status = Some(format!(
@@ -292,10 +374,105 @@ impl NyaTermApp {
         passthrough
     }
 
+    fn queue_trzsz_download_worker_output(&mut self, session_id: &str, data: &[u8]) -> bool {
+        let Some(state) = self.trzsz_sessions.get_mut(session_id) else {
+            return false;
+        };
+        let Some(worker) = state.download_worker.as_ref() else {
+            return false;
+        };
+        if !data.is_empty() {
+            worker.send_output(data.to_vec());
+        }
+        true
+    }
+
+    pub(in crate::features) fn drain_trzsz_download_worker_events(
+        &mut self,
+        cx: &mut Context<Self>,
+    ) -> bool {
+        let mut events = Vec::new();
+        for (session_id, state) in &mut self.trzsz_sessions {
+            let Some(worker) = state.download_worker.as_ref() else {
+                continue;
+            };
+            while let Some(event) = worker.try_recv_event() {
+                events.push((session_id.clone(), event));
+                if events.len() >= TRZSZ_DOWNLOAD_WORKER_EVENT_DRAIN_BATCH {
+                    break;
+                }
+            }
+            if events.len() >= TRZSZ_DOWNLOAD_WORKER_EVENT_DRAIN_BATCH {
+                break;
+            }
+        }
+        if events.is_empty() {
+            return false;
+        }
+
+        let mut dirty = false;
+        for (session_id, event) in events {
+            dirty |= self.apply_trzsz_download_worker_event(&session_id, event, cx);
+        }
+        dirty
+    }
+
+    fn apply_trzsz_download_worker_event(
+        &mut self,
+        session_id: &str,
+        event: TrzszDownloadWorkerEvent,
+        cx: &mut Context<Self>,
+    ) -> bool {
+        let mut dirty = false;
+        if !event.passthrough.is_empty() {
+            self.submit_terminal_frame_output(session_id, event.passthrough);
+            dirty = true;
+        }
+        for response in event.responses {
+            if let Err(error) = self.write_session_protocol_response(session_id, &response) {
+                self.terminal_status = format!("trzsz protocol response failed: {error}");
+                dirty = true;
+            }
+        }
+        for update in event.progress {
+            self.update_trzsz_download_job(session_id, update, cx);
+            dirty = true;
+        }
+        if let Some(reason) = event.failed {
+            self.finish_trzsz_download_jobs(session_id, false, Some(&reason), cx);
+            if let Some(state) = self.trzsz_sessions.get_mut(session_id) {
+                state.download = None;
+                state.stop_download_worker();
+                state.protocol_active = false;
+                state.protocol.reset();
+            }
+            self.terminal_status = format!("trzsz download failed: {reason}");
+            dirty = true;
+        } else if let Some(message) = event.completed {
+            self.finish_trzsz_download_jobs(session_id, true, None, cx);
+            if let Some(state) = self.trzsz_sessions.get_mut(session_id) {
+                state.download = None;
+                state.stop_download_worker();
+                state.protocol_active = false;
+                state.protocol.reset();
+            }
+            self.terminal_status = message;
+            dirty = true;
+        } else if let Some(status) = event.status {
+            self.terminal_status = status;
+            dirty = true;
+        }
+        if dirty {
+            cx.notify();
+        }
+        dirty
+    }
+
     fn trzsz_output_can_bypass_detector(&self, session_id: &str, data: &[u8]) -> bool {
         let state_is_idle = self.trzsz_sessions.get(session_id).is_none_or(|state| {
             !state.protocol_active
                 && state.download.is_none()
+                && state.download_worker.is_none()
                 && state.upload.is_none()
                 && state.detector.is_idle()
         });
@@ -1052,6 +1229,138 @@ enum TrzszUploadRuntimeUpdate {
     Completed(Vec<String>),
 }
 
+fn run_trzsz_download_worker(
+    mut download: TrzszDownloadRuntime,
+    remote_is_windows: bool,
+    command_rx: mpsc::Receiver<TrzszDownloadWorkerCommand>,
+    event_tx: mpsc::SyncSender<TrzszDownloadWorkerEvent>,
+) {
+    let mut protocol = TrzszProtocolStream::new();
+    let mut transfer = TrzszTransferState::new();
+    transfer.remote_is_windows = remote_is_windows;
+    while let Ok(command) = command_rx.recv() {
+        match command {
+            TrzszDownloadWorkerCommand::Output(data) => {
+                let event = process_trzsz_download_worker_output(
+                    &mut download,
+                    &mut protocol,
+                    &mut transfer,
+                    data,
+                );
+                let done = event.completed.is_some() || event.failed.is_some();
+                let _ = event_tx.send(event);
+                if done {
+                    break;
+                }
+            }
+            TrzszDownloadWorkerCommand::Stop => break,
+        }
+    }
+}
+
+fn process_trzsz_download_worker_output(
+    download: &mut TrzszDownloadRuntime,
+    protocol: &mut TrzszProtocolStream,
+    transfer: &mut TrzszTransferState,
+    data: Vec<u8>,
+) -> TrzszDownloadWorkerEvent {
+    let protocol_output = protocol.filter_terminal_output(&data);
+    let mut event = TrzszDownloadWorkerEvent {
+        passthrough: protocol_output.passthrough,
+        ..TrzszDownloadWorkerEvent::default()
+    };
+
+    for frame in protocol_output.frames {
+        if let Some(done) =
+            process_trzsz_download_worker_frame(download, transfer, frame, &mut event)
+        {
+            event.failed = done.failed;
+            event.completed = done.completed;
+            break;
+        }
+    }
+    event
+}
+
+fn process_trzsz_download_worker_frame(
+    download: &mut TrzszDownloadRuntime,
+    transfer: &mut TrzszTransferState,
+    frame: TrzszProtocolFrame,
+    event: &mut TrzszDownloadWorkerEvent,
+) -> Option<TrzszDownloadWorkerEvent> {
+    match transfer.observe_frame(frame.clone()) {
+        TrzszTransferEvent::Config { config } => {
+            download.engine.set_directory_mode(config.directory);
+            if config.directory {
+                event.status = Some("trzsz directory download accepted".to_string());
+            }
+        }
+        TrzszTransferEvent::Failure { message } | TrzszTransferEvent::Exit { message } => {
+            return Some(TrzszDownloadWorkerEvent {
+                failed: Some(message),
+                ..TrzszDownloadWorkerEvent::default()
+            });
+        }
+        _ => {}
+    }
+
+    if !is_trzsz_download_frame(&frame) {
+        return None;
+    }
+    match download.engine.observe_frame(frame) {
+        Ok(step) => {
+            event.responses.extend(step.responses);
+            for transfer_event in step.events {
+                match apply_trzsz_download_event(download, transfer_event) {
+                    Ok(TrzszDownloadRuntimeUpdate::None) => {}
+                    Ok(TrzszDownloadRuntimeUpdate::Progress(update)) => {
+                        event.progress.push(update);
+                    }
+                    Ok(TrzszDownloadRuntimeUpdate::Completed(names)) => {
+                        let message = if names.is_empty() {
+                            "trzsz download complete".to_string()
+                        } else {
+                            format!("Saved {}", names.join(", "))
+                        };
+                        let newline = if transfer.remote_is_windows {
+                            "!\n"
+                        } else {
+                            "\n"
+                        };
+                        event.responses.push(build_trzsz_string_frame(
+                            "EXIT",
+                            message.as_bytes(),
+                            newline,
+                        ));
+                        return Some(TrzszDownloadWorkerEvent {
+                            completed: Some(message),
+                            ..TrzszDownloadWorkerEvent::default()
+                        });
+                    }
+                    Err(error) => {
+                        let response = trzsz_fail_response(&error, transfer.remote_is_windows);
+                        event.responses.push(response);
+                        return Some(TrzszDownloadWorkerEvent {
+                            failed: Some(error),
+                            ..TrzszDownloadWorkerEvent::default()
+                        });
+                    }
+                }
+            }
+        }
+        Err(error) => {
+            let reason = format!("{error:?}");
+            let response = trzsz_fail_response(&reason, transfer.remote_is_windows);
+            event.responses.push(response);
+            return Some(TrzszDownloadWorkerEvent {
+                failed: Some(reason),
+                ..TrzszDownloadWorkerEvent::default()
+            });
+        }
+    }
+    None
+}
+
 fn is_trzsz_download_frame(frame: &TrzszProtocolFrame) -> bool {
     matches!(
         frame.frame_type.to_ascii_uppercase().as_str(),
@@ -1596,4 +1905,105 @@ fn unique_trzsz_download_path(directory: &Path, file_name: &str) -> PathBuf {
         .map(|duration| duration.as_millis())
         .unwrap_or(0);
     directory.join(format!("{stem} ({suffix})"))
+}
+
+const TRZSZ_DOWNLOAD_WORKER_EVENT_CHANNEL_CAP: usize = 256;
+const TRZSZ_DOWNLOAD_WORKER_EVENT_DRAIN_BATCH: usize = 32;
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use nyaterm_transport::TrzszProtocolPayload;
+
+    #[test]
+    fn trzsz_download_worker_frame_path_writes_file_off_ui_state() {
+        let directory = unique_test_dir("trzsz-worker-download");
+        std::fs::create_dir_all(&directory).expect("test directory should be created");
+        let mut download = TrzszDownloadRuntime {
+            engine: TrzszDownloadEngine::new(false),
+            directory: directory.clone(),
+            directory_roots: HashMap::new(),
+            pending_path: None,
+            current_file: None,
+        };
+        let mut transfer = TrzszTransferState::new();
+        transfer.remote_is_windows = false;
+
+        let mut event = TrzszDownloadWorkerEvent::default();
+        assert!(
+            process_trzsz_download_worker_frame(
+                &mut download,
+                &mut transfer,
+                frame("NUM", TrzszProtocolPayload::Integer(1)),
+                &mut event,
+            )
+            .is_none()
+        );
+        assert_eq!(event.responses.len(), 1);
+
+        let mut event = TrzszDownloadWorkerEvent::default();
+        process_trzsz_download_worker_frame(
+            &mut download,
+            &mut transfer,
+            frame(
+                "NAME",
+                TrzszProtocolPayload::EncodedBytes(b"hello.txt".to_vec()),
+            ),
+            &mut event,
+        );
+        assert_eq!(event.responses.len(), 1);
+
+        let mut event = TrzszDownloadWorkerEvent::default();
+        process_trzsz_download_worker_frame(
+            &mut download,
+            &mut transfer,
+            frame("SIZE", TrzszProtocolPayload::Integer(5)),
+            &mut event,
+        );
+        assert_eq!(event.progress.len(), 1);
+        assert_eq!(event.progress[0].file_name, "hello.txt");
+
+        let data = b"hello".to_vec();
+        let mut event = TrzszDownloadWorkerEvent::default();
+        process_trzsz_download_worker_frame(
+            &mut download,
+            &mut transfer,
+            frame("DATA", TrzszProtocolPayload::EncodedBytes(data.clone())),
+            &mut event,
+        );
+        assert_eq!(event.progress.len(), 1);
+        assert_eq!(event.progress[0].bytes_transferred, 5);
+
+        let digest = md5::compute(&data).0.to_vec();
+        let mut event = TrzszDownloadWorkerEvent::default();
+        let done = process_trzsz_download_worker_frame(
+            &mut download,
+            &mut transfer,
+            frame("MD5", TrzszProtocolPayload::EncodedBytes(digest)),
+            &mut event,
+        )
+        .expect("md5 should complete the download");
+        assert_eq!(done.completed.as_deref(), Some("Saved hello.txt"));
+        assert_eq!(
+            std::fs::read(directory.join("hello.txt")).expect("download file should exist"),
+            data
+        );
+
+        let _ = std::fs::remove_dir_all(directory);
+    }
+
+    fn frame(frame_type: &str, payload: TrzszProtocolPayload) -> TrzszProtocolFrame {
+        TrzszProtocolFrame {
+            frame_type: frame_type.to_string(),
+            payload,
+        }
+    }
+
+    fn unique_test_dir(name: &str) -> PathBuf {
+        let nanos = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("system clock should be after epoch")
+            .as_nanos();
+        std::env::temp_dir().join(format!("nyaterm-{name}-{nanos}"))
+    }
 }
