@@ -84,7 +84,7 @@ impl NyaTermApp {
         .and_then(|store| store.save_diagnostics_settings(&self.settings))
         {
             Ok(settings) => {
-                self.settings = settings;
+                self.apply_gpui_settings(settings);
                 self.store_status.message = "diagnostics settings saved".to_string();
                 self.store_status.ready = true;
                 self.terminal_status = "diagnostics settings saved".to_string();
@@ -106,7 +106,7 @@ impl NyaTermApp {
         .and_then(|store| store.save_general_settings(&self.settings))
         {
             Ok(settings) => {
-                self.settings = settings;
+                self.apply_gpui_settings(settings);
                 self.store_status.message = "general settings saved".to_string();
                 self.store_status.ready = true;
                 self.terminal_status = "general settings saved".to_string();
@@ -221,7 +221,7 @@ impl NyaTermApp {
         .and_then(|store| store.save_interaction_settings(&self.settings))
         {
             Ok(settings) => {
-                self.settings = settings;
+                self.apply_gpui_settings(settings);
                 self.store_status.message = "interaction settings saved".to_string();
                 self.store_status.ready = true;
                 self.terminal_status = "interaction settings saved".to_string();
@@ -261,7 +261,7 @@ impl NyaTermApp {
         .and_then(|store| store.save_screen_lock_settings(&self.settings))
         {
             Ok(settings) => {
-                self.settings = settings;
+                self.apply_gpui_settings(settings);
                 self.store_status.message = "screen lock settings saved".to_string();
                 self.store_status.ready = true;
                 self.terminal_status = "screen lock settings saved".to_string();

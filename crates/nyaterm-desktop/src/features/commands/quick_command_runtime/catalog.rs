@@ -49,7 +49,7 @@ impl NyaTermApp {
         .and_then(|store| store.save_quick_command_ui_settings(&self.settings))
         {
             Ok(settings) => {
-                self.settings = settings;
+                self.apply_gpui_settings(settings);
                 self.store_status.message = "quick command UI settings saved".to_string();
                 self.store_status.ready = true;
                 self.terminal_status = "quick command UI settings saved".to_string();

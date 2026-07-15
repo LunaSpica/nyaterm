@@ -123,7 +123,7 @@ impl NyaTermApp {
         .and_then(|store| store.save_terminal_settings(&self.settings))
         {
             Ok(settings) => {
-                self.settings = settings;
+                self.apply_gpui_settings(settings);
                 self.enforce_terminal_scrollback_limit();
                 self.store_status.message = "terminal settings saved".to_string();
                 self.store_status.ready = true;

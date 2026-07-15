@@ -95,7 +95,7 @@ impl NyaTermApp {
         .and_then(|store| store.save_keybindings(&keybindings))
         {
             Ok(settings) => {
-                self.settings = settings;
+                self.apply_gpui_settings(settings);
                 self.keybinding_recording_id = None;
                 self.keybinding_pending_keys = None;
                 self.store_status.message = success_message.clone();

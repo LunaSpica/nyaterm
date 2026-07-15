@@ -3,6 +3,14 @@ use gpui::{
     App, ClickEvent, FontWeight, Hsla, IntoElement, SharedString, Window, div, prelude::*, px, rgb,
 };
 
+fn platform_code_font_family() -> &'static str {
+    if cfg!(target_os = "windows") {
+        "Consolas"
+    } else {
+        "JetBrains Mono"
+    }
+}
+
 pub fn status_pill(
     label: &'static str,
     fg: impl Into<Hsla>,
@@ -96,7 +104,7 @@ pub fn session_info_row(
             div()
                 .min_w_0()
                 .flex_1()
-                .font_family("JetBrains Mono")
+                .font_family(platform_code_font_family())
                 .text_xs()
                 .text_color(rgb(palette.text))
                 .child(value),

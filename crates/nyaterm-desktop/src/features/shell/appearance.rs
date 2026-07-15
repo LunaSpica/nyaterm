@@ -6,6 +6,11 @@ const TERMINAL_FONT_SIZE_MIN: i16 = 8;
 const TERMINAL_FONT_SIZE_MAX: i16 = 72;
 
 impl NyaTermApp {
+    pub(in crate::features) fn apply_gpui_settings(&mut self, mut settings: AppSettingsSummary) {
+        normalize_gpui_font_settings_for_platform(&mut settings);
+        self.settings = settings;
+    }
+
     pub(in crate::features) fn gpui_terminal_font_family(&self) -> String {
         gpui_platform_font_family(
             &self.settings.terminal_font_family,
@@ -331,7 +336,7 @@ impl NyaTermApp {
         .and_then(|store| store.save_appearance_settings(&self.settings))
         {
             Ok(settings) => {
-                self.settings = settings;
+                self.apply_gpui_settings(settings);
                 self.store_status.message = "appearance settings saved".to_string();
                 self.store_status.ready = true;
                 self.terminal_status = "appearance settings saved".to_string();

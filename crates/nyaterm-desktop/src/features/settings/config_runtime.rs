@@ -641,7 +641,7 @@ impl NyaTermApp {
                         self.quick_command_categories.clear();
                         self.command_history.clear();
                         self.keyword_highlights = KeywordHighlightConfig::default();
-                        self.settings = AppSettingsSummary::default();
+                        self.apply_gpui_settings(AppSettingsSummary::default());
                         self.translation_settings = TranslationSettings::default();
                         self.translation_secret_draft = TranslationSecretDraft::default();
                         self.translate_target_language =
@@ -663,7 +663,7 @@ impl NyaTermApp {
                 self.quick_commands.clear();
                 self.quick_command_categories.clear();
                 self.command_history.clear();
-                self.settings = AppSettingsSummary::default();
+                self.apply_gpui_settings(AppSettingsSummary::default());
                 self.translation_settings = TranslationSettings::default();
                 self.translation_secret_draft = TranslationSecretDraft::default();
                 self.translate_target_language = self.translation_settings.target_language.clone();

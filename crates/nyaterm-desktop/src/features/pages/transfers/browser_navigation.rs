@@ -400,7 +400,7 @@ impl NyaTermApp {
         .and_then(|store| store.save_file_explorer_favorite_dirs(&self.settings))
         {
             Ok(settings) => {
-                self.settings = settings;
+                self.apply_gpui_settings(settings);
                 self.store_status.message = "file explorer favorites saved".to_string();
                 self.store_status.ready = true;
             }

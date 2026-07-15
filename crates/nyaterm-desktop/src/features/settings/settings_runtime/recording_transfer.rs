@@ -13,7 +13,7 @@ impl NyaTermApp {
         .and_then(|store| store.save_host_key_policy(policy))
         {
             Ok(settings) => {
-                self.settings = settings;
+                self.apply_gpui_settings(settings);
                 self.terminal_status = format!("host key policy set to {policy}");
                 self.store_status.message = "settings saved".to_string();
                 self.store_status.ready = true;
@@ -67,7 +67,7 @@ impl NyaTermApp {
         .and_then(|store| store.save_recording_settings(&self.settings))
         {
             Ok(settings) => {
-                self.settings = settings;
+                self.apply_gpui_settings(settings);
                 self.recording_manager
                     .set_memory_limit(self.settings.recording_memory_limit_bytes as usize);
                 self.store_status.message = "recording settings saved".to_string();
@@ -186,7 +186,7 @@ impl NyaTermApp {
         .and_then(|store| store.save_transfer_settings(&self.settings))
         {
             Ok(settings) => {
-                self.settings = settings;
+                self.apply_gpui_settings(settings);
                 self.transfer_duplicate_policy = SftpDuplicatePolicy::from_legacy_value(
                     &self.settings.transfer_duplicate_strategy,
                 );
