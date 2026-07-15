@@ -383,17 +383,8 @@ impl NyaTermApp {
                     ai_execution_profile,
                     ..
                 } => {
-                    let config = match self.build_ssh_session_config(&connection, &mut Vec::new()) {
-                        Ok(config) => config,
-                        Err(error) => {
-                            self.terminal_status = format!("restore SSH prepare failed: {error}");
-                            return false;
-                        }
-                    };
-                    self.begin_background_ssh_start(
-                        connection.name,
-                        config,
-                        Some(connection.id),
+                    self.begin_background_saved_ssh_start(
+                        connection,
                         ai_execution_profile,
                         custom_name,
                         tab_color,

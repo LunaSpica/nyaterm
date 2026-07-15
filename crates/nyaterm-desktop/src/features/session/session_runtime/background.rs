@@ -35,7 +35,7 @@ impl NyaTermApp {
             request_id.clone(),
             PendingSessionStart {
                 connection_name: connection_name.clone(),
-                launch_config: launch_config.clone(),
+                launch_config: Some(launch_config.clone()),
                 requested_at,
                 kind,
                 ai_execution_profile,
@@ -61,10 +61,11 @@ impl NyaTermApp {
         let request_id_for_worker = request_id.clone();
         std::thread::spawn(move || {
             let worker_started_at = Instant::now();
-            let result = create_session_from_launch_config(&session_manager, launch_config)
+            let result = create_session_from_launch_config(&session_manager, launch_config.clone())
                 .map(|session_info| SessionStartSuccess {
                     session_info,
                     multiplex_handle: None,
+                    launch_config: Some(launch_config),
                 })
                 .map_err(|error| error.to_string());
             let worker_finished_at = Instant::now();
@@ -123,7 +124,7 @@ impl NyaTermApp {
             request_id.clone(),
             PendingSessionStart {
                 connection_name: connection_name.clone(),
-                launch_config: SessionLaunchConfig::Ssh(config.clone()),
+                launch_config: Some(SessionLaunchConfig::Ssh(config.clone())),
                 requested_at,
                 kind: SessionKind::Ssh,
                 ai_execution_profile,
@@ -149,10 +150,11 @@ impl NyaTermApp {
         std::thread::spawn(move || {
             let worker_started_at = Instant::now();
             let result = session_manager
-                .create_ssh_session(config)
+                .create_ssh_session(config.clone())
                 .map(|info| SessionStartSuccess {
                     session_info: info,
                     multiplex_handle: None,
+                    launch_config: Some(SessionLaunchConfig::Ssh(config)),
                 })
                 .map_err(|error| error.to_string());
             let worker_finished_at = Instant::now();
@@ -211,7 +213,7 @@ impl NyaTermApp {
             request_id.clone(),
             PendingSessionStart {
                 connection_name: connection_name.clone(),
-                launch_config: SessionLaunchConfig::Ssh(config.clone()),
+                launch_config: Some(SessionLaunchConfig::Ssh(config.clone())),
                 requested_at,
                 kind: SessionKind::Ssh,
                 ai_execution_profile,
@@ -240,11 +242,12 @@ impl NyaTermApp {
                         .map_err(|error| error.to_string())?,
                 };
                 let info = session_manager
-                    .create_ssh_session_with_multiplex(config, multiplex.clone())
+                    .create_ssh_session_with_multiplex(config.clone(), multiplex.clone())
                     .map_err(|error| error.to_string())?;
                 Ok(SessionStartSuccess {
                     session_info: info,
                     multiplex_handle: Some(multiplex),
+                    launch_config: Some(SessionLaunchConfig::Ssh(config)),
                 })
             })();
             let worker_finished_at = Instant::now();
@@ -318,9 +321,13 @@ impl NyaTermApp {
                     self.last_connect_failure_error = None;
                     let session_info = success.session_info;
                     let session_id = session_info.id.clone();
-                    let launch_config = pending
-                        .as_ref()
-                        .map(|pending| pending.launch_config.clone())
+                    let launch_config = success
+                        .launch_config
+                        .or_else(|| {
+                            pending
+                                .as_ref()
+                                .and_then(|pending| pending.launch_config.clone())
+                        })
                         .unwrap_or_else(|| launch_config_for_session_info(&session_info));
                     let ssh_config = match &launch_config {
                         SessionLaunchConfig::Ssh(config) => Some(config.clone()),

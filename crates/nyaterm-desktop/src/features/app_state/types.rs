@@ -39,7 +39,7 @@ pub(in crate::features) enum SessionPaneState {
 
 pub(in crate::features) struct PendingSessionStart {
     pub connection_name: String,
-    pub launch_config: SessionLaunchConfig,
+    pub launch_config: Option<SessionLaunchConfig>,
     pub requested_at: Instant,
     pub kind: SessionKind,
     pub ai_execution_profile: AiExecutionProfile,

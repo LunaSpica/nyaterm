@@ -1,6 +1,5 @@
 use super::*;
 
-#[derive(Debug)]
 pub(in crate::features) struct SessionStartResult {
     pub(in crate::features) request_id: String,
     pub(in crate::features) connection_name: String,
@@ -10,10 +9,10 @@ pub(in crate::features) struct SessionStartResult {
     pub(in crate::features) result: Result<SessionStartSuccess, String>,
 }
 
-#[derive(Debug)]
 pub(in crate::features) struct SessionStartSuccess {
     pub(in crate::features) session_info: SessionInfo,
     pub(in crate::features) multiplex_handle: Option<SshMultiplexHandle>,
+    pub(in crate::features) launch_config: Option<SessionLaunchConfig>,
 }
 
 #[derive(Debug)]

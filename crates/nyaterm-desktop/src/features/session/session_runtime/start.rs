@@ -1,5 +1,16 @@
 use super::*;
 
+#[derive(Clone)]
+pub(in crate::features) struct SshSessionConfigBuildContext {
+    pub(in crate::features) config_dir: PathBuf,
+    pub(in crate::features) portable_key_path: Option<PathBuf>,
+    pub(in crate::features) host_key_policy: String,
+    pub(in crate::features) x11_display: String,
+    pub(in crate::features) host_key_prompts: Arc<HostKeyPromptBroker>,
+    pub(in crate::features) credential_prompts: Arc<CredentialPromptBroker>,
+    pub(in crate::features) otp_provider: Arc<NativeOtpProvider>,
+}
+
 impl NyaTermApp {
     pub(in crate::features) fn start_local_session(
         &mut self,
@@ -113,19 +124,8 @@ impl NyaTermApp {
                 ai_execution_profile,
                 ..
             } => {
-                let config = match self.build_ssh_session_config(&connection, &mut Vec::new()) {
-                    Ok(config) => config,
-                    Err(error) => {
-                        self.terminal_status = format!("failed to prepare SSH session: {error}");
-                        self.selected_nav = NavItem::Workspace;
-                        cx.notify();
-                        return;
-                    }
-                };
-                self.begin_background_ssh_start(
-                    connection.name,
-                    config,
-                    Some(connection.id),
+                self.begin_background_saved_ssh_start(
+                    connection,
                     ai_execution_profile,
                     None,
                     None,
@@ -177,35 +177,124 @@ impl NyaTermApp {
             .any(|pending| pending.source_connection_id.as_deref() == Some(connection.id.as_str()))
     }
 
+    pub(in crate::features) fn begin_background_saved_ssh_start(
+        &mut self,
+        connection: SavedConnection,
+        ai_execution_profile: AiExecutionProfile,
+        custom_name: Option<String>,
+        tab_color: Option<u32>,
+        after_session_id: Option<String>,
+        insert_index: Option<usize>,
+        seed_output: Option<String>,
+        startup_command: Option<StartupCommandRequest>,
+        cx: &mut Context<Self>,
+    ) {
+        let connection_name = connection.name.clone();
+        let source_connection_id = Some(connection.id.clone());
+        let geometry_session_hint = after_session_id
+            .as_deref()
+            .or(self.pending_reconnect_replace_id.as_deref());
+        let desired_geometry =
+            self.desired_terminal_resize_geometry_for_session_hint(geometry_session_hint);
+        let build_context = self.ssh_session_config_build_context();
+        let request_id = uuid();
+        let requested_at = Instant::now();
+        self.pending_session_name = Some(connection_name.clone());
+        self.last_connect_failure_name = None;
+        self.last_connect_failure_error = None;
+        self.session_pane_states.insert(
+            request_id.clone(),
+            SessionPaneState::Connecting {
+                request_id: request_id.clone(),
+                name: connection_name.clone(),
+                kind: SessionKind::Ssh,
+            },
+        );
+        self.pending_session_starts.insert(
+            request_id.clone(),
+            PendingSessionStart {
+                connection_name: connection_name.clone(),
+                launch_config: None,
+                requested_at,
+                kind: SessionKind::Ssh,
+                ai_execution_profile,
+                custom_name,
+                tab_color,
+                after_session_id,
+                insert_index,
+                seed_output,
+                startup_command,
+                multiplex_key: None,
+                source_connection_id,
+            },
+        );
+        self.terminal_status = format!("connecting to {connection_name}");
+        if self.active_session_id.is_none() {
+            self.append_terminal_log(format!("\n# connecting to {connection_name}\n"));
+        }
+        self.selected_nav = NavItem::Workspace;
+        self.main_mode = MainMode::Workspace;
+
+        let session_manager = self.session_manager.clone();
+        let session_start_tx = self.session_start_tx.clone();
+        let request_id_for_worker = request_id.clone();
+        std::thread::spawn(move || {
+            let worker_started_at = Instant::now();
+            let result = (|| {
+                let mut config = build_ssh_session_config_with_context(
+                    &connection,
+                    &mut Vec::new(),
+                    &build_context,
+                )?;
+                config.deferred_pty = true;
+                if let Some(geometry) = desired_geometry {
+                    config.cols = geometry.cols;
+                    config.rows = geometry.rows;
+                    config.pixel_width = geometry.pixel_width;
+                    config.pixel_height = geometry.pixel_height;
+                }
+                let session_info = session_manager
+                    .create_ssh_session(config.clone())
+                    .map_err(|error| error.to_string())?;
+                Ok(SessionStartSuccess {
+                    session_info,
+                    multiplex_handle: None,
+                    launch_config: Some(SessionLaunchConfig::Ssh(config)),
+                })
+            })();
+            let worker_finished_at = Instant::now();
+            let _ = session_start_tx.send(SessionStartResult {
+                request_id: request_id_for_worker,
+                connection_name,
+                kind: SessionKind::Ssh,
+                worker_started_at,
+                worker_finished_at,
+                result,
+            });
+        });
+        cx.notify();
+    }
+
+    pub(in crate::features) fn ssh_session_config_build_context(
+        &self,
+    ) -> SshSessionConfigBuildContext {
+        SshSessionConfigBuildContext {
+            config_dir: self.runtime.config_dir().to_path_buf(),
+            portable_key_path: self.runtime.portable_key_path().map(ToOwned::to_owned),
+            host_key_policy: self.settings.host_key_policy.clone(),
+            x11_display: self.settings.x11_display.clone(),
+            host_key_prompts: self.host_key_prompts.clone(),
+            credential_prompts: self.credential_prompts.clone(),
+            otp_provider: self.otp_provider.clone(),
+        }
+    }
+
     pub(in crate::features) fn load_ssh_key_auth(
         &self,
         key_id: Option<&str>,
         auth_mode: &str,
     ) -> Result<Option<SshKeyAuthConfig>, String> {
-        if auth_mode != "key" {
-            return Ok(None);
-        }
-        let key_id = key_id
-            .filter(|key_id| !key_id.trim().is_empty())
-            .ok_or_else(|| "connection is set to key auth but has no key_id".to_string())?;
-        let store = ConnectionStore::open_with_portable_key_path(
-            self.runtime.config_dir(),
-            self.runtime.portable_key_path().map(ToOwned::to_owned),
-        )
-        .map_err(|error| error.to_string())?;
-        let key = store
-            .load_decrypted_ssh_key_by_id(key_id)
-            .map_err(|error| error.to_string())?
-            .ok_or_else(|| format!("SSH key '{key_id}' was not found"))?;
-        let key_data = key
-            .key_data
-            .filter(|value| !value.trim().is_empty())
-            .ok_or_else(|| format!("SSH key '{}' has no private key data", key.name))?;
-        Ok(Some(SshKeyAuthConfig {
-            key_data,
-            cert_data: key.cert_data.filter(|value| !value.trim().is_empty()),
-            passphrase: key.passphrase.filter(|value| !value.trim().is_empty()),
-        }))
+        load_ssh_key_auth_with_context(&self.ssh_session_config_build_context(), key_id, auth_mode)
     }
 
     pub(in crate::features) fn build_ssh_session_config(
@@ -213,94 +302,18 @@ impl NyaTermApp {
         connection: &SavedConnection,
         visited_proxy_jumps: &mut Vec<String>,
     ) -> Result<SshSessionConfig, String> {
-        let ConnectionType::Ssh {
-            host,
-            port,
-            username,
-            backspace_mode,
-            ai_execution_profile: _,
-            x11_forwarding,
-        } = connection.config.clone()
-        else {
-            return Err("only SSH connections can be used for SSH sessions".to_string());
-        };
-        let auth = connection.auth.clone().unwrap_or_default();
-        let allow_none_auth = auth.mode == "none";
-        let password = (!auth.has_password)
-            .then_some(auth.password)
-            .flatten()
-            .filter(|value| !value.trim().is_empty());
-        let key_auth = self.load_ssh_key_auth(auth.key_id.as_deref(), &auth.mode)?;
-        let proxy_jump = self.load_proxy_jump_config(connection, visited_proxy_jumps)?;
-        let proxy = self.load_proxy_config(connection)?;
-
-        Ok(SshSessionConfig {
-            name: connection.name.clone(),
-            host,
-            port,
-            username,
-            password,
-            key_auth,
-            otp_id: auth.otp_id.filter(|value| !value.trim().is_empty()),
-            auto_fill_otp: auth.auto_fill_otp,
-            proxy_jump,
-            proxy,
-            allow_none_auth,
-            backspace_mode,
-            term: "xterm-256color".to_string(),
-            x11_forwarding,
-            x11_display: self.settings.x11_display.clone(),
-            deferred_pty: true,
-            cols: 80,
-            rows: 24,
-            pixel_width: 0,
-            pixel_height: 0,
-            host_key_verifier: Some(Arc::new(NativeHostKeyVerifier {
-                config_dir: self.runtime.config_dir().to_path_buf(),
-                portable_key_path: self.runtime.portable_key_path().map(ToOwned::to_owned),
-                policy: self.settings.host_key_policy.clone(),
-                prompt_broker: self.host_key_prompts.clone(),
-            })),
-            credential_provider: Some(self.credential_prompts.clone()),
-            otp_provider: Some(self.otp_provider.clone()),
-        })
+        build_ssh_session_config_with_context(
+            connection,
+            visited_proxy_jumps,
+            &self.ssh_session_config_build_context(),
+        )
     }
 
     pub(in crate::features) fn load_proxy_config(
         &self,
         connection: &SavedConnection,
     ) -> Result<Option<SshProxyConfig>, String> {
-        let Some(proxy_id) = connection
-            .network
-            .as_ref()
-            .and_then(|network| network.proxy_id.as_deref())
-            .filter(|value| !value.trim().is_empty())
-        else {
-            return Ok(None);
-        };
-        let store = ConnectionStore::open_with_portable_key_path(
-            self.runtime.config_dir(),
-            self.runtime.portable_key_path().map(ToOwned::to_owned),
-        )
-        .map_err(|error| error.to_string())?;
-        let proxy = store
-            .list_proxies()
-            .map_err(|error| error.to_string())?
-            .into_iter()
-            .find(|proxy| proxy.id == proxy_id)
-            .ok_or_else(|| format!("Proxy '{proxy_id}' was not found"))?;
-        let protocol = match proxy.protocol.as_str() {
-            "http" | "proxycommand" => proxy.protocol,
-            _ => "socks5".to_string(),
-        };
-        Ok(Some(SshProxyConfig {
-            protocol,
-            host: proxy.host,
-            port: proxy.port,
-            command: proxy.command.filter(|value| !value.trim().is_empty()),
-            username: proxy.username.filter(|value| !value.trim().is_empty()),
-            password: proxy.password.filter(|value| !value.is_empty()),
-        }))
+        load_proxy_config_with_context(&self.ssh_session_config_build_context(), connection)
     }
 
     pub(in crate::features) fn apply_desired_geometry_to_local_config(
@@ -320,37 +333,176 @@ impl NyaTermApp {
         connection: &SavedConnection,
         visited_proxy_jumps: &mut Vec<String>,
     ) -> Result<Option<Box<SshSessionConfig>>, String> {
-        let Some(proxy_jump_id) = connection
-            .network
-            .as_ref()
-            .and_then(|network| network.proxy_jump_id.as_deref())
-            .filter(|value| !value.trim().is_empty())
-        else {
-            return Ok(None);
-        };
-        if visited_proxy_jumps
-            .iter()
-            .any(|visited| visited == proxy_jump_id)
-        {
-            return Err(format!(
-                "ProxyJump chain contains a cycle at '{proxy_jump_id}'"
-            ));
-        }
-        visited_proxy_jumps.push(proxy_jump_id.to_string());
-        let store = ConnectionStore::open_with_portable_key_path(
-            self.runtime.config_dir(),
-            self.runtime.portable_key_path().map(ToOwned::to_owned),
+        load_proxy_jump_config_with_context(
+            &self.ssh_session_config_build_context(),
+            connection,
+            visited_proxy_jumps,
         )
-        .map_err(|error| error.to_string())?;
-        let jump_connection = store
-            .get_connection(proxy_jump_id)
-            .map_err(|error| error.to_string())?
-            .ok_or_else(|| format!("ProxyJump connection '{proxy_jump_id}' was not found"))?;
-        if !matches!(jump_connection.config, ConnectionType::Ssh { .. }) {
-            return Err("Only SSH connections can be used as jump hosts".to_string());
-        }
-        let jump_config = self.build_ssh_session_config(&jump_connection, visited_proxy_jumps)?;
-        visited_proxy_jumps.pop();
-        Ok(Some(Box::new(jump_config)))
     }
+}
+
+pub(in crate::features) fn build_ssh_session_config_with_context(
+    connection: &SavedConnection,
+    visited_proxy_jumps: &mut Vec<String>,
+    context: &SshSessionConfigBuildContext,
+) -> Result<SshSessionConfig, String> {
+    let ConnectionType::Ssh {
+        host,
+        port,
+        username,
+        backspace_mode,
+        ai_execution_profile: _,
+        x11_forwarding,
+    } = connection.config.clone()
+    else {
+        return Err("only SSH connections can be used for SSH sessions".to_string());
+    };
+    let auth = connection.auth.clone().unwrap_or_default();
+    let allow_none_auth = auth.mode == "none";
+    let password = (!auth.has_password)
+        .then_some(auth.password)
+        .flatten()
+        .filter(|value| !value.trim().is_empty());
+    let key_auth = load_ssh_key_auth_with_context(context, auth.key_id.as_deref(), &auth.mode)?;
+    let proxy_jump = load_proxy_jump_config_with_context(context, connection, visited_proxy_jumps)?;
+    let proxy = load_proxy_config_with_context(context, connection)?;
+
+    Ok(SshSessionConfig {
+        name: connection.name.clone(),
+        host,
+        port,
+        username,
+        password,
+        key_auth,
+        otp_id: auth.otp_id.filter(|value| !value.trim().is_empty()),
+        auto_fill_otp: auth.auto_fill_otp,
+        proxy_jump,
+        proxy,
+        allow_none_auth,
+        backspace_mode,
+        term: "xterm-256color".to_string(),
+        x11_forwarding,
+        x11_display: context.x11_display.clone(),
+        deferred_pty: true,
+        cols: 80,
+        rows: 24,
+        pixel_width: 0,
+        pixel_height: 0,
+        host_key_verifier: Some(Arc::new(NativeHostKeyVerifier {
+            config_dir: context.config_dir.clone(),
+            portable_key_path: context.portable_key_path.clone(),
+            policy: context.host_key_policy.clone(),
+            prompt_broker: context.host_key_prompts.clone(),
+        })),
+        credential_provider: Some(context.credential_prompts.clone()),
+        otp_provider: Some(context.otp_provider.clone()),
+    })
+}
+
+fn load_ssh_key_auth_with_context(
+    context: &SshSessionConfigBuildContext,
+    key_id: Option<&str>,
+    auth_mode: &str,
+) -> Result<Option<SshKeyAuthConfig>, String> {
+    if auth_mode != "key" {
+        return Ok(None);
+    }
+    let key_id = key_id
+        .filter(|key_id| !key_id.trim().is_empty())
+        .ok_or_else(|| "connection is set to key auth but has no key_id".to_string())?;
+    let store = ConnectionStore::open_with_portable_key_path(
+        &context.config_dir,
+        context.portable_key_path.clone(),
+    )
+    .map_err(|error| error.to_string())?;
+    let key = store
+        .load_decrypted_ssh_key_by_id(key_id)
+        .map_err(|error| error.to_string())?
+        .ok_or_else(|| format!("SSH key '{key_id}' was not found"))?;
+    let key_data = key
+        .key_data
+        .filter(|value| !value.trim().is_empty())
+        .ok_or_else(|| format!("SSH key '{}' has no private key data", key.name))?;
+    Ok(Some(SshKeyAuthConfig {
+        key_data,
+        cert_data: key.cert_data.filter(|value| !value.trim().is_empty()),
+        passphrase: key.passphrase.filter(|value| !value.trim().is_empty()),
+    }))
+}
+
+fn load_proxy_config_with_context(
+    context: &SshSessionConfigBuildContext,
+    connection: &SavedConnection,
+) -> Result<Option<SshProxyConfig>, String> {
+    let Some(proxy_id) = connection
+        .network
+        .as_ref()
+        .and_then(|network| network.proxy_id.as_deref())
+        .filter(|value| !value.trim().is_empty())
+    else {
+        return Ok(None);
+    };
+    let store = ConnectionStore::open_with_portable_key_path(
+        &context.config_dir,
+        context.portable_key_path.clone(),
+    )
+    .map_err(|error| error.to_string())?;
+    let proxy = store
+        .list_proxies()
+        .map_err(|error| error.to_string())?
+        .into_iter()
+        .find(|proxy| proxy.id == proxy_id)
+        .ok_or_else(|| format!("Proxy '{proxy_id}' was not found"))?;
+    let protocol = match proxy.protocol.as_str() {
+        "http" | "proxycommand" => proxy.protocol,
+        _ => "socks5".to_string(),
+    };
+    Ok(Some(SshProxyConfig {
+        protocol,
+        host: proxy.host,
+        port: proxy.port,
+        command: proxy.command.filter(|value| !value.trim().is_empty()),
+        username: proxy.username.filter(|value| !value.trim().is_empty()),
+        password: proxy.password.filter(|value| !value.is_empty()),
+    }))
+}
+
+fn load_proxy_jump_config_with_context(
+    context: &SshSessionConfigBuildContext,
+    connection: &SavedConnection,
+    visited_proxy_jumps: &mut Vec<String>,
+) -> Result<Option<Box<SshSessionConfig>>, String> {
+    let Some(proxy_jump_id) = connection
+        .network
+        .as_ref()
+        .and_then(|network| network.proxy_jump_id.as_deref())
+        .filter(|value| !value.trim().is_empty())
+    else {
+        return Ok(None);
+    };
+    if visited_proxy_jumps
+        .iter()
+        .any(|visited| visited == proxy_jump_id)
+    {
+        return Err(format!(
+            "ProxyJump chain contains a cycle at '{proxy_jump_id}'"
+        ));
+    }
+    visited_proxy_jumps.push(proxy_jump_id.to_string());
+    let store = ConnectionStore::open_with_portable_key_path(
+        &context.config_dir,
+        context.portable_key_path.clone(),
+    )
+    .map_err(|error| error.to_string())?;
+    let jump_connection = store
+        .get_connection(proxy_jump_id)
+        .map_err(|error| error.to_string())?
+        .ok_or_else(|| format!("ProxyJump connection '{proxy_jump_id}' was not found"))?;
+    if !matches!(jump_connection.config, ConnectionType::Ssh { .. }) {
+        return Err("Only SSH connections can be used as jump hosts".to_string());
+    }
+    let jump_config =
+        build_ssh_session_config_with_context(&jump_connection, visited_proxy_jumps, context)?;
+    visited_proxy_jumps.pop();
+    Ok(Some(Box::new(jump_config)))
 }
