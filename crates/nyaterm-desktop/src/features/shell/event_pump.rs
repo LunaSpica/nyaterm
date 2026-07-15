@@ -222,37 +222,41 @@ impl NyaTermApp {
         let mut output_event_count = 0usize;
         let mut drain_timings = SessionEventDrainTimings::default();
         let mut max_output_chunk_duration = Duration::ZERO;
-        let drained_output_bytes;
-        let queued_events: usize;
-        let queued_output_bytes: usize;
+        let mut processed_output_bytes = 0usize;
+        let mut transport_queued_events = 0usize;
+        let mut transport_queued_output_bytes = 0usize;
 
-        let Ok(drain) = self.session_manager.drain_events_with_output_budget(
-            SESSION_EVENT_DRAIN_BATCH,
-            SESSION_EVENT_DRAIN_OUTPUT_BUDGET,
-        ) else {
-            self.terminal_status = "failed to drain session events".to_string();
-            return true;
-        };
-        let events = drain.events;
-        drained_output_bytes = drain.stats.drained_output_bytes;
-        queued_events = drain.stats.queued_events;
-        queued_output_bytes = drain.stats.queued_output_bytes;
-        if drain.stats.dropped_output_bytes > 0 {
-            self.terminal_runtime.session_event_dropped_output_bytes = self
-                .terminal_runtime
-                .session_event_dropped_output_bytes
-                .saturating_add(drain.stats.dropped_output_bytes as u64);
+        if self.pending_session_events.is_empty() {
+            let Ok(drain) = self.session_manager.drain_events_with_output_budget(
+                SESSION_EVENT_DRAIN_BATCH,
+                SESSION_EVENT_DRAIN_OUTPUT_BUDGET,
+            ) else {
+                self.terminal_status = "failed to drain session events".to_string();
+                return true;
+            };
+            transport_queued_events = drain.stats.queued_events;
+            transport_queued_output_bytes = drain.stats.queued_output_bytes;
+            if drain.stats.dropped_output_bytes > 0 {
+                self.terminal_runtime.session_event_dropped_output_bytes = self
+                    .terminal_runtime
+                    .session_event_dropped_output_bytes
+                    .saturating_add(drain.stats.dropped_output_bytes as u64);
+            }
+            self.pending_session_events.extend(drain.events);
         }
-        if !events.is_empty() {
-            dirty = true;
-            drained_events = events.len();
 
-            for event in events {
+        if !self.pending_session_events.is_empty() {
+            dirty = true;
+
+            while let Some(event) = self.pending_session_events.pop_front() {
+                drained_events += 1;
                 match event {
                     SessionEvent::Output { session_id, data } => {
                         output_event_count += 1;
                         let chunk_started_at = Instant::now();
                         let chunk_input_bytes = data.len();
+                        processed_output_bytes =
+                            processed_output_bytes.saturating_add(chunk_input_bytes);
                         let mut chunk_timings = SessionEventDrainTimings::default();
                         let stage_started_at = Instant::now();
                         let data = self.process_zmodem_output(&session_id, &data, cx);
@@ -271,6 +275,12 @@ impl NyaTermApp {
                                 chunk_duration,
                                 &chunk_timings,
                             );
+                            if session_event_drain_wall_budget_exhausted(
+                                drain_started_at,
+                                !self.pending_session_events.is_empty(),
+                            ) {
+                                break;
+                            }
                             continue;
                         }
                         // Consume side-band markers after active transfer payloads are removed.
@@ -291,6 +301,12 @@ impl NyaTermApp {
                                 chunk_duration,
                                 &chunk_timings,
                             );
+                            if session_event_drain_wall_budget_exhausted(
+                                drain_started_at,
+                                !self.pending_session_events.is_empty(),
+                            ) {
+                                break;
+                            }
                             continue;
                         }
                         if self.session_has_active_ai_capture(&session_id) {
@@ -413,9 +429,20 @@ impl NyaTermApp {
                         }
                     }
                 }
+                if session_event_drain_wall_budget_exhausted(
+                    drain_started_at,
+                    !self.pending_session_events.is_empty(),
+                ) {
+                    break;
+                }
             }
         }
 
+        let queued_events =
+            transport_queued_events.saturating_add(self.pending_session_events.len());
+        let queued_output_bytes = transport_queued_output_bytes
+            .saturating_add(session_events_output_bytes(&self.pending_session_events));
+        let drained_output_bytes = processed_output_bytes;
         self.terminal_runtime.session_event_queued_events = queued_events;
         self.terminal_runtime.session_event_queued_output_bytes = queued_output_bytes;
         self.terminal_runtime
@@ -749,7 +776,8 @@ impl NyaTermApp {
 
 const TRANSFER_AUTO_SYNC_CWD_INTERVAL_SECONDS: u32 = 3;
 const SESSION_EVENT_DRAIN_BATCH: usize = 256;
-const SESSION_EVENT_DRAIN_OUTPUT_BUDGET: usize = 32 * 1024;
+const SESSION_EVENT_DRAIN_OUTPUT_BUDGET: usize = 8 * 1024;
+const SESSION_EVENT_DRAIN_WALL_BUDGET: Duration = Duration::from_millis(8);
 const SLOW_DIAGNOSTIC_THROTTLE: Duration = Duration::from_secs(2);
 const RUNTIME_TICK_SLOW_THRESHOLD: Duration = Duration::from_millis(40);
 const SESSION_EVENT_DRAIN_SLOW_TOTAL: Duration = Duration::from_millis(20);
@@ -776,6 +804,20 @@ fn diagnostic_log_due(last_at: Option<Instant>, now: Instant, throttle: Duration
 
 fn session_event_drain_is_slow(total: Duration, max_chunk: Duration) -> bool {
     total >= SESSION_EVENT_DRAIN_SLOW_TOTAL || max_chunk >= SESSION_EVENT_DRAIN_SLOW_CHUNK
+}
+
+fn session_event_drain_wall_budget_exhausted(started_at: Instant, has_pending: bool) -> bool {
+    has_pending && started_at.elapsed() >= SESSION_EVENT_DRAIN_WALL_BUDGET
+}
+
+fn session_events_output_bytes(events: &VecDeque<SessionEvent>) -> usize {
+    events
+        .iter()
+        .map(|event| match event {
+            SessionEvent::Output { data, .. } => data.len(),
+            _ => 0,
+        })
+        .sum()
 }
 
 fn remote_refresh_due(last_refresh_at: Option<Instant>, interval_seconds: u32) -> bool {
@@ -863,5 +905,32 @@ mod tests {
             Duration::from_millis(1),
             SESSION_EVENT_DRAIN_SLOW_CHUNK
         ));
+    }
+
+    #[test]
+    fn session_event_drain_wall_budget_only_stops_with_pending_events() {
+        let start = Instant::now() - SESSION_EVENT_DRAIN_WALL_BUDGET;
+
+        assert!(!session_event_drain_wall_budget_exhausted(start, false));
+        assert!(session_event_drain_wall_budget_exhausted(start, true));
+    }
+
+    #[test]
+    fn session_events_output_bytes_counts_only_output_payloads() {
+        let mut events = VecDeque::new();
+        events.push_back(SessionEvent::Output {
+            session_id: "a".to_string(),
+            data: vec![1, 2, 3],
+        });
+        events.push_back(SessionEvent::Error {
+            session_id: "a".to_string(),
+            message: "nope".to_string(),
+        });
+        events.push_back(SessionEvent::Output {
+            session_id: "b".to_string(),
+            data: vec![4, 5],
+        });
+
+        assert_eq!(session_events_output_bytes(&events), 5);
     }
 }

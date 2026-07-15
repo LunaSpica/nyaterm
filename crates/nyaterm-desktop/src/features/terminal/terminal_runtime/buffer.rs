@@ -106,9 +106,56 @@ impl NyaTermApp {
         &mut self,
         cx: &mut Context<Self>,
     ) -> bool {
+        let started_at = Instant::now();
         let mut dirty = false;
-        for frame in self.terminal_frame_pipeline.drain_events(256) {
+        let mut drained_events = 0usize;
+        let mut output_events = 0usize;
+        let mut accepted_bytes = 0usize;
+        let mut max_apply_duration = Duration::ZERO;
+
+        while drained_events < TERMINAL_FRAME_EVENT_DRAIN_BATCH {
+            if self.pending_terminal_frame_events.is_empty() {
+                let Some(event) = self.terminal_frame_pipeline.try_recv_event() else {
+                    break;
+                };
+                self.pending_terminal_frame_events.push_back(event);
+            }
+
+            let Some(frame) = self.pending_terminal_frame_events.pop_front() else {
+                break;
+            };
+            if let TerminalFrameEvent::Output(output) = &frame {
+                output_events += 1;
+                accepted_bytes = accepted_bytes.saturating_add(output.accepted_bytes);
+            }
+            let apply_started_at = Instant::now();
             dirty |= self.apply_terminal_frame_event(frame, cx);
+            max_apply_duration = max_apply_duration.max(apply_started_at.elapsed());
+            drained_events += 1;
+
+            if started_at.elapsed() >= TERMINAL_FRAME_EVENT_DRAIN_WALL_BUDGET {
+                break;
+            }
+        }
+
+        if !self.pending_terminal_frame_events.is_empty() {
+            dirty = true;
+        }
+        let total_duration = started_at.elapsed();
+        if (total_duration >= TERMINAL_FRAME_EVENT_DRAIN_SLOW_TOTAL
+            || max_apply_duration >= TERMINAL_FRAME_EVENT_APPLY_SLOW)
+            && self.should_log_slow_diagnostic("terminal_frame_event_drain", Instant::now())
+        {
+            tracing::warn!(
+                diagnostic = "terminal_frame_event_drain",
+                drained_events,
+                output_events,
+                accepted_bytes,
+                pending_events = self.pending_terminal_frame_events.len(),
+                total_ms = total_duration.as_millis(),
+                max_apply_ms = max_apply_duration.as_millis(),
+                "slow terminal frame event drain"
+            );
         }
         dirty
     }
@@ -145,7 +192,7 @@ impl NyaTermApp {
             view.has_unread = true;
         }
         self.apply_terminal_effects(&session_id, frame.effects, frame.command_running, cx);
-        if is_active && !frame.visible_text.is_empty() {
+        if is_active && self.should_feed_credential_autofill_frame(&frame.visible_text) {
             self.feed_credential_autofill_output(&frame.visible_text, cx);
         }
         if frame.process_duration >= Duration::from_millis(20)
@@ -552,6 +599,11 @@ impl NyaTermApp {
         }
     }
 }
+
+const TERMINAL_FRAME_EVENT_DRAIN_BATCH: usize = 64;
+const TERMINAL_FRAME_EVENT_DRAIN_WALL_BUDGET: Duration = Duration::from_millis(4);
+const TERMINAL_FRAME_EVENT_DRAIN_SLOW_TOTAL: Duration = Duration::from_millis(12);
+const TERMINAL_FRAME_EVENT_APPLY_SLOW: Duration = Duration::from_millis(8);
 
 fn terminal_local_log_text(text: &str) -> Cow<'_, str> {
     if !text.chars().any(terminal_local_log_control_needs_escape) {

@@ -633,7 +633,7 @@ pub(crate) struct TerminalFramePipeline {
 impl TerminalFramePipeline {
     pub(crate) fn spawn() -> Self {
         let (command_tx, command_rx) = mpsc::channel();
-        let (event_tx, event_rx) = mpsc::channel();
+        let (event_tx, event_rx) = mpsc::sync_channel(TERMINAL_FRAME_EVENT_CHANNEL_CAP);
         thread::Builder::new()
             .name("nyaterm-terminal-frame-processor".to_string())
             .spawn(move || run_terminal_frame_processor(command_rx, event_tx))
@@ -737,16 +737,12 @@ impl TerminalFramePipeline {
         });
     }
 
-    pub(crate) fn drain_events(&self, max_events: usize) -> Vec<TerminalFrameEvent> {
-        let mut events = Vec::new();
-        for _ in 0..max_events {
-            match self.event_rx.try_recv() {
-                Ok(event) => events.push(event),
-                Err(mpsc::TryRecvError::Empty) => break,
-                Err(mpsc::TryRecvError::Disconnected) => break,
-            }
+    pub(crate) fn try_recv_event(&self) -> Option<TerminalFrameEvent> {
+        match self.event_rx.try_recv() {
+            Ok(event) => Some(event),
+            Err(mpsc::TryRecvError::Empty) => None,
+            Err(mpsc::TryRecvError::Disconnected) => None,
         }
-        events
     }
 }
 
@@ -971,7 +967,7 @@ impl TerminalFrameSession {
 
 fn run_terminal_frame_processor(
     command_rx: mpsc::Receiver<TerminalFrameCommand>,
-    event_tx: mpsc::Sender<TerminalFrameEvent>,
+    event_tx: mpsc::SyncSender<TerminalFrameEvent>,
 ) {
     let mut sessions: HashMap<String, TerminalFrameSession> = HashMap::new();
     while let Ok(command) = command_rx.recv() {
@@ -1055,6 +1051,8 @@ fn run_terminal_frame_processor(
         }
     }
 }
+
+const TERMINAL_FRAME_EVENT_CHANNEL_CAP: usize = 1024;
 
 #[cfg(test)]
 mod tests {

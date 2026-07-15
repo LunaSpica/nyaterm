@@ -476,6 +476,8 @@ pub struct NyaTermApp {
     pub(in crate::features) terminal_scroll_offset: usize,
     pub(in crate::features) terminal_status: String,
     pub(in crate::features) terminal_runtime: TerminalRuntimeUiState,
+    pub(in crate::features) pending_terminal_frame_events: VecDeque<TerminalFrameEvent>,
+    pub(in crate::features) pending_session_events: VecDeque<SessionEvent>,
     pub(in crate::features) diagnostic_log_last_at: HashMap<&'static str, Instant>,
     /// Active visible-grid selection for the focused terminal surface.
     pub(in crate::features) terminal_selection: Option<TerminalSelection>,

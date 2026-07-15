@@ -665,6 +665,8 @@ impl NyaTermApp {
             terminal_scroll_offset: 0,
             terminal_status: "idle".to_string(),
             terminal_runtime: TerminalRuntimeUiState::default(),
+            pending_terminal_frame_events: VecDeque::new(),
+            pending_session_events: VecDeque::new(),
             diagnostic_log_last_at: HashMap::new(),
             terminal_selection: None,
             terminal_selection_dragging: false,

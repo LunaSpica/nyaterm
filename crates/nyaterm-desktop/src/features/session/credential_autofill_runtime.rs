@@ -156,6 +156,24 @@ impl NyaTermApp {
         self.detect_credential_prompt(cx);
     }
 
+    pub(in crate::features) fn should_feed_credential_autofill_frame(&self, text: &str) -> bool {
+        if self.active_session_id.is_none() || text.is_empty() {
+            return false;
+        }
+        if self.connection_saved_credentials.is_empty()
+            && self.credential_autofill_pending.is_none()
+        {
+            return false;
+        }
+        if self.terminal_runtime.session_event_queued_output_bytes > 0
+            || !self.pending_session_events.is_empty()
+            || !self.pending_terminal_frame_events.is_empty()
+        {
+            return false;
+        }
+        credential_autofill_visible_may_complete_prompt(credential_autofill_visible_tail(text))
+    }
+
     pub(in crate::features) fn detect_credential_prompt(&mut self, cx: &mut Context<Self>) {
         if self.active_session_id.is_none() || self.credential_suggestions.is_some() {
             return;
