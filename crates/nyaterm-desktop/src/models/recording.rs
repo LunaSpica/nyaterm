@@ -10,6 +10,11 @@ pub(crate) struct RecordingWritePipeline {
     event_rx: mpsc::Receiver<RecordingWriteEvent>,
 }
 
+#[derive(Clone)]
+pub(crate) struct RecordingWriteHandle {
+    command_tx: mpsc::Sender<RecordingWriteCommand>,
+}
+
 impl RecordingWritePipeline {
     pub(crate) fn spawn(recording_manager: Arc<RecordingManager>) -> Self {
         let (command_tx, command_rx) = mpsc::channel();
@@ -25,14 +30,7 @@ impl RecordingWritePipeline {
     }
 
     pub(crate) fn write_output(&self, session_id: impl Into<String>, text: impl Into<String>) {
-        let text = text.into();
-        if text.is_empty() {
-            return;
-        }
-        let _ = self.command_tx.send(RecordingWriteCommand::WriteOutput {
-            session_id: session_id.into(),
-            text,
-        });
+        self.writer().write_output(session_id, text);
     }
 
     pub(crate) fn write_input(&self, session_id: impl Into<String>, data: impl Into<Vec<u8>>) {
@@ -89,6 +87,25 @@ impl RecordingWritePipeline {
         {
             let _ = ack_rx.recv();
         }
+    }
+
+    pub(crate) fn writer(&self) -> RecordingWriteHandle {
+        RecordingWriteHandle {
+            command_tx: self.command_tx.clone(),
+        }
+    }
+}
+
+impl RecordingWriteHandle {
+    pub(crate) fn write_output(&self, session_id: impl Into<String>, text: impl Into<String>) {
+        let text = text.into();
+        if text.is_empty() {
+            return;
+        }
+        let _ = self.command_tx.send(RecordingWriteCommand::WriteOutput {
+            session_id: session_id.into(),
+            text,
+        });
     }
 }
 

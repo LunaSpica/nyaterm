@@ -182,6 +182,7 @@ impl NyaTermApp {
         recording_manager.set_memory_limit(settings.recording_memory_limit_bytes as usize);
         let recording_write_pipeline =
             RecordingWritePipeline::spawn(Arc::clone(&recording_manager));
+        let recording_writer = recording_write_pipeline.writer();
         let cloud_sync_history = read_cloud_sync_history(
             runtime.log_dir(),
             settings.diagnostics_retention_days,
@@ -668,7 +669,7 @@ impl NyaTermApp {
             terminal_output: String::from(INITIAL_TERMINAL_BANNER),
             terminal_output_decoder,
             terminal_screen,
-            terminal_frame_pipeline: TerminalFramePipeline::spawn(),
+            terminal_frame_pipeline: TerminalFramePipeline::spawn(recording_writer),
             terminal_scroll_offset: 0,
             terminal_status: "idle".to_string(),
             terminal_runtime: TerminalRuntimeUiState::default(),

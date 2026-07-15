@@ -20,6 +20,8 @@ use crate::{
     },
 };
 
+use super::RecordingWriteHandle;
+
 /// Large-output protection modes (Tauri XTerminal performanceMode).
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub(crate) enum TerminalPerformanceMode {
@@ -692,12 +694,12 @@ pub(crate) struct TerminalFramePipeline {
 }
 
 impl TerminalFramePipeline {
-    pub(crate) fn spawn() -> Self {
+    pub(crate) fn spawn(recording_writer: RecordingWriteHandle) -> Self {
         let (command_tx, command_rx) = mpsc::channel();
         let (event_tx, event_rx) = mpsc::sync_channel(TERMINAL_FRAME_EVENT_CHANNEL_CAP);
         thread::Builder::new()
             .name("nyaterm-terminal-frame-processor".to_string())
-            .spawn(move || run_terminal_frame_processor(command_rx, event_tx))
+            .spawn(move || run_terminal_frame_processor(command_rx, event_tx, recording_writer))
             .expect("failed to spawn terminal frame processor");
         Self {
             command_tx,
@@ -809,7 +811,9 @@ impl TerminalFramePipeline {
 
 impl Default for TerminalFramePipeline {
     fn default() -> Self {
-        Self::spawn()
+        let recording_manager = Arc::new(nyaterm_transport::RecordingManager::new());
+        let recording_writer = super::RecordingWritePipeline::spawn(recording_manager).writer();
+        Self::spawn(recording_writer)
     }
 }
 
@@ -865,7 +869,7 @@ pub(crate) enum TerminalFrameEvent {
 pub(crate) struct TerminalFrameOutputEvent {
     pub(crate) session_id: String,
     pub(crate) visible_text: String,
-    pub(crate) recording_text: String,
+    pub(crate) recording_text_bytes: usize,
     pub(crate) snapshot: TerminalSnapshot,
     pub(crate) action_links: Option<TerminalFrameActionLinks>,
     pub(crate) protocol_state: TerminalProtocolState,
@@ -951,10 +955,13 @@ impl TerminalFrameSession {
         scrollback_limit: usize,
         action_links_enabled: bool,
         action_link_matchers: ActionLinksMatcherSettings,
+        recording_writer: &RecordingWriteHandle,
     ) -> TerminalFrameOutputEvent {
         let started_at = Instant::now();
         self.set_encoding_and_limit(&encoding, scrollback_limit);
         let recording_text = self.recording_decoder.decode_output_text(&data);
+        let recording_text_bytes = recording_text.len();
+        recording_writer.write_output(session_id.clone(), recording_text);
         let (feed, skipped_output_bytes) =
             protect_terminal_output_burst(&mut self.screen, &mut self.output_decoder, &data);
         self.screen.advance(feed);
@@ -975,7 +982,7 @@ impl TerminalFrameSession {
         TerminalFrameOutputEvent {
             session_id,
             visible_text,
-            recording_text,
+            recording_text_bytes,
             snapshot,
             action_links,
             protocol_state,
@@ -1032,6 +1039,7 @@ impl TerminalFrameSession {
 fn run_terminal_frame_processor(
     command_rx: mpsc::Receiver<TerminalFrameCommand>,
     event_tx: mpsc::SyncSender<TerminalFrameEvent>,
+    recording_writer: RecordingWriteHandle,
 ) {
     let mut sessions: HashMap<String, TerminalFrameSession> = HashMap::new();
     let mut pending_commands = VecDeque::new();
@@ -1105,6 +1113,7 @@ fn run_terminal_frame_processor(
                     scrollback_limit,
                     action_links_enabled,
                     action_link_matchers,
+                    &recording_writer,
                 );
                 let _ = event_tx.send(TerminalFrameEvent::Output(event));
             }
@@ -1405,6 +1414,9 @@ mod tests {
     #[test]
     fn terminal_frame_visible_text_event_keeps_only_tail_for_ui() {
         let mut session = TerminalFrameSession::new("UTF-8", 1000);
+        let recording_manager = Arc::new(nyaterm_transport::RecordingManager::new());
+        let recording_pipeline =
+            super::super::RecordingWritePipeline::spawn(Arc::clone(&recording_manager));
         let input = format!(
             "{}tail",
             "x".repeat(TERMINAL_FRAME_VISIBLE_TEXT_TAIL_CAP + 1024)
@@ -1417,14 +1429,30 @@ mod tests {
             1000,
             false,
             ActionLinksMatcherSettings::default(),
+            &recording_pipeline.writer(),
         );
 
         assert!(event.visible_text.len() <= TERMINAL_FRAME_VISIBLE_TEXT_TAIL_CAP);
         assert!(event.visible_text.ends_with("tail"));
         assert_eq!(
-            event.recording_text.len(),
+            event.recording_text_bytes,
             TERMINAL_FRAME_VISIBLE_TEXT_TAIL_CAP + 1028
         );
+        recording_pipeline.flush();
+        let recorded = recording_manager
+            .search_history(nyaterm_transport::TerminalHistorySearchRequest {
+                session_id: "s1".to_string(),
+                query: "tail".to_string(),
+                case_sensitive: false,
+                regex: false,
+                whole_word: false,
+                limit: Some(10),
+                context_before: Some(0),
+                context_after: Some(0),
+                max_lines: None,
+            })
+            .expect("recording history search should succeed");
+        assert_eq!(recorded.total, 1);
     }
 
     #[test]

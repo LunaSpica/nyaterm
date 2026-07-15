@@ -174,16 +174,11 @@ impl NyaTermApp {
 
     fn apply_terminal_output_frame(
         &mut self,
-        mut frame: TerminalFrameOutputEvent,
+        frame: TerminalFrameOutputEvent,
         cx: &mut Context<Self>,
     ) -> bool {
         let session_id = frame.session_id.clone();
         let is_active = self.active_session_id.as_deref() == Some(session_id.as_str());
-        let recording_text = std::mem::take(&mut frame.recording_text);
-        if !recording_text.is_empty() {
-            self.recording_write_pipeline
-                .write_output(session_id.clone(), recording_text);
-        }
         let view = self
             .terminal_views
             .entry(session_id.clone())
@@ -208,7 +203,7 @@ impl NyaTermApp {
                 accepted_bytes = frame.accepted_bytes,
                 skipped_output_bytes = frame.skipped_output_bytes,
                 visible_text_bytes = frame.visible_text.len(),
-                recording_text_bytes = frame.recording_text.len(),
+                recording_text_bytes = frame.recording_text_bytes,
                 process_ms = frame.process_duration.as_millis(),
                 "slow terminal frame processing"
             );
