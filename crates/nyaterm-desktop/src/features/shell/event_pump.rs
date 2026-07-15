@@ -1070,8 +1070,16 @@ impl NyaTermApp {
         self.session_event_bridge.configure(
             self.settings.interaction_default_encoding.clone(),
             self.terminal_scrollback_line_limit(),
-            self.ai_agent_capture.has_active(),
         );
+        let mut session_ids = self.session_metadata.keys().cloned().collect::<Vec<_>>();
+        if let Some(active_session_id) = self.active_session_id.clone()
+            && !session_ids.contains(&active_session_id)
+        {
+            session_ids.push(active_session_id);
+        }
+        for session_id in session_ids {
+            self.sync_session_event_bridge_session_policy(&session_id);
+        }
     }
 
     pub(in crate::features) fn sync_session_event_bridge_session_policy(&self, session_id: &str) {

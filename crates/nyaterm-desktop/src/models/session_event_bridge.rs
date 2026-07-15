@@ -60,7 +60,6 @@ struct SessionEventBridgeState {
 
 #[derive(Clone)]
 struct SessionEventBridgeControl {
-    force_ui_all_output: bool,
     ui_routed_sessions: HashSet<String>,
     encoding: String,
     scrollback_limit: usize,
@@ -70,7 +69,6 @@ struct SessionEventBridgeControl {
 
 #[derive(Clone)]
 struct SessionEventBridgeControlSnapshot {
-    force_ui_all_output: bool,
     ui_routed_sessions: HashSet<String>,
     encoding: String,
     scrollback_limit: usize,
@@ -102,7 +100,6 @@ impl SessionEventBridge {
     ) -> Self {
         let state = Arc::new(SessionEventBridgeState {
             control: Mutex::new(SessionEventBridgeControl {
-                force_ui_all_output: false,
                 ui_routed_sessions: HashSet::new(),
                 encoding,
                 scrollback_limit,
@@ -124,18 +121,12 @@ impl SessionEventBridge {
         Self { state }
     }
 
-    pub(crate) fn configure(
-        &self,
-        encoding: String,
-        scrollback_limit: usize,
-        force_ui_all_output: bool,
-    ) {
+    pub(crate) fn configure(&self, encoding: String, scrollback_limit: usize) {
         let Ok(mut control) = self.state.control.lock() else {
             return;
         };
         control.encoding = encoding;
         control.scrollback_limit = scrollback_limit;
-        control.force_ui_all_output = force_ui_all_output;
     }
 
     pub(crate) fn route_session_to_ui(&self, session_id: &str) {
@@ -203,7 +194,6 @@ impl SessionEventBridgeState {
     fn control_snapshot(&self) -> Option<SessionEventBridgeControlSnapshot> {
         let control = self.control.lock().ok()?;
         Some(SessionEventBridgeControlSnapshot {
-            force_ui_all_output: control.force_ui_all_output,
             ui_routed_sessions: control.ui_routed_sessions.clone(),
             encoding: control.encoding.clone(),
             scrollback_limit: control.scrollback_limit,
@@ -549,8 +539,7 @@ fn bridge_should_pause_source_drain(
     control: &SessionEventBridgeControlSnapshot,
     frame_pipeline_queued_output_bytes: usize,
 ) -> bool {
-    !control.force_ui_all_output
-        && control.ui_routed_sessions.is_empty()
+    control.ui_routed_sessions.is_empty()
         && frame_pipeline_queued_output_bytes >= SESSION_EVENT_BRIDGE_DIRECT_OUTPUT_BACKPRESSURE
 }
 
@@ -569,8 +558,7 @@ fn bridge_output_can_go_direct(
     session_id: &str,
     needs_ui_probe: bool,
 ) -> bool {
-    !control.force_ui_all_output
-        && !control.ui_routed_sessions.contains(session_id)
+    !control.ui_routed_sessions.contains(session_id)
         && frame_pipeline_queued_output_bytes < SESSION_EVENT_BRIDGE_DIRECT_OUTPUT_BACKPRESSURE
         && !needs_ui_probe
 }
@@ -581,8 +569,7 @@ fn bridge_output_is_backpressured(
     session_id: &str,
     needs_ui_probe: bool,
 ) -> bool {
-    !control.force_ui_all_output
-        && !control.ui_routed_sessions.contains(session_id)
+    !control.ui_routed_sessions.contains(session_id)
         && frame_pipeline_queued_output_bytes >= SESSION_EVENT_BRIDGE_DIRECT_OUTPUT_BACKPRESSURE
         && !needs_ui_probe
 }
@@ -649,7 +636,6 @@ mod tests {
     #[test]
     fn bridge_direct_policy_rejects_sideband_triggers() {
         let control = SessionEventBridgeControlSnapshot {
-            force_ui_all_output: false,
             ui_routed_sessions: HashSet::new(),
             encoding: "UTF-8".to_string(),
             scrollback_limit: 1000,
@@ -665,7 +651,6 @@ mod tests {
         let mut routed = HashSet::new();
         routed.insert("s1".to_string());
         let control = SessionEventBridgeControlSnapshot {
-            force_ui_all_output: false,
             ui_routed_sessions: routed,
             encoding: "UTF-8".to_string(),
             scrollback_limit: 1000,
@@ -677,7 +662,6 @@ mod tests {
     #[test]
     fn bridge_direct_policy_yields_under_frame_backpressure() {
         let control = SessionEventBridgeControlSnapshot {
-            force_ui_all_output: false,
             ui_routed_sessions: HashSet::new(),
             encoding: "UTF-8".to_string(),
             scrollback_limit: 1000,
@@ -712,7 +696,6 @@ mod tests {
     #[test]
     fn bridge_pauses_source_drain_only_for_pure_direct_backpressure() {
         let control = SessionEventBridgeControlSnapshot {
-            force_ui_all_output: false,
             ui_routed_sessions: HashSet::new(),
             encoding: "UTF-8".to_string(),
             scrollback_limit: 1000,
@@ -724,15 +707,6 @@ mod tests {
         assert!(!bridge_should_pause_source_drain(
             &control,
             SESSION_EVENT_BRIDGE_DIRECT_OUTPUT_BACKPRESSURE - 1
-        ));
-
-        let forced_ui = SessionEventBridgeControlSnapshot {
-            force_ui_all_output: true,
-            ..control.clone()
-        };
-        assert!(!bridge_should_pause_source_drain(
-            &forced_ui,
-            SESSION_EVENT_BRIDGE_DIRECT_OUTPUT_BACKPRESSURE
         ));
 
         let mut routed = HashSet::new();

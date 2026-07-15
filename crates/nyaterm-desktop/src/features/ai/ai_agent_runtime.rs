@@ -193,7 +193,6 @@ impl NyaTermApp {
             match build_agent_capture_command(profile, &marker_id, command.trim()) {
                 Some(wrapped) => {
                     self.ai_agent_capture.register(marker_id.clone());
-                    self.sync_session_event_bridge_policy();
                     (Some(marker_id), Some(wrapped))
                 }
                 None => (None, None),
@@ -217,6 +216,7 @@ impl NyaTermApp {
             last_seen_len: output_start_len,
             stable_since: now,
         });
+        self.sync_session_event_bridge_policy();
         self.ai_status = format!(
             "AI Agent observing command output for step {}/{}",
             step_index + 1,
