@@ -230,6 +230,14 @@ impl NyaTermApp {
         terminal_output_decoder.set_encoding(&settings.interaction_default_encoding);
         let mut terminal_screen = initial_terminal_screen();
         terminal_screen.set_encoding(&settings.interaction_default_encoding);
+        let session_manager = Arc::new(SessionManager::new());
+        let terminal_frame_pipeline = TerminalFramePipeline::spawn(recording_writer);
+        let session_event_bridge = SessionEventBridge::spawn(
+            Arc::clone(&session_manager),
+            terminal_frame_pipeline.clone(),
+            settings.interaction_default_encoding.clone(),
+            settings.terminal_scrollback_lines.clamp(100, 100_000) as usize,
+        );
 
         Self {
             stores,
@@ -393,7 +401,8 @@ impl NyaTermApp {
             keybinding_search_focus: cx.focus_handle(),
             keybindings_focus: cx.focus_handle(),
             store_status,
-            session_manager: Arc::new(SessionManager::new()),
+            session_manager,
+            session_event_bridge,
             recording_manager,
             recording_write_pipeline,
             recording_search_draft: String::new(),
@@ -672,7 +681,7 @@ impl NyaTermApp {
             terminal_output: String::from(INITIAL_TERMINAL_BANNER),
             terminal_output_decoder,
             terminal_screen,
-            terminal_frame_pipeline: TerminalFramePipeline::spawn(recording_writer),
+            terminal_frame_pipeline,
             terminal_scroll_offset: 0,
             terminal_status: "idle".to_string(),
             terminal_runtime: TerminalRuntimeUiState::default(),

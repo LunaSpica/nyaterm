@@ -193,6 +193,7 @@ impl NyaTermApp {
             match build_agent_capture_command(profile, &marker_id, command.trim()) {
                 Some(wrapped) => {
                     self.ai_agent_capture.register(marker_id.clone());
+                    self.sync_session_event_bridge_policy();
                     (Some(marker_id), Some(wrapped))
                 }
                 None => (None, None),
@@ -400,6 +401,7 @@ impl NyaTermApp {
                 .unwrap_or(u64::MAX);
             let command = state.command.clone();
             self.ai_agent_capture.cancel(&marker_id);
+            self.sync_session_event_bridge_policy();
             let Some(state) = self.ai_agent_loop.take() else {
                 return false;
             };
@@ -502,6 +504,7 @@ impl NyaTermApp {
         };
         if let Some(marker_id) = state.marker_id.as_deref() {
             self.ai_agent_capture.cancel(marker_id);
+            self.sync_session_event_bridge_policy();
         }
         let duration_ms = state
             .started_at

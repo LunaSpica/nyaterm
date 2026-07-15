@@ -73,6 +73,7 @@ impl NyaTermApp {
         if was_active {
             self.ai_agent_loop = None;
             self.ai_agent_capture = AgentOutputCaptureProcessor::new();
+            self.sync_session_event_bridge_policy();
             if let Some(next_session_id) = self.next_session_after(&session_id) {
                 self.activate_session_id(&next_session_id);
                 self.terminal_status =
@@ -136,6 +137,7 @@ impl NyaTermApp {
         if !active_is_live {
             self.ai_agent_loop = None;
             self.ai_agent_capture = AgentOutputCaptureProcessor::new();
+            self.sync_session_event_bridge_policy();
             if let Some(next_session_id) = self
                 .session_order
                 .iter()

@@ -225,6 +225,7 @@ impl NyaTermApp {
     pub(in crate::features) fn drain_session_events(&mut self, cx: &mut Context<Self>) -> bool {
         let drain_started_at = Instant::now();
         let mut dirty = false;
+        self.sync_session_event_bridge_policy();
         dirty |= self.drain_zmodem_worker_events(cx);
         dirty |= self.drain_trzsz_download_worker_events(cx);
         dirty |= self.drain_trzsz_upload_prepare_events(cx);
@@ -236,19 +237,30 @@ impl NyaTermApp {
         let mut processed_output_bytes = 0usize;
         let mut transport_queued_events = 0usize;
         let mut transport_queued_output_bytes = 0usize;
+        let mut bridge_direct_output_events = 0u64;
+        let mut bridge_direct_output_bytes = 0u64;
+        let mut bridge_drained_ui_events = 0usize;
+        let mut bridge_drained_ui_output_bytes = 0usize;
         let mut pending_frame_outputs: Vec<(String, Vec<u8>)> = Vec::new();
         let drain_budget = session_event_drain_budget(self.runtime_output_pressure_active());
 
         if self.pending_session_events.is_empty() {
-            let Ok(drain) = self.session_manager.drain_events_with_output_budget(
+            let drain = self.session_event_bridge.drain_events_with_output_budget(
                 drain_budget.max_events,
                 drain_budget.max_output_bytes,
-            ) else {
-                self.terminal_status = "failed to drain session events".to_string();
-                return true;
-            };
-            transport_queued_events = drain.stats.queued_events;
-            transport_queued_output_bytes = drain.stats.queued_output_bytes;
+            );
+            transport_queued_events = drain
+                .stats
+                .source_queued_events
+                .saturating_add(drain.stats.ui_queued_events);
+            transport_queued_output_bytes = drain
+                .stats
+                .source_queued_output_bytes
+                .saturating_add(drain.stats.ui_queued_output_bytes);
+            bridge_direct_output_events = drain.stats.direct_output_events;
+            bridge_direct_output_bytes = drain.stats.direct_output_bytes;
+            bridge_drained_ui_events = drain.stats.drained_ui_events;
+            bridge_drained_ui_output_bytes = drain.stats.drained_ui_output_bytes;
             if drain.stats.dropped_output_bytes > 0 {
                 self.terminal_runtime.session_event_dropped_output_bytes = self
                     .terminal_runtime
@@ -369,6 +381,7 @@ impl NyaTermApp {
                         } else {
                             pending_frame_outputs.push((session_id.clone(), data));
                         }
+                        self.sync_session_event_bridge_session_policy(&session_id);
                         let chunk_duration = chunk_started_at.elapsed();
                         drain_timings.output_total += chunk_duration;
                         chunk_timings.output_total += chunk_duration;
@@ -388,6 +401,7 @@ impl NyaTermApp {
                         self.note_trzsz_output_discontinuity(&session_id);
                         self.note_zmodem_output_discontinuity(&session_id, bytes, cx);
                         self.note_ai_agent_output_discontinuity(&session_id, bytes, cx);
+                        self.session_event_bridge.route_session_to_ui(&session_id);
                         let encoding = self.settings.interaction_default_encoding.clone();
                         let view = self
                             .terminal_views
@@ -414,6 +428,7 @@ impl NyaTermApp {
                         );
                         self.clear_trzsz_session(&session_id);
                         self.clear_zmodem_session(&session_id);
+                        self.session_event_bridge.clear_session(&session_id);
                         self.recording_write_pipeline
                             .cleanup_session(session_id.clone());
                         let _ = self.session_manager.close(&session_id);
@@ -439,6 +454,7 @@ impl NyaTermApp {
                         let log_message = terminal_log_plain_text(&message);
                         let log = format!("\n# session error: {log_message}\n");
                         if !session_id.is_empty() {
+                            self.sync_session_event_bridge_session_policy(&session_id);
                             self.recording_write_pipeline
                                 .write_output(session_id.clone(), log.clone());
                         }
@@ -505,6 +521,10 @@ impl NyaTermApp {
                 drain_output_budget = drain_budget.max_output_bytes,
                 queued_events,
                 queued_output_bytes,
+                bridge_direct_output_events,
+                bridge_direct_output_bytes,
+                bridge_drained_ui_events,
+                bridge_drained_ui_output_bytes,
                 dropped_output_bytes = self.terminal_runtime.session_event_dropped_output_bytes,
                 drain_total_ms = drain_started_at.elapsed().as_millis(),
                 output_total_ms = drain_timings.output_total.as_millis(),
@@ -685,6 +705,8 @@ impl NyaTermApp {
             self.terminal_runtime.session_event_backlog_active,
             self.terminal_runtime.session_event_queued_output_bytes,
             self.pending_session_events.len(),
+            self.session_event_bridge.queued_event_count(),
+            self.session_event_bridge.queued_output_bytes(),
             self.pending_terminal_frame_events.len(),
             self.terminal_frame_pipeline.queued_event_count(),
             self.terminal_frame_pipeline.queued_output_bytes(),
@@ -1015,6 +1037,30 @@ impl NyaTermApp {
             || self.terminal_frame_pipeline.queued_event_count() > 0
     }
 
+    pub(in crate::features) fn sync_session_event_bridge_policy(&self) {
+        self.session_event_bridge.configure(
+            self.settings.interaction_default_encoding.clone(),
+            self.terminal_scrollback_line_limit(),
+            self.ai_agent_capture.has_active(),
+        );
+    }
+
+    pub(in crate::features) fn sync_session_event_bridge_session_policy(&self, session_id: &str) {
+        if self.session_has_active_ai_capture(session_id)
+            || !self.session_sideband_detectors_idle(session_id)
+        {
+            self.session_event_bridge.route_session_to_ui(session_id);
+        } else {
+            self.session_event_bridge
+                .resume_session_direct_output(session_id);
+        }
+    }
+
+    fn session_sideband_detectors_idle(&self, session_id: &str) -> bool {
+        self.zmodem_output_can_bypass_detector(session_id, &[])
+            && self.trzsz_output_can_bypass_detector(session_id, &[])
+    }
+
     fn session_output_can_bypass_sideband_detectors(&self, session_id: &str, data: &[u8]) -> bool {
         self.zmodem_output_can_bypass_detector(session_id, data)
             && self.trzsz_output_can_bypass_detector(session_id, data)
@@ -1157,6 +1203,8 @@ fn runtime_output_pressure_active_from_counts(
     session_event_backlog_active: bool,
     session_event_queued_output_bytes: usize,
     pending_session_events: usize,
+    bridge_queued_events: usize,
+    bridge_queued_output_bytes: usize,
     pending_terminal_frame_events: usize,
     queued_terminal_frame_events: usize,
     queued_terminal_frame_output_bytes: usize,
@@ -1164,6 +1212,8 @@ fn runtime_output_pressure_active_from_counts(
     session_event_backlog_active
         || session_event_queued_output_bytes > 0
         || pending_session_events > 0
+        || bridge_queued_events > 0
+        || bridge_queued_output_bytes > 0
         || pending_terminal_frame_events > 0
         || queued_terminal_frame_events > 0
         || queued_terminal_frame_output_bytes > 0
@@ -1366,25 +1416,31 @@ mod tests {
     #[test]
     fn runtime_output_pressure_tracks_output_and_frame_backlog_only() {
         assert!(!runtime_output_pressure_active_from_counts(
-            false, 0, 0, 0, 0, 0
+            false, 0, 0, 0, 0, 0, 0, 0
         ));
         assert!(runtime_output_pressure_active_from_counts(
-            true, 0, 0, 0, 0, 0
+            true, 0, 0, 0, 0, 0, 0, 0
         ));
         assert!(runtime_output_pressure_active_from_counts(
-            false, 1, 0, 0, 0, 0
+            false, 1, 0, 0, 0, 0, 0, 0
         ));
         assert!(runtime_output_pressure_active_from_counts(
-            false, 0, 1, 0, 0, 0
+            false, 0, 1, 0, 0, 0, 0, 0
         ));
         assert!(runtime_output_pressure_active_from_counts(
-            false, 0, 0, 1, 0, 0
+            false, 0, 0, 1, 0, 0, 0, 0
         ));
         assert!(runtime_output_pressure_active_from_counts(
-            false, 0, 0, 0, 1, 0
+            false, 0, 0, 0, 1, 0, 0, 0
         ));
         assert!(runtime_output_pressure_active_from_counts(
-            false, 0, 0, 0, 0, 1
+            false, 0, 0, 0, 0, 1, 0, 0
+        ));
+        assert!(runtime_output_pressure_active_from_counts(
+            false, 0, 0, 0, 0, 0, 1, 0
+        ));
+        assert!(runtime_output_pressure_active_from_counts(
+            false, 0, 0, 0, 0, 0, 0, 1
         ));
     }
 

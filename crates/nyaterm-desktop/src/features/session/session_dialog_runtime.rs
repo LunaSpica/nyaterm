@@ -237,6 +237,7 @@ impl NyaTermApp {
         self.session_cwds.remove(session_id);
         self.clear_zmodem_session(session_id);
         self.clear_trzsz_session(session_id);
+        self.session_event_bridge.clear_session(session_id);
         self.session_tab_colors.remove(session_id);
         self.terminal_views.remove(session_id);
         self.terminal_frame_pipeline

@@ -182,6 +182,7 @@ pub struct NyaTermApp {
     pub(in crate::features) keybindings_focus: FocusHandle,
     pub(in crate::features) store_status: StoreStatus,
     pub(in crate::features) session_manager: Arc<SessionManager>,
+    pub(in crate::features) session_event_bridge: SessionEventBridge,
     pub(in crate::features) recording_manager: Arc<RecordingManager>,
     pub(in crate::features) recording_write_pipeline: RecordingWritePipeline,
     pub(in crate::features) recording_search_draft: String,

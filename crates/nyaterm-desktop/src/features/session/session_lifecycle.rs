@@ -399,6 +399,7 @@ impl NyaTermApp {
             self.active_ai_execution_profile = AiExecutionProfile::SendOnly;
             self.ai_agent_loop = None;
             self.ai_agent_capture = AgentOutputCaptureProcessor::new();
+            self.sync_session_event_bridge_policy();
         }
 
         let mut metadata = metadata;

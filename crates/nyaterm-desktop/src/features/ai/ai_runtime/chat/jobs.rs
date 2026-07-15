@@ -28,6 +28,7 @@ impl NyaTermApp {
             self.ai_agent_capture.cancel(marker_id);
         }
         self.ai_agent_capture = AgentOutputCaptureProcessor::new();
+        self.sync_session_event_bridge_policy();
         self.ai_agent_task_prompt = None;
         self.ai_command_cards.clear();
         self.ai_response_preview = "AI request cancelled".to_string();

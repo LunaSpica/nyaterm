@@ -775,7 +775,7 @@ impl KeywordHighlightEditorField {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub(crate) struct TerminalFramePipeline {
     command_tx: TerminalFrameCommandSender,
     event_queue: TerminalFrameEventQueue,
@@ -1449,6 +1449,17 @@ impl TerminalFrameCommandSender {
             .lock()
             .map(|inner| terminal_frame_command_queue_output_bytes(&inner.commands))
             .unwrap_or(0)
+    }
+}
+
+impl Clone for TerminalFrameCommandSender {
+    fn clone(&self) -> Self {
+        if let Ok(mut inner) = self.shared.inner.lock() {
+            inner.sender_count = inner.sender_count.saturating_add(1);
+        }
+        Self {
+            shared: self.shared.clone(),
+        }
     }
 }
 
