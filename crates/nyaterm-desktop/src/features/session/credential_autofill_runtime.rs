@@ -1,6 +1,7 @@
 use super::*;
 
 const CREDENTIAL_AUTOFILL_BUFFER_LIMIT: usize = 4096;
+const CREDENTIAL_AUTOFILL_INPUT_TAIL_LIMIT: usize = 4096;
 const RECENT_PROMPT_TTL_MS: u64 = 30_000;
 const PENDING_PASSWORD_TTL_MS: u64 = 60_000;
 const CREDENTIAL_PROMPT_INPUT_TTL_MS: u64 = 120_000;
@@ -113,7 +114,7 @@ impl NyaTermApp {
         if text.is_empty() {
             return;
         }
-        let visible = strip_terminal_control_sequences(text);
+        let visible = strip_terminal_control_sequences(credential_autofill_visible_tail(text));
         if visible.is_empty() {
             return;
         }
@@ -129,7 +130,8 @@ impl NyaTermApp {
             }
         }
 
-        if detect_credential_prompt_kind(&self.credential_autofill_buffer).is_some() {
+        let detected_prompt_kind = detect_credential_prompt_kind(&self.credential_autofill_buffer);
+        if detected_prompt_kind.is_some() {
             self.credential_prompt_input_until_ms =
                 Self::now_unix_ms().saturating_add(CREDENTIAL_PROMPT_INPUT_TTL_MS);
             // Suppress command suggestions while a credential prompt is live.
@@ -140,6 +142,9 @@ impl NyaTermApp {
         }
 
         if self.credential_suggestions.is_some() || self.credential_autofill_sending {
+            return;
+        }
+        if detected_prompt_kind.is_none() && self.credential_autofill_pending.is_none() {
             return;
         }
         self.detect_credential_prompt(cx);
@@ -159,6 +164,9 @@ impl NyaTermApp {
         if prompt_text.is_empty() {
             return;
         }
+        let Some(prompt_kind) = detect_credential_prompt_kind(&prompt_text) else {
+            return;
+        };
         let current_line = prompt_text.trim().to_string();
         let credentials = self.connection_saved_credentials.clone();
 
@@ -210,47 +218,44 @@ impl NyaTermApp {
             }
         }
 
-        let password_matches =
-            find_matching_credentials(&credentials, CredentialPromptKind::Password, &prompt_text);
-        if !password_matches.is_empty() {
-            if !self.remember_credential_prompt(CredentialPromptKind::Password, &prompt_text, now) {
-                return;
-            }
-            self.show_credential_panel(
-                CredentialPromptKind::Password,
-                password_matches,
-                prompt_text,
-                cx,
-            );
+        if !self.remember_credential_prompt(prompt_kind, &prompt_text, now) {
             return;
         }
 
-        if is_default_password_prompt(&prompt_text) {
-            let fallback = find_password_only_fallback_credentials(&credentials);
-            if !fallback.is_empty() {
-                if !self.remember_credential_prompt(
-                    CredentialPromptKind::Password,
-                    &prompt_text,
-                    now,
-                ) {
-                    return;
-                }
+        if prompt_kind == CredentialPromptKind::Password {
+            let password_matches = find_matching_credentials(
+                &credentials,
+                CredentialPromptKind::Password,
+                &prompt_text,
+            );
+            if !password_matches.is_empty() {
                 self.show_credential_panel(
                     CredentialPromptKind::Password,
-                    fallback,
+                    password_matches,
                     prompt_text,
                     cx,
                 );
                 return;
             }
+
+            if is_default_password_prompt(&prompt_text) {
+                let fallback = find_password_only_fallback_credentials(&credentials);
+                if !fallback.is_empty() {
+                    self.show_credential_panel(
+                        CredentialPromptKind::Password,
+                        fallback,
+                        prompt_text,
+                        cx,
+                    );
+                    return;
+                }
+            }
+            return;
         }
 
         let username_matches =
             find_matching_credentials(&credentials, CredentialPromptKind::Username, &prompt_text);
         if username_matches.is_empty() {
-            return;
-        }
-        if !self.remember_credential_prompt(CredentialPromptKind::Username, &prompt_text, now) {
             return;
         }
         self.show_credential_panel(
@@ -592,5 +597,31 @@ impl NyaTermApp {
                     .child("↑↓ select · Enter fill · Esc dismiss"),
             )
             .into_any_element()
+    }
+}
+
+fn credential_autofill_visible_tail(text: &str) -> &str {
+    if text.len() <= CREDENTIAL_AUTOFILL_INPUT_TAIL_LIMIT {
+        return text;
+    }
+    let mut start = text.len() - CREDENTIAL_AUTOFILL_INPUT_TAIL_LIMIT;
+    while start < text.len() && !text.is_char_boundary(start) {
+        start += 1;
+    }
+    &text[start..]
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn credential_autofill_visible_tail_caps_input_on_boundary() {
+        let text = format!("{}密码：", "测".repeat(3000));
+        let tail = credential_autofill_visible_tail(&text);
+
+        assert!(tail.len() <= CREDENTIAL_AUTOFILL_INPUT_TAIL_LIMIT);
+        assert!(tail.is_char_boundary(0));
+        assert!(tail.ends_with("密码："));
     }
 }
