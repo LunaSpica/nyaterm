@@ -719,17 +719,20 @@ impl NyaTermApp {
         let background_started_at = Instant::now();
         let mut background_timings = RuntimeBackgroundDrainTimings::default();
         let critical_background_only = self.runtime_output_pressure_active();
-        let defer_terminal_frame_after_output = runtime_background_should_defer_terminal_frames(
-            self.terminal_runtime.session_event_last_output_event_count,
-            self.terminal_runtime
-                .session_event_last_drained_output_bytes,
-        );
-        let terminal_frame_apply_paced = self.terminal_frame_backlog_active()
+        let terminal_frame_backlog_active = self.terminal_frame_backlog_active();
+        let terminal_frame_apply_paced = terminal_frame_backlog_active
             && terminal_frame_apply_should_defer(
                 self.terminal_runtime.last_terminal_frame_apply_at,
                 tick_started_at,
                 critical_background_only,
             );
+        let defer_terminal_frame_after_output = runtime_background_should_defer_terminal_frames(
+            self.terminal_runtime.session_event_last_output_event_count,
+            self.terminal_runtime
+                .session_event_last_drained_output_bytes,
+            terminal_frame_backlog_active,
+            terminal_frame_apply_paced,
+        );
         let defer_terminal_frame_apply =
             defer_terminal_frame_after_output || terminal_frame_apply_paced;
         dirty |= self.drain_runtime_background_events(
@@ -1248,8 +1251,11 @@ fn session_event_backlog_active(
 fn runtime_background_should_defer_terminal_frames(
     output_event_count: usize,
     drained_output_bytes: usize,
+    terminal_frame_backlog_active: bool,
+    terminal_frame_apply_paced: bool,
 ) -> bool {
-    output_event_count > 0 || drained_output_bytes > 0
+    let drained_output = output_event_count > 0 || drained_output_bytes > 0;
+    drained_output && (!terminal_frame_backlog_active || terminal_frame_apply_paced)
 }
 
 fn terminal_frame_apply_should_defer(
@@ -1511,9 +1517,25 @@ mod tests {
 
     #[test]
     fn runtime_background_defers_terminal_frames_after_output() {
-        assert!(!runtime_background_should_defer_terminal_frames(0, 0));
-        assert!(runtime_background_should_defer_terminal_frames(1, 0));
-        assert!(runtime_background_should_defer_terminal_frames(0, 1));
+        assert!(!runtime_background_should_defer_terminal_frames(
+            0, 0, false, false
+        ));
+        assert!(runtime_background_should_defer_terminal_frames(
+            1, 0, false, false
+        ));
+        assert!(runtime_background_should_defer_terminal_frames(
+            0, 1, false, false
+        ));
+    }
+
+    #[test]
+    fn runtime_background_does_not_starve_due_terminal_frame_apply() {
+        assert!(runtime_background_should_defer_terminal_frames(
+            1, 1024, true, true
+        ));
+        assert!(!runtime_background_should_defer_terminal_frames(
+            1, 1024, true, false
+        ));
     }
 
     #[test]
