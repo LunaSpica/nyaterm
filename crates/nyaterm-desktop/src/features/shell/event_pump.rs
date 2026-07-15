@@ -240,6 +240,8 @@ impl NyaTermApp {
         let mut transport_queued_output_bytes = 0usize;
         let mut bridge_direct_output_events = 0u64;
         let mut bridge_direct_output_bytes = 0u64;
+        let mut bridge_direct_backpressure_events = 0u64;
+        let mut bridge_direct_backpressure_bytes = 0u64;
         let mut bridge_drained_ui_events = 0usize;
         let mut bridge_drained_ui_output_bytes = 0usize;
         let mut pending_frame_outputs: Vec<(String, Vec<u8>)> = Vec::new();
@@ -260,6 +262,8 @@ impl NyaTermApp {
                 .saturating_add(drain.stats.ui_queued_output_bytes);
             bridge_direct_output_events = drain.stats.direct_output_events;
             bridge_direct_output_bytes = drain.stats.direct_output_bytes;
+            bridge_direct_backpressure_events = drain.stats.direct_backpressure_events;
+            bridge_direct_backpressure_bytes = drain.stats.direct_backpressure_bytes;
             bridge_drained_ui_events = drain.stats.drained_ui_events;
             bridge_drained_ui_output_bytes = drain.stats.drained_ui_output_bytes;
             if drain.stats.dropped_output_bytes > 0 {
@@ -514,6 +518,8 @@ impl NyaTermApp {
                 queued_output_bytes,
                 bridge_direct_output_events,
                 bridge_direct_output_bytes,
+                bridge_direct_backpressure_events,
+                bridge_direct_backpressure_bytes,
                 bridge_drained_ui_events,
                 bridge_drained_ui_output_bytes,
                 dropped_output_bytes = self.terminal_runtime.session_event_dropped_output_bytes,

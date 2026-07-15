@@ -18,11 +18,14 @@ const SESSION_EVENT_BRIDGE_IDLE_SLEEP: Duration = Duration::from_millis(4);
 const SESSION_EVENT_BRIDGE_BUSY_SLEEP: Duration = Duration::from_millis(1);
 const SESSION_EVENT_BRIDGE_UI_OUTPUT_LIMIT: usize = 1024 * 1024;
 const SESSION_EVENT_BRIDGE_UI_OUTPUT_EVENT_LIMIT: usize = 128 * 1024;
+const SESSION_EVENT_BRIDGE_DIRECT_OUTPUT_BACKPRESSURE: usize = 2 * 1024 * 1024;
 
 #[derive(Clone, Debug, Default)]
 pub(crate) struct SessionEventBridgeStats {
     pub(crate) direct_output_events: u64,
     pub(crate) direct_output_bytes: u64,
+    pub(crate) direct_backpressure_events: u64,
+    pub(crate) direct_backpressure_bytes: u64,
     pub(crate) drained_ui_events: usize,
     pub(crate) drained_ui_output_bytes: usize,
     pub(crate) ui_queued_events: usize,
@@ -48,6 +51,8 @@ struct SessionEventBridgeState {
     ui_queue: SessionEventBridgeQueue,
     direct_output_events: AtomicU64,
     direct_output_bytes: AtomicU64,
+    direct_backpressure_events: AtomicU64,
+    direct_backpressure_bytes: AtomicU64,
     stop: AtomicBool,
 }
 
@@ -99,6 +104,8 @@ impl SessionEventBridge {
             ui_queue: SessionEventBridgeQueue::new(),
             direct_output_events: AtomicU64::new(0),
             direct_output_bytes: AtomicU64::new(0),
+            direct_backpressure_events: AtomicU64::new(0),
+            direct_backpressure_bytes: AtomicU64::new(0),
             stop: AtomicBool::new(false),
         });
         let worker_state = state.clone();
@@ -154,6 +161,14 @@ impl SessionEventBridge {
         drain.stats.direct_output_events =
             self.state.direct_output_events.swap(0, Ordering::Relaxed);
         drain.stats.direct_output_bytes = self.state.direct_output_bytes.swap(0, Ordering::Relaxed);
+        drain.stats.direct_backpressure_events = self
+            .state
+            .direct_backpressure_events
+            .swap(0, Ordering::Relaxed);
+        drain.stats.direct_backpressure_bytes = self
+            .state
+            .direct_backpressure_bytes
+            .swap(0, Ordering::Relaxed);
         if let Ok(control) = self.state.control.lock() {
             drain.stats.source_queued_events = control.source_queued_events;
             drain.stats.source_queued_output_bytes = control.source_queued_output_bytes;
@@ -423,7 +438,13 @@ fn run_session_event_bridge(
         for event in drain.events {
             match event {
                 SessionEvent::Output { session_id, data } => {
-                    if bridge_output_can_go_direct(&control, &session_id, &data) {
+                    let frame_queued_output_bytes = frame_pipeline.queued_output_bytes();
+                    if bridge_output_can_go_direct(
+                        &control,
+                        frame_queued_output_bytes,
+                        &session_id,
+                        &data,
+                    ) {
                         state.direct_output_events.fetch_add(1, Ordering::Relaxed);
                         state
                             .direct_output_bytes
@@ -435,6 +456,19 @@ fn run_session_event_bridge(
                             scrollback_limit: control.scrollback_limit,
                         });
                     } else {
+                        if bridge_output_is_backpressured(
+                            frame_queued_output_bytes,
+                            &control,
+                            &session_id,
+                            &data,
+                        ) {
+                            state
+                                .direct_backpressure_events
+                                .fetch_add(1, Ordering::Relaxed);
+                            state
+                                .direct_backpressure_bytes
+                                .fetch_add(data.len() as u64, Ordering::Relaxed);
+                        }
                         flush_bridge_direct_outputs(&frame_pipeline, &mut pending_direct_outputs);
                         if bridge_output_may_contain_sideband_trigger(&data) {
                             state.route_session_to_ui(&session_id);
@@ -482,11 +516,25 @@ fn flush_bridge_direct_outputs(
 
 fn bridge_output_can_go_direct(
     control: &SessionEventBridgeControlSnapshot,
+    frame_pipeline_queued_output_bytes: usize,
     session_id: &str,
     data: &[u8],
 ) -> bool {
     !control.force_ui_all_output
         && !control.ui_routed_sessions.contains(session_id)
+        && frame_pipeline_queued_output_bytes < SESSION_EVENT_BRIDGE_DIRECT_OUTPUT_BACKPRESSURE
+        && !bridge_output_may_contain_sideband_trigger(data)
+}
+
+fn bridge_output_is_backpressured(
+    frame_pipeline_queued_output_bytes: usize,
+    control: &SessionEventBridgeControlSnapshot,
+    session_id: &str,
+    data: &[u8],
+) -> bool {
+    !control.force_ui_all_output
+        && !control.ui_routed_sessions.contains(session_id)
+        && frame_pipeline_queued_output_bytes >= SESSION_EVENT_BRIDGE_DIRECT_OUTPUT_BACKPRESSURE
         && !bridge_output_may_contain_sideband_trigger(data)
 }
 
@@ -507,9 +555,9 @@ mod tests {
             encoding: "UTF-8".to_string(),
             scrollback_limit: 1000,
         };
-        assert!(bridge_output_can_go_direct(&control, "s1", b"hello\n"));
-        assert!(!bridge_output_can_go_direct(&control, "s1", b"**\x18B"));
-        assert!(!bridge_output_can_go_direct(&control, "s1", b"::TRZSZ:"));
+        assert!(bridge_output_can_go_direct(&control, 0, "s1", b"hello\n"));
+        assert!(!bridge_output_can_go_direct(&control, 0, "s1", b"**\x18B"));
+        assert!(!bridge_output_can_go_direct(&control, 0, "s1", b"::TRZSZ:"));
     }
 
     #[test]
@@ -522,7 +570,36 @@ mod tests {
             encoding: "UTF-8".to_string(),
             scrollback_limit: 1000,
         };
-        assert!(!bridge_output_can_go_direct(&control, "s1", b"hello\n"));
-        assert!(bridge_output_can_go_direct(&control, "s2", b"hello\n"));
+        assert!(!bridge_output_can_go_direct(&control, 0, "s1", b"hello\n"));
+        assert!(bridge_output_can_go_direct(&control, 0, "s2", b"hello\n"));
+    }
+
+    #[test]
+    fn bridge_direct_policy_yields_under_frame_backpressure() {
+        let control = SessionEventBridgeControlSnapshot {
+            force_ui_all_output: false,
+            ui_routed_sessions: HashSet::new(),
+            encoding: "UTF-8".to_string(),
+            scrollback_limit: 1000,
+        };
+
+        assert!(bridge_output_can_go_direct(
+            &control,
+            SESSION_EVENT_BRIDGE_DIRECT_OUTPUT_BACKPRESSURE - 1,
+            "s1",
+            b"hello\n"
+        ));
+        assert!(!bridge_output_can_go_direct(
+            &control,
+            SESSION_EVENT_BRIDGE_DIRECT_OUTPUT_BACKPRESSURE,
+            "s1",
+            b"hello\n"
+        ));
+        assert!(bridge_output_is_backpressured(
+            SESSION_EVENT_BRIDGE_DIRECT_OUTPUT_BACKPRESSURE,
+            &control,
+            "s1",
+            b"hello\n"
+        ));
     }
 }
