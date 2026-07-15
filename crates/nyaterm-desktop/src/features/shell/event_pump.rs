@@ -268,63 +268,70 @@ impl NyaTermApp {
                         processed_output_bytes =
                             processed_output_bytes.saturating_add(chunk_input_bytes);
                         let mut chunk_timings = SessionEventDrainTimings::default();
-                        let stage_started_at = Instant::now();
-                        let data = self.process_zmodem_output(&session_id, &data, cx);
-                        let stage_duration = stage_started_at.elapsed();
-                        drain_timings.zmodem += stage_duration;
-                        chunk_timings.zmodem += stage_duration;
-                        if data.is_empty() {
-                            let chunk_duration = chunk_started_at.elapsed();
-                            drain_timings.output_total += chunk_duration;
-                            chunk_timings.output_total += chunk_duration;
-                            max_output_chunk_duration =
-                                max_output_chunk_duration.max(chunk_duration);
-                            self.maybe_log_slow_session_output_chunk(
-                                &session_id,
-                                chunk_input_bytes,
-                                chunk_duration,
-                                &chunk_timings,
-                            );
-                            if session_event_drain_should_yield(
-                                drain_started_at,
-                                !self.pending_session_events.is_empty(),
-                                transport_queued_events,
-                                transport_queued_output_bytes,
-                                drain_budget,
-                            ) {
-                                break;
+                        let data = if self
+                            .session_output_can_bypass_sideband_detectors(&session_id, &data)
+                        {
+                            data
+                        } else {
+                            let stage_started_at = Instant::now();
+                            let data = self.process_zmodem_output(&session_id, &data, cx);
+                            let stage_duration = stage_started_at.elapsed();
+                            drain_timings.zmodem += stage_duration;
+                            chunk_timings.zmodem += stage_duration;
+                            if data.is_empty() {
+                                let chunk_duration = chunk_started_at.elapsed();
+                                drain_timings.output_total += chunk_duration;
+                                chunk_timings.output_total += chunk_duration;
+                                max_output_chunk_duration =
+                                    max_output_chunk_duration.max(chunk_duration);
+                                self.maybe_log_slow_session_output_chunk(
+                                    &session_id,
+                                    chunk_input_bytes,
+                                    chunk_duration,
+                                    &chunk_timings,
+                                );
+                                if session_event_drain_should_yield(
+                                    drain_started_at,
+                                    !self.pending_session_events.is_empty(),
+                                    transport_queued_events,
+                                    transport_queued_output_bytes,
+                                    drain_budget,
+                                ) {
+                                    break;
+                                }
+                                continue;
                             }
-                            continue;
-                        }
-                        // Consume side-band markers after active transfer payloads are removed.
-                        let stage_started_at = Instant::now();
-                        let data = self.process_trzsz_output(&session_id, &data, cx);
-                        let stage_duration = stage_started_at.elapsed();
-                        drain_timings.trzsz += stage_duration;
-                        chunk_timings.trzsz += stage_duration;
-                        if data.is_empty() {
-                            let chunk_duration = chunk_started_at.elapsed();
-                            drain_timings.output_total += chunk_duration;
-                            chunk_timings.output_total += chunk_duration;
-                            max_output_chunk_duration =
-                                max_output_chunk_duration.max(chunk_duration);
-                            self.maybe_log_slow_session_output_chunk(
-                                &session_id,
-                                chunk_input_bytes,
-                                chunk_duration,
-                                &chunk_timings,
-                            );
-                            if session_event_drain_should_yield(
-                                drain_started_at,
-                                !self.pending_session_events.is_empty(),
-                                transport_queued_events,
-                                transport_queued_output_bytes,
-                                drain_budget,
-                            ) {
-                                break;
+                            // Consume side-band markers after active transfer payloads are removed.
+                            let stage_started_at = Instant::now();
+                            let data = self.process_trzsz_output(&session_id, &data, cx);
+                            let stage_duration = stage_started_at.elapsed();
+                            drain_timings.trzsz += stage_duration;
+                            chunk_timings.trzsz += stage_duration;
+                            if data.is_empty() {
+                                let chunk_duration = chunk_started_at.elapsed();
+                                drain_timings.output_total += chunk_duration;
+                                chunk_timings.output_total += chunk_duration;
+                                max_output_chunk_duration =
+                                    max_output_chunk_duration.max(chunk_duration);
+                                self.maybe_log_slow_session_output_chunk(
+                                    &session_id,
+                                    chunk_input_bytes,
+                                    chunk_duration,
+                                    &chunk_timings,
+                                );
+                                if session_event_drain_should_yield(
+                                    drain_started_at,
+                                    !self.pending_session_events.is_empty(),
+                                    transport_queued_events,
+                                    transport_queued_output_bytes,
+                                    drain_budget,
+                                ) {
+                                    break;
+                                }
+                                continue;
                             }
-                            continue;
-                        }
+                            data
+                        };
                         if self.session_has_active_ai_capture(&session_id) {
                             let stage_started_at = Instant::now();
                             let text = self.decode_session_output_for_recording(&session_id, &data);
@@ -977,6 +984,11 @@ impl NyaTermApp {
     fn terminal_frame_backlog_active(&self) -> bool {
         !self.pending_terminal_frame_events.is_empty()
             || self.terminal_frame_pipeline.queued_event_count() > 0
+    }
+
+    fn session_output_can_bypass_sideband_detectors(&self, session_id: &str, data: &[u8]) -> bool {
+        self.zmodem_output_can_bypass_detector(session_id, data)
+            && self.trzsz_output_can_bypass_detector(session_id, data)
     }
 
     pub(in crate::features) fn pending_session_status_label(&self) -> Option<String> {

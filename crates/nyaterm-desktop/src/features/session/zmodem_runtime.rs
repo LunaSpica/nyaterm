@@ -469,7 +469,11 @@ impl NyaTermApp {
         }
     }
 
-    fn zmodem_output_can_bypass_detector(&self, session_id: &str, data: &[u8]) -> bool {
+    pub(in crate::features) fn zmodem_output_can_bypass_detector(
+        &self,
+        session_id: &str,
+        data: &[u8],
+    ) -> bool {
         let state_is_idle = self.zmodem_sessions.get(session_id).is_none_or(|state| {
             state.transfer.is_none()
                 && state.worker.is_none()

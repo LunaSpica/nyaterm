@@ -674,7 +674,11 @@ impl NyaTermApp {
         dirty
     }
 
-    fn trzsz_output_can_bypass_detector(&self, session_id: &str, data: &[u8]) -> bool {
+    pub(in crate::features) fn trzsz_output_can_bypass_detector(
+        &self,
+        session_id: &str,
+        data: &[u8],
+    ) -> bool {
         let state_is_idle = self.trzsz_sessions.get(session_id).is_none_or(|state| {
             !state.protocol_active
                 && state.download.is_none()
