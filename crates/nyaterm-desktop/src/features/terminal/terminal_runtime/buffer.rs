@@ -152,6 +152,11 @@ impl NyaTermApp {
         let mut coalesced_output_events = 0usize;
         let mut accepted_bytes = 0usize;
         let mut max_apply_duration = Duration::ZERO;
+        let visible_session_ids = self
+            .visible_terminal_session_ids()
+            .into_iter()
+            .map(str::to_string)
+            .collect::<Vec<_>>();
 
         self.fill_pending_terminal_frame_events();
 
@@ -162,8 +167,10 @@ impl NyaTermApp {
                 }
             }
 
-            let (frames, coalesced) =
-                pop_terminal_frame_events_for_apply(&mut self.pending_terminal_frame_events);
+            let (frames, coalesced) = pop_terminal_frame_events_for_apply(
+                &mut self.pending_terminal_frame_events,
+                &visible_session_ids,
+            );
             if frames.is_empty() {
                 break;
             }
@@ -664,6 +671,7 @@ impl NyaTermApp {
 
 fn pop_terminal_frame_events_for_apply(
     events: &mut VecDeque<TerminalFrameEvent>,
+    visible_session_ids: &[String],
 ) -> (Vec<TerminalFrameEvent>, usize) {
     let Some(first) = events.pop_front() else {
         return (Vec::new(), 0);
@@ -679,11 +687,12 @@ fn pop_terminal_frame_events_for_apply(
         };
         output_run.push(event);
     }
-    coalesce_terminal_output_run_for_apply(output_run)
+    coalesce_terminal_output_run_for_apply(output_run, visible_session_ids)
 }
 
 fn coalesce_terminal_output_run_for_apply(
     output_run: Vec<TerminalFrameEvent>,
+    visible_session_ids: &[String],
 ) -> (Vec<TerminalFrameEvent>, usize) {
     let mut frames = Vec::new();
     let mut segment = Vec::new();
@@ -695,7 +704,7 @@ fn coalesce_terminal_output_run_for_apply(
         };
         if terminal_output_frame_is_apply_barrier(&frame) {
             let (mut coalesced_segment, segment_coalesced) =
-                coalesce_terminal_pure_output_segment_for_apply(segment);
+                coalesce_terminal_pure_output_segment_for_apply(segment, visible_session_ids);
             frames.append(&mut coalesced_segment);
             coalesced = coalesced.saturating_add(segment_coalesced);
             segment = Vec::new();
@@ -706,7 +715,7 @@ fn coalesce_terminal_output_run_for_apply(
     }
 
     let (mut coalesced_segment, segment_coalesced) =
-        coalesce_terminal_pure_output_segment_for_apply(segment);
+        coalesce_terminal_pure_output_segment_for_apply(segment, visible_session_ids);
     frames.append(&mut coalesced_segment);
     coalesced = coalesced.saturating_add(segment_coalesced);
 
@@ -715,6 +724,7 @@ fn coalesce_terminal_output_run_for_apply(
 
 fn coalesce_terminal_pure_output_segment_for_apply(
     output_run: Vec<TerminalFrameEvent>,
+    visible_session_ids: &[String],
 ) -> (Vec<TerminalFrameEvent>, usize) {
     if output_run.is_empty() {
         return (Vec::new(), 0);
@@ -733,7 +743,12 @@ fn coalesce_terminal_pure_output_segment_for_apply(
         }
     }
     let mut latest = latest_by_session.into_values().collect::<Vec<_>>();
-    latest.sort_by_key(|(index, _)| *index);
+    latest.sort_by_key(|(index, frame)| {
+        (
+            terminal_output_frame_apply_priority(frame, visible_session_ids),
+            *index,
+        )
+    });
     let events = latest
         .into_iter()
         .map(|(_, frame)| TerminalFrameEvent::Output(frame))
@@ -744,6 +759,20 @@ fn coalesce_terminal_pure_output_segment_for_apply(
 
 fn terminal_output_frame_is_apply_barrier(frame: &TerminalFrameOutputEvent) -> bool {
     terminal_effects_need_ui_apply(&frame.effects)
+}
+
+fn terminal_output_frame_apply_priority(
+    frame: &TerminalFrameOutputEvent,
+    visible_session_ids: &[String],
+) -> u8 {
+    if visible_session_ids
+        .iter()
+        .any(|session_id| session_id == &frame.session_id)
+    {
+        0
+    } else {
+        1
+    }
 }
 
 fn merge_terminal_output_frame_for_apply(
@@ -887,7 +916,7 @@ mod frame_event_queue_tests {
             output_frame("b", 3),
         ]);
 
-        let (frames, coalesced) = pop_terminal_frame_events_for_apply(&mut events);
+        let (frames, coalesced) = pop_terminal_frame_events_for_apply(&mut events, &[]);
 
         assert_eq!(coalesced, 1);
         assert!(events.is_empty());
@@ -908,6 +937,32 @@ mod frame_event_queue_tests {
     }
 
     #[test]
+    fn terminal_frame_apply_prioritizes_visible_output() {
+        let mut events = VecDeque::from([
+            output_frame("hidden", 1),
+            output_frame("visible", 2),
+            output_frame("hidden", 3),
+        ]);
+
+        let (frames, coalesced) =
+            pop_terminal_frame_events_for_apply(&mut events, &["visible".to_string()]);
+
+        assert_eq!(coalesced, 1);
+        assert!(events.is_empty());
+        assert_eq!(frames.len(), 2);
+        assert!(matches!(
+            &frames[0],
+            TerminalFrameEvent::Output(frame)
+                if frame.session_id == "visible" && frame.revision == 2
+        ));
+        assert!(matches!(
+            &frames[1],
+            TerminalFrameEvent::Output(frame)
+                if frame.session_id == "hidden" && frame.revision == 3
+        ));
+    }
+
+    #[test]
     fn terminal_frame_apply_preserves_output_effect_barriers() {
         let mut effect = output_frame("a", 3);
         if let TerminalFrameEvent::Output(frame) = &mut effect {
@@ -920,7 +975,7 @@ mod frame_event_queue_tests {
             output_frame("a", 4),
         ]);
 
-        let (frames, coalesced) = pop_terminal_frame_events_for_apply(&mut events);
+        let (frames, coalesced) = pop_terminal_frame_events_for_apply(&mut events, &[]);
 
         assert_eq!(coalesced, 1);
         assert!(events.is_empty());
@@ -947,9 +1002,9 @@ mod frame_event_queue_tests {
             output_frame("a", 2),
         ]);
 
-        let (first, first_coalesced) = pop_terminal_frame_events_for_apply(&mut events);
-        let (second, second_coalesced) = pop_terminal_frame_events_for_apply(&mut events);
-        let (third, third_coalesced) = pop_terminal_frame_events_for_apply(&mut events);
+        let (first, first_coalesced) = pop_terminal_frame_events_for_apply(&mut events, &[]);
+        let (second, second_coalesced) = pop_terminal_frame_events_for_apply(&mut events, &[]);
+        let (third, third_coalesced) = pop_terminal_frame_events_for_apply(&mut events, &[]);
 
         assert_eq!(first_coalesced, 0);
         assert!(matches!(
