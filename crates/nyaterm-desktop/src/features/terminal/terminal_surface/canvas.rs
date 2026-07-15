@@ -41,11 +41,24 @@ impl NyaTermApp {
             .terminal_views
             .get(&session_id)
             .is_some_and(|view| view.render_degraded || render_pressure);
+        let (output_burst_bytes, performance_mode) = self
+            .terminal_views
+            .get(&session_id)
+            .map(|view| (view.output_burst_bytes, view.performance_mode))
+            .unwrap_or((0, TerminalPerformanceMode::Normal));
+        let expensive_interactions_enabled = terminal_expensive_interactions_enabled(
+            self.settings.terminal_action_links_enabled,
+            is_active,
+            render_degraded,
+            render_output_pressure,
+            output_burst_bytes,
+            performance_mode,
+        );
         let action_link_matcher_key = terminal_action_link_matcher_key(
             self.settings.terminal_action_links_enabled,
             &self.settings.terminal_action_links_matchers,
         );
-        let keyword_rules = if render_degraded {
+        let keyword_rules = if render_degraded || !is_active {
             Vec::new()
         } else {
             self.resolved_keyword_highlight_rules()
@@ -63,6 +76,7 @@ impl NyaTermApp {
         let frame_action_links = self
             .terminal_views
             .get(&session_id)
+            .filter(|_| expensive_interactions_enabled)
             .and_then(|view| {
                 if scroll_offset == 0 {
                     view.frame_action_links.as_ref()
@@ -153,20 +167,19 @@ impl NyaTermApp {
         let has_selection = terminal_selection.is_some();
         let has_search_decorations =
             !search_ranges_by_line.is_empty() || !active_search_ranges_by_line.is_empty();
-        let has_frame_action_links = !render_degraded
-            && self.settings.terminal_action_links_enabled
+        let has_frame_action_links = expensive_interactions_enabled
             && frame_action_links.is_some_and(|links| {
                 links
                     .cell_ranges_by_line
                     .iter()
                     .any(|ranges| !ranges.is_empty())
             });
-        let has_hyperlinks = !render_degraded
+        let has_hyperlinks = expensive_interactions_enabled
             && snapshot
                 .hyperlink_lines
                 .iter()
                 .any(|spans| !spans.is_empty());
-        let include_command_marks = !render_degraded;
+        let include_command_marks = is_active && !render_degraded && !render_output_pressure;
         let has_command_marks =
             include_command_marks && snapshot.command_marks.iter().any(Option::is_some);
         let needs_line_decorations = terminal_line_decorations_needed(
@@ -177,9 +190,8 @@ impl NyaTermApp {
             has_command_marks,
         );
         let line_decorations = if needs_line_decorations {
-            let include_action_links =
-                self.settings.terminal_action_links_enabled && !render_degraded;
-            let include_hyperlinks = !render_degraded;
+            let include_action_links = expensive_interactions_enabled;
+            let include_hyperlinks = expensive_interactions_enabled;
             let decoration_cache_key = terminal_line_decorations_cache_key(
                 &snapshot,
                 terminal_selection,
@@ -1185,6 +1197,9 @@ impl NyaTermApp {
                 is_active,
                 render_degraded,
                 render_output_pressure,
+                expensive_interactions_enabled,
+                output_burst_bytes,
+                ?performance_mode,
                 action_links_enabled = self.settings.terminal_action_links_enabled,
                 search_open = self.terminal_search_open,
                 search_matches = search_matches.len(),

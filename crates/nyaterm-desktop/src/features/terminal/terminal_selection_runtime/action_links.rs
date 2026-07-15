@@ -130,6 +130,9 @@ impl NyaTermApp {
         }
         let session_id = self.terminal_session_at_point(position)?;
         let session_id = session_id.as_deref();
+        if !self.terminal_expensive_interactions_enabled_for_session(session_id) {
+            return None;
+        }
         // Only hit-test when the pointer is over the painted terminal content area.
         let bounds = self.terminal_surface_bounds_for_session(session_id)?;
         let (cell_w, cell_h) = self.terminal_cell_size();
@@ -289,6 +292,11 @@ impl NyaTermApp {
         event: &ClickEvent,
         cx: &mut Context<Self>,
     ) -> bool {
+        if !self.active_session_id.as_deref().is_some_and(|session_id| {
+            self.terminal_expensive_interactions_enabled_for_session(Some(session_id))
+        }) {
+            return false;
+        }
         let Some(pos) = self.point_to_terminal_cell(event.position()) else {
             return false;
         };
@@ -357,6 +365,32 @@ impl NyaTermApp {
             return true;
         }
         false
+    }
+
+    fn terminal_expensive_interactions_enabled_for_session(
+        &self,
+        session_id: Option<&str>,
+    ) -> bool {
+        let Some(session_id) = session_id.filter(|id| !id.is_empty()) else {
+            return false;
+        };
+        let is_active = self.active_session_id.as_deref() == Some(session_id);
+        let Some(view) = self.terminal_views.get(session_id) else {
+            return false;
+        };
+        let runtime_output_pressure = self.runtime_output_pressure_active();
+        let render_degraded = view.render_degraded
+            || runtime_output_pressure
+            || view.output_burst_bytes > 0
+            || view.performance_mode == TerminalPerformanceMode::Overloaded;
+        terminal_expensive_interactions_enabled(
+            self.settings.terminal_action_links_enabled,
+            is_active,
+            render_degraded,
+            runtime_output_pressure,
+            view.output_burst_bytes,
+            view.performance_mode,
+        )
     }
 }
 

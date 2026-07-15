@@ -89,6 +89,22 @@ pub(crate) fn terminal_frame_search_result_is_current(
     result.key == *key && result.revision == revision
 }
 
+pub(crate) fn terminal_expensive_interactions_enabled(
+    action_links_enabled: bool,
+    is_active: bool,
+    render_degraded: bool,
+    runtime_output_pressure: bool,
+    output_burst_bytes: usize,
+    performance_mode: TerminalPerformanceMode,
+) -> bool {
+    action_links_enabled
+        && is_active
+        && !render_degraded
+        && !runtime_output_pressure
+        && output_burst_bytes == 0
+        && performance_mode != TerminalPerformanceMode::Overloaded
+}
+
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub(crate) struct TerminalProtocolState {
     pub(crate) focus_reporting: bool,
@@ -2302,6 +2318,70 @@ mod tests {
             Some(TerminalFrameEvent::Output(frame)) if frame.revision == 2
         ));
         assert!(queue.try_recv().is_none());
+    }
+
+    #[test]
+    fn expensive_interactions_require_active_calm_terminal() {
+        assert!(terminal_expensive_interactions_enabled(
+            true,
+            true,
+            false,
+            false,
+            0,
+            TerminalPerformanceMode::Normal,
+        ));
+        assert!(!terminal_expensive_interactions_enabled(
+            false,
+            true,
+            false,
+            false,
+            0,
+            TerminalPerformanceMode::Normal,
+        ));
+        assert!(!terminal_expensive_interactions_enabled(
+            true,
+            false,
+            false,
+            false,
+            0,
+            TerminalPerformanceMode::Normal,
+        ));
+    }
+
+    #[test]
+    fn expensive_interactions_yield_under_render_pressure() {
+        assert!(!terminal_expensive_interactions_enabled(
+            true,
+            true,
+            true,
+            false,
+            0,
+            TerminalPerformanceMode::Normal,
+        ));
+        assert!(!terminal_expensive_interactions_enabled(
+            true,
+            true,
+            false,
+            true,
+            0,
+            TerminalPerformanceMode::Normal,
+        ));
+        assert!(!terminal_expensive_interactions_enabled(
+            true,
+            true,
+            false,
+            false,
+            1,
+            TerminalPerformanceMode::Normal,
+        ));
+        assert!(!terminal_expensive_interactions_enabled(
+            true,
+            true,
+            false,
+            false,
+            0,
+            TerminalPerformanceMode::Overloaded,
+        ));
     }
 
     #[test]
