@@ -42,7 +42,15 @@ impl NyaTermApp {
         let snapshot = self
             .terminal_views
             .get(&session_id)
-            .map(|view| view.screen.viewport_snapshot(scroll_offset))
+            .map(|view| {
+                if scroll_offset == 0 {
+                    view.frame_snapshot
+                        .clone()
+                        .unwrap_or_else(|| view.screen.viewport_snapshot(scroll_offset))
+                } else {
+                    view.screen.viewport_snapshot(scroll_offset)
+                }
+            })
             .unwrap_or_else(|| self.terminal_screen.viewport_snapshot(scroll_offset));
         let lines = snapshot.lines.clone();
         let line_timestamps_ms = snapshot.line_timestamps_ms.clone();

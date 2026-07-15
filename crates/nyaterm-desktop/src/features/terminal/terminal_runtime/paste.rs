@@ -45,7 +45,7 @@ impl NyaTermApp {
     pub(in crate::features) fn session_bracketed_paste(&self, session_id: &str) -> bool {
         self.terminal_views
             .get(session_id)
-            .map(|view| view.screen.bracketed_paste())
+            .map(|view| view.protocol_state.bracketed_paste)
             .unwrap_or(false)
     }
 

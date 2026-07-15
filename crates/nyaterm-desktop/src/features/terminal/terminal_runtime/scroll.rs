@@ -545,6 +545,8 @@ impl NyaTermApp {
             if grid_changed {
                 view.screen.resize(cols, rows);
                 view.clamp_scroll_offset();
+                self.terminal_frame_pipeline
+                    .resize_session(session_id.to_string(), cols, rows);
             }
             if backend_changed {
                 view.remember_backend_resize(cols, rows, pixel_width, pixel_height);

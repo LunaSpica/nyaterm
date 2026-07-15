@@ -661,6 +661,7 @@ impl NyaTermApp {
             terminal_output: String::from(INITIAL_TERMINAL_BANNER),
             terminal_output_decoder,
             terminal_screen,
+            terminal_frame_pipeline: TerminalFramePipeline::spawn(),
             terminal_scroll_offset: 0,
             terminal_status: "idle".to_string(),
             terminal_runtime: TerminalRuntimeUiState::default(),

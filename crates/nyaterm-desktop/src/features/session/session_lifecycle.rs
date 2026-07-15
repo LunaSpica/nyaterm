@@ -437,6 +437,11 @@ impl NyaTermApp {
                 match self.session_manager.create_local_session(config.clone()) {
                     Ok(info) => {
                         self.register_session(&info.id, metadata);
+                        let seed_for_processor = view
+                            .as_ref()
+                            .map(|view| view.output.clone())
+                            .unwrap_or_else(|| seed_output.clone());
+                        self.seed_terminal_frame_session(&info.id, seed_for_processor);
                         self.terminal_views.insert(
                             info.id.clone(),
                             view.unwrap_or_else(|| {
@@ -478,6 +483,11 @@ impl NyaTermApp {
                 match self.session_manager.create_telnet_session(config.clone()) {
                     Ok(info) => {
                         self.register_session(&info.id, metadata);
+                        let seed_for_processor = view
+                            .as_ref()
+                            .map(|view| view.output.clone())
+                            .unwrap_or_else(|| seed_output.clone());
+                        self.seed_terminal_frame_session(&info.id, seed_for_processor);
                         self.terminal_views.insert(
                             info.id.clone(),
                             view.unwrap_or_else(|| {
@@ -518,6 +528,11 @@ impl NyaTermApp {
                 match self.session_manager.create_serial_session(config.clone()) {
                     Ok(info) => {
                         self.register_session(&info.id, metadata);
+                        let seed_for_processor = view
+                            .as_ref()
+                            .map(|view| view.output.clone())
+                            .unwrap_or_else(|| seed_output.clone());
+                        self.seed_terminal_frame_session(&info.id, seed_for_processor);
                         self.terminal_views.insert(
                             info.id.clone(),
                             view.unwrap_or_else(|| {

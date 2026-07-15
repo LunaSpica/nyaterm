@@ -217,7 +217,7 @@ impl NyaTermApp {
 
     pub(in crate::features) fn drain_session_events(&mut self, cx: &mut Context<Self>) -> bool {
         let drain_started_at = Instant::now();
-        let mut dirty = false;
+        let mut dirty = self.drain_terminal_frame_events(cx);
         let mut drained_events = 0usize;
         let mut output_event_count = 0usize;
         let mut drain_timings = SessionEventDrainTimings::default();
@@ -293,14 +293,14 @@ impl NyaTermApp {
                             );
                             continue;
                         }
-                        let is_active =
-                            self.active_session_id.as_deref() == Some(session_id.as_str());
-                        let stage_started_at = Instant::now();
-                        let text = self.decode_session_output_for_recording(&session_id, &data);
-                        let stage_duration = stage_started_at.elapsed();
-                        drain_timings.decode += stage_duration;
-                        chunk_timings.decode += stage_duration;
                         if self.session_has_active_ai_capture(&session_id) {
+                            let is_active =
+                                self.active_session_id.as_deref() == Some(session_id.as_str());
+                            let stage_started_at = Instant::now();
+                            let text = self.decode_session_output_for_recording(&session_id, &data);
+                            let stage_duration = stage_started_at.elapsed();
+                            drain_timings.decode += stage_duration;
+                            chunk_timings.decode += stage_duration;
                             let stage_started_at = Instant::now();
                             let result = self.ai_agent_capture.process(&text);
                             let stage_duration = stage_started_at.elapsed();
@@ -342,35 +342,9 @@ impl NyaTermApp {
                             let stage_duration = stage_started_at.elapsed();
                             drain_timings.ai_capture += stage_duration;
                             chunk_timings.ai_capture += stage_duration;
-                        } else if is_active {
-                            let stage_started_at = Instant::now();
-                            self.recording_manager.write_output(&session_id, &text);
-                            let stage_duration = stage_started_at.elapsed();
-                            drain_timings.recording += stage_duration;
-                            chunk_timings.recording += stage_duration;
-                            let stage_started_at = Instant::now();
-                            self.append_terminal_bytes(&data, cx);
-                            let stage_duration = stage_started_at.elapsed();
-                            drain_timings.terminal_append += stage_duration;
-                            chunk_timings.terminal_append += stage_duration;
-                            let stage_started_at = Instant::now();
-                            self.feed_credential_autofill_output(&text, cx);
-                            let stage_duration = stage_started_at.elapsed();
-                            drain_timings.credential_autofill += stage_duration;
-                            chunk_timings.credential_autofill += stage_duration;
                         } else {
                             let stage_started_at = Instant::now();
-                            self.recording_manager.write_output(&session_id, &text);
-                            let stage_duration = stage_started_at.elapsed();
-                            drain_timings.recording += stage_duration;
-                            chunk_timings.recording += stage_duration;
-                            let stage_started_at = Instant::now();
-                            self.append_terminal_bytes_for_session(
-                                Some(&session_id),
-                                &data,
-                                true,
-                                Some(cx),
-                            );
+                            self.submit_terminal_frame_output(&session_id, data);
                             let stage_duration = stage_started_at.elapsed();
                             drain_timings.terminal_append += stage_duration;
                             chunk_timings.terminal_append += stage_duration;
@@ -486,6 +460,7 @@ impl NyaTermApp {
         dirty |= self.drain_host_key_prompts();
         dirty |= self.drain_credential_prompts();
         dirty |= self.drain_duplicate_prompts();
+        dirty |= self.drain_terminal_frame_events(cx);
         if session_event_drain_is_slow(drain_timings.output_total, max_output_chunk_duration)
             && self.should_log_slow_diagnostic("session_event_drain", Instant::now())
         {

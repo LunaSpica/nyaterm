@@ -8,6 +8,13 @@ enum MouseReportWriteResult {
 }
 
 impl NyaTermApp {
+    fn terminal_protocol_state_for_session(&self, session_id: &str) -> TerminalProtocolState {
+        self.terminal_views
+            .get(session_id)
+            .map(|view| view.protocol_state)
+            .unwrap_or_else(|| TerminalProtocolState::from_screen(&self.terminal_screen))
+    }
+
     pub(in crate::features) fn open_terminal_actions(
         &mut self,
         window: &mut Window,
@@ -34,7 +41,12 @@ impl NyaTermApp {
         self.active_session_id
             .as_deref()
             .and_then(|session_id| self.terminal_views.get(session_id))
-            .map(|view| view.screen.lines().join("\n"))
+            .map(|view| {
+                view.frame_snapshot
+                    .as_ref()
+                    .map(|snapshot| snapshot.lines.join("\n"))
+                    .unwrap_or_else(|| view.screen.lines().join("\n"))
+            })
             .unwrap_or_else(|| self.terminal_screen.lines().join("\n"))
     }
 
@@ -382,12 +394,8 @@ impl NyaTermApp {
         if delta_lines == 0 || session_id.is_empty() || self.is_session_disconnected(session_id) {
             return None;
         }
-        let screen = self
-            .terminal_views
-            .get(session_id)
-            .map(|view| &view.screen)
-            .unwrap_or(&self.terminal_screen);
-        screen.alternate_scroll_payload(delta_lines)
+        self.terminal_protocol_state_for_session(session_id)
+            .alternate_scroll_payload(delta_lines)
     }
 
     /// When the active session's screen has mouse reporting enabled, encode and
@@ -493,12 +501,8 @@ impl NyaTermApp {
         if session_id.is_empty() {
             return false;
         }
-        let screen = self
-            .terminal_views
-            .get(&session_id)
-            .map(|view| &view.screen)
-            .unwrap_or(&self.terminal_screen);
-        if !screen.mouse_motion_reporting() {
+        let protocol = self.terminal_protocol_state_for_session(&session_id);
+        if !protocol.mouse_motion_reporting {
             return false;
         }
         let Some(cell) =
@@ -553,30 +557,20 @@ impl NyaTermApp {
             return MouseReportWriteResult::NotHandled;
         }
         let disconnected = self.is_session_disconnected(session_id);
-        let reporting = self
-            .terminal_views
-            .get(session_id)
-            .map(|view| view.screen.mouse_reporting())
-            .unwrap_or_else(|| self.terminal_screen.mouse_reporting());
-        if !reporting {
+        let protocol = self.terminal_protocol_state_for_session(session_id);
+        if !protocol.mouse_reporting {
             return MouseReportWriteResult::NotHandled;
         }
-        let screen = self
-            .terminal_views
-            .get(session_id)
-            .map(|view| &view.screen)
-            .unwrap_or(&self.terminal_screen);
         if !terminal_mouse_report_should_send(TerminalMouseReportEligibility {
             session_id_empty: false,
             disconnected,
-            mouse_reporting: reporting,
+            mouse_reporting: protocol.mouse_reporting,
             motion,
-            mouse_drag_reporting: screen.mouse_drag_reporting(),
+            mouse_drag_reporting: protocol.mouse_drag_reporting,
         }) {
             return MouseReportWriteResult::NotHandled;
         }
-        let bytes = nyaterm_terminal::encode_mouse_report_with_modifiers(
-            screen,
+        let bytes = protocol.encode_mouse_report(
             button,
             col,
             row,
@@ -808,12 +802,10 @@ impl NyaTermApp {
         if self.is_session_disconnected(session_id) {
             return false;
         }
-        let reporting = self
-            .terminal_views
-            .get(session_id)
-            .map(|view| view.screen.focus_reporting())
-            .unwrap_or_else(|| self.terminal_screen.focus_reporting());
-        if !reporting {
+        if !self
+            .terminal_protocol_state_for_session(session_id)
+            .focus_reporting
+        {
             return false;
         }
         let bytes = nyaterm_terminal::TerminalScreen::encode_focus_report(focused);
@@ -908,14 +900,15 @@ impl NyaTermApp {
             self.terminal_views
                 .get(session_id)
                 .map(|view| {
+                    let protocol = view.protocol_state;
                     (
-                        view.screen.application_cursor_keys(),
-                        view.screen.application_keypad(),
-                        view.screen.kitty_keyboard_disambiguate(),
-                        view.screen.kitty_keyboard_report_event_types(),
-                        view.screen.kitty_keyboard_report_alternate_keys(),
-                        view.screen.kitty_keyboard_report_all_keys_as_esc(),
-                        view.screen.kitty_keyboard_report_associated_text(),
+                        protocol.application_cursor_keys,
+                        protocol.application_keypad,
+                        protocol.kitty_keyboard_disambiguate,
+                        protocol.kitty_keyboard_report_event_types,
+                        protocol.kitty_keyboard_report_alternate_keys,
+                        protocol.kitty_keyboard_report_all_keys_as_esc,
+                        protocol.kitty_keyboard_report_associated_text,
                     )
                 })
                 .unwrap_or((false, false, false, false, false, false, false))

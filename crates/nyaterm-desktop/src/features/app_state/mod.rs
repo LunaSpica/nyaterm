@@ -471,6 +471,7 @@ pub struct NyaTermApp {
     pub(in crate::features) terminal_output: String,
     pub(in crate::features) terminal_output_decoder: TerminalOutputDecoder,
     pub(in crate::features) terminal_screen: TerminalScreen,
+    pub(in crate::features) terminal_frame_pipeline: TerminalFramePipeline,
     /// Scroll offset for the fallback/global terminal screen (no session view).
     pub(in crate::features) terminal_scroll_offset: usize,
     pub(in crate::features) terminal_status: String,

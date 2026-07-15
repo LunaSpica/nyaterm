@@ -363,6 +363,7 @@ impl NyaTermApp {
                         .as_ref()
                         .and_then(|pending| pending.seed_output.clone())
                     {
+                        self.seed_terminal_frame_session(&session_id, seed_output.clone());
                         self.terminal_views.insert(
                             session_id.clone(),
                             TerminalViewState::from_output_with_encoding(

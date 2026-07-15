@@ -6,8 +6,12 @@ use super::*;
 const MAX_OSC52_REPLY_CHARS: usize = 1_048_576;
 
 impl NyaTermApp {
+    pub(in crate::features) fn terminal_scrollback_line_limit(&self) -> usize {
+        self.settings.terminal_scrollback_lines.clamp(100, 100_000) as usize
+    }
+
     pub(in crate::features) fn sync_terminal_scrollback_limits(&mut self) {
-        let limit = self.settings.terminal_scrollback_lines.clamp(100, 100_000) as usize;
+        let limit = self.terminal_scrollback_line_limit();
         self.terminal_screen.set_scrollback_limit(limit);
         for view in self.terminal_views.values_mut() {
             view.screen.set_scrollback_limit(limit);
@@ -19,7 +23,84 @@ impl NyaTermApp {
     }
 
     pub(in crate::features) fn terminal_scrollback_max_bytes(&self) -> usize {
-        (self.settings.terminal_scrollback_lines.clamp(100, 100_000) as usize).saturating_mul(96)
+        self.terminal_scrollback_line_limit().saturating_mul(96)
+    }
+
+    pub(in crate::features) fn submit_terminal_frame_output(
+        &self,
+        session_id: &str,
+        data: Vec<u8>,
+    ) {
+        self.terminal_frame_pipeline.submit_output(
+            session_id.to_string(),
+            data,
+            self.settings.interaction_default_encoding.clone(),
+            self.terminal_scrollback_line_limit(),
+        );
+    }
+
+    pub(in crate::features) fn seed_terminal_frame_session(
+        &self,
+        session_id: &str,
+        output: String,
+    ) {
+        self.terminal_frame_pipeline.seed_session(
+            session_id.to_string(),
+            output,
+            self.settings.interaction_default_encoding.clone(),
+            self.terminal_scrollback_line_limit(),
+        );
+    }
+
+    pub(in crate::features) fn drain_terminal_frame_events(
+        &mut self,
+        cx: &mut Context<Self>,
+    ) -> bool {
+        let mut dirty = false;
+        for frame in self.terminal_frame_pipeline.drain_events(256) {
+            dirty |= self.apply_terminal_frame_event(frame, cx);
+        }
+        dirty
+    }
+
+    fn apply_terminal_frame_event(
+        &mut self,
+        frame: TerminalFrameEvent,
+        cx: &mut Context<Self>,
+    ) -> bool {
+        let session_id = frame.session_id.clone();
+        let is_active = self.active_session_id.as_deref() == Some(session_id.as_str());
+        if !frame.recording_text.is_empty() {
+            self.recording_manager
+                .write_output(&session_id, &frame.recording_text);
+        }
+        let view = self
+            .terminal_views
+            .entry(session_id.clone())
+            .or_insert_with(TerminalViewState::new);
+        view.apply_terminal_frame(&frame);
+        if !is_active {
+            view.has_unread = true;
+        }
+        self.apply_terminal_effects(&session_id, frame.effects, frame.command_running, cx);
+        if is_active && !frame.visible_text.is_empty() {
+            self.feed_credential_autofill_output(&frame.visible_text, cx);
+        }
+        if frame.process_duration >= Duration::from_millis(20)
+            && self.should_log_slow_diagnostic("terminal_frame_processor", Instant::now())
+        {
+            tracing::warn!(
+                diagnostic = "terminal_frame_processor",
+                session_id = %session_id,
+                accepted_bytes = frame.accepted_bytes,
+                skipped_output_bytes = frame.skipped_output_bytes,
+                visible_text_bytes = frame.visible_text.len(),
+                recording_text_bytes = frame.recording_text.len(),
+                process_ms = frame.process_duration.as_millis(),
+                "slow terminal frame processing"
+            );
+        }
+        true
     }
 
     pub(in crate::features) fn enforce_terminal_scrollback_limit(&mut self) {
@@ -29,15 +110,6 @@ impl NyaTermApp {
         for view in self.terminal_views.values_mut() {
             trim_terminal_output_to(&mut view.output, max_bytes);
         }
-    }
-
-    pub(in crate::features) fn append_terminal_bytes(
-        &mut self,
-        data: &[u8],
-        cx: &mut Context<Self>,
-    ) {
-        let session_id = self.active_session_id.clone();
-        self.append_terminal_bytes_for_session(session_id.as_deref(), data, false, Some(cx));
     }
 
     pub(in crate::features) fn decode_session_output_for_recording(
@@ -269,6 +341,46 @@ impl NyaTermApp {
                 self.terminal_status = format!("terminal response failed: {error}");
                 break;
             }
+        }
+    }
+
+    fn apply_terminal_effects(
+        &mut self,
+        session_id: &str,
+        effects: TerminalEffects,
+        command_running: bool,
+        cx: &mut Context<Self>,
+    ) {
+        let mut pending_pty_writes = effects.pty_write;
+        let mut clipboard_store = effects.clipboard_store;
+        let mut clipboard_loads = effects.clipboard_loads;
+        if effects.bell {
+            self.terminal_runtime.visual_bell_ticks = 4;
+        }
+        if let Some(title) = effects.title {
+            self.session_dynamic_titles
+                .insert(session_id.to_string(), title);
+        }
+        if effects.reset_title {
+            self.session_dynamic_titles.remove(session_id);
+        }
+        self.handle_terminal_clipboard_effects(
+            &mut clipboard_store,
+            &mut clipboard_loads,
+            &mut pending_pty_writes,
+            Some(cx),
+        );
+        self.write_terminal_pty_responses(session_id, pending_pty_writes);
+        if effects.shell_command_started || effects.shell_command_finished {
+            self.apply_shell_integration_edges(
+                session_id,
+                effects.shell_command_started,
+                effects.shell_command_finished,
+                command_running,
+            );
+        }
+        if let Some(cwd) = effects.cwd {
+            self.apply_session_cwd(session_id, cwd);
         }
     }
 

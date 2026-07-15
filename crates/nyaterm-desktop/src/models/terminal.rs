@@ -1,8 +1,11 @@
 use nyaterm_core::{TerminalBackendResize, terminal_backend_resize_changed};
-use nyaterm_terminal::{TerminalOutputDecoder, TerminalScreen};
+use nyaterm_terminal::{TerminalEffects, TerminalOutputDecoder, TerminalScreen, TerminalSnapshot};
 use std::collections::HashMap;
 use std::hash::{Hash, Hasher};
+use std::sync::mpsc;
 use std::sync::{Arc, Mutex};
+use std::thread;
+use std::time::{Duration, Instant};
 
 use crate::terminal::{
     NyaTerminalLayoutCache, terminal_cell_col_for_byte_index, terminal_screen_from_output,
@@ -37,6 +40,106 @@ pub(crate) const TERMINAL_RENDER_DEGRADATION_RECOVERY_TICKS: u8 = 8;
 pub(crate) struct TerminalRenderedLine {
     pub(crate) text: String,
     pub(crate) action_link_ranges: Vec<(usize, usize)>,
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub(crate) struct TerminalProtocolState {
+    pub(crate) focus_reporting: bool,
+    pub(crate) bracketed_paste: bool,
+    pub(crate) mouse_reporting: bool,
+    pub(crate) mouse_sgr: bool,
+    pub(crate) mouse_drag_reporting: bool,
+    pub(crate) mouse_motion_reporting: bool,
+    pub(crate) application_cursor_keys: bool,
+    pub(crate) application_keypad: bool,
+    pub(crate) kitty_keyboard_disambiguate: bool,
+    pub(crate) kitty_keyboard_report_event_types: bool,
+    pub(crate) kitty_keyboard_report_alternate_keys: bool,
+    pub(crate) kitty_keyboard_report_all_keys_as_esc: bool,
+    pub(crate) kitty_keyboard_report_associated_text: bool,
+    pub(crate) alternate_scroll: bool,
+    pub(crate) alternate_screen: bool,
+}
+
+impl TerminalProtocolState {
+    pub(crate) fn from_screen(screen: &TerminalScreen) -> Self {
+        Self {
+            focus_reporting: screen.focus_reporting(),
+            bracketed_paste: screen.bracketed_paste(),
+            mouse_reporting: screen.mouse_reporting(),
+            mouse_sgr: screen.mouse_sgr(),
+            mouse_drag_reporting: screen.mouse_drag_reporting(),
+            mouse_motion_reporting: screen.mouse_motion_reporting(),
+            application_cursor_keys: screen.application_cursor_keys(),
+            application_keypad: screen.application_keypad(),
+            kitty_keyboard_disambiguate: screen.kitty_keyboard_disambiguate(),
+            kitty_keyboard_report_event_types: screen.kitty_keyboard_report_event_types(),
+            kitty_keyboard_report_alternate_keys: screen.kitty_keyboard_report_alternate_keys(),
+            kitty_keyboard_report_all_keys_as_esc: screen.kitty_keyboard_report_all_keys_as_esc(),
+            kitty_keyboard_report_associated_text: screen.kitty_keyboard_report_associated_text(),
+            alternate_scroll: screen.alternate_scroll(),
+            alternate_screen: screen.alternate_screen(),
+        }
+    }
+
+    pub(crate) fn alternate_scroll_payload(self, delta_lines: i32) -> Option<Vec<u8>> {
+        if delta_lines == 0
+            || !self.alternate_screen
+            || !self.alternate_scroll
+            || self.mouse_reporting
+        {
+            return None;
+        }
+        let up = delta_lines > 0;
+        let unit = nyaterm_terminal::alternate_scroll_key_bytes(up, self.application_cursor_keys);
+        let steps = delta_lines.unsigned_abs().min(8) as usize;
+        let mut payload = Vec::with_capacity(unit.len() * steps);
+        for _ in 0..steps {
+            payload.extend_from_slice(&unit);
+        }
+        Some(payload)
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub(crate) fn encode_mouse_report(
+        self,
+        button: u8,
+        col: u16,
+        row: u16,
+        press: bool,
+        motion: bool,
+        shift: bool,
+        alt: bool,
+        ctrl: bool,
+    ) -> Vec<u8> {
+        if !self.mouse_reporting {
+            return Vec::new();
+        }
+        let x = col.saturating_add(1);
+        let y = row.saturating_add(1);
+        let mut code = if press || self.mouse_sgr { button } else { 3 };
+        if motion {
+            code = code.saturating_add(32);
+        }
+        if shift {
+            code = code.saturating_add(4);
+        }
+        if alt {
+            code = code.saturating_add(8);
+        }
+        if ctrl {
+            code = code.saturating_add(16);
+        }
+        if self.mouse_sgr {
+            let suffix = if press { 'M' } else { 'm' };
+            format!("\x1b[<{code};{x};{y}{suffix}").into_bytes()
+        } else {
+            let cb = 32u16.saturating_add(u16::from(code)).min(255) as u8;
+            let cx = 32u16.saturating_add(x).min(255) as u8;
+            let cy = 32u16.saturating_add(y).min(255) as u8;
+            vec![0x1b, b'[', b'M', cb, cx, cy]
+        }
+    }
 }
 
 #[derive(Debug, Default)]
@@ -108,6 +211,9 @@ pub(crate) fn protect_terminal_output_burst<'a>(
 pub(crate) struct TerminalViewState {
     pub(crate) output: String,
     pub(crate) screen: TerminalScreen,
+    /// Latest live viewport prepared by the background terminal frame processor.
+    pub(crate) frame_snapshot: Option<TerminalSnapshot>,
+    pub(crate) protocol_state: TerminalProtocolState,
     pub(crate) output_decoder: TerminalOutputDecoder,
     pub(crate) recording_decoder: TerminalOutputDecoder,
     pub(crate) screen_revision: u64,
@@ -138,6 +244,8 @@ impl TerminalViewState {
         Self {
             output: String::new(),
             screen: TerminalScreen::default(),
+            frame_snapshot: None,
+            protocol_state: TerminalProtocolState::default(),
             output_decoder: TerminalOutputDecoder::default(),
             recording_decoder: TerminalOutputDecoder::default(),
             screen_revision: 0,
@@ -158,9 +266,12 @@ impl TerminalViewState {
 
     pub(crate) fn from_output(output: String) -> Self {
         let screen = terminal_screen_from_output(&output);
+        let protocol_state = TerminalProtocolState::from_screen(&screen);
         Self {
             output,
             screen,
+            frame_snapshot: None,
+            protocol_state,
             output_decoder: TerminalOutputDecoder::default(),
             recording_decoder: TerminalOutputDecoder::default(),
             screen_revision: 0,
@@ -197,6 +308,8 @@ impl TerminalViewState {
         }
         self.screen.advance_decoded_text(text);
         self.screen_revision = self.screen_revision.saturating_add(1);
+        self.frame_snapshot = Some(self.screen.viewport_snapshot(0));
+        self.protocol_state = TerminalProtocolState::from_screen(&self.screen);
         self.output.push_str(text);
         trim_terminal_output(&mut self.output);
         if self.scroll_offset > 0 {
@@ -213,6 +326,8 @@ impl TerminalViewState {
         }
         self.screen.advance(data);
         self.screen_revision = self.screen_revision.saturating_add(1);
+        self.frame_snapshot = Some(self.screen.viewport_snapshot(0));
+        self.protocol_state = TerminalProtocolState::from_screen(&self.screen);
         self.output
             .push_str(&self.output_decoder.decode_output_text(data));
         trim_terminal_output(&mut self.output);
@@ -314,6 +429,8 @@ impl TerminalViewState {
     pub(crate) fn clear(&mut self) {
         self.output.clear();
         self.screen.clear();
+        self.frame_snapshot = None;
+        self.protocol_state = TerminalProtocolState::default();
         self.output_decoder.reset_decoder();
         self.recording_decoder.reset_decoder();
         self.screen_revision = self.screen_revision.saturating_add(1);
@@ -331,10 +448,36 @@ impl TerminalViewState {
     }
 
     pub(crate) fn clamp_scroll_offset(&mut self) {
-        let max = self.screen.scrollback_len();
+        let max = self
+            .frame_snapshot
+            .as_ref()
+            .map(|snapshot| snapshot.scrollback_len)
+            .unwrap_or_else(|| self.screen.scrollback_len());
         if self.scroll_offset > max {
             self.scroll_offset = max;
         }
+    }
+
+    pub(crate) fn apply_terminal_frame(&mut self, frame: &TerminalFrameEvent) {
+        if !frame.visible_text.is_empty() {
+            self.output.push_str(&frame.visible_text);
+            trim_terminal_output(&mut self.output);
+        }
+        self.frame_snapshot = Some(frame.snapshot.clone());
+        self.protocol_state = frame.protocol_state;
+        self.screen_revision = frame.revision;
+        self.output_burst_bytes = self.output_burst_bytes.saturating_add(frame.accepted_bytes);
+        if frame.skipped_output_bytes > 0 {
+            self.note_skipped_output(frame.skipped_output_bytes);
+        } else if self.output_burst_bytes > TERMINAL_OUTPUT_VISIBLE_BURST_OVERLOAD
+            || frame.accepted_bytes > TERMINAL_OUTPUT_WRITE_CHUNK
+        {
+            self.enter_overloaded_mode();
+        }
+        if self.scroll_offset > 0 {
+            self.has_new_while_scrolled = true;
+        }
+        self.clamp_scroll_offset();
     }
 
     pub(crate) fn backend_resize_changed(
@@ -387,6 +530,289 @@ impl KeywordHighlightEditorField {
             Self::Patterns => Self::ColorDark,
             Self::ColorDark => Self::ColorLight,
             Self::ColorLight => Self::Name,
+        }
+    }
+}
+
+#[derive(Debug)]
+pub(crate) struct TerminalFramePipeline {
+    command_tx: mpsc::Sender<TerminalFrameCommand>,
+    event_rx: mpsc::Receiver<TerminalFrameEvent>,
+}
+
+impl TerminalFramePipeline {
+    pub(crate) fn spawn() -> Self {
+        let (command_tx, command_rx) = mpsc::channel();
+        let (event_tx, event_rx) = mpsc::channel();
+        thread::Builder::new()
+            .name("nyaterm-terminal-frame-processor".to_string())
+            .spawn(move || run_terminal_frame_processor(command_rx, event_tx))
+            .expect("failed to spawn terminal frame processor");
+        Self {
+            command_tx,
+            event_rx,
+        }
+    }
+
+    pub(crate) fn ensure_session(
+        &self,
+        session_id: impl Into<String>,
+        encoding: impl Into<String>,
+        scrollback_limit: usize,
+    ) {
+        let _ = self.command_tx.send(TerminalFrameCommand::EnsureSession {
+            session_id: session_id.into(),
+            encoding: encoding.into(),
+            scrollback_limit,
+        });
+    }
+
+    pub(crate) fn seed_session(
+        &self,
+        session_id: impl Into<String>,
+        output: impl Into<String>,
+        encoding: impl Into<String>,
+        scrollback_limit: usize,
+    ) {
+        let _ = self.command_tx.send(TerminalFrameCommand::SeedSession {
+            session_id: session_id.into(),
+            output: output.into(),
+            encoding: encoding.into(),
+            scrollback_limit,
+        });
+    }
+
+    pub(crate) fn remove_session(&self, session_id: impl Into<String>) {
+        let _ = self.command_tx.send(TerminalFrameCommand::RemoveSession {
+            session_id: session_id.into(),
+        });
+    }
+
+    pub(crate) fn resize_session(&self, session_id: impl Into<String>, cols: u16, rows: u16) {
+        let _ = self.command_tx.send(TerminalFrameCommand::ResizeSession {
+            session_id: session_id.into(),
+            cols,
+            rows,
+        });
+    }
+
+    pub(crate) fn submit_output(
+        &self,
+        session_id: impl Into<String>,
+        data: Vec<u8>,
+        encoding: impl Into<String>,
+        scrollback_limit: usize,
+    ) {
+        if data.is_empty() {
+            return;
+        }
+        let _ = self.command_tx.send(TerminalFrameCommand::Output {
+            session_id: session_id.into(),
+            data,
+            encoding: encoding.into(),
+            scrollback_limit,
+        });
+    }
+
+    pub(crate) fn drain_events(&self, max_events: usize) -> Vec<TerminalFrameEvent> {
+        let mut events = Vec::new();
+        for _ in 0..max_events {
+            match self.event_rx.try_recv() {
+                Ok(event) => events.push(event),
+                Err(mpsc::TryRecvError::Empty) => break,
+                Err(mpsc::TryRecvError::Disconnected) => break,
+            }
+        }
+        events
+    }
+}
+
+impl Default for TerminalFramePipeline {
+    fn default() -> Self {
+        Self::spawn()
+    }
+}
+
+#[derive(Debug)]
+enum TerminalFrameCommand {
+    EnsureSession {
+        session_id: String,
+        encoding: String,
+        scrollback_limit: usize,
+    },
+    SeedSession {
+        session_id: String,
+        output: String,
+        encoding: String,
+        scrollback_limit: usize,
+    },
+    RemoveSession {
+        session_id: String,
+    },
+    ResizeSession {
+        session_id: String,
+        cols: u16,
+        rows: u16,
+    },
+    Output {
+        session_id: String,
+        data: Vec<u8>,
+        encoding: String,
+        scrollback_limit: usize,
+    },
+}
+
+#[derive(Clone, Debug)]
+pub(crate) struct TerminalFrameEvent {
+    pub(crate) session_id: String,
+    pub(crate) visible_text: String,
+    pub(crate) recording_text: String,
+    pub(crate) snapshot: TerminalSnapshot,
+    pub(crate) protocol_state: TerminalProtocolState,
+    pub(crate) effects: TerminalEffects,
+    pub(crate) command_running: bool,
+    pub(crate) accepted_bytes: usize,
+    pub(crate) skipped_output_bytes: usize,
+    pub(crate) revision: u64,
+    pub(crate) process_duration: Duration,
+}
+
+struct TerminalFrameSession {
+    screen: TerminalScreen,
+    output_decoder: TerminalOutputDecoder,
+    recording_decoder: TerminalOutputDecoder,
+    revision: u64,
+}
+
+impl TerminalFrameSession {
+    fn new(encoding: &str, scrollback_limit: usize) -> Self {
+        let mut screen = TerminalScreen::default();
+        screen.set_encoding(encoding);
+        screen.set_scrollback_limit(scrollback_limit);
+        let mut output_decoder = TerminalOutputDecoder::default();
+        output_decoder.set_encoding(encoding);
+        let mut recording_decoder = TerminalOutputDecoder::default();
+        recording_decoder.set_encoding(encoding);
+        Self {
+            screen,
+            output_decoder,
+            recording_decoder,
+            revision: 0,
+        }
+    }
+
+    fn set_encoding_and_limit(&mut self, encoding: &str, scrollback_limit: usize) {
+        self.screen.set_encoding(encoding);
+        self.screen.set_scrollback_limit(scrollback_limit);
+        self.output_decoder.set_encoding(encoding);
+        self.recording_decoder.set_encoding(encoding);
+    }
+
+    fn seed(&mut self, output: String, encoding: &str, scrollback_limit: usize) {
+        self.screen = terminal_screen_from_output(&output);
+        self.screen.set_encoding(encoding);
+        self.screen.set_scrollback_limit(scrollback_limit);
+        self.output_decoder = TerminalOutputDecoder::default();
+        self.output_decoder.set_encoding(encoding);
+        self.recording_decoder = TerminalOutputDecoder::default();
+        self.recording_decoder.set_encoding(encoding);
+        self.revision = self.revision.saturating_add(1);
+    }
+
+    fn resize(&mut self, cols: u16, rows: u16) {
+        if self.screen.cols() as u16 != cols || self.screen.rows() as u16 != rows {
+            self.screen.resize(cols, rows);
+            self.revision = self.revision.saturating_add(1);
+        }
+    }
+
+    fn process_output(
+        &mut self,
+        session_id: String,
+        data: Vec<u8>,
+        encoding: String,
+        scrollback_limit: usize,
+    ) -> TerminalFrameEvent {
+        let started_at = Instant::now();
+        self.set_encoding_and_limit(&encoding, scrollback_limit);
+        let recording_text = self.recording_decoder.decode_output_text(&data);
+        let (feed, skipped_output_bytes) =
+            protect_terminal_output_burst(&mut self.screen, &mut self.output_decoder, &data);
+        self.screen.advance(feed);
+        let visible_text = self.output_decoder.decode_output_text(feed);
+        self.revision = self.revision.saturating_add(1);
+        let effects = self.screen.take_effects();
+        let command_running = self.screen.command_running();
+        let protocol_state = TerminalProtocolState::from_screen(&self.screen);
+        TerminalFrameEvent {
+            session_id,
+            visible_text,
+            recording_text,
+            snapshot: self.screen.viewport_snapshot(0),
+            protocol_state,
+            effects,
+            command_running,
+            accepted_bytes: feed.len(),
+            skipped_output_bytes,
+            revision: self.revision,
+            process_duration: started_at.elapsed(),
+        }
+    }
+
+}
+
+fn run_terminal_frame_processor(
+    command_rx: mpsc::Receiver<TerminalFrameCommand>,
+    event_tx: mpsc::Sender<TerminalFrameEvent>,
+) {
+    let mut sessions: HashMap<String, TerminalFrameSession> = HashMap::new();
+    while let Ok(command) = command_rx.recv() {
+        match command {
+            TerminalFrameCommand::EnsureSession {
+                session_id,
+                encoding,
+                scrollback_limit,
+            } => {
+                sessions
+                    .entry(session_id)
+                    .or_insert_with(|| TerminalFrameSession::new(&encoding, scrollback_limit))
+                    .set_encoding_and_limit(&encoding, scrollback_limit);
+            }
+            TerminalFrameCommand::SeedSession {
+                session_id,
+                output,
+                encoding,
+                scrollback_limit,
+            } => {
+                let session = sessions
+                    .entry(session_id)
+                    .or_insert_with(|| TerminalFrameSession::new(&encoding, scrollback_limit));
+                session.seed(output, &encoding, scrollback_limit);
+            }
+            TerminalFrameCommand::RemoveSession { session_id } => {
+                sessions.remove(&session_id);
+            }
+            TerminalFrameCommand::ResizeSession {
+                session_id,
+                cols,
+                rows,
+            } => {
+                if let Some(session) = sessions.get_mut(&session_id) {
+                    session.resize(cols, rows);
+                }
+            }
+            TerminalFrameCommand::Output {
+                session_id,
+                data,
+                encoding,
+                scrollback_limit,
+            } => {
+                let session = sessions
+                    .entry(session_id.clone())
+                    .or_insert_with(|| TerminalFrameSession::new(&encoding, scrollback_limit));
+                let event = session.process_output(session_id, data, encoding, scrollback_limit);
+                let _ = event_tx.send(event);
+            }
         }
     }
 }
@@ -562,6 +988,52 @@ mod tests {
         assert!(!view.backend_resize_changed(80, 24, 800, 432));
         assert!(view.backend_resize_changed(80, 24, 960, 432));
         assert!(view.backend_resize_changed(80, 25, 800, 450));
+    }
+
+    #[test]
+    fn terminal_protocol_state_encodes_sgr_mouse_report() {
+        let protocol = TerminalProtocolState {
+            mouse_reporting: true,
+            mouse_sgr: true,
+            ..TerminalProtocolState::default()
+        };
+
+        assert_eq!(
+            protocol.encode_mouse_report(0, 1, 2, true, false, false, false, false),
+            b"\x1b[<0;2;3M".to_vec()
+        );
+        assert_eq!(
+            protocol.encode_mouse_report(0, 1, 2, false, false, false, false, false),
+            b"\x1b[<0;2;3m".to_vec()
+        );
+    }
+
+    #[test]
+    fn terminal_protocol_state_blocks_alternate_scroll_when_mouse_reporting() {
+        let protocol = TerminalProtocolState {
+            alternate_screen: true,
+            alternate_scroll: true,
+            mouse_reporting: true,
+            application_cursor_keys: true,
+            ..TerminalProtocolState::default()
+        };
+
+        assert_eq!(protocol.alternate_scroll_payload(1), None);
+    }
+
+    #[test]
+    fn terminal_protocol_state_emits_alternate_scroll_payload() {
+        let protocol = TerminalProtocolState {
+            alternate_screen: true,
+            alternate_scroll: true,
+            application_cursor_keys: true,
+            ..TerminalProtocolState::default()
+        };
+
+        assert_eq!(
+            protocol.alternate_scroll_payload(1),
+            Some(b"\x1bOA".to_vec())
+        );
     }
 }
 

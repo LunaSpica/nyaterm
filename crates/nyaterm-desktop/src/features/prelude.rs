@@ -35,7 +35,7 @@ pub(super) use nyaterm_core::{
     terminal_resize_geometry_for_size, terminal_wire_write_disposition, truncate_preview, uuid,
 };
 pub(super) use nyaterm_legacy::{LegacyProject, MigrationInventory};
-pub(super) use nyaterm_terminal::{TerminalOutputDecoder, TerminalScreen};
+pub(super) use nyaterm_terminal::{TerminalEffects, TerminalOutputDecoder, TerminalScreen};
 pub(super) use nyaterm_transport::{
     DockerComposeService, DockerContainerDetails, DockerService, LocalSessionConfig,
     RecordingManager, RemoteCommandOutput, RemoteDockerOverview, RemoteProcess, RemoteStats,
@@ -94,9 +94,10 @@ pub(super) use crate::models::{
     SecurityPasswordEditorState, SessionLaunchConfig, SessionRuntimeMetadata, SettingsTab,
     SmartSplitMode, SnapshotPasswordPromptKind, SnapshotPasswordPromptState, SplitEdge,
     StartupCommandAction, StartupCommandRequest, StoreStatus, SyncInputGroup, TabDockZone,
-    TerminalCellPos, TerminalContextMenuState, TerminalPerformanceOverlay, TerminalSearchMode,
-    TerminalSelection, TerminalViewState, TerminalWindowNode, TitleMenu,
-    TransferBrowserColumnResizeState, TransferBrowserColumnWidths, TransferBrowserContextMenuState,
+    TerminalCellPos, TerminalContextMenuState, TerminalFrameEvent, TerminalFramePipeline,
+    TerminalPerformanceOverlay, TerminalProtocolState, TerminalSearchMode, TerminalSelection,
+    TerminalViewState, TerminalWindowNode, TitleMenu, TransferBrowserColumnResizeState,
+    TransferBrowserColumnWidths, TransferBrowserContextMenuState,
     TransferBrowserDragSelectionState, TransferBrowserFavoritesMenuState,
     TransferBrowserPendingRenameState, TransferBrowserSessionCacheState, TransferBrowserSortColumn,
     TransferBrowserSortDirection, TransferBrowserUploadMenuState, TransferDeleteState,

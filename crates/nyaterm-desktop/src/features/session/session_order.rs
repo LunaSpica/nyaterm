@@ -17,6 +17,11 @@ impl NyaTermApp {
             .entry(session_id.to_string())
             .or_insert_with(TerminalViewState::new);
         view.set_encoding(&encoding);
+        self.terminal_frame_pipeline.ensure_session(
+            session_id.to_string(),
+            encoding,
+            self.terminal_scrollback_line_limit(),
+        );
         self.reconcile_terminal_windows();
         if self.startup_restore_complete {
             self.persist_open_tabs();
