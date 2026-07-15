@@ -357,14 +357,21 @@ fn parse_minimum_contrast_ratio(raw: &str) -> f32 {
 }
 
 fn gpui_platform_font_family(raw: &str, fallback: &str, monospace: bool) -> String {
+    gpui_platform_font_family_for_target(raw, fallback, monospace, cfg!(target_os = "windows"))
+}
+
+fn gpui_platform_font_family_for_target(
+    raw: &str,
+    fallback: &str,
+    monospace: bool,
+    is_windows: bool,
+) -> String {
     let primary = raw
         .split(',')
         .map(trim_gpui_font_family)
         .find(|family| !family.is_empty())
         .unwrap_or(fallback);
-    if cfg!(target_os = "windows")
-        && (raw.contains(',') || windows_gpui_font_should_fallback(primary, monospace))
-    {
+    if is_windows && (raw.contains(',') || windows_gpui_font_should_fallback(primary, monospace)) {
         fallback.to_string()
     } else {
         primary.to_string()
@@ -409,5 +416,49 @@ fn windows_gpui_font_should_fallback(family: &str, monospace: bool) -> bool {
             family,
             "Inter" | "JetBrains Mono" | "Noto Sans SC Variable" | "微软雅黑"
         )
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn windows_terminal_font_family_collapses_comma_stack() {
+        assert_eq!(
+            gpui_platform_font_family_for_target(
+                "FiraCode Nerd Font Mono, Maple Mono CN",
+                "Consolas",
+                true,
+                true,
+            ),
+            "Consolas"
+        );
+    }
+
+    #[test]
+    fn windows_ui_font_family_collapses_known_missing_stack() {
+        assert_eq!(
+            gpui_platform_font_family_for_target(
+                "JetBrains Mono, Noto Sans SC Variable, 微软雅黑",
+                "Microsoft YaHei UI",
+                false,
+                true,
+            ),
+            "Microsoft YaHei UI"
+        );
+    }
+
+    #[test]
+    fn non_windows_font_family_uses_first_family() {
+        assert_eq!(
+            gpui_platform_font_family_for_target(
+                "JetBrains Mono, monospace",
+                "monospace",
+                true,
+                false,
+            ),
+            "JetBrains Mono"
+        );
     }
 }
