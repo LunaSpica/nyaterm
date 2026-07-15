@@ -236,6 +236,7 @@ impl NyaTermApp {
         let mut processed_output_bytes = 0usize;
         let mut transport_queued_events = 0usize;
         let mut transport_queued_output_bytes = 0usize;
+        let mut pending_frame_outputs: Vec<(String, Vec<u8>)> = Vec::new();
         let drain_budget = session_event_drain_budget(self.runtime_output_pressure_active());
 
         if self.pending_session_events.is_empty() {
@@ -333,6 +334,10 @@ impl NyaTermApp {
                             data
                         };
                         if self.session_has_active_ai_capture(&session_id) {
+                            self.flush_pending_session_frame_outputs(
+                                &mut pending_frame_outputs,
+                                &mut drain_timings,
+                            );
                             let stage_started_at = Instant::now();
                             let text = self.decode_session_output_for_recording(&session_id, &data);
                             let stage_duration = stage_started_at.elapsed();
@@ -362,11 +367,7 @@ impl NyaTermApp {
                             drain_timings.ai_capture += stage_duration;
                             chunk_timings.ai_capture += stage_duration;
                         } else {
-                            let stage_started_at = Instant::now();
-                            self.submit_terminal_frame_output(&session_id, data);
-                            let stage_duration = stage_started_at.elapsed();
-                            drain_timings.terminal_append += stage_duration;
-                            chunk_timings.terminal_append += stage_duration;
+                            pending_frame_outputs.push((session_id.clone(), data));
                         }
                         let chunk_duration = chunk_started_at.elapsed();
                         drain_timings.output_total += chunk_duration;
@@ -380,6 +381,10 @@ impl NyaTermApp {
                         );
                     }
                     SessionEvent::OutputDropped { session_id, bytes } => {
+                        self.flush_pending_session_frame_outputs(
+                            &mut pending_frame_outputs,
+                            &mut drain_timings,
+                        );
                         self.note_trzsz_output_discontinuity(&session_id);
                         self.note_zmodem_output_discontinuity(&session_id, bytes, cx);
                         self.note_ai_agent_output_discontinuity(&session_id, bytes, cx);
@@ -403,6 +408,10 @@ impl NyaTermApp {
                         }
                     }
                     SessionEvent::Exited { session_id } => {
+                        self.flush_pending_session_frame_outputs(
+                            &mut pending_frame_outputs,
+                            &mut drain_timings,
+                        );
                         self.clear_trzsz_session(&session_id);
                         self.clear_zmodem_session(&session_id);
                         self.recording_write_pipeline
@@ -423,6 +432,10 @@ impl NyaTermApp {
                         session_id,
                         message,
                     } => {
+                        self.flush_pending_session_frame_outputs(
+                            &mut pending_frame_outputs,
+                            &mut drain_timings,
+                        );
                         let log_message = terminal_log_plain_text(&message);
                         let log = format!("\n# session error: {log_message}\n");
                         if !session_id.is_empty() {
@@ -451,6 +464,7 @@ impl NyaTermApp {
                 }
             }
         }
+        self.flush_pending_session_frame_outputs(&mut pending_frame_outputs, &mut drain_timings);
 
         let queued_events =
             transport_queued_events.saturating_add(self.pending_session_events.len());
@@ -979,6 +993,21 @@ impl NyaTermApp {
                 .ai_agent_loop
                 .as_ref()
                 .is_some_and(|state| state.terminal_session_id == session_id)
+    }
+
+    fn flush_pending_session_frame_outputs(
+        &self,
+        pending_frame_outputs: &mut Vec<(String, Vec<u8>)>,
+        timings: &mut SessionEventDrainTimings,
+    ) {
+        if pending_frame_outputs.is_empty() {
+            return;
+        }
+        let stage_started_at = Instant::now();
+        self.submit_terminal_frame_outputs(std::mem::take(pending_frame_outputs));
+        let stage_duration = stage_started_at.elapsed();
+        timings.terminal_append += stage_duration;
+        timings.output_total += stage_duration;
     }
 
     fn terminal_frame_backlog_active(&self) -> bool {

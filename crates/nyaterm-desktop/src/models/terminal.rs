@@ -781,6 +781,13 @@ pub(crate) struct TerminalFramePipeline {
     event_queue: TerminalFrameEventQueue,
 }
 
+pub(crate) struct TerminalFrameOutputSubmission {
+    pub(crate) session_id: String,
+    pub(crate) data: Vec<u8>,
+    pub(crate) encoding: String,
+    pub(crate) scrollback_limit: usize,
+}
+
 impl TerminalFramePipeline {
     pub(crate) fn spawn(recording_writer: RecordingWriteHandle) -> Self {
         let (command_tx, command_rx) = terminal_frame_command_channel();
@@ -856,6 +863,21 @@ impl TerminalFramePipeline {
             encoding: encoding.into(),
             scrollback_limit,
         });
+    }
+
+    pub(crate) fn submit_outputs(&self, outputs: Vec<TerminalFrameOutputSubmission>) {
+        if outputs.is_empty() {
+            return;
+        }
+        let commands = outputs.into_iter().filter_map(|output| {
+            (!output.data.is_empty()).then_some(TerminalFrameCommand::Output {
+                session_id: output.session_id,
+                data: output.data,
+                encoding: output.encoding,
+                scrollback_limit: output.scrollback_limit,
+            })
+        });
+        let _ = self.command_tx.send_many(commands);
     }
 
     pub(crate) fn request_snapshot(
@@ -1393,6 +1415,24 @@ impl TerminalFrameCommandSender {
         push_terminal_frame_command(&mut inner.commands, command);
         self.shared.ready.notify_one();
         true
+    }
+
+    fn send_many<I>(&self, commands: I) -> bool
+    where
+        I: IntoIterator<Item = TerminalFrameCommand>,
+    {
+        let Ok(mut inner) = self.shared.inner.lock() else {
+            return false;
+        };
+        let mut sent = false;
+        for command in commands {
+            push_terminal_frame_command(&mut inner.commands, command);
+            sent = true;
+        }
+        if sent {
+            self.shared.ready.notify_one();
+        }
+        sent
     }
 
     fn len(&self) -> usize {
@@ -2728,6 +2768,50 @@ mod tests {
         }));
 
         assert_eq!(tx.queued_output_bytes(), 5);
+    }
+
+    #[test]
+    fn terminal_frame_command_queue_sends_many_in_order() {
+        let (tx, rx) = terminal_frame_command_channel();
+        assert!(!tx.send_many(Vec::<TerminalFrameCommand>::new()));
+        assert!(tx.send_many(vec![
+            TerminalFrameCommand::Output {
+                session_id: "s1".to_string(),
+                data: b"abc".to_vec(),
+                encoding: "UTF-8".to_string(),
+                scrollback_limit: 1000,
+            },
+            TerminalFrameCommand::ResizeSession {
+                session_id: "s1".to_string(),
+                cols: 100,
+                rows: 30,
+            },
+            TerminalFrameCommand::Output {
+                session_id: "s1".to_string(),
+                data: b"de".to_vec(),
+                encoding: "UTF-8".to_string(),
+                scrollback_limit: 1000,
+            },
+        ]));
+
+        assert_eq!(tx.queued_output_bytes(), 5);
+        assert!(matches!(
+            rx.try_recv(),
+            Some(TerminalFrameCommand::Output { data, .. }) if data == b"abc"
+        ));
+        assert!(matches!(
+            rx.try_recv(),
+            Some(TerminalFrameCommand::ResizeSession {
+                cols: 100,
+                rows: 30,
+                ..
+            })
+        ));
+        assert!(matches!(
+            rx.try_recv(),
+            Some(TerminalFrameCommand::Output { data, .. }) if data == b"de"
+        ));
+        assert!(rx.try_recv().is_none());
     }
 
     #[test]

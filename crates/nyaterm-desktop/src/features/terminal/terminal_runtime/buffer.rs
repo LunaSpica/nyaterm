@@ -39,6 +39,29 @@ impl NyaTermApp {
         );
     }
 
+    pub(in crate::features) fn submit_terminal_frame_outputs(
+        &self,
+        outputs: Vec<(String, Vec<u8>)>,
+    ) {
+        if outputs.is_empty() {
+            return;
+        }
+        let encoding = self.settings.interaction_default_encoding.clone();
+        let scrollback_limit = self.terminal_scrollback_line_limit();
+        let submissions = outputs
+            .into_iter()
+            .filter_map(|(session_id, data)| {
+                (!data.is_empty()).then_some(TerminalFrameOutputSubmission {
+                    session_id,
+                    data,
+                    encoding: encoding.clone(),
+                    scrollback_limit,
+                })
+            })
+            .collect::<Vec<_>>();
+        self.terminal_frame_pipeline.submit_outputs(submissions);
+    }
+
     pub(in crate::features) fn request_terminal_frame_snapshot(
         &mut self,
         session_id: &str,
