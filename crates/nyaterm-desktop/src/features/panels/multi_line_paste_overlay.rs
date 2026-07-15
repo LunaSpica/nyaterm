@@ -31,7 +31,7 @@ impl NyaTermApp {
             })
             .bg(rgb(palette.input))
             .p_3()
-            .font_family("JetBrains Mono")
+            .font_family(crate::features::gpui_code_font_family())
             .text_xs()
             .line_height(px(18.))
             .text_color(if can_send {

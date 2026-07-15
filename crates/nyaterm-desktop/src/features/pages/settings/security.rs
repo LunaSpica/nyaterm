@@ -102,7 +102,7 @@ impl NyaTermApp {
                                         .child(
                                             div()
                                                 .min_w(px(72.))
-                                                .font_family("JetBrains Mono")
+                                                .font_family(crate::features::gpui_code_font_family())
                                                 .text_size(px(12.))
                                                 .font_weight(FontWeight(600.))
                                                 .text_color(rgb(palette.text))

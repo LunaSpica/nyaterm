@@ -63,7 +63,7 @@ impl NyaTermApp {
                     .child(
                         div()
                             .mt_2()
-                            .font_family("JetBrains Mono")
+                            .font_family(crate::features::gpui_code_font_family())
                             .text_xs()
                             .text_color(rgb(palette.text_muted))
                             .child(truncate_preview(&state.parent_path, 92)),
@@ -84,7 +84,7 @@ impl NyaTermApp {
                             .px_3()
                             .flex()
                             .items_center()
-                            .font_family("JetBrains Mono")
+                            .font_family(crate::features::gpui_code_font_family())
                             .text_sm()
                             .text_color(if state.value.is_empty() {
                                 rgb(palette.text_muted)
@@ -254,7 +254,7 @@ impl NyaTermApp {
                     .child(
                         div()
                             .mt_2()
-                            .font_family("JetBrains Mono")
+                            .font_family(crate::features::gpui_code_font_family())
                             .text_xs()
                             .text_color(rgb(palette.text_muted))
                             .child(truncate_preview(&state.parent_path, 92)),
@@ -275,7 +275,7 @@ impl NyaTermApp {
                             .px_3()
                             .flex()
                             .items_center()
-                            .font_family("JetBrains Mono")
+                            .font_family(crate::features::gpui_code_font_family())
                             .text_sm()
                             .text_color(if state.value.is_empty() {
                                 rgb(palette.text_muted)
@@ -433,7 +433,7 @@ impl NyaTermApp {
                     .child(
                         div()
                             .mt_2()
-                            .font_family("JetBrains Mono")
+                            .font_family(crate::features::gpui_code_font_family())
                             .text_xs()
                             .text_color(rgb(palette.text_muted))
                             .child(truncate_preview(&state.parent_path, 92)),

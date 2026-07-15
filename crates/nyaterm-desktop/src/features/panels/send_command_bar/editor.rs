@@ -162,7 +162,7 @@ impl NyaTermApp {
                             self.send_command_data_type == SendCommandDataType::Hex,
                             |this| this.pt(px(22.)),
                         )
-                        .font_family("JetBrains Mono")
+                        .font_family(crate::features::gpui_code_font_family())
                         .track_focus(&self.send_command_focus)
                         .on_click(cx.listener(|this, _, window, cx| {
                             window.focus(&this.send_command_focus);
@@ -229,7 +229,7 @@ impl NyaTermApp {
                             .child(
                                 div()
                                     .flex_1()
-                                    .font_family("JetBrains Mono")
+                                    .font_family(crate::features::gpui_code_font_family())
                                     .text_size(px(11.))
                                     .line_height(px(15.))
                                     .text_color(if validation_error {

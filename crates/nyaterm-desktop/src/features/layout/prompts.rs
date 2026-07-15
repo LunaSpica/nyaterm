@@ -287,7 +287,7 @@ impl NyaTermApp {
                             .border_1()
                             .border_color(rgb(palette.accent))
                             .bg(rgb(palette.bg))
-                            .font_family("JetBrains Mono")
+                            .font_family(crate::features::gpui_code_font_family())
                             .text_sm()
                             .track_focus(&self.credential_focus)
                             .on_click(cx.listener(|this, _, window, cx| {
@@ -397,7 +397,7 @@ impl NyaTermApp {
                             .border_1()
                             .border_color(rgb(palette.accent))
                             .bg(rgb(palette.bg))
-                            .font_family("JetBrains Mono")
+                            .font_family(crate::features::gpui_code_font_family())
                             .text_sm()
                             .track_focus(&self.snapshot_password_focus)
                             .on_click(cx.listener(|this, _, window, cx| {

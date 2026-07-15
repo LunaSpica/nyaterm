@@ -162,7 +162,9 @@ impl NyaTermApp {
                                                     rgb(palette.border)
                                                 })
                                                 .bg(rgb(palette.input))
-                                                .font_family("JetBrains Mono")
+                                                .font_family(
+                                                    crate::features::gpui_code_font_family(),
+                                                )
                                                 .text_sm()
                                                 .text_color(rgb(palette.text))
                                                 .cursor_pointer()

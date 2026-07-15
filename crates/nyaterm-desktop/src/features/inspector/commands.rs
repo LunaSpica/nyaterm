@@ -261,7 +261,7 @@ impl NyaTermApp {
                         )
                         .child(
                             div()
-                                .font_family("JetBrains Mono")
+                                .font_family(crate::features::gpui_code_font_family())
                                 .text_xs()
                                 .text_color(rgb(palette.text_muted))
                                 .line_height(px(18.))
@@ -388,7 +388,7 @@ impl NyaTermApp {
                             div()
                                 .min_w_0()
                                 .flex_1()
-                                .font_family("JetBrains Mono")
+                                .font_family(crate::features::gpui_code_font_family())
                                 .text_size(px(12.))
                                 .text_color(rgb(palette.text))
                                 .overflow_hidden()

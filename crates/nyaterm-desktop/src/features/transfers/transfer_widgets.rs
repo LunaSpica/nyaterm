@@ -101,7 +101,7 @@ pub(in crate::features) fn transfer_input(
         )
         .child(
             div()
-                .font_family("JetBrains Mono")
+                .font_family(crate::features::gpui_code_font_family())
                 .text_xs()
                 .text_color(rgb(palette.text))
                 .child(value),

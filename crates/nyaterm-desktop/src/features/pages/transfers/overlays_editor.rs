@@ -225,7 +225,7 @@ impl NyaTermApp {
                                     )
                                     .child(
                                         div()
-                                            .font_family("JetBrains Mono")
+                                            .font_family(crate::features::gpui_code_font_family())
                                             .text_xs()
                                             .text_color(rgb(palette.text_muted))
                                             .child(truncate_preview(&state.remote_path, 96)),
@@ -303,7 +303,7 @@ impl NyaTermApp {
                                     .px_3()
                                     .flex()
                                     .items_center()
-                                    .font_family("JetBrains Mono")
+                                    .font_family(crate::features::gpui_code_font_family())
                                     .text_xs()
                                     .text_color(if state.search_query.is_empty() {
                                         rgb(palette.text_muted)
@@ -368,7 +368,7 @@ impl NyaTermApp {
                             .border_color(rgb(palette.border))
                             .bg(rgb(palette.input))
                             .p_3()
-                            .font_family("JetBrains Mono")
+                            .font_family(crate::features::gpui_code_font_family())
                             .text_xs()
                             .text_color(if state.loading {
                                 rgb(palette.text_muted)

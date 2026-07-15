@@ -229,7 +229,7 @@ impl NyaTermApp {
                                     .child(
                                         div()
                                             .mt_0()
-                                            .font_family("JetBrains Mono")
+                                            .font_family(crate::features::gpui_code_font_family())
                                             .text_size(px(11.))
                                             .text_color(rgb(palette.text))
                                             .child(format_cloud_provider(&conflict.provider)),

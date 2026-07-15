@@ -115,7 +115,7 @@ impl NyaTermApp {
                             .border_1()
                             .border_color(rgb(palette.accent))
                             .bg(rgb(palette.input))
-                            .font_family("JetBrains Mono")
+                            .font_family(crate::features::gpui_code_font_family())
                             .text_xs()
                             .text_color(rgb(palette.text))
                             .child(draft),

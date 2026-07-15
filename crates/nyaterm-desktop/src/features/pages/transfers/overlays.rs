@@ -76,7 +76,7 @@ impl NyaTermApp {
                             .rounded_sm()
                             .bg(rgb(palette.input))
                             .p_3()
-                            .font_family("JetBrains Mono")
+                            .font_family(crate::features::gpui_code_font_family())
                             .text_xs()
                             .text_color(rgb(palette.text))
                             .child(truncate_preview(&state.title, 64)),

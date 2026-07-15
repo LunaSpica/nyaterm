@@ -184,7 +184,7 @@ pub(in crate::features::pages::tunnels) fn network_proxy_editor_panel(
                 .child(div().text_xs().text_color(rgb(palette.text_muted)).child("Preview"))
                 .child(
                     div()
-                        .font_family("JetBrains Mono")
+                        .font_family(crate::features::gpui_code_font_family())
                         .text_xs()
                         .text_color(rgb(palette.text))
                         .child(proxy_editor_preview(&editor)),

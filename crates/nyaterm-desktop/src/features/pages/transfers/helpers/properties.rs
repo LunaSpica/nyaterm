@@ -40,7 +40,7 @@ pub(in crate::features::pages::transfers) fn symlink_input_row(
                 .px_3()
                 .flex()
                 .items_center()
-                .font_family("JetBrains Mono")
+                .font_family(crate::features::gpui_code_font_family())
                 .text_sm()
                 .text_color(
                     if value.is_empty() || value == "Symlink name" || value == "/path/to/target" {
@@ -75,7 +75,7 @@ pub(in crate::features::pages::transfers) fn property_row(
             div()
                 .min_w_0()
                 .flex_1()
-                .font_family("JetBrains Mono")
+                .font_family(crate::features::gpui_code_font_family())
                 .text_color(rgb(palette.text))
                 .child(value.into()),
         )
@@ -122,7 +122,7 @@ pub(in crate::features::pages::transfers) fn property_input_row(
                 .px_3()
                 .flex()
                 .items_center()
-                .font_family("JetBrains Mono")
+                .font_family(crate::features::gpui_code_font_family())
                 .text_xs()
                 .text_color(if value.is_empty() {
                     rgb(palette.text_muted)

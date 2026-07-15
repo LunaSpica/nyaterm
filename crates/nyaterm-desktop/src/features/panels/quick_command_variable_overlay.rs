@@ -79,7 +79,7 @@ impl NyaTermApp {
                                         .into_any_element()
                                     } else {
                                         div()
-                                            .font_family("JetBrains Mono")
+                                            .font_family(crate::features::gpui_code_font_family())
                                             .text_xs()
                                             .text_color(rgb(palette.text))
                                             .child(if variable.value.is_empty() {
@@ -216,7 +216,7 @@ impl NyaTermApp {
                             .child(
                                 div()
                                     .mt_1()
-                                    .font_family("JetBrains Mono")
+                                    .font_family(crate::features::gpui_code_font_family())
                                     .text_xs()
                                     .line_height(px(18.))
                                     .text_color(rgb(palette.text_muted))

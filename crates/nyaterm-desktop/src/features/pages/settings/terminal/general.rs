@@ -34,7 +34,7 @@ impl NyaTermApp {
                             .child(
                                 div()
                                     .min_w(px(72.))
-                                    .font_family("JetBrains Mono")
+                                    .font_family(crate::features::gpui_code_font_family())
                                     .text_size(px(12.))
                                     .font_weight(FontWeight(600.))
                                     .text_color(rgb(palette.text))
@@ -65,7 +65,7 @@ impl NyaTermApp {
                             .child(
                                 div()
                                     .min_w(px(56.))
-                                    .font_family("JetBrains Mono")
+                                    .font_family(crate::features::gpui_code_font_family())
                                     .text_size(px(12.))
                                     .font_weight(FontWeight(600.))
                                     .text_color(rgb(palette.text))
@@ -202,7 +202,7 @@ impl NyaTermApp {
                                         .child(
                                             div()
                                                 .min_w(px(40.))
-                                                .font_family("JetBrains Mono")
+                                                .font_family(crate::features::gpui_code_font_family())
                                                 .text_size(px(11.))
                                                 .text_color(rgb(palette.text))
                                                 .child(format!("{remote_stats_interval}s")),
@@ -255,7 +255,7 @@ impl NyaTermApp {
                                         .child(
                                             div()
                                                 .min_w(px(40.))
-                                                .font_family("JetBrains Mono")
+                                                .font_family(crate::features::gpui_code_font_family())
                                                 .text_size(px(11.))
                                                 .text_color(rgb(palette.text))
                                                 .child(format!("{process_interval}s")),
@@ -308,7 +308,7 @@ impl NyaTermApp {
                                         .child(
                                             div()
                                                 .min_w(px(40.))
-                                                .font_family("JetBrains Mono")
+                                                .font_family(crate::features::gpui_code_font_family())
                                                 .text_size(px(11.))
                                                 .text_color(rgb(palette.text))
                                                 .child(format!("{docker_interval}s")),

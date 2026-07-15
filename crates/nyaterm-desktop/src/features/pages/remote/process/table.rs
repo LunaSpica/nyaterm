@@ -217,7 +217,7 @@ pub(in crate::features::pages::remote) fn process_table_row(
                     )
                     .child(
                         div()
-                            .font_family("JetBrains Mono")
+                            .font_family(crate::features::gpui_code_font_family())
                             .text_size(px(10.))
                             .text_color(rgb(palette.text_dimmed))
                             .overflow_hidden()
@@ -256,7 +256,7 @@ pub(in crate::features::pages::remote) fn process_table_row(
                     )
                     .child(
                         div()
-                            .font_family("JetBrains Mono")
+                            .font_family(crate::features::gpui_code_font_family())
                             .text_size(px(10.))
                             .text_color(rgb(palette.text_dimmed))
                             .overflow_hidden()
@@ -349,7 +349,7 @@ pub(in crate::features::pages::remote) fn process_table_cell(
     // Tauri ProcessManager numeric columns are mono + right-aligned.
     div()
         .min_w_0()
-        .font_family("JetBrains Mono")
+        .font_family(crate::features::gpui_code_font_family())
         .text_xs()
         .when(numeric, |this| this.text_right())
         .text_color(color.unwrap_or_else(|| rgb(palette.text).into()))

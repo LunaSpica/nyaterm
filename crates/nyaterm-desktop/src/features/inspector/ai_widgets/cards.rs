@@ -160,7 +160,7 @@ impl NyaTermApp {
                     .bg(rgb(palette.surface))
                     .px_2()
                     .py_1()
-                    .font_family("JetBrains Mono")
+                    .font_family(crate::features::gpui_code_font_family())
                     .text_size(px(11.))
                     .text_color(rgb(palette.text))
                     .line_height(px(16.))

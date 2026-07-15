@@ -447,7 +447,7 @@ impl NyaTermApp {
                                                                     rgb(palette.border)
                                                                 })
                                                                 .bg(rgb(palette.input))
-                                                                .font_family("JetBrains Mono")
+                                                                .font_family(crate::features::gpui_code_font_family())
                                                                 .text_size(px(11.))
                                                                 .text_color(rgb(palette.text))
                                                                 .line_height(px(16.))

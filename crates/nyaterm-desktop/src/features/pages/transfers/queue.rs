@@ -169,7 +169,7 @@ impl NyaTermApp {
                             .id(SharedString::from("transfer-download-path-footer"))
                             .min_w_0()
                             .flex_1()
-                            .font_family("JetBrains Mono")
+                            .font_family(crate::features::gpui_code_font_family())
                             .text_size(px(10.))
                             .text_color(rgb(palette.text_muted))
                             .cursor_pointer()

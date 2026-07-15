@@ -151,7 +151,7 @@ pub(in crate::features::pages::remote) fn docker_confirm_panel(
                 )
                 .child(
                     div()
-                        .font_family("JetBrains Mono")
+                        .font_family(crate::features::gpui_code_font_family())
                         .text_xs()
                         .text_color(rgb(0xfecdd3))
                         .child(confirm.detail),

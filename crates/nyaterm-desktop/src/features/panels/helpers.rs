@@ -134,7 +134,7 @@ pub(in crate::features::panels) fn quick_command_icon_mark(
             .flex()
             .items_center()
             .justify_center()
-            .font_family("JetBrains Mono")
+            .font_family(crate::features::gpui_code_font_family())
             .text_size(px(8.))
             .font_weight(FontWeight(800.))
             .text_color(color)
@@ -254,7 +254,7 @@ pub(in crate::features::panels) fn quick_command_editor_field(
             div()
                 .mt_1()
                 .min_h(px(20.))
-                .font_family("JetBrains Mono")
+                .font_family(crate::features::gpui_code_font_family())
                 .text_xs()
                 .line_height(px(18.))
                 .text_color(if is_placeholder {
@@ -321,7 +321,7 @@ pub(in crate::features::panels) fn quick_command_editor_script_field(
             div()
                 .mt_2()
                 .min_h(px(112.))
-                .font_family("JetBrains Mono")
+                .font_family(crate::features::gpui_code_font_family())
                 .text_xs()
                 .line_height(px(18.))
                 .text_color(if is_placeholder {

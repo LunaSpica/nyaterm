@@ -180,7 +180,7 @@ fn quick_command_import_source_card(
                 .flex()
                 .items_center()
                 .justify_center()
-                .font_family("JetBrains Mono")
+                .font_family(crate::features::gpui_code_font_family())
                 .text_sm()
                 .font_weight(FontWeight(800.))
                 .text_color(rgb(accent))

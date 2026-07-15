@@ -106,7 +106,7 @@ impl NyaTermApp {
                                         .child(
                                             div()
                                                 .min_w(px(28.))
-                                                .font_family("JetBrains Mono")
+                                                .font_family(crate::features::gpui_code_font_family())
                                                 .text_size(px(11.))
                                                 .text_color(rgb(palette.text))
                                                 .child(min_chars.to_string()),
@@ -141,7 +141,7 @@ impl NyaTermApp {
                                         .child(
                                             div()
                                                 .min_w(px(28.))
-                                                .font_family("JetBrains Mono")
+                                                .font_family(crate::features::gpui_code_font_family())
                                                 .text_size(px(11.))
                                                 .text_color(rgb(palette.text))
                                                 .child(max_chars.to_string()),
@@ -177,7 +177,7 @@ impl NyaTermApp {
                             .gap_1()
                             .child(
                                 div()
-                                    .font_family("JetBrains Mono")
+                                    .font_family(crate::features::gpui_code_font_family())
                                     .text_size(px(10.))
                                     .text_color(rgb(palette.text_muted))
                                     .child(truncate_preview(&word_sep, 28)),
@@ -216,7 +216,7 @@ impl NyaTermApp {
                             .gap_1()
                             .child(
                                 div()
-                                    .font_family("JetBrains Mono")
+                                    .font_family(crate::features::gpui_code_font_family())
                                     .text_size(px(11.))
                                     .text_color(rgb(palette.text))
                                     .child(format!("{delay_ms} ms")),

@@ -345,7 +345,7 @@ impl NyaTermApp {
                                     )
                                     .child(
                                         div()
-                                            .font_family("JetBrains Mono")
+                                            .font_family(crate::features::gpui_code_font_family())
                                             .text_size(px(10.))
                                             .text_color(rgb(self.theme_palette().text_dimmed))
                                             .child(match self.network_tab {

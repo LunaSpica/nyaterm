@@ -226,7 +226,7 @@ pub(in crate::features::pages::tunnels) fn network_tunnel_editor_panel(
                 )
                 .child(
                     div()
-                        .font_family("JetBrains Mono")
+                        .font_family(crate::features::gpui_code_font_family())
                         .text_xs()
                         .text_color(rgb(palette.text))
                         .child(preview),
@@ -301,7 +301,7 @@ pub(in crate::features::pages::tunnels) fn tunnel_editor_selector(
         )
         .child(
             div()
-                .font_family("JetBrains Mono")
+                .font_family(crate::features::gpui_code_font_family())
                 .text_size(px(12.))
                 .text_color(rgb(palette.text))
                 .child(truncate_preview(&value, 42)),

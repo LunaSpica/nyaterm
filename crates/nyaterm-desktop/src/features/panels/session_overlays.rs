@@ -66,7 +66,7 @@ impl NyaTermApp {
                             .px_3()
                             .flex()
                             .items_center()
-                            .font_family("JetBrains Mono")
+                            .font_family(crate::features::gpui_code_font_family())
                             .text_sm()
                             .text_color(if self.rename_draft.is_empty() {
                                 rgb(palette.text_muted)
@@ -407,7 +407,7 @@ impl NyaTermApp {
                             .px_3()
                             .flex()
                             .items_center()
-                            .font_family("JetBrains Mono")
+                            .font_family(crate::features::gpui_code_font_family())
                             .text_sm()
                             .text_color(if self.startup_command_draft.is_empty() {
                                 rgb(palette.text_muted)
@@ -436,7 +436,7 @@ impl NyaTermApp {
                                     )
                                     .child(
                                         div()
-                                            .font_family("JetBrains Mono")
+                                            .font_family(crate::features::gpui_code_font_family())
                                             .text_sm()
                                             .text_color(rgb(palette.text))
                                             .child(delay_label),

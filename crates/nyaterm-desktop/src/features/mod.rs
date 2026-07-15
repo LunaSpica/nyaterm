@@ -136,6 +136,7 @@ pub(in crate::features) use ai_jobs::{
 };
 pub use app_state::NyaTermApp;
 pub(in crate::features) use app_state::{PendingSessionStart, SessionPaneState};
+pub(in crate::features) use appearance::gpui_code_font_family;
 pub(in crate::features) use auth_runtime::{
     CredentialPromptBroker, CredentialPromptState, HostKeyPromptBroker, HostKeyPromptChoice,
     HostKeyPromptIssue, HostKeyPromptRequest, NativeHostKeyVerifier, NativeOtpProvider,

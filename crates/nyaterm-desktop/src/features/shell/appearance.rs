@@ -390,6 +390,14 @@ fn gpui_terminal_font_fallback() -> &'static str {
     }
 }
 
+pub(in crate::features) fn gpui_code_font_family() -> &'static str {
+    if cfg!(target_os = "windows") {
+        "Consolas"
+    } else {
+        "JetBrains Mono"
+    }
+}
+
 fn gpui_ui_font_fallback() -> &'static str {
     if cfg!(target_os = "windows") {
         "Microsoft YaHei UI"
@@ -447,6 +455,13 @@ mod tests {
             ),
             "Microsoft YaHei UI"
         );
+    }
+
+    #[test]
+    fn windows_code_font_uses_installed_platform_default() {
+        if cfg!(target_os = "windows") {
+            assert_eq!(gpui_code_font_family(), "Consolas");
+        }
     }
 
     #[test]

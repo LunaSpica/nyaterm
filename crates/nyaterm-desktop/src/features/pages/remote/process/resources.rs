@@ -21,7 +21,7 @@ pub(in crate::features::pages::remote) fn dense_capability_line(
         .child(
             div()
                 .min_w_0()
-                .font_family("JetBrains Mono")
+                .font_family(crate::features::gpui_code_font_family())
                 .text_size(px(10.))
                 .text_color(rgb(palette.text))
                 .overflow_hidden()
@@ -60,7 +60,7 @@ pub(in crate::features::pages::remote) fn resource_gauge_card(
                 .justify_center()
                 .child(
                     div()
-                        .font_family("JetBrains Mono")
+                        .font_family(crate::features::gpui_code_font_family())
                         .text_size(px(11.))
                         .font_weight(FontWeight(700.))
                         .text_color(usage_color(palette, ratio))
@@ -119,7 +119,7 @@ pub(in crate::features::pages::remote) fn resource_summary_card(
         )
         .child(
             div()
-                .font_family("JetBrains Mono")
+                .font_family(crate::features::gpui_code_font_family())
                 .text_size(px(12.))
                 .font_weight(FontWeight(700.))
                 .text_color(usage_color(palette, ratio))

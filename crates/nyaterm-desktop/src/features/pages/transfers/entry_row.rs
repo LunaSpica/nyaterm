@@ -81,7 +81,7 @@ pub(super) fn transfer_browser_parent_entry_row(
                 .child(
                     div()
                         .min_w_0()
-                        .font_family("JetBrains Mono")
+                        .font_family(crate::features::gpui_code_font_family())
                         .text_xs()
                         .text_color(rgb(palette.text_muted))
                         .child(truncate_preview(&parent_path, 32)),
@@ -262,7 +262,7 @@ pub(super) fn transfer_browser_entry_row(
                             .px_2()
                             .flex()
                             .items_center()
-                            .font_family("JetBrains Mono")
+                            .font_family(crate::features::gpui_code_font_family())
                             .text_xs()
                             .text_color(if rename_value.is_empty() {
                                 rgb(palette.text_muted)
@@ -328,7 +328,7 @@ pub(super) fn transfer_browser_entry_row(
                 .flex_none()
                 .truncate()
                 .text_xs()
-                .font_family("JetBrains Mono")
+                .font_family(crate::features::gpui_code_font_family())
                 .text_color(rgb(palette.text_muted))
                 .child(
                     entry
@@ -343,7 +343,7 @@ pub(super) fn transfer_browser_entry_row(
                 .flex_none()
                 .truncate()
                 .text_xs()
-                .font_family("JetBrains Mono")
+                .font_family(crate::features::gpui_code_font_family())
                 .text_color(rgb(palette.text_muted))
                 .child(if entry.owner.is_empty() {
                     "-".to_string()
@@ -357,7 +357,7 @@ pub(super) fn transfer_browser_entry_row(
                 .flex_none()
                 .truncate()
                 .text_xs()
-                .font_family("JetBrains Mono")
+                .font_family(crate::features::gpui_code_font_family())
                 .text_color(rgb(palette.text_muted))
                 .child(if entry.group.is_empty() {
                     "-".to_string()

@@ -105,7 +105,9 @@ impl NyaTermApp {
                                         )
                                         .child(
                                             div()
-                                                .font_family("JetBrains Mono")
+                                                .font_family(
+                                                    crate::features::gpui_code_font_family(),
+                                                )
                                                 .text_sm()
                                                 .font_weight(FontWeight(700.))
                                                 .text_color(rgb(if code_raw == "------" {
@@ -119,7 +121,9 @@ impl NyaTermApp {
                                             this.child(
                                                 div()
                                                     .text_size(px(10.))
-                                                    .font_family("JetBrains Mono")
+                                                    .font_family(
+                                                        crate::features::gpui_code_font_family(),
+                                                    )
                                                     .text_color(rgb(if remaining <= 5 {
                                                         palette.warning
                                                     } else {

@@ -72,7 +72,7 @@ impl NyaTermApp {
                                 .px_2()
                                 .flex()
                                 .items_center()
-                                .font_family("JetBrains Mono")
+                                .font_family(crate::features::gpui_code_font_family())
                                 .text_xs()
                                 .text_color(if self.transfer_browser_path_draft.is_empty() {
                                     rgb(palette.text_muted)
@@ -109,7 +109,7 @@ impl NyaTermApp {
                                 .rounded_sm()
                                 .px_2()
                                 .py_1()
-                                .font_family("JetBrains Mono")
+                                .font_family(crate::features::gpui_code_font_family())
                                 .text_size(px(10.))
                                 .text_color(rgb(palette.text_muted))
                                 .cursor_pointer()
@@ -410,7 +410,7 @@ fn transfer_browser_path_history_list(
                 .px_2()
                 .flex()
                 .items_center()
-                .font_family("JetBrains Mono")
+                .font_family(crate::features::gpui_code_font_family())
                 .text_size(px(10.))
                 .text_color(if is_current {
                     rgb(palette.accent)
@@ -477,7 +477,7 @@ fn transfer_browser_path_quick_list(
                 .flex()
                 .items_center()
                 .gap_1()
-                .font_family("JetBrains Mono")
+                .font_family(crate::features::gpui_code_font_family())
                 .text_size(px(10.))
                 .text_color(rgb(palette.text))
                 .cursor_pointer()
@@ -568,7 +568,7 @@ fn transfer_browser_path_breadcrumbs(
         return row
             .child(
                 div()
-                    .font_family("JetBrains Mono")
+                    .font_family(crate::features::gpui_code_font_family())
                     .text_xs()
                     .text_color(rgb(palette.text_muted))
                     .child(truncate_preview(&raw_browser_path, 72)),
@@ -582,7 +582,7 @@ fn transfer_browser_path_breadcrumbs(
             row = row.child(
                 div()
                     .flex_shrink_0()
-                    .font_family("JetBrains Mono")
+                    .font_family(crate::features::gpui_code_font_family())
                     .text_xs()
                     .text_color(rgb(0x475569))
                     .child("/"),
@@ -612,7 +612,7 @@ fn transfer_browser_path_breadcrumbs(
                 .px_2()
                 .flex()
                 .items_center()
-                .font_family("JetBrains Mono")
+                .font_family(crate::features::gpui_code_font_family())
                 .text_xs()
                 .text_color(if is_current {
                     rgb(0xd1fae5)

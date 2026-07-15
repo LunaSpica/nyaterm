@@ -32,7 +32,7 @@ pub(in crate::features::pages::remote) fn process_details(
         .gap_1()
         .child(
             div()
-                .font_family("JetBrains Mono")
+                .font_family(crate::features::gpui_code_font_family())
                 .text_size(px(11.))
                 .line_height(px(15.))
                 .text_color(rgb(palette.text))
@@ -191,7 +191,7 @@ pub(in crate::features::pages::remote) fn process_detail_chip(
         )
         .child(
             div()
-                .font_family("JetBrains Mono")
+                .font_family(crate::features::gpui_code_font_family())
                 .text_size(px(11.))
                 .text_color(rgb(palette.text))
                 .child(truncate_preview(&value, 24)),
@@ -231,7 +231,7 @@ pub(in crate::features::pages::remote) fn process_signal_confirm_panel(
                 )
                 .child(
                     div()
-                        .font_family("JetBrains Mono")
+                        .font_family(crate::features::gpui_code_font_family())
                         .text_xs()
                         .text_color(rgb(0xfecdd3))
                         .child(format!(

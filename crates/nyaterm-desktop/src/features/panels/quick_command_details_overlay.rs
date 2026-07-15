@@ -150,7 +150,7 @@ impl NyaTermApp {
                                     .mt_2()
                                     .max_h(px(180.))
                                     .overflow_hidden()
-                                    .font_family("JetBrains Mono")
+                                    .font_family(crate::features::gpui_code_font_family())
                                     .text_xs()
                                     .line_height(px(18.))
                                     .text_color(rgb(0xdbe4f0))

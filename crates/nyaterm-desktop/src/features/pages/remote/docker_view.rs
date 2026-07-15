@@ -251,7 +251,7 @@ impl NyaTermApp {
                                     .id(SharedString::from("docker-logs-scroll"))
                                     .overflow_scroll()
                                     .scrollbar_width(px(6.))
-                                    .font_family("JetBrains Mono")
+                                    .font_family(crate::features::gpui_code_font_family())
                                     .text_size(px(10.))
                                     .line_height(px(16.))
                                     .text_color(rgb(0xaeb7c8))

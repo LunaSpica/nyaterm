@@ -50,7 +50,7 @@ pub(in crate::features::pages::remote) fn docker_details_panel(
                     .gap(px(2.))
                     .child(
                         div()
-                            .font_family("JetBrains Mono")
+                            .font_family(crate::features::gpui_code_font_family())
                             .text_size(px(11.))
                             .text_color(rgb(palette.text))
                             .overflow_hidden()
@@ -103,7 +103,7 @@ pub(in crate::features::pages::remote) fn docker_details_panel(
                     )
                     .child(
                         div()
-                            .font_family("JetBrains Mono")
+                            .font_family(crate::features::gpui_code_font_family())
                             .text_size(px(10.))
                             .text_color(rgb(palette.text_dimmed))
                             .child(ip_address),
@@ -480,7 +480,7 @@ fn docker_detail_line(
             div()
                 .min_w_0()
                 .flex_1()
-                .font_family("JetBrains Mono")
+                .font_family(crate::features::gpui_code_font_family())
                 .text_size(px(11.))
                 .line_height(px(15.))
                 .text_color(rgb(palette.text))

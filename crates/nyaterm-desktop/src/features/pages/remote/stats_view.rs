@@ -461,14 +461,14 @@ fn cpu_core_row(palette: crate::theme::ThemePalette, index: usize, usage: f64) -
                 .gap_2()
                 .child(
                     div()
-                        .font_family("JetBrains Mono")
+                        .font_family(crate::features::gpui_code_font_family())
                         .text_xs()
                         .text_color(rgb(palette.text))
                         .child(format!("CPU {index}")),
                 )
                 .child(
                     div()
-                        .font_family("JetBrains Mono")
+                        .font_family(crate::features::gpui_code_font_family())
                         .text_xs()
                         .text_color(usage_color(palette, ratio))
                         .child(format!("{usage:.1}%")),

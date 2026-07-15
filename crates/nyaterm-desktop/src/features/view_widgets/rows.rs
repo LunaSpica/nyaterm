@@ -182,7 +182,7 @@ pub(in crate::features) fn cloud_sync_history_row(
                                     } else {
                                         rgb(palette.surface)
                                     })
-                                    .font_family("JetBrains Mono")
+                                    .font_family(crate::features::gpui_code_font_family())
                                     .text_size(px(10.))
                                     .text_color(if is_problem {
                                         rgb(0xffa198)
@@ -211,7 +211,7 @@ pub(in crate::features) fn cloud_sync_history_row(
                                     .child(
                                         div()
                                             .mt_0()
-                                            .font_family("JetBrains Mono")
+                                            .font_family(crate::features::gpui_code_font_family())
                                             .text_size(px(11.))
                                             .text_color(rgb(palette.text))
                                             .child(revision.unwrap_or_default()),

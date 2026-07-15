@@ -178,7 +178,7 @@ pub(in crate::features::pages::remote) fn docker_compose_service_row(
                 )
                 .child(
                     div()
-                        .font_family("JetBrains Mono")
+                        .font_family(crate::features::gpui_code_font_family())
                         .text_size(px(10.))
                         .text_color(rgb(palette.text_dimmed))
                         .overflow_hidden()

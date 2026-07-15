@@ -141,7 +141,7 @@ impl NyaTermApp {
                                     .bg(rgb(palette.input))
                                     .px_3()
                                     .py_2()
-                                    .font_family("JetBrains Mono")
+                                    .font_family(crate::features::gpui_code_font_family())
                                     .text_sm()
                                     .text_color(if self.temporary_ssh_link_draft.is_empty() {
                                         rgb(palette.text_muted)
@@ -179,7 +179,7 @@ impl NyaTermApp {
                                         )
                                         .child(
                                             div()
-                                                .font_family("JetBrains Mono")
+                                                .font_family(crate::features::gpui_code_font_family())
                                                 .text_size(px(11.))
                                                 .text_color(rgb(palette.text))
                                                 .child(summary),
