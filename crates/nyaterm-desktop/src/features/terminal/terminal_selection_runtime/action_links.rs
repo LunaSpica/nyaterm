@@ -42,7 +42,7 @@ impl NyaTermApp {
         event: &MouseMoveEvent,
         cx: &mut Context<Self>,
     ) {
-        if !self.settings.terminal_action_links_enabled {
+        if !self.settings.terminal_action_links_enabled || self.runtime_output_pressure_active() {
             self.clear_action_link_tooltip(cx);
             return;
         }

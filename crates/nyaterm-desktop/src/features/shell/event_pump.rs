@@ -811,10 +811,16 @@ impl NyaTermApp {
         dirty |= self.drive_pending_focus(window);
         let pending_focus_duration = stage_started_at.elapsed();
         let stage_started_at = Instant::now();
-        dirty |= self.poll_connection_hover_delay();
+        let output_pressure_after_render = self.runtime_output_pressure_active();
+        if connection_hover_poll_allowed(
+            output_pressure_after_render,
+            self.has_pending_session_start(),
+            !self.pending_saved_connection_queue.is_empty(),
+        ) {
+            dirty |= self.poll_connection_hover_delay();
+        }
         let connection_hover_duration = stage_started_at.elapsed();
         let stage_started_at = Instant::now();
-        let output_pressure_after_render = self.runtime_output_pressure_active();
         if !output_pressure_after_render {
             dirty |= self.poll_action_link_tooltip_delay(cx);
         }
@@ -1325,6 +1331,14 @@ fn terminal_render_work_pressure_active(
     runtime_output_pressure || pending_session_start || queued_saved_connection_start
 }
 
+fn connection_hover_poll_allowed(
+    runtime_output_pressure: bool,
+    pending_session_start: bool,
+    queued_saved_connection_start: bool,
+) -> bool {
+    !runtime_output_pressure && !pending_session_start && !queued_saved_connection_start
+}
+
 fn terminal_performance_tick_session_ids(visible_session_ids: &[&str]) -> Vec<String> {
     let mut ids = Vec::with_capacity(visible_session_ids.len());
     for session_id in visible_session_ids {
@@ -1624,6 +1638,14 @@ mod tests {
         assert!(terminal_render_work_pressure_active(true, false, false));
         assert!(terminal_render_work_pressure_active(false, true, false));
         assert!(terminal_render_work_pressure_active(false, false, true));
+    }
+
+    #[test]
+    fn connection_hover_poll_waits_for_idle_runtime() {
+        assert!(connection_hover_poll_allowed(false, false, false));
+        assert!(!connection_hover_poll_allowed(true, false, false));
+        assert!(!connection_hover_poll_allowed(false, true, false));
+        assert!(!connection_hover_poll_allowed(false, false, true));
     }
 
     #[test]

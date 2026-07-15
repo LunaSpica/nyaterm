@@ -1,6 +1,6 @@
 use super::*;
 
-const CONNECTION_HOVER_INTENT_DELAY: Duration = Duration::from_millis(250);
+const CONNECTION_HOVER_INTENT_DELAY: Duration = Duration::from_millis(700);
 
 impl NyaTermApp {
     pub(in crate::features) fn dismiss_connection_hover(&mut self, cx: &mut Context<Self>) {
