@@ -178,9 +178,17 @@ impl NyaTermApp {
                 }
             }
 
+            let allow_deferred_events = terminal_frame_deferred_events_can_apply(
+                self.terminal_runtime.session_event_backlog_active,
+                self.terminal_runtime.session_event_queued_output_bytes,
+                self.session_event_bridge.queued_output_bytes(),
+                pending_terminal_frame_output_events(&self.pending_terminal_frame_events),
+                self.terminal_frame_pipeline.queued_output_bytes(),
+            );
             let (frames, coalesced) = pop_terminal_frame_events_for_apply(
                 &mut self.pending_terminal_frame_events,
                 &visible_session_ids,
+                allow_deferred_events,
             );
             if frames.is_empty() {
                 break;
@@ -683,7 +691,11 @@ impl NyaTermApp {
 fn pop_terminal_frame_events_for_apply(
     events: &mut VecDeque<TerminalFrameEvent>,
     visible_session_ids: &[String],
+    allow_deferred_events: bool,
 ) -> (Vec<TerminalFrameEvent>, usize) {
+    if !allow_deferred_events {
+        return pop_terminal_frame_output_events_for_apply(events, visible_session_ids);
+    }
     let Some(first) = events.pop_front() else {
         return (Vec::new(), 0);
     };
@@ -694,6 +706,28 @@ fn pop_terminal_frame_events_for_apply(
     let mut output_run = vec![first];
     while matches!(events.front(), Some(TerminalFrameEvent::Output(_))) {
         let Some(event) = events.pop_front() else {
+            break;
+        };
+        output_run.push(event);
+    }
+    coalesce_terminal_output_run_for_apply(output_run, visible_session_ids)
+}
+
+fn pop_terminal_frame_output_events_for_apply(
+    events: &mut VecDeque<TerminalFrameEvent>,
+    visible_session_ids: &[String],
+) -> (Vec<TerminalFrameEvent>, usize) {
+    let Some(first_output_index) = events
+        .iter()
+        .position(|event| matches!(event, TerminalFrameEvent::Output(_)))
+    else {
+        return (Vec::new(), 0);
+    };
+
+    let mut output_run = Vec::new();
+    let index = first_output_index;
+    while matches!(events.get(index), Some(TerminalFrameEvent::Output(_))) {
+        let Some(event) = events.remove(index) else {
             break;
         };
         output_run.push(event);
@@ -847,6 +881,27 @@ fn terminal_frame_snapshot_request_waits_for_idle(runtime_output_pressure: bool)
     runtime_output_pressure
 }
 
+fn terminal_frame_deferred_events_can_apply(
+    session_event_backlog_active: bool,
+    session_event_queued_output_bytes: usize,
+    bridge_queued_output_bytes: usize,
+    pending_terminal_frame_output_events: usize,
+    queued_terminal_frame_output_bytes: usize,
+) -> bool {
+    !session_event_backlog_active
+        && session_event_queued_output_bytes == 0
+        && bridge_queued_output_bytes == 0
+        && pending_terminal_frame_output_events == 0
+        && queued_terminal_frame_output_bytes == 0
+}
+
+fn pending_terminal_frame_output_events(events: &VecDeque<TerminalFrameEvent>) -> usize {
+    events
+        .iter()
+        .filter(|event| matches!(event, TerminalFrameEvent::Output(_)))
+        .count()
+}
+
 fn workspace_pane_node_visible_session_ids(root: &WorkspacePaneNode) -> Vec<&str> {
     let mut ids = Vec::new();
     collect_workspace_pane_node_visible_session_ids(root, &mut ids);
@@ -937,7 +992,7 @@ mod frame_event_queue_tests {
             output_frame("b", 3),
         ]);
 
-        let (frames, coalesced) = pop_terminal_frame_events_for_apply(&mut events, &[]);
+        let (frames, coalesced) = pop_terminal_frame_events_for_apply(&mut events, &[], true);
 
         assert_eq!(coalesced, 1);
         assert!(events.is_empty());
@@ -966,7 +1021,7 @@ mod frame_event_queue_tests {
         ]);
 
         let (frames, coalesced) =
-            pop_terminal_frame_events_for_apply(&mut events, &["visible".to_string()]);
+            pop_terminal_frame_events_for_apply(&mut events, &["visible".to_string()], true);
 
         assert_eq!(coalesced, 1);
         assert!(events.is_empty());
@@ -996,7 +1051,7 @@ mod frame_event_queue_tests {
             output_frame("a", 4),
         ]);
 
-        let (frames, coalesced) = pop_terminal_frame_events_for_apply(&mut events, &[]);
+        let (frames, coalesced) = pop_terminal_frame_events_for_apply(&mut events, &[], true);
 
         assert_eq!(coalesced, 1);
         assert!(events.is_empty());
@@ -1023,9 +1078,10 @@ mod frame_event_queue_tests {
             output_frame("a", 2),
         ]);
 
-        let (first, first_coalesced) = pop_terminal_frame_events_for_apply(&mut events, &[]);
-        let (second, second_coalesced) = pop_terminal_frame_events_for_apply(&mut events, &[]);
-        let (third, third_coalesced) = pop_terminal_frame_events_for_apply(&mut events, &[]);
+        let (first, first_coalesced) = pop_terminal_frame_events_for_apply(&mut events, &[], true);
+        let (second, second_coalesced) =
+            pop_terminal_frame_events_for_apply(&mut events, &[], true);
+        let (third, third_coalesced) = pop_terminal_frame_events_for_apply(&mut events, &[], true);
 
         assert_eq!(first_coalesced, 0);
         assert!(matches!(
@@ -1040,6 +1096,50 @@ mod frame_event_queue_tests {
             TerminalFrameEvent::Output(frame) if frame.revision == 2
         ));
         assert!(events.is_empty());
+    }
+
+    #[test]
+    fn terminal_frame_apply_skips_deferred_events_under_output_pressure() {
+        let mut events = VecDeque::from([
+            buffer_text_frame("a"),
+            output_frame("a", 1),
+            output_frame("a", 2),
+        ]);
+
+        let (frames, coalesced) = pop_terminal_frame_events_for_apply(&mut events, &[], false);
+
+        assert_eq!(coalesced, 1);
+        assert_eq!(frames.len(), 1);
+        assert!(matches!(
+            &frames[0],
+            TerminalFrameEvent::Output(frame) if frame.revision == 2
+        ));
+        assert_eq!(events.len(), 1);
+        assert!(matches!(
+            events.front(),
+            Some(TerminalFrameEvent::BufferText(_))
+        ));
+
+        let (pressure_frames, _) = pop_terminal_frame_events_for_apply(&mut events, &[], false);
+        assert!(pressure_frames.is_empty());
+        assert_eq!(events.len(), 1);
+
+        let (idle_frames, _) = pop_terminal_frame_events_for_apply(&mut events, &[], true);
+        assert!(matches!(
+            idle_frames.first(),
+            Some(TerminalFrameEvent::BufferText(_))
+        ));
+        assert!(events.is_empty());
+    }
+
+    #[test]
+    fn terminal_frame_deferred_events_wait_for_output_backlog() {
+        assert!(terminal_frame_deferred_events_can_apply(false, 0, 0, 0, 0));
+        assert!(!terminal_frame_deferred_events_can_apply(true, 0, 0, 0, 0));
+        assert!(!terminal_frame_deferred_events_can_apply(false, 1, 0, 0, 0));
+        assert!(!terminal_frame_deferred_events_can_apply(false, 0, 1, 0, 0));
+        assert!(!terminal_frame_deferred_events_can_apply(false, 0, 0, 1, 0));
+        assert!(!terminal_frame_deferred_events_can_apply(false, 0, 0, 0, 1));
     }
 }
 
