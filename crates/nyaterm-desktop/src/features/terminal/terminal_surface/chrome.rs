@@ -121,6 +121,7 @@ impl NyaTermApp {
         let palette = self.theme_palette();
         let buffer_matches = self.terminal_buffer_matches();
         let history_results = self.terminal_history_search_results();
+        let history_pending = self.terminal_history_search_pending_for_current_query();
         let (status, is_error) = match self.terminal_search_mode {
             TerminalSearchMode::Buffer => match &buffer_matches {
                 Ok(matches) if self.terminal_search_query.trim().is_empty() => {
@@ -147,6 +148,7 @@ impl NyaTermApp {
                 }
                 Err(error) => (truncate_preview(error, 40), true),
             },
+            TerminalSearchMode::History if history_pending => ("searching".to_string(), false),
             TerminalSearchMode::History => match &history_results {
                 Ok(response) if self.terminal_search_query.trim().is_empty() => {
                     ("idle".to_string(), false)
@@ -308,7 +310,7 @@ impl NyaTermApp {
                         cx.listener(|this, _, _, cx| {
                             this.terminal_search_mode = TerminalSearchMode::Buffer;
                             this.terminal_search_active_index = 0;
-                            this.request_active_terminal_buffer_search();
+                            this.request_active_terminal_search();
                             cx.notify();
                         }),
                     ))
@@ -320,6 +322,7 @@ impl NyaTermApp {
                         cx.listener(|this, _, _, cx| {
                             this.terminal_search_mode = TerminalSearchMode::History;
                             this.terminal_search_active_index = 0;
+                            this.request_active_terminal_search();
                             cx.notify();
                         }),
                     ))
@@ -379,7 +382,7 @@ impl NyaTermApp {
                             this.terminal_search_case_sensitive =
                                 !this.terminal_search_case_sensitive;
                             this.terminal_search_active_index = 0;
-                            this.request_active_terminal_buffer_search();
+                            this.request_active_terminal_search();
                             cx.notify();
                         }),
                     ))
@@ -391,7 +394,7 @@ impl NyaTermApp {
                         cx.listener(|this, _, _, cx| {
                             this.terminal_search_regex = !this.terminal_search_regex;
                             this.terminal_search_active_index = 0;
-                            this.request_active_terminal_buffer_search();
+                            this.request_active_terminal_search();
                             cx.notify();
                         }),
                     ))
@@ -403,7 +406,7 @@ impl NyaTermApp {
                         cx.listener(|this, _, _, cx| {
                             this.terminal_search_whole_word = !this.terminal_search_whole_word;
                             this.terminal_search_active_index = 0;
-                            this.request_active_terminal_buffer_search();
+                            this.request_active_terminal_search();
                             cx.notify();
                         }),
                     ))

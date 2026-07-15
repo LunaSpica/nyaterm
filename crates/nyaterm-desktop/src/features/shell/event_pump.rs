@@ -469,6 +469,7 @@ impl NyaTermApp {
                 session_start_ms = background_timings.session_start.as_millis(),
                 prompts_ms = background_timings.prompts.as_millis(),
                 terminal_frames_ms = background_timings.terminal_frames.as_millis(),
+                recording_ms = background_timings.recording.as_millis(),
                 startup_restore_ms = background_timings.startup_restore.as_millis(),
                 transfer_ms = background_timings.transfer.as_millis(),
                 ai_ms = background_timings.ai.as_millis(),
@@ -532,6 +533,7 @@ impl NyaTermApp {
                 | self.drain_duplicate_prompts()
         );
         drain_stage!(terminal_frames, self.drain_terminal_frame_events(cx));
+        drain_stage!(recording, self.drain_recording_pipeline_events());
         // Continue sequential startup restore after async SSH connects complete.
         // Window handle is not available here; pump only when not waiting on pending.
         drain_stage!(
@@ -857,6 +859,7 @@ struct RuntimeBackgroundDrainTimings {
     session_start: Duration,
     prompts: Duration,
     terminal_frames: Duration,
+    recording: Duration,
     startup_restore: Duration,
     transfer: Duration,
     ai: Duration,

@@ -341,6 +341,8 @@ impl NyaTermApp {
             terminal_search_regex: false,
             terminal_search_whole_word: false,
             terminal_search_active_index: 0,
+            terminal_history_search_pending_key: None,
+            terminal_history_search_result: None,
             search_engine_edit_index: None,
             search_engine_expanded_index: None,
             search_engine_edit_field: SearchEngineEditorField::Name,

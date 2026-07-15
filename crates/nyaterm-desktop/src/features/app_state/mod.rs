@@ -125,6 +125,8 @@ pub struct NyaTermApp {
     pub(in crate::features) terminal_search_regex: bool,
     pub(in crate::features) terminal_search_whole_word: bool,
     pub(in crate::features) terminal_search_active_index: usize,
+    pub(in crate::features) terminal_history_search_pending_key: Option<RecordingHistorySearchKey>,
+    pub(in crate::features) terminal_history_search_result: Option<RecordingHistorySearchEvent>,
     /// Which search engine row is focused for name/url editing (Settings → Search).
     pub(in crate::features) search_engine_edit_index: Option<usize>,
     pub(in crate::features) search_engine_expanded_index: Option<usize>,

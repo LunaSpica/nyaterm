@@ -10,7 +10,7 @@ impl NyaTermApp {
         self.terminal_search_open = true;
         self.terminal_search_active_index = 0;
         self.terminal_status = "terminal search opened".to_string();
-        self.request_active_terminal_buffer_search();
+        self.request_active_terminal_search();
         window.focus(&self.terminal_search_focus);
         cx.notify();
     }
@@ -52,6 +52,11 @@ impl NyaTermApp {
             return;
         };
         self.request_terminal_frame_search(&session_id, key);
+    }
+
+    pub(in crate::features) fn request_active_terminal_search(&mut self) {
+        self.request_active_terminal_buffer_search();
+        self.request_active_terminal_history_search();
     }
 
     pub(in crate::features) fn terminal_buffer_matches(
@@ -99,39 +104,85 @@ impl NyaTermApp {
         cx.notify();
     }
 
+    pub(in crate::features) fn terminal_history_search_key(
+        &self,
+    ) -> Option<RecordingHistorySearchKey> {
+        let session_id = self.active_session_id.clone()?;
+        let query = self.terminal_search_query.trim();
+        if query.is_empty() {
+            return None;
+        }
+        Some(RecordingHistorySearchKey {
+            session_id,
+            query: query.to_string(),
+            case_sensitive: self.terminal_search_case_sensitive,
+            regex: self.terminal_search_regex,
+            whole_word: self.terminal_search_whole_word,
+            limit: Some(8),
+            context_before: Some(1),
+            context_after: Some(1),
+            max_lines: Some(30_000),
+        })
+    }
+
+    pub(in crate::features) fn request_active_terminal_history_search(&mut self) {
+        if !self.terminal_search_open || self.terminal_search_mode != TerminalSearchMode::History {
+            return;
+        }
+        let Some(key) = self.terminal_history_search_key() else {
+            self.terminal_history_search_pending_key = None;
+            self.terminal_history_search_result = None;
+            return;
+        };
+        if self.terminal_history_search_pending_key.as_ref() == Some(&key)
+            || self
+                .terminal_history_search_result
+                .as_ref()
+                .is_some_and(|result| result.key == key)
+        {
+            return;
+        }
+        self.terminal_history_search_pending_key = Some(key.clone());
+        self.recording_write_pipeline.request_history_search(key);
+    }
+
+    pub(in crate::features) fn drain_recording_pipeline_events(&mut self) -> bool {
+        let mut dirty = false;
+        while let Some(event) = self.recording_write_pipeline.try_recv_event() {
+            match event {
+                RecordingWriteEvent::HistorySearch(event) => {
+                    if self.terminal_history_search_pending_key.as_ref() == Some(&event.key) {
+                        self.terminal_history_search_pending_key = None;
+                        self.terminal_history_search_result = Some(event);
+                        dirty = true;
+                    }
+                }
+            }
+        }
+        dirty
+    }
+
+    pub(in crate::features) fn terminal_history_search_pending_for_current_query(&self) -> bool {
+        let Some(key) = self.terminal_history_search_key() else {
+            return false;
+        };
+        self.terminal_history_search_pending_key.as_ref() == Some(&key)
+    }
+
     pub(in crate::features) fn terminal_history_search_results(
         &self,
     ) -> Result<nyaterm_transport::TerminalHistorySearchResponse, String> {
-        let Some(session_id) = self.active_session_id.clone() else {
-            return Ok(nyaterm_transport::TerminalHistorySearchResponse {
-                total: 0,
-                elapsed_ms: 0,
-                truncated: false,
-                results: Vec::new(),
-            });
+        let Some(key) = self.terminal_history_search_key() else {
+            return Ok(empty_terminal_history_search_response());
         };
-        let query = self.terminal_search_query.trim();
-        if query.is_empty() {
-            return Ok(nyaterm_transport::TerminalHistorySearchResponse {
-                total: 0,
-                elapsed_ms: 0,
-                truncated: false,
-                results: Vec::new(),
-            });
+        if let Some(result) = self
+            .terminal_history_search_result
+            .as_ref()
+            .filter(|result| result.key == key)
+        {
+            return result.result.clone();
         }
-        self.recording_manager
-            .search_history(TerminalHistorySearchRequest {
-                session_id,
-                query: query.to_string(),
-                case_sensitive: self.terminal_search_case_sensitive,
-                regex: self.terminal_search_regex,
-                whole_word: self.terminal_search_whole_word,
-                limit: Some(8),
-                context_before: Some(1),
-                context_after: Some(1),
-                max_lines: Some(30_000),
-            })
-            .map_err(|error| error.to_string())
+        Ok(empty_terminal_history_search_response())
     }
 
     pub(in crate::features) fn navigate_terminal_search(
@@ -196,7 +247,7 @@ impl NyaTermApp {
             "backspace" => {
                 self.terminal_search_query.pop();
                 self.terminal_search_active_index = 0;
-                self.request_active_terminal_buffer_search();
+                self.request_active_terminal_search();
                 cx.notify();
             }
             "tab" => {
@@ -207,7 +258,7 @@ impl NyaTermApp {
                         TerminalSearchMode::Buffer
                     };
                 self.terminal_search_active_index = 0;
-                self.request_active_terminal_buffer_search();
+                self.request_active_terminal_search();
                 cx.notify();
             }
             _ => {
@@ -218,7 +269,7 @@ impl NyaTermApp {
                 {
                     self.terminal_search_query.push_str(input);
                     self.terminal_search_active_index = 0;
-                    self.request_active_terminal_buffer_search();
+                    self.request_active_terminal_search();
                     cx.notify();
                 }
             }
@@ -257,5 +308,14 @@ impl NyaTermApp {
                 }
             }
         }
+    }
+}
+
+fn empty_terminal_history_search_response() -> nyaterm_transport::TerminalHistorySearchResponse {
+    nyaterm_transport::TerminalHistorySearchResponse {
+        total: 0,
+        elapsed_ms: 0,
+        truncated: false,
+        results: Vec::new(),
     }
 }
