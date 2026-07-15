@@ -216,8 +216,12 @@ impl NyaTermApp {
     }
 
     pub(in crate::features) fn drain_session_events(&mut self, cx: &mut Context<Self>) -> bool {
+        let drain_started_at = Instant::now();
         let mut dirty = false;
         let mut drained_events = 0usize;
+        let mut output_event_count = 0usize;
+        let mut drain_timings = SessionEventDrainTimings::default();
+        let mut max_output_chunk_duration = Duration::ZERO;
         let drained_output_bytes;
         let queued_events: usize;
         let queued_output_bytes: usize;
@@ -246,23 +250,70 @@ impl NyaTermApp {
             for event in events {
                 match event {
                     SessionEvent::Output { session_id, data } => {
+                        output_event_count += 1;
+                        let chunk_started_at = Instant::now();
+                        let chunk_input_bytes = data.len();
+                        let mut chunk_timings = SessionEventDrainTimings::default();
+                        let stage_started_at = Instant::now();
                         let data = self.process_zmodem_output(&session_id, &data, cx);
+                        let stage_duration = stage_started_at.elapsed();
+                        drain_timings.zmodem += stage_duration;
+                        chunk_timings.zmodem += stage_duration;
                         if data.is_empty() {
+                            let chunk_duration = chunk_started_at.elapsed();
+                            drain_timings.output_total += chunk_duration;
+                            chunk_timings.output_total += chunk_duration;
+                            max_output_chunk_duration =
+                                max_output_chunk_duration.max(chunk_duration);
+                            self.maybe_log_slow_session_output_chunk(
+                                &session_id,
+                                chunk_input_bytes,
+                                chunk_duration,
+                                &chunk_timings,
+                            );
                             continue;
                         }
                         // Consume side-band markers after active transfer payloads are removed.
+                        let stage_started_at = Instant::now();
                         let data = self.process_trzsz_output(&session_id, &data, cx);
+                        let stage_duration = stage_started_at.elapsed();
+                        drain_timings.trzsz += stage_duration;
+                        chunk_timings.trzsz += stage_duration;
                         if data.is_empty() {
+                            let chunk_duration = chunk_started_at.elapsed();
+                            drain_timings.output_total += chunk_duration;
+                            chunk_timings.output_total += chunk_duration;
+                            max_output_chunk_duration =
+                                max_output_chunk_duration.max(chunk_duration);
+                            self.maybe_log_slow_session_output_chunk(
+                                &session_id,
+                                chunk_input_bytes,
+                                chunk_duration,
+                                &chunk_timings,
+                            );
                             continue;
                         }
                         let is_active =
                             self.active_session_id.as_deref() == Some(session_id.as_str());
+                        let stage_started_at = Instant::now();
                         let text = self.decode_session_output_for_recording(&session_id, &data);
+                        let stage_duration = stage_started_at.elapsed();
+                        drain_timings.decode += stage_duration;
+                        chunk_timings.decode += stage_duration;
                         if self.session_has_active_ai_capture(&session_id) {
+                            let stage_started_at = Instant::now();
                             let result = self.ai_agent_capture.process(&text);
+                            let stage_duration = stage_started_at.elapsed();
+                            drain_timings.ai_capture += stage_duration;
+                            chunk_timings.ai_capture += stage_duration;
                             if !result.visible_text.is_empty() {
+                                let stage_started_at = Instant::now();
                                 self.recording_manager
                                     .write_output(&session_id, &result.visible_text);
+                                let stage_duration = stage_started_at.elapsed();
+                                drain_timings.recording += stage_duration;
+                                chunk_timings.recording += stage_duration;
+                                let stage_started_at = Instant::now();
                                 let visible_bytes = self.encode_visible_terminal_text_for_output(
                                     &session_id,
                                     &result.visible_text,
@@ -273,26 +324,67 @@ impl NyaTermApp {
                                     !is_active,
                                     Some(cx),
                                 );
+                                let stage_duration = stage_started_at.elapsed();
+                                drain_timings.terminal_append += stage_duration;
+                                chunk_timings.terminal_append += stage_duration;
                                 if is_active {
+                                    let stage_started_at = Instant::now();
                                     self.feed_credential_autofill_output(&result.visible_text, cx);
+                                    let stage_duration = stage_started_at.elapsed();
+                                    drain_timings.credential_autofill += stage_duration;
+                                    chunk_timings.credential_autofill += stage_duration;
                                 }
                             }
+                            let stage_started_at = Instant::now();
                             for captured in result.completed {
                                 self.handle_ai_agent_captured_output(captured, cx);
                             }
+                            let stage_duration = stage_started_at.elapsed();
+                            drain_timings.ai_capture += stage_duration;
+                            chunk_timings.ai_capture += stage_duration;
                         } else if is_active {
+                            let stage_started_at = Instant::now();
                             self.recording_manager.write_output(&session_id, &text);
+                            let stage_duration = stage_started_at.elapsed();
+                            drain_timings.recording += stage_duration;
+                            chunk_timings.recording += stage_duration;
+                            let stage_started_at = Instant::now();
                             self.append_terminal_bytes(&data, cx);
+                            let stage_duration = stage_started_at.elapsed();
+                            drain_timings.terminal_append += stage_duration;
+                            chunk_timings.terminal_append += stage_duration;
+                            let stage_started_at = Instant::now();
                             self.feed_credential_autofill_output(&text, cx);
+                            let stage_duration = stage_started_at.elapsed();
+                            drain_timings.credential_autofill += stage_duration;
+                            chunk_timings.credential_autofill += stage_duration;
                         } else {
+                            let stage_started_at = Instant::now();
                             self.recording_manager.write_output(&session_id, &text);
+                            let stage_duration = stage_started_at.elapsed();
+                            drain_timings.recording += stage_duration;
+                            chunk_timings.recording += stage_duration;
+                            let stage_started_at = Instant::now();
                             self.append_terminal_bytes_for_session(
                                 Some(&session_id),
                                 &data,
                                 true,
                                 Some(cx),
                             );
+                            let stage_duration = stage_started_at.elapsed();
+                            drain_timings.terminal_append += stage_duration;
+                            chunk_timings.terminal_append += stage_duration;
                         }
+                        let chunk_duration = chunk_started_at.elapsed();
+                        drain_timings.output_total += chunk_duration;
+                        chunk_timings.output_total += chunk_duration;
+                        max_output_chunk_duration = max_output_chunk_duration.max(chunk_duration);
+                        self.maybe_log_slow_session_output_chunk(
+                            &session_id,
+                            chunk_input_bytes,
+                            chunk_duration,
+                            &chunk_timings,
+                        );
                     }
                     SessionEvent::OutputDropped { session_id, bytes } => {
                         self.note_trzsz_output_discontinuity(&session_id);
@@ -372,7 +464,10 @@ impl NyaTermApp {
             dirty = true;
         }
 
+        let session_start_started_at = Instant::now();
         dirty |= self.drain_session_start_events(cx);
+        self.terminal_runtime.last_session_start_drain_duration =
+            session_start_started_at.elapsed();
         // Continue sequential startup restore after async SSH connects complete.
         // Window handle is not available here; pump only when not waiting on pending.
         dirty |= self.stores.startup_restore.update(cx, |store, _| {
@@ -391,6 +486,30 @@ impl NyaTermApp {
         dirty |= self.drain_host_key_prompts();
         dirty |= self.drain_credential_prompts();
         dirty |= self.drain_duplicate_prompts();
+        if session_event_drain_is_slow(drain_timings.output_total, max_output_chunk_duration)
+            && self.should_log_slow_diagnostic("session_event_drain", Instant::now())
+        {
+            tracing::warn!(
+                diagnostic = "session_event_drain",
+                drained_events,
+                output_event_count,
+                drained_output_bytes,
+                queued_events,
+                queued_output_bytes,
+                dropped_output_bytes = self.terminal_runtime.session_event_dropped_output_bytes,
+                drain_total_ms = drain_started_at.elapsed().as_millis(),
+                output_total_ms = drain_timings.output_total.as_millis(),
+                max_output_chunk_ms = max_output_chunk_duration.as_millis(),
+                zmodem_us = drain_timings.zmodem.as_micros(),
+                trzsz_us = drain_timings.trzsz.as_micros(),
+                decode_us = drain_timings.decode.as_micros(),
+                recording_us = drain_timings.recording.as_micros(),
+                terminal_append_us = drain_timings.terminal_append.as_micros(),
+                credential_autofill_us = drain_timings.credential_autofill.as_micros(),
+                ai_capture_us = drain_timings.ai_capture.as_micros(),
+                "slow session event drain"
+            );
+        }
         dirty
     }
 
@@ -398,6 +517,52 @@ impl NyaTermApp {
         if !self.is_locked {
             self.last_user_activity_at = Instant::now();
         }
+    }
+
+    pub(in crate::features) fn should_log_slow_diagnostic(
+        &mut self,
+        key: &'static str,
+        now: Instant,
+    ) -> bool {
+        if diagnostic_log_due(
+            self.diagnostic_log_last_at.get(key).copied(),
+            now,
+            SLOW_DIAGNOSTIC_THROTTLE,
+        ) {
+            self.diagnostic_log_last_at.insert(key, now);
+            true
+        } else {
+            false
+        }
+    }
+
+    fn maybe_log_slow_session_output_chunk(
+        &mut self,
+        session_id: &str,
+        chunk_input_bytes: usize,
+        chunk_duration: Duration,
+        timings: &SessionEventDrainTimings,
+    ) {
+        if chunk_duration < SESSION_EVENT_DRAIN_SLOW_CHUNK {
+            return;
+        }
+        if !self.should_log_slow_diagnostic("session_event_output_chunk", Instant::now()) {
+            return;
+        }
+        tracing::warn!(
+            diagnostic = "session_event_drain",
+            session_id = %session_id,
+            chunk_input_bytes,
+            chunk_duration_ms = chunk_duration.as_millis(),
+            zmodem_us = timings.zmodem.as_micros(),
+            trzsz_us = timings.trzsz.as_micros(),
+            decode_us = timings.decode.as_micros(),
+            recording_us = timings.recording.as_micros(),
+            terminal_append_us = timings.terminal_append.as_micros(),
+            credential_autofill_us = timings.credential_autofill.as_micros(),
+            ai_capture_us = timings.ai_capture.as_micros(),
+            "slow session output chunk"
+        );
     }
 
     pub(in crate::features) fn drive_idle_lock(&mut self) -> bool {
@@ -435,14 +600,33 @@ impl NyaTermApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> bool {
+        let tick_started_at = Instant::now();
+        let stage_started_at = Instant::now();
         let mut dirty = self.refresh_window_render_inputs(window, cx);
+        let render_input_duration = stage_started_at.elapsed();
+        let stage_started_at = Instant::now();
         dirty |= self.drain_session_events(cx);
+        let session_events_duration = stage_started_at.elapsed();
+        let session_start_duration = self.terminal_runtime.last_session_start_drain_duration;
+        let stage_started_at = Instant::now();
         dirty |= self.drive_startup_restore_queue_tick(window, cx);
+        let startup_restore_duration = stage_started_at.elapsed();
+        let stage_started_at = Instant::now();
         dirty |= self.drive_terminal_resize();
+        let terminal_resize_duration = stage_started_at.elapsed();
+        let stage_started_at = Instant::now();
         dirty |= self.drive_pending_focus(window);
+        let pending_focus_duration = stage_started_at.elapsed();
+        let stage_started_at = Instant::now();
         dirty |= self.poll_action_link_tooltip_delay(cx);
+        let action_link_tooltip_duration = stage_started_at.elapsed();
+        let stage_started_at = Instant::now();
         dirty |= self.drive_remote_auto_refresh(window, cx);
+        let remote_refresh_duration = stage_started_at.elapsed();
+        let stage_started_at = Instant::now();
         dirty |= self.drive_idle_lock();
+        let idle_lock_duration = stage_started_at.elapsed();
+        let visual_stage_started_at = Instant::now();
         // ~530ms blink half-period (50ms * 11 ticks) when enabled.
         if self.settings.cursor_blink {
             self.terminal_runtime.cursor_blink_tick =
@@ -480,10 +664,41 @@ impl NyaTermApp {
             self.terminal_file_drop_hover = None;
             dirty = true;
         }
+        let visual_runtime_duration = visual_stage_started_at.elapsed();
+        let notify_started_at = Instant::now();
         if dirty {
             cx.notify();
         }
+        let notify_duration = notify_started_at.elapsed();
+        let publish_started_at = Instant::now();
         self.publish_store_snapshots(cx);
+        let publish_duration = publish_started_at.elapsed();
+        let tick_duration = tick_started_at.elapsed();
+        if tick_duration >= RUNTIME_TICK_SLOW_THRESHOLD
+            && self.should_log_slow_diagnostic("runtime_tick", Instant::now())
+        {
+            tracing::warn!(
+                diagnostic = "runtime_tick",
+                total_ms = tick_duration.as_millis(),
+                render_input_ms = render_input_duration.as_millis(),
+                session_events_ms = session_events_duration.as_millis(),
+                session_start_ms = session_start_duration.as_millis(),
+                startup_restore_ms = startup_restore_duration.as_millis(),
+                terminal_resize_ms = terminal_resize_duration.as_millis(),
+                pending_focus_ms = pending_focus_duration.as_millis(),
+                action_link_tooltip_ms = action_link_tooltip_duration.as_millis(),
+                remote_refresh_ms = remote_refresh_duration.as_millis(),
+                idle_lock_ms = idle_lock_duration.as_millis(),
+                visual_runtime_ms = visual_runtime_duration.as_millis(),
+                notify_ms = notify_duration.as_millis(),
+                publish_snapshots_ms = publish_duration.as_millis(),
+                queued_events = self.terminal_runtime.session_event_queued_events,
+                queued_output_bytes = self.terminal_runtime.session_event_queued_output_bytes,
+                pending_session_starts = self.pending_session_starts.len(),
+                dirty,
+                "slow runtime tick"
+            );
+        }
         self.terminal_runtime.event_pump_started
     }
 
@@ -560,6 +775,33 @@ impl NyaTermApp {
 const TRANSFER_AUTO_SYNC_CWD_INTERVAL_SECONDS: u32 = 3;
 const SESSION_EVENT_DRAIN_BATCH: usize = 256;
 const SESSION_EVENT_DRAIN_OUTPUT_BUDGET: usize = 32 * 1024;
+const SLOW_DIAGNOSTIC_THROTTLE: Duration = Duration::from_secs(2);
+const RUNTIME_TICK_SLOW_THRESHOLD: Duration = Duration::from_millis(40);
+const SESSION_EVENT_DRAIN_SLOW_TOTAL: Duration = Duration::from_millis(20);
+const SESSION_EVENT_DRAIN_SLOW_CHUNK: Duration = Duration::from_millis(8);
+
+#[derive(Default)]
+struct SessionEventDrainTimings {
+    output_total: Duration,
+    zmodem: Duration,
+    trzsz: Duration,
+    decode: Duration,
+    recording: Duration,
+    terminal_append: Duration,
+    credential_autofill: Duration,
+    ai_capture: Duration,
+}
+
+fn diagnostic_log_due(last_at: Option<Instant>, now: Instant, throttle: Duration) -> bool {
+    last_at.is_none_or(|last_at| {
+        now.checked_duration_since(last_at)
+            .is_none_or(|elapsed| elapsed >= throttle)
+    })
+}
+
+fn session_event_drain_is_slow(total: Duration, max_chunk: Duration) -> bool {
+    total >= SESSION_EVENT_DRAIN_SLOW_TOTAL || max_chunk >= SESSION_EVENT_DRAIN_SLOW_CHUNK
+}
 
 fn remote_refresh_due(last_refresh_at: Option<Instant>, interval_seconds: u32) -> bool {
     last_refresh_at.is_none_or(|last_refresh_at| {
@@ -613,5 +855,38 @@ mod tests {
         assert!(!escaped.contains('\x07'));
         assert!(!escaped.contains('\n'));
         assert!(escaped.contains("失败"));
+    }
+
+    #[test]
+    fn diagnostic_log_due_respects_throttle_window() {
+        let start = Instant::now();
+
+        assert!(diagnostic_log_due(None, start, SLOW_DIAGNOSTIC_THROTTLE));
+        assert!(!diagnostic_log_due(
+            Some(start),
+            start + Duration::from_millis(1999),
+            SLOW_DIAGNOSTIC_THROTTLE
+        ));
+        assert!(diagnostic_log_due(
+            Some(start),
+            start + SLOW_DIAGNOSTIC_THROTTLE,
+            SLOW_DIAGNOSTIC_THROTTLE
+        ));
+    }
+
+    #[test]
+    fn session_event_drain_slow_budget_flags_total_or_chunk() {
+        assert!(!session_event_drain_is_slow(
+            Duration::from_millis(19),
+            Duration::from_millis(7)
+        ));
+        assert!(session_event_drain_is_slow(
+            SESSION_EVENT_DRAIN_SLOW_TOTAL,
+            Duration::from_millis(1)
+        ));
+        assert!(session_event_drain_is_slow(
+            Duration::from_millis(1),
+            SESSION_EVENT_DRAIN_SLOW_CHUNK
+        ));
     }
 }

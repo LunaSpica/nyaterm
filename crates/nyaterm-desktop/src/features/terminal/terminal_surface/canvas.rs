@@ -15,11 +15,13 @@ impl NyaTermApp {
         show_pane_chrome: bool,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
+        let render_started_at = Instant::now();
         let palette = self.terminal_theme_palette();
         let keyword_rules = self.resolved_keyword_highlight_rules();
         let action_link_matchers = self.settings.terminal_action_links_matchers.clone();
         let is_active = self.active_session_id.as_deref() == Some(session_id.as_str());
         let is_disconnected = !session_id.is_empty() && self.is_session_disconnected(&session_id);
+        let snapshot_stage_started_at = Instant::now();
         let layout_cache = self
             .terminal_views
             .get(&session_id)
@@ -41,6 +43,7 @@ impl NyaTermApp {
         let cursor_col = snapshot.cursor_col;
         let snapshot_rows = snapshot.rows;
         let snapshot_cols = snapshot.cols;
+        let viewport_snapshot_duration = snapshot_stage_started_at.elapsed();
         let show_line_numbers = self.settings.terminal_show_line_numbers;
         let show_timestamps = self.settings.terminal_show_timestamps;
         let show_timestamp_ms = self.settings.terminal_show_timestamp_milliseconds;
@@ -63,6 +66,7 @@ impl NyaTermApp {
             nyaterm_terminal::CursorShape::Hidden => self.settings.cursor_style.as_str(),
             nyaterm_terminal::CursorShape::Block => self.settings.cursor_style.as_str(),
         };
+        let search_stage_started_at = Instant::now();
         let search_matches = if is_active
             && self.terminal_search_open
             && self.terminal_search_mode == TerminalSearchMode::Buffer
@@ -108,7 +112,10 @@ impl NyaTermApp {
                     .push(range);
             }
         }
+        let search_mapping_duration = search_stage_started_at.elapsed();
         let mut line_decorations = Vec::with_capacity(lines.len());
+        let decoration_stage_started_at = Instant::now();
+        let mut action_link_duration = Duration::ZERO;
         for (line_index, line) in lines.iter().enumerate() {
             let line = if line.is_empty() {
                 " ".to_string()
@@ -122,6 +129,7 @@ impl NyaTermApp {
             } else {
                 None
             };
+            let action_link_started_at = Instant::now();
             let mut link_ranges: Vec<(usize, usize)> =
                 if self.settings.terminal_action_links_enabled {
                     if let Some(view) = self.terminal_views.get_mut(&session_id) {
@@ -140,6 +148,7 @@ impl NyaTermApp {
                 } else {
                     Vec::new()
                 };
+            action_link_duration += action_link_started_at.elapsed();
             // OSC 8 hyperlinks from the terminal model (always paint when present).
             if let Some(spans) = hyperlink_lines.get(line_index) {
                 for span in spans {
@@ -168,6 +177,8 @@ impl NyaTermApp {
                 command_mark,
             });
         }
+        let decorations_duration = decoration_stage_started_at.elapsed();
+        let element_stage_started_at = Instant::now();
         let (cell_w, cell_h) = self.terminal_cell_size();
         let ime_preedit_text = (is_active
             && !session_id.is_empty()
@@ -312,7 +323,7 @@ impl NyaTermApp {
             .unwrap_or("Local");
         let (drop_title, drop_hint) = nyaterm_core::terminal_drop_overlay_copy(drop_session_kind);
 
-        div()
+        let canvas = div()
             .flex_1()
             .min_h_0()
             .font_family(terminal_font_family)
@@ -1103,6 +1114,43 @@ impl NyaTermApp {
                     .when(is_active && self.terminal_search_open, |this| {
                         this.child(self.terminal_search_bar(cx))
                     }),
-            )
+            );
+        let element_construction_duration = element_stage_started_at.elapsed();
+        let total_duration = render_started_at.elapsed();
+        if (viewport_snapshot_duration >= TERMINAL_RENDER_SLOW_STAGE
+            || search_mapping_duration >= TERMINAL_RENDER_SLOW_STAGE
+            || action_link_duration >= TERMINAL_RENDER_SLOW_STAGE
+            || decorations_duration >= TERMINAL_RENDER_SLOW_STAGE
+            || element_construction_duration >= TERMINAL_RENDER_SLOW_STAGE
+            || total_duration >= TERMINAL_RENDER_SLOW_TOTAL)
+            && self.should_log_slow_diagnostic("terminal_render", Instant::now())
+        {
+            tracing::warn!(
+                diagnostic = "terminal_render",
+                session_id = %session_id,
+                rows = snapshot_rows,
+                cols = snapshot_cols,
+                line_count = lines.len(),
+                is_active,
+                action_links_enabled = self.settings.terminal_action_links_enabled,
+                search_open = self.terminal_search_open,
+                search_matches = search_matches.len(),
+                render_cache_hits,
+                render_cache_misses,
+                layout_cache_hits,
+                layout_cache_misses,
+                viewport_snapshot_ms = viewport_snapshot_duration.as_millis(),
+                search_mapping_ms = search_mapping_duration.as_millis(),
+                action_links_ms = action_link_duration.as_millis(),
+                decorations_ms = decorations_duration.as_millis(),
+                element_construction_ms = element_construction_duration.as_millis(),
+                total_ms = total_duration.as_millis(),
+                "slow terminal render"
+            );
+        }
+        canvas
     }
 }
+
+const TERMINAL_RENDER_SLOW_STAGE: Duration = Duration::from_millis(12);
+const TERMINAL_RENDER_SLOW_TOTAL: Duration = Duration::from_millis(25);

@@ -474,6 +474,7 @@ pub struct NyaTermApp {
     pub(in crate::features) terminal_scroll_offset: usize,
     pub(in crate::features) terminal_status: String,
     pub(in crate::features) terminal_runtime: TerminalRuntimeUiState,
+    pub(in crate::features) diagnostic_log_last_at: HashMap<&'static str, Instant>,
     /// Active visible-grid selection for the focused terminal surface.
     pub(in crate::features) terminal_selection: Option<TerminalSelection>,
     /// True while the user is dragging a left-button text selection.

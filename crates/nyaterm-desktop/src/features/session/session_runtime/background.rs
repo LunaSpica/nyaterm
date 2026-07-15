@@ -17,6 +17,7 @@ impl NyaTermApp {
     ) {
         let kind = session_kind_for_launch_config(&launch_config);
         let request_id = uuid();
+        let requested_at = Instant::now();
         self.pending_session_name = Some(connection_name.clone());
         self.last_connect_failure_name = None;
         self.last_connect_failure_error = None;
@@ -33,6 +34,8 @@ impl NyaTermApp {
             PendingSessionStart {
                 connection_name: connection_name.clone(),
                 launch_config: launch_config.clone(),
+                requested_at,
+                kind,
                 ai_execution_profile,
                 custom_name,
                 tab_color,
@@ -55,15 +58,20 @@ impl NyaTermApp {
         let session_start_tx = self.session_start_tx.clone();
         let request_id_for_worker = request_id.clone();
         std::thread::spawn(move || {
+            let worker_started_at = Instant::now();
             let result = create_session_from_launch_config(&session_manager, launch_config)
                 .map(|session_info| SessionStartSuccess {
                     session_info,
                     multiplex_handle: None,
                 })
                 .map_err(|error| error.to_string());
+            let worker_finished_at = Instant::now();
             let _ = session_start_tx.send(SessionStartResult {
                 request_id: request_id_for_worker,
                 connection_name,
+                kind,
+                worker_started_at,
+                worker_finished_at,
                 result,
             });
         });
@@ -97,6 +105,7 @@ impl NyaTermApp {
             config.pixel_height = geometry.pixel_height;
         }
         let request_id = uuid();
+        let requested_at = Instant::now();
         self.pending_session_name = Some(connection_name.clone());
         self.last_connect_failure_name = None;
         self.last_connect_failure_error = None;
@@ -113,6 +122,8 @@ impl NyaTermApp {
             PendingSessionStart {
                 connection_name: connection_name.clone(),
                 launch_config: SessionLaunchConfig::Ssh(config.clone()),
+                requested_at,
+                kind: SessionKind::Ssh,
                 ai_execution_profile,
                 custom_name,
                 tab_color,
@@ -134,6 +145,7 @@ impl NyaTermApp {
         let session_start_tx = self.session_start_tx.clone();
         let request_id_for_worker = request_id.clone();
         std::thread::spawn(move || {
+            let worker_started_at = Instant::now();
             let result = session_manager
                 .create_ssh_session(config)
                 .map(|info| SessionStartSuccess {
@@ -141,9 +153,13 @@ impl NyaTermApp {
                     multiplex_handle: None,
                 })
                 .map_err(|error| error.to_string());
+            let worker_finished_at = Instant::now();
             let _ = session_start_tx.send(SessionStartResult {
                 request_id: request_id_for_worker,
                 connection_name,
+                kind: SessionKind::Ssh,
+                worker_started_at,
+                worker_finished_at,
                 result,
             });
         });
@@ -177,6 +193,7 @@ impl NyaTermApp {
         }
         let multiplex_key = ssh_multiplex_key(&config);
         let request_id = uuid();
+        let requested_at = Instant::now();
         self.pending_session_name = Some(connection_name.clone());
         self.last_connect_failure_name = None;
         self.last_connect_failure_error = None;
@@ -193,6 +210,8 @@ impl NyaTermApp {
             PendingSessionStart {
                 connection_name: connection_name.clone(),
                 launch_config: SessionLaunchConfig::Ssh(config.clone()),
+                requested_at,
+                kind: SessionKind::Ssh,
                 ai_execution_profile,
                 custom_name,
                 tab_color,
@@ -211,6 +230,7 @@ impl NyaTermApp {
         let session_start_tx = self.session_start_tx.clone();
         let request_id_for_worker = request_id.clone();
         std::thread::spawn(move || {
+            let worker_started_at = Instant::now();
             let result = (|| {
                 let multiplex = match existing_multiplex {
                     Some(handle) if !handle.is_closed() => handle,
@@ -225,9 +245,13 @@ impl NyaTermApp {
                     multiplex_handle: Some(multiplex),
                 })
             })();
+            let worker_finished_at = Instant::now();
             let _ = session_start_tx.send(SessionStartResult {
                 request_id: request_id_for_worker,
                 connection_name,
+                kind: SessionKind::Ssh,
+                worker_started_at,
+                worker_finished_at,
                 result,
             });
         });
@@ -270,8 +294,21 @@ impl NyaTermApp {
         while let Ok(event) = self.session_start_rx.try_recv() {
             dirty = true;
             let pending = self.pending_session_starts.remove(&event.request_id);
+            let request_id = event.request_id.clone();
+            let connection_name = event.connection_name.clone();
+            let kind = pending
+                .as_ref()
+                .map(|pending| pending.kind)
+                .unwrap_or(event.kind);
+            let requested_at = pending.as_ref().map(|pending| pending.requested_at);
+            let worker_duration = event
+                .worker_finished_at
+                .saturating_duration_since(event.worker_started_at);
+            let worker_to_ui_duration =
+                Instant::now().saturating_duration_since(event.worker_finished_at);
             match event.result {
                 Ok(success) => {
+                    let ui_register_started_at = Instant::now();
                     self.last_connect_failure_name = None;
                     self.last_connect_failure_error = None;
                     let session_info = success.session_info;
@@ -377,27 +414,74 @@ impl NyaTermApp {
                     }
                     self.apply_pending_workspace_split_for_duplicate(&session_id);
                     self.selected_nav = NavItem::Workspace;
+                    let ui_register_duration = ui_register_started_at.elapsed();
+                    let request_to_ui_duration = requested_at
+                        .map(|requested_at| requested_at.elapsed())
+                        .unwrap_or(worker_duration + worker_to_ui_duration + ui_register_duration);
+                    tracing::debug!(
+                        diagnostic = "session_start",
+                        request_id = %request_id,
+                        connection_name = %connection_name,
+                        kind = session_kind_label(kind),
+                        session_id = %session_id,
+                        worker_duration_ms = worker_duration.as_millis(),
+                        worker_to_ui_ms = worker_to_ui_duration.as_millis(),
+                        ui_register_ms = ui_register_duration.as_millis(),
+                        request_to_ui_ms = request_to_ui_duration.as_millis(),
+                        "session start completed"
+                    );
+                    if (worker_duration >= SESSION_START_SLOW_THRESHOLD
+                        || request_to_ui_duration >= SESSION_START_SLOW_THRESHOLD
+                        || ui_register_duration >= SESSION_START_SLOW_THRESHOLD)
+                        && self.should_log_slow_diagnostic("session_start", Instant::now())
+                    {
+                        tracing::warn!(
+                            diagnostic = "session_start",
+                            request_id = %request_id,
+                            connection_name = %connection_name,
+                            kind = session_kind_label(kind),
+                            session_id = %session_id,
+                            worker_duration_ms = worker_duration.as_millis(),
+                            worker_to_ui_ms = worker_to_ui_duration.as_millis(),
+                            ui_register_ms = ui_register_duration.as_millis(),
+                            request_to_ui_ms = request_to_ui_duration.as_millis(),
+                            "slow session start"
+                        );
+                    }
                 }
                 Err(error) => {
                     let _ = self.pending_reconnect_replace_id.take();
-                    self.last_connect_failure_name = Some(event.connection_name.clone());
+                    self.last_connect_failure_name = Some(connection_name.clone());
                     self.last_connect_failure_error = Some(error.clone());
                     self.session_pane_states.insert(
-                        event.request_id.clone(),
+                        request_id.clone(),
                         SessionPaneState::Failed {
-                            name: event.connection_name.clone(),
+                            name: connection_name.clone(),
                             error: error.clone(),
                         },
                     );
-                    self.terminal_status =
-                        format!("failed to start {}: {error}", event.connection_name);
+                    self.terminal_status = format!("failed to start {connection_name}: {error}");
                     if self.active_session_id.is_none() {
                         self.append_terminal_log(format!(
                             "\n# failed to start {}: {error}\n",
-                            event.connection_name
+                            connection_name
                         ));
                     }
                     self.selected_nav = NavItem::Workspace;
+                    let request_to_ui_duration = requested_at
+                        .map(|requested_at| requested_at.elapsed())
+                        .unwrap_or(worker_duration + worker_to_ui_duration);
+                    tracing::warn!(
+                        diagnostic = "session_start",
+                        request_id = %request_id,
+                        connection_name = %connection_name,
+                        kind = session_kind_label(kind),
+                        worker_duration_ms = worker_duration.as_millis(),
+                        worker_to_ui_ms = worker_to_ui_duration.as_millis(),
+                        request_to_ui_ms = request_to_ui_duration.as_millis(),
+                        error = %error,
+                        "session start failed"
+                    );
                 }
             }
             self.refresh_pending_session_name();
@@ -424,6 +508,8 @@ fn session_kind_for_launch_config(config: &SessionLaunchConfig) -> SessionKind {
     }
 }
 
+const SESSION_START_SLOW_THRESHOLD: Duration = Duration::from_millis(500);
+
 fn create_session_from_launch_config(
     session_manager: &SessionManager,
     launch_config: SessionLaunchConfig,
@@ -449,8 +535,8 @@ fn launch_config_for_session_info(info: &SessionInfo) -> SessionLaunchConfig {
             pixel_height: 0,
         }),
         SessionKind::Ssh => SessionLaunchConfig::Ssh(SshSessionConfig::default()),
-        SessionKind::Telnet | SessionKind::RawTcp => SessionLaunchConfig::Telnet(
-            TelnetSessionConfig {
+        SessionKind::Telnet | SessionKind::RawTcp => {
+            SessionLaunchConfig::Telnet(TelnetSessionConfig {
                 name: info.name.clone(),
                 host: String::new(),
                 port: 23,
@@ -461,8 +547,8 @@ fn launch_config_for_session_info(info: &SessionInfo) -> SessionLaunchConfig {
                 send_sga: false,
                 cols: info.cols,
                 rows: info.rows,
-            },
-        ),
+            })
+        }
         SessionKind::Serial => SessionLaunchConfig::Serial(SerialSessionConfig {
             name: info.name.clone(),
             port_name: String::new(),

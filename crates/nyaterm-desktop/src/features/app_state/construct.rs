@@ -663,6 +663,7 @@ impl NyaTermApp {
             terminal_scroll_offset: 0,
             terminal_status: "idle".to_string(),
             terminal_runtime: TerminalRuntimeUiState::default(),
+            diagnostic_log_last_at: HashMap::new(),
             terminal_selection: None,
             terminal_selection_dragging: false,
             terminal_mouse_report_button: None,

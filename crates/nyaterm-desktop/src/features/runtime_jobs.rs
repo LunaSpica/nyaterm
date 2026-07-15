@@ -4,6 +4,9 @@ use super::*;
 pub(in crate::features) struct SessionStartResult {
     pub(in crate::features) request_id: String,
     pub(in crate::features) connection_name: String,
+    pub(in crate::features) kind: SessionKind,
+    pub(in crate::features) worker_started_at: Instant,
+    pub(in crate::features) worker_finished_at: Instant,
     pub(in crate::features) result: Result<SessionStartSuccess, String>,
 }
 
