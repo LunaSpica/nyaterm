@@ -3,7 +3,9 @@ use std::fmt::Write as _;
 use super::*;
 
 impl NyaTermApp {
-    pub(in crate::features) fn publish_store_snapshots(&self, cx: &mut Context<Self>) {
+    pub(in crate::features) fn publish_store_snapshots(&mut self, cx: &mut Context<Self>) {
+        self.terminal_runtime.last_store_snapshot_publish_at = Some(Instant::now());
+
         let workspace = crate::entities::WorkspaceSnapshot {
             active_session_id: self.active_session_id.clone(),
             ordered_tab_roots: self
@@ -735,7 +737,14 @@ impl NyaTermApp {
         }
         let notify_duration = notify_started_at.elapsed();
         let publish_started_at = Instant::now();
-        self.publish_store_snapshots(cx);
+        let should_publish_snapshots = dirty
+            || store_snapshot_publish_due(
+                self.terminal_runtime.last_store_snapshot_publish_at,
+                publish_started_at,
+            );
+        if should_publish_snapshots {
+            self.publish_store_snapshots(cx);
+        }
         let publish_duration = publish_started_at.elapsed();
         let tick_duration = tick_started_at.elapsed();
         if tick_duration >= RUNTIME_TICK_SLOW_THRESHOLD
@@ -846,6 +855,7 @@ const SLOW_DIAGNOSTIC_THROTTLE: Duration = Duration::from_secs(2);
 const RUNTIME_TICK_SLOW_THRESHOLD: Duration = Duration::from_millis(40);
 const SESSION_EVENT_DRAIN_SLOW_TOTAL: Duration = Duration::from_millis(20);
 const SESSION_EVENT_DRAIN_SLOW_CHUNK: Duration = Duration::from_millis(8);
+const STORE_SNAPSHOT_HEARTBEAT: Duration = Duration::from_secs(1);
 
 #[derive(Default)]
 struct SessionEventDrainTimings {
@@ -877,6 +887,10 @@ fn diagnostic_log_due(last_at: Option<Instant>, now: Instant, throttle: Duration
         now.checked_duration_since(last_at)
             .is_none_or(|elapsed| elapsed >= throttle)
     })
+}
+
+fn store_snapshot_publish_due(last_at: Option<Instant>, now: Instant) -> bool {
+    diagnostic_log_due(last_at, now, STORE_SNAPSHOT_HEARTBEAT)
 }
 
 fn session_event_drain_is_slow(total: Duration, max_chunk: Duration) -> bool {
@@ -969,6 +983,21 @@ mod tests {
             Some(start),
             start + SLOW_DIAGNOSTIC_THROTTLE,
             SLOW_DIAGNOSTIC_THROTTLE
+        ));
+    }
+
+    #[test]
+    fn store_snapshot_publish_due_uses_low_frequency_heartbeat() {
+        let start = Instant::now();
+
+        assert!(store_snapshot_publish_due(None, start));
+        assert!(!store_snapshot_publish_due(
+            Some(start),
+            start + STORE_SNAPSHOT_HEARTBEAT - Duration::from_millis(1)
+        ));
+        assert!(store_snapshot_publish_due(
+            Some(start),
+            start + STORE_SNAPSHOT_HEARTBEAT
         ));
     }
 
