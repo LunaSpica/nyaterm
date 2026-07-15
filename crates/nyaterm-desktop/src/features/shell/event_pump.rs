@@ -458,10 +458,12 @@ impl NyaTermApp {
 
         let background_started_at = Instant::now();
         let mut background_timings = RuntimeBackgroundDrainTimings::default();
+        let critical_background_only = self.runtime_output_pressure_active();
         dirty |= self.drain_runtime_background_events(
             cx,
             background_started_at,
             &mut background_timings,
+            critical_background_only,
         );
         self.terminal_runtime.last_session_start_drain_duration = background_timings.session_start;
         let background_total = background_started_at.elapsed();
@@ -518,6 +520,7 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
         started_at: Instant,
         timings: &mut RuntimeBackgroundDrainTimings,
+        critical_only: bool,
     ) -> bool {
         let mut dirty = false;
         macro_rules! drain_stage {
@@ -545,6 +548,9 @@ impl NyaTermApp {
             self.drain_pending_credential_autofill_detection(cx)
         );
         drain_stage!(recording, self.drain_recording_pipeline_events());
+        if critical_only {
+            return dirty;
+        }
         // Continue sequential startup restore after async SSH connects complete.
         // Window handle is not available here; pump only when not waiting on pending.
         drain_stage!(
@@ -683,7 +689,10 @@ impl NyaTermApp {
         let session_events_duration = stage_started_at.elapsed();
         let session_start_duration = self.terminal_runtime.last_session_start_drain_duration;
         let stage_started_at = Instant::now();
-        dirty |= self.drive_startup_restore_queue_tick(window, cx);
+        let output_pressure_after_events = self.runtime_output_pressure_active();
+        if !output_pressure_after_events {
+            dirty |= self.drive_startup_restore_queue_tick(window, cx);
+        }
         let startup_restore_duration = stage_started_at.elapsed();
         let stage_started_at = Instant::now();
         dirty |= self.drive_terminal_resize();
@@ -696,7 +705,10 @@ impl NyaTermApp {
         dirty |= self.drive_pending_focus(window);
         let pending_focus_duration = stage_started_at.elapsed();
         let stage_started_at = Instant::now();
-        dirty |= self.poll_action_link_tooltip_delay(cx);
+        let output_pressure_after_render = self.runtime_output_pressure_active();
+        if !output_pressure_after_render {
+            dirty |= self.poll_action_link_tooltip_delay(cx);
+        }
         let action_link_tooltip_duration = stage_started_at.elapsed();
         let output_pressure = self.runtime_output_pressure_active();
         let stage_started_at = Instant::now();
@@ -748,13 +760,17 @@ impl NyaTermApp {
             dirty = true;
         }
         let visual_runtime_duration = visual_stage_started_at.elapsed();
+        let pending_session_stage_started_at = Instant::now();
+        dirty |= self.drive_pending_session_status();
+        let pending_session_status_duration = pending_session_stage_started_at.elapsed();
         let notify_started_at = Instant::now();
         if dirty {
             cx.notify();
         }
         let notify_duration = notify_started_at.elapsed();
         let publish_started_at = Instant::now();
-        let should_publish_snapshots = dirty
+        let output_pressure_for_publish = self.runtime_output_pressure_active();
+        let should_publish_snapshots = dirty && !output_pressure_for_publish
             || store_snapshot_publish_due(
                 self.terminal_runtime.last_store_snapshot_publish_at,
                 publish_started_at,
@@ -782,6 +798,7 @@ impl NyaTermApp {
                 remote_refresh_ms = remote_refresh_duration.as_millis(),
                 idle_lock_ms = idle_lock_duration.as_millis(),
                 visual_runtime_ms = visual_runtime_duration.as_millis(),
+                pending_session_status_ms = pending_session_status_duration.as_millis(),
                 notify_ms = notify_duration.as_millis(),
                 publish_snapshots_ms = publish_duration.as_millis(),
                 queued_events = self.terminal_runtime.session_event_queued_events,
@@ -794,6 +811,38 @@ impl NyaTermApp {
             );
         }
         self.terminal_runtime.event_pump_started
+    }
+
+    fn drive_pending_session_status(&mut self) -> bool {
+        let Some((name, requested_at)) = self
+            .pending_session_starts
+            .values()
+            .next()
+            .map(|pending| (pending.connection_name.clone(), pending.requested_at))
+        else {
+            self.terminal_runtime.last_pending_session_status_at = None;
+            return false;
+        };
+        if requested_at.elapsed() < PENDING_SESSION_STILL_CONNECTING_AFTER {
+            return false;
+        }
+        let now = Instant::now();
+        if self
+            .terminal_runtime
+            .last_pending_session_status_at
+            .is_some_and(|last_at| {
+                now.saturating_duration_since(last_at) < PENDING_SESSION_STATUS_INTERVAL
+            })
+        {
+            return false;
+        }
+        self.terminal_runtime.last_pending_session_status_at = Some(now);
+        let message = format!("still connecting to {name}");
+        if self.terminal_status == message {
+            return false;
+        }
+        self.terminal_status = message;
+        true
     }
 
     fn drive_remote_auto_refresh(&mut self, window: &mut Window, cx: &mut Context<Self>) -> bool {
@@ -879,6 +928,8 @@ const RUNTIME_TICK_SLOW_THRESHOLD: Duration = Duration::from_millis(40);
 const SESSION_EVENT_DRAIN_SLOW_TOTAL: Duration = Duration::from_millis(20);
 const SESSION_EVENT_DRAIN_SLOW_CHUNK: Duration = Duration::from_millis(8);
 const STORE_SNAPSHOT_HEARTBEAT: Duration = Duration::from_secs(1);
+const PENDING_SESSION_STILL_CONNECTING_AFTER: Duration = Duration::from_secs(15);
+const PENDING_SESSION_STATUS_INTERVAL: Duration = Duration::from_secs(1);
 
 #[derive(Default)]
 struct SessionEventDrainTimings {

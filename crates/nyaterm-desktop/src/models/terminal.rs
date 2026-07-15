@@ -1302,6 +1302,8 @@ fn coalesce_terminal_frame_output_command(
                 &next_session_id,
                 &next_encoding,
                 next_scrollback_limit,
+                data.len(),
+                next_data.len(),
             ) =>
             {
                 data.extend(next_data);
@@ -1323,13 +1325,17 @@ fn terminal_frame_output_commands_can_merge(
     next_session_id: &str,
     next_encoding: &str,
     next_scrollback_limit: usize,
+    current_bytes: usize,
+    next_bytes: usize,
 ) -> bool {
     session_id == next_session_id
         && encoding == next_encoding
         && scrollback_limit == next_scrollback_limit
+        && current_bytes.saturating_add(next_bytes) <= TERMINAL_FRAME_OUTPUT_COALESCE_BYTE_LIMIT
 }
 
 const TERMINAL_FRAME_EVENT_QUEUE_CAP: usize = 1024;
+const TERMINAL_FRAME_OUTPUT_COALESCE_BYTE_LIMIT: usize = 64 * 1024;
 
 #[cfg(test)]
 mod tests {
@@ -1816,6 +1822,35 @@ mod tests {
 
         assert_eq!(data, b"abc");
         assert!(pending.is_empty());
+    }
+
+    #[test]
+    fn terminal_frame_worker_caps_coalesced_output_batch() {
+        let (tx, rx) = mpsc::channel();
+        tx.send(TerminalFrameCommand::Output {
+            session_id: "s1".to_string(),
+            data: vec![b'b'; 2],
+            encoding: "UTF-8".to_string(),
+            scrollback_limit: 1000,
+        })
+        .unwrap();
+        drop(tx);
+
+        let mut pending = VecDeque::new();
+        let (_, data, _, _) = coalesce_terminal_frame_output_command(
+            &rx,
+            &mut pending,
+            "s1".to_string(),
+            vec![b'a'; TERMINAL_FRAME_OUTPUT_COALESCE_BYTE_LIMIT - 1],
+            "UTF-8".to_string(),
+            1000,
+        );
+
+        assert_eq!(data.len(), TERMINAL_FRAME_OUTPUT_COALESCE_BYTE_LIMIT - 1);
+        assert!(matches!(
+            next_terminal_frame_command(&rx, &mut pending),
+            Some(TerminalFrameCommand::Output { data, .. }) if data == vec![b'b'; 2]
+        ));
     }
 
     #[test]
