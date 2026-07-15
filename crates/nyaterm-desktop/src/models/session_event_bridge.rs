@@ -416,10 +416,7 @@ fn run_session_event_bridge(
             thread::sleep(SESSION_EVENT_BRIDGE_IDLE_SLEEP);
             continue;
         };
-        let now = Instant::now();
-        if bridge_should_pause_source_drain(&control, frame_pipeline.queued_output_bytes())
-            && !bridge_has_active_sideband_probe(&mut sideband_probe_sessions, now)
-        {
+        if bridge_should_pause_source_drain(frame_pipeline.queued_output_bytes()) {
             thread::sleep(SESSION_EVENT_BRIDGE_BUSY_SLEEP);
             continue;
         }
@@ -535,12 +532,8 @@ fn run_session_event_bridge(
     }
 }
 
-fn bridge_should_pause_source_drain(
-    control: &SessionEventBridgeControlSnapshot,
-    frame_pipeline_queued_output_bytes: usize,
-) -> bool {
-    control.ui_routed_sessions.is_empty()
-        && frame_pipeline_queued_output_bytes >= SESSION_EVENT_BRIDGE_DIRECT_OUTPUT_BACKPRESSURE
+fn bridge_should_pause_source_drain(frame_pipeline_queued_output_bytes: usize) -> bool {
+    frame_pipeline_queued_output_bytes >= SESSION_EVENT_BRIDGE_DIRECT_OUTPUT_BACKPRESSURE
 }
 
 fn flush_bridge_direct_outputs(
@@ -606,14 +599,6 @@ fn bridge_sideband_probe_active(
         return false;
     }
     true
-}
-
-fn bridge_has_active_sideband_probe(
-    probes: &mut HashMap<String, SessionEventBridgeSidebandProbe>,
-    now: Instant,
-) -> bool {
-    probes.retain(|_, probe| probe.events_remaining > 0 && now < probe.expires_at);
-    !probes.is_empty()
 }
 
 fn bridge_consume_sideband_probe(
@@ -694,30 +679,12 @@ mod tests {
     }
 
     #[test]
-    fn bridge_pauses_source_drain_only_for_pure_direct_backpressure() {
-        let control = SessionEventBridgeControlSnapshot {
-            ui_routed_sessions: HashSet::new(),
-            encoding: "UTF-8".to_string(),
-            scrollback_limit: 1000,
-        };
+    fn bridge_pauses_source_drain_on_frame_backpressure() {
         assert!(bridge_should_pause_source_drain(
-            &control,
             SESSION_EVENT_BRIDGE_DIRECT_OUTPUT_BACKPRESSURE
         ));
         assert!(!bridge_should_pause_source_drain(
-            &control,
             SESSION_EVENT_BRIDGE_DIRECT_OUTPUT_BACKPRESSURE - 1
-        ));
-
-        let mut routed = HashSet::new();
-        routed.insert("s1".to_string());
-        let routed_ui = SessionEventBridgeControlSnapshot {
-            ui_routed_sessions: routed,
-            ..control
-        };
-        assert!(!bridge_should_pause_source_drain(
-            &routed_ui,
-            SESSION_EVENT_BRIDGE_DIRECT_OUTPUT_BACKPRESSURE
         ));
     }
 
