@@ -1,5 +1,7 @@
 use super::*;
 
+const AI_CHAT_EVENT_DRAIN_LIMIT: usize = 256;
+
 impl NyaTermApp {
     pub(in crate::features) fn begin_ai_chat_job(&mut self) -> (u64, Arc<AtomicBool>) {
         self.ai_chat_job_id = self.ai_chat_job_id.wrapping_add(1).max(1);
@@ -282,7 +284,10 @@ impl NyaTermApp {
 
     pub(in crate::features) fn drain_ai_chat_events(&mut self, cx: &mut Context<Self>) -> bool {
         let mut dirty = false;
-        while let Ok(event) = self.ai_chat_rx.try_recv() {
+        for _ in 0..AI_CHAT_EVENT_DRAIN_LIMIT {
+            let Ok(event) = self.ai_chat_rx.try_recv() else {
+                break;
+            };
             match event {
                 AiChatWorkerEvent::Delta {
                     job_id,
