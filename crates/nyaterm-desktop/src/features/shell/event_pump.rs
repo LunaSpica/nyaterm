@@ -799,6 +799,9 @@ impl NyaTermApp {
         dirty |= self.drive_pending_focus(window);
         let pending_focus_duration = stage_started_at.elapsed();
         let stage_started_at = Instant::now();
+        dirty |= self.poll_connection_hover_delay();
+        let connection_hover_duration = stage_started_at.elapsed();
+        let stage_started_at = Instant::now();
         let output_pressure_after_render = self.runtime_output_pressure_active();
         if !output_pressure_after_render {
             dirty |= self.poll_action_link_tooltip_delay(cx);
@@ -897,6 +900,7 @@ impl NyaTermApp {
                 render_requests_ms = render_requests_duration.as_millis(),
                 render_requests_output_pressure = render_request_output_pressure,
                 pending_focus_ms = pending_focus_duration.as_millis(),
+                connection_hover_ms = connection_hover_duration.as_millis(),
                 action_link_tooltip_ms = action_link_tooltip_duration.as_millis(),
                 remote_refresh_ms = remote_refresh_duration.as_millis(),
                 idle_lock_ms = idle_lock_duration.as_millis(),

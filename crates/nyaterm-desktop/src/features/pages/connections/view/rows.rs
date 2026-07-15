@@ -1,11 +1,58 @@
 use super::*;
 
+const CONNECTION_HOVER_INTENT_DELAY: Duration = Duration::from_millis(250);
+
 impl NyaTermApp {
     pub(in crate::features) fn dismiss_connection_hover(&mut self, cx: &mut Context<Self>) {
-        let changed = self.hovered_connection_id.take().is_some();
+        let had_hovered = self.hovered_connection_id.take().is_some();
+        let had_pending = self.connection_hover_pending.take().is_some();
+        let changed = had_hovered || had_pending;
         if changed {
             cx.notify();
         }
+    }
+
+    pub(in crate::features) fn poll_connection_hover_delay(&mut self) -> bool {
+        let Some((connection_id, started_at)) = self.connection_hover_pending.clone() else {
+            return false;
+        };
+        if !connection_hover_intent_ready(started_at, Instant::now()) {
+            return false;
+        }
+        self.connection_hover_pending = None;
+        if self.hovered_connection_id.as_deref() == Some(connection_id.as_str()) {
+            return false;
+        }
+        self.hovered_connection_id = Some(connection_id);
+        true
+    }
+
+    fn begin_connection_hover_intent(&mut self, connection_id: String) {
+        if self.hovered_connection_id.as_deref() == Some(connection_id.as_str())
+            || self
+                .connection_hover_pending
+                .as_ref()
+                .is_some_and(|(pending_id, _)| pending_id == &connection_id)
+        {
+            return;
+        }
+        self.connection_hover_pending = Some((connection_id, Instant::now()));
+    }
+
+    fn clear_connection_hover_intent(&mut self, connection_id: &str) -> bool {
+        let mut changed = false;
+        if self
+            .connection_hover_pending
+            .as_ref()
+            .is_some_and(|(pending_id, _)| pending_id == connection_id)
+        {
+            self.connection_hover_pending = None;
+        }
+        if self.hovered_connection_id.as_deref() == Some(connection_id) {
+            self.hovered_connection_id = None;
+            changed = true;
+        }
+        changed
     }
 
     pub(in crate::features) fn connection_section(
@@ -346,6 +393,7 @@ impl NyaTermApp {
             } else {
                 rgb(palette.surface)
             })
+            .hover(move |this| this.bg(rgb(palette.hover)))
             .when(show_inside, |this| {
                 this.border_1().border_color(rgb(palette.accent))
             })
@@ -431,11 +479,10 @@ impl NyaTermApp {
             })
             .on_hover(cx.listener(move |this, hovered: &bool, _, cx| {
                 if *hovered {
-                    this.hovered_connection_id = Some(hover_id.clone());
-                } else if this.hovered_connection_id.as_deref() == Some(hover_id.as_str()) {
-                    this.hovered_connection_id = None;
+                    this.begin_connection_hover_intent(hover_id.clone());
+                } else if this.clear_connection_hover_intent(&hover_id) {
+                    cx.notify();
                 }
-                cx.notify();
             }))
             .on_mouse_down(
                 MouseButton::Left,
@@ -617,5 +664,28 @@ impl NyaTermApp {
                     ),
             )
             .child(grid)
+    }
+}
+
+fn connection_hover_intent_ready(started_at: Instant, now: Instant) -> bool {
+    now.saturating_duration_since(started_at) >= CONNECTION_HOVER_INTENT_DELAY
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn connection_hover_intent_waits_for_delay() {
+        let started_at = Instant::now();
+
+        assert!(!connection_hover_intent_ready(
+            started_at,
+            started_at + CONNECTION_HOVER_INTENT_DELAY - Duration::from_millis(1)
+        ));
+        assert!(connection_hover_intent_ready(
+            started_at,
+            started_at + CONNECTION_HOVER_INTENT_DELAY
+        ));
     }
 }
