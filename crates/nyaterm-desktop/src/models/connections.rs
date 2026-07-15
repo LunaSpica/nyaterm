@@ -3,8 +3,8 @@ use nyaterm_core::{
     CredentialPromptKind, SavedCredential, compile_prompt_regex,
     find_password_only_fallback_credentials, get_credential_prompt_pattern,
 };
-use std::collections::HashMap;
-use std::sync::mpsc;
+use std::collections::{HashMap, VecDeque};
+use std::sync::{Arc, Mutex, mpsc};
 use std::thread;
 
 const CREDENTIAL_AUTOFILL_MATCH_REGEX_CACHE_LIMIT: usize = 512;
@@ -286,20 +286,22 @@ pub(crate) enum CredentialAutofillMatchOutcome {
 
 pub(crate) struct CredentialAutofillMatchPipeline {
     command_tx: mpsc::Sender<CredentialAutofillMatchRequest>,
-    event_rx: mpsc::Receiver<CredentialAutofillMatchEvent>,
+    event_queue: CredentialAutofillMatchEventQueue,
 }
 
 impl CredentialAutofillMatchPipeline {
     pub(crate) fn spawn() -> Self {
         let (command_tx, command_rx) = mpsc::channel();
-        let (event_tx, event_rx) = mpsc::sync_channel(CREDENTIAL_AUTOFILL_MATCH_EVENT_CAP);
+        let event_queue =
+            CredentialAutofillMatchEventQueue::new(CREDENTIAL_AUTOFILL_MATCH_EVENT_CAP);
+        let event_queue_for_worker = event_queue.clone();
         thread::Builder::new()
             .name("nyaterm-credential-autofill".to_string())
-            .spawn(move || run_credential_autofill_matcher(command_rx, event_tx))
+            .spawn(move || run_credential_autofill_matcher(command_rx, event_queue_for_worker))
             .expect("failed to spawn credential autofill matcher");
         Self {
             command_tx,
-            event_rx,
+            event_queue,
         }
     }
 
@@ -308,11 +310,7 @@ impl CredentialAutofillMatchPipeline {
     }
 
     pub(crate) fn try_recv_event(&self) -> Option<CredentialAutofillMatchEvent> {
-        match self.event_rx.try_recv() {
-            Ok(event) => Some(event),
-            Err(mpsc::TryRecvError::Empty) => None,
-            Err(mpsc::TryRecvError::Disconnected) => None,
-        }
+        self.event_queue.try_recv()
     }
 }
 
@@ -322,9 +320,42 @@ impl Default for CredentialAutofillMatchPipeline {
     }
 }
 
+#[derive(Clone)]
+struct CredentialAutofillMatchEventQueue {
+    inner: Arc<Mutex<VecDeque<CredentialAutofillMatchEvent>>>,
+    cap: usize,
+}
+
+impl CredentialAutofillMatchEventQueue {
+    fn new(cap: usize) -> Self {
+        Self {
+            inner: Arc::new(Mutex::new(VecDeque::with_capacity(cap.min(128)))),
+            cap,
+        }
+    }
+
+    fn push(&self, event: CredentialAutofillMatchEvent) {
+        let Ok(mut queue) = self.inner.lock() else {
+            return;
+        };
+        queue.retain(|queued| {
+            queued.key.session_id != event.key.session_id
+                || queued.key.prompt_text != event.key.prompt_text
+        });
+        while queue.len() >= self.cap.max(1) {
+            queue.pop_front();
+        }
+        queue.push_back(event);
+    }
+
+    fn try_recv(&self) -> Option<CredentialAutofillMatchEvent> {
+        self.inner.lock().ok()?.pop_front()
+    }
+}
+
 fn run_credential_autofill_matcher(
     command_rx: mpsc::Receiver<CredentialAutofillMatchRequest>,
-    event_tx: mpsc::SyncSender<CredentialAutofillMatchEvent>,
+    event_queue: CredentialAutofillMatchEventQueue,
 ) {
     let mut regex_cache = HashMap::new();
     while let Ok(request) = command_rx.recv() {
@@ -332,7 +363,7 @@ fn run_credential_autofill_matcher(
             key: request.key.clone(),
             outcome: credential_autofill_match_outcome(request, &mut regex_cache),
         };
-        let _ = event_tx.send(event);
+        event_queue.push(event);
     }
 }
 
@@ -561,6 +592,59 @@ mod credential_autofill_match_tests {
             credentials,
             pending,
         }
+    }
+
+    fn event(request_id: u64, session_id: &str, prompt_text: &str) -> CredentialAutofillMatchEvent {
+        CredentialAutofillMatchEvent {
+            key: CredentialAutofillMatchRequestKey {
+                request_id,
+                session_id: session_id.to_string(),
+                prompt_text: prompt_text.to_string(),
+            },
+            outcome: CredentialAutofillMatchOutcome::NoMatch {
+                clear_pending: false,
+            },
+        }
+    }
+
+    #[test]
+    fn credential_autofill_event_queue_keeps_latest_prompt_match() {
+        let queue = CredentialAutofillMatchEventQueue::new(8);
+
+        queue.push(event(1, "s1", "Password:"));
+        queue.push(event(2, "s1", "Password:"));
+
+        assert!(matches!(
+            queue.try_recv(),
+            Some(CredentialAutofillMatchEvent { key, .. }) if key.request_id == 2
+        ));
+        assert!(queue.try_recv().is_none());
+    }
+
+    #[test]
+    fn credential_autofill_event_queue_preserves_different_prompts() {
+        let queue = CredentialAutofillMatchEventQueue::new(8);
+
+        queue.push(event(1, "s1", "login as:"));
+        queue.push(event(2, "s1", "Password:"));
+        queue.push(event(3, "s2", "Password:"));
+
+        assert!(matches!(
+            queue.try_recv(),
+            Some(CredentialAutofillMatchEvent { key, .. })
+                if key.request_id == 1 && key.session_id == "s1"
+        ));
+        assert!(matches!(
+            queue.try_recv(),
+            Some(CredentialAutofillMatchEvent { key, .. })
+                if key.request_id == 2 && key.session_id == "s1"
+        ));
+        assert!(matches!(
+            queue.try_recv(),
+            Some(CredentialAutofillMatchEvent { key, .. })
+                if key.request_id == 3 && key.session_id == "s2"
+        ));
+        assert!(queue.try_recv().is_none());
     }
 
     #[test]
