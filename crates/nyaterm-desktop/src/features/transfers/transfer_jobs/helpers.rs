@@ -1,5 +1,42 @@
 use super::*;
 
+const TRANSFER_PROGRESS_EVENT_INTERVAL: Duration = Duration::from_millis(50);
+
+pub(super) struct TransferProgressEventSender {
+    id: String,
+    tx: mpsc::Sender<TransferJobResult>,
+    last_sent_at: Option<Instant>,
+}
+
+impl TransferProgressEventSender {
+    pub(super) fn new(id: String, tx: mpsc::Sender<TransferJobResult>) -> Self {
+        Self {
+            id,
+            tx,
+            last_sent_at: None,
+        }
+    }
+
+    pub(super) fn send(&mut self, progress: SftpTransferProgress) {
+        let now = Instant::now();
+        let completed = progress
+            .total_bytes
+            .is_some_and(|total| progress.bytes_transferred >= total);
+        let due = self.last_sent_at.is_none_or(|last_sent_at| {
+            now.duration_since(last_sent_at) >= TRANSFER_PROGRESS_EVENT_INTERVAL
+        });
+        if !completed && !due {
+            return;
+        }
+
+        self.last_sent_at = Some(now);
+        let _ = self.tx.send(TransferJobResult {
+            id: self.id.clone(),
+            event: TransferJobEvent::Progress(progress),
+        });
+    }
+}
+
 pub(super) fn transfer_job_remote_parent_path(path: &str) -> String {
     let path = path.trim_end_matches('/');
     match path.rfind('/') {

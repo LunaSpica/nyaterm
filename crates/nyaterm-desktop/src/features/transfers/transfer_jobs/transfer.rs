@@ -72,7 +72,7 @@ impl NyaTermApp {
         let progress_tx = self.transfer_tx.clone();
         let finished_tx = self.transfer_tx.clone();
         std::thread::spawn(move || {
-            let progress_id = id.clone();
+            let mut progress_sender = TransferProgressEventSender::new(id.clone(), progress_tx);
             let result = SftpService::new(config)
                 .download_path_with_progress_options_and_resolver_options(
                     &remote_path,
@@ -82,10 +82,7 @@ impl NyaTermApp {
                     duplicate_resolver,
                     transfer_options,
                     move |progress| {
-                        let _ = progress_tx.send(TransferJobResult {
-                            id: progress_id.clone(),
-                            event: TransferJobEvent::Progress(progress),
-                        });
+                        progress_sender.send(progress);
                     },
                 )
                 .map(TransferJobOutput::Summary)
@@ -143,7 +140,7 @@ impl NyaTermApp {
         let progress_tx = self.transfer_tx.clone();
         let finished_tx = self.transfer_tx.clone();
         std::thread::spawn(move || {
-            let progress_id = id.clone();
+            let mut progress_sender = TransferProgressEventSender::new(id.clone(), progress_tx);
             let service = SftpService::new(config);
             let result = service
                 .upload_path_with_progress_options_and_resolver_options(
@@ -154,10 +151,7 @@ impl NyaTermApp {
                     duplicate_resolver,
                     transfer_options,
                     move |progress| {
-                        let _ = progress_tx.send(TransferJobResult {
-                            id: progress_id.clone(),
-                            event: TransferJobEvent::Progress(progress),
-                        });
+                        progress_sender.send(progress);
                     },
                 )
                 .map(|summary| {
@@ -350,7 +344,8 @@ impl NyaTermApp {
                 let progress_tx = self.transfer_tx.clone();
                 let finished_tx = self.transfer_tx.clone();
                 std::thread::spawn(move || {
-                    let progress_id = job_id.clone();
+                    let mut progress_sender =
+                        TransferProgressEventSender::new(job_id.clone(), progress_tx);
                     let result = SftpService::new(config)
                         .download_path_with_progress_options_and_resolver_options(
                             &remote_path,
@@ -360,10 +355,7 @@ impl NyaTermApp {
                             duplicate_resolver,
                             transfer_options,
                             move |progress| {
-                                let _ = progress_tx.send(TransferJobResult {
-                                    id: progress_id.clone(),
-                                    event: TransferJobEvent::Progress(progress),
-                                });
+                                progress_sender.send(progress);
                             },
                         )
                         .map(TransferJobOutput::Summary)
@@ -394,7 +386,8 @@ impl NyaTermApp {
                 let progress_tx = self.transfer_tx.clone();
                 let finished_tx = self.transfer_tx.clone();
                 std::thread::spawn(move || {
-                    let progress_id = job_id.clone();
+                    let mut progress_sender =
+                        TransferProgressEventSender::new(job_id.clone(), progress_tx);
                     let service = SftpService::new(config);
                     let result = service
                         .upload_path_with_progress_options_and_resolver_options(
@@ -405,10 +398,7 @@ impl NyaTermApp {
                             duplicate_resolver,
                             transfer_options,
                             move |progress| {
-                                let _ = progress_tx.send(TransferJobResult {
-                                    id: progress_id.clone(),
-                                    event: TransferJobEvent::Progress(progress),
-                                });
+                                progress_sender.send(progress);
                             },
                         )
                         .map(|summary| {
