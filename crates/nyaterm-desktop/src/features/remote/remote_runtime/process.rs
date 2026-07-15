@@ -1,5 +1,7 @@
 use super::*;
 
+const PROCESS_EVENT_DRAIN_LIMIT: usize = 8;
+
 impl NyaTermApp {
     pub(in crate::features) fn set_docker_tab(&mut self, tab: DockerTab, cx: &mut Context<Self>) {
         self.docker_container_menu_id = None;
@@ -414,7 +416,10 @@ impl NyaTermApp {
 
     pub(in crate::features) fn drain_process_events(&mut self) -> bool {
         let mut dirty = false;
-        while let Ok(event) = self.process_rx.try_recv() {
+        for _ in 0..PROCESS_EVENT_DRAIN_LIMIT {
+            let Ok(event) = self.process_rx.try_recv() else {
+                break;
+            };
             dirty = true;
             self.process_pending = false;
             match event.result {

@@ -2,6 +2,8 @@ use super::*;
 
 use crate::http::update::check_native_update;
 
+const UPDATE_EVENT_DRAIN_LIMIT: usize = 4;
+
 impl NyaTermApp {
     pub(in crate::features) fn start_update_check(&mut self, cx: &mut Context<Self>) {
         if self.update_pending {
@@ -22,7 +24,10 @@ impl NyaTermApp {
 
     pub(super) fn drain_update_events(&mut self) -> bool {
         let mut dirty = false;
-        while let Ok(event) = self.update_rx.try_recv() {
+        for _ in 0..UPDATE_EVENT_DRAIN_LIMIT {
+            let Ok(event) = self.update_rx.try_recv() else {
+                break;
+            };
             dirty = true;
             self.update_pending = false;
             match event.result {

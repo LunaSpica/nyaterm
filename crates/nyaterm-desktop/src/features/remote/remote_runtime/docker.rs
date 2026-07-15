@@ -1,5 +1,7 @@
 use super::*;
 
+const DOCKER_EVENT_DRAIN_LIMIT: usize = 16;
+
 impl NyaTermApp {
     pub(in crate::features) fn refresh_docker(
         &mut self,
@@ -503,7 +505,10 @@ impl NyaTermApp {
 
     pub(in crate::features) fn drain_docker_events(&mut self) -> bool {
         let mut dirty = false;
-        while let Ok(event) = self.docker_rx.try_recv() {
+        for _ in 0..DOCKER_EVENT_DRAIN_LIMIT {
+            let Ok(event) = self.docker_rx.try_recv() else {
+                break;
+            };
             dirty = true;
             self.docker_pending = false;
             match event.result {

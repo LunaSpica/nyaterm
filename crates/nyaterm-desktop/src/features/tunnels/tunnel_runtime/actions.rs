@@ -1,5 +1,7 @@
 use super::*;
 
+const TUNNEL_EVENT_DRAIN_LIMIT: usize = 32;
+
 impl NyaTermApp {
     pub(in crate::features) fn open_network_move_picker(
         &mut self,
@@ -362,7 +364,10 @@ impl NyaTermApp {
 
     pub(in crate::features) fn drain_tunnel_events(&mut self) -> bool {
         let mut dirty = false;
-        while let Ok(event) = self.tunnel_rx.try_recv() {
+        for _ in 0..TUNNEL_EVENT_DRAIN_LIMIT {
+            let Ok(event) = self.tunnel_rx.try_recv() else {
+                break;
+            };
             dirty = true;
             self.pending_tunnels.retain(|id| id != &event.tunnel_id);
             match event.result {

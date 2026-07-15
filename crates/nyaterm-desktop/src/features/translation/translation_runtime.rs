@@ -2,6 +2,8 @@ use super::*;
 
 use crate::http::translation::translate_text;
 
+const TRANSLATE_EVENT_DRAIN_LIMIT: usize = 8;
+
 impl NyaTermApp {
     pub(in crate::features) fn run_translation(
         &mut self,
@@ -415,7 +417,10 @@ impl NyaTermApp {
 
     pub(super) fn drain_translate_events(&mut self) -> bool {
         let mut dirty = false;
-        while let Ok(event) = self.translate_rx.try_recv() {
+        for _ in 0..TRANSLATE_EVENT_DRAIN_LIMIT {
+            let Ok(event) = self.translate_rx.try_recv() else {
+                break;
+            };
             dirty = true;
             self.translate_pending = false;
             match event.result {

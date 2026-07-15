@@ -1,5 +1,7 @@
 use super::*;
 
+const SESSION_START_EVENT_DRAIN_LIMIT: usize = 8;
+
 impl NyaTermApp {
     pub(in crate::features) fn begin_background_session_start(
         &mut self,
@@ -291,7 +293,10 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) -> bool {
         let mut dirty = false;
-        while let Ok(event) = self.session_start_rx.try_recv() {
+        for _ in 0..SESSION_START_EVENT_DRAIN_LIMIT {
+            let Ok(event) = self.session_start_rx.try_recv() else {
+                break;
+            };
             dirty = true;
             let pending = self.pending_session_starts.remove(&event.request_id);
             let request_id = event.request_id.clone();

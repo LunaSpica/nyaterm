@@ -1,5 +1,7 @@
 use super::*;
 
+const STATS_EVENT_DRAIN_LIMIT: usize = 8;
+
 impl NyaTermApp {
     pub(in crate::features) fn refresh_stats(
         &mut self,
@@ -43,7 +45,10 @@ impl NyaTermApp {
 
     pub(in crate::features) fn drain_stats_events(&mut self) -> bool {
         let mut dirty = false;
-        while let Ok(event) = self.stats_rx.try_recv() {
+        for _ in 0..STATS_EVENT_DRAIN_LIMIT {
+            let Ok(event) = self.stats_rx.try_recv() else {
+                break;
+            };
             dirty = true;
             self.stats_pending = false;
             match event.result {

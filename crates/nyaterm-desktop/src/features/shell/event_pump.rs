@@ -465,29 +465,34 @@ impl NyaTermApp {
             dirty = true;
         }
 
-        let session_start_started_at = Instant::now();
-        dirty |= self.drain_session_start_events(cx);
-        self.terminal_runtime.last_session_start_drain_duration =
-            session_start_started_at.elapsed();
-        // Continue sequential startup restore after async SSH connects complete.
-        // Window handle is not available here; pump only when not waiting on pending.
-        dirty |= self.stores.startup_restore.update(cx, |store, _| {
-            store.can_pump_queue(self.pending_session_name.is_some())
-        });
-        dirty |= self.drain_tunnel_events();
-        dirty |= self.drain_process_events();
-        dirty |= self.drain_stats_events();
-        dirty |= self.drain_translate_events();
-        dirty |= self.drain_update_events();
-        dirty |= self.drain_docker_events();
-        dirty |= self.drain_transfer_events(cx);
-        dirty |= self.drain_ai_discovery_events();
-        dirty |= self.drain_ai_chat_events(cx);
-        dirty |= self.drive_ai_agent_loop(cx);
-        dirty |= self.drain_host_key_prompts();
-        dirty |= self.drain_credential_prompts();
-        dirty |= self.drain_duplicate_prompts();
-        dirty |= self.drain_terminal_frame_events(cx);
+        let background_started_at = Instant::now();
+        let mut background_timings = RuntimeBackgroundDrainTimings::default();
+        dirty |= self.drain_runtime_background_events(
+            cx,
+            background_started_at,
+            &mut background_timings,
+        );
+        self.terminal_runtime.last_session_start_drain_duration = background_timings.session_start;
+        let background_total = background_started_at.elapsed();
+        if (background_timings.budget_exhausted
+            || background_total >= RUNTIME_BACKGROUND_EVENT_DRAIN_SLOW)
+            && self.should_log_slow_diagnostic("runtime_background_event_drain", Instant::now())
+        {
+            tracing::warn!(
+                diagnostic = "runtime_background_event_drain",
+                total_ms = background_total.as_millis(),
+                session_start_ms = background_timings.session_start.as_millis(),
+                prompts_ms = background_timings.prompts.as_millis(),
+                terminal_frames_ms = background_timings.terminal_frames.as_millis(),
+                startup_restore_ms = background_timings.startup_restore.as_millis(),
+                transfer_ms = background_timings.transfer.as_millis(),
+                ai_ms = background_timings.ai.as_millis(),
+                remote_ms = background_timings.remote.as_millis(),
+                maintenance_ms = background_timings.maintenance.as_millis(),
+                budget_exhausted = background_timings.budget_exhausted,
+                "slow runtime background event drain"
+            );
+        }
         if session_event_drain_is_slow(drain_timings.output_total, max_output_chunk_duration)
             && self.should_log_slow_diagnostic("session_event_drain", Instant::now())
         {
@@ -512,6 +517,63 @@ impl NyaTermApp {
                 "slow session event drain"
             );
         }
+        dirty
+    }
+
+    fn drain_runtime_background_events(
+        &mut self,
+        cx: &mut Context<Self>,
+        started_at: Instant,
+        timings: &mut RuntimeBackgroundDrainTimings,
+    ) -> bool {
+        let mut dirty = false;
+        macro_rules! drain_stage {
+            ($field:ident, $expr:expr) => {{
+                let stage_started_at = Instant::now();
+                dirty |= $expr;
+                timings.$field += stage_started_at.elapsed();
+                if runtime_background_event_drain_budget_exhausted(started_at) {
+                    timings.budget_exhausted = true;
+                    return dirty;
+                }
+            }};
+        }
+
+        drain_stage!(session_start, self.drain_session_start_events(cx));
+        drain_stage!(
+            prompts,
+            self.drain_host_key_prompts()
+                | self.drain_credential_prompts()
+                | self.drain_duplicate_prompts()
+        );
+        drain_stage!(terminal_frames, self.drain_terminal_frame_events(cx));
+        // Continue sequential startup restore after async SSH connects complete.
+        // Window handle is not available here; pump only when not waiting on pending.
+        drain_stage!(
+            startup_restore,
+            self.stores.startup_restore.update(cx, |store, _| {
+                store.can_pump_queue(self.pending_session_name.is_some())
+            })
+        );
+        drain_stage!(transfer, self.drain_transfer_events(cx));
+        drain_stage!(
+            ai,
+            self.drain_ai_discovery_events()
+                | self.drain_ai_chat_events(cx)
+                | self.drive_ai_agent_loop(cx)
+        );
+        drain_stage!(
+            remote,
+            self.drain_tunnel_events()
+                | self.drain_process_events()
+                | self.drain_stats_events()
+                | self.drain_docker_events()
+        );
+        drain_stage!(
+            maintenance,
+            self.drain_translate_events() | self.drain_update_events()
+        );
+
         dirty
     }
 
@@ -778,6 +840,8 @@ const TRANSFER_AUTO_SYNC_CWD_INTERVAL_SECONDS: u32 = 3;
 const SESSION_EVENT_DRAIN_BATCH: usize = 256;
 const SESSION_EVENT_DRAIN_OUTPUT_BUDGET: usize = 8 * 1024;
 const SESSION_EVENT_DRAIN_WALL_BUDGET: Duration = Duration::from_millis(8);
+const RUNTIME_BACKGROUND_EVENT_DRAIN_WALL_BUDGET: Duration = Duration::from_millis(6);
+const RUNTIME_BACKGROUND_EVENT_DRAIN_SLOW: Duration = Duration::from_millis(12);
 const SLOW_DIAGNOSTIC_THROTTLE: Duration = Duration::from_secs(2);
 const RUNTIME_TICK_SLOW_THRESHOLD: Duration = Duration::from_millis(40);
 const SESSION_EVENT_DRAIN_SLOW_TOTAL: Duration = Duration::from_millis(20);
@@ -793,6 +857,19 @@ struct SessionEventDrainTimings {
     terminal_append: Duration,
     credential_autofill: Duration,
     ai_capture: Duration,
+}
+
+#[derive(Default)]
+struct RuntimeBackgroundDrainTimings {
+    session_start: Duration,
+    prompts: Duration,
+    terminal_frames: Duration,
+    startup_restore: Duration,
+    transfer: Duration,
+    ai: Duration,
+    remote: Duration,
+    maintenance: Duration,
+    budget_exhausted: bool,
 }
 
 fn diagnostic_log_due(last_at: Option<Instant>, now: Instant, throttle: Duration) -> bool {
@@ -818,6 +895,10 @@ fn session_events_output_bytes(events: &VecDeque<SessionEvent>) -> usize {
             _ => 0,
         })
         .sum()
+}
+
+fn runtime_background_event_drain_budget_exhausted(started_at: Instant) -> bool {
+    started_at.elapsed() >= RUNTIME_BACKGROUND_EVENT_DRAIN_WALL_BUDGET
 }
 
 fn remote_refresh_due(last_refresh_at: Option<Instant>, interval_seconds: u32) -> bool {
@@ -932,5 +1013,15 @@ mod tests {
         });
 
         assert_eq!(session_events_output_bytes(&events), 5);
+    }
+
+    #[test]
+    fn runtime_background_event_drain_budget_exhaustion_tracks_elapsed_time() {
+        let start = Instant::now() - RUNTIME_BACKGROUND_EVENT_DRAIN_WALL_BUDGET;
+
+        assert!(runtime_background_event_drain_budget_exhausted(start));
+        assert!(!runtime_background_event_drain_budget_exhausted(
+            Instant::now()
+        ));
     }
 }

@@ -1,5 +1,7 @@
 use super::*;
 
+const AI_DISCOVERY_EVENT_DRAIN_LIMIT: usize = 8;
+
 impl NyaTermApp {
     pub(in crate::features) fn discover_ai_models(&mut self, cx: &mut Context<Self>) {
         if self.ai_discovery_pending {
@@ -72,7 +74,10 @@ impl NyaTermApp {
 
     pub(in crate::features) fn drain_ai_discovery_events(&mut self) -> bool {
         let mut dirty = false;
-        while let Ok(event) = self.ai_discovery_rx.try_recv() {
+        for _ in 0..AI_DISCOVERY_EVENT_DRAIN_LIMIT {
+            let Ok(event) = self.ai_discovery_rx.try_recv() else {
+                break;
+            };
             dirty = true;
             self.ai_discovery_pending = false;
             match event.result {
