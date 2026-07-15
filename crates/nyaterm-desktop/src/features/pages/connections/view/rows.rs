@@ -1,53 +1,6 @@
 use super::*;
 
 impl NyaTermApp {
-    fn schedule_connection_details_hover(&mut self, connection_id: String, cx: &mut Context<Self>) {
-        let started_at = Instant::now();
-        self.connection_details_hover_pending = Some((connection_id.clone(), started_at));
-        cx.spawn(async move |this, cx| {
-            Timer::after(CONNECTION_DETAILS_HOVER_DELAY).await;
-            let _ = this.update(cx, |this, cx| {
-                let pending_matches = this
-                    .connection_details_hover_pending
-                    .as_ref()
-                    .is_some_and(|(id, started)| id == &connection_id && *started == started_at);
-                if !pending_matches
-                    || this.hovered_connection_id.as_deref() != Some(connection_id.as_str())
-                    || this.connection_context_menu.is_some()
-                    || this.connection_group_context_menu.is_some()
-                    || this.connection_drop_target.is_some()
-                {
-                    return;
-                }
-                this.connection_details_hover_pending = None;
-                if this.connection_details_tooltip_id.as_deref() != Some(connection_id.as_str()) {
-                    this.connection_details_tooltip_id = Some(connection_id);
-                    cx.notify();
-                }
-            });
-        })
-        .detach();
-    }
-
-    fn clear_connection_details_hover(&mut self, connection_id: &str, cx: &mut Context<Self>) {
-        let mut changed = false;
-        if self
-            .connection_details_hover_pending
-            .as_ref()
-            .is_some_and(|(id, _)| id == connection_id)
-        {
-            self.connection_details_hover_pending = None;
-            changed = true;
-        }
-        if self.connection_details_tooltip_id.as_deref() == Some(connection_id) {
-            self.connection_details_tooltip_id = None;
-            changed = true;
-        }
-        if changed {
-            cx.notify();
-        }
-    }
-
     pub(in crate::features) fn dismiss_connection_details_hover(&mut self, cx: &mut Context<Self>) {
         let changed = self.connection_details_hover_pending.take().is_some()
             | self.connection_details_tooltip_id.take().is_some();
@@ -482,10 +435,8 @@ impl NyaTermApp {
             .on_hover(cx.listener(move |this, hovered: &bool, _, cx| {
                 if *hovered {
                     this.hovered_connection_id = Some(hover_id.clone());
-                    this.schedule_connection_details_hover(hover_id.clone(), cx);
                 } else if this.hovered_connection_id.as_deref() == Some(hover_id.as_str()) {
                     this.hovered_connection_id = None;
-                    this.clear_connection_details_hover(&hover_id, cx);
                 }
                 cx.notify();
             }))
@@ -515,7 +466,7 @@ impl NyaTermApp {
                     this.select_connection(select_id.clone(), additive, range, cx);
                 }),
             )
-            // Single-line name row (endpoint/last-used live in hover tooltip, like Tauri).
+            // Single-line name row; details live in the explicit selection panel.
             .child(connection_type_icon(palette, icon_def, selected, 14.))
             .child(
                 div()
@@ -671,5 +622,3 @@ impl NyaTermApp {
             .child(grid)
     }
 }
-
-const CONNECTION_DETAILS_HOVER_DELAY: Duration = Duration::from_millis(900);
