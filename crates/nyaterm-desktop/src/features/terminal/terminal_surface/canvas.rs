@@ -166,7 +166,9 @@ impl NyaTermApp {
                 .hyperlink_lines
                 .iter()
                 .any(|spans| !spans.is_empty());
-        let has_command_marks = snapshot.command_marks.iter().any(Option::is_some);
+        let include_command_marks = !render_degraded;
+        let has_command_marks =
+            include_command_marks && snapshot.command_marks.iter().any(Option::is_some);
         let needs_line_decorations = terminal_line_decorations_needed(
             has_selection,
             has_search_decorations,
@@ -186,6 +188,7 @@ impl NyaTermApp {
                 frame_action_links,
                 include_action_links,
                 include_hyperlinks,
+                include_command_marks,
             );
             let mut build = || {
                 let action_link_started_at = Instant::now();
@@ -197,6 +200,7 @@ impl NyaTermApp {
                     frame_action_links,
                     include_action_links,
                     include_hyperlinks,
+                    include_command_marks,
                 );
                 action_link_duration += action_link_started_at.elapsed();
                 decorations
@@ -1217,6 +1221,7 @@ fn terminal_line_decorations_cache_key(
     frame_action_links: Option<&TerminalFrameActionLinks>,
     include_action_links: bool,
     include_hyperlinks: bool,
+    include_command_marks: bool,
 ) -> u64 {
     let mut hasher = DefaultHasher::new();
     snapshot.rows.hash(&mut hasher);
@@ -1226,6 +1231,7 @@ fn terminal_line_decorations_cache_key(
     selection.hash(&mut hasher);
     include_action_links.hash(&mut hasher);
     include_hyperlinks.hash(&mut hasher);
+    include_command_marks.hash(&mut hasher);
     hash_ranges_by_line(search_ranges_by_line, &mut hasher);
     hash_ranges_by_line(active_search_ranges_by_line, &mut hasher);
     if include_action_links {
@@ -1247,7 +1253,9 @@ fn terminal_line_decorations_cache_key(
             }
         }
     }
-    snapshot.command_marks.hash(&mut hasher);
+    if include_command_marks {
+        snapshot.command_marks.hash(&mut hasher);
+    }
     hasher.finish()
 }
 
@@ -1276,6 +1284,7 @@ fn build_terminal_line_decorations(
     frame_action_links: Option<&TerminalFrameActionLinks>,
     include_action_links: bool,
     include_hyperlinks: bool,
+    include_command_marks: bool,
 ) -> Vec<TerminalLineDecorations> {
     let line_count = snapshot.lines.len();
     let mut line_decorations = Vec::with_capacity(line_count);
@@ -1307,7 +1316,9 @@ fn build_terminal_line_decorations(
             .get(&line_index)
             .map(|ranges| ranges.as_slice())
             .unwrap_or(&empty_ranges);
-        let command_mark = snapshot.command_marks.get(line_index).copied().flatten();
+        let command_mark = include_command_marks
+            .then(|| snapshot.command_marks.get(line_index).copied().flatten())
+            .flatten();
         line_decorations.push(TerminalLineDecorations {
             search_ranges: line_search_ranges.to_vec(),
             active_search_ranges: line_active_search_ranges.to_vec(),
@@ -1406,7 +1417,7 @@ mod tests {
         let search = HashMap::new();
         let active = HashMap::new();
         let without_selection = terminal_line_decorations_cache_key(
-            &snapshot, None, &search, &active, None, false, false,
+            &snapshot, None, &search, &active, None, false, false, false,
         );
         let with_selection = terminal_line_decorations_cache_key(
             &snapshot,
@@ -1417,6 +1428,7 @@ mod tests {
             &search,
             &active,
             None,
+            false,
             false,
             false,
         );
@@ -1442,6 +1454,7 @@ mod tests {
             Some(&links),
             true,
             false,
+            false,
         );
         links.cell_ranges_by_line[0] = vec![(2, 5)];
         let second = terminal_line_decorations_cache_key(
@@ -1452,8 +1465,24 @@ mod tests {
             Some(&links),
             true,
             false,
+            false,
         );
 
         assert_ne!(first, second);
+    }
+
+    #[test]
+    fn terminal_line_decorations_cache_key_tracks_command_mark_mode() {
+        let snapshot = TerminalScreen::default().viewport_snapshot(0);
+        let search = HashMap::new();
+        let active = HashMap::new();
+        let without_marks = terminal_line_decorations_cache_key(
+            &snapshot, None, &search, &active, None, false, false, false,
+        );
+        let with_marks = terminal_line_decorations_cache_key(
+            &snapshot, None, &search, &active, None, false, false, true,
+        );
+
+        assert_ne!(without_marks, with_marks);
     }
 }
