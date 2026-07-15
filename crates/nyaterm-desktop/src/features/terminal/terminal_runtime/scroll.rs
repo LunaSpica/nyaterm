@@ -95,7 +95,7 @@ impl NyaTermApp {
             }
         }
         if let Some((session_id, offset)) = snapshot_request {
-            self.request_terminal_frame_snapshot(&session_id, offset);
+            self.request_terminal_frame_snapshot_when_idle(&session_id, offset);
         }
         cx.notify();
     }
@@ -267,7 +267,7 @@ impl NyaTermApp {
             self.terminal_scroll_offset = self.terminal_screen.scrollback_len();
         }
         if let Some((session_id, offset)) = snapshot_request {
-            self.request_terminal_frame_snapshot(&session_id, offset);
+            self.request_terminal_frame_snapshot_when_idle(&session_id, offset);
         }
         cx.notify();
     }
@@ -293,7 +293,7 @@ impl NyaTermApp {
             self.terminal_scroll_offset = offset.min(max);
         }
         if let Some((session_id, offset)) = snapshot_request {
-            self.request_terminal_frame_snapshot(&session_id, offset);
+            self.request_terminal_frame_snapshot_when_idle(&session_id, offset);
         }
         cx.notify();
     }
@@ -345,7 +345,7 @@ impl NyaTermApp {
             self.terminal_scroll_offset = offset.min(max);
         }
         if let Some((session_id, offset)) = snapshot_request {
-            self.request_terminal_frame_snapshot(&session_id, offset);
+            self.request_terminal_frame_snapshot_when_idle(&session_id, offset);
         }
         cx.notify();
     }

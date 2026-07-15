@@ -87,6 +87,17 @@ impl NyaTermApp {
         true
     }
 
+    pub(in crate::features) fn request_terminal_frame_snapshot_when_idle(
+        &mut self,
+        session_id: &str,
+        offset: usize,
+    ) -> bool {
+        if terminal_frame_snapshot_request_waits_for_idle(self.runtime_output_pressure_active()) {
+            return false;
+        }
+        self.request_terminal_frame_snapshot(session_id, offset)
+    }
+
     pub(in crate::features) fn request_terminal_frame_search(
         &mut self,
         session_id: &str,
@@ -832,6 +843,10 @@ fn terminal_frame_snapshot_request_candidates(
         .collect()
 }
 
+fn terminal_frame_snapshot_request_waits_for_idle(runtime_output_pressure: bool) -> bool {
+    runtime_output_pressure
+}
+
 fn workspace_pane_node_visible_session_ids(root: &WorkspacePaneNode) -> Vec<&str> {
     let mut ids = Vec::new();
     collect_workspace_pane_node_visible_session_ids(root, &mut ids);
@@ -906,6 +921,12 @@ mod frame_event_queue_tests {
             ),
             vec![("visible-scrolled".to_string(), 5)]
         );
+    }
+
+    #[test]
+    fn terminal_frame_snapshot_requests_wait_for_idle_runtime() {
+        assert!(!terminal_frame_snapshot_request_waits_for_idle(false));
+        assert!(terminal_frame_snapshot_request_waits_for_idle(true));
     }
 
     #[test]
