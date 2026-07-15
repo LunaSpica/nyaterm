@@ -1688,6 +1688,14 @@ fn process_terminal_frame_output_burst(
     }
 
     loop {
+        if !terminal_frame_output_batch_should_continue(
+            processed_bytes,
+            started_at.elapsed(),
+            TERMINAL_FRAME_OUTPUT_BURST_BYTE_LIMIT,
+            TERMINAL_FRAME_OUTPUT_BURST_WALL_BUDGET,
+        ) {
+            break;
+        }
         let next = pending_commands
             .pop_front()
             .or_else(|| command_rx.try_recv());
@@ -1809,8 +1817,18 @@ fn terminal_frame_output_commands_can_merge(
 
 const TERMINAL_FRAME_EVENT_QUEUE_CAP: usize = 1024;
 const TERMINAL_FRAME_COMMAND_QUEUE_CAP: usize = 512;
-const TERMINAL_FRAME_OUTPUT_COALESCE_BYTE_LIMIT: usize = 64 * 1024;
-const TERMINAL_FRAME_OUTPUT_BURST_BYTE_LIMIT: usize = 512 * 1024;
+const TERMINAL_FRAME_OUTPUT_COALESCE_BYTE_LIMIT: usize = 32 * 1024;
+const TERMINAL_FRAME_OUTPUT_BURST_BYTE_LIMIT: usize = 64 * 1024;
+const TERMINAL_FRAME_OUTPUT_BURST_WALL_BUDGET: Duration = Duration::from_millis(4);
+
+fn terminal_frame_output_batch_should_continue(
+    processed_bytes: usize,
+    elapsed: Duration,
+    byte_limit: usize,
+    wall_budget: Duration,
+) -> bool {
+    processed_bytes < byte_limit && elapsed < wall_budget
+}
 
 #[cfg(test)]
 mod tests {
@@ -2495,6 +2513,32 @@ mod tests {
         assert!(matches!(
             next_terminal_frame_command(&rx, &mut pending),
             Some(TerminalFrameCommand::Output { .. })
+        ));
+    }
+
+    #[test]
+    fn terminal_frame_output_batch_policy_stops_at_latency_budget() {
+        assert!(terminal_frame_output_batch_should_continue(
+            1024,
+            Duration::from_millis(1),
+            TERMINAL_FRAME_OUTPUT_BURST_BYTE_LIMIT,
+            TERMINAL_FRAME_OUTPUT_BURST_WALL_BUDGET,
+        ));
+        assert!(!terminal_frame_output_batch_should_continue(
+            1024,
+            TERMINAL_FRAME_OUTPUT_BURST_WALL_BUDGET,
+            TERMINAL_FRAME_OUTPUT_BURST_BYTE_LIMIT,
+            TERMINAL_FRAME_OUTPUT_BURST_WALL_BUDGET,
+        ));
+    }
+
+    #[test]
+    fn terminal_frame_output_batch_policy_stops_at_byte_budget() {
+        assert!(!terminal_frame_output_batch_should_continue(
+            TERMINAL_FRAME_OUTPUT_BURST_BYTE_LIMIT,
+            Duration::from_millis(1),
+            TERMINAL_FRAME_OUTPUT_BURST_BYTE_LIMIT,
+            TERMINAL_FRAME_OUTPUT_BURST_WALL_BUDGET,
         ));
     }
 
