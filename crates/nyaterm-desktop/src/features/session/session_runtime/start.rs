@@ -30,10 +30,8 @@ impl NyaTermApp {
         _window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        if self.pending_session_name.is_some()
-            && !matches!(connection.config, ConnectionType::Ssh { .. })
-        {
-            self.terminal_status = "wait for the pending session to finish connecting".to_string();
+        if self.saved_connection_start_is_pending(&connection) {
+            self.terminal_status = format!("{} is already connecting", connection.name);
             self.selected_nav = NavItem::Workspace;
             cx.notify();
             return;
@@ -170,6 +168,12 @@ impl NyaTermApp {
                 );
             }
         }
+    }
+
+    fn saved_connection_start_is_pending(&self, connection: &SavedConnection) -> bool {
+        self.pending_session_starts
+            .values()
+            .any(|pending| pending.source_connection_id.as_deref() == Some(connection.id.as_str()))
     }
 
     pub(in crate::features) fn load_ssh_key_auth(
@@ -348,5 +352,4 @@ impl NyaTermApp {
         visited_proxy_jumps.pop();
         Ok(Some(Box::new(jump_config)))
     }
-
 }
