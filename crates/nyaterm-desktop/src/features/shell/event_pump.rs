@@ -253,8 +253,6 @@ impl NyaTermApp {
         }
 
         if !self.pending_session_events.is_empty() {
-            dirty = true;
-
             while let Some(event) = self.pending_session_events.pop_front() {
                 drained_events += 1;
                 match event {
@@ -389,6 +387,7 @@ impl NyaTermApp {
                                 "terminal output overloaded; dropped {} queued byte(s)",
                                 bytes
                             );
+                            dirty = true;
                         }
                     }
                     SessionEvent::Exited { session_id } => {
@@ -406,6 +405,7 @@ impl NyaTermApp {
                             self.terminal_status =
                                 format!("session exited {}", short_id(&session_id));
                         }
+                        dirty = true;
                     }
                     SessionEvent::Error {
                         session_id,
@@ -425,6 +425,7 @@ impl NyaTermApp {
                         } else {
                             self.append_terminal_log_for_session(Some(&session_id), &log, true);
                         }
+                        dirty = true;
                     }
                 }
                 if session_event_drain_should_yield(
@@ -654,12 +655,13 @@ impl NyaTermApp {
     }
 
     fn runtime_output_pressure_active(&self) -> bool {
-        self.terminal_runtime.session_event_backlog_active
-            || self.terminal_runtime.session_event_queued_output_bytes > 0
-            || !self.pending_session_events.is_empty()
-            || !self.pending_terminal_frame_events.is_empty()
-            || self.terminal_frame_pipeline.queued_event_count() > 0
-            || !self.pending_session_starts.is_empty()
+        runtime_output_pressure_active_from_counts(
+            self.terminal_runtime.session_event_backlog_active,
+            self.terminal_runtime.session_event_queued_output_bytes,
+            self.pending_session_events.len(),
+            self.pending_terminal_frame_events.len(),
+            self.terminal_frame_pipeline.queued_event_count(),
+        )
     }
 
     pub(crate) fn drive_window_runtime_tick(
@@ -790,18 +792,22 @@ impl NyaTermApp {
         let pending_session_stage_started_at = Instant::now();
         dirty |= self.drive_pending_session_status();
         let pending_session_status_duration = pending_session_stage_started_at.elapsed();
+        let visual_dirty = dirty;
         let notify_started_at = Instant::now();
-        if dirty {
+        if visual_dirty {
             cx.notify();
         }
         let notify_duration = notify_started_at.elapsed();
         let publish_started_at = Instant::now();
         let output_pressure_for_publish = self.runtime_output_pressure_active();
-        let should_publish_snapshots = dirty && !output_pressure_for_publish
-            || store_snapshot_publish_due(
+        let should_publish_snapshots = should_publish_store_snapshots(
+            visual_dirty,
+            output_pressure_for_publish,
+            store_snapshot_publish_due(
                 self.terminal_runtime.last_store_snapshot_publish_at,
                 publish_started_at,
-            );
+            ),
+        );
         if should_publish_snapshots {
             self.publish_store_snapshots(cx);
         }
@@ -835,7 +841,9 @@ impl NyaTermApp {
                 pending_session_starts = self.pending_session_starts.len(),
                 output_pressure,
                 next_tick_delay_ms = self.window_runtime_tick_delay().as_millis(),
-                dirty,
+                visual_dirty,
+                notify_requested = visual_dirty,
+                publish_snapshots = should_publish_snapshots,
                 "slow runtime tick"
             );
         }
@@ -1007,12 +1015,34 @@ fn store_snapshot_publish_due(last_at: Option<Instant>, now: Instant) -> bool {
     diagnostic_log_due(last_at, now, STORE_SNAPSHOT_HEARTBEAT)
 }
 
+fn should_publish_store_snapshots(
+    visual_dirty: bool,
+    output_pressure: bool,
+    heartbeat_due: bool,
+) -> bool {
+    !output_pressure && (visual_dirty || heartbeat_due)
+}
+
 fn runtime_tick_interval_for_pressure(output_pressure: bool) -> Duration {
     if output_pressure {
         RUNTIME_PRESSURE_TICK_INTERVAL
     } else {
         RUNTIME_IDLE_TICK_INTERVAL
     }
+}
+
+fn runtime_output_pressure_active_from_counts(
+    session_event_backlog_active: bool,
+    session_event_queued_output_bytes: usize,
+    pending_session_events: usize,
+    pending_terminal_frame_events: usize,
+    queued_terminal_frame_events: usize,
+) -> bool {
+    session_event_backlog_active
+        || session_event_queued_output_bytes > 0
+        || pending_session_events > 0
+        || pending_terminal_frame_events > 0
+        || queued_terminal_frame_events > 0
 }
 
 fn session_event_drain_is_slow(total: Duration, max_chunk: Duration) -> bool {
@@ -1152,6 +1182,15 @@ mod tests {
     }
 
     #[test]
+    fn store_snapshot_publish_waits_until_output_pressure_clears() {
+        assert!(should_publish_store_snapshots(true, false, false));
+        assert!(should_publish_store_snapshots(false, false, true));
+        assert!(!should_publish_store_snapshots(false, false, false));
+        assert!(!should_publish_store_snapshots(true, true, false));
+        assert!(!should_publish_store_snapshots(false, true, true));
+    }
+
+    #[test]
     fn runtime_tick_interval_uses_fast_cadence_under_output_pressure() {
         assert_eq!(
             runtime_tick_interval_for_pressure(false),
@@ -1161,6 +1200,26 @@ mod tests {
             runtime_tick_interval_for_pressure(true),
             RUNTIME_PRESSURE_TICK_INTERVAL
         );
+    }
+
+    #[test]
+    fn runtime_output_pressure_tracks_output_and_frame_backlog_only() {
+        assert!(!runtime_output_pressure_active_from_counts(
+            false, 0, 0, 0, 0
+        ));
+        assert!(runtime_output_pressure_active_from_counts(true, 0, 0, 0, 0));
+        assert!(runtime_output_pressure_active_from_counts(
+            false, 1, 0, 0, 0
+        ));
+        assert!(runtime_output_pressure_active_from_counts(
+            false, 0, 1, 0, 0
+        ));
+        assert!(runtime_output_pressure_active_from_counts(
+            false, 0, 0, 1, 0
+        ));
+        assert!(runtime_output_pressure_active_from_counts(
+            false, 0, 0, 0, 1
+        ));
     }
 
     #[test]

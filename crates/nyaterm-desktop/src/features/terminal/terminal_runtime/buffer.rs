@@ -172,9 +172,6 @@ impl NyaTermApp {
             }
         }
 
-        if !self.pending_terminal_frame_events.is_empty() {
-            dirty = true;
-        }
         let total_duration = started_at.elapsed();
         if (total_duration >= TERMINAL_FRAME_EVENT_DRAIN_SLOW_TOTAL
             || max_apply_duration >= TERMINAL_FRAME_EVENT_APPLY_SLOW)
