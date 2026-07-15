@@ -90,24 +90,8 @@ impl NyaTermApp {
 
     fn active_terminal_cursor_cell_for_autofill(&self) -> (usize, usize) {
         let offset = self.active_terminal_scroll_offset();
-        let snapshot = self
-            .active_session_id
-            .as_deref()
-            .and_then(|session_id| self.terminal_views.get(session_id))
-            .map(|view| {
-                if offset == 0 {
-                    view.frame_snapshot
-                        .clone()
-                        .unwrap_or_else(|| view.screen.viewport_snapshot(offset))
-                } else {
-                    view.scrollback_snapshots
-                        .get(&offset)
-                        .cloned()
-                        .or_else(|| view.frame_snapshot.clone())
-                        .unwrap_or_else(|| view.screen.viewport_snapshot(offset))
-                }
-            })
-            .unwrap_or_else(|| self.terminal_screen.viewport_snapshot(offset));
+        let snapshot =
+            self.terminal_snapshot_for_session(self.active_session_id.as_deref(), offset);
         let row = if snapshot.cursor_row == usize::MAX {
             snapshot.lines.len().saturating_sub(1)
         } else {

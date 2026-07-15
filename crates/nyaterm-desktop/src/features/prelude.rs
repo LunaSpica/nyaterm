@@ -35,7 +35,9 @@ pub(super) use nyaterm_core::{
     terminal_resize_geometry_for_size, terminal_wire_write_disposition, truncate_preview, uuid,
 };
 pub(super) use nyaterm_legacy::{LegacyProject, MigrationInventory};
-pub(super) use nyaterm_terminal::{TerminalEffects, TerminalOutputDecoder, TerminalScreen};
+pub(super) use nyaterm_terminal::{
+    TerminalEffects, TerminalOutputDecoder, TerminalScreen, TerminalSnapshot,
+};
 pub(super) use nyaterm_transport::{
     DockerComposeService, DockerContainerDetails, DockerService, LocalSessionConfig,
     RecordingManager, RemoteCommandOutput, RemoteDockerOverview, RemoteProcess, RemoteStats,

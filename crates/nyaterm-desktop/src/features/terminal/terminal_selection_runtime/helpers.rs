@@ -128,12 +128,7 @@ impl EntityInputHandler for NyaTermApp {
         let (cell_w, cell_h) = self.terminal_cell_size();
         let pad = self.terminal_content_padding_px();
         let gutter = self.terminal_gutter_width_px();
-        let snapshot = self
-            .active_session_id
-            .as_deref()
-            .and_then(|session_id| self.terminal_views.get(session_id))
-            .map(|view| view.screen.viewport_snapshot(0))
-            .unwrap_or_else(|| self.terminal_screen.viewport_snapshot(0));
+        let snapshot = self.terminal_snapshot_for_session(self.active_session_id.as_deref(), 0);
         let row = if snapshot.cursor_row == usize::MAX {
             snapshot.lines.len().saturating_sub(1)
         } else {

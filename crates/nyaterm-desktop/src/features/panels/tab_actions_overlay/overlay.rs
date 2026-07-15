@@ -37,12 +37,16 @@ impl NyaTermApp {
             .is_some_and(|root| root.is_split())
             || self.workspace_split.is_some();
         let can_merge_windows = self.terminal_windows_is_multi_leaf();
+        let scroll_offset = self
+            .terminal_views
+            .get(&session_id)
+            .map(|view| view.scroll_offset)
+            .unwrap_or(0);
         let visible_for_ai = terminal_action_prompt_text(
             &self
-                .terminal_views
-                .get(&session_id)
-                .map(|view| view.screen.lines().join("\n"))
-                .unwrap_or_default(),
+                .terminal_snapshot_for_session(Some(session_id.as_str()), scroll_offset)
+                .lines
+                .join("\n"),
             2_800,
         );
         let buffer_for_ai = terminal_action_prompt_text(

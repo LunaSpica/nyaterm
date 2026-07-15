@@ -46,11 +46,6 @@ impl NyaTermApp {
         if scroll_offset > 0 {
             self.request_terminal_frame_snapshot(&session_id, scroll_offset);
         }
-        let live_frame_has_snapshot = scroll_offset == 0
-            && self
-                .terminal_views
-                .get(&session_id)
-                .is_some_and(|view| view.frame_snapshot.is_some());
         let frame_action_links = self
             .terminal_views
             .get(&session_id)
@@ -63,23 +58,10 @@ impl NyaTermApp {
             })
             .filter(|links| links.matcher_key == action_link_matcher_key)
             .cloned();
-        let snapshot = self
-            .terminal_views
-            .get(&session_id)
-            .map(|view| {
-                if scroll_offset == 0 {
-                    view.frame_snapshot
-                        .clone()
-                        .unwrap_or_else(|| view.screen.viewport_snapshot(scroll_offset))
-                } else {
-                    view.scrollback_snapshots
-                        .get(&scroll_offset)
-                        .cloned()
-                        .or_else(|| view.frame_snapshot.clone())
-                        .unwrap_or_else(|| view.screen.viewport_snapshot(scroll_offset))
-                }
-            })
-            .unwrap_or_else(|| self.terminal_screen.viewport_snapshot(scroll_offset));
+        let snapshot = self.terminal_snapshot_for_session(
+            (!session_id.is_empty()).then_some(session_id.as_str()),
+            scroll_offset,
+        );
         let lines = snapshot.lines.clone();
         let line_timestamps_ms = snapshot.line_timestamps_ms.clone();
         let hyperlink_lines = snapshot.hyperlink_lines.clone();
@@ -191,20 +173,6 @@ impl NyaTermApp {
                                 .collect()
                         })
                         .unwrap_or_default()
-                } else if !live_frame_has_snapshot {
-                    if let Some(view) = self.terminal_views.get_mut(&session_id) {
-                        view.render_cache
-                            .action_link_ranges(&line, &action_link_matchers)
-                    } else {
-                        find_action_links(&line, &action_link_matchers, true)
-                            .into_iter()
-                            .map(|item| {
-                                let start_col = terminal_cell_col_for_byte_index(&line, item.start);
-                                let end_col = terminal_cell_col_for_byte_index(&line, item.end);
-                                (start_col, end_col)
-                            })
-                            .collect()
-                    }
                 } else {
                     Vec::new()
                 }

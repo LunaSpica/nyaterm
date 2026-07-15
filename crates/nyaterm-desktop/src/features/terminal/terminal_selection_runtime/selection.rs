@@ -31,12 +31,8 @@ impl NyaTermApp {
             return None;
         }
         let offset = self.active_terminal_scroll_offset();
-        let snapshot = self
-            .active_session_id
-            .as_deref()
-            .and_then(|session_id| self.terminal_views.get(session_id))
-            .map(|view| view.screen.viewport_snapshot(offset))
-            .unwrap_or_else(|| self.terminal_screen.viewport_snapshot(offset));
+        let snapshot =
+            self.terminal_snapshot_for_session(self.active_session_id.as_deref(), offset);
         let (start, end) = selection.ordered();
         let mut parts = Vec::new();
         for row in start.row..=end.row {
@@ -236,12 +232,8 @@ impl NyaTermApp {
 
     pub(in crate::features) fn word_bounds_at(&self, cell: TerminalCellPos) -> (usize, usize) {
         let offset = self.active_terminal_scroll_offset();
-        let snapshot = self
-            .active_session_id
-            .as_deref()
-            .and_then(|session_id| self.terminal_views.get(session_id))
-            .map(|view| view.screen.viewport_snapshot(offset))
-            .unwrap_or_else(|| self.terminal_screen.viewport_snapshot(offset));
+        let snapshot =
+            self.terminal_snapshot_for_session(self.active_session_id.as_deref(), offset);
         let line = snapshot
             .lines
             .get(cell.row)

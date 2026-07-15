@@ -86,7 +86,11 @@ impl NyaTermApp {
             }
         } else {
             let total = self.terminal_screen.total_rows().max(1);
-            let rows = self.terminal_screen.viewport_snapshot(0).lines.len().max(1);
+            let rows = self
+                .terminal_snapshot_for_session(None, 0)
+                .lines
+                .len()
+                .max(1);
             let max_start = total.saturating_sub(rows);
             let start = abs_line.min(max_start);
             let offset = total.saturating_sub(start + rows);

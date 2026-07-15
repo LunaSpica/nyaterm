@@ -38,16 +38,7 @@ impl NyaTermApp {
     }
 
     pub(in crate::features) fn active_terminal_visible_text(&self) -> String {
-        self.active_session_id
-            .as_deref()
-            .and_then(|session_id| self.terminal_views.get(session_id))
-            .map(|view| {
-                view.frame_snapshot
-                    .as_ref()
-                    .map(|snapshot| snapshot.lines.join("\n"))
-                    .unwrap_or_else(|| view.screen.lines().join("\n"))
-            })
-            .unwrap_or_else(|| self.terminal_screen.lines().join("\n"))
+        self.active_terminal_snapshot().lines.join("\n")
     }
 
     pub(in crate::features) fn active_terminal_buffer_text(&self) -> String {
@@ -82,6 +73,36 @@ impl NyaTermApp {
         session_id: &str,
     ) -> Option<&TerminalViewState> {
         self.terminal_views.get(session_id)
+    }
+
+    pub(in crate::features) fn terminal_snapshot_for_session(
+        &self,
+        session_id: Option<&str>,
+        offset: usize,
+    ) -> TerminalSnapshot {
+        if let Some(session_id) = session_id.filter(|id| !id.is_empty()) {
+            if let Some(view) = self.terminal_views.get(session_id) {
+                if offset == 0 {
+                    return view
+                        .frame_snapshot
+                        .clone()
+                        .unwrap_or_else(|| view.screen.viewport_snapshot(0));
+                }
+                return view
+                    .scrollback_snapshots
+                    .get(&offset)
+                    .cloned()
+                    .unwrap_or_else(|| view.screen.viewport_snapshot(offset));
+            }
+        }
+        self.terminal_screen.viewport_snapshot(offset)
+    }
+
+    pub(in crate::features) fn active_terminal_snapshot(&self) -> TerminalSnapshot {
+        self.terminal_snapshot_for_session(
+            self.active_session_id.as_deref(),
+            self.active_terminal_scroll_offset(),
+        )
     }
 
     pub(in crate::features) fn copy_terminal_visible_text(&mut self, cx: &mut Context<Self>) {

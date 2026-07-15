@@ -138,12 +138,8 @@ impl NyaTermApp {
 
     pub(in crate::features) fn read_active_terminal_input_line(&self) -> Option<String> {
         let offset = self.active_terminal_scroll_offset();
-        let snapshot = self
-            .active_session_id
-            .as_deref()
-            .and_then(|session_id| self.terminal_views.get(session_id))
-            .map(|view| view.screen.viewport_snapshot(offset))
-            .unwrap_or_else(|| self.terminal_screen.viewport_snapshot(offset));
+        let snapshot =
+            self.terminal_snapshot_for_session(self.active_session_id.as_deref(), offset);
         if snapshot.cursor_row == usize::MAX {
             return None;
         }
@@ -224,12 +220,8 @@ impl NyaTermApp {
 
     pub(in crate::features) fn active_terminal_cursor_cell(&self) -> (usize, usize) {
         let offset = self.active_terminal_scroll_offset();
-        let snapshot = self
-            .active_session_id
-            .as_deref()
-            .and_then(|session_id| self.terminal_views.get(session_id))
-            .map(|view| view.screen.viewport_snapshot(offset))
-            .unwrap_or_else(|| self.terminal_screen.viewport_snapshot(offset));
+        let snapshot =
+            self.terminal_snapshot_for_session(self.active_session_id.as_deref(), offset);
         let row = if snapshot.cursor_row == usize::MAX {
             snapshot.lines.len().saturating_sub(1)
         } else {

@@ -13,7 +13,7 @@ use crate::{
     action_links::{ActionLinkMatch, find_action_links},
     terminal::{
         NyaTerminalLayoutCache, TerminalBufferMatch, TerminalSearchFlags, terminal_buffer_matches,
-        terminal_cell_col_for_byte_index, terminal_screen_from_output, trim_terminal_output,
+        terminal_screen_from_output, trim_terminal_output,
     },
 };
 
@@ -174,7 +174,6 @@ impl TerminalProtocolState {
 
 #[derive(Debug, Default)]
 pub(crate) struct TerminalRenderCache {
-    action_link_ranges_by_line_hash: HashMap<u64, Vec<(usize, usize)>>,
     pub(crate) layout_cache: Arc<Mutex<NyaTerminalLayoutCache>>,
     pub(crate) hits: u64,
     pub(crate) misses: u64,
@@ -182,46 +181,12 @@ pub(crate) struct TerminalRenderCache {
 
 impl TerminalRenderCache {
     pub(crate) fn clear(&mut self) {
-        self.action_link_ranges_by_line_hash.clear();
         if let Ok(mut cache) = self.layout_cache.lock() {
             cache.clear();
         }
         self.hits = 0;
         self.misses = 0;
     }
-
-    pub(crate) fn action_link_ranges(
-        &mut self,
-        line: &str,
-        matchers: &nyaterm_core::ActionLinksMatcherSettings,
-    ) -> Vec<(usize, usize)> {
-        let key = terminal_line_cache_key(line, matchers);
-        if let Some(ranges) = self.action_link_ranges_by_line_hash.get(&key) {
-            self.hits = self.hits.saturating_add(1);
-            return ranges.clone();
-        }
-        self.misses = self.misses.saturating_add(1);
-        let ranges = crate::action_links::find_action_links(line, matchers, true)
-            .into_iter()
-            .map(|item| {
-                let start = terminal_cell_col_for_byte_index(line, item.start);
-                let end = terminal_cell_col_for_byte_index(line, item.end);
-                (start, end)
-            })
-            .collect::<Vec<_>>();
-        self.action_link_ranges_by_line_hash
-            .insert(key, ranges.clone());
-        ranges
-    }
-}
-
-fn terminal_line_cache_key(line: &str, matchers: &nyaterm_core::ActionLinksMatcherSettings) -> u64 {
-    let mut hasher = std::collections::hash_map::DefaultHasher::new();
-    line.hash(&mut hasher);
-    matchers.ipv4.hash(&mut hasher);
-    matchers.archive.hash(&mut hasher);
-    matchers.host_port.hash(&mut hasher);
-    hasher.finish()
 }
 
 pub(crate) fn terminal_action_link_matcher_key(

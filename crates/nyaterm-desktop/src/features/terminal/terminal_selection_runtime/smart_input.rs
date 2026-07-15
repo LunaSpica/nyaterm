@@ -38,12 +38,7 @@ impl NyaTermApp {
         if offset != 0 {
             return None;
         }
-        let snapshot = self
-            .active_session_id
-            .as_deref()
-            .and_then(|session_id| self.terminal_views.get(session_id))
-            .map(|view| view.screen.viewport_snapshot(0))
-            .unwrap_or_else(|| self.terminal_screen.viewport_snapshot(0));
+        let snapshot = self.terminal_snapshot_for_session(self.active_session_id.as_deref(), 0);
         if cell.row != snapshot.cursor_row {
             return None;
         }
@@ -141,12 +136,7 @@ impl NyaTermApp {
             // Selection in history is not the live input line.
             return None;
         }
-        let snapshot = self
-            .active_session_id
-            .as_deref()
-            .and_then(|session_id| self.terminal_views.get(session_id))
-            .map(|view| view.screen.viewport_snapshot(0))
-            .unwrap_or_else(|| self.terminal_screen.viewport_snapshot(0));
+        let snapshot = self.terminal_snapshot_for_session(self.active_session_id.as_deref(), 0);
 
         if start.row != snapshot.cursor_row {
             return None;

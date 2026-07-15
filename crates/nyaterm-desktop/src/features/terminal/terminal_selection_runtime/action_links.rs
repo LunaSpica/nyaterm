@@ -149,32 +149,36 @@ impl NyaTermApp {
             self.settings.terminal_action_links_enabled,
             &self.settings.terminal_action_links_matchers,
         );
-        let (snapshot, frame_action_links, live_frame_has_snapshot) = if let Some(session_id) =
-            session_id.filter(|id| !id.is_empty())
-        {
-            let view = self.terminal_views.get(session_id)?;
-            let live_frame_has_snapshot = view.scroll_offset == 0 && view.frame_snapshot.is_some();
-            let snapshot = if view.scroll_offset == 0 {
-                view.frame_snapshot
-                    .clone()
-                    .unwrap_or_else(|| view.screen.viewport_snapshot(view.scroll_offset))
-            } else {
-                view.screen.viewport_snapshot(view.scroll_offset)
-            };
-            let frame_action_links = view
-                .frame_action_links
-                .as_ref()
+        let offset = if let Some(session_id) = session_id.filter(|id| !id.is_empty()) {
+            self.terminal_views
+                .get(session_id)
+                .map(|view| view.scroll_offset)
+                .unwrap_or(0)
+        } else {
+            self.terminal_scroll_offset
+        };
+        let snapshot = self.terminal_snapshot_for_session(session_id, offset);
+        let (frame_action_links, has_prepared_snapshot) =
+            if let Some(session_id) = session_id.filter(|id| !id.is_empty()) {
+                let Some(view) = self.terminal_views.get(session_id) else {
+                    return None;
+                };
+                let links = if offset == 0 {
+                    view.frame_action_links.as_ref()
+                } else {
+                    view.scrollback_action_links.get(&offset)
+                }
                 .filter(|links| links.matcher_key == action_link_matcher_key)
                 .cloned();
-            (snapshot, frame_action_links, live_frame_has_snapshot)
-        } else {
-            (
-                self.terminal_screen
-                    .viewport_snapshot(self.terminal_scroll_offset),
-                None,
-                false,
-            )
-        };
+                let prepared = if offset == 0 {
+                    view.frame_snapshot.is_some()
+                } else {
+                    view.scrollback_snapshots.contains_key(&offset)
+                };
+                (links, prepared)
+            } else {
+                (None, false)
+            };
         let line = snapshot.lines.get(cell.row)?;
         if line.is_empty() {
             return None;
@@ -187,7 +191,7 @@ impl NyaTermApp {
                 .iter()
                 .find(|item| byte_offset >= item.start && byte_offset < item.end)
                 .cloned()?
-        } else if live_frame_has_snapshot {
+        } else if has_prepared_snapshot {
             return None;
         } else {
             let matchers = &self.settings.terminal_action_links_matchers;
@@ -299,19 +303,7 @@ impl NyaTermApp {
         };
         let session_id = self.active_session_id.clone().unwrap_or_default();
         let scroll_offset = self.active_terminal_scroll_offset();
-        let snapshot = self
-            .terminal_views
-            .get(&session_id)
-            .map(|view| {
-                if scroll_offset == 0 {
-                    view.frame_snapshot
-                        .clone()
-                        .unwrap_or_else(|| view.screen.viewport_snapshot(scroll_offset))
-                } else {
-                    view.screen.viewport_snapshot(scroll_offset)
-                }
-            })
-            .unwrap_or_else(|| self.terminal_screen.viewport_snapshot(scroll_offset));
+        let snapshot = self.terminal_snapshot_for_session(Some(session_id.as_str()), scroll_offset);
         let Some(spans) = snapshot.hyperlink_lines.get(pos.row) else {
             return false;
         };
