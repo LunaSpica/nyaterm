@@ -131,61 +131,87 @@ impl NyaTermApp {
             }
         }
         let search_mapping_duration = search_stage_started_at.elapsed();
-        let mut line_decorations = Vec::with_capacity(lines.len());
         let decoration_stage_started_at = Instant::now();
         let mut action_link_duration = Duration::ZERO;
-        for line_index in 0..lines.len() {
-            let selection_cols = if is_active {
-                self.terminal_selection
-                    .as_ref()
-                    .and_then(|selection| selection.cols_for_row(line_index))
-            } else {
-                None
-            };
-            let action_link_started_at = Instant::now();
-            let mut link_ranges: Vec<(usize, usize)> =
-                if !render_degraded && self.settings.terminal_action_links_enabled {
-                    if let Some(links) = frame_action_links {
-                        links
-                            .cell_ranges_by_line
-                            .get(line_index)
-                            .cloned()
-                            .unwrap_or_default()
+        let has_selection = is_active && self.terminal_selection.is_some();
+        let has_search_decorations =
+            !search_ranges_by_line.is_empty() || !active_search_ranges_by_line.is_empty();
+        let has_frame_action_links = !render_degraded
+            && self.settings.terminal_action_links_enabled
+            && frame_action_links.is_some_and(|links| {
+                links
+                    .cell_ranges_by_line
+                    .iter()
+                    .any(|ranges| !ranges.is_empty())
+            });
+        let has_hyperlinks =
+            !render_degraded && hyperlink_lines.iter().any(|spans| !spans.is_empty());
+        let has_command_marks = snapshot.command_marks.iter().any(Option::is_some);
+        let needs_line_decorations = terminal_line_decorations_needed(
+            has_selection,
+            has_search_decorations,
+            has_frame_action_links,
+            has_hyperlinks,
+            has_command_marks,
+        );
+        let line_decorations = if needs_line_decorations {
+            let mut line_decorations = Vec::with_capacity(lines.len());
+            for line_index in 0..lines.len() {
+                let selection_cols = if is_active {
+                    self.terminal_selection
+                        .as_ref()
+                        .and_then(|selection| selection.cols_for_row(line_index))
+                } else {
+                    None
+                };
+                let action_link_started_at = Instant::now();
+                let mut link_ranges: Vec<(usize, usize)> =
+                    if !render_degraded && self.settings.terminal_action_links_enabled {
+                        if let Some(links) = frame_action_links {
+                            links
+                                .cell_ranges_by_line
+                                .get(line_index)
+                                .cloned()
+                                .unwrap_or_default()
+                        } else {
+                            Vec::new()
+                        }
                     } else {
                         Vec::new()
-                    }
-                } else {
-                    Vec::new()
-                };
-            action_link_duration += action_link_started_at.elapsed();
-            // OSC 8 hyperlinks from the terminal model (always paint when present).
-            if !render_degraded && let Some(spans) = hyperlink_lines.get(line_index) {
-                for span in spans {
-                    let start = span.start_col;
-                    let end = span.end_col.saturating_add(1);
-                    if end > start {
-                        link_ranges.push((start, end));
+                    };
+                action_link_duration += action_link_started_at.elapsed();
+                // OSC 8 hyperlinks from the terminal model (always paint when present).
+                if !render_degraded && let Some(spans) = hyperlink_lines.get(line_index) {
+                    for span in spans {
+                        let start = span.start_col;
+                        let end = span.end_col.saturating_add(1);
+                        if end > start {
+                            link_ranges.push((start, end));
+                        }
                     }
                 }
+                let empty_ranges: [(usize, usize); 0] = [];
+                let line_search_ranges = search_ranges_by_line
+                    .get(&line_index)
+                    .map(|ranges| ranges.as_slice())
+                    .unwrap_or(&empty_ranges);
+                let line_active_search_ranges = active_search_ranges_by_line
+                    .get(&line_index)
+                    .map(|ranges| ranges.as_slice())
+                    .unwrap_or(&empty_ranges);
+                let command_mark = snapshot.command_marks.get(line_index).copied().flatten();
+                line_decorations.push(TerminalLineDecorations {
+                    search_ranges: line_search_ranges.to_vec(),
+                    active_search_ranges: line_active_search_ranges.to_vec(),
+                    selection_cols,
+                    link_ranges,
+                    command_mark,
+                });
             }
-            let empty_ranges: [(usize, usize); 0] = [];
-            let line_search_ranges = search_ranges_by_line
-                .get(&line_index)
-                .map(|ranges| ranges.as_slice())
-                .unwrap_or(&empty_ranges);
-            let line_active_search_ranges = active_search_ranges_by_line
-                .get(&line_index)
-                .map(|ranges| ranges.as_slice())
-                .unwrap_or(&empty_ranges);
-            let command_mark = snapshot.command_marks.get(line_index).copied().flatten();
-            line_decorations.push(TerminalLineDecorations {
-                search_ranges: line_search_ranges.to_vec(),
-                active_search_ranges: line_active_search_ranges.to_vec(),
-                selection_cols,
-                link_ranges,
-                command_mark,
-            });
-        }
+            line_decorations
+        } else {
+            Vec::new()
+        };
         let decorations_duration = decoration_stage_started_at.elapsed();
         let element_stage_started_at = Instant::now();
         let (cell_w, cell_h) = self.terminal_cell_size();
@@ -1178,5 +1204,50 @@ fn terminal_snapshot_absolute_range(
     (start, end)
 }
 
+fn terminal_line_decorations_needed(
+    has_selection: bool,
+    has_search_decorations: bool,
+    has_frame_action_links: bool,
+    has_hyperlinks: bool,
+    has_command_marks: bool,
+) -> bool {
+    has_selection
+        || has_search_decorations
+        || has_frame_action_links
+        || has_hyperlinks
+        || has_command_marks
+}
+
 const TERMINAL_RENDER_SLOW_STAGE: Duration = Duration::from_millis(12);
 const TERMINAL_RENDER_SLOW_TOTAL: Duration = Duration::from_millis(25);
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn terminal_line_decorations_skip_plain_viewport() {
+        assert!(!terminal_line_decorations_needed(
+            false, false, false, false, false
+        ));
+    }
+
+    #[test]
+    fn terminal_line_decorations_keep_interactive_marks() {
+        assert!(terminal_line_decorations_needed(
+            true, false, false, false, false
+        ));
+        assert!(terminal_line_decorations_needed(
+            false, true, false, false, false
+        ));
+        assert!(terminal_line_decorations_needed(
+            false, false, true, false, false
+        ));
+        assert!(terminal_line_decorations_needed(
+            false, false, false, true, false
+        ));
+        assert!(terminal_line_decorations_needed(
+            false, false, false, false, true
+        ));
+    }
+}
