@@ -16,7 +16,7 @@ use crate::{
     action_links::{ActionLinkMatch, find_action_links},
     terminal::{
         NyaTerminalLayoutCache, TerminalBufferMatch, TerminalSearchFlags, terminal_buffer_matches,
-        terminal_screen_from_output, trim_terminal_output,
+        terminal_screen_from_output,
     },
 };
 
@@ -39,6 +39,11 @@ pub(crate) enum TerminalPerformanceOverlay {
 pub(crate) const TERMINAL_OUTPUT_WRITE_CHUNK: usize = 32 * 1024;
 pub(crate) const TERMINAL_OUTPUT_VISIBLE_BACKLOG_CAP: usize = 1_000_000;
 pub(crate) const TERMINAL_OUTPUT_VISIBLE_BURST_OVERLOAD: usize = 256 * 1024;
+/// UI-only text mirror cap. The authoritative terminal screen/scrollback lives
+/// in the frame worker; the GPUI thread keeps only a recent tail for prompts,
+/// AI context snippets, reconnect seed text, and compact tab actions.
+pub(crate) const TERMINAL_UI_OUTPUT_TAIL_CAP: usize = 128 * 1024;
+const TERMINAL_FRAME_VISIBLE_TEXT_TAIL_CAP: usize = 16 * 1024;
 /// ~3s recovery notice at the 50ms event-pump cadence.
 pub(crate) const TERMINAL_PERFORMANCE_RECOVERY_TICKS: u8 = 60;
 /// Require a short calm window before re-enabling expensive render decorations.
@@ -265,6 +270,35 @@ pub(crate) fn protect_terminal_output_burst<'a>(
     (&data[skip..], skip)
 }
 
+fn trim_string_to_tail(output: &mut String, max_bytes: usize) {
+    if max_bytes == 0 {
+        output.clear();
+        return;
+    }
+    if output.len() <= max_bytes {
+        return;
+    }
+    let min_start = output.len() - max_bytes;
+    let drain_to = output
+        .char_indices()
+        .find_map(|(index, _)| (index >= min_start).then_some(index))
+        .unwrap_or(output.len());
+    output.drain(..drain_to);
+}
+
+pub(crate) fn append_terminal_ui_output_tail(output: &mut String, text: &str) {
+    if text.is_empty() {
+        return;
+    }
+    output.push_str(text);
+    trim_string_to_tail(output, TERMINAL_UI_OUTPUT_TAIL_CAP);
+}
+
+fn terminal_text_tail(mut text: String, max_bytes: usize) -> String {
+    trim_string_to_tail(&mut text, max_bytes);
+    text
+}
+
 pub(crate) struct TerminalViewState {
     pub(crate) output: String,
     pub(crate) screen: TerminalScreen,
@@ -387,8 +421,7 @@ impl TerminalViewState {
         self.frame_action_links = None;
         self.clear_frame_query_caches();
         self.protocol_state = TerminalProtocolState::from_screen(&self.screen);
-        self.output.push_str(text);
-        trim_terminal_output(&mut self.output);
+        append_terminal_ui_output_tail(&mut self.output, text);
         if self.scroll_offset > 0 {
             self.has_new_while_scrolled = true;
         }
@@ -408,9 +441,10 @@ impl TerminalViewState {
         self.frame_action_links = None;
         self.clear_frame_query_caches();
         self.protocol_state = TerminalProtocolState::from_screen(&self.screen);
-        self.output
-            .push_str(&self.output_decoder.decode_output_text(data));
-        trim_terminal_output(&mut self.output);
+        append_terminal_ui_output_tail(
+            &mut self.output,
+            &self.output_decoder.decode_output_text(data),
+        );
         if self.scroll_offset > 0 {
             self.has_new_while_scrolled = true;
         }
@@ -547,8 +581,7 @@ impl TerminalViewState {
 
     pub(crate) fn apply_terminal_frame(&mut self, frame: &TerminalFrameOutputEvent) {
         if !frame.visible_text.is_empty() {
-            self.output.push_str(&frame.visible_text);
-            trim_terminal_output(&mut self.output);
+            append_terminal_ui_output_tail(&mut self.output, &frame.visible_text);
         }
         self.frame_snapshot = Some(frame.snapshot.clone());
         self.frame_action_links = frame.action_links.clone();
@@ -925,7 +958,10 @@ impl TerminalFrameSession {
         let (feed, skipped_output_bytes) =
             protect_terminal_output_burst(&mut self.screen, &mut self.output_decoder, &data);
         self.screen.advance(feed);
-        let visible_text = self.output_decoder.decode_output_text(feed);
+        let visible_text = terminal_text_tail(
+            self.output_decoder.decode_output_text(feed),
+            TERMINAL_FRAME_VISIBLE_TEXT_TAIL_CAP,
+        );
         self.revision = self.revision.saturating_add(1);
         let effects = self.screen.take_effects();
         let command_running = self.screen.command_running();
@@ -1353,6 +1389,42 @@ mod tests {
             .find(|cell| cell.text == "r")
             .expect("styled red cell");
         assert_eq!(red_cell.style.fg, Some(1));
+    }
+
+    #[test]
+    fn terminal_ui_output_tail_is_bounded_and_utf8_safe() {
+        let mut output = format!("{}界", "好".repeat(TERMINAL_UI_OUTPUT_TAIL_CAP));
+
+        append_terminal_ui_output_tail(&mut output, "done");
+
+        assert!(output.len() <= TERMINAL_UI_OUTPUT_TAIL_CAP);
+        assert!(output.ends_with("done"));
+        assert!(std::str::from_utf8(output.as_bytes()).is_ok());
+    }
+
+    #[test]
+    fn terminal_frame_visible_text_event_keeps_only_tail_for_ui() {
+        let mut session = TerminalFrameSession::new("UTF-8", 1000);
+        let input = format!(
+            "{}tail",
+            "x".repeat(TERMINAL_FRAME_VISIBLE_TEXT_TAIL_CAP + 1024)
+        );
+
+        let event = session.process_output(
+            "s1".to_string(),
+            input.into_bytes(),
+            "UTF-8".to_string(),
+            1000,
+            false,
+            ActionLinksMatcherSettings::default(),
+        );
+
+        assert!(event.visible_text.len() <= TERMINAL_FRAME_VISIBLE_TEXT_TAIL_CAP);
+        assert!(event.visible_text.ends_with("tail"));
+        assert_eq!(
+            event.recording_text.len(),
+            TERMINAL_FRAME_VISIBLE_TEXT_TAIL_CAP + 1028
+        );
     }
 
     #[test]

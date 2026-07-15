@@ -174,14 +174,15 @@ impl NyaTermApp {
 
     fn apply_terminal_output_frame(
         &mut self,
-        frame: TerminalFrameOutputEvent,
+        mut frame: TerminalFrameOutputEvent,
         cx: &mut Context<Self>,
     ) -> bool {
         let session_id = frame.session_id.clone();
         let is_active = self.active_session_id.as_deref() == Some(session_id.as_str());
-        if !frame.recording_text.is_empty() {
+        let recording_text = std::mem::take(&mut frame.recording_text);
+        if !recording_text.is_empty() {
             self.recording_write_pipeline
-                .write_output(session_id.clone(), frame.recording_text.clone());
+                .write_output(session_id.clone(), recording_text);
         }
         let view = self
             .terminal_views
@@ -291,8 +292,9 @@ impl NyaTermApp {
         self.sync_terminal_scrollback_limits();
         let max_bytes = self.terminal_scrollback_max_bytes();
         trim_terminal_output_to(&mut self.terminal_output, max_bytes);
+        let ui_output_tail_cap = max_bytes.min(TERMINAL_UI_OUTPUT_TAIL_CAP);
         for view in self.terminal_views.values_mut() {
-            trim_terminal_output_to(&mut view.output, max_bytes);
+            trim_terminal_output_to(&mut view.output, ui_output_tail_cap);
         }
     }
 
