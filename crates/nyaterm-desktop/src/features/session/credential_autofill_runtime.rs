@@ -1,6 +1,5 @@
 use super::*;
 
-const CREDENTIAL_AUTOFILL_BUFFER_LIMIT: usize = 4096;
 const CREDENTIAL_AUTOFILL_INPUT_TAIL_LIMIT: usize = 4096;
 const RECENT_PROMPT_TTL_MS: u64 = 30_000;
 const PENDING_PASSWORD_TTL_MS: u64 = 60_000;
@@ -103,75 +102,30 @@ impl NyaTermApp {
         (row, snapshot.cursor_col)
     }
 
-    pub(in crate::features) fn feed_credential_autofill_output(
-        &mut self,
-        session_id: &str,
-        text: &str,
-        cx: &mut Context<Self>,
-    ) {
-        if self.active_session_id.as_deref() != Some(session_id) {
-            return;
-        }
-        if text.is_empty() {
-            return;
-        }
-        let visible =
-            credential_autofill_strip_controls_fast(credential_autofill_visible_tail(text));
-        if visible.is_empty() {
-            return;
-        }
-        let may_complete_prompt = credential_autofill_visible_may_complete_prompt(&visible);
-        let clears_prompt_input = visible.contains('\r') || visible.contains('\n');
-
-        self.credential_autofill_buffer.push_str(&visible);
-        if self.credential_autofill_buffer.len() > CREDENTIAL_AUTOFILL_BUFFER_LIMIT {
-            let excess = self.credential_autofill_buffer.len() - CREDENTIAL_AUTOFILL_BUFFER_LIMIT;
-            self.credential_autofill_buffer.drain(..excess);
-            while !self.credential_autofill_buffer.is_empty()
-                && !self.credential_autofill_buffer.is_char_boundary(0)
-            {
-                self.credential_autofill_buffer.remove(0);
-            }
-        }
-
-        if !may_complete_prompt {
-            return;
-        }
-
-        let prompt_text =
-            credential_autofill_prompt_text_from_visible(&self.credential_autofill_buffer);
-        let detected_prompt_kind = credential_autofill_detect_prompt_kind(&prompt_text);
-        if detected_prompt_kind.is_some() {
-            self.credential_prompt_input_until_ms =
-                Self::now_unix_ms().saturating_add(CREDENTIAL_PROMPT_INPUT_TTL_MS);
-            // Suppress command suggestions while a credential prompt is live.
-            self.command_suggestions = None;
-            self.command_input_tracker = TerminalInputState::new();
-        } else if clears_prompt_input {
-            self.credential_prompt_input_until_ms = 0;
-        }
-
-        if self.credential_suggestions.is_some() || self.credential_autofill_sending {
-            return;
-        }
-        if detected_prompt_kind.is_none() && self.credential_autofill_pending.is_none() {
-            return;
-        }
-        self.credential_autofill_detection_pending = true;
-        cx.notify();
-    }
-
     pub(in crate::features) fn drain_pending_credential_autofill_detection(
         &mut self,
         cx: &mut Context<Self>,
     ) -> bool {
         let mut dirty = self.drain_credential_autofill_match_events(cx);
+        if credential_autofill_snapshot_detection_can_run(
+            self.active_session_id.as_deref(),
+            !self.connection_saved_credentials.is_empty()
+                || self.credential_autofill_pending.is_some(),
+            self.terminal_runtime.session_event_queued_output_bytes,
+            self.pending_session_events.len(),
+            self.pending_terminal_frame_events.len(),
+            self.terminal_frame_pipeline.queued_event_count(),
+            self.credential_autofill_pending_request.is_some(),
+        ) {
+            dirty |= self.sync_credential_autofill_from_active_snapshot(cx);
+        }
         if !credential_autofill_pending_detection_can_run(
             self.active_session_id.as_deref(),
             self.credential_autofill_detection_pending,
             self.terminal_runtime.session_event_queued_output_bytes,
             self.pending_session_events.len(),
             self.pending_terminal_frame_events.len(),
+            self.terminal_frame_pipeline.queued_event_count(),
             self.credential_autofill_pending_request.is_some(),
         ) {
             return dirty;
@@ -181,21 +135,81 @@ impl NyaTermApp {
         dirty
     }
 
-    pub(in crate::features) fn should_feed_credential_autofill_frame_for_session(
-        &self,
+    fn sync_credential_autofill_from_active_snapshot(&mut self, cx: &mut Context<Self>) -> bool {
+        let Some(session_id) = self.active_session_id.clone() else {
+            return false;
+        };
+        let Some(snapshot) = self
+            .terminal_views
+            .get(&session_id)
+            .and_then(|view| view.frame_snapshot.as_ref())
+        else {
+            return false;
+        };
+        let Some(line) = credential_autofill_prompt_line_from_snapshot(snapshot) else {
+            return false;
+        };
+        self.sync_credential_autofill_visible_line(&session_id, &line, cx)
+    }
+
+    fn sync_credential_autofill_visible_line(
+        &mut self,
         session_id: &str,
-        text: &str,
+        line: &str,
+        cx: &mut Context<Self>,
     ) -> bool {
-        credential_autofill_should_queue_detection(
-            self.active_session_id.as_deref(),
-            session_id,
-            text,
-            !self.connection_saved_credentials.is_empty()
-                || self.credential_autofill_pending.is_some(),
-            self.terminal_runtime.session_event_queued_output_bytes,
-            self.pending_session_events.len(),
-            self.pending_terminal_frame_events.len(),
-        )
+        if self.active_session_id.as_deref() != Some(session_id) {
+            return false;
+        }
+        let prompt_text = credential_autofill_prompt_text_from_visible(line);
+        if prompt_text.is_empty() {
+            if !self.credential_autofill_buffer.is_empty() {
+                self.credential_autofill_buffer.clear();
+                self.credential_prompt_input_until_ms = 0;
+                return true;
+            }
+            return false;
+        }
+        if self.credential_autofill_buffer == prompt_text
+            && (self.credential_autofill_detection_pending
+                || self.credential_autofill_pending.is_none())
+        {
+            return false;
+        }
+        let detected_prompt_kind = credential_autofill_detect_prompt_kind(&prompt_text);
+        if detected_prompt_kind.is_none() && self.credential_autofill_pending.is_none() {
+            if !self.credential_autofill_buffer.is_empty() {
+                self.credential_autofill_buffer.clear();
+                self.credential_prompt_input_until_ms = 0;
+                return true;
+            }
+            return false;
+        }
+
+        let mut dirty = false;
+        if self.credential_autofill_buffer != prompt_text {
+            self.credential_autofill_buffer = prompt_text;
+            dirty = true;
+        }
+        if detected_prompt_kind.is_some() {
+            self.credential_prompt_input_until_ms =
+                Self::now_unix_ms().saturating_add(CREDENTIAL_PROMPT_INPUT_TTL_MS);
+            // Suppress command suggestions while a credential prompt is live.
+            if self.command_suggestions.take().is_some() {
+                dirty = true;
+            }
+            self.command_input_tracker = TerminalInputState::new();
+        }
+
+        if self.credential_suggestions.is_some() || self.credential_autofill_sending {
+            return dirty;
+        }
+        if !self.credential_autofill_detection_pending {
+            self.credential_autofill_detection_pending = true;
+            dirty = true;
+            cx.notify();
+        }
+        dirty
     }
 
     pub(in crate::features) fn detect_credential_prompt(
@@ -649,22 +663,22 @@ impl NyaTermApp {
     }
 }
 
-fn credential_autofill_should_queue_detection(
+fn credential_autofill_snapshot_detection_can_run(
     active_session_id: Option<&str>,
-    output_session_id: &str,
-    text: &str,
     has_credentials_or_pending: bool,
     queued_output_bytes: usize,
     pending_session_events: usize,
     pending_terminal_frame_events: usize,
+    queued_terminal_frame_events: usize,
+    match_request_pending: bool,
 ) -> bool {
-    active_session_id == Some(output_session_id)
-        && !text.is_empty()
+    active_session_id.is_some()
         && has_credentials_or_pending
         && queued_output_bytes == 0
         && pending_session_events == 0
         && pending_terminal_frame_events == 0
-        && credential_autofill_visible_may_complete_prompt(credential_autofill_visible_tail(text))
+        && queued_terminal_frame_events == 0
+        && !match_request_pending
 }
 
 fn credential_autofill_pending_detection_can_run(
@@ -673,6 +687,7 @@ fn credential_autofill_pending_detection_can_run(
     queued_output_bytes: usize,
     pending_session_events: usize,
     pending_terminal_frame_events: usize,
+    queued_terminal_frame_events: usize,
     match_request_pending: bool,
 ) -> bool {
     active_session_id.is_some()
@@ -680,7 +695,29 @@ fn credential_autofill_pending_detection_can_run(
         && queued_output_bytes == 0
         && pending_session_events == 0
         && pending_terminal_frame_events == 0
+        && queued_terminal_frame_events == 0
         && !match_request_pending
+}
+
+fn credential_autofill_prompt_line_from_snapshot(snapshot: &TerminalSnapshot) -> Option<String> {
+    credential_autofill_prompt_line_from_viewport(&snapshot.lines, snapshot.cursor_row)
+}
+
+fn credential_autofill_prompt_line_from_viewport(
+    lines: &[String],
+    cursor_row: usize,
+) -> Option<String> {
+    if lines.is_empty() {
+        return None;
+    }
+    if cursor_row != usize::MAX {
+        return lines.get(cursor_row).cloned();
+    }
+    lines
+        .iter()
+        .rev()
+        .find(|line| !line.trim().is_empty())
+        .cloned()
 }
 
 fn credential_autofill_visible_tail(text: &str) -> &str {
@@ -692,49 +729,6 @@ fn credential_autofill_visible_tail(text: &str) -> &str {
         start += 1;
     }
     &text[start..]
-}
-
-fn credential_autofill_strip_controls_fast(text: &str) -> String {
-    let mut out = String::with_capacity(text.len());
-    let mut iter = text.chars().peekable();
-    while let Some(ch) = iter.next() {
-        if ch != '\x1b' {
-            out.push(ch);
-            continue;
-        }
-        match iter.peek().copied() {
-            Some('[') => {
-                iter.next();
-                for next in iter.by_ref() {
-                    if ('@'..='~').contains(&next) {
-                        break;
-                    }
-                }
-            }
-            Some(']') => {
-                iter.next();
-                let mut saw_esc = false;
-                for next in iter.by_ref() {
-                    if next == '\x07' {
-                        break;
-                    }
-                    if saw_esc && next == '\\' {
-                        break;
-                    }
-                    saw_esc = next == '\x1b';
-                }
-            }
-            Some('@'..='Z' | '\\' | '_' | '^') => {
-                iter.next();
-            }
-            _ => {}
-        }
-    }
-    out
-}
-
-fn credential_autofill_visible_may_complete_prompt(text: &str) -> bool {
-    text.contains(':') || text.contains('：') || text.contains('\r') || text.contains('\n')
 }
 
 fn credential_autofill_prompt_text_from_visible(output: &str) -> String {
@@ -811,55 +805,76 @@ mod tests {
     use super::*;
 
     #[test]
-    fn credential_autofill_queue_detection_only_for_active_session() {
-        assert!(credential_autofill_should_queue_detection(
+    fn credential_autofill_snapshot_detection_requires_active_session_and_credentials() {
+        assert!(credential_autofill_snapshot_detection_can_run(
             Some("active"),
-            "active",
-            "Password: ",
             true,
             0,
             0,
-            0
+            0,
+            0,
+            false
         ));
-        assert!(!credential_autofill_should_queue_detection(
+        assert!(!credential_autofill_snapshot_detection_can_run(
+            None, true, 0, 0, 0, 0, false
+        ));
+        assert!(!credential_autofill_snapshot_detection_can_run(
             Some("active"),
-            "background",
-            "Password: ",
+            false,
+            0,
+            0,
+            0,
+            0,
+            false
+        ));
+        assert!(!credential_autofill_snapshot_detection_can_run(
+            Some("active"),
             true,
             0,
             0,
-            0
+            0,
+            0,
+            true
         ));
     }
 
     #[test]
-    fn credential_autofill_queue_detection_waits_for_output_backlog() {
-        assert!(!credential_autofill_should_queue_detection(
+    fn credential_autofill_snapshot_detection_waits_for_all_backlogs() {
+        assert!(!credential_autofill_snapshot_detection_can_run(
             Some("active"),
-            "active",
-            "Password: ",
             true,
             1,
             0,
-            0
+            0,
+            0,
+            false
         ));
-        assert!(!credential_autofill_should_queue_detection(
+        assert!(!credential_autofill_snapshot_detection_can_run(
             Some("active"),
-            "active",
-            "Password: ",
             true,
             0,
             1,
-            0
+            0,
+            0,
+            false
         ));
-        assert!(!credential_autofill_should_queue_detection(
+        assert!(!credential_autofill_snapshot_detection_can_run(
             Some("active"),
-            "active",
-            "Password: ",
             true,
             0,
             0,
-            1
+            1,
+            0,
+            false
+        ));
+        assert!(!credential_autofill_snapshot_detection_can_run(
+            Some("active"),
+            true,
+            0,
+            0,
+            0,
+            1,
+            false
         ));
     }
 
@@ -871,14 +886,16 @@ mod tests {
             0,
             0,
             0,
+            0,
             false
         ));
         assert!(!credential_autofill_pending_detection_can_run(
-            None, true, 0, 0, 0, false
+            None, true, 0, 0, 0, 0, false
         ));
         assert!(!credential_autofill_pending_detection_can_run(
             Some("active"),
             false,
+            0,
             0,
             0,
             0,
@@ -890,6 +907,7 @@ mod tests {
             1,
             0,
             0,
+            0,
             false
         ));
         assert!(!credential_autofill_pending_detection_can_run(
@@ -898,8 +916,46 @@ mod tests {
             0,
             0,
             0,
+            1,
+            false
+        ));
+        assert!(!credential_autofill_pending_detection_can_run(
+            Some("active"),
+            true,
+            0,
+            0,
+            0,
+            0,
             true
         ));
+    }
+
+    #[test]
+    fn credential_autofill_prompt_line_uses_cursor_row() {
+        let lines = vec![
+            "Last login".to_string(),
+            "Password:".to_string(),
+            "ignored:".to_string(),
+        ];
+
+        assert_eq!(
+            credential_autofill_prompt_line_from_viewport(&lines, 1).as_deref(),
+            Some("Password:")
+        );
+    }
+
+    #[test]
+    fn credential_autofill_prompt_line_falls_back_to_last_nonempty_line() {
+        let lines = vec![
+            "Last login".to_string(),
+            "Password:".to_string(),
+            "".to_string(),
+        ];
+
+        assert_eq!(
+            credential_autofill_prompt_line_from_viewport(&lines, usize::MAX).as_deref(),
+            Some("Password:")
+        );
     }
 
     #[test]
@@ -927,16 +983,6 @@ mod tests {
         let prompt = credential_autofill_prompt_text_from_visible(&long);
         assert_eq!(prompt.chars().count(), 500);
         assert!(prompt.ends_with("Password:"));
-    }
-
-    #[test]
-    fn credential_autofill_fast_strip_removes_common_controls() {
-        let text = "\x1b[32mhello\x1b[0m\x1b]0;title\x07\nPassword: ";
-
-        assert_eq!(
-            credential_autofill_strip_controls_fast(text),
-            "hello\nPassword: "
-        );
     }
 
     #[test]
