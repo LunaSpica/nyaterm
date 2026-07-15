@@ -1,10 +1,10 @@
-use std::collections::{HashSet, VecDeque};
+use std::collections::{HashMap, HashSet, VecDeque};
 use std::sync::{
     Arc, Mutex,
     atomic::{AtomicBool, AtomicU64, Ordering},
 };
 use std::thread;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use nyaterm_transport::{
     SessionDrainStats, SessionEvent, SessionManager, TrzszDetector, ZmodemDetector,
@@ -19,6 +19,8 @@ const SESSION_EVENT_BRIDGE_BUSY_SLEEP: Duration = Duration::from_millis(1);
 const SESSION_EVENT_BRIDGE_UI_OUTPUT_LIMIT: usize = 1024 * 1024;
 const SESSION_EVENT_BRIDGE_UI_OUTPUT_EVENT_LIMIT: usize = 128 * 1024;
 const SESSION_EVENT_BRIDGE_DIRECT_OUTPUT_BACKPRESSURE: usize = 2 * 1024 * 1024;
+const SESSION_EVENT_BRIDGE_SIDEBAND_PROBE_EVENTS: usize = 4;
+const SESSION_EVENT_BRIDGE_SIDEBAND_PROBE_WINDOW: Duration = Duration::from_millis(250);
 
 #[derive(Clone, Debug, Default)]
 pub(crate) struct SessionEventBridgeStats {
@@ -72,6 +74,12 @@ struct SessionEventBridgeControlSnapshot {
     ui_routed_sessions: HashSet<String>,
     encoding: String,
     scrollback_limit: usize,
+}
+
+#[derive(Clone, Copy, Debug)]
+struct SessionEventBridgeSidebandProbe {
+    events_remaining: usize,
+    expires_at: Instant,
 }
 
 #[derive(Clone)]
@@ -411,12 +419,17 @@ fn run_session_event_bridge(
     frame_pipeline: TerminalFramePipeline,
     state: Arc<SessionEventBridgeState>,
 ) {
+    let mut sideband_probe_sessions: HashMap<String, SessionEventBridgeSidebandProbe> =
+        HashMap::new();
     while !state.stop.load(Ordering::Relaxed) {
         let Some(control) = state.control_snapshot() else {
             thread::sleep(SESSION_EVENT_BRIDGE_IDLE_SLEEP);
             continue;
         };
-        if bridge_should_pause_source_drain(&control, frame_pipeline.queued_output_bytes()) {
+        let now = Instant::now();
+        if bridge_should_pause_source_drain(&control, frame_pipeline.queued_output_bytes())
+            && !bridge_has_active_sideband_probe(&mut sideband_probe_sessions, now)
+        {
             thread::sleep(SESSION_EVENT_BRIDGE_BUSY_SLEEP);
             continue;
         }
@@ -442,12 +455,23 @@ fn run_session_event_bridge(
         for event in drain.events {
             match event {
                 SessionEvent::Output { session_id, data } => {
+                    let now = Instant::now();
+                    let sideband_probe_active = bridge_sideband_probe_active(
+                        &mut sideband_probe_sessions,
+                        &session_id,
+                        now,
+                    );
+                    let sideband_probe_detected = bridge_output_may_contain_sideband_trigger(&data);
+                    if sideband_probe_detected {
+                        bridge_arm_sideband_probe(&mut sideband_probe_sessions, &session_id, now);
+                    }
+                    let needs_ui_probe = sideband_probe_active || sideband_probe_detected;
                     let frame_queued_output_bytes = frame_pipeline.queued_output_bytes();
                     if bridge_output_can_go_direct(
                         &control,
                         frame_queued_output_bytes,
                         &session_id,
-                        &data,
+                        needs_ui_probe,
                     ) {
                         state.direct_output_events.fetch_add(1, Ordering::Relaxed);
                         state
@@ -463,7 +487,7 @@ fn run_session_event_bridge(
                         frame_queued_output_bytes,
                         &control,
                         &session_id,
-                        &data,
+                        needs_ui_probe,
                     ) {
                         state
                             .direct_backpressure_events
@@ -479,16 +503,22 @@ fn run_session_event_bridge(
                         });
                     } else {
                         flush_bridge_direct_outputs(&frame_pipeline, &mut pending_direct_outputs);
-                        if bridge_output_may_contain_sideband_trigger(&data) {
-                            state.route_session_to_ui(&session_id);
-                        }
+                        // Ambiguous side-band prefixes such as "*" or ":" are common in normal
+                        // shell output. Probe this chunk on the UI side, but let the detector
+                        // state decide whether future chunks need sticky UI routing.
+                        let routed_session_id = session_id.clone();
                         state
                             .ui_queue
                             .push(SessionEvent::Output { session_id, data });
+                        bridge_consume_sideband_probe(
+                            &mut sideband_probe_sessions,
+                            &routed_session_id,
+                        );
                     }
                 }
                 SessionEvent::OutputDropped { session_id, bytes } => {
                     flush_bridge_direct_outputs(&frame_pipeline, &mut pending_direct_outputs);
+                    sideband_probe_sessions.remove(&session_id);
                     state.route_session_to_ui(&session_id);
                     state
                         .ui_queue
@@ -496,6 +526,7 @@ fn run_session_event_bridge(
                 }
                 SessionEvent::Exited { session_id } => {
                     flush_bridge_direct_outputs(&frame_pipeline, &mut pending_direct_outputs);
+                    sideband_probe_sessions.remove(&session_id);
                     state.ui_queue.push(SessionEvent::Exited { session_id });
                 }
                 SessionEvent::Error {
@@ -536,29 +567,79 @@ fn bridge_output_can_go_direct(
     control: &SessionEventBridgeControlSnapshot,
     frame_pipeline_queued_output_bytes: usize,
     session_id: &str,
-    data: &[u8],
+    needs_ui_probe: bool,
 ) -> bool {
     !control.force_ui_all_output
         && !control.ui_routed_sessions.contains(session_id)
         && frame_pipeline_queued_output_bytes < SESSION_EVENT_BRIDGE_DIRECT_OUTPUT_BACKPRESSURE
-        && !bridge_output_may_contain_sideband_trigger(data)
+        && !needs_ui_probe
 }
 
 fn bridge_output_is_backpressured(
     frame_pipeline_queued_output_bytes: usize,
     control: &SessionEventBridgeControlSnapshot,
     session_id: &str,
-    data: &[u8],
+    needs_ui_probe: bool,
 ) -> bool {
     !control.force_ui_all_output
         && !control.ui_routed_sessions.contains(session_id)
         && frame_pipeline_queued_output_bytes >= SESSION_EVENT_BRIDGE_DIRECT_OUTPUT_BACKPRESSURE
-        && !bridge_output_may_contain_sideband_trigger(data)
+        && !needs_ui_probe
 }
 
 fn bridge_output_may_contain_sideband_trigger(data: &[u8]) -> bool {
     ZmodemDetector::output_may_contain_trigger(data)
         || TrzszDetector::output_may_contain_trigger(data)
+}
+
+fn bridge_arm_sideband_probe(
+    probes: &mut HashMap<String, SessionEventBridgeSidebandProbe>,
+    session_id: &str,
+    now: Instant,
+) {
+    probes.insert(
+        session_id.to_string(),
+        SessionEventBridgeSidebandProbe {
+            events_remaining: SESSION_EVENT_BRIDGE_SIDEBAND_PROBE_EVENTS,
+            expires_at: now + SESSION_EVENT_BRIDGE_SIDEBAND_PROBE_WINDOW,
+        },
+    );
+}
+
+fn bridge_sideband_probe_active(
+    probes: &mut HashMap<String, SessionEventBridgeSidebandProbe>,
+    session_id: &str,
+    now: Instant,
+) -> bool {
+    let Some(probe) = probes.get(session_id).copied() else {
+        return false;
+    };
+    if probe.events_remaining == 0 || now >= probe.expires_at {
+        probes.remove(session_id);
+        return false;
+    }
+    true
+}
+
+fn bridge_has_active_sideband_probe(
+    probes: &mut HashMap<String, SessionEventBridgeSidebandProbe>,
+    now: Instant,
+) -> bool {
+    probes.retain(|_, probe| probe.events_remaining > 0 && now < probe.expires_at);
+    !probes.is_empty()
+}
+
+fn bridge_consume_sideband_probe(
+    probes: &mut HashMap<String, SessionEventBridgeSidebandProbe>,
+    session_id: &str,
+) {
+    let Some(probe) = probes.get_mut(session_id) else {
+        return;
+    };
+    probe.events_remaining = probe.events_remaining.saturating_sub(1);
+    if probe.events_remaining == 0 {
+        probes.remove(session_id);
+    }
 }
 
 #[cfg(test)]
@@ -573,9 +654,10 @@ mod tests {
             encoding: "UTF-8".to_string(),
             scrollback_limit: 1000,
         };
-        assert!(bridge_output_can_go_direct(&control, 0, "s1", b"hello\n"));
-        assert!(!bridge_output_can_go_direct(&control, 0, "s1", b"**\x18B"));
-        assert!(!bridge_output_can_go_direct(&control, 0, "s1", b"::TRZSZ:"));
+        assert!(bridge_output_can_go_direct(&control, 0, "s1", false));
+        assert!(!bridge_output_can_go_direct(&control, 0, "s1", true));
+        assert!(bridge_output_may_contain_sideband_trigger(b"**\x18B"));
+        assert!(bridge_output_may_contain_sideband_trigger(b"::TRZSZ:"));
     }
 
     #[test]
@@ -588,8 +670,8 @@ mod tests {
             encoding: "UTF-8".to_string(),
             scrollback_limit: 1000,
         };
-        assert!(!bridge_output_can_go_direct(&control, 0, "s1", b"hello\n"));
-        assert!(bridge_output_can_go_direct(&control, 0, "s2", b"hello\n"));
+        assert!(!bridge_output_can_go_direct(&control, 0, "s1", false));
+        assert!(bridge_output_can_go_direct(&control, 0, "s2", false));
     }
 
     #[test]
@@ -605,19 +687,25 @@ mod tests {
             &control,
             SESSION_EVENT_BRIDGE_DIRECT_OUTPUT_BACKPRESSURE - 1,
             "s1",
-            b"hello\n"
+            false
         ));
         assert!(!bridge_output_can_go_direct(
             &control,
             SESSION_EVENT_BRIDGE_DIRECT_OUTPUT_BACKPRESSURE,
             "s1",
-            b"hello\n"
+            false
         ));
         assert!(bridge_output_is_backpressured(
             SESSION_EVENT_BRIDGE_DIRECT_OUTPUT_BACKPRESSURE,
             &control,
             "s1",
-            b"hello\n"
+            false
+        ));
+        assert!(!bridge_output_is_backpressured(
+            SESSION_EVENT_BRIDGE_DIRECT_OUTPUT_BACKPRESSURE,
+            &control,
+            "s1",
+            true
         ));
     }
 
@@ -656,6 +744,26 @@ mod tests {
         assert!(!bridge_should_pause_source_drain(
             &routed_ui,
             SESSION_EVENT_BRIDGE_DIRECT_OUTPUT_BACKPRESSURE
+        ));
+    }
+
+    #[test]
+    fn bridge_sideband_probe_is_bounded_by_events_and_time() {
+        let mut probes = HashMap::new();
+        let now = Instant::now();
+        bridge_arm_sideband_probe(&mut probes, "s1", now);
+
+        assert!(bridge_sideband_probe_active(&mut probes, "s1", now));
+        for _ in 0..SESSION_EVENT_BRIDGE_SIDEBAND_PROBE_EVENTS {
+            bridge_consume_sideband_probe(&mut probes, "s1");
+        }
+        assert!(!bridge_sideband_probe_active(&mut probes, "s1", now));
+
+        bridge_arm_sideband_probe(&mut probes, "s2", now);
+        assert!(!bridge_sideband_probe_active(
+            &mut probes,
+            "s2",
+            now + SESSION_EVENT_BRIDGE_SIDEBAND_PROBE_WINDOW + Duration::from_millis(1)
         ));
     }
 }
