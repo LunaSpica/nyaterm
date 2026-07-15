@@ -231,11 +231,12 @@ impl NyaTermApp {
         let mut processed_output_bytes = 0usize;
         let mut transport_queued_events = 0usize;
         let mut transport_queued_output_bytes = 0usize;
+        let drain_budget = session_event_drain_budget(self.runtime_output_pressure_active());
 
         if self.pending_session_events.is_empty() {
             let Ok(drain) = self.session_manager.drain_events_with_output_budget(
-                SESSION_EVENT_DRAIN_BATCH,
-                SESSION_EVENT_DRAIN_OUTPUT_BUDGET,
+                drain_budget.max_events,
+                drain_budget.max_output_bytes,
             ) else {
                 self.terminal_status = "failed to drain session events".to_string();
                 return true;
@@ -281,9 +282,12 @@ impl NyaTermApp {
                                 chunk_duration,
                                 &chunk_timings,
                             );
-                            if session_event_drain_wall_budget_exhausted(
+                            if session_event_drain_should_yield(
                                 drain_started_at,
                                 !self.pending_session_events.is_empty(),
+                                transport_queued_events,
+                                transport_queued_output_bytes,
+                                drain_budget,
                             ) {
                                 break;
                             }
@@ -307,9 +311,12 @@ impl NyaTermApp {
                                 chunk_duration,
                                 &chunk_timings,
                             );
-                            if session_event_drain_wall_budget_exhausted(
+                            if session_event_drain_should_yield(
                                 drain_started_at,
                                 !self.pending_session_events.is_empty(),
+                                transport_queued_events,
+                                transport_queued_output_bytes,
+                                drain_budget,
                             ) {
                                 break;
                             }
@@ -420,9 +427,12 @@ impl NyaTermApp {
                         }
                     }
                 }
-                if session_event_drain_wall_budget_exhausted(
+                if session_event_drain_should_yield(
                     drain_started_at,
                     !self.pending_session_events.is_empty(),
+                    transport_queued_events,
+                    transport_queued_output_bytes,
+                    drain_budget,
                 ) {
                     break;
                 }
@@ -439,8 +449,8 @@ impl NyaTermApp {
         self.terminal_runtime
             .session_event_last_drained_output_bytes = drained_output_bytes;
 
-        if drained_events >= SESSION_EVENT_DRAIN_BATCH
-            || drained_output_bytes >= SESSION_EVENT_DRAIN_OUTPUT_BUDGET
+        if drained_events >= drain_budget.max_events
+            || drained_output_bytes >= drain_budget.max_output_bytes
             || queued_output_bytes > 0
         {
             if !self.terminal_runtime.session_event_backlog_active {
@@ -496,6 +506,7 @@ impl NyaTermApp {
                 drained_events,
                 output_event_count,
                 drained_output_bytes,
+                drain_output_budget = drain_budget.max_output_bytes,
                 queued_events,
                 queued_output_bytes,
                 dropped_output_bytes = self.terminal_runtime.session_event_dropped_output_bytes,
@@ -917,7 +928,8 @@ impl NyaTermApp {
 
 const TRANSFER_AUTO_SYNC_CWD_INTERVAL_SECONDS: u32 = 3;
 const SESSION_EVENT_DRAIN_BATCH: usize = 256;
-const SESSION_EVENT_DRAIN_OUTPUT_BUDGET: usize = 32 * 1024;
+const SESSION_EVENT_DRAIN_IDLE_OUTPUT_BUDGET: usize = 32 * 1024;
+const SESSION_EVENT_DRAIN_PRESSURE_OUTPUT_BUDGET: usize = 8 * 1024;
 const SESSION_EVENT_DRAIN_WALL_BUDGET: Duration = Duration::from_millis(8);
 const RUNTIME_BACKGROUND_EVENT_DRAIN_WALL_BUDGET: Duration = Duration::from_millis(6);
 const RUNTIME_BACKGROUND_EVENT_DRAIN_SLOW: Duration = Duration::from_millis(12);
@@ -958,6 +970,13 @@ struct RuntimeBackgroundDrainTimings {
     budget_exhausted: bool,
 }
 
+#[derive(Clone, Copy)]
+struct SessionEventDrainBudget {
+    max_events: usize,
+    max_output_bytes: usize,
+    wall_budget: Duration,
+}
+
 fn diagnostic_log_due(last_at: Option<Instant>, now: Instant, throttle: Duration) -> bool {
     last_at.is_none_or(|last_at| {
         now.checked_duration_since(last_at)
@@ -981,8 +1000,29 @@ fn session_event_drain_is_slow(total: Duration, max_chunk: Duration) -> bool {
     total >= SESSION_EVENT_DRAIN_SLOW_TOTAL || max_chunk >= SESSION_EVENT_DRAIN_SLOW_CHUNK
 }
 
-fn session_event_drain_wall_budget_exhausted(started_at: Instant, has_pending: bool) -> bool {
-    has_pending && started_at.elapsed() >= SESSION_EVENT_DRAIN_WALL_BUDGET
+fn session_event_drain_budget(output_pressure: bool) -> SessionEventDrainBudget {
+    SessionEventDrainBudget {
+        max_events: SESSION_EVENT_DRAIN_BATCH,
+        max_output_bytes: if output_pressure {
+            SESSION_EVENT_DRAIN_PRESSURE_OUTPUT_BUDGET
+        } else {
+            SESSION_EVENT_DRAIN_IDLE_OUTPUT_BUDGET
+        },
+        wall_budget: SESSION_EVENT_DRAIN_WALL_BUDGET,
+    }
+}
+
+fn session_event_drain_should_yield(
+    started_at: Instant,
+    has_pending_events: bool,
+    transport_queued_events: usize,
+    transport_queued_output_bytes: usize,
+    budget: SessionEventDrainBudget,
+) -> bool {
+    if started_at.elapsed() < budget.wall_budget {
+        return false;
+    }
+    has_pending_events || transport_queued_events > 0 || transport_queued_output_bytes > 0
 }
 
 fn session_events_output_bytes(events: &VecDeque<SessionEvent>) -> usize {
@@ -1114,11 +1154,42 @@ mod tests {
     }
 
     #[test]
-    fn session_event_drain_wall_budget_only_stops_with_pending_events() {
-        let start = Instant::now() - SESSION_EVENT_DRAIN_WALL_BUDGET;
+    fn session_event_drain_budget_reduces_output_under_pressure() {
+        let idle = session_event_drain_budget(false);
+        let pressure = session_event_drain_budget(true);
 
-        assert!(!session_event_drain_wall_budget_exhausted(start, false));
-        assert!(session_event_drain_wall_budget_exhausted(start, true));
+        assert_eq!(idle.max_events, SESSION_EVENT_DRAIN_BATCH);
+        assert_eq!(pressure.max_events, SESSION_EVENT_DRAIN_BATCH);
+        assert_eq!(
+            idle.max_output_bytes,
+            SESSION_EVENT_DRAIN_IDLE_OUTPUT_BUDGET
+        );
+        assert_eq!(
+            pressure.max_output_bytes,
+            SESSION_EVENT_DRAIN_PRESSURE_OUTPUT_BUDGET
+        );
+        assert!(pressure.max_output_bytes < idle.max_output_bytes);
+        assert_eq!(pressure.wall_budget, SESSION_EVENT_DRAIN_WALL_BUDGET);
+    }
+
+    #[test]
+    fn session_event_drain_yields_when_backlog_remains_after_wall_budget() {
+        let start = Instant::now() - SESSION_EVENT_DRAIN_WALL_BUDGET;
+        let budget = session_event_drain_budget(true);
+
+        assert!(!session_event_drain_should_yield(
+            start, false, 0, 0, budget
+        ));
+        assert!(session_event_drain_should_yield(start, true, 0, 0, budget));
+        assert!(session_event_drain_should_yield(start, false, 1, 0, budget));
+        assert!(session_event_drain_should_yield(start, false, 0, 1, budget));
+        assert!(!session_event_drain_should_yield(
+            Instant::now(),
+            true,
+            1,
+            1,
+            budget
+        ));
     }
 
     #[test]
