@@ -359,10 +359,7 @@ pub(in crate::features) fn build_ssh_session_config_with_context(
     };
     let auth = connection.auth.clone().unwrap_or_default();
     let allow_none_auth = auth.mode == "none";
-    let password = (!auth.has_password)
-        .then_some(auth.password)
-        .flatten()
-        .filter(|value| !value.trim().is_empty());
+    let password = load_ssh_connection_password_with_context(context, &auth)?;
     let key_auth = load_ssh_key_auth_with_context(context, auth.key_id.as_deref(), &auth.mode)?;
     let proxy_jump = load_proxy_jump_config_with_context(context, connection, visited_proxy_jumps)?;
     let proxy = load_proxy_config_with_context(context, connection)?;
@@ -397,6 +394,45 @@ pub(in crate::features) fn build_ssh_session_config_with_context(
         credential_provider: Some(context.credential_prompts.clone()),
         otp_provider: Some(context.otp_provider.clone()),
     })
+}
+
+fn load_ssh_connection_password_with_context(
+    context: &SshSessionConfigBuildContext,
+    auth: &ConnectionAuth,
+) -> Result<Option<String>, String> {
+    if let Some(password) = auth
+        .password
+        .as_deref()
+        .filter(|value| !value.trim().is_empty())
+    {
+        if auth.has_password {
+            return Err("saved SSH password is locked or could not be decrypted".to_string());
+        }
+        return Ok(Some(password.to_string()));
+    }
+
+    let Some(password_id) = auth
+        .password_id
+        .as_deref()
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+    else {
+        return Ok(None);
+    };
+
+    let store = ConnectionStore::open_with_portable_key_path(
+        &context.config_dir,
+        context.portable_key_path.clone(),
+    )
+    .map_err(|error| error.to_string())?;
+    let password = store
+        .load_decrypted_password_by_id(password_id)
+        .map_err(|error| error.to_string())?
+        .ok_or_else(|| format!("saved password '{password_id}' was not found"))?
+        .password
+        .filter(|value| !value.trim().is_empty())
+        .ok_or_else(|| format!("saved password '{password_id}' is empty or locked"))?;
+    Ok(Some(password))
 }
 
 fn load_ssh_key_auth_with_context(
@@ -505,4 +541,91 @@ fn load_proxy_jump_config_with_context(
         build_ssh_session_config_with_context(&jump_connection, visited_proxy_jumps, context)?;
     visited_proxy_jumps.pop();
     Ok(Some(Box::new(jump_config)))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn unique_temp_dir(name: &str) -> PathBuf {
+        let dir = std::env::temp_dir().join(format!(
+            "nyaterm-desktop-{name}-{}-{}",
+            std::process::id(),
+            uuid()
+        ));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).expect("create temp dir");
+        dir
+    }
+
+    fn test_ssh_build_context(config_dir: PathBuf) -> SshSessionConfigBuildContext {
+        SshSessionConfigBuildContext {
+            config_dir: config_dir.clone(),
+            portable_key_path: None,
+            host_key_policy: "accept".to_string(),
+            x11_display: String::new(),
+            host_key_prompts: Arc::new(HostKeyPromptBroker::default()),
+            credential_prompts: Arc::new(CredentialPromptBroker::default()),
+            otp_provider: Arc::new(NativeOtpProvider::new(config_dir, None)),
+        }
+    }
+
+    #[test]
+    fn ssh_password_loader_uses_decrypted_inline_password() {
+        let dir = unique_temp_dir("ssh-inline-password");
+        let context = test_ssh_build_context(dir.clone());
+        let auth = ConnectionAuth {
+            mode: "password".to_string(),
+            password: Some("secret".to_string()),
+            has_password: false,
+            ..ConnectionAuth::default()
+        };
+
+        let password = load_ssh_connection_password_with_context(&context, &auth).unwrap();
+
+        assert_eq!(password.as_deref(), Some("secret"));
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn ssh_password_loader_resolves_saved_password_id() {
+        let dir = unique_temp_dir("ssh-password-id");
+        let store = ConnectionStore::open(&dir).expect("open store");
+        let password_id = store
+            .save_password(nyaterm_core::SavedPassword {
+                id: "pw-1".to_string(),
+                name: "Primary".to_string(),
+                password: Some("stored-secret".to_string()),
+                has_password: false,
+            })
+            .expect("save password");
+        let context = test_ssh_build_context(dir.clone());
+        let auth = ConnectionAuth {
+            mode: "password".to_string(),
+            password_id: Some(password_id),
+            ..ConnectionAuth::default()
+        };
+
+        let password = load_ssh_connection_password_with_context(&context, &auth).unwrap();
+
+        assert_eq!(password.as_deref(), Some("stored-secret"));
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn ssh_password_loader_rejects_locked_inline_password() {
+        let dir = unique_temp_dir("ssh-locked-password");
+        let context = test_ssh_build_context(dir.clone());
+        let auth = ConnectionAuth {
+            mode: "password".to_string(),
+            password: Some("encrypted".to_string()),
+            has_password: true,
+            ..ConnectionAuth::default()
+        };
+
+        let error = load_ssh_connection_password_with_context(&context, &auth).unwrap_err();
+
+        assert!(error.contains("locked"));
+        let _ = std::fs::remove_dir_all(dir);
+    }
 }
