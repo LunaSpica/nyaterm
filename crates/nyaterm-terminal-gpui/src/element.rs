@@ -186,6 +186,63 @@ mod layout_cache_tests {
         decorations.active_search_ranges.push((2, 4));
         assert!(terminal_glyph_decorations_needed(&decorations));
     }
+
+    #[test]
+    fn plain_row_fast_path_accepts_unstyled_rows() {
+        let default_spans = [nyaterm_terminal::StyledSpan {
+            text: "plain".to_string(),
+            style: nyaterm_terminal::CellStyle::default(),
+        }];
+
+        assert!(terminal_plain_row_fast_path(
+            None,
+            &[],
+            &TerminalLineDecorations::default()
+        ));
+        assert!(terminal_plain_row_fast_path(
+            Some(&default_spans),
+            &[],
+            &TerminalLineDecorations::default()
+        ));
+    }
+
+    #[test]
+    fn plain_row_fast_path_rejects_enhanced_rows() {
+        let mut styled = nyaterm_terminal::CellStyle::default();
+        styled.bold = true;
+        let styled_spans = [nyaterm_terminal::StyledSpan {
+            text: "bold".to_string(),
+            style: styled,
+        }];
+        let keyword_rule = ResolvedKeywordHighlightRule {
+            id: "errors".to_string(),
+            name: "Errors".to_string(),
+            patterns: vec!["error".to_string()],
+            color: "#ff0000".to_string(),
+            enabled: true,
+        };
+        let selection = TerminalLineDecorations {
+            selection_cols: Some((0, 2)),
+            ..TerminalLineDecorations::default()
+        };
+        let command_mark = TerminalLineDecorations {
+            command_mark: Some(nyaterm_terminal::ShellCommandMark::Prompt),
+            ..TerminalLineDecorations::default()
+        };
+
+        assert!(!terminal_plain_row_fast_path(
+            Some(&styled_spans),
+            &[],
+            &TerminalLineDecorations::default()
+        ));
+        assert!(!terminal_plain_row_fast_path(
+            None,
+            &[keyword_rule],
+            &TerminalLineDecorations::default()
+        ));
+        assert!(!terminal_plain_row_fast_path(None, &[], &selection));
+        assert!(terminal_plain_row_fast_path(None, &[], &command_mark));
+    }
 }
 
 pub struct NyaTerminalElement {
@@ -323,6 +380,33 @@ impl NyaTerminalElement {
         self.bold_weight.to_bits().hash(&mut hasher);
         hasher.finish()
     }
+
+    fn shape_row(
+        &self,
+        row: usize,
+        row_key: u64,
+        text: String,
+        text_runs: Vec<TextRun>,
+        font_size: Pixels,
+        window: &mut Window,
+    ) -> ShapedLine {
+        let shape_row = |window: &mut Window| {
+            window.text_system().shape_line(
+                SharedString::from(text.clone()),
+                font_size,
+                &text_runs,
+                None,
+            )
+        };
+        if let Some(cache) = self.layout_cache.as_ref() {
+            match cache.lock() {
+                Ok(mut cache) => cache.shaped_line(row, row_key, || shape_row(window)),
+                Err(_) => shape_row(window),
+            }
+        } else {
+            shape_row(window)
+        }
+    }
 }
 
 fn hash_styled_spans<H: Hasher>(
@@ -345,6 +429,26 @@ fn terminal_glyph_decorations_needed(decorations: &TerminalLineDecorations) -> b
         || !decorations.active_search_ranges.is_empty()
         || decorations.selection_cols.is_some()
         || !decorations.link_ranges.is_empty()
+}
+
+fn terminal_plain_row_fast_path(
+    ansi_spans: Option<&[nyaterm_terminal::StyledSpan]>,
+    keyword_rules: &[ResolvedKeywordHighlightRule],
+    decorations: &TerminalLineDecorations,
+) -> bool {
+    keyword_rules.is_empty()
+        && !terminal_glyph_decorations_needed(decorations)
+        && terminal_ansi_spans_are_plain(ansi_spans)
+}
+
+fn terminal_ansi_spans_are_plain(ansi_spans: Option<&[nyaterm_terminal::StyledSpan]>) -> bool {
+    let Some(spans) = ansi_spans else {
+        return true;
+    };
+    let default_style = nyaterm_terminal::CellStyle::default();
+    spans
+        .iter()
+        .all(|span| span.text.is_empty() || span.style == default_style)
 }
 
 impl IntoElement for NyaTerminalElement {
@@ -466,6 +570,28 @@ impl Element for NyaTerminalElement {
                     Bounds::new(point(x, y), size(px(2.), px(cell_h))),
                     rgb(color),
                 ));
+            }
+
+            if terminal_plain_row_fast_path(ansi, &self.keyword_rules, decorations) {
+                let text = display_line.to_string();
+                let text_runs = vec![TextRun {
+                    len: text.len().max(1),
+                    font: terminal_run_font(
+                        base_font.clone(),
+                        false,
+                        false,
+                        self.normal_weight,
+                        self.bold_weight,
+                    ),
+                    color: rgb(self.palette.terminal_fg).into(),
+                    background_color: None,
+                    underline: None,
+                    strikethrough: None,
+                }];
+                let row_key = self.row_layout_key(row, display_line, ansi, decorations);
+                let shaped = self.shape_row(row, row_key, text, text_runs, font_size, window);
+                plan.rows.push(TerminalPaintRow { y, line: shaped });
+                continue;
             }
 
             // Cell / keyword backgrounds (OxideTerm layers 2–3).
@@ -611,22 +737,7 @@ impl Element for NyaTerminalElement {
                 });
             }
             let row_key = self.row_layout_key(row, display_line, ansi, decorations);
-            let shape_row = |window: &mut Window| {
-                window.text_system().shape_line(
-                    SharedString::from(text.clone()),
-                    font_size,
-                    &text_runs,
-                    None,
-                )
-            };
-            let shaped = if let Some(cache) = self.layout_cache.as_ref() {
-                match cache.lock() {
-                    Ok(mut cache) => cache.shaped_line(row, row_key, || shape_row(window)),
-                    Err(_) => shape_row(window),
-                }
-            } else {
-                shape_row(window)
-            };
+            let shaped = self.shape_row(row, row_key, text, text_runs, font_size, window);
             plan.rows.push(TerminalPaintRow { y, line: shaped });
         }
 
