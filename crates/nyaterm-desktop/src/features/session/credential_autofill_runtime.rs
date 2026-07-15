@@ -2,7 +2,6 @@ use super::*;
 
 const CREDENTIAL_AUTOFILL_BUFFER_LIMIT: usize = 4096;
 const CREDENTIAL_AUTOFILL_INPUT_TAIL_LIMIT: usize = 4096;
-const CREDENTIAL_PROMPT_REGEX_CACHE_LIMIT: usize = 512;
 const RECENT_PROMPT_TTL_MS: u64 = 30_000;
 const PENDING_PASSWORD_TTL_MS: u64 = 60_000;
 const CREDENTIAL_PROMPT_INPUT_TTL_MS: u64 = 120_000;
@@ -20,6 +19,7 @@ impl NyaTermApp {
         self.credential_autofill_buffer.clear();
         self.credential_autofill_recent.clear();
         self.credential_autofill_detection_pending = false;
+        self.credential_autofill_pending_request = None;
         if had_panel {
             cx.notify();
         }
@@ -31,6 +31,7 @@ impl NyaTermApp {
         self.credential_autofill_recent.clear();
         self.credential_autofill_pending = None;
         self.credential_autofill_detection_pending = false;
+        self.credential_autofill_pending_request = None;
         self.credential_autofill_sending = false;
         self.credential_prompt_input_until_ms = 0;
         cx.notify();
@@ -164,18 +165,20 @@ impl NyaTermApp {
         &mut self,
         cx: &mut Context<Self>,
     ) -> bool {
+        let mut dirty = self.drain_credential_autofill_match_events(cx);
         if !credential_autofill_pending_detection_can_run(
             self.active_session_id.as_deref(),
             self.credential_autofill_detection_pending,
             self.terminal_runtime.session_event_queued_output_bytes,
             self.pending_session_events.len(),
             self.pending_terminal_frame_events.len(),
+            self.credential_autofill_pending_request.is_some(),
         ) {
-            return false;
+            return dirty;
         }
         self.credential_autofill_detection_pending = false;
-        self.detect_credential_prompt(cx);
-        true
+        dirty |= self.detect_credential_prompt(cx);
+        dirty
     }
 
     pub(in crate::features) fn should_feed_credential_autofill_frame_for_session(
@@ -195,24 +198,30 @@ impl NyaTermApp {
         )
     }
 
-    pub(in crate::features) fn detect_credential_prompt(&mut self, cx: &mut Context<Self>) {
+    pub(in crate::features) fn detect_credential_prompt(
+        &mut self,
+        _cx: &mut Context<Self>,
+    ) -> bool {
         if self.active_session_id.is_none() || self.credential_suggestions.is_some() {
-            return;
+            return false;
         }
         if self.connection_saved_credentials.is_empty() {
-            return;
+            return false;
         }
 
         let now = Self::now_unix_ms();
         let prompt_text =
             credential_autofill_prompt_text_from_visible(&self.credential_autofill_buffer);
         if prompt_text.is_empty() {
-            return;
+            return false;
         }
         let Some(prompt_kind) = credential_autofill_detect_prompt_kind(&prompt_text) else {
-            return;
+            return false;
         };
         let current_line = prompt_text.trim().to_string();
+        let Some(active_session_id) = self.active_session_id.clone() else {
+            return false;
+        };
         let credentials = self.connection_saved_credentials.clone();
 
         if let Some(pending) = self.credential_autofill_pending.clone() {
@@ -222,149 +231,88 @@ impl NyaTermApp {
         }
 
         if let Some(pending) = self.credential_autofill_pending.clone() {
-            let Some(active_session_id) = self.active_session_id.clone() else {
-                return;
-            };
             if pending.session_id != active_session_id {
                 self.credential_autofill_pending = None;
-            } else {
-                let pending_cred = credentials
-                    .iter()
-                    .find(|entry| entry.id == pending.credential_id)
-                    .cloned();
-                if let Some(pending_cred) = pending_cred {
-                    if self.credential_matches_prompt_cached(
-                        &pending_cred,
-                        CredentialPromptKind::Password,
-                        &current_line,
-                    ) || self.credential_matches_prompt_cached(
-                        &pending_cred,
-                        CredentialPromptKind::Password,
-                        &prompt_text,
-                    ) {
-                        self.credential_autofill_pending = None;
-                        self.credential_autofill_buffer.clear();
-                        self.credential_autofill_recent.clear();
-                        self.send_credential_value(
-                            &pending_cred,
-                            CredentialPromptKind::Password,
-                            &active_session_id,
-                            cx,
-                        );
-                        return;
-                    }
-                }
-
-                if credential_autofill_detect_prompt_kind(&current_line)
-                    == Some(CredentialPromptKind::Password)
-                {
-                    self.credential_autofill_pending = None;
-                } else {
-                    return;
-                }
             }
         }
 
-        if !self.remember_credential_prompt(prompt_kind, &prompt_text, now) {
-            return;
+        if self.credential_autofill_pending.is_none()
+            && !self.remember_credential_prompt(prompt_kind, &prompt_text, now)
+        {
+            return false;
         }
 
-        if prompt_kind == CredentialPromptKind::Password {
-            let password_matches = self.find_matching_credentials_cached(
-                &credentials,
-                CredentialPromptKind::Password,
-                &prompt_text,
-            );
-            if !password_matches.is_empty() {
-                self.show_credential_panel(
-                    CredentialPromptKind::Password,
-                    password_matches,
-                    prompt_text,
-                    cx,
-                );
-                return;
-            }
-
-            if credential_autofill_detect_prompt_kind(&prompt_text)
-                == Some(CredentialPromptKind::Password)
-            {
-                let fallback = find_password_only_fallback_credentials(&credentials);
-                if !fallback.is_empty() {
-                    self.show_credential_panel(
-                        CredentialPromptKind::Password,
-                        fallback,
-                        prompt_text,
-                        cx,
-                    );
-                    return;
-                }
-            }
-            return;
-        }
-
-        let username_matches = self.find_matching_credentials_cached(
-            &credentials,
-            CredentialPromptKind::Username,
-            &prompt_text,
-        );
-        if username_matches.is_empty() {
-            return;
-        }
-        self.show_credential_panel(
-            CredentialPromptKind::Username,
-            username_matches,
+        self.credential_autofill_next_request_id =
+            self.credential_autofill_next_request_id.saturating_add(1);
+        let key = CredentialAutofillMatchRequestKey {
+            request_id: self.credential_autofill_next_request_id,
+            session_id: active_session_id,
             prompt_text,
-            cx,
-        );
+        };
+        self.credential_autofill_pending_request = Some(key.clone());
+        self.credential_autofill_match_pipeline
+            .request(CredentialAutofillMatchRequest {
+                key,
+                current_line,
+                prompt_kind,
+                credentials,
+                pending: self.credential_autofill_pending.clone(),
+            });
+        true
     }
 
-    fn find_matching_credentials_cached(
-        &mut self,
-        credentials: &[SavedCredential],
-        kind: CredentialPromptKind,
-        output: &str,
-    ) -> Vec<SavedCredential> {
-        credentials
-            .iter()
-            .filter(|credential| self.credential_matches_prompt_cached(credential, kind, output))
-            .cloned()
-            .collect()
+    fn drain_credential_autofill_match_events(&mut self, cx: &mut Context<Self>) -> bool {
+        let mut dirty = false;
+        while let Some(event) = self.credential_autofill_match_pipeline.try_recv_event() {
+            dirty |= self.apply_credential_autofill_match_event(event, cx);
+        }
+        dirty
     }
 
-    fn credential_matches_prompt_cached(
+    fn apply_credential_autofill_match_event(
         &mut self,
-        credential: &SavedCredential,
-        kind: CredentialPromptKind,
-        output: &str,
+        event: CredentialAutofillMatchEvent,
+        cx: &mut Context<Self>,
     ) -> bool {
-        if !credential.enabled {
+        if self.credential_autofill_pending_request.as_ref() != Some(&event.key) {
             return false;
         }
-        if kind == CredentialPromptKind::Username && credential.username.trim().is_empty() {
+        self.credential_autofill_pending_request = None;
+        if self.active_session_id.as_deref() != Some(event.key.session_id.as_str()) {
             return false;
         }
-        if kind == CredentialPromptKind::Password && !credential.has_password {
+        if credential_autofill_prompt_text_from_visible(&self.credential_autofill_buffer)
+            != event.key.prompt_text
+        {
             return false;
         }
 
-        let pattern = get_credential_prompt_pattern(credential, kind);
-        if pattern.is_empty() {
-            return false;
-        }
-        let cache_key = format!("{}:{kind:?}:{pattern}", credential.id);
-        if !self.credential_prompt_regex_cache.contains_key(&cache_key) {
-            if self.credential_prompt_regex_cache.len() >= CREDENTIAL_PROMPT_REGEX_CACHE_LIMIT {
-                self.credential_prompt_regex_cache.clear();
+        match event.outcome {
+            CredentialAutofillMatchOutcome::Suggest {
+                kind,
+                matches,
+                clear_pending,
+            } => {
+                if clear_pending {
+                    self.credential_autofill_pending = None;
+                }
+                self.show_credential_panel(kind, matches, event.key.prompt_text, cx);
+                true
             }
-            let Some(regex) = compile_prompt_regex(&pattern) else {
-                return false;
-            };
-            self.credential_prompt_regex_cache
-                .insert(cache_key.clone(), regex);
+            CredentialAutofillMatchOutcome::AutoFill { credential, kind } => {
+                self.credential_autofill_pending = None;
+                self.credential_autofill_buffer.clear();
+                self.credential_autofill_recent.clear();
+                self.send_credential_value(&credential, kind, &event.key.session_id, cx);
+                true
+            }
+            CredentialAutofillMatchOutcome::NoMatch { clear_pending } => {
+                if clear_pending {
+                    self.credential_autofill_pending = None;
+                }
+                false
+            }
         }
-        self.credential_prompt_regex_cache
-            .get(&cache_key)
-            .is_some_and(|regex| regex.is_match(output))
     }
 
     fn send_credential_value(
@@ -725,12 +673,14 @@ fn credential_autofill_pending_detection_can_run(
     queued_output_bytes: usize,
     pending_session_events: usize,
     pending_terminal_frame_events: usize,
+    match_request_pending: bool,
 ) -> bool {
     active_session_id.is_some()
         && detection_pending
         && queued_output_bytes == 0
         && pending_session_events == 0
         && pending_terminal_frame_events == 0
+        && !match_request_pending
 }
 
 fn credential_autofill_visible_tail(text: &str) -> &str {
@@ -920,24 +870,35 @@ mod tests {
             true,
             0,
             0,
-            0
+            0,
+            false
         ));
         assert!(!credential_autofill_pending_detection_can_run(
-            None, true, 0, 0, 0
+            None, true, 0, 0, 0, false
         ));
         assert!(!credential_autofill_pending_detection_can_run(
             Some("active"),
             false,
             0,
             0,
-            0
+            0,
+            false
         ));
         assert!(!credential_autofill_pending_detection_can_run(
             Some("active"),
             true,
             1,
             0,
-            0
+            0,
+            false
+        ));
+        assert!(!credential_autofill_pending_detection_can_run(
+            Some("active"),
+            true,
+            0,
+            0,
+            0,
+            true
         ));
     }
 

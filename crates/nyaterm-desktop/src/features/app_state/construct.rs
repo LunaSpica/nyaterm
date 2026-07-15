@@ -298,8 +298,10 @@ impl NyaTermApp {
             credential_autofill_recent: HashMap::new(),
             credential_autofill_pending: None,
             credential_autofill_detection_pending: false,
+            credential_autofill_next_request_id: 0,
+            credential_autofill_pending_request: None,
+            credential_autofill_match_pipeline: CredentialAutofillMatchPipeline::spawn(),
             credential_autofill_sending: false,
-            credential_prompt_regex_cache: HashMap::new(),
             credential_prompt_input_until_ms: 0,
 
             quick_command_search_focus: cx.focus_handle(),

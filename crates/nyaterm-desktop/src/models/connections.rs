@@ -1,5 +1,13 @@
 use gpui::Pixels;
-use nyaterm_core::{CredentialPromptKind, SavedCredential};
+use nyaterm_core::{
+    CredentialPromptKind, SavedCredential, compile_prompt_regex,
+    find_password_only_fallback_credentials, get_credential_prompt_pattern,
+};
+use std::collections::HashMap;
+use std::sync::mpsc;
+use std::thread;
+
+const CREDENTIAL_AUTOFILL_MATCH_REGEX_CACHE_LIMIT: usize = 512;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum ConnectionKindTab {
@@ -236,6 +244,412 @@ pub(crate) struct PendingCredentialAutofill {
     pub(crate) session_id: String,
     pub(crate) credential_id: String,
     pub(crate) expires_at_ms: u64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct CredentialAutofillMatchRequestKey {
+    pub(crate) request_id: u64,
+    pub(crate) session_id: String,
+    pub(crate) prompt_text: String,
+}
+
+#[derive(Debug, Clone)]
+pub(crate) struct CredentialAutofillMatchRequest {
+    pub(crate) key: CredentialAutofillMatchRequestKey,
+    pub(crate) current_line: String,
+    pub(crate) prompt_kind: CredentialPromptKind,
+    pub(crate) credentials: Vec<SavedCredential>,
+    pub(crate) pending: Option<PendingCredentialAutofill>,
+}
+
+#[derive(Debug, Clone)]
+pub(crate) struct CredentialAutofillMatchEvent {
+    pub(crate) key: CredentialAutofillMatchRequestKey,
+    pub(crate) outcome: CredentialAutofillMatchOutcome,
+}
+
+#[derive(Debug, Clone)]
+pub(crate) enum CredentialAutofillMatchOutcome {
+    Suggest {
+        kind: CredentialPromptKind,
+        matches: Vec<SavedCredential>,
+        clear_pending: bool,
+    },
+    AutoFill {
+        credential: SavedCredential,
+        kind: CredentialPromptKind,
+    },
+    NoMatch {
+        clear_pending: bool,
+    },
+}
+
+pub(crate) struct CredentialAutofillMatchPipeline {
+    command_tx: mpsc::Sender<CredentialAutofillMatchRequest>,
+    event_rx: mpsc::Receiver<CredentialAutofillMatchEvent>,
+}
+
+impl CredentialAutofillMatchPipeline {
+    pub(crate) fn spawn() -> Self {
+        let (command_tx, command_rx) = mpsc::channel();
+        let (event_tx, event_rx) = mpsc::sync_channel(CREDENTIAL_AUTOFILL_MATCH_EVENT_CAP);
+        thread::Builder::new()
+            .name("nyaterm-credential-autofill".to_string())
+            .spawn(move || run_credential_autofill_matcher(command_rx, event_tx))
+            .expect("failed to spawn credential autofill matcher");
+        Self {
+            command_tx,
+            event_rx,
+        }
+    }
+
+    pub(crate) fn request(&self, request: CredentialAutofillMatchRequest) {
+        let _ = self.command_tx.send(request);
+    }
+
+    pub(crate) fn try_recv_event(&self) -> Option<CredentialAutofillMatchEvent> {
+        match self.event_rx.try_recv() {
+            Ok(event) => Some(event),
+            Err(mpsc::TryRecvError::Empty) => None,
+            Err(mpsc::TryRecvError::Disconnected) => None,
+        }
+    }
+}
+
+impl Default for CredentialAutofillMatchPipeline {
+    fn default() -> Self {
+        Self::spawn()
+    }
+}
+
+fn run_credential_autofill_matcher(
+    command_rx: mpsc::Receiver<CredentialAutofillMatchRequest>,
+    event_tx: mpsc::SyncSender<CredentialAutofillMatchEvent>,
+) {
+    let mut regex_cache = HashMap::new();
+    while let Ok(request) = command_rx.recv() {
+        let event = CredentialAutofillMatchEvent {
+            key: request.key.clone(),
+            outcome: credential_autofill_match_outcome(request, &mut regex_cache),
+        };
+        let _ = event_tx.send(event);
+    }
+}
+
+fn credential_autofill_match_outcome(
+    request: CredentialAutofillMatchRequest,
+    regex_cache: &mut HashMap<String, regex::Regex>,
+) -> CredentialAutofillMatchOutcome {
+    if let Some(pending) = request.pending.as_ref()
+        && pending.session_id == request.key.session_id
+    {
+        let pending_credential = request
+            .credentials
+            .iter()
+            .find(|credential| credential.id == pending.credential_id);
+        if let Some(credential) = pending_credential
+            && (credential_matches_prompt_cached(
+                credential,
+                CredentialPromptKind::Password,
+                &request.current_line,
+                regex_cache,
+            ) || credential_matches_prompt_cached(
+                credential,
+                CredentialPromptKind::Password,
+                &request.key.prompt_text,
+                regex_cache,
+            ))
+        {
+            return CredentialAutofillMatchOutcome::AutoFill {
+                credential: credential.clone(),
+                kind: CredentialPromptKind::Password,
+            };
+        }
+        if credential_autofill_detect_prompt_kind(&request.current_line)
+            != Some(CredentialPromptKind::Password)
+        {
+            return CredentialAutofillMatchOutcome::NoMatch {
+                clear_pending: false,
+            };
+        }
+    }
+
+    match request.prompt_kind {
+        CredentialPromptKind::Password => {
+            let matches = find_matching_credentials_cached(
+                &request.credentials,
+                CredentialPromptKind::Password,
+                &request.key.prompt_text,
+                regex_cache,
+            );
+            if !matches.is_empty() {
+                return CredentialAutofillMatchOutcome::Suggest {
+                    kind: CredentialPromptKind::Password,
+                    matches,
+                    clear_pending: true,
+                };
+            }
+            let fallback = find_password_only_fallback_credentials(&request.credentials);
+            if !fallback.is_empty() {
+                return CredentialAutofillMatchOutcome::Suggest {
+                    kind: CredentialPromptKind::Password,
+                    matches: fallback,
+                    clear_pending: true,
+                };
+            }
+            CredentialAutofillMatchOutcome::NoMatch {
+                clear_pending: true,
+            }
+        }
+        CredentialPromptKind::Username => {
+            let matches = find_matching_credentials_cached(
+                &request.credentials,
+                CredentialPromptKind::Username,
+                &request.key.prompt_text,
+                regex_cache,
+            );
+            if matches.is_empty() {
+                CredentialAutofillMatchOutcome::NoMatch {
+                    clear_pending: false,
+                }
+            } else {
+                CredentialAutofillMatchOutcome::Suggest {
+                    kind: CredentialPromptKind::Username,
+                    matches,
+                    clear_pending: false,
+                }
+            }
+        }
+    }
+}
+
+fn find_matching_credentials_cached(
+    credentials: &[SavedCredential],
+    kind: CredentialPromptKind,
+    output: &str,
+    regex_cache: &mut HashMap<String, regex::Regex>,
+) -> Vec<SavedCredential> {
+    credentials
+        .iter()
+        .filter(|credential| {
+            credential_matches_prompt_cached(credential, kind, output, regex_cache)
+        })
+        .cloned()
+        .collect()
+}
+
+fn credential_matches_prompt_cached(
+    credential: &SavedCredential,
+    kind: CredentialPromptKind,
+    output: &str,
+    regex_cache: &mut HashMap<String, regex::Regex>,
+) -> bool {
+    if !credential.enabled {
+        return false;
+    }
+    if kind == CredentialPromptKind::Username && credential.username.trim().is_empty() {
+        return false;
+    }
+    if kind == CredentialPromptKind::Password && !credential.has_password {
+        return false;
+    }
+
+    let pattern = get_credential_prompt_pattern(credential, kind);
+    if pattern.is_empty() {
+        return false;
+    }
+    let cache_key = format!("{}:{kind:?}:{pattern}", credential.id);
+    if !regex_cache.contains_key(&cache_key) {
+        if regex_cache.len() >= CREDENTIAL_AUTOFILL_MATCH_REGEX_CACHE_LIMIT {
+            regex_cache.clear();
+        }
+        let Some(regex) = compile_prompt_regex(&pattern) else {
+            return false;
+        };
+        regex_cache.insert(cache_key.clone(), regex);
+    }
+    regex_cache
+        .get(&cache_key)
+        .is_some_and(|regex| regex.is_match(output))
+}
+
+fn credential_autofill_detect_prompt_kind(prompt: &str) -> Option<CredentialPromptKind> {
+    let trimmed = prompt.trim();
+    if trimmed.is_empty()
+        || !trimmed
+            .chars()
+            .last()
+            .is_some_and(|ch| ch == ':' || ch == '：')
+    {
+        return None;
+    }
+    let lower = trimmed.to_ascii_lowercase();
+    if lower.contains("password")
+        || lower.contains("passphrase")
+        || lower.contains("passcode")
+        || lower.contains("pin")
+        || lower.contains("otp")
+        || lower.contains("verification code")
+        || lower.contains("authentication code")
+        || lower.contains("auth code")
+        || lower.contains("2fa")
+        || lower.contains("mfa")
+        || trimmed.contains("密码")
+        || trimmed.contains("口令")
+        || trimmed.contains("验证码")
+        || trimmed.contains("动态码")
+        || trimmed.contains("动态口令")
+    {
+        return Some(CredentialPromptKind::Password);
+    }
+    if lower.contains("username")
+        || lower.contains("user name")
+        || lower.contains("login as")
+        || lower.contains("login")
+        || lower.contains("account")
+        || lower.contains("user")
+        || trimmed.contains("用户名")
+        || trimmed.contains("用户")
+        || trimmed.contains("账号")
+        || trimmed.contains("账户")
+        || trimmed.contains("登录名")
+    {
+        return Some(CredentialPromptKind::Username);
+    }
+    None
+}
+
+const CREDENTIAL_AUTOFILL_MATCH_EVENT_CAP: usize = 128;
+
+#[cfg(test)]
+mod credential_autofill_match_tests {
+    use super::*;
+
+    fn credential(
+        id: &str,
+        username: &str,
+        username_prompt_regex: Option<&str>,
+        password_prompt_regex: Option<&str>,
+        has_password: bool,
+    ) -> SavedCredential {
+        SavedCredential {
+            id: id.to_string(),
+            name: id.to_string(),
+            username: username.to_string(),
+            password: None,
+            username_prompt_regex: username_prompt_regex.map(str::to_string),
+            password_prompt_regex: password_prompt_regex.map(str::to_string),
+            enabled: true,
+            has_password,
+        }
+    }
+
+    fn request(
+        prompt_text: &str,
+        prompt_kind: CredentialPromptKind,
+        credentials: Vec<SavedCredential>,
+        pending: Option<PendingCredentialAutofill>,
+    ) -> CredentialAutofillMatchRequest {
+        CredentialAutofillMatchRequest {
+            key: CredentialAutofillMatchRequestKey {
+                request_id: 1,
+                session_id: "s1".to_string(),
+                prompt_text: prompt_text.to_string(),
+            },
+            current_line: prompt_text.to_string(),
+            prompt_kind,
+            credentials,
+            pending,
+        }
+    }
+
+    #[test]
+    fn credential_autofill_worker_suggests_matching_username() {
+        let mut regex_cache = HashMap::new();
+        let output = credential_autofill_match_outcome(
+            request(
+                "login as:",
+                CredentialPromptKind::Username,
+                vec![credential("c1", "root", Some("login as:"), None, true)],
+                None,
+            ),
+            &mut regex_cache,
+        );
+
+        match output {
+            CredentialAutofillMatchOutcome::Suggest {
+                kind,
+                matches,
+                clear_pending,
+            } => {
+                assert_eq!(kind, CredentialPromptKind::Username);
+                assert_eq!(matches.len(), 1);
+                assert_eq!(matches[0].id, "c1");
+                assert!(!clear_pending);
+            }
+            other => panic!("unexpected outcome: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn credential_autofill_worker_falls_back_to_password_only_credentials() {
+        let mut regex_cache = HashMap::new();
+        let output = credential_autofill_match_outcome(
+            request(
+                "Password:",
+                CredentialPromptKind::Password,
+                vec![credential("c1", "", None, None, true)],
+                None,
+            ),
+            &mut regex_cache,
+        );
+
+        match output {
+            CredentialAutofillMatchOutcome::Suggest {
+                kind,
+                matches,
+                clear_pending,
+            } => {
+                assert_eq!(kind, CredentialPromptKind::Password);
+                assert_eq!(matches.len(), 1);
+                assert_eq!(matches[0].id, "c1");
+                assert!(clear_pending);
+            }
+            other => panic!("unexpected outcome: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn credential_autofill_worker_autofills_pending_password() {
+        let mut regex_cache = HashMap::new();
+        let output = credential_autofill_match_outcome(
+            request(
+                "Password:",
+                CredentialPromptKind::Password,
+                vec![credential(
+                    "c1",
+                    "root",
+                    Some("login as:"),
+                    Some("Password:"),
+                    true,
+                )],
+                Some(PendingCredentialAutofill {
+                    session_id: "s1".to_string(),
+                    credential_id: "c1".to_string(),
+                    expires_at_ms: u64::MAX,
+                }),
+            ),
+            &mut regex_cache,
+        );
+
+        match output {
+            CredentialAutofillMatchOutcome::AutoFill { credential, kind } => {
+                assert_eq!(credential.id, "c1");
+                assert_eq!(kind, CredentialPromptKind::Password);
+            }
+            other => panic!("unexpected outcome: {other:?}"),
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
