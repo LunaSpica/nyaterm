@@ -130,13 +130,9 @@ impl NyaTermApp {
         if !allow_deferred_work {
             return false;
         }
-        let snapshot_requests = self
-            .terminal_views
-            .iter()
-            .filter_map(|(session_id, view)| {
-                (view.scroll_offset > 0).then(|| (session_id.clone(), view.scroll_offset))
-            })
-            .collect::<Vec<_>>();
+        let visible_session_ids = self.visible_terminal_session_ids();
+        let snapshot_requests =
+            terminal_frame_snapshot_request_candidates(&self.terminal_views, &visible_session_ids);
         let mut requested = false;
         for (session_id, offset) in snapshot_requests {
             requested |= self.request_terminal_frame_snapshot(&session_id, offset);
@@ -304,17 +300,24 @@ impl NyaTermApp {
         if session_id.is_empty() || self.main_mode != MainMode::Workspace {
             return false;
         }
+        self.visible_terminal_session_ids()
+            .iter()
+            .any(|id| *id == session_id)
+    }
+
+    fn visible_terminal_session_ids(&self) -> Vec<&str> {
+        if self.main_mode != MainMode::Workspace {
+            return Vec::new();
+        }
         if let Some(root) = self.terminal_windows.as_ref()
             && matches!(root, TerminalWindowNode::Split { .. })
         {
-            return terminal_window_node_visible_tab_ids(root)
-                .into_iter()
-                .any(|id| id == session_id);
+            return terminal_window_node_visible_tab_ids(root);
         }
         if let Some(root) = self.workspace_split.as_ref() {
-            return root.contains_session(session_id);
+            return workspace_pane_node_visible_session_ids(root);
         }
-        self.active_session_id.as_deref() == Some(session_id)
+        self.active_session_id.iter().map(String::as_str).collect()
     }
 
     fn apply_terminal_snapshot_frame(&mut self, frame: TerminalFrameSnapshotEvent) -> bool {
@@ -687,6 +690,43 @@ fn pop_terminal_frame_events_for_apply(
     (events, coalesced)
 }
 
+fn terminal_frame_snapshot_request_candidates(
+    terminal_views: &HashMap<String, TerminalViewState>,
+    visible_session_ids: &[&str],
+) -> Vec<(String, usize)> {
+    terminal_views
+        .iter()
+        .filter_map(|(session_id, view)| {
+            (view.scroll_offset > 0
+                && visible_session_ids
+                    .iter()
+                    .any(|visible_id| *visible_id == session_id))
+            .then(|| (session_id.clone(), view.scroll_offset))
+        })
+        .collect()
+}
+
+fn workspace_pane_node_visible_session_ids(root: &WorkspacePaneNode) -> Vec<&str> {
+    let mut ids = Vec::new();
+    collect_workspace_pane_node_visible_session_ids(root, &mut ids);
+    ids
+}
+
+fn collect_workspace_pane_node_visible_session_ids<'a>(
+    node: &'a WorkspacePaneNode,
+    ids: &mut Vec<&'a str>,
+) {
+    match node {
+        WorkspacePaneNode::Leaf { session_id, .. } => {
+            ids.push(session_id.as_str());
+        }
+        WorkspacePaneNode::Split { first, second, .. } => {
+            collect_workspace_pane_node_visible_session_ids(first, ids);
+            collect_workspace_pane_node_visible_session_ids(second, ids);
+        }
+    }
+}
+
 #[cfg(test)]
 mod frame_event_queue_tests {
     use super::*;
@@ -716,6 +756,30 @@ mod frame_event_queue_tests {
             truncated: false,
             process_duration: Duration::ZERO,
         })
+    }
+
+    #[test]
+    fn terminal_frame_snapshot_requests_only_include_visible_scrolled_sessions() {
+        let mut views = HashMap::new();
+        let mut visible_scrolled = TerminalViewState::new();
+        visible_scrolled.scroll_offset = 5;
+        views.insert("visible-scrolled".to_string(), visible_scrolled);
+
+        let mut hidden_scrolled = TerminalViewState::new();
+        hidden_scrolled.scroll_offset = 7;
+        views.insert("hidden-scrolled".to_string(), hidden_scrolled);
+
+        let mut visible_at_bottom = TerminalViewState::new();
+        visible_at_bottom.scroll_offset = 0;
+        views.insert("visible-at-bottom".to_string(), visible_at_bottom);
+
+        assert_eq!(
+            terminal_frame_snapshot_request_candidates(
+                &views,
+                &["visible-scrolled", "visible-at-bottom"]
+            ),
+            vec![("visible-scrolled".to_string(), 5)]
+        );
     }
 
     #[test]
