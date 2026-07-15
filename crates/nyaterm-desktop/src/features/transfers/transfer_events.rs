@@ -1,9 +1,14 @@
 use super::*;
 
+const TRANSFER_EVENT_DRAIN_LIMIT: usize = 256;
+
 impl NyaTermApp {
     pub(super) fn drain_transfer_events(&mut self, cx: &mut Context<Self>) -> bool {
         let mut dirty = false;
-        while let Ok(event) = self.transfer_rx.try_recv() {
+        for _ in 0..TRANSFER_EVENT_DRAIN_LIMIT {
+            let Ok(event) = self.transfer_rx.try_recv() else {
+                break;
+            };
             dirty = true;
             let Some(job) = self
                 .transfer_jobs
