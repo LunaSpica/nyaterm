@@ -371,10 +371,9 @@ impl NyaTermApp {
             .as_deref()
             .is_some_and(|id| id == session_id.as_str());
         let drop_session_kind = self
-            .ordered_sessions()
-            .into_iter()
-            .find(|s| s.id == session_id)
-            .map(|s| session_kind_label(s.kind))
+            .session_metadata
+            .get(&session_id)
+            .map(|metadata| terminal_canvas_session_kind_label(&metadata.launch_config))
             .unwrap_or("Local");
         let (drop_title, drop_hint) = nyaterm_core::terminal_drop_overlay_copy(drop_session_kind);
 
@@ -1367,6 +1366,16 @@ fn terminal_render_pressure_active(
     runtime_output_pressure
         || output_burst_bytes > 0
         || performance_mode == TerminalPerformanceMode::Overloaded
+}
+
+fn terminal_canvas_session_kind_label(config: &SessionLaunchConfig) -> &'static str {
+    match config {
+        SessionLaunchConfig::Local(_) => "Local",
+        SessionLaunchConfig::Ssh(_) => "SSH",
+        SessionLaunchConfig::Telnet(config) if config.raw_tcp => "Raw TCP",
+        SessionLaunchConfig::Telnet(_) => "Telnet",
+        SessionLaunchConfig::Serial(_) => "Serial",
+    }
 }
 
 const TERMINAL_RENDER_SLOW_STAGE: Duration = Duration::from_millis(12);
