@@ -1,16 +1,84 @@
 use super::*;
 use nyaterm_transport::{
     ZmodemAction, ZmodemDetectResult, ZmodemDetector, ZmodemDirection, ZmodemEvent, ZmodemTransfer,
-    start_zmodem_transfer,
 };
-use std::path::PathBuf;
+use std::{path::PathBuf, sync::mpsc, thread};
 
 pub(in crate::features) struct ZmodemSessionState {
     pub(in crate::features) detector: ZmodemDetector,
     pub(in crate::features) transfer: Option<ZmodemTransfer>,
+    worker: Option<ZmodemWorker>,
     pub(in crate::features) pending_upload: Option<Vec<PathBuf>>,
     /// Download waiting for user to pick a save directory.
     pub(in crate::features) pending_download: bool,
+}
+
+struct ZmodemWorker {
+    command_tx: mpsc::Sender<ZmodemWorkerCommand>,
+    event_rx: mpsc::Receiver<ZmodemWorkerEvent>,
+}
+
+enum ZmodemWorkerCommand {
+    Input(Vec<u8>),
+    AcceptDownload(PathBuf),
+    AcceptUpload(Vec<PathBuf>),
+    Cancel(String),
+    Stop,
+}
+
+struct ZmodemWorkerEvent {
+    actions: Vec<ZmodemAction>,
+    done: bool,
+}
+
+impl ZmodemWorker {
+    fn spawn(transfer: ZmodemTransfer) -> Self {
+        let (command_tx, command_rx) = mpsc::channel();
+        let (event_tx, event_rx) = mpsc::sync_channel(ZMODEM_WORKER_EVENT_CHANNEL_CAP);
+        thread::Builder::new()
+            .name("nyaterm-zmodem-transfer".to_string())
+            .spawn(move || run_zmodem_worker(transfer, command_rx, event_tx))
+            .expect("failed to spawn zmodem worker");
+        Self {
+            command_tx,
+            event_rx,
+        }
+    }
+
+    fn send_input(&self, data: Vec<u8>) {
+        if !data.is_empty() {
+            let _ = self.command_tx.send(ZmodemWorkerCommand::Input(data));
+        }
+    }
+
+    fn accept_download(&self, save_dir: PathBuf) {
+        let _ = self
+            .command_tx
+            .send(ZmodemWorkerCommand::AcceptDownload(save_dir));
+    }
+
+    fn accept_upload(&self, files: Vec<PathBuf>) {
+        let _ = self
+            .command_tx
+            .send(ZmodemWorkerCommand::AcceptUpload(files));
+    }
+
+    fn cancel(&self, reason: impl Into<String>) {
+        let _ = self
+            .command_tx
+            .send(ZmodemWorkerCommand::Cancel(reason.into()));
+    }
+
+    fn try_recv_event(&self) -> Option<ZmodemWorkerEvent> {
+        match self.event_rx.try_recv() {
+            Ok(event) => Some(event),
+            Err(mpsc::TryRecvError::Empty) | Err(mpsc::TryRecvError::Disconnected) => None,
+        }
+    }
+
+    fn stop(self) {
+        let _ = self.command_tx.send(ZmodemWorkerCommand::Stop);
+    }
 }
 
 impl Default for ZmodemSessionState {
@@ -18,8 +86,17 @@ impl Default for ZmodemSessionState {
         Self {
             detector: ZmodemDetector::new(),
             transfer: None,
+            worker: None,
             pending_upload: None,
             pending_download: false,
+        }
+    }
+}
+
+impl ZmodemSessionState {
+    fn stop_worker(&mut self) {
+        if let Some(worker) = self.worker.take() {
+            worker.stop();
         }
     }
 }
@@ -32,7 +109,9 @@ impl NyaTermApp {
     }
 
     pub(in crate::features) fn clear_zmodem_session(&mut self, session_id: &str) {
-        self.zmodem_sessions.remove(session_id);
+        if let Some(mut state) = self.zmodem_sessions.remove(session_id) {
+            state.stop_worker();
+        }
     }
 
     pub(in crate::features) fn note_zmodem_output_discontinuity(
@@ -44,17 +123,22 @@ impl NyaTermApp {
         let Some(state) = self.zmodem_sessions.get_mut(session_id) else {
             return;
         };
-        let mut actions = Vec::new();
-        if let Some(transfer) = state.transfer.as_mut() {
-            let reason = format!("terminal output dropped {dropped_bytes} byte(s)");
-            actions = transfer.cancel_with_reason(reason);
+        let reason = format!("terminal output dropped {dropped_bytes} byte(s)");
+        if let Some(worker) = state.worker.as_ref() {
+            worker.cancel(reason);
+        } else if let Some(transfer) = state.transfer.as_mut() {
+            let actions = transfer.cancel_with_reason(reason);
+            state.transfer = None;
+            state.detector = ZmodemDetector::new();
+            state.pending_download = false;
+            if !actions.is_empty() {
+                self.apply_zmodem_actions(session_id, actions, cx);
+            }
+            return;
         }
         state.transfer = None;
         state.detector = ZmodemDetector::new();
         state.pending_download = false;
-        if !actions.is_empty() {
-            self.apply_zmodem_actions(session_id, actions, cx);
-        }
     }
 
     /// Queue local files for ZMODEM upload (remote `rz`) after optional SFTP conflict probe.
@@ -74,7 +158,7 @@ impl NyaTermApp {
             return;
         }
         let state = self.zmodem_state_mut(&session_id);
-        if state.transfer.is_some() {
+        if state.transfer.is_some() || state.worker.is_some() {
             self.terminal_status = "ZMODEM transfer already active".to_string();
             cx.notify();
             return;
@@ -171,7 +255,7 @@ impl NyaTermApp {
             return;
         }
         let state = self.zmodem_state_mut(&session_id);
-        if state.transfer.is_some() {
+        if state.transfer.is_some() || state.worker.is_some() {
             self.terminal_status = "ZMODEM transfer already active".to_string();
             cx.notify();
             return;
@@ -205,10 +289,17 @@ impl NyaTermApp {
         };
         state.pending_upload = None;
         state.pending_download = false;
-        let mut actions = Vec::new();
-        if let Some(transfer) = state.transfer.as_mut() {
-            actions = transfer.cancel();
+        if let Some(worker) = state.worker.as_ref() {
+            worker.cancel("cancelled");
+            self.terminal_status = "ZMODEM transfer cancelling".to_string();
+            cx.notify();
+            return;
         }
+        let actions = state
+            .transfer
+            .as_mut()
+            .map(ZmodemTransfer::cancel)
+            .unwrap_or_default();
         state.transfer = None;
         state.detector = ZmodemDetector::new();
         self.apply_zmodem_actions(session_id, actions, cx);
@@ -226,16 +317,66 @@ impl NyaTermApp {
             return;
         };
         state.pending_download = false;
-        let mut actions = Vec::new();
-        if let Some(transfer) = state.transfer.as_mut() {
-            actions = transfer.accept_download(save_dir);
-            if transfer.is_done() {
-                state.transfer = None;
-                state.detector = ZmodemDetector::new();
+        if let Some(worker) = state.worker.as_ref() {
+            worker.accept_download(save_dir);
+            cx.notify();
+            return;
+        }
+        let Some(transfer) = state.transfer.take() else {
+            return;
+        };
+        let worker = ZmodemWorker::spawn(transfer);
+        worker.accept_download(save_dir);
+        state.worker = Some(worker);
+        cx.notify();
+    }
+
+    pub(in crate::features) fn drain_zmodem_worker_events(
+        &mut self,
+        cx: &mut Context<Self>,
+    ) -> bool {
+        let mut events = Vec::new();
+        for (session_id, state) in &mut self.zmodem_sessions {
+            let Some(worker) = state.worker.as_ref() else {
+                continue;
+            };
+            while let Some(event) = worker.try_recv_event() {
+                events.push((session_id.clone(), event));
+                if events.len() >= ZMODEM_WORKER_EVENT_DRAIN_BATCH {
+                    break;
+                }
+            }
+            if events.len() >= ZMODEM_WORKER_EVENT_DRAIN_BATCH {
+                break;
             }
         }
-        self.apply_zmodem_actions(&session_id, actions, cx);
-        cx.notify();
+        if events.is_empty() {
+            return false;
+        }
+
+        for (session_id, event) in events {
+            self.apply_zmodem_worker_event(&session_id, event, cx);
+        }
+        true
+    }
+
+    fn apply_zmodem_worker_event(
+        &mut self,
+        session_id: &str,
+        event: ZmodemWorkerEvent,
+        cx: &mut Context<Self>,
+    ) {
+        self.apply_zmodem_actions(session_id, event.actions, cx);
+        if event.done
+            && let Some(state) = self.zmodem_sessions.get_mut(session_id)
+            && state.worker.is_some()
+        {
+            state.worker = None;
+            state.transfer = None;
+            state.detector = ZmodemDetector::new();
+            state.pending_download = false;
+            state.pending_upload = None;
+        }
     }
 
     /// Process raw session output for ZMODEM interception. Returns bytes that
@@ -252,25 +393,29 @@ impl NyaTermApp {
         if self.zmodem_output_can_bypass_detector(session_id, data) {
             return data.to_vec();
         }
-        let state = self.zmodem_state_mut(session_id);
 
         // Active transfer: consume all raw bytes.
-        if state.transfer.is_some() {
-            let mut actions = Vec::new();
-            let done = {
-                let state = self.zmodem_state_mut(session_id);
-                if let Some(transfer) = state.transfer.as_mut() {
-                    actions = transfer.feed_incoming(data);
-                    transfer.is_done()
-                } else {
-                    false
-                }
-            };
-            self.apply_zmodem_actions(session_id, actions, cx);
-            if done {
+        if let Some(state) = self.zmodem_sessions.get(session_id)
+            && let Some(worker) = state.worker.as_ref()
+        {
+            worker.send_input(data.to_vec());
+            return Vec::new();
+        }
+
+        if self
+            .zmodem_sessions
+            .get(session_id)
+            .is_some_and(|state| state.transfer.is_some())
+        {
+            if let Some(transfer) = self
+                .zmodem_sessions
+                .get_mut(session_id)
+                .and_then(|state| state.transfer.take())
+            {
+                let worker = ZmodemWorker::spawn(transfer);
+                worker.send_input(data.to_vec());
                 if let Some(state) = self.zmodem_sessions.get_mut(session_id) {
-                    state.transfer = None;
-                    state.detector = ZmodemDetector::new();
+                    state.worker = Some(worker);
                 }
             }
             return Vec::new();
@@ -293,14 +438,18 @@ impl NyaTermApp {
                 } else {
                     None
                 };
-                let (transfer, bootstrap) =
-                    start_zmodem_transfer(direction, &initial_bytes, prepared_upload);
-                let actions = bootstrap;
+                let transfer = ZmodemTransfer::new(direction, &initial_bytes);
                 {
                     let state = self.zmodem_state_mut(session_id);
-                    state.transfer = Some(transfer);
-                    if direction == ZmodemDirection::Download {
-                        state.pending_download = true;
+                    if let Some(files) = prepared_upload {
+                        let worker = ZmodemWorker::spawn(transfer);
+                        worker.accept_upload(files);
+                        state.worker = Some(worker);
+                    } else {
+                        state.transfer = Some(transfer);
+                        if direction == ZmodemDirection::Download {
+                            state.pending_download = true;
+                        }
                     }
                 }
                 // If upload auto-started with prepared files, bootstrap may already
@@ -308,7 +457,6 @@ impl NyaTermApp {
                 if direction == ZmodemDirection::Download {
                     self.prompt_zmodem_download_directory(session_id.to_string(), cx);
                 }
-                self.apply_zmodem_actions(session_id, actions, cx);
                 // Surface detection event status.
                 self.terminal_status = match direction {
                     ZmodemDirection::Upload => "ZMODEM upload detected".to_string(),
@@ -324,6 +472,7 @@ impl NyaTermApp {
     fn zmodem_output_can_bypass_detector(&self, session_id: &str, data: &[u8]) -> bool {
         let state_is_idle = self.zmodem_sessions.get(session_id).is_none_or(|state| {
             state.transfer.is_none()
+                && state.worker.is_none()
                 && state.pending_upload.is_none()
                 && !state.pending_download
                 && state.detector.is_idle()
@@ -405,6 +554,7 @@ impl NyaTermApp {
                 self.finish_zmodem_transfer_jobs(session_id, true, None, cx);
                 if let Some(state) = self.zmodem_sessions.get_mut(session_id) {
                     state.transfer = None;
+                    state.worker = None;
                     state.detector = ZmodemDetector::new();
                     state.pending_download = false;
                     state.pending_upload = None;
@@ -415,6 +565,7 @@ impl NyaTermApp {
                 self.finish_zmodem_transfer_jobs(session_id, false, Some(reason.as_str()), cx);
                 if let Some(state) = self.zmodem_sessions.get_mut(session_id) {
                     state.transfer = None;
+                    state.worker = None;
                     state.detector = ZmodemDetector::new();
                     state.pending_download = false;
                     state.pending_upload = None;
@@ -585,6 +736,40 @@ impl NyaTermApp {
     }
 }
 
+fn run_zmodem_worker(
+    mut transfer: ZmodemTransfer,
+    command_rx: mpsc::Receiver<ZmodemWorkerCommand>,
+    event_tx: mpsc::SyncSender<ZmodemWorkerEvent>,
+) {
+    while let Ok(command) = command_rx.recv() {
+        let Some(event) = process_zmodem_worker_command(&mut transfer, command) else {
+            break;
+        };
+        let done = event.done;
+        let _ = event_tx.send(event);
+        if done {
+            break;
+        }
+    }
+}
+
+fn process_zmodem_worker_command(
+    transfer: &mut ZmodemTransfer,
+    command: ZmodemWorkerCommand,
+) -> Option<ZmodemWorkerEvent> {
+    let actions = match command {
+        ZmodemWorkerCommand::Input(data) => transfer.feed_incoming(&data),
+        ZmodemWorkerCommand::AcceptDownload(save_dir) => transfer.accept_download(save_dir),
+        ZmodemWorkerCommand::AcceptUpload(files) => transfer.accept_upload(files),
+        ZmodemWorkerCommand::Cancel(reason) => transfer.cancel_with_reason(reason),
+        ZmodemWorkerCommand::Stop => return None,
+    };
+    Some(ZmodemWorkerEvent {
+        actions,
+        done: transfer.is_done(),
+    })
+}
+
 fn probe_zmodem_remote_conflicts(
     config: SshSessionConfig,
     remote_dir: String,
@@ -660,5 +845,30 @@ fn probe_zmodem_remote_conflicts(
             }
             Ok((resolved, false))
         }
+    }
+}
+
+const ZMODEM_WORKER_EVENT_CHANNEL_CAP: usize = 256;
+const ZMODEM_WORKER_EVENT_DRAIN_BATCH: usize = 32;
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn zmodem_worker_cancel_emits_failed_event_off_ui_state() {
+        let mut transfer = ZmodemTransfer::new(ZmodemDirection::Download, b"");
+
+        let event = process_zmodem_worker_command(
+            &mut transfer,
+            ZmodemWorkerCommand::Cancel("stop".into()),
+        )
+        .expect("cancel should produce a worker event");
+
+        assert!(event.done);
+        assert!(event.actions.iter().any(|action| matches!(
+            action,
+            ZmodemAction::EmitEvent(ZmodemEvent::Failed { reason }) if reason == "stop"
+        )));
     }
 }
