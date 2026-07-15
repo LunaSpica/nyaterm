@@ -375,6 +375,7 @@ impl TerminalViewState {
 
     /// Feed already-protected bytes into the view (used when the caller applies
     /// the same feed to the mirrored active screen).
+    #[cfg(test)]
     pub(crate) fn append_bytes_unprotected(&mut self, data: &[u8]) {
         if data.is_empty() {
             return;
@@ -396,6 +397,7 @@ impl TerminalViewState {
 
     /// Drop the oldest part of an oversized burst so the latest screen state wins
     /// (Tauri backlog trim + large-output protection).
+    #[cfg(test)]
     pub(crate) fn protect_output_burst<'a>(&mut self, data: &'a [u8]) -> &'a [u8] {
         if data.is_empty() {
             return data;

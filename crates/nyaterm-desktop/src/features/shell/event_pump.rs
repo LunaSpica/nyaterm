@@ -312,8 +312,6 @@ impl NyaTermApp {
                             continue;
                         }
                         if self.session_has_active_ai_capture(&session_id) {
-                            let is_active =
-                                self.active_session_id.as_deref() == Some(session_id.as_str());
                             let stage_started_at = Instant::now();
                             let text = self.decode_session_output_for_recording(&session_id, &data);
                             let stage_duration = stage_started_at.elapsed();
@@ -326,32 +324,14 @@ impl NyaTermApp {
                             chunk_timings.ai_capture += stage_duration;
                             if !result.visible_text.is_empty() {
                                 let stage_started_at = Instant::now();
-                                self.recording_manager
-                                    .write_output(&session_id, &result.visible_text);
-                                let stage_duration = stage_started_at.elapsed();
-                                drain_timings.recording += stage_duration;
-                                chunk_timings.recording += stage_duration;
-                                let stage_started_at = Instant::now();
                                 let visible_bytes = self.encode_visible_terminal_text_for_output(
                                     &session_id,
                                     &result.visible_text,
                                 );
-                                self.append_terminal_bytes_for_session(
-                                    Some(&session_id),
-                                    &visible_bytes,
-                                    !is_active,
-                                    Some(cx),
-                                );
+                                self.submit_terminal_frame_output(&session_id, visible_bytes);
                                 let stage_duration = stage_started_at.elapsed();
                                 drain_timings.terminal_append += stage_duration;
                                 chunk_timings.terminal_append += stage_duration;
-                                if is_active {
-                                    let stage_started_at = Instant::now();
-                                    self.feed_credential_autofill_output(&result.visible_text, cx);
-                                    let stage_duration = stage_started_at.elapsed();
-                                    drain_timings.credential_autofill += stage_duration;
-                                    chunk_timings.credential_autofill += stage_duration;
-                                }
                             }
                             let stage_started_at = Instant::now();
                             for captured in result.completed {
