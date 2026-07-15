@@ -41,6 +41,7 @@ impl NyaTermApp {
             .terminal_views
             .get(&session_id)
             .is_some_and(|view| view.render_degraded || render_pressure);
+        let render_profile = terminal_render_profile(render_degraded);
         let (output_burst_bytes, performance_mode) = self
             .terminal_views
             .get(&session_id)
@@ -118,7 +119,7 @@ impl NyaTermApp {
             nyaterm_terminal::CursorShape::Block => self.settings.cursor_style.clone(),
         };
         let search_stage_started_at = Instant::now();
-        let search_matches = if !render_degraded
+        let search_matches = if render_profile.enhanced_decorations_enabled()
             && is_active
             && self.terminal_search_open
             && self.terminal_search_mode == TerminalSearchMode::Buffer
@@ -163,7 +164,11 @@ impl NyaTermApp {
         let search_mapping_duration = search_stage_started_at.elapsed();
         let decoration_stage_started_at = Instant::now();
         let mut action_link_duration = Duration::ZERO;
-        let terminal_selection = is_active.then_some(self.terminal_selection).flatten();
+        let terminal_selection = if render_profile.enhanced_decorations_enabled() {
+            is_active.then_some(self.terminal_selection).flatten()
+        } else {
+            None
+        };
         let has_selection = terminal_selection.is_some();
         let has_search_decorations =
             !search_ranges_by_line.is_empty() || !active_search_ranges_by_line.is_empty();
@@ -179,7 +184,8 @@ impl NyaTermApp {
                 .hyperlink_lines
                 .iter()
                 .any(|spans| !spans.is_empty());
-        let include_command_marks = is_active && !render_degraded && !render_output_pressure;
+        let include_command_marks =
+            is_active && render_profile.enhanced_decorations_enabled() && !render_output_pressure;
         let has_command_marks =
             include_command_marks && snapshot.command_marks.iter().any(Option::is_some);
         let needs_line_decorations = terminal_line_decorations_needed(
@@ -1195,6 +1201,7 @@ impl NyaTermApp {
                 line_count,
                 is_active,
                 render_degraded,
+                render_profile = render_profile.label(),
                 render_output_pressure,
                 expensive_interactions_enabled,
                 output_burst_bytes,
@@ -1368,6 +1375,33 @@ fn terminal_render_pressure_active(
         || performance_mode == TerminalPerformanceMode::Overloaded
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum TerminalRenderProfile {
+    Full,
+    PlainViewport,
+}
+
+impl TerminalRenderProfile {
+    fn enhanced_decorations_enabled(self) -> bool {
+        matches!(self, Self::Full)
+    }
+
+    fn label(self) -> &'static str {
+        match self {
+            Self::Full => "full",
+            Self::PlainViewport => "plain_viewport",
+        }
+    }
+}
+
+fn terminal_render_profile(render_degraded: bool) -> TerminalRenderProfile {
+    if render_degraded {
+        TerminalRenderProfile::PlainViewport
+    } else {
+        TerminalRenderProfile::Full
+    }
+}
+
 fn terminal_canvas_session_kind_label(config: &SessionLaunchConfig) -> &'static str {
     match config {
         SessionLaunchConfig::Local(_) => "Local",
@@ -1433,6 +1467,18 @@ mod tests {
             0,
             TerminalPerformanceMode::Normal
         ));
+    }
+
+    #[test]
+    fn terminal_render_profile_uses_plain_viewport_while_degraded() {
+        assert_eq!(terminal_render_profile(false), TerminalRenderProfile::Full);
+        assert_eq!(
+            terminal_render_profile(true),
+            TerminalRenderProfile::PlainViewport
+        );
+        assert!(terminal_render_profile(false).enhanced_decorations_enabled());
+        assert!(!terminal_render_profile(true).enhanced_decorations_enabled());
+        assert_eq!(terminal_render_profile(true).label(), "plain_viewport");
     }
 
     #[test]
