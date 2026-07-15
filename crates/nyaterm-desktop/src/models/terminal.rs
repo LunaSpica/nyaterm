@@ -7,8 +7,7 @@ use nyaterm_terminal::{
 };
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::hash::{Hash, Hasher};
-use std::sync::mpsc;
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Condvar, Mutex};
 use std::thread;
 use std::time::{Duration, Instant};
 
@@ -696,13 +695,13 @@ impl KeywordHighlightEditorField {
 
 #[derive(Debug)]
 pub(crate) struct TerminalFramePipeline {
-    command_tx: mpsc::Sender<TerminalFrameCommand>,
+    command_tx: TerminalFrameCommandSender,
     event_queue: TerminalFrameEventQueue,
 }
 
 impl TerminalFramePipeline {
     pub(crate) fn spawn(recording_writer: RecordingWriteHandle) -> Self {
-        let (command_tx, command_rx) = mpsc::channel();
+        let (command_tx, command_rx) = terminal_frame_command_channel();
         let event_queue = TerminalFrameEventQueue::new(TERMINAL_FRAME_EVENT_QUEUE_CAP);
         let event_queue_for_worker = event_queue.clone();
         thread::Builder::new()
@@ -1160,8 +1159,129 @@ impl TerminalFrameSession {
     }
 }
 
+#[derive(Debug)]
+struct TerminalFrameCommandSender {
+    shared: Arc<TerminalFrameCommandQueueShared>,
+}
+
+#[derive(Debug)]
+struct TerminalFrameCommandReceiver {
+    shared: Arc<TerminalFrameCommandQueueShared>,
+}
+
+#[derive(Debug)]
+struct TerminalFrameCommandQueueShared {
+    inner: Mutex<TerminalFrameCommandQueueInner>,
+    ready: Condvar,
+}
+
+#[derive(Debug)]
+struct TerminalFrameCommandQueueInner {
+    commands: VecDeque<TerminalFrameCommand>,
+    sender_count: usize,
+}
+
+fn terminal_frame_command_channel() -> (TerminalFrameCommandSender, TerminalFrameCommandReceiver) {
+    let shared = Arc::new(TerminalFrameCommandQueueShared {
+        inner: Mutex::new(TerminalFrameCommandQueueInner {
+            commands: VecDeque::new(),
+            sender_count: 1,
+        }),
+        ready: Condvar::new(),
+    });
+    (
+        TerminalFrameCommandSender {
+            shared: shared.clone(),
+        },
+        TerminalFrameCommandReceiver { shared },
+    )
+}
+
+impl TerminalFrameCommandSender {
+    fn send(&self, command: TerminalFrameCommand) -> bool {
+        let Ok(mut inner) = self.shared.inner.lock() else {
+            return false;
+        };
+        push_terminal_frame_command(&mut inner.commands, command);
+        self.shared.ready.notify_one();
+        true
+    }
+}
+
+impl Drop for TerminalFrameCommandSender {
+    fn drop(&mut self) {
+        let Ok(mut inner) = self.shared.inner.lock() else {
+            return;
+        };
+        inner.sender_count = inner.sender_count.saturating_sub(1);
+        self.shared.ready.notify_all();
+    }
+}
+
+impl TerminalFrameCommandReceiver {
+    fn recv(&self) -> Option<TerminalFrameCommand> {
+        let mut inner = self.shared.inner.lock().ok()?;
+        loop {
+            if let Some(command) = inner.commands.pop_front() {
+                return Some(command);
+            }
+            if inner.sender_count == 0 {
+                return None;
+            }
+            inner = self.shared.ready.wait(inner).ok()?;
+        }
+    }
+
+    fn try_recv(&self) -> Option<TerminalFrameCommand> {
+        self.shared.inner.lock().ok()?.commands.pop_front()
+    }
+}
+
+fn push_terminal_frame_command(
+    commands: &mut VecDeque<TerminalFrameCommand>,
+    command: TerminalFrameCommand,
+) {
+    match command {
+        TerminalFrameCommand::Output {
+            session_id,
+            data,
+            encoding,
+            scrollback_limit,
+        } => {
+            if let Some(TerminalFrameCommand::Output {
+                session_id: last_session_id,
+                data: last_data,
+                encoding: last_encoding,
+                scrollback_limit: last_scrollback_limit,
+            }) = commands.back_mut()
+            {
+                if terminal_frame_output_commands_can_merge(
+                    last_session_id,
+                    last_encoding,
+                    *last_scrollback_limit,
+                    &session_id,
+                    &encoding,
+                    scrollback_limit,
+                    last_data.len(),
+                    data.len(),
+                ) {
+                    last_data.extend(data);
+                    return;
+                }
+            }
+            commands.push_back(TerminalFrameCommand::Output {
+                session_id,
+                data,
+                encoding,
+                scrollback_limit,
+            });
+        }
+        other => commands.push_back(other),
+    }
+}
+
 fn run_terminal_frame_processor(
-    command_rx: mpsc::Receiver<TerminalFrameCommand>,
+    command_rx: TerminalFrameCommandReceiver,
     event_queue: TerminalFrameEventQueue,
     recording_writer: RecordingWriteHandle,
 ) {
@@ -1266,16 +1386,14 @@ fn run_terminal_frame_processor(
 }
 
 fn next_terminal_frame_command(
-    command_rx: &mpsc::Receiver<TerminalFrameCommand>,
+    command_rx: &TerminalFrameCommandReceiver,
     pending_commands: &mut VecDeque<TerminalFrameCommand>,
 ) -> Option<TerminalFrameCommand> {
-    pending_commands
-        .pop_front()
-        .or_else(|| command_rx.recv().ok())
+    pending_commands.pop_front().or_else(|| command_rx.recv())
 }
 
 fn coalesce_terminal_frame_output_command(
-    command_rx: &mpsc::Receiver<TerminalFrameCommand>,
+    command_rx: &TerminalFrameCommandReceiver,
     pending_commands: &mut VecDeque<TerminalFrameCommand>,
     session_id: String,
     mut data: Vec<u8>,
@@ -1285,7 +1403,7 @@ fn coalesce_terminal_frame_output_command(
     loop {
         let next = pending_commands
             .pop_front()
-            .or_else(|| command_rx.try_recv().ok());
+            .or_else(|| command_rx.try_recv());
         let Some(next) = next else {
             break;
         };
@@ -1800,14 +1918,13 @@ mod tests {
 
     #[test]
     fn terminal_frame_worker_coalesces_adjacent_matching_output() {
-        let (tx, rx) = mpsc::channel();
-        tx.send(TerminalFrameCommand::Output {
+        let (tx, rx) = terminal_frame_command_channel();
+        assert!(tx.send(TerminalFrameCommand::Output {
             session_id: "s1".to_string(),
             data: b"bc".to_vec(),
             encoding: "UTF-8".to_string(),
             scrollback_limit: 1000,
-        })
-        .unwrap();
+        }));
         drop(tx);
 
         let mut pending = VecDeque::new();
@@ -1826,14 +1943,13 @@ mod tests {
 
     #[test]
     fn terminal_frame_worker_caps_coalesced_output_batch() {
-        let (tx, rx) = mpsc::channel();
-        tx.send(TerminalFrameCommand::Output {
+        let (tx, rx) = terminal_frame_command_channel();
+        assert!(tx.send(TerminalFrameCommand::Output {
             session_id: "s1".to_string(),
             data: vec![b'b'; 2],
             encoding: "UTF-8".to_string(),
             scrollback_limit: 1000,
-        })
-        .unwrap();
+        }));
         drop(tx);
 
         let mut pending = VecDeque::new();
@@ -1855,20 +1971,18 @@ mod tests {
 
     #[test]
     fn terminal_frame_worker_does_not_coalesce_across_resize() {
-        let (tx, rx) = mpsc::channel();
-        tx.send(TerminalFrameCommand::ResizeSession {
+        let (tx, rx) = terminal_frame_command_channel();
+        assert!(tx.send(TerminalFrameCommand::ResizeSession {
             session_id: "s1".to_string(),
             cols: 100,
             rows: 30,
-        })
-        .unwrap();
-        tx.send(TerminalFrameCommand::Output {
+        }));
+        assert!(tx.send(TerminalFrameCommand::Output {
             session_id: "s1".to_string(),
             data: b"bc".to_vec(),
             encoding: "UTF-8".to_string(),
             scrollback_limit: 1000,
-        })
-        .unwrap();
+        }));
         drop(tx);
 
         let mut pending = VecDeque::new();
@@ -1890,6 +2004,72 @@ mod tests {
             next_terminal_frame_command(&rx, &mut pending),
             Some(TerminalFrameCommand::Output { .. })
         ));
+    }
+
+    #[test]
+    fn terminal_frame_command_queue_coalesces_adjacent_matching_output() {
+        let (tx, rx) = terminal_frame_command_channel();
+        assert!(tx.send(TerminalFrameCommand::Output {
+            session_id: "s1".to_string(),
+            data: b"a".to_vec(),
+            encoding: "UTF-8".to_string(),
+            scrollback_limit: 1000,
+        }));
+        assert!(tx.send(TerminalFrameCommand::Output {
+            session_id: "s1".to_string(),
+            data: b"bc".to_vec(),
+            encoding: "UTF-8".to_string(),
+            scrollback_limit: 1000,
+        }));
+
+        assert!(matches!(
+            rx.try_recv(),
+            Some(TerminalFrameCommand::Output { data, .. }) if data == b"abc"
+        ));
+        assert!(rx.try_recv().is_none());
+    }
+
+    #[test]
+    fn terminal_frame_command_queue_does_not_coalesce_across_resize() {
+        let (tx, rx) = terminal_frame_command_channel();
+        assert!(tx.send(TerminalFrameCommand::Output {
+            session_id: "s1".to_string(),
+            data: b"a".to_vec(),
+            encoding: "UTF-8".to_string(),
+            scrollback_limit: 1000,
+        }));
+        assert!(tx.send(TerminalFrameCommand::ResizeSession {
+            session_id: "s1".to_string(),
+            cols: 100,
+            rows: 30,
+        }));
+        assert!(tx.send(TerminalFrameCommand::Output {
+            session_id: "s1".to_string(),
+            data: b"bc".to_vec(),
+            encoding: "UTF-8".to_string(),
+            scrollback_limit: 1000,
+        }));
+
+        assert!(matches!(
+            rx.try_recv(),
+            Some(TerminalFrameCommand::Output { data, .. }) if data == b"a"
+        ));
+        assert!(matches!(
+            rx.try_recv(),
+            Some(TerminalFrameCommand::ResizeSession { .. })
+        ));
+        assert!(matches!(
+            rx.try_recv(),
+            Some(TerminalFrameCommand::Output { data, .. }) if data == b"bc"
+        ));
+    }
+
+    #[test]
+    fn terminal_frame_command_queue_stops_after_sender_drop() {
+        let (tx, rx) = terminal_frame_command_channel();
+        drop(tx);
+
+        assert!(rx.recv().is_none());
     }
 
     #[test]
