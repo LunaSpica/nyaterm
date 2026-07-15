@@ -1,5 +1,6 @@
 //! Shared terminal paint types.
 
+#[derive(Clone)]
 pub(super) struct TerminalHighlightSpan {
     pub(super) text: String,
     pub(super) color: Option<u32>,

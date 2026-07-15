@@ -158,6 +158,34 @@ mod layout_cache_tests {
             element.row_layout_key(0, "same", Some(&bold), &decorations)
         );
     }
+
+    #[test]
+    fn terminal_glyph_decorations_detects_glyph_only_work() {
+        assert!(!terminal_glyph_decorations_needed(
+            &TerminalLineDecorations::default()
+        ));
+
+        let mut decorations = TerminalLineDecorations {
+            command_mark: Some(nyaterm_terminal::ShellCommandMark::Prompt),
+            ..TerminalLineDecorations::default()
+        };
+        assert!(!terminal_glyph_decorations_needed(&decorations));
+
+        decorations.link_ranges.push((1, 3));
+        assert!(terminal_glyph_decorations_needed(&decorations));
+
+        decorations.link_ranges.clear();
+        decorations.selection_cols = Some((0, 2));
+        assert!(terminal_glyph_decorations_needed(&decorations));
+
+        decorations.selection_cols = None;
+        decorations.search_ranges.push((2, 4));
+        assert!(terminal_glyph_decorations_needed(&decorations));
+
+        decorations.search_ranges.clear();
+        decorations.active_search_ranges.push((2, 4));
+        assert!(terminal_glyph_decorations_needed(&decorations));
+    }
 }
 
 pub struct NyaTerminalElement {
@@ -312,6 +340,13 @@ fn hash_styled_spans<H: Hasher>(
     }
 }
 
+fn terminal_glyph_decorations_needed(decorations: &TerminalLineDecorations) -> bool {
+    !decorations.search_ranges.is_empty()
+        || !decorations.active_search_ranges.is_empty()
+        || decorations.selection_cols.is_some()
+        || !decorations.link_ranges.is_empty()
+}
+
 impl IntoElement for NyaTerminalElement {
     type Element = Self;
 
@@ -388,16 +423,20 @@ impl Element for NyaTerminalElement {
                 self.palette,
             );
             // Full spans include search/selection fg tweaks for the glyph layer.
-            let spans = terminal_highlight_spans(
-                display_line,
-                ansi,
-                &self.keyword_rules,
-                &decorations.search_ranges,
-                &decorations.active_search_ranges,
-                decorations.selection_cols,
-                &decorations.link_ranges,
-                self.palette,
-            );
+            let spans = if terminal_glyph_decorations_needed(decorations) {
+                terminal_highlight_spans(
+                    display_line,
+                    ansi,
+                    &self.keyword_rules,
+                    &decorations.search_ranges,
+                    &decorations.active_search_ranges,
+                    decorations.selection_cols,
+                    &decorations.link_ranges,
+                    self.palette,
+                )
+            } else {
+                base_spans.clone()
+            };
             let y = px(f32::from(bounds.top()) + row as f32 * cell_h);
 
             if !decorations.active_search_ranges.is_empty() {
