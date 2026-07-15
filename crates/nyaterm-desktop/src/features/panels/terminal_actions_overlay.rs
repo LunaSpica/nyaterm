@@ -7,14 +7,14 @@ impl NyaTermApp {
     ) -> impl IntoElement {
         let palette = self.theme_palette();
         let visible_text = self.active_terminal_visible_text();
-        let buffer_text = self.active_terminal_buffer_text();
+        let buffer_tail = self.active_terminal_buffer_tail();
         let visible_lines = visible_text.lines().count();
-        let buffer_chars = buffer_text.chars().count();
+        let buffer_chars = buffer_tail.chars().count();
         let visible_for_translate = visible_text.clone();
         let visible_for_ai = terminal_action_prompt_text(&visible_text, 2_800);
-        let buffer_for_ai = terminal_action_prompt_text(&buffer_text, 4_000);
+        let buffer_for_ai = terminal_action_prompt_text(buffer_tail, 4_000);
         let has_visible_text = !visible_text.trim().is_empty();
-        let has_buffer_text = !buffer_text.trim().is_empty();
+        let has_buffer_text = !buffer_tail.trim().is_empty();
         let _has_selection = self.selected_terminal_text().is_some();
 
         div()

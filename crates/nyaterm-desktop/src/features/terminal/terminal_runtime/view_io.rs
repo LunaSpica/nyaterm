@@ -55,6 +55,21 @@ impl NyaTermApp {
             .unwrap_or_else(|| self.terminal_output.clone())
     }
 
+    pub(in crate::features) fn active_terminal_buffer_tail(&self) -> &str {
+        self.active_session_id
+            .as_deref()
+            .and_then(|session_id| self.terminal_views.get(session_id))
+            .map(|view| view.output.as_str())
+            .unwrap_or(self.terminal_output.as_str())
+    }
+
+    pub(in crate::features) fn terminal_buffer_tail_for_session(&self, session_id: &str) -> &str {
+        self.terminal_views
+            .get(session_id)
+            .map(|view| view.output.as_str())
+            .unwrap_or(self.terminal_output.as_str())
+    }
+
     pub(in crate::features) fn active_terminal_view(&self) -> Option<&TerminalViewState> {
         self.active_session_id
             .as_deref()
@@ -118,14 +133,25 @@ impl NyaTermApp {
     }
 
     pub(in crate::features) fn copy_terminal_buffer_text(&mut self, cx: &mut Context<Self>) {
-        let text = self.active_terminal_buffer_text();
-        if text.trim().is_empty() {
-            self.terminal_status = "terminal buffer is empty".to_string();
-        } else {
-            cx.write_to_clipboard(ClipboardItem::new_string(text));
-            self.terminal_status = "copied terminal buffer".to_string();
-        }
         self.terminal_actions_open = false;
+        let Some(session_id) = self.active_session_id.clone() else {
+            let text = self.terminal_output.clone();
+            if text.trim().is_empty() {
+                self.terminal_status = "terminal buffer is empty".to_string();
+            } else {
+                cx.write_to_clipboard(ClipboardItem::new_string(text));
+                self.terminal_status = "copied terminal buffer".to_string();
+            }
+            cx.notify();
+            return;
+        };
+        let request_id = uuid();
+        self.terminal_frame_pipeline.request_buffer_text(
+            session_id,
+            self.terminal_scrollback_max_bytes(),
+            request_id,
+        );
+        self.terminal_status = "preparing terminal buffer copy".to_string();
         cx.notify();
     }
 

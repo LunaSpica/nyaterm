@@ -800,6 +800,21 @@ impl TerminalFramePipeline {
         });
     }
 
+    pub(crate) fn request_buffer_text(
+        &self,
+        session_id: impl Into<String>,
+        max_bytes: usize,
+        request_id: impl Into<String>,
+    ) {
+        let _ = self
+            .command_tx
+            .send(TerminalFrameCommand::RequestBufferText {
+                session_id: session_id.into(),
+                max_bytes,
+                request_id: request_id.into(),
+            });
+    }
+
     pub(crate) fn try_recv_event(&self) -> Option<TerminalFrameEvent> {
         match self.event_rx.try_recv() {
             Ok(event) => Some(event),
@@ -856,6 +871,11 @@ enum TerminalFrameCommand {
         session_id: String,
         key: TerminalFrameSearchKey,
     },
+    RequestBufferText {
+        session_id: String,
+        max_bytes: usize,
+        request_id: String,
+    },
 }
 
 #[derive(Clone, Debug)]
@@ -863,6 +883,7 @@ pub(crate) enum TerminalFrameEvent {
     Output(TerminalFrameOutputEvent),
     Snapshot(TerminalFrameSnapshotEvent),
     Search(TerminalFrameSearchEvent),
+    BufferText(TerminalFrameBufferTextEvent),
 }
 
 #[derive(Clone, Debug)]
@@ -895,6 +916,15 @@ pub(crate) struct TerminalFrameSnapshotEvent {
 pub(crate) struct TerminalFrameSearchEvent {
     pub(crate) session_id: String,
     pub(crate) result: TerminalFrameSearchResult,
+    pub(crate) process_duration: Duration,
+}
+
+#[derive(Clone, Debug)]
+pub(crate) struct TerminalFrameBufferTextEvent {
+    pub(crate) session_id: String,
+    pub(crate) request_id: String,
+    pub(crate) text: String,
+    pub(crate) truncated: bool,
     pub(crate) process_duration: Duration,
 }
 
@@ -1034,6 +1064,27 @@ impl TerminalFrameSession {
             process_duration: started_at.elapsed(),
         }
     }
+
+    fn buffer_text_event(
+        &self,
+        session_id: String,
+        request_id: String,
+        max_bytes: usize,
+    ) -> TerminalFrameBufferTextEvent {
+        let started_at = Instant::now();
+        let mut text = self.screen.all_lines().join("\n");
+        let truncated = text.len() > max_bytes;
+        if truncated {
+            text = terminal_text_tail(text, max_bytes);
+        }
+        TerminalFrameBufferTextEvent {
+            session_id,
+            request_id,
+            text,
+            truncated,
+            process_duration: started_at.elapsed(),
+        }
+    }
 }
 
 fn run_terminal_frame_processor(
@@ -1137,6 +1188,16 @@ fn run_terminal_frame_processor(
                 if let Some(session) = sessions.get(&session_id) {
                     let event = session.search_event(session_id, key);
                     let _ = event_tx.send(TerminalFrameEvent::Search(event));
+                }
+            }
+            TerminalFrameCommand::RequestBufferText {
+                session_id,
+                max_bytes,
+                request_id,
+            } => {
+                if let Some(session) = sessions.get(&session_id) {
+                    let event = session.buffer_text_event(session_id, request_id, max_bytes);
+                    let _ = event_tx.send(TerminalFrameEvent::BufferText(event));
                 }
             }
         }
@@ -1453,6 +1514,21 @@ mod tests {
             })
             .expect("recording history search should succeed");
         assert_eq!(recorded.total, 1);
+    }
+
+    #[test]
+    fn terminal_frame_buffer_text_event_is_prepared_off_ui_state() {
+        let mut session = TerminalFrameSession::new("UTF-8", 1000);
+        session.screen.advance_decoded_text("alpha\n");
+        session.screen.advance_decoded_text(&"x".repeat(512));
+
+        let event = session.buffer_text_event("s1".to_string(), "r1".to_string(), 64);
+
+        assert_eq!(event.session_id, "s1");
+        assert_eq!(event.request_id, "r1");
+        assert!(event.truncated);
+        assert!(event.text.len() <= 64);
+        assert!(event.text.ends_with('x'));
     }
 
     #[test]

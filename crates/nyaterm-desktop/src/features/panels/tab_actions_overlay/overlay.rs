@@ -49,14 +49,8 @@ impl NyaTermApp {
                 .join("\n"),
             2_800,
         );
-        let buffer_for_ai = terminal_action_prompt_text(
-            &self
-                .terminal_views
-                .get(&session_id)
-                .map(|view| view.output.clone())
-                .unwrap_or_default(),
-            4_000,
-        );
+        let buffer_for_ai =
+            terminal_action_prompt_text(self.terminal_buffer_tail_for_session(&session_id), 4_000);
 
         let compact = self.tab_actions_anchor.is_some();
         if compact {

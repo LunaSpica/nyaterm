@@ -169,6 +169,9 @@ impl NyaTermApp {
             TerminalFrameEvent::Output(frame) => self.apply_terminal_output_frame(frame, cx),
             TerminalFrameEvent::Snapshot(snapshot) => self.apply_terminal_snapshot_frame(snapshot),
             TerminalFrameEvent::Search(search) => self.apply_terminal_search_frame(search),
+            TerminalFrameEvent::BufferText(buffer) => {
+                self.apply_terminal_buffer_text_frame(buffer, cx)
+            }
         }
     }
 
@@ -278,6 +281,39 @@ impl NyaTermApp {
                 match_count,
                 process_ms = frame.process_duration.as_millis(),
                 "slow terminal frame search"
+            );
+        }
+        true
+    }
+
+    fn apply_terminal_buffer_text_frame(
+        &mut self,
+        frame: TerminalFrameBufferTextEvent,
+        cx: &mut Context<Self>,
+    ) -> bool {
+        let text_bytes = frame.text.len();
+        if frame.text.trim().is_empty() {
+            self.terminal_status = "terminal buffer is empty".to_string();
+        } else {
+            let char_count = frame.text.chars().count();
+            cx.write_to_clipboard(ClipboardItem::new_string(frame.text));
+            self.terminal_status = if frame.truncated {
+                format!("copied terminal buffer tail ({char_count} chars)")
+            } else {
+                format!("copied terminal buffer ({char_count} chars)")
+            };
+        }
+        if frame.process_duration >= Duration::from_millis(20)
+            && self.should_log_slow_diagnostic("terminal_frame_buffer_text", Instant::now())
+        {
+            tracing::warn!(
+                diagnostic = "terminal_frame_buffer_text",
+                session_id = %frame.session_id,
+                request_id = %frame.request_id,
+                text_bytes,
+                truncated = frame.truncated,
+                process_ms = frame.process_duration.as_millis(),
+                "slow terminal frame buffer text"
             );
         }
         true
