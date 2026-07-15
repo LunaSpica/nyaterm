@@ -3099,44 +3099,12 @@ impl SessionEventQueueInner {
                 }
                 if leading_drop > 0 {
                     self.push_output_drop_event(session_id.clone(), leading_drop);
-                    self.queued_output_bytes = self.queued_output_bytes.saturating_add(data.len());
-                    self.events
-                        .push_back(SessionEvent::Output { session_id, data });
-                } else if self.events.back().is_some_and(|event| {
-                    matches!(
-                        event,
-                        SessionEvent::Output {
-                            session_id: last_session_id,
-                            ..
-                        } if last_session_id == &session_id
-                    )
-                }) {
-                    let last_index = self.events.len().saturating_sub(1);
-                    let mut dropped = 0usize;
-                    if let Some(SessionEvent::Output {
-                        data: last_data, ..
-                    }) = self.events.get_mut(last_index)
-                    {
-                        last_data.extend_from_slice(&data);
-                        self.queued_output_bytes =
-                            self.queued_output_bytes.saturating_add(data.len());
-                        if last_data.len() > SESSION_EVENT_QUEUE_OUTPUT_EVENT_LIMIT {
-                            dropped = last_data.len() - SESSION_EVENT_QUEUE_OUTPUT_EVENT_LIMIT;
-                            last_data.drain(..dropped);
-                            self.queued_output_bytes =
-                                self.queued_output_bytes.saturating_sub(dropped);
-                        }
-                    }
-                    if dropped > 0 {
-                        self.insert_output_drop_event(last_index, session_id.clone(), dropped);
-                    }
-                } else {
-                    self.queued_output_bytes = self.queued_output_bytes.saturating_add(data.len());
-                    self.events.push_back(SessionEvent::Output {
-                        session_id: session_id.clone(),
-                        data,
-                    });
                 }
+                self.queued_output_bytes = self.queued_output_bytes.saturating_add(data.len());
+                self.events.push_back(SessionEvent::Output {
+                    session_id: session_id.clone(),
+                    data,
+                });
                 self.enforce_output_limit();
             }
             other => self.events.push_back(other),
@@ -7950,7 +7918,7 @@ host/unix:1  MIT-MAGIC-COOKIE-1  ffeeddccbbaa99887766554433221100
     }
 
     #[test]
-    fn session_event_queue_merges_consecutive_output() {
+    fn session_event_queue_keeps_consecutive_output_chunks_separate() {
         let queue = SessionEventQueue::new();
         queue.push(SessionEvent::Output {
             session_id: "a".to_string(),
@@ -7962,13 +7930,20 @@ host/unix:1  MIT-MAGIC-COOKIE-1  ffeeddccbbaa99887766554433221100
         });
 
         let drain = queue.drain(8);
-        assert_eq!(drain.events.len(), 1);
+        assert_eq!(drain.events.len(), 2);
         assert_eq!(drain.stats.drained_output_bytes, 11);
         assert_eq!(drain.stats.queued_output_bytes, 0);
         match &drain.events[0] {
             SessionEvent::Output { session_id, data } => {
                 assert_eq!(session_id, "a");
-                assert_eq!(data, b"hello world");
+                assert_eq!(data, b"hello ");
+            }
+            event => panic!("unexpected event: {event:?}"),
+        }
+        match &drain.events[1] {
+            SessionEvent::Output { session_id, data } => {
+                assert_eq!(session_id, "a");
+                assert_eq!(data, b"world");
             }
             event => panic!("unexpected event: {event:?}"),
         }
@@ -8107,7 +8082,7 @@ host/unix:1  MIT-MAGIC-COOKIE-1  ffeeddccbbaa99887766554433221100
     }
 
     #[test]
-    fn session_event_queue_reports_drop_before_coalesced_retained_output() {
+    fn session_event_queue_keeps_adjacent_output_chunks_separate() {
         let queue = SessionEventQueue::new();
         queue.push(SessionEvent::Output {
             session_id: "a".to_string(),
@@ -8122,16 +8097,17 @@ host/unix:1  MIT-MAGIC-COOKIE-1  ffeeddccbbaa99887766554433221100
         assert_eq!(drain.events.len(), 2);
         assert!(matches!(
             &drain.events[0],
-            SessionEvent::OutputDropped { session_id, bytes } if session_id == "a" && *bytes == 8
+            SessionEvent::Output { session_id, data } if session_id == "a"
+                && data.len() == SESSION_EVENT_QUEUE_OUTPUT_EVENT_LIMIT - 8
+                && data[0] == b'a'
         ));
         assert!(matches!(
             &drain.events[1],
             SessionEvent::Output { session_id, data } if session_id == "a"
-                && data.len() == SESSION_EVENT_QUEUE_OUTPUT_EVENT_LIMIT
-                && data[0] == b'a'
+                && data.len() == 16
                 && *data.last().unwrap() == b'b'
         ));
-        assert_eq!(drain.stats.dropped_output_bytes, 8);
+        assert_eq!(drain.stats.dropped_output_bytes, 0);
     }
 
     #[test]
