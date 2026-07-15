@@ -494,22 +494,12 @@ impl NyaTermApp {
         self.terminal_runtime
             .session_event_last_drained_output_bytes = drained_output_bytes;
 
-        if drained_events >= drain_budget.max_events
-            || drained_output_bytes >= drain_budget.max_output_bytes
-            || queued_output_bytes > 0
-        {
-            if !self.terminal_runtime.session_event_backlog_active {
-                self.terminal_status = format!(
-                    "terminal output busy; processed {drained_events} event(s), {queued_output_bytes} byte(s) queued"
-                );
-                dirty = true;
-            }
-            self.terminal_runtime.session_event_backlog_active = true;
-        } else if self.terminal_runtime.session_event_backlog_active {
-            self.terminal_runtime.session_event_backlog_active = false;
-            self.terminal_status = "terminal output caught up".to_string();
-            dirty = true;
-        }
+        self.terminal_runtime.session_event_backlog_active = session_event_backlog_active(
+            drained_events,
+            drained_output_bytes,
+            queued_output_bytes,
+            drain_budget,
+        );
 
         if session_event_drain_is_slow(drain_timings.output_total, max_output_chunk_duration)
             && self.should_log_slow_diagnostic("session_event_drain", Instant::now())
@@ -1244,6 +1234,17 @@ fn session_event_drain_budget(output_pressure: bool) -> SessionEventDrainBudget 
     }
 }
 
+fn session_event_backlog_active(
+    drained_events: usize,
+    drained_output_bytes: usize,
+    queued_output_bytes: usize,
+    budget: SessionEventDrainBudget,
+) -> bool {
+    drained_events >= budget.max_events
+        || drained_output_bytes >= budget.max_output_bytes
+        || queued_output_bytes > 0
+}
+
 fn runtime_background_should_defer_terminal_frames(
     output_event_count: usize,
     drained_output_bytes: usize,
@@ -1486,6 +1487,26 @@ mod tests {
         );
         assert!(pressure.max_output_bytes < idle.max_output_bytes);
         assert_eq!(pressure.wall_budget, SESSION_EVENT_DRAIN_WALL_BUDGET);
+    }
+
+    #[test]
+    fn session_event_backlog_tracks_budget_without_user_status() {
+        let budget = session_event_drain_budget(false);
+
+        assert!(!session_event_backlog_active(1, 128, 0, budget));
+        assert!(session_event_backlog_active(
+            budget.max_events,
+            128,
+            0,
+            budget
+        ));
+        assert!(session_event_backlog_active(
+            1,
+            budget.max_output_bytes,
+            0,
+            budget
+        ));
+        assert!(session_event_backlog_active(1, 128, 1, budget));
     }
 
     #[test]
