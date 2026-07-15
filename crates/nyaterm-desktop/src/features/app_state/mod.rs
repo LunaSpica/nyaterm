@@ -13,6 +13,7 @@ pub struct NyaTermApp {
     pub(in crate::features) services: NativeServices,
     pub(in crate::features) inventory: MigrationInventory,
     pub(in crate::features) connections: Vec<SavedConnection>,
+    pub(in crate::features) pending_saved_connection_queue: VecDeque<SavedConnection>,
     pub(in crate::features) connection_groups: Vec<Group>,
     pub(in crate::features) connection_search_draft: String,
     pub(in crate::features) connection_search_focus: FocusHandle,

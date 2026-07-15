@@ -245,6 +245,7 @@ impl NyaTermApp {
             services: NativeServices::new(),
             inventory,
             connections,
+            pending_saved_connection_queue: VecDeque::new(),
             connection_search_draft: String::new(),
             connection_search_focus: cx.focus_handle(),
             connection_sort_mode: ConnectionSortMode::Default,

@@ -83,18 +83,9 @@ impl NyaTermApp {
             cx.notify();
             return;
         }
-        // Connect first selected immediately; remaining are queued sequentially via status for now.
-        // Tauri opens all; we open first and report count to avoid multi-pending races.
-        let first = selected[0].clone();
-        let remaining = selected.len().saturating_sub(1);
-        self.start_saved_connection(first, window, cx);
-        if remaining > 0 {
-            // Best-effort open remaining after first is started (may still be pending).
-            for connection in selected.into_iter().skip(1) {
-                self.start_saved_connection(connection, window, cx);
-            }
-            self.terminal_status = format!("opening {} connection(s)", remaining + 1);
-        }
+        let queued = self.enqueue_saved_connection_starts(selected, cx);
+        self.terminal_status = format!("queued {queued} connection(s)");
+        self.drive_saved_connection_start_queue(window, cx);
     }
 
     pub(in crate::features) fn start_group_connections(
@@ -131,10 +122,75 @@ impl NyaTermApp {
             cx.notify();
             return;
         }
-        let total = connections.len();
-        for connection in connections {
-            self.start_saved_connection(connection, window, cx);
+        let queued = self.enqueue_saved_connection_starts(connections, cx);
+        self.terminal_status = format!("queued {queued} connection(s) from group");
+        self.drive_saved_connection_start_queue(window, cx);
+    }
+
+    pub(in crate::features) fn enqueue_saved_connection_start(
+        &mut self,
+        connection: SavedConnection,
+        cx: &mut Context<Self>,
+    ) -> bool {
+        if self.saved_connection_start_is_pending_or_queued(&connection) {
+            self.terminal_status = format!("{} is already queued", connection.name);
+            self.selected_nav = NavItem::Workspace;
+            self.main_mode = MainMode::Workspace;
+            cx.notify();
+            return false;
         }
-        self.terminal_status = format!("opening {total} connection(s) from group");
+        let name = connection.name.clone();
+        self.pending_saved_connection_queue.push_back(connection);
+        self.terminal_status = format!(
+            "queued {name} ({} pending)",
+            self.pending_saved_connection_queue.len()
+        );
+        self.selected_nav = NavItem::Workspace;
+        self.main_mode = MainMode::Workspace;
+        cx.notify();
+        true
+    }
+
+    fn enqueue_saved_connection_starts(
+        &mut self,
+        connections: Vec<SavedConnection>,
+        cx: &mut Context<Self>,
+    ) -> usize {
+        let mut queued = 0usize;
+        for connection in connections {
+            if self.enqueue_saved_connection_start(connection, cx) {
+                queued = queued.saturating_add(1);
+            }
+        }
+        queued
+    }
+
+    pub(in crate::features) fn drive_saved_connection_start_queue(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> bool {
+        if self.pending_session_name.is_some() {
+            return false;
+        }
+        let mut dirty = false;
+        while self.pending_session_name.is_none() {
+            let Some(connection) = self.pending_saved_connection_queue.pop_front() else {
+                return dirty;
+            };
+            if self.saved_connection_start_is_pending(&connection) {
+                dirty = true;
+                continue;
+            }
+            let before_pending_count = self.pending_session_starts.len();
+            self.start_saved_connection(connection, window, cx);
+            dirty = true;
+            if self.pending_session_name.is_some()
+                || self.pending_session_starts.len() > before_pending_count
+            {
+                return true;
+            }
+        }
+        dirty
     }
 }

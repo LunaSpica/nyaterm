@@ -34,7 +34,8 @@ impl NyaTermApp {
             .into_iter()
             .map(|session| session.id)
             .collect();
-        let pending_start_count = usize::from(self.pending_session_name.is_some());
+        let pending_start_count =
+            self.pending_session_starts.len() + self.pending_saved_connection_queue.len();
         let sessions = crate::entities::SessionSnapshot {
             active_session_id: self.active_session_id.clone(),
             ordered_session_ids: self.session_order.clone(),
@@ -783,6 +784,12 @@ impl NyaTermApp {
         }
         let startup_restore_duration = stage_started_at.elapsed();
         let stage_started_at = Instant::now();
+        let output_pressure_after_startup = self.runtime_output_pressure_active();
+        if !output_pressure_after_startup {
+            dirty |= self.drive_saved_connection_start_queue(window, cx);
+        }
+        let saved_connection_queue_duration = stage_started_at.elapsed();
+        let stage_started_at = Instant::now();
         dirty |= self.drive_terminal_resize();
         let terminal_resize_duration = stage_started_at.elapsed();
         let stage_started_at = Instant::now();
@@ -886,6 +893,7 @@ impl NyaTermApp {
                 terminal_frames_deferred_after_output = defer_terminal_frame_after_output,
                 terminal_frames_deferred_for_pacing = terminal_frame_apply_paced,
                 startup_restore_ms = startup_restore_duration.as_millis(),
+                saved_connection_queue_ms = saved_connection_queue_duration.as_millis(),
                 terminal_resize_ms = terminal_resize_duration.as_millis(),
                 render_requests_ms = render_requests_duration.as_millis(),
                 render_requests_output_pressure = render_request_output_pressure,
@@ -904,6 +912,7 @@ impl NyaTermApp {
                 frame_event_count = self.terminal_frame_pipeline.queued_event_count(),
                 pending_frame_events = self.pending_terminal_frame_events.len(),
                 pending_session_starts = self.pending_session_starts.len(),
+                queued_saved_connection_starts = self.pending_saved_connection_queue.len(),
                 output_pressure,
                 next_tick_delay_ms = self.window_runtime_tick_delay().as_millis(),
                 visual_dirty,
