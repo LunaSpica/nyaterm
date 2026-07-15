@@ -397,12 +397,7 @@ impl NyaTermApp {
                     }
                     if let Some(stale_id) = self.pending_reconnect_replace_id.take() {
                         if stale_id != session_id {
-                            if let Some(bounds) =
-                                self.terminal_session_surface_bounds.get(&stale_id).copied()
-                            {
-                                self.terminal_session_surface_bounds
-                                    .insert(session_id.clone(), bounds);
-                            }
+                            self.migrate_reconnected_session_state(&stale_id, &session_id);
                             self.remove_session_state(&stale_id);
                         }
                     }

@@ -292,22 +292,22 @@ impl NyaTermApp {
         self.active_session_busy_actions
             .insert(session_id.clone(), "reconnect".to_string());
         self.active_session_menu_id = None;
+        let old_id = session_id;
         let source_index = self
             .session_order
             .iter()
-            .position(|id| id == &session_id)
+            .position(|id| id == &old_id)
             .unwrap_or(self.session_order.len());
-        let custom_name = self.session_custom_names.get(&session_id).cloned();
-        let custom_color = self.session_tab_colors.get(&session_id).copied();
+        let custom_name = self.session_custom_names.get(&old_id).cloned();
+        let custom_color = self.session_tab_colors.get(&old_id).copied();
         let seed_output = self
             .terminal_views
-            .get(&session_id)
+            .get(&old_id)
             .map(|view| view.output.clone())
             .unwrap_or_default();
-        let was_active = self.active_session_id.as_deref() == Some(session_id.as_str());
 
         // Tauri: write cyan reconnecting line into the buffer before recreating.
-        if let Some(view) = self.terminal_views.get_mut(&session_id) {
+        if let Some(view) = self.terminal_views.get_mut(&old_id) {
             view.append_text(
                 "
 [36m[Reconnecting…][0m
@@ -316,272 +316,81 @@ impl NyaTermApp {
         }
         let seed_output = self
             .terminal_views
-            .get(&session_id)
+            .get(&old_id)
             .map(|view| view.output.clone())
             .unwrap_or(seed_output);
 
         // Close live backend if still present.
-        let _ = self.session_manager.close(&session_id);
+        let _ = self.session_manager.close(&old_id);
         self.recording_write_pipeline
-            .cleanup_session(session_id.clone());
-
-        // Soft-remove UI state without dropping order/metadata, then recreate under same id path:
-        // We allocate a new backend id and migrate UI maps to the new id.
-        let old_id = session_id;
+            .cleanup_session(old_id.clone());
         self.clear_terminal_mouse_report_for_session(&old_id);
-        self.session_order.retain(|id| id != &old_id);
-        let metadata = self
-            .session_metadata
-            .remove(&old_id)
-            .expect("metadata present");
-        let view = self.terminal_views.remove(&old_id);
-        let bounds = self.terminal_session_surface_bounds.remove(&old_id);
-        let history = self.session_command_history.remove(&old_id);
-        self.session_custom_names.remove(&old_id);
-        let dynamic_title = self.session_dynamic_titles.remove(&old_id);
-        let session_cwd = self.session_cwds.remove(&old_id);
-        self.session_tab_colors.remove(&old_id);
-        self.transfer_browser_session_cache.remove(&old_id);
-        self.purge_session_from_sync_groups(&old_id);
-        if was_active {
-            self.active_session_id = None;
-            self.active_ssh_config = None;
-            self.active_ai_execution_profile = AiExecutionProfile::SendOnly;
-            self.ai_agent_loop = None;
-            self.ai_agent_capture = AgentOutputCaptureProcessor::new();
-            self.sync_session_event_bridge_policy();
-        }
-
-        let mut metadata = metadata;
-        metadata.disconnected = false;
-
-        let restore_maps = |this: &mut Self, new_id: &str| {
-            this.move_session_to_index(new_id, source_index);
-            if let Some(bounds) = bounds {
-                this.terminal_session_surface_bounds
-                    .insert(new_id.to_string(), bounds);
-            }
-            if let Some(custom_name) = custom_name.clone() {
-                this.session_custom_names
-                    .insert(new_id.to_string(), custom_name);
-            }
-            if let Some(title) = dynamic_title.clone() {
-                this.session_dynamic_titles
-                    .insert(new_id.to_string(), title);
-            }
-            if let Some(cwd) = session_cwd.clone() {
-                this.session_cwds.insert(new_id.to_string(), cwd);
-            }
-            if let Some(custom_color) = custom_color {
-                this.session_tab_colors
-                    .insert(new_id.to_string(), custom_color);
-            }
-            if let Some(history) = history.clone() {
-                this.session_command_history
-                    .insert(new_id.to_string(), history);
-            }
+        let Some(metadata) = self.session_metadata.get_mut(&old_id) else {
+            self.active_session_busy_actions.remove(&old_id);
+            self.terminal_status = "session cannot be reconnected".to_string();
+            cx.notify();
+            return;
         };
+        metadata.disconnected = true;
+        let launch_config = metadata.launch_config.clone();
+        let source_connection_id = metadata.source_connection_id.clone();
+        let ai_execution_profile = metadata.ai_execution_profile;
+        let seed = Some(seed_output);
+        self.pending_reconnect_replace_id = Some(old_id.clone());
 
-        match metadata.launch_config.clone() {
+        match launch_config {
             SessionLaunchConfig::Local(mut config) => {
                 self.apply_desired_geometry_to_local_config(&mut config);
-                let mut metadata = metadata.clone();
-                metadata.launch_config = SessionLaunchConfig::Local(config.clone());
-                match self.session_manager.create_local_session(config.clone()) {
-                    Ok(info) => {
-                        self.register_session(&info.id, metadata);
-                        let seed_for_processor = view
-                            .as_ref()
-                            .map(|view| view.output.clone())
-                            .unwrap_or_else(|| seed_output.clone());
-                        self.seed_terminal_frame_session(&info.id, seed_for_processor);
-                        self.terminal_views.insert(
-                            info.id.clone(),
-                            view.unwrap_or_else(|| {
-                                TerminalViewState::from_output_with_encoding(
-                                    seed_output,
-                                    &self.settings.interaction_default_encoding,
-                                )
-                            }),
-                        );
-                        restore_maps(self, &info.id);
-                        self.activate_session_id(&info.id);
-                        self.terminal_status = format!("reconnected {}", short_id(&info.id));
-                        self.append_terminal_log(format!(
-                            "\n# reconnected local PTY {}\n",
-                            short_id(&info.id)
-                        ));
-                        self.maybe_auto_start_recording(&info.id, &info.name);
-                    }
-                    Err(error) => {
-                        // Put disconnected tab back on failure.
-                        self.restore_failed_reconnect(
-                            old_id.clone(),
-                            metadata,
-                            view,
-                            seed_output,
-                            source_index,
-                            custom_name,
-                            custom_color,
-                            bounds,
-                            history,
-                            error.to_string(),
-                            was_active,
-                            cx,
-                        );
-                    }
-                }
+                self.begin_background_session_start(
+                    format!("{} reconnect", config.name),
+                    SessionLaunchConfig::Local(config),
+                    source_connection_id,
+                    ai_execution_profile,
+                    custom_name,
+                    custom_color,
+                    None,
+                    Some(source_index),
+                    seed,
+                    None,
+                    cx,
+                );
             }
             SessionLaunchConfig::Telnet(config) => {
-                match self.session_manager.create_telnet_session(config.clone()) {
-                    Ok(info) => {
-                        self.register_session(&info.id, metadata);
-                        let seed_for_processor = view
-                            .as_ref()
-                            .map(|view| view.output.clone())
-                            .unwrap_or_else(|| seed_output.clone());
-                        self.seed_terminal_frame_session(&info.id, seed_for_processor);
-                        self.terminal_views.insert(
-                            info.id.clone(),
-                            view.unwrap_or_else(|| {
-                                TerminalViewState::from_output_with_encoding(
-                                    seed_output,
-                                    &self.settings.interaction_default_encoding,
-                                )
-                            }),
-                        );
-                        restore_maps(self, &info.id);
-                        self.activate_session_id(&info.id);
-                        self.terminal_status = format!("reconnected {}", short_id(&info.id));
-                        self.append_terminal_log(format!(
-                            "\n# reconnected telnet session {}\n",
-                            short_id(&info.id)
-                        ));
-                        self.maybe_auto_start_recording(&info.id, &info.name);
-                    }
-                    Err(error) => {
-                        self.restore_failed_reconnect(
-                            old_id.clone(),
-                            metadata,
-                            view,
-                            seed_output,
-                            source_index,
-                            custom_name,
-                            custom_color,
-                            bounds,
-                            history,
-                            error.to_string(),
-                            was_active,
-                            cx,
-                        );
-                    }
-                }
+                self.begin_background_session_start(
+                    format!("{} reconnect", config.name),
+                    SessionLaunchConfig::Telnet(config),
+                    source_connection_id,
+                    ai_execution_profile,
+                    custom_name,
+                    custom_color,
+                    None,
+                    Some(source_index),
+                    seed,
+                    None,
+                    cx,
+                );
             }
             SessionLaunchConfig::Serial(config) => {
-                match self.session_manager.create_serial_session(config.clone()) {
-                    Ok(info) => {
-                        self.register_session(&info.id, metadata);
-                        let seed_for_processor = view
-                            .as_ref()
-                            .map(|view| view.output.clone())
-                            .unwrap_or_else(|| seed_output.clone());
-                        self.seed_terminal_frame_session(&info.id, seed_for_processor);
-                        self.terminal_views.insert(
-                            info.id.clone(),
-                            view.unwrap_or_else(|| {
-                                TerminalViewState::from_output_with_encoding(
-                                    seed_output,
-                                    &self.settings.interaction_default_encoding,
-                                )
-                            }),
-                        );
-                        restore_maps(self, &info.id);
-                        self.activate_session_id(&info.id);
-                        self.terminal_status = format!("reconnected {}", short_id(&info.id));
-                        self.append_terminal_log(format!(
-                            "\n# reconnected serial session {}\n",
-                            short_id(&info.id)
-                        ));
-                        self.maybe_auto_start_recording(&info.id, &info.name);
-                    }
-                    Err(error) => {
-                        self.restore_failed_reconnect(
-                            old_id.clone(),
-                            metadata,
-                            view,
-                            seed_output,
-                            source_index,
-                            custom_name,
-                            custom_color,
-                            bounds,
-                            history,
-                            error.to_string(),
-                            was_active,
-                            cx,
-                        );
-                    }
-                }
+                self.begin_background_session_start(
+                    format!("{} reconnect", config.name),
+                    SessionLaunchConfig::Serial(config),
+                    source_connection_id,
+                    ai_execution_profile,
+                    custom_name,
+                    custom_color,
+                    None,
+                    Some(source_index),
+                    seed,
+                    None,
+                    cx,
+                );
             }
             SessionLaunchConfig::Ssh(config) => {
-                // Keep the disconnected tab until the new SSH session registers.
-                // Re-insert UI maps under the old id as disconnected, then start a
-                // replacement session at the same tab index (old id is closed on success
-                // when the new session activates and we close leftovers separately).
-                let seed = if let Some(ref view) = view {
-                    Some(view.output.clone())
-                } else {
-                    Some(seed_output.clone())
-                };
-                let mut keep = metadata.clone();
-                keep.disconnected = true;
-                self.session_metadata.insert(old_id.clone(), keep);
-                if !self.session_order.iter().any(|id| id == &old_id) {
-                    let index = source_index.min(self.session_order.len());
-                    self.session_order.insert(index, old_id.clone());
-                }
-                if let Some(view) = view {
-                    self.terminal_views.insert(old_id.clone(), view);
-                } else {
-                    self.terminal_views.insert(
-                        old_id.clone(),
-                        TerminalViewState::from_output_with_encoding(
-                            seed_output,
-                            &self.settings.interaction_default_encoding,
-                        ),
-                    );
-                }
-                if let Some(custom_name_keep) = custom_name.clone() {
-                    self.session_custom_names
-                        .insert(old_id.clone(), custom_name_keep);
-                }
-                if let Some(title_keep) = dynamic_title.clone() {
-                    self.session_dynamic_titles
-                        .insert(old_id.clone(), title_keep);
-                }
-                if let Some(cwd_keep) = session_cwd.clone() {
-                    self.session_cwds.insert(old_id.clone(), cwd_keep);
-                }
-                if let Some(custom_color_keep) = custom_color {
-                    self.session_tab_colors
-                        .insert(old_id.clone(), custom_color_keep);
-                }
-                if let Some(history_keep) = history.clone() {
-                    self.session_command_history
-                        .insert(old_id.clone(), history_keep);
-                }
-                if let Some(bounds) = bounds {
-                    self.terminal_session_surface_bounds
-                        .insert(old_id.clone(), bounds);
-                }
-                if was_active {
-                    self.activate_session_id(&old_id);
-                }
-                self.pending_reconnect_replace_id = Some(old_id.clone());
                 self.begin_background_ssh_start(
                     format!("{} reconnect", config.name),
                     config,
-                    metadata.source_connection_id.clone(),
-                    metadata.ai_execution_profile,
+                    source_connection_id,
+                    ai_execution_profile,
                     custom_name,
                     custom_color,
                     None,
@@ -601,58 +410,36 @@ impl NyaTermApp {
         cx.notify();
     }
 
-    fn restore_failed_reconnect(
+    pub(in crate::features) fn migrate_reconnected_session_state(
         &mut self,
-        old_id: String,
-        mut metadata: SessionRuntimeMetadata,
-        view: Option<TerminalViewState>,
-        seed_output: String,
-        source_index: usize,
-        custom_name: Option<String>,
-        custom_color: Option<u32>,
-        bounds: Option<gpui::Bounds<gpui::Pixels>>,
-        history: Option<Vec<String>>,
-        error: String,
-        was_active: bool,
-        cx: &mut Context<Self>,
+        old_id: &str,
+        new_id: &str,
     ) {
-        self.active_session_busy_actions.remove(&old_id);
-
-        metadata.disconnected = true;
-        self.session_metadata.insert(old_id.clone(), metadata);
-        if !self.session_order.iter().any(|id| id == &old_id) {
-            let index = source_index.min(self.session_order.len());
-            self.session_order.insert(index, old_id.clone());
-        }
-        if let Some(view) = view {
-            self.terminal_views.insert(old_id.clone(), view);
-        } else {
-            self.terminal_views.insert(
-                old_id.clone(),
-                TerminalViewState::from_output_with_encoding(
-                    seed_output,
-                    &self.settings.interaction_default_encoding,
-                ),
-            );
-        }
-        if let Some(custom_name) = custom_name {
-            self.session_custom_names
-                .insert(old_id.clone(), custom_name);
-        }
-        if let Some(custom_color) = custom_color {
-            self.session_tab_colors.insert(old_id.clone(), custom_color);
-        }
-        if let Some(bounds) = bounds {
+        if let Some(bounds) = self.terminal_session_surface_bounds.remove(old_id) {
             self.terminal_session_surface_bounds
-                .insert(old_id.clone(), bounds);
+                .insert(new_id.to_string(), bounds);
         }
-        if let Some(history) = history {
-            self.session_command_history.insert(old_id.clone(), history);
+        if !self.session_custom_names.contains_key(new_id) {
+            if let Some(custom_name) = self.session_custom_names.remove(old_id) {
+                self.session_custom_names
+                    .insert(new_id.to_string(), custom_name);
+            }
         }
-        if was_active {
-            self.activate_session_id(&old_id);
+        if let Some(title) = self.session_dynamic_titles.remove(old_id) {
+            self.session_dynamic_titles
+                .insert(new_id.to_string(), title);
         }
-        self.terminal_status = format!("reconnect failed: {error}");
-        cx.notify();
+        if let Some(cwd) = self.session_cwds.remove(old_id) {
+            self.session_cwds.insert(new_id.to_string(), cwd);
+        }
+        if !self.session_tab_colors.contains_key(new_id) {
+            if let Some(color) = self.session_tab_colors.remove(old_id) {
+                self.session_tab_colors.insert(new_id.to_string(), color);
+            }
+        }
+        if let Some(history) = self.session_command_history.remove(old_id) {
+            self.session_command_history
+                .insert(new_id.to_string(), history);
+        }
     }
 }
