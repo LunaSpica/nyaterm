@@ -587,18 +587,27 @@ impl TerminalViewState {
         }
     }
 
-    pub(crate) fn apply_terminal_frame(&mut self, frame: &TerminalFrameOutputEvent) {
-        if !frame.visible_text.is_empty() {
-            append_terminal_ui_output_tail(&mut self.output, &frame.visible_text);
+    pub(crate) fn apply_terminal_frame_parts(
+        &mut self,
+        visible_text: &str,
+        snapshot: TerminalSnapshot,
+        action_links: Option<TerminalFrameActionLinks>,
+        protocol_state: TerminalProtocolState,
+        accepted_bytes: usize,
+        skipped_output_bytes: usize,
+        revision: u64,
+    ) {
+        if !visible_text.is_empty() {
+            append_terminal_ui_output_tail(&mut self.output, visible_text);
         }
-        self.frame_snapshot = Some(frame.snapshot.clone());
-        self.frame_action_links = frame.action_links.clone();
+        self.frame_snapshot = Some(snapshot);
+        self.frame_action_links = action_links;
         self.clear_scrollback_query_caches();
-        self.protocol_state = frame.protocol_state;
-        self.screen_revision = frame.revision;
-        self.output_burst_bytes = self.output_burst_bytes.saturating_add(frame.accepted_bytes);
-        if frame.skipped_output_bytes > 0 {
-            self.note_skipped_output(frame.skipped_output_bytes);
+        self.protocol_state = protocol_state;
+        self.screen_revision = revision;
+        self.output_burst_bytes = self.output_burst_bytes.saturating_add(accepted_bytes);
+        if skipped_output_bytes > 0 {
+            self.note_skipped_output(skipped_output_bytes);
         }
         if self.scroll_offset > 0 {
             self.has_new_while_scrolled = true;
@@ -1479,6 +1488,28 @@ mod tests {
         }
     }
 
+    fn apply_output_frame_to_view(view: &mut TerminalViewState, frame: TerminalFrameOutputEvent) {
+        let TerminalFrameOutputEvent {
+            visible_text,
+            snapshot,
+            action_links,
+            protocol_state,
+            accepted_bytes,
+            skipped_output_bytes,
+            revision,
+            ..
+        } = frame;
+        view.apply_terminal_frame_parts(
+            &visible_text,
+            snapshot,
+            action_links,
+            protocol_state,
+            accepted_bytes,
+            skipped_output_bytes,
+            revision,
+        );
+    }
+
     #[test]
     fn terminal_view_output_decodes_session_charset() {
         let mut view = TerminalViewState::new();
@@ -1587,7 +1618,7 @@ mod tests {
         let mut view = TerminalViewState::new();
         let frame = output_frame_with_sizes((32 * 1024) + 1, 0);
 
-        view.apply_terminal_frame(&frame);
+        apply_output_frame_to_view(&mut view, frame);
 
         assert_eq!(view.performance_mode, TerminalPerformanceMode::Normal);
         assert_eq!(view.performance_overlay, None);
@@ -1599,7 +1630,7 @@ mod tests {
         let mut view = TerminalViewState::new();
         let frame = output_frame_with_sizes(1, 7);
 
-        view.apply_terminal_frame(&frame);
+        apply_output_frame_to_view(&mut view, frame);
 
         assert_eq!(view.performance_mode, TerminalPerformanceMode::Overloaded);
         assert_eq!(

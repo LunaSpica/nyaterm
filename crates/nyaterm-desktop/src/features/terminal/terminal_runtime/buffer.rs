@@ -221,36 +221,56 @@ impl NyaTermApp {
         frame: TerminalFrameOutputEvent,
         cx: &mut Context<Self>,
     ) -> bool {
-        let session_id = frame.session_id.clone();
+        let TerminalFrameOutputEvent {
+            session_id,
+            visible_text,
+            recording_text_bytes,
+            snapshot,
+            action_links,
+            protocol_state,
+            effects,
+            command_running,
+            accepted_bytes,
+            skipped_output_bytes,
+            revision,
+            process_duration,
+        } = frame;
         let is_active = self.active_session_id.as_deref() == Some(session_id.as_str());
         let view = self
             .terminal_views
             .entry(session_id.clone())
             .or_insert_with(TerminalViewState::new);
-        view.apply_terminal_frame(&frame);
+        view.apply_terminal_frame_parts(
+            &visible_text,
+            snapshot,
+            action_links,
+            protocol_state,
+            accepted_bytes,
+            skipped_output_bytes,
+            revision,
+        );
         if !is_active {
             view.has_unread = true;
         }
-        if terminal_effects_need_ui_apply(&frame.effects) {
-            self.apply_terminal_effects(&session_id, frame.effects, frame.command_running, cx);
+        if terminal_effects_need_ui_apply(&effects) {
+            self.apply_terminal_effects(&session_id, effects, command_running, cx);
         }
         if is_active
-            && self
-                .should_feed_credential_autofill_frame_for_session(&session_id, &frame.visible_text)
+            && self.should_feed_credential_autofill_frame_for_session(&session_id, &visible_text)
         {
-            self.feed_credential_autofill_output(&session_id, &frame.visible_text, cx);
+            self.feed_credential_autofill_output(&session_id, &visible_text, cx);
         }
-        if frame.process_duration >= Duration::from_millis(20)
+        if process_duration >= Duration::from_millis(20)
             && self.should_log_slow_diagnostic("terminal_frame_processor", Instant::now())
         {
             tracing::warn!(
                 diagnostic = "terminal_frame_processor",
                 session_id = %session_id,
-                accepted_bytes = frame.accepted_bytes,
-                skipped_output_bytes = frame.skipped_output_bytes,
-                visible_text_bytes = frame.visible_text.len(),
-                recording_text_bytes = frame.recording_text_bytes,
-                process_ms = frame.process_duration.as_millis(),
+                accepted_bytes,
+                skipped_output_bytes,
+                visible_text_bytes = visible_text.len(),
+                recording_text_bytes,
+                process_ms = process_duration.as_millis(),
                 "slow terminal frame processing"
             );
         }
