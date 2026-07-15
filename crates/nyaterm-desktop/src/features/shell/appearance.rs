@@ -346,6 +346,27 @@ impl NyaTermApp {
     }
 }
 
+pub(in crate::features) fn normalize_gpui_font_settings_for_platform(
+    settings: &mut AppSettingsSummary,
+) {
+    normalize_gpui_font_settings_for_target(settings, cfg!(target_os = "windows"));
+}
+
+fn normalize_gpui_font_settings_for_target(settings: &mut AppSettingsSummary, is_windows: bool) {
+    settings.terminal_font_family = gpui_platform_font_family_for_target(
+        &settings.terminal_font_family,
+        gpui_terminal_font_fallback(),
+        true,
+        is_windows,
+    );
+    settings.ui_font_family = gpui_platform_font_family_for_target(
+        &settings.ui_font_family,
+        gpui_ui_font_fallback(),
+        false,
+        is_windows,
+    );
+}
+
 fn parse_minimum_contrast_ratio(raw: &str) -> f32 {
     match raw.trim() {
         "3" => 3.0,
@@ -462,6 +483,20 @@ mod tests {
         if cfg!(target_os = "windows") {
             assert_eq!(gpui_code_font_family(), "Consolas");
         }
+    }
+
+    #[test]
+    fn windows_font_settings_are_normalized_before_gpui_render() {
+        let mut settings = AppSettingsSummary {
+            terminal_font_family: "FiraCode Nerd Font Mono, Maple Mono CN".to_string(),
+            ui_font_family: "JetBrains Mono, Noto Sans SC Variable, 微软雅黑".to_string(),
+            ..AppSettingsSummary::default()
+        };
+
+        normalize_gpui_font_settings_for_target(&mut settings, true);
+
+        assert_eq!(settings.terminal_font_family, "Consolas");
+        assert_eq!(settings.ui_font_family, "Microsoft YaHei UI");
     }
 
     #[test]

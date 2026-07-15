@@ -172,6 +172,8 @@ impl NyaTermApp {
                 0,
             ),
         };
+        let mut settings = settings;
+        normalize_gpui_font_settings_for_platform(&mut settings);
         let otp_provider = Arc::new(NativeOtpProvider::new(
             runtime.config_dir().to_path_buf(),
             runtime.portable_key_path().map(ToOwned::to_owned),
