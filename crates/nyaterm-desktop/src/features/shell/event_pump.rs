@@ -928,12 +928,7 @@ impl NyaTermApp {
     }
 
     fn drive_pending_session_status(&mut self) -> bool {
-        let Some((name, requested_at)) = self
-            .pending_session_starts
-            .values()
-            .next()
-            .map(|pending| (pending.connection_name.clone(), pending.requested_at))
-        else {
+        let Some((name, requested_at)) = self.pending_session_status_source() else {
             self.terminal_runtime.last_pending_session_status_at = None;
             return false;
         };

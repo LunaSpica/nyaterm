@@ -8,6 +8,11 @@ impl NyaTermApp {
     }
 
     pub(in crate::features) fn pending_session_display_name(&self) -> Option<String> {
+        self.pending_session_status_source()
+            .map(|(connection_name, _)| connection_name)
+    }
+
+    pub(in crate::features) fn pending_session_status_source(&self) -> Option<(String, Instant)> {
         self.pending_session_starts
             .values()
             .min_by(|left, right| {
@@ -15,7 +20,7 @@ impl NyaTermApp {
                     .cmp(&right.requested_at)
                     .then_with(|| left.connection_name.cmp(&right.connection_name))
             })
-            .map(|pending| pending.connection_name.clone())
+            .map(|pending| (pending.connection_name.clone(), pending.requested_at))
     }
 
     pub(in crate::features) fn register_pending_session_start(
