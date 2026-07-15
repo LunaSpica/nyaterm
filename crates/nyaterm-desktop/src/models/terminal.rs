@@ -14,8 +14,8 @@ use std::time::{Duration, Instant};
 use crate::{
     action_links::{ActionLinkMatch, find_action_links},
     terminal::{
-        NyaTerminalLayoutCache, TerminalBufferMatch, TerminalSearchFlags, terminal_buffer_matches,
-        terminal_screen_from_output,
+        NyaTerminalLayoutCache, TerminalBufferMatch, TerminalLineDecorations, TerminalSearchFlags,
+        terminal_buffer_matches, terminal_screen_from_output,
     },
 };
 
@@ -192,8 +192,15 @@ impl TerminalProtocolState {
 #[derive(Debug, Default)]
 pub(crate) struct TerminalRenderCache {
     pub(crate) layout_cache: Arc<Mutex<NyaTerminalLayoutCache>>,
-    pub(crate) hits: u64,
-    pub(crate) misses: u64,
+    decoration_cache: Arc<Mutex<TerminalDecorationCache>>,
+}
+
+#[derive(Debug, Default)]
+struct TerminalDecorationCache {
+    decoration_key: Option<u64>,
+    decoration_lines: Vec<TerminalLineDecorations>,
+    hits: u64,
+    misses: u64,
 }
 
 impl TerminalRenderCache {
@@ -201,8 +208,52 @@ impl TerminalRenderCache {
         if let Ok(mut cache) = self.layout_cache.lock() {
             cache.clear();
         }
+        if let Ok(mut cache) = self.decoration_cache.lock() {
+            cache.clear();
+        }
+    }
+
+    pub(crate) fn line_decorations(
+        &self,
+        key: u64,
+        build: impl FnOnce() -> Vec<TerminalLineDecorations>,
+    ) -> Vec<TerminalLineDecorations> {
+        let Ok(mut cache) = self.decoration_cache.lock() else {
+            return build();
+        };
+        cache.line_decorations(key, build)
+    }
+
+    pub(crate) fn decoration_stats(&self) -> (u64, u64) {
+        self.decoration_cache
+            .lock()
+            .map(|cache| (cache.hits, cache.misses))
+            .unwrap_or((0, 0))
+    }
+}
+
+impl TerminalDecorationCache {
+    fn clear(&mut self) {
+        self.decoration_key = None;
+        self.decoration_lines.clear();
         self.hits = 0;
         self.misses = 0;
+    }
+
+    fn line_decorations(
+        &mut self,
+        key: u64,
+        build: impl FnOnce() -> Vec<TerminalLineDecorations>,
+    ) -> Vec<TerminalLineDecorations> {
+        if self.decoration_key == Some(key) {
+            self.hits = self.hits.saturating_add(1);
+            return self.decoration_lines.clone();
+        }
+        self.misses = self.misses.saturating_add(1);
+        let decorations = build();
+        self.decoration_key = Some(key);
+        self.decoration_lines = decorations.clone();
+        decorations
     }
 }
 
@@ -2218,7 +2269,7 @@ impl SearchEngineEditorField {
 }
 
 /// Inclusive cell coordinate inside the visible terminal grid.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub(crate) struct TerminalCellPos {
     pub(crate) row: usize,
     pub(crate) col: usize,
@@ -2231,7 +2282,7 @@ impl TerminalCellPos {
 }
 
 /// Visible-grid text selection (start/end are inclusive cell positions).
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub(crate) struct TerminalSelection {
     pub(crate) anchor: TerminalCellPos,
     pub(crate) head: TerminalCellPos,
