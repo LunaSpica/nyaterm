@@ -57,9 +57,7 @@ impl NyaTermApp {
             (!session_id.is_empty()).then_some(session_id.as_str()),
             scroll_offset,
         );
-        let lines = snapshot.lines.clone();
-        let line_timestamps_ms = snapshot.line_timestamps_ms.clone();
-        let hyperlink_lines = snapshot.hyperlink_lines.clone();
+        let line_count = snapshot.lines.len();
         let cursor_row = snapshot.cursor_row;
         let cursor_col = snapshot.cursor_col;
         let snapshot_rows = snapshot.rows;
@@ -144,8 +142,11 @@ impl NyaTermApp {
                     .iter()
                     .any(|ranges| !ranges.is_empty())
             });
-        let has_hyperlinks =
-            !render_degraded && hyperlink_lines.iter().any(|spans| !spans.is_empty());
+        let has_hyperlinks = !render_degraded
+            && snapshot
+                .hyperlink_lines
+                .iter()
+                .any(|spans| !spans.is_empty());
         let has_command_marks = snapshot.command_marks.iter().any(Option::is_some);
         let needs_line_decorations = terminal_line_decorations_needed(
             has_selection,
@@ -155,8 +156,8 @@ impl NyaTermApp {
             has_command_marks,
         );
         let line_decorations = if needs_line_decorations {
-            let mut line_decorations = Vec::with_capacity(lines.len());
-            for line_index in 0..lines.len() {
+            let mut line_decorations = Vec::with_capacity(line_count);
+            for line_index in 0..line_count {
                 let selection_cols = if is_active {
                     self.terminal_selection
                         .as_ref()
@@ -181,7 +182,7 @@ impl NyaTermApp {
                     };
                 action_link_duration += action_link_started_at.elapsed();
                 // OSC 8 hyperlinks from the terminal model (always paint when present).
-                if !render_degraded && let Some(spans) = hyperlink_lines.get(line_index) {
+                if !render_degraded && let Some(spans) = snapshot.hyperlink_lines.get(line_index) {
                     for span in spans {
                         let start = span.start_col;
                         let end = span.end_col.saturating_add(1);
@@ -215,6 +216,7 @@ impl NyaTermApp {
         let decorations_duration = decoration_stage_started_at.elapsed();
         let element_stage_started_at = Instant::now();
         let (cell_w, cell_h) = self.terminal_cell_size();
+        let terminal_font_family = self.gpui_terminal_font_family();
         let ime_preedit_text = (is_active
             && !session_id.is_empty()
             && self.settings.interaction_mac_ime_compatibility
@@ -224,7 +226,7 @@ impl NyaTermApp {
             let pad = self.terminal_content_padding_px();
             let gutter = self.terminal_gutter_width_px();
             let row = if cursor_row == usize::MAX {
-                lines.len().saturating_sub(1)
+                line_count.saturating_sub(1)
             } else {
                 cursor_row.min(snapshot_rows.saturating_sub(1))
             };
@@ -234,31 +236,14 @@ impl NyaTermApp {
                 pad + row as f32 * cell_h,
             )
         });
-        let terminal_font_family = self.gpui_terminal_font_family();
-        let mut grid = NyaTerminalElement::new(
-            snapshot,
-            keyword_rules,
-            line_decorations,
-            show_cursor,
-            cursor_style,
-            cell_w,
-            cell_h,
-            palette,
-            terminal_font_family.clone(),
-            self.settings.terminal_font_size as f32,
-            self.settings.terminal_font_weight as f32,
-            self.settings.terminal_font_weight_bold as f32,
-        );
-        if let Some(cache) = layout_cache {
-            grid = grid.with_layout_cache(cache);
-        }
-        let output = if gutter_enabled {
+        let gutter = if gutter_enabled {
             let ts_w = self.terminal_timestamp_gutter_width_px();
             let ln_w = self.terminal_line_number_gutter_width_px();
             let mut gutter = div().flex().flex_col().flex_none();
-            for line_index in 0..lines.len() {
+            for line_index in 0..line_count {
                 let ts_label = if show_timestamps {
-                    line_timestamps_ms
+                    snapshot
+                        .line_timestamps_ms
                         .get(line_index)
                         .copied()
                         .flatten()
@@ -298,6 +283,28 @@ impl NyaTermApp {
                         }),
                 );
             }
+            Some(gutter)
+        } else {
+            None
+        };
+        let mut grid = NyaTerminalElement::new(
+            snapshot,
+            keyword_rules,
+            line_decorations,
+            show_cursor,
+            cursor_style,
+            cell_w,
+            cell_h,
+            palette,
+            terminal_font_family.clone(),
+            self.settings.terminal_font_size as f32,
+            self.settings.terminal_font_weight as f32,
+            self.settings.terminal_font_weight_bold as f32,
+        );
+        if let Some(cache) = layout_cache {
+            grid = grid.with_layout_cache(cache);
+        }
+        let output = if let Some(gutter) = gutter {
             div().flex().flex_row().child(gutter).child(grid)
         } else {
             div().flex().flex_row().child(grid)
@@ -1173,7 +1180,7 @@ impl NyaTermApp {
                 session_id = %session_id,
                 rows = snapshot_rows,
                 cols = snapshot_cols,
-                line_count = lines.len(),
+                line_count,
                 is_active,
                 render_degraded,
                 action_links_enabled = self.settings.terminal_action_links_enabled,
