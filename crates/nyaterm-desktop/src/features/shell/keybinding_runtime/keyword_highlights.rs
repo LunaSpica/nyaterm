@@ -18,6 +18,7 @@ impl NyaTermApp {
     }
 
     fn save_keyword_highlights(&mut self, cx: &mut Context<Self>) {
+        self.invalidate_paint_theme_caches();
         match ConnectionStore::open_with_portable_key_path(
             self.runtime.config_dir(),
             self.runtime.portable_key_path().map(ToOwned::to_owned),
@@ -124,6 +125,7 @@ impl NyaTermApp {
     }
 
     pub(in crate::features) fn refresh_keyword_highlights(&mut self) {
+        self.invalidate_paint_theme_caches();
         if let Ok(store) = ConnectionStore::open_with_portable_key_path(
             self.runtime.config_dir(),
             self.runtime.portable_key_path().map(ToOwned::to_owned),

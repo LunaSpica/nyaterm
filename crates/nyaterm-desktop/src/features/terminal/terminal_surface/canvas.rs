@@ -19,6 +19,7 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
         let render_started_at = Instant::now();
+        self.ensure_paint_theme_caches();
         let palette = self.terminal_theme_palette();
         let is_active = self.active_session_id.as_deref() == Some(session_id.as_str());
         let is_disconnected = !session_id.is_empty() && self.is_session_disconnected(&session_id);
@@ -60,7 +61,7 @@ impl NyaTermApp {
             &self.settings.terminal_action_links_matchers,
         );
         let keyword_rules = if render_degraded || !is_active {
-            Vec::new()
+            std::sync::Arc::new(Vec::new())
         } else {
             self.resolved_keyword_highlight_rules()
         };

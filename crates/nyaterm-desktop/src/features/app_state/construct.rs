@@ -690,6 +690,8 @@ impl NyaTermApp {
             terminal_surface_bounds: None,
             terminal_session_surface_bounds: HashMap::new(),
             terminal_cell_metrics: None,
+            cached_terminal_theme_palette: None,
+            cached_keyword_highlight_rules: None,
             terminal_file_drop_hover: None,
             last_viewport_size: (1280., 800.),
             last_viewport_change_at: None,

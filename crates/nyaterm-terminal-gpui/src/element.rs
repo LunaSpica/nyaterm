@@ -129,7 +129,7 @@ mod layout_cache_tests {
         snapshot.line_signatures[0] = 7;
         let element = NyaTerminalElement::new(
             Arc::new(snapshot),
-            Vec::new(),
+            Arc::new(Vec::new()),
             Vec::new(),
             false,
             "block",
@@ -247,7 +247,7 @@ mod layout_cache_tests {
 
 pub struct NyaTerminalElement {
     snapshot: Arc<TerminalSnapshot>,
-    keyword_rules: Vec<ResolvedKeywordHighlightRule>,
+    keyword_rules: Arc<Vec<ResolvedKeywordHighlightRule>>,
     decorations: Vec<TerminalLineDecorations>,
     layout_cache: Option<Arc<Mutex<NyaTerminalLayoutCache>>>,
     show_cursor: bool,
@@ -310,7 +310,7 @@ impl NyaTerminalElement {
     #[allow(clippy::too_many_arguments)]
     pub fn new(
         snapshot: Arc<TerminalSnapshot>,
-        keyword_rules: Vec<ResolvedKeywordHighlightRule>,
+        keyword_rules: Arc<Vec<ResolvedKeywordHighlightRule>>,
         decorations: Vec<TerminalLineDecorations>,
         show_cursor: bool,
         cursor_style: impl Into<String>,
@@ -361,7 +361,7 @@ impl NyaTerminalElement {
         display_line.hash(&mut hasher);
         hash_styled_spans(ansi_spans, &mut hasher);
         decorations.hash(&mut hasher);
-        for rule in &self.keyword_rules {
+        for rule in self.keyword_rules.iter() {
             rule.id.hash(&mut hasher);
             rule.name.hash(&mut hasher);
             rule.patterns.hash(&mut hasher);
@@ -547,7 +547,7 @@ impl Element for NyaTerminalElement {
             }
 
             // Plain/degraded rows skip full highlight span work entirely.
-            if terminal_plain_row_fast_path(ansi, &self.keyword_rules, decorations) {
+            if terminal_plain_row_fast_path(ansi, self.keyword_rules.as_slice(), decorations) {
                 let text = display_line.to_string();
                 let text_runs = vec![TextRun {
                     len: text.len().max(1),
@@ -573,7 +573,7 @@ impl Element for NyaTerminalElement {
             let base_spans = terminal_highlight_spans(
                 display_line,
                 ansi,
-                &self.keyword_rules,
+                self.keyword_rules.as_slice(),
                 &[],
                 &[],
                 None,
@@ -585,7 +585,7 @@ impl Element for NyaTerminalElement {
                 terminal_highlight_spans(
                     display_line,
                     ansi,
-                    &self.keyword_rules,
+                    self.keyword_rules.as_slice(),
                     &decorations.search_ranges,
                     &decorations.active_search_ranges,
                     decorations.selection_cols,

@@ -153,10 +153,25 @@ impl NyaTermApp {
 
     /// Sessions shown in the global tab strip / multi-leaf tab lists (tab roots only).
     pub(in crate::features) fn ordered_tab_sessions(&self) -> Vec<SessionInfo> {
-        self.ordered_sessions()
-            .into_iter()
-            .filter(|session| !self.is_secondary_pane_session(&session.id))
-            .collect()
+        let mut ordered = Vec::with_capacity(self.session_order.len());
+        let mut seen = HashSet::with_capacity(self.session_order.len());
+        for session_id in &self.session_order {
+            if !seen.insert(session_id.as_str()) {
+                continue;
+            }
+            if self.is_secondary_pane_session(session_id) {
+                continue;
+            }
+            if let Some(metadata) = self.session_metadata.get(session_id) {
+                ordered.push(session_info_from_metadata(session_id, metadata));
+            }
+        }
+        for (session_id, metadata) in &self.session_metadata {
+            if seen.insert(session_id.as_str()) && !self.is_secondary_pane_session(session_id) {
+                ordered.push(session_info_from_metadata(session_id, metadata));
+            }
+        }
+        ordered
     }
 
     /// Prefer the currently focused leaf when it belongs to `tab_root`, else the tab root.

@@ -502,6 +502,12 @@ pub struct NyaTermApp {
         HashMap<String, gpui::Bounds<gpui::Pixels>>,
     /// Measured monospaced cell size (width, height) from the terminal font when available.
     pub(in crate::features) terminal_cell_metrics: Option<(f32, f32)>,
+    /// Cached terminal surface palette (theme + contrast fingerprint).
+    pub(in crate::features) cached_terminal_theme_palette:
+        Option<(String, String, String, crate::theme::ThemePalette)>,
+    /// Cached keyword highlight rules for paint (invalidated on settings change).
+    pub(in crate::features) cached_keyword_highlight_rules:
+        Option<std::sync::Arc<Vec<nyaterm_core::ResolvedKeywordHighlightRule>>>,
     /// Session id currently under an external file drag (drop overlay).
     pub(in crate::features) terminal_file_drop_hover: Option<String>,
 

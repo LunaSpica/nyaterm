@@ -9,6 +9,7 @@ impl NyaTermApp {
     pub(in crate::features) fn apply_gpui_settings(&mut self, mut settings: AppSettingsSummary) {
         normalize_gpui_font_settings_for_platform(&mut settings);
         self.settings = settings;
+        self.invalidate_paint_theme_caches();
     }
 
     pub(in crate::features) fn gpui_terminal_font_family(&self) -> String {
@@ -43,36 +44,127 @@ impl NyaTermApp {
 
     pub(in crate::features) fn resolved_keyword_highlight_rules(
         &self,
-    ) -> Vec<nyaterm_core::ResolvedKeywordHighlightRule> {
-        if !self.keyword_highlights.enabled {
-            return Vec::new();
+    ) -> std::sync::Arc<Vec<nyaterm_core::ResolvedKeywordHighlightRule>> {
+        if let Some(cached) = self.cached_keyword_highlight_rules.as_ref() {
+            return cached.clone();
         }
-        nyaterm_core::merge_keyword_highlight_rules_for_paint(
+        // Cache miss (settings path / first call without ensure): build once without storing.
+        if !self.keyword_highlights.enabled {
+            return std::sync::Arc::new(Vec::new());
+        }
+        std::sync::Arc::new(nyaterm_core::merge_keyword_highlight_rules_for_paint(
             &self.keyword_highlights.rules,
             &self.keyword_highlights.builtin_rules,
             self.terminal_theme_is_dark(),
-        )
+        ))
+    }
+
+    /// Populate paint caches used by every terminal/chrome rebuild.
+    pub(in crate::features) fn ensure_paint_theme_caches(&mut self) {
+        self.ensure_terminal_theme_palette_cache();
+        self.ensure_keyword_highlight_rules_cache();
+    }
+
+    fn ensure_keyword_highlight_rules_cache(&mut self) {
+        if self.cached_keyword_highlight_rules.is_some() {
+            return;
+        }
+        let rules = if !self.keyword_highlights.enabled {
+            std::sync::Arc::new(Vec::new())
+        } else {
+            // terminal_theme_is_dark uses palette; ensure palette first.
+            self.ensure_terminal_theme_palette_cache();
+            std::sync::Arc::new(nyaterm_core::merge_keyword_highlight_rules_for_paint(
+                &self.keyword_highlights.rules,
+                &self.keyword_highlights.builtin_rules,
+                self.terminal_theme_is_dark(),
+            ))
+        };
+        self.cached_keyword_highlight_rules = Some(rules);
     }
 
     /// Terminal surface palette: follows optional `terminal_theme`, else UI theme.
     pub(in crate::features) fn terminal_theme_palette(&self) -> ThemePalette {
-        let id = self
+        let ui_theme = self.settings.theme.as_str();
+        let terminal_theme = self
             .settings
             .terminal_theme
             .as_deref()
             .map(str::trim)
             .filter(|s| !s.is_empty())
-            .unwrap_or(self.settings.theme.as_str());
+            .unwrap_or("");
+        let contrast = self.settings.minimum_contrast_ratio.as_str();
+        if let Some((cached_ui, cached_term, cached_contrast, palette)) =
+            self.cached_terminal_theme_palette.as_ref()
+        {
+            if cached_ui == ui_theme && cached_term == terminal_theme && cached_contrast == contrast
+            {
+                return *palette;
+            }
+        }
+        Self::compute_terminal_theme_palette(
+            ui_theme,
+            if terminal_theme.is_empty() {
+                None
+            } else {
+                Some(terminal_theme)
+            },
+            contrast,
+        )
+    }
+
+    fn ensure_terminal_theme_palette_cache(&mut self) {
+        let ui_theme = self.settings.theme.clone();
+        let terminal_theme = self
+            .settings
+            .terminal_theme
+            .as_deref()
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+            .unwrap_or("")
+            .to_string();
+        let contrast = self.settings.minimum_contrast_ratio.clone();
+        if let Some((cached_ui, cached_term, cached_contrast, _)) =
+            self.cached_terminal_theme_palette.as_ref()
+        {
+            if cached_ui == &ui_theme
+                && cached_term == &terminal_theme
+                && cached_contrast == &contrast
+            {
+                return;
+            }
+        }
+        let palette = Self::compute_terminal_theme_palette(
+            &ui_theme,
+            if terminal_theme.is_empty() {
+                None
+            } else {
+                Some(terminal_theme.as_str())
+            },
+            &contrast,
+        );
+        self.cached_terminal_theme_palette = Some((ui_theme, terminal_theme, contrast, palette));
+    }
+
+    fn compute_terminal_theme_palette(
+        ui_theme: &str,
+        terminal_theme: Option<&str>,
+        minimum_contrast_ratio: &str,
+    ) -> ThemePalette {
+        let id = terminal_theme.unwrap_or(ui_theme);
         let id = if id == "catppuccin" {
             "catppuccin-mocha"
         } else {
             id
         };
         let mut palette = theme_palette(id);
-        palette.apply_minimum_contrast_ratio(parse_minimum_contrast_ratio(
-            &self.settings.minimum_contrast_ratio,
-        ));
+        palette.apply_minimum_contrast_ratio(parse_minimum_contrast_ratio(minimum_contrast_ratio));
         palette
+    }
+
+    pub(in crate::features) fn invalidate_paint_theme_caches(&mut self) {
+        self.cached_terminal_theme_palette = None;
+        self.cached_keyword_highlight_rules = None;
     }
 
     pub(in crate::features) fn update_appearance_theme(

@@ -21,6 +21,7 @@ impl NyaTermApp {
     }
 
     fn root_chrome(&mut self, cx: &mut Context<Self>) -> Stateful<Div> {
+        self.ensure_paint_theme_caches();
         let palette = self.theme_palette();
         let wallpaper_path = self
             .settings
