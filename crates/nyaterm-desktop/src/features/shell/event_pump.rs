@@ -562,6 +562,7 @@ impl NyaTermApp {
             }};
         }
 
+        // Control / data plane first. Sideband work is demoted under pressure.
         drain_stage!(session_start, self.drain_session_start_events(cx));
         drain_stage!(
             prompts,
@@ -570,19 +571,20 @@ impl NyaTermApp {
                 | self.drain_duplicate_prompts()
         );
         if defer_terminal_frames {
+            // Leave room for paint after a fresh output drain.
             timings.terminal_frames_deferred = true;
             return dirty;
-        } else {
-            drain_stage!(terminal_frames, self.drain_terminal_frame_events(cx));
+        }
+        drain_stage!(terminal_frames, self.drain_terminal_frame_events(cx));
+        if critical_only {
+            // Autofill / recording / transfer / remote are idle-plane sideband.
+            return dirty;
         }
         drain_stage!(
             credential_autofill,
             self.drain_pending_credential_autofill_detection(cx)
         );
         drain_stage!(recording, self.drain_recording_pipeline_events());
-        if critical_only {
-            return dirty;
-        }
         // Continue sequential startup restore after async SSH connects complete.
         // Window handle is not available here; pump only when not waiting on pending.
         drain_stage!(
@@ -803,7 +805,10 @@ impl NyaTermApp {
         let startup_restore_duration = stage_started_at.elapsed();
         let saved_connection_queue_duration = control_plane_timings.saved_connection_queue;
         let stage_started_at = Instant::now();
-        dirty |= self.drive_terminal_resize();
+        // Bounds paint path already resizes; polling is idle-plane maintenance.
+        if runtime_idle_plane_allowed(output_pressure_after_events) {
+            dirty |= self.drive_terminal_resize();
+        }
         let terminal_resize_duration = stage_started_at.elapsed();
         let stage_started_at = Instant::now();
         let render_request_output_pressure = self.runtime_output_pressure_active();
@@ -834,11 +839,14 @@ impl NyaTermApp {
         }
         let remote_refresh_duration = stage_started_at.elapsed();
         let stage_started_at = Instant::now();
-        dirty |= self.drive_idle_lock();
+        if runtime_idle_plane_allowed(output_pressure) {
+            dirty |= self.drive_idle_lock();
+        }
         let idle_lock_duration = stage_started_at.elapsed();
         let visual_stage_started_at = Instant::now();
         // ~530ms blink half-period (50ms * 11 ticks) when enabled.
-        if self.settings.cursor_blink {
+        // Under output pressure, keep last blink phase so we do not force redraws.
+        if runtime_cursor_blink_allowed(output_pressure, self.settings.cursor_blink) {
             self.terminal_runtime.cursor_blink_tick =
                 self.terminal_runtime.cursor_blink_tick.wrapping_add(1);
             if self.terminal_runtime.cursor_blink_tick >= 11 {
@@ -846,7 +854,7 @@ impl NyaTermApp {
                 self.terminal_runtime.cursor_blink_on = !self.terminal_runtime.cursor_blink_on;
                 dirty = true;
             }
-        } else {
+        } else if !self.settings.cursor_blink {
             if !self.terminal_runtime.cursor_blink_on
                 || self.terminal_runtime.cursor_blink_tick != 0
             {
@@ -1345,6 +1353,14 @@ fn connection_hover_poll_allowed(
     !runtime_output_pressure && !pending_session_start && !queued_saved_connection_start
 }
 
+fn runtime_idle_plane_allowed(runtime_output_pressure: bool) -> bool {
+    !runtime_output_pressure
+}
+
+fn runtime_cursor_blink_allowed(runtime_output_pressure: bool, cursor_blink_enabled: bool) -> bool {
+    cursor_blink_enabled && !runtime_output_pressure
+}
+
 fn terminal_performance_tick_session_ids(visible_session_ids: &[&str]) -> Vec<String> {
     let mut ids = Vec::with_capacity(visible_session_ids.len());
     for session_id in visible_session_ids {
@@ -1658,6 +1674,20 @@ mod tests {
         assert!(!connection_hover_poll_allowed(true, false, false));
         assert!(!connection_hover_poll_allowed(false, true, false));
         assert!(!connection_hover_poll_allowed(false, false, true));
+    }
+
+    #[test]
+    fn runtime_idle_plane_waits_for_output_calm() {
+        assert!(runtime_idle_plane_allowed(false));
+        assert!(!runtime_idle_plane_allowed(true));
+    }
+
+    #[test]
+    fn runtime_cursor_blink_pauses_under_output_pressure() {
+        assert!(runtime_cursor_blink_allowed(false, true));
+        assert!(!runtime_cursor_blink_allowed(true, true));
+        assert!(!runtime_cursor_blink_allowed(false, false));
+        assert!(!runtime_cursor_blink_allowed(true, false));
     }
 
     #[test]
