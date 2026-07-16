@@ -335,14 +335,18 @@ impl NyaTermApp {
         let mut result = RuntimeIdlePlaneResult::default();
         // Idle-plane work does not drain output; one pressure sample is enough for the stage.
         let output_pressure = self.runtime_output_pressure_active();
-        result.render_request_output_pressure = output_pressure;
+        let geometry_churn =
+            window_geometry_churn_active(self.last_viewport_change_at, Instant::now());
+        // Treat recent window geometry churn like output pressure: keep focus only.
+        let demote_idle = output_pressure || geometry_churn;
+        result.render_request_output_pressure = demote_idle;
 
         // Focus transitions remain latency-sensitive even under pressure.
         let stage_started_at = Instant::now();
         dirty |= self.drive_pending_focus(window);
         result.pending_focus = stage_started_at.elapsed();
 
-        if !runtime_idle_plane_allowed(output_pressure) {
+        if !runtime_idle_plane_allowed(demote_idle) {
             result.dirty = dirty;
             return result;
         }
@@ -365,7 +369,7 @@ impl NyaTermApp {
 
         let stage_started_at = Instant::now();
         if connection_hover_poll_allowed(
-            output_pressure,
+            demote_idle,
             pending_session_start,
             queued_saved_connection_start,
         ) {

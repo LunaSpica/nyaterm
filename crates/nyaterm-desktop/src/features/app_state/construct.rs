@@ -690,6 +690,7 @@ impl NyaTermApp {
             terminal_cell_metrics: None,
             terminal_file_drop_hover: None,
             last_viewport_size: (1280., 800.),
+            last_viewport_change_at: None,
             selected_nav: NavItem::Workspace,
             main_mode: MainMode::Workspace,
             settings_active_tab: SettingsTab::General,

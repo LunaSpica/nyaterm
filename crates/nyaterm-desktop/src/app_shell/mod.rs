@@ -59,18 +59,11 @@ impl AppShell {
             remote_ops: remote_ops.clone(),
         };
         let app = cx.new(|cx| NyaTermApp::new(runtime, stores, cx));
-        let subscriptions = vec![
-            cx.observe(&startup_restore, |_, _, cx| cx.notify()),
-            cx.observe(&workspace, |_, _, cx| cx.notify()),
-            cx.observe(&sessions, |_, _, cx| cx.notify()),
-            cx.observe(&overlays, |_, _, cx| cx.notify()),
-            cx.observe(&settings, |_, _, cx| cx.notify()),
-            cx.observe(&connections, |_, _, cx| cx.notify()),
-            cx.observe(&transfers, |_, _, cx| cx.notify()),
-            cx.observe(&ai, |_, _, cx| cx.notify()),
-            cx.observe(&cloud_sync, |_, _, cx| cx.notify()),
-            cx.observe(&remote_ops, |_, _, cx| cx.notify()),
-        ];
+        // Do not observe UI stores for parent notify: AppShell only hosts the
+        // NyaTermApp entity, and NyaTermApp already cx.notify()s on visual dirty.
+        // Store observe → AppShell notify was amplifying every snapshot publish
+        // into an extra shell paint (connect bursts, sideband heartbeats, drag).
+        let subscriptions = Vec::new();
 
         Self {
             app,

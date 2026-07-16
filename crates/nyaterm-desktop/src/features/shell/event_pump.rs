@@ -23,6 +23,10 @@ impl NyaTermApp {
         let before_metrics = self.terminal_cell_metrics;
         let vs = window.viewport_size();
         self.last_viewport_size = (f32::from(vs.width), f32::from(vs.height));
+        if self.last_viewport_size != before_viewport {
+            // Geometry churn (resize / some window managers during move).
+            self.last_viewport_change_at = Some(Instant::now());
+        }
         if terminal_cell_metrics_refresh_needed(self.terminal_cell_metrics) {
             self.refresh_terminal_cell_metrics(cx);
         }
@@ -87,6 +91,11 @@ impl NyaTermApp {
     }
 
     pub(crate) fn window_runtime_tick_delay(&self) -> Duration {
+        // During recent viewport geometry churn (window resize/drag), prefer the
+        // idle cadence so full plane ticks do not stack on compositor paints.
+        if window_geometry_churn_active(self.last_viewport_change_at, Instant::now()) {
+            return RUNTIME_IDLE_TICK_INTERVAL;
+        }
         runtime_tick_interval_for_pressure(self.runtime_output_pressure_active())
     }
 

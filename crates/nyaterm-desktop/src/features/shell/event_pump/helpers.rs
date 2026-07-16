@@ -9,7 +9,10 @@ pub(super) const SESSION_EVENT_DRAIN_WALL_BUDGET: Duration = Duration::from_mill
 pub(super) const RUNTIME_BACKGROUND_EVENT_DRAIN_WALL_BUDGET: Duration = Duration::from_millis(6);
 pub(super) const RUNTIME_BACKGROUND_EVENT_DRAIN_SLOW: Duration = Duration::from_millis(12);
 pub(super) const RUNTIME_IDLE_TICK_INTERVAL: Duration = Duration::from_millis(50);
-pub(super) const RUNTIME_PRESSURE_TICK_INTERVAL: Duration = Duration::from_millis(8);
+/// Match display frame pacing; 8ms stacked full ticks under pressure contended with window drag paints.
+pub(super) const RUNTIME_PRESSURE_TICK_INTERVAL: Duration = Duration::from_millis(16);
+/// After viewport size changes, hold pressure cadence for this long.
+pub(super) const WINDOW_GEOMETRY_CHURN_HOLD: Duration = Duration::from_millis(200);
 pub(super) const TERMINAL_FRAME_APPLY_PRESSURE_INTERVAL: Duration = Duration::from_millis(16);
 pub(super) const SLOW_DIAGNOSTIC_THROTTLE: Duration = Duration::from_secs(2);
 pub(super) const RUNTIME_TICK_SLOW_THRESHOLD: Duration = Duration::from_millis(40);
@@ -146,6 +149,16 @@ pub(super) fn runtime_tick_interval_for_pressure(output_pressure: bool) -> Durat
     } else {
         RUNTIME_IDLE_TICK_INTERVAL
     }
+}
+
+pub(super) fn window_geometry_churn_active(
+    last_viewport_change_at: Option<Instant>,
+    now: Instant,
+) -> bool {
+    last_viewport_change_at.is_some_and(|at| {
+        now.checked_duration_since(at)
+            .is_some_and(|elapsed| elapsed < WINDOW_GEOMETRY_CHURN_HOLD)
+    })
 }
 
 pub(super) fn runtime_output_pressure_active_from_counts(
@@ -417,6 +430,17 @@ mod tests {
             runtime_tick_interval_for_pressure(true),
             RUNTIME_PRESSURE_TICK_INTERVAL
         );
+    }
+
+    #[test]
+    fn window_geometry_churn_holds_after_recent_viewport_change() {
+        let now = Instant::now();
+        assert!(!window_geometry_churn_active(None, now));
+        assert!(window_geometry_churn_active(Some(now), now));
+        assert!(!window_geometry_churn_active(
+            Some(now - WINDOW_GEOMETRY_CHURN_HOLD - Duration::from_millis(1)),
+            now
+        ));
     }
 
     #[test]
