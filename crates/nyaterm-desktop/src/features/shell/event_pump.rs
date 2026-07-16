@@ -728,24 +728,141 @@ impl NyaTermApp {
         let mut dirty = self.refresh_window_render_inputs(window, cx);
         let render_input_duration = stage_started_at.elapsed();
 
-        let control_plane_started_at = Instant::now();
-        let mut control_plane_timings = RuntimeControlPlaneDrainTimings::default();
-        let stage_started_at = Instant::now();
-        dirty |= self.drain_session_start_events(cx);
-        control_plane_timings.session_start = stage_started_at.elapsed();
-        let stage_started_at = Instant::now();
-        dirty |= self.drain_host_key_prompts()
-            | self.drain_credential_prompts()
-            | self.drain_duplicate_prompts();
-        control_plane_timings.prompts = stage_started_at.elapsed();
-        let stage_started_at = Instant::now();
-        dirty |= self.drive_saved_connection_start_queue(window, cx);
-        control_plane_timings.saved_connection_queue = stage_started_at.elapsed();
-        let control_plane_duration = control_plane_started_at.elapsed();
+        let control = self.drive_runtime_control_plane(window, cx);
+        dirty |= control.dirty;
 
         let stage_started_at = Instant::now();
         dirty |= self.drain_session_events(cx);
         let session_events_duration = stage_started_at.elapsed();
+
+        let data = self.drive_runtime_data_plane(tick_started_at, cx);
+        dirty |= data.dirty;
+        self.terminal_runtime.last_session_start_drain_duration =
+            control.timings.session_start + data.background_timings.session_start;
+        self.maybe_log_slow_runtime_background_event_drain(
+            data.background_total,
+            &data.background_timings,
+            data.defer_terminal_frame_after_output,
+            data.terminal_frame_apply_paced,
+        );
+
+        let idle = self.drive_runtime_idle_plane(window, cx);
+        dirty |= idle.dirty;
+
+        let visual = self.drive_runtime_visual_plane(cx);
+        dirty |= visual.dirty;
+
+        let pending_session_stage_started_at = Instant::now();
+        dirty |= self.drive_pending_session_status();
+        let pending_session_status_duration = pending_session_stage_started_at.elapsed();
+        let visual_dirty = dirty;
+        let notify_started_at = Instant::now();
+        if visual_dirty {
+            cx.notify();
+        }
+        let notify_duration = notify_started_at.elapsed();
+        let publish_started_at = Instant::now();
+        let output_pressure_for_publish = self.runtime_output_pressure_active();
+        let should_publish_snapshots = should_publish_store_snapshots(
+            visual_dirty,
+            output_pressure_for_publish,
+            store_snapshot_publish_due(
+                self.terminal_runtime.last_store_snapshot_publish_at,
+                publish_started_at,
+            ),
+        );
+        if should_publish_snapshots {
+            self.publish_store_snapshots(cx);
+        }
+        let publish_duration = publish_started_at.elapsed();
+        let tick_duration = tick_started_at.elapsed();
+        if tick_duration >= RUNTIME_TICK_SLOW_THRESHOLD
+            && self.should_log_slow_diagnostic("runtime_tick", Instant::now())
+        {
+            let output_pressure = self.runtime_output_pressure_active();
+            tracing::warn!(
+                diagnostic = "runtime_tick",
+                total_ms = tick_duration.as_millis(),
+                render_input_ms = render_input_duration.as_millis(),
+                control_plane_ms = control.duration.as_millis(),
+                control_session_start_ms = control.timings.session_start.as_millis(),
+                control_prompts_ms = control.timings.prompts.as_millis(),
+                control_saved_connection_queue_ms =
+                    control.timings.saved_connection_queue.as_millis(),
+                session_events_ms = session_events_duration.as_millis(),
+                background_runtime_ms = data.background_total.as_millis(),
+                session_start_ms = data.background_timings.session_start.as_millis(),
+                terminal_frames_deferred = data.background_timings.terminal_frames_deferred,
+                terminal_frames_deferred_after_output = data.defer_terminal_frame_after_output,
+                terminal_frames_deferred_for_pacing = data.terminal_frame_apply_paced,
+                startup_restore_ms = idle.startup_restore.as_millis(),
+                saved_connection_queue_ms = control.timings.saved_connection_queue.as_millis(),
+                terminal_resize_ms = idle.terminal_resize.as_millis(),
+                render_requests_ms = idle.render_requests.as_millis(),
+                render_requests_output_pressure = idle.render_request_output_pressure,
+                pending_focus_ms = idle.pending_focus.as_millis(),
+                connection_hover_ms = idle.connection_hover.as_millis(),
+                action_link_tooltip_ms = idle.action_link_tooltip.as_millis(),
+                remote_refresh_ms = idle.remote_refresh.as_millis(),
+                idle_lock_ms = idle.idle_lock.as_millis(),
+                visual_runtime_ms = visual.duration.as_millis(),
+                pending_session_status_ms = pending_session_status_duration.as_millis(),
+                notify_ms = notify_duration.as_millis(),
+                publish_snapshots_ms = publish_duration.as_millis(),
+                queued_events = self.terminal_runtime.session_event_queued_events,
+                queued_output_bytes = self.terminal_runtime.session_event_queued_output_bytes,
+                frame_command_count = self.terminal_frame_pipeline.queued_command_count(),
+                frame_command_output_bytes = self.terminal_frame_pipeline.queued_output_bytes(),
+                frame_event_count = self.terminal_frame_pipeline.queued_event_count(),
+                pending_frame_events = self.pending_terminal_frame_events.len(),
+                pending_session_starts = self.pending_session_starts.len(),
+                queued_saved_connection_starts = self.pending_saved_connection_queue.len(),
+                output_pressure,
+                next_tick_delay_ms = self.window_runtime_tick_delay().as_millis(),
+                visual_dirty,
+                notify_requested = visual_dirty,
+                publish_snapshots = should_publish_snapshots,
+                "slow runtime tick"
+            );
+        }
+        self.terminal_runtime.event_pump_started
+    }
+
+    fn drive_runtime_control_plane(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> RuntimeControlPlaneResult {
+        let started_at = Instant::now();
+        let mut timings = RuntimeControlPlaneDrainTimings::default();
+        let mut dirty = false;
+
+        let stage_started_at = Instant::now();
+        dirty |= self.drain_session_start_events(cx);
+        timings.session_start = stage_started_at.elapsed();
+
+        let stage_started_at = Instant::now();
+        dirty |= self.drain_host_key_prompts()
+            | self.drain_credential_prompts()
+            | self.drain_duplicate_prompts();
+        timings.prompts = stage_started_at.elapsed();
+
+        let stage_started_at = Instant::now();
+        dirty |= self.drive_saved_connection_start_queue(window, cx);
+        timings.saved_connection_queue = stage_started_at.elapsed();
+
+        RuntimeControlPlaneResult {
+            dirty,
+            duration: started_at.elapsed(),
+            timings,
+        }
+    }
+
+    fn drive_runtime_data_plane(
+        &mut self,
+        tick_started_at: Instant,
+        cx: &mut Context<Self>,
+    ) -> RuntimeDataPlaneResult {
         let background_started_at = Instant::now();
         let mut background_timings = RuntimeBackgroundDrainTimings::default();
         let critical_background_only = self.runtime_output_pressure_active();
@@ -765,62 +882,88 @@ impl NyaTermApp {
         );
         let defer_terminal_frame_apply =
             defer_terminal_frame_after_output || terminal_frame_apply_paced;
-        dirty |= self.drain_runtime_background_events(
+        let dirty = self.drain_runtime_background_events(
             cx,
             background_started_at,
             &mut background_timings,
             critical_background_only,
             defer_terminal_frame_apply,
         );
-        self.terminal_runtime.last_session_start_drain_duration =
-            control_plane_timings.session_start + background_timings.session_start;
-        let background_total = background_started_at.elapsed();
-        if (background_timings.budget_exhausted
-            || background_total >= RUNTIME_BACKGROUND_EVENT_DRAIN_SLOW)
-            && self.should_log_slow_diagnostic("runtime_background_event_drain", Instant::now())
-        {
-            tracing::warn!(
-                diagnostic = "runtime_background_event_drain",
-                total_ms = background_total.as_millis(),
-                session_start_ms = background_timings.session_start.as_millis(),
-                prompts_ms = background_timings.prompts.as_millis(),
-                terminal_frames_ms = background_timings.terminal_frames.as_millis(),
-                terminal_frames_deferred = background_timings.terminal_frames_deferred,
-                terminal_frames_deferred_after_output = defer_terminal_frame_after_output,
-                terminal_frames_deferred_for_pacing = terminal_frame_apply_paced,
-                credential_autofill_ms = background_timings.credential_autofill.as_millis(),
-                recording_ms = background_timings.recording.as_millis(),
-                startup_restore_ms = background_timings.startup_restore.as_millis(),
-                transfer_ms = background_timings.transfer.as_millis(),
-                ai_ms = background_timings.ai.as_millis(),
-                remote_ms = background_timings.remote.as_millis(),
-                maintenance_ms = background_timings.maintenance.as_millis(),
-                budget_exhausted = background_timings.budget_exhausted,
-                "slow runtime background event drain"
-            );
+        RuntimeDataPlaneResult {
+            dirty,
+            background_total: background_started_at.elapsed(),
+            background_timings,
+            defer_terminal_frame_after_output,
+            terminal_frame_apply_paced,
         }
-        let background_runtime_duration = background_total;
-        let session_start_duration = background_timings.session_start;
+    }
+
+    fn maybe_log_slow_runtime_background_event_drain(
+        &mut self,
+        background_total: Duration,
+        background_timings: &RuntimeBackgroundDrainTimings,
+        defer_terminal_frame_after_output: bool,
+        terminal_frame_apply_paced: bool,
+    ) {
+        if !(background_timings.budget_exhausted
+            || background_total >= RUNTIME_BACKGROUND_EVENT_DRAIN_SLOW)
+            || !self.should_log_slow_diagnostic("runtime_background_event_drain", Instant::now())
+        {
+            return;
+        }
+        tracing::warn!(
+            diagnostic = "runtime_background_event_drain",
+            total_ms = background_total.as_millis(),
+            session_start_ms = background_timings.session_start.as_millis(),
+            prompts_ms = background_timings.prompts.as_millis(),
+            terminal_frames_ms = background_timings.terminal_frames.as_millis(),
+            terminal_frames_deferred = background_timings.terminal_frames_deferred,
+            terminal_frames_deferred_after_output = defer_terminal_frame_after_output,
+            terminal_frames_deferred_for_pacing = terminal_frame_apply_paced,
+            credential_autofill_ms = background_timings.credential_autofill.as_millis(),
+            recording_ms = background_timings.recording.as_millis(),
+            startup_restore_ms = background_timings.startup_restore.as_millis(),
+            transfer_ms = background_timings.transfer.as_millis(),
+            ai_ms = background_timings.ai.as_millis(),
+            remote_ms = background_timings.remote.as_millis(),
+            maintenance_ms = background_timings.maintenance.as_millis(),
+            budget_exhausted = background_timings.budget_exhausted,
+            "slow runtime background event drain"
+        );
+    }
+
+    fn drive_runtime_idle_plane(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> RuntimeIdlePlaneResult {
+        let mut dirty = false;
+        let mut result = RuntimeIdlePlaneResult::default();
+
         let stage_started_at = Instant::now();
         let output_pressure_after_events = self.runtime_output_pressure_active();
         if !output_pressure_after_events {
             dirty |= self.drive_startup_restore_queue_tick(window, cx);
         }
-        let startup_restore_duration = stage_started_at.elapsed();
-        let saved_connection_queue_duration = control_plane_timings.saved_connection_queue;
+        result.startup_restore = stage_started_at.elapsed();
+
         let stage_started_at = Instant::now();
         // Bounds paint path already resizes; polling is idle-plane maintenance.
         if runtime_idle_plane_allowed(output_pressure_after_events) {
             dirty |= self.drive_terminal_resize();
         }
-        let terminal_resize_duration = stage_started_at.elapsed();
+        result.terminal_resize = stage_started_at.elapsed();
+
         let stage_started_at = Instant::now();
         let render_request_output_pressure = self.runtime_output_pressure_active();
         dirty |= self.drive_terminal_render_requests(!render_request_output_pressure);
-        let render_requests_duration = stage_started_at.elapsed();
+        result.render_request_output_pressure = render_request_output_pressure;
+        result.render_requests = stage_started_at.elapsed();
+
         let stage_started_at = Instant::now();
         dirty |= self.drive_pending_focus(window);
-        let pending_focus_duration = stage_started_at.elapsed();
+        result.pending_focus = stage_started_at.elapsed();
+
         let stage_started_at = Instant::now();
         let output_pressure_after_render = self.runtime_output_pressure_active();
         if connection_hover_poll_allowed(
@@ -830,24 +973,34 @@ impl NyaTermApp {
         ) {
             dirty |= self.poll_connection_hover_delay();
         }
-        let connection_hover_duration = stage_started_at.elapsed();
+        result.connection_hover = stage_started_at.elapsed();
+
         let stage_started_at = Instant::now();
         if !output_pressure_after_render {
             dirty |= self.poll_action_link_tooltip_delay(cx);
         }
-        let action_link_tooltip_duration = stage_started_at.elapsed();
-        let output_pressure = self.runtime_output_pressure_active();
+        result.action_link_tooltip = stage_started_at.elapsed();
+
         let stage_started_at = Instant::now();
+        let output_pressure = self.runtime_output_pressure_active();
         if !output_pressure {
             dirty |= self.drive_remote_auto_refresh(window, cx);
         }
-        let remote_refresh_duration = stage_started_at.elapsed();
+        result.remote_refresh = stage_started_at.elapsed();
+
         let stage_started_at = Instant::now();
         if runtime_idle_plane_allowed(output_pressure) {
             dirty |= self.drive_idle_lock();
         }
-        let idle_lock_duration = stage_started_at.elapsed();
+        result.idle_lock = stage_started_at.elapsed();
+        result.dirty = dirty;
+        result
+    }
+
+    fn drive_runtime_visual_plane(&mut self, cx: &mut Context<Self>) -> RuntimeVisualPlaneResult {
         let visual_stage_started_at = Instant::now();
+        let mut dirty = false;
+        let output_pressure = self.runtime_output_pressure_active();
         // ~530ms blink half-period (50ms * 11 ticks) when enabled.
         // Under output pressure, keep last blink phase so we do not force redraws.
         if runtime_cursor_blink_allowed(output_pressure, self.settings.cursor_blink) {
@@ -897,80 +1050,10 @@ impl NyaTermApp {
             self.terminal_file_drop_hover = None;
             dirty = true;
         }
-        let visual_runtime_duration = visual_stage_started_at.elapsed();
-        let pending_session_stage_started_at = Instant::now();
-        dirty |= self.drive_pending_session_status();
-        let pending_session_status_duration = pending_session_stage_started_at.elapsed();
-        let visual_dirty = dirty;
-        let notify_started_at = Instant::now();
-        if visual_dirty {
-            cx.notify();
+        RuntimeVisualPlaneResult {
+            dirty,
+            duration: visual_stage_started_at.elapsed(),
         }
-        let notify_duration = notify_started_at.elapsed();
-        let publish_started_at = Instant::now();
-        let output_pressure_for_publish = self.runtime_output_pressure_active();
-        let should_publish_snapshots = should_publish_store_snapshots(
-            visual_dirty,
-            output_pressure_for_publish,
-            store_snapshot_publish_due(
-                self.terminal_runtime.last_store_snapshot_publish_at,
-                publish_started_at,
-            ),
-        );
-        if should_publish_snapshots {
-            self.publish_store_snapshots(cx);
-        }
-        let publish_duration = publish_started_at.elapsed();
-        let tick_duration = tick_started_at.elapsed();
-        if tick_duration >= RUNTIME_TICK_SLOW_THRESHOLD
-            && self.should_log_slow_diagnostic("runtime_tick", Instant::now())
-        {
-            tracing::warn!(
-                diagnostic = "runtime_tick",
-                total_ms = tick_duration.as_millis(),
-                render_input_ms = render_input_duration.as_millis(),
-                control_plane_ms = control_plane_duration.as_millis(),
-                control_session_start_ms = control_plane_timings.session_start.as_millis(),
-                control_prompts_ms = control_plane_timings.prompts.as_millis(),
-                control_saved_connection_queue_ms =
-                    control_plane_timings.saved_connection_queue.as_millis(),
-                session_events_ms = session_events_duration.as_millis(),
-                background_runtime_ms = background_runtime_duration.as_millis(),
-                session_start_ms = session_start_duration.as_millis(),
-                terminal_frames_deferred = background_timings.terminal_frames_deferred,
-                terminal_frames_deferred_after_output = defer_terminal_frame_after_output,
-                terminal_frames_deferred_for_pacing = terminal_frame_apply_paced,
-                startup_restore_ms = startup_restore_duration.as_millis(),
-                saved_connection_queue_ms = saved_connection_queue_duration.as_millis(),
-                terminal_resize_ms = terminal_resize_duration.as_millis(),
-                render_requests_ms = render_requests_duration.as_millis(),
-                render_requests_output_pressure = render_request_output_pressure,
-                pending_focus_ms = pending_focus_duration.as_millis(),
-                connection_hover_ms = connection_hover_duration.as_millis(),
-                action_link_tooltip_ms = action_link_tooltip_duration.as_millis(),
-                remote_refresh_ms = remote_refresh_duration.as_millis(),
-                idle_lock_ms = idle_lock_duration.as_millis(),
-                visual_runtime_ms = visual_runtime_duration.as_millis(),
-                pending_session_status_ms = pending_session_status_duration.as_millis(),
-                notify_ms = notify_duration.as_millis(),
-                publish_snapshots_ms = publish_duration.as_millis(),
-                queued_events = self.terminal_runtime.session_event_queued_events,
-                queued_output_bytes = self.terminal_runtime.session_event_queued_output_bytes,
-                frame_command_count = self.terminal_frame_pipeline.queued_command_count(),
-                frame_command_output_bytes = self.terminal_frame_pipeline.queued_output_bytes(),
-                frame_event_count = self.terminal_frame_pipeline.queued_event_count(),
-                pending_frame_events = self.pending_terminal_frame_events.len(),
-                pending_session_starts = self.pending_session_starts.len(),
-                queued_saved_connection_starts = self.pending_saved_connection_queue.len(),
-                output_pressure,
-                next_tick_delay_ms = self.window_runtime_tick_delay().as_millis(),
-                visual_dirty,
-                notify_requested = visual_dirty,
-                publish_snapshots = should_publish_snapshots,
-                "slow runtime tick"
-            );
-        }
-        self.terminal_runtime.event_pump_started
     }
 
     fn drive_pending_session_status(&mut self) -> bool {
@@ -1213,6 +1296,40 @@ struct RuntimeBackgroundDrainTimings {
     remote: Duration,
     maintenance: Duration,
     budget_exhausted: bool,
+}
+
+#[derive(Default)]
+struct RuntimeControlPlaneResult {
+    dirty: bool,
+    duration: Duration,
+    timings: RuntimeControlPlaneDrainTimings,
+}
+
+struct RuntimeDataPlaneResult {
+    dirty: bool,
+    background_total: Duration,
+    background_timings: RuntimeBackgroundDrainTimings,
+    defer_terminal_frame_after_output: bool,
+    terminal_frame_apply_paced: bool,
+}
+
+#[derive(Default)]
+struct RuntimeIdlePlaneResult {
+    dirty: bool,
+    startup_restore: Duration,
+    terminal_resize: Duration,
+    render_requests: Duration,
+    render_request_output_pressure: bool,
+    pending_focus: Duration,
+    connection_hover: Duration,
+    action_link_tooltip: Duration,
+    remote_refresh: Duration,
+    idle_lock: Duration,
+}
+
+struct RuntimeVisualPlaneResult {
+    dirty: bool,
+    duration: Duration,
 }
 
 #[derive(Default)]
