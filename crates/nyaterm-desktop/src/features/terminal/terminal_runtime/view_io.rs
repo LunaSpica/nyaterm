@@ -1043,7 +1043,12 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) -> Entity<TerminalSurface> {
         if let Some(surface) = self.terminal_surfaces.get(session_id) {
-            return surface.clone();
+            let surface = surface.clone();
+            let app = cx.entity();
+            surface.update(cx, |surface, _cx| {
+                surface.set_app(app);
+            });
+            return surface;
         }
         let layout_cache = self
             .terminal_views
@@ -1053,9 +1058,11 @@ impl NyaTermApp {
                 std::sync::Arc::new(std::sync::Mutex::new(NyaTerminalLayoutCache::default()))
             });
         let session_id_owned = session_id.to_string();
+        let app = cx.entity();
         let surface = cx.new(|_| {
             let mut surface = TerminalSurface::new(session_id_owned);
             surface.set_layout_cache(layout_cache);
+            surface.set_app(app);
             surface
         });
         self.terminal_surfaces
@@ -1265,6 +1272,16 @@ impl NyaTermApp {
             .terminal_cell_metrics
             .unwrap_or(((font_size * 0.6).max(6.0), (font_size * 1.35).max(12.0)));
         let visual_bell = is_active && self.terminal_runtime.visual_bell_ticks > 0;
+        let scrollback_len = self
+            .terminal_views
+            .get(session_id)
+            .map(|view| view.scrollback_len_for_ui())
+            .unwrap_or(0);
+        let viewport_rows = self
+            .terminal_views
+            .get(session_id)
+            .map(|view| view.viewport_rows_for_ui())
+            .unwrap_or(1);
         surface.update(cx, |surface, cx| {
             surface.set_layout_cache(layout_cache);
             surface.set_paint_chrome(
@@ -1284,6 +1301,8 @@ impl NyaTermApp {
             surface.apply_frame_snapshot(
                 snapshot,
                 scroll_offset,
+                scrollback_len,
+                viewport_rows,
                 has_new,
                 performance_overlay,
                 skipped,

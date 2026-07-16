@@ -100,9 +100,6 @@ impl NyaTermApp {
         } else {
             self.notify_active_terminal_surface(cx);
         }
-        // Scrollbar track/thumb still paints on the shell canvas wrapper around
-        // TerminalSurface; keep a shell notify so the thumb tracks scroll_offset.
-        cx.notify();
     }
 
     /// Insert quoted local file paths into the active session (Tauri Local drop).
@@ -257,8 +254,6 @@ impl NyaTermApp {
             self.terminal_scroll_offset = 0;
         }
         self.notify_active_terminal_surface(cx);
-        // Shell scrollbar chrome (see scroll helpers above).
-        cx.notify();
     }
 
     pub(in crate::features) fn scroll_terminal_to_top(&mut self, cx: &mut Context<Self>) {
@@ -279,9 +274,6 @@ impl NyaTermApp {
         } else {
             self.notify_active_terminal_surface(cx);
         }
-        // Scrollbar track/thumb still paints on the shell canvas wrapper around
-        // TerminalSurface; keep a shell notify so the thumb tracks scroll_offset.
-        cx.notify();
     }
 
     pub(in crate::features) fn set_terminal_scroll_offset(
@@ -310,9 +302,6 @@ impl NyaTermApp {
         } else {
             self.notify_active_terminal_surface(cx);
         }
-        // Scrollbar track/thumb still paints on the shell canvas wrapper around
-        // TerminalSurface; keep a shell notify so the thumb tracks scroll_offset.
-        cx.notify();
     }
 
     pub(in crate::features) fn active_terminal_scroll_max(&self) -> usize {
@@ -367,9 +356,6 @@ impl NyaTermApp {
         } else {
             self.notify_active_terminal_surface(cx);
         }
-        // Scrollbar track/thumb still paints on the shell canvas wrapper around
-        // TerminalSurface; keep a shell notify so the thumb tracks scroll_offset.
-        cx.notify();
     }
 
     /// Map a vertical pointer position (0..=1 top→bottom of track) to scroll_offset.
@@ -410,8 +396,9 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         self.terminal_scrollbar_dragging = true;
-        self.terminal_scrollbar_drag_session_id = session_id;
-        cx.notify();
+        self.terminal_scrollbar_drag_session_id = session_id.clone();
+        // Thumb lives on TerminalSurface now.
+        self.notify_terminal_surface_only(session_id.as_deref(), cx);
     }
 
     pub(in crate::features) fn update_terminal_scrollbar_drag(
@@ -437,9 +424,10 @@ impl NyaTermApp {
 
     pub(in crate::features) fn finish_terminal_scrollbar_drag(&mut self, cx: &mut Context<Self>) {
         if self.terminal_scrollbar_dragging {
+            let session_id = self.terminal_scrollbar_drag_session_id.clone();
             self.terminal_scrollbar_dragging = false;
             self.terminal_scrollbar_drag_session_id = None;
-            cx.notify();
+            self.notify_terminal_surface_only(session_id.as_deref(), cx);
         }
     }
 

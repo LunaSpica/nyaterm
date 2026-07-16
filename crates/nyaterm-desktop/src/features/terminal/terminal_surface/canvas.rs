@@ -433,7 +433,7 @@ impl NyaTermApp {
                     .map(|cache| (cache.hits, cache.misses))
             })
             .unwrap_or((0, 0));
-        let show_scroll_to_bottom = is_active && scroll_offset > 0;
+        let show_scroll_to_bottom = session_id.is_empty() && is_active && scroll_offset > 0;
         let show_visual_bell = is_active && self.terminal_runtime.visual_bell_ticks > 0;
         let file_drop_hover = self
             .terminal_file_drop_hover
@@ -922,12 +922,15 @@ impl NyaTermApp {
                                             .min_h_0()
                                             .child(output),
                                     )
-                                    .child(self.terminal_scrollbar_element(
-                                        &session_id,
-                                        is_active,
-                                        scroll_offset,
-                                        cx,
-                                    )),
+                                    // Scrollbar is painted by TerminalSurface for live sessions.
+                                    .when(session_id.is_empty(), |this| {
+                                        this.child(self.terminal_scrollbar_element(
+                                            &session_id,
+                                            is_active,
+                                            scroll_offset,
+                                            cx,
+                                        ))
+                                    }),
                             )
                             .when(show_visual_bell, |this| {
                                 this.child(
