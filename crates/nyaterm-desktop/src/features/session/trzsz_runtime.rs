@@ -519,6 +519,9 @@ impl NyaTermApp {
         &mut self,
         cx: &mut Context<Self>,
     ) -> bool {
+        if self.trzsz_sessions.is_empty() {
+            return false;
+        }
         let mut events = Vec::new();
         for (session_id, state) in &mut self.trzsz_sessions {
             let Some(worker) = state.download_worker.as_ref() else {
@@ -600,6 +603,9 @@ impl NyaTermApp {
         &mut self,
         cx: &mut Context<Self>,
     ) -> bool {
+        if self.trzsz_sessions.is_empty() {
+            return false;
+        }
         let mut events = Vec::new();
         for (session_id, state) in &mut self.trzsz_sessions {
             let Some(worker) = state.upload_worker.as_ref() else {
@@ -918,6 +924,9 @@ impl NyaTermApp {
         &mut self,
         cx: &mut Context<Self>,
     ) -> bool {
+        if self.trzsz_sessions.is_empty() {
+            return false;
+        }
         let mut events = Vec::new();
         for (session_id, state) in &mut self.trzsz_sessions {
             let Some(worker) = state.upload_prepare_worker.as_ref() else {

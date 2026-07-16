@@ -336,6 +336,9 @@ impl NyaTermApp {
         &mut self,
         cx: &mut Context<Self>,
     ) -> bool {
+        if self.zmodem_sessions.is_empty() {
+            return false;
+        }
         let mut events = Vec::new();
         for (session_id, state) in &mut self.zmodem_sessions {
             let Some(worker) = state.worker.as_ref() else {
