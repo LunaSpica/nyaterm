@@ -14,13 +14,14 @@ pub(super) fn flush_bg(
     if end <= start {
         return;
     }
+    let left = (f32::from(bounds.left()) + start as f32 * cell_w).floor();
+    let top = (f32::from(bounds.top()) + row as f32 * cell_h).floor();
+    let right = (f32::from(bounds.left()) + end as f32 * cell_w).ceil();
+    let bottom = (f32::from(bounds.top()) + (row + 1) as f32 * cell_h).ceil();
     out.push(fill(
         Bounds::new(
-            point(
-                px(f32::from(bounds.left()) + start as f32 * cell_w),
-                px(f32::from(bounds.top()) + row as f32 * cell_h),
-            ),
-            size(px((end - start) as f32 * cell_w), px(cell_h)),
+            point(px(left), px(top)),
+            size(px((right - left).max(0.)), px((bottom - top).max(0.))),
         ),
         rgb(bg),
     ));
@@ -394,6 +395,40 @@ pub(super) fn compress_flat_cells(flat: Vec<FlatTerminalCell>) -> Vec<TerminalHi
     }
     out
 }
+
+pub(super) fn terminal_cell_text_at_col(line: &str, col: usize) -> String {
+    let mut cell_col = 0usize;
+    let mut chars = line.chars().peekable();
+    while let Some(ch) = chars.next() {
+        if terminal_is_zero_width_mark(ch) {
+            if col == 0 {
+                let mut text = String::new();
+                text.push(ch);
+                return text;
+            }
+            continue;
+        }
+
+        let width = terminal_char_cell_width(ch).max(1);
+        let mut text = String::new();
+        text.push(ch);
+        while let Some(next) = chars.peek().copied() {
+            if !terminal_is_zero_width_mark(next) {
+                break;
+            }
+            text.push(next);
+            chars.next();
+        }
+
+        if col >= cell_col && col < cell_col + width {
+            return text;
+        }
+        cell_col += width;
+    }
+
+    " ".to_string()
+}
+
 /// Paint a caret at `cursor_col` (char index) using Tauri cursor styles.
 pub(super) fn apply_cursor_style(
     spans: Vec<TerminalHighlightSpan>,
@@ -575,5 +610,19 @@ mod tests {
         assert_eq!(terminal_byte_index_for_cell_col(text, 0), 0);
         assert_eq!(terminal_byte_index_for_cell_col(text, 1), "a\u{fe0f}".len());
         assert_eq!(terminal_byte_index_for_cell_col(text, 2), text.len());
+    }
+
+    #[test]
+    fn terminal_cell_text_at_col_keeps_combining_marks() {
+        assert_eq!(terminal_cell_text_at_col("e\u{301}x", 0), "e\u{301}");
+        assert_eq!(terminal_cell_text_at_col("e\u{301}x", 1), "x");
+    }
+
+    #[test]
+    fn terminal_cell_text_at_col_maps_wide_spacer_to_base_glyph() {
+        assert_eq!(terminal_cell_text_at_col("界x", 0), "界");
+        assert_eq!(terminal_cell_text_at_col("界x", 1), "界");
+        assert_eq!(terminal_cell_text_at_col("界x", 2), "x");
+        assert_eq!(terminal_cell_text_at_col("界x", 3), " ");
     }
 }

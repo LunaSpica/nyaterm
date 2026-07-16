@@ -446,17 +446,20 @@ impl NyaTermApp {
             .get(&session_id)
             .map(|view| view.render_cache.decoration_stats())
             .unwrap_or((0, 0));
-        let (layout_cache_hits, layout_cache_misses) = self
-            .terminal_views
-            .get(&session_id)
-            .and_then(|view| {
-                view.render_cache
-                    .layout_cache
-                    .lock()
-                    .ok()
-                    .map(|cache| (cache.hits, cache.misses))
-            })
-            .unwrap_or((0, 0));
+        let (layout_cache_hits, layout_cache_misses, layout_shape_calls, layout_shape_duration_ms) =
+            self.terminal_views
+                .get(&session_id)
+                .and_then(|view| {
+                    view.render_cache.layout_cache.lock().ok().map(|cache| {
+                        (
+                            cache.hits,
+                            cache.misses,
+                            cache.shape_calls,
+                            cache.shape_duration_us / 1_000,
+                        )
+                    })
+                })
+                .unwrap_or((0, 0, 0, 0));
         let show_scroll_to_bottom = session_id.is_empty() && is_active && scroll_offset > 0;
         let show_visual_bell = is_active && self.terminal_runtime.visual_bell_ticks > 0;
         let file_drop_hover = self
@@ -1145,7 +1148,7 @@ impl NyaTermApp {
                             })
                             .when_some(performance_overlay, |this, overlay| {
                                 let stats_detail = format!(
-                                    "Queued {} in {} event(s). Dropped {} total. Last drain {}. Link cache {}/{} hit/miss. Layout cache {}/{} hit/miss.",
+                                    "Queued {} in {} event(s). Dropped {} total. Last drain {}. Link cache {}/{} hit/miss. Layout cache {}/{} hit/miss. Shape {} calls/{}ms.",
                                     format_bytes(self.terminal_runtime.session_event_queued_output_bytes as u64),
                                     format_skipped_count(self.terminal_runtime.session_event_queued_events as u64),
                                     format_bytes(self.terminal_runtime.session_event_dropped_output_bytes),
@@ -1154,6 +1157,8 @@ impl NyaTermApp {
                                     format_skipped_count(render_cache_misses),
                                     format_skipped_count(layout_cache_hits),
                                     format_skipped_count(layout_cache_misses),
+                                    format_skipped_count(layout_shape_calls),
+                                    format_skipped_count(layout_shape_duration_ms),
                                 );
                                 let (title, detail) = match overlay {
                                     TerminalPerformanceOverlay::Overloaded => (
@@ -1305,6 +1310,8 @@ impl NyaTermApp {
                 render_cache_misses,
                 layout_cache_hits,
                 layout_cache_misses,
+                layout_shape_calls,
+                layout_shape_duration_ms,
                 viewport_snapshot_ms = viewport_snapshot_duration.as_millis(),
                 search_mapping_ms = search_mapping_duration.as_millis(),
                 action_links_ms = action_link_duration.as_millis(),

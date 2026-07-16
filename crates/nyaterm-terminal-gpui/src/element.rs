@@ -41,6 +41,8 @@ pub struct NyaTerminalLayoutCache {
     compiled_keyword_rules: CompiledKeywordRules,
     pub hits: u64,
     pub misses: u64,
+    pub shape_calls: u64,
+    pub shape_duration_us: u64,
 }
 
 const TERMINAL_LAYOUT_CACHE_ROW_CAP: usize = 4096;
@@ -54,6 +56,8 @@ impl NyaTerminalLayoutCache {
         self.compiled_keyword_rules.clear();
         self.hits = 0;
         self.misses = 0;
+        self.shape_calls = 0;
+        self.shape_duration_us = 0;
     }
 
     fn compiled_keyword_rules(
@@ -73,24 +77,28 @@ impl NyaTerminalLayoutCache {
         &mut self,
         _row: usize,
         key: u64,
-        shape: impl FnOnce() -> Arc<ShapedLine>,
-    ) -> Arc<ShapedLine> {
+        shape: impl FnOnce() -> (Arc<ShapedLine>, std::time::Duration),
+    ) -> (Arc<ShapedLine>, bool, std::time::Duration) {
         if let Some(cached) = self.rows.get(&key) {
             self.hits = self.hits.saturating_add(1);
-            return Arc::clone(&cached.line);
+            return (Arc::clone(&cached.line), false, std::time::Duration::ZERO);
         }
         self.misses = self.misses.saturating_add(1);
         if self.rows.len() >= TERMINAL_LAYOUT_CACHE_ROW_CAP {
             self.rows.clear();
         }
-        let line = shape();
+        let (line, duration) = shape();
+        self.shape_calls = self.shape_calls.saturating_add(1);
+        self.shape_duration_us = self
+            .shape_duration_us
+            .saturating_add(duration.as_micros().min(u128::from(u64::MAX)) as u64);
         self.rows.insert(
             key,
             CachedTerminalPaintRow {
                 line: Arc::clone(&line),
             },
         );
-        line
+        (line, true, duration)
     }
 }
 
@@ -102,7 +110,9 @@ mod layout_cache_tests {
     fn shaped_line_cache_reuses_matching_row_key() {
         let mut cache = NyaTerminalLayoutCache::default();
 
-        let _ = cache.shaped_line(0, 42, || Arc::new(ShapedLine::default()));
+        let _ = cache.shaped_line(0, 42, || {
+            (Arc::new(ShapedLine::default()), std::time::Duration::ZERO)
+        });
         let _ = cache.shaped_line(7, 42, || {
             panic!("matching key should reuse cached row even at another viewport row")
         });
@@ -114,13 +124,17 @@ mod layout_cache_tests {
     #[test]
     fn clear_resets_shaped_line_cache() {
         let mut cache = NyaTerminalLayoutCache::default();
-        let _ = cache.shaped_line(0, 42, || Arc::new(ShapedLine::default()));
+        let _ = cache.shaped_line(0, 42, || {
+            (Arc::new(ShapedLine::default()), std::time::Duration::ZERO)
+        });
 
         cache.clear();
 
         assert_eq!(cache.misses, 0);
         assert_eq!(cache.hits, 0);
-        let _ = cache.shaped_line(0, 42, || Arc::new(ShapedLine::default()));
+        let _ = cache.shaped_line(0, 42, || {
+            (Arc::new(ShapedLine::default()), std::time::Duration::ZERO)
+        });
         assert_eq!(cache.misses, 1);
     }
 
@@ -128,8 +142,12 @@ mod layout_cache_tests {
     fn shaped_line_cache_misses_on_style_key_change() {
         let mut cache = NyaTerminalLayoutCache::default();
 
-        let _ = cache.shaped_line(0, 42, || Arc::new(ShapedLine::default()));
-        let _ = cache.shaped_line(0, 43, || Arc::new(ShapedLine::default()));
+        let _ = cache.shaped_line(0, 42, || {
+            (Arc::new(ShapedLine::default()), std::time::Duration::ZERO)
+        });
+        let _ = cache.shaped_line(0, 43, || {
+            (Arc::new(ShapedLine::default()), std::time::Duration::ZERO)
+        });
 
         assert_eq!(cache.misses, 2);
         assert_eq!(cache.hits, 0);
@@ -194,6 +212,71 @@ mod layout_cache_tests {
     }
 
     #[test]
+    fn row_layout_key_ignores_dynamic_overlay_decorations() {
+        let mut snapshot = TerminalScreen::default().snapshot();
+        snapshot.lines[0] = "same".to_string();
+        snapshot.line_signatures[0] = 7;
+        let element = NyaTerminalElement::new(
+            Arc::new(snapshot),
+            Arc::new(Vec::new()),
+            Vec::new(),
+            false,
+            "block",
+            8.0,
+            16.0,
+            nyaterm_ui::theme_palette("github-dark"),
+            "monospace".to_string(),
+            14.0,
+            400.0,
+            700.0,
+        );
+        let base = TerminalLineDecorations::default();
+        let dynamic = TerminalLineDecorations {
+            search_ranges: vec![(0, 2)],
+            active_search_ranges: vec![(2, 4)],
+            selection_cols: Some((1, 3)),
+            command_mark: Some(nyaterm_terminal::ShellCommandMark::Prompt),
+            ..TerminalLineDecorations::default()
+        };
+
+        assert_eq!(
+            element.row_layout_key(0, "same", None, &base),
+            element.row_layout_key(0, "same", None, &dynamic)
+        );
+    }
+
+    #[test]
+    fn row_layout_key_tracks_link_glyph_decorations() {
+        let mut snapshot = TerminalScreen::default().snapshot();
+        snapshot.lines[0] = "same".to_string();
+        snapshot.line_signatures[0] = 7;
+        let element = NyaTerminalElement::new(
+            Arc::new(snapshot),
+            Arc::new(Vec::new()),
+            Vec::new(),
+            false,
+            "block",
+            8.0,
+            16.0,
+            nyaterm_ui::theme_palette("github-dark"),
+            "monospace".to_string(),
+            14.0,
+            400.0,
+            700.0,
+        );
+        let base = TerminalLineDecorations::default();
+        let linked = TerminalLineDecorations {
+            link_ranges: vec![(0, 2)],
+            ..TerminalLineDecorations::default()
+        };
+
+        assert_ne!(
+            element.row_layout_key(0, "same", None, &base),
+            element.row_layout_key(0, "same", None, &linked)
+        );
+    }
+
+    #[test]
     fn terminal_glyph_decorations_detects_glyph_only_work() {
         assert!(!terminal_glyph_decorations_needed(
             &TerminalLineDecorations::default()
@@ -210,15 +293,15 @@ mod layout_cache_tests {
 
         decorations.link_ranges.clear();
         decorations.selection_cols = Some((0, 2));
-        assert!(terminal_glyph_decorations_needed(&decorations));
+        assert!(!terminal_glyph_decorations_needed(&decorations));
 
         decorations.selection_cols = None;
         decorations.search_ranges.push((2, 4));
-        assert!(terminal_glyph_decorations_needed(&decorations));
+        assert!(!terminal_glyph_decorations_needed(&decorations));
 
         decorations.search_ranges.clear();
         decorations.active_search_ranges.push((2, 4));
-        assert!(terminal_glyph_decorations_needed(&decorations));
+        assert!(!terminal_glyph_decorations_needed(&decorations));
     }
 
     #[test]
@@ -274,7 +357,7 @@ mod layout_cache_tests {
             &[keyword_rule],
             &TerminalLineDecorations::default()
         ));
-        assert!(!terminal_plain_row_fast_path(None, &[], &selection));
+        assert!(terminal_plain_row_fast_path(None, &[], &selection));
         assert!(terminal_plain_row_fast_path(None, &[], &command_mark));
     }
 }
@@ -305,6 +388,11 @@ pub struct TerminalImagePaint {
     image: std::sync::Arc<gpui::RenderImage>,
 }
 
+pub struct TerminalCursorGlyphPaint {
+    origin: gpui::Point<Pixels>,
+    line: Arc<ShapedLine>,
+}
+
 #[derive(Default)]
 pub struct NyaTerminalPaintPlan {
     /// Cell / keyword backgrounds (under protocol images).
@@ -322,7 +410,11 @@ pub struct NyaTerminalPaintPlan {
     images_above: Vec<TerminalImagePaint>,
     /// Accent placeholders for undecodable above-text images.
     placeholders_above: Vec<PaintQuad>,
-    cursor: Option<PaintQuad>,
+    cursor_background: Option<PaintQuad>,
+    cursor_glyph: Option<TerminalCursorGlyphPaint>,
+    shape_line_count: usize,
+    shape_line_duration: std::time::Duration,
+    text_run_count: usize,
 }
 
 fn image_mask(
@@ -394,7 +486,7 @@ impl NyaTerminalElement {
             .hash(&mut hasher);
         display_line.hash(&mut hasher);
         hash_styled_spans(ansi_spans, &mut hasher);
-        decorations.hash(&mut hasher);
+        hash_stable_glyph_decorations(decorations, &mut hasher);
         for rule in self.keyword_rules.iter() {
             rule.id.hash(&mut hasher);
             rule.name.hash(&mut hasher);
@@ -445,24 +537,34 @@ impl NyaTerminalElement {
         text_runs: Vec<TextRun>,
         font_size: Pixels,
         window: &mut Window,
-    ) -> Arc<ShapedLine> {
-        let shape_row = |window: &mut Window| {
-            Arc::new(window.text_system().shape_line(
-                SharedString::from(text.clone()),
-                font_size,
-                &text_runs,
-                None,
-            ))
-        };
+    ) -> (Arc<ShapedLine>, bool, std::time::Duration) {
         if let Some(cache) = self.layout_cache.as_ref() {
-            match cache.lock() {
-                Ok(mut cache) => cache.shaped_line(row, row_key, || shape_row(window)),
-                Err(_) => shape_row(window),
+            if let Ok(mut cache) = cache.lock() {
+                return cache.shaped_line(row, row_key, || {
+                    let started_at = Instant::now();
+                    let line = Arc::new(window.text_system().shape_line(
+                        SharedString::from(text),
+                        font_size,
+                        &text_runs,
+                        None,
+                    ));
+                    (line, started_at.elapsed())
+                });
             }
-        } else {
-            shape_row(window)
         }
+        let started_at = Instant::now();
+        let line = Arc::new(window.text_system().shape_line(
+            SharedString::from(text),
+            font_size,
+            &text_runs,
+            None,
+        ));
+        (line, true, started_at.elapsed())
     }
+}
+
+fn hash_stable_glyph_decorations<H: Hasher>(decorations: &TerminalLineDecorations, hasher: &mut H) {
+    decorations.link_ranges.hash(hasher);
 }
 
 fn hash_styled_spans<H: Hasher>(
@@ -481,10 +583,7 @@ fn hash_styled_spans<H: Hasher>(
 }
 
 fn terminal_glyph_decorations_needed(decorations: &TerminalLineDecorations) -> bool {
-    !decorations.search_ranges.is_empty()
-        || !decorations.active_search_ranges.is_empty()
-        || decorations.selection_cols.is_some()
-        || !decorations.link_ranges.is_empty()
+    !decorations.link_ranges.is_empty()
 }
 
 fn terminal_plain_row_fast_path(
@@ -630,13 +729,31 @@ impl Element for NyaTerminalElement {
                     strikethrough: None,
                 }];
                 let row_key = self.row_layout_key(row, display_line, ansi, decorations);
-                let shaped = self.shape_row(row, row_key, text, text_runs, font_size, window);
+                plan.text_run_count = plan.text_run_count.saturating_add(text_runs.len());
+                let (shaped, did_shape, shape_duration) =
+                    self.shape_row(row, row_key, text, text_runs, font_size, window);
+                if did_shape {
+                    plan.shape_line_count = plan.shape_line_count.saturating_add(1);
+                    plan.shape_line_duration += shape_duration;
+                }
                 plan.rows.push(TerminalPaintRow { y, line: shaped });
                 continue;
             }
 
             // Base spans drive cell/keyword backgrounds only (under images).
-            let base_spans = terminal_highlight_spans_compiled(
+            let background_spans = terminal_highlight_spans_compiled(
+                display_line,
+                ansi,
+                &compiled_keyword_rules,
+                &[],
+                &[],
+                None,
+                &[],
+                self.palette,
+            );
+            // Glyph spans intentionally exclude search/selection/cursor state so
+            // dynamic overlays do not invalidate shaped base rows.
+            let spans = terminal_highlight_spans_compiled(
                 display_line,
                 ansi,
                 &compiled_keyword_rules,
@@ -646,26 +763,11 @@ impl Element for NyaTerminalElement {
                 &decorations.link_ranges,
                 self.palette,
             );
-            // Full spans include search/selection fg tweaks for the glyph layer.
-            let spans = if terminal_glyph_decorations_needed(decorations) {
-                terminal_highlight_spans_compiled(
-                    display_line,
-                    ansi,
-                    &compiled_keyword_rules,
-                    &decorations.search_ranges,
-                    &decorations.active_search_ranges,
-                    decorations.selection_cols,
-                    &decorations.link_ranges,
-                    self.palette,
-                )
-            } else {
-                base_spans.clone()
-            };
 
             // Cell / keyword backgrounds.
             let mut col = 0usize;
             let mut pending_bg: Option<(u32, usize, usize)> = None;
-            for span in &base_spans {
+            for span in &background_spans {
                 let bg = span
                     .bg
                     .or_else(|| span.keyword.then_some(self.palette.surface));
@@ -805,7 +907,13 @@ impl Element for NyaTerminalElement {
                 });
             }
             let row_key = self.row_layout_key(row, display_line, ansi, decorations);
-            let shaped = self.shape_row(row, row_key, text, text_runs, font_size, window);
+            plan.text_run_count = plan.text_run_count.saturating_add(text_runs.len());
+            let (shaped, did_shape, shape_duration) =
+                self.shape_row(row, row_key, text, text_runs, font_size, window);
+            if did_shape {
+                plan.shape_line_count = plan.shape_line_count.saturating_add(1);
+                plan.shape_line_duration += shape_duration;
+            }
             plan.rows.push(TerminalPaintRow { y, line: shaped });
         }
 
@@ -813,6 +921,10 @@ impl Element for NyaTerminalElement {
         // Kitty z>0 places above text; everything else stays under the glyph layer.
         for image in &self.snapshot.images {
             if image.width_cells == 0 || image.height_cells == 0 {
+                continue;
+            }
+            let image_row_end = image.row.saturating_add(image.height_cells);
+            if image_row_end <= visible_row_start || image.row >= visible_row_end {
                 continue;
             }
             let x = px(f32::from(bounds.left())
@@ -853,17 +965,62 @@ impl Element for NyaTerminalElement {
             && self.snapshot.cursor_row < self.snapshot.rows
             && self.snapshot.cursor_col < self.snapshot.cols.max(1)
         {
-            let x = px(f32::from(bounds.left()) + self.snapshot.cursor_col as f32 * cell_w);
-            let y = px(f32::from(bounds.top()) + self.snapshot.cursor_row as f32 * cell_h);
+            let left =
+                (f32::from(bounds.left()) + self.snapshot.cursor_col as f32 * cell_w).floor();
+            let top = (f32::from(bounds.top()) + self.snapshot.cursor_row as f32 * cell_h).floor();
+            let right =
+                (f32::from(bounds.left()) + (self.snapshot.cursor_col + 1) as f32 * cell_w).ceil();
+            let bottom =
+                (f32::from(bounds.top()) + (self.snapshot.cursor_row + 1) as f32 * cell_h).ceil();
+            let x = px(left);
+            let y = px(top);
+            let width = (right - left).max(1.);
+            let height = (bottom - top).max(1.);
             let cursor_bounds = match self.cursor_style.as_str() {
-                "bar" => Bounds::new(point(x, y), size(px(2.), px(cell_h))),
-                "underline" => Bounds::new(
-                    point(x, px(f32::from(y) + cell_h - 2.)),
-                    size(px(cell_w), px(2.)),
-                ),
-                _ => Bounds::new(point(x, y), size(px(cell_w), px(cell_h))),
+                "bar" => Bounds::new(point(x, y), size(px(2.), px(height))),
+                "underline" => {
+                    Bounds::new(point(x, px((bottom - 2.).floor())), size(px(width), px(2.)))
+                }
+                _ => Bounds::new(point(x, y), size(px(width), px(height))),
             };
-            plan.cursor = Some(fill(cursor_bounds, rgb(self.palette.terminal_cursor)));
+            plan.cursor_background = Some(fill(cursor_bounds, rgb(self.palette.terminal_cursor)));
+            if self.cursor_style.as_str() != "bar" && self.cursor_style.as_str() != "underline" {
+                let cursor_line = self
+                    .snapshot
+                    .lines
+                    .get(self.snapshot.cursor_row)
+                    .map(String::as_str)
+                    .unwrap_or("");
+                let cursor_text = terminal_cell_text_at_col(cursor_line, self.snapshot.cursor_col);
+                let cursor_runs = vec![TextRun {
+                    len: cursor_text.len().max(1),
+                    font: terminal_run_font(
+                        base_font,
+                        false,
+                        false,
+                        self.normal_weight,
+                        self.bold_weight,
+                    ),
+                    color: rgb(self.palette.terminal_bg).into(),
+                    background_color: None,
+                    underline: None,
+                    strikethrough: None,
+                }];
+                let started_at = Instant::now();
+                let line = Arc::new(window.text_system().shape_line(
+                    SharedString::from(cursor_text),
+                    font_size,
+                    &cursor_runs,
+                    None,
+                ));
+                plan.shape_line_count = plan.shape_line_count.saturating_add(1);
+                plan.shape_line_duration += started_at.elapsed();
+                plan.text_run_count = plan.text_run_count.saturating_add(cursor_runs.len());
+                plan.cursor_glyph = Some(TerminalCursorGlyphPaint {
+                    origin: point(x, y),
+                    line,
+                });
+            }
         }
 
         let elapsed = started_at.elapsed();
@@ -896,6 +1053,9 @@ impl Element for NyaTerminalElement {
                 decoration_backgrounds = plan.decoration_backgrounds.len(),
                 active_markers = plan.active_markers.len(),
                 shaped_rows = plan.rows.len(),
+                shape_line_count = plan.shape_line_count,
+                shape_line_ms = plan.shape_line_duration.as_millis(),
+                text_run_count = plan.text_run_count,
                 images_under = plan.images_under.len(),
                 images_above = plan.images_above.len(),
                 placeholders_under = plan.placeholders_under.len(),
@@ -930,7 +1090,11 @@ impl Element for NyaTerminalElement {
         let shaped_rows = prepaint.rows.len();
         let images_above = prepaint.images_above.len();
         let placeholders_above = prepaint.placeholders_above.len();
-        let cursor = prepaint.cursor.is_some();
+        let cursor = prepaint.cursor_background.is_some();
+        let cursor_glyph = prepaint.cursor_glyph.is_some();
+        let shape_line_count = prepaint.shape_line_count;
+        let shape_line_ms = prepaint.shape_line_duration.as_millis();
+        let text_run_count = prepaint.text_run_count;
         // cell/keyword bg → under images → search/selection → marks → text → above images → cursor
         for quad in prepaint.backgrounds.drain(..) {
             window.paint_quad(quad);
@@ -984,8 +1148,16 @@ impl Element for NyaTerminalElement {
                 window.paint_quad(quad);
             }
         });
-        if let Some(cursor) = prepaint.cursor.take() {
+        if let Some(cursor) = prepaint.cursor_background.take() {
             window.paint_quad(cursor);
+        }
+        if let Some(cursor_glyph) = prepaint.cursor_glyph.take() {
+            let _ = cursor_glyph.line.paint(
+                cursor_glyph.origin,
+                px(self.cell_height.max(1.)),
+                window,
+                cx,
+            );
         }
         let elapsed = started_at.elapsed();
         if elapsed.as_millis() >= TERMINAL_ELEMENT_PAINT_SLOW_MS {
@@ -1003,6 +1175,10 @@ impl Element for NyaTerminalElement {
                 placeholders_under,
                 placeholders_above,
                 cursor,
+                cursor_glyph,
+                shape_line_count,
+                shape_line_ms,
+                text_run_count,
                 "slow terminal element paint"
             );
         }
