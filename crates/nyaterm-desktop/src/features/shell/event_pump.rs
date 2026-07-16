@@ -27,12 +27,13 @@ impl NyaTermApp {
             terminal_windows_active: self.terminal_windows.is_some(),
         };
 
+        // Prefer local metadata over SessionManager::list_sessions so publish
+        // never takes the transport session map lock on the UI tick.
         let live_session_ids = self
-            .session_manager
-            .list_sessions()
-            .unwrap_or_default()
-            .into_iter()
-            .map(|session| session.id)
+            .session_metadata
+            .iter()
+            .filter(|(_, metadata)| !metadata.disconnected)
+            .map(|(session_id, _)| session_id.clone())
             .collect();
         let pending_start_count =
             self.pending_session_starts.len() + self.pending_saved_connection_queue.len();

@@ -2,11 +2,10 @@ use super::*;
 
 impl NyaTermApp {
     pub(in crate::features) fn live_session_ids(&self) -> HashSet<String> {
-        self.session_manager
-            .list_sessions()
-            .unwrap_or_default()
-            .into_iter()
-            .map(|session| session.id)
+        self.session_metadata
+            .iter()
+            .filter(|(_, metadata)| !metadata.disconnected)
+            .map(|(session_id, _)| session_id.clone())
             .collect()
     }
 
