@@ -187,7 +187,7 @@ impl NyaTermApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> bool {
-        if self.has_pending_session_start() {
+        if self.pending_saved_connection_queue.is_empty() || self.has_pending_session_start() {
             return false;
         }
         let mut dirty = false;

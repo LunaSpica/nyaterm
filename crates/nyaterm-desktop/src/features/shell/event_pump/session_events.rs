@@ -43,31 +43,46 @@ impl NyaTermApp {
         let drain_budget = session_event_drain_budget(self.runtime_output_pressure_active());
 
         if self.pending_session_events.is_empty() {
-            let drain = self.session_event_bridge.drain_events_with_output_budget(
-                drain_budget.max_events,
-                drain_budget.max_output_bytes,
-            );
-            transport_queued_events = drain
-                .stats
-                .source_queued_events
-                .saturating_add(drain.stats.ui_queued_events);
-            transport_queued_output_bytes = drain
-                .stats
-                .source_queued_output_bytes
-                .saturating_add(drain.stats.ui_queued_output_bytes);
-            bridge_direct_output_events = drain.stats.direct_output_events;
-            bridge_direct_output_bytes = drain.stats.direct_output_bytes;
-            bridge_direct_backpressure_events = drain.stats.direct_backpressure_events;
-            bridge_direct_backpressure_bytes = drain.stats.direct_backpressure_bytes;
-            bridge_drained_ui_events = drain.stats.drained_ui_events;
-            bridge_drained_ui_output_bytes = drain.stats.drained_ui_output_bytes;
-            if drain.stats.dropped_output_bytes > 0 {
-                self.terminal_runtime.session_event_dropped_output_bytes = self
-                    .terminal_runtime
-                    .session_event_dropped_output_bytes
-                    .saturating_add(drain.stats.dropped_output_bytes as u64);
+            if self.session_event_bridge.has_pending_ui_work() {
+                let drain = self.session_event_bridge.drain_events_with_output_budget(
+                    drain_budget.max_events,
+                    drain_budget.max_output_bytes,
+                );
+                transport_queued_events = drain
+                    .stats
+                    .source_queued_events
+                    .saturating_add(drain.stats.ui_queued_events);
+                transport_queued_output_bytes = drain
+                    .stats
+                    .source_queued_output_bytes
+                    .saturating_add(drain.stats.ui_queued_output_bytes);
+                bridge_direct_output_events = drain.stats.direct_output_events;
+                bridge_direct_output_bytes = drain.stats.direct_output_bytes;
+                bridge_direct_backpressure_events = drain.stats.direct_backpressure_events;
+                bridge_direct_backpressure_bytes = drain.stats.direct_backpressure_bytes;
+                bridge_drained_ui_events = drain.stats.drained_ui_events;
+                bridge_drained_ui_output_bytes = drain.stats.drained_ui_output_bytes;
+                if drain.stats.dropped_output_bytes > 0 {
+                    self.terminal_runtime.session_event_dropped_output_bytes = self
+                        .terminal_runtime
+                        .session_event_dropped_output_bytes
+                        .saturating_add(drain.stats.dropped_output_bytes as u64);
+                }
+                self.pending_session_events.extend(drain.events);
+            } else {
+                // Direct-output-only ticks: harvest counters without UI queue lock.
+                let stats = self.session_event_bridge.harvest_direct_stats();
+                transport_queued_events = stats
+                    .source_queued_events
+                    .saturating_add(stats.ui_queued_events);
+                transport_queued_output_bytes = stats
+                    .source_queued_output_bytes
+                    .saturating_add(stats.ui_queued_output_bytes);
+                bridge_direct_output_events = stats.direct_output_events;
+                bridge_direct_output_bytes = stats.direct_output_bytes;
+                bridge_direct_backpressure_events = stats.direct_backpressure_events;
+                bridge_direct_backpressure_bytes = stats.direct_backpressure_bytes;
             }
-            self.pending_session_events.extend(drain.events);
         }
 
         if !self.pending_session_events.is_empty() {
@@ -105,50 +120,14 @@ impl NyaTermApp {
                             &mut pending_frame_outputs,
                             &mut drain_timings,
                         );
-                        self.note_trzsz_output_discontinuity(&session_id);
-                        self.note_zmodem_output_discontinuity(&session_id, bytes, cx);
-                        self.note_ai_agent_output_discontinuity(&session_id, bytes, cx);
-                        self.session_event_bridge.route_session_to_ui(&session_id);
-                        let encoding = self.settings.interaction_default_encoding.clone();
-                        let view = self
-                            .terminal_views
-                            .entry(session_id.clone())
-                            .or_insert_with(TerminalViewState::new);
-                        view.set_encoding(&encoding);
-                        view.note_output_discontinuity(bytes);
-                        let marker = terminal_output_dropped_marker(bytes);
-                        self.recording_write_pipeline
-                            .write_output(session_id.clone(), marker.clone());
-                        self.append_terminal_log_for_session(Some(&session_id), &marker, true);
-                        if self.active_session_id.as_deref() == Some(session_id.as_str()) {
-                            self.terminal_status = format!(
-                                "terminal output overloaded; dropped {} queued byte(s)",
-                                bytes
-                            );
-                            dirty = true;
-                        }
+                        dirty |= self.handle_session_output_dropped_event(session_id, bytes, cx);
                     }
                     SessionEvent::Exited { session_id } => {
                         self.flush_pending_session_frame_outputs(
                             &mut pending_frame_outputs,
                             &mut drain_timings,
                         );
-                        self.clear_trzsz_session(&session_id);
-                        self.clear_zmodem_session(&session_id);
-                        self.session_event_bridge.clear_session(&session_id);
-                        self.recording_write_pipeline
-                            .cleanup_session(session_id.clone());
-                        let _ = self.session_manager.close(&session_id);
-                        if self.session_metadata.contains_key(&session_id) {
-                            // Keep the tab so the user can reconnect (Tauri disconnected pane).
-                            self.mark_session_disconnected(&session_id, cx);
-                            self.terminal_status =
-                                format!("session disconnected {}", short_id(&session_id));
-                        } else {
-                            self.terminal_status =
-                                format!("session exited {}", short_id(&session_id));
-                        }
-                        dirty = true;
+                        dirty |= self.handle_session_exited_event(session_id, cx);
                     }
                     SessionEvent::Error {
                         session_id,
@@ -158,22 +137,7 @@ impl NyaTermApp {
                             &mut pending_frame_outputs,
                             &mut drain_timings,
                         );
-                        let log_message = terminal_log_plain_text(&message);
-                        let log = format!("\n# session error: {log_message}\n");
-                        if !session_id.is_empty() {
-                            self.sync_session_event_bridge_session_policy(&session_id);
-                            self.recording_write_pipeline
-                                .write_output(session_id.clone(), log.clone());
-                        }
-                        if session_id.is_empty()
-                            || self.active_session_id.as_deref() == Some(session_id.as_str())
-                        {
-                            self.terminal_status = format!("session error: {message}");
-                            self.append_terminal_log(log);
-                        } else {
-                            self.append_terminal_log_for_session(Some(&session_id), &log, true);
-                        }
-                        dirty = true;
+                        dirty |= self.handle_session_error_event(session_id, message);
                     }
                 }
                 if session_event_drain_should_yield(
@@ -239,6 +203,71 @@ impl NyaTermApp {
             );
         }
         dirty
+    }
+
+    fn handle_session_output_dropped_event(
+        &mut self,
+        session_id: String,
+        bytes: usize,
+        cx: &mut Context<Self>,
+    ) -> bool {
+        self.note_trzsz_output_discontinuity(&session_id);
+        self.note_zmodem_output_discontinuity(&session_id, bytes, cx);
+        self.note_ai_agent_output_discontinuity(&session_id, bytes, cx);
+        self.session_event_bridge.route_session_to_ui(&session_id);
+        let encoding = self.settings.interaction_default_encoding.clone();
+        let view = self
+            .terminal_views
+            .entry(session_id.clone())
+            .or_insert_with(TerminalViewState::new);
+        view.set_encoding(&encoding);
+        view.note_output_discontinuity(bytes);
+        let marker = terminal_output_dropped_marker(bytes);
+        self.recording_write_pipeline
+            .write_output(session_id.clone(), marker.clone());
+        self.append_terminal_log_for_session(Some(&session_id), &marker, true);
+        if self.active_session_id.as_deref() == Some(session_id.as_str()) {
+            self.terminal_status = format!(
+                "terminal output overloaded; dropped {} queued byte(s)",
+                bytes
+            );
+            return true;
+        }
+        false
+    }
+
+    fn handle_session_exited_event(&mut self, session_id: String, cx: &mut Context<Self>) -> bool {
+        self.clear_trzsz_session(&session_id);
+        self.clear_zmodem_session(&session_id);
+        self.session_event_bridge.clear_session(&session_id);
+        self.recording_write_pipeline
+            .cleanup_session(session_id.clone());
+        let _ = self.session_manager.close(&session_id);
+        if self.session_metadata.contains_key(&session_id) {
+            // Keep the tab so the user can reconnect (Tauri disconnected pane).
+            self.mark_session_disconnected(&session_id, cx);
+            self.terminal_status = format!("session disconnected {}", short_id(&session_id));
+        } else {
+            self.terminal_status = format!("session exited {}", short_id(&session_id));
+        }
+        true
+    }
+
+    fn handle_session_error_event(&mut self, session_id: String, message: String) -> bool {
+        let log_message = terminal_log_plain_text(&message);
+        let log = format!("\n# session error: {log_message}\n");
+        if !session_id.is_empty() {
+            self.sync_session_event_bridge_session_policy(&session_id);
+            self.recording_write_pipeline
+                .write_output(session_id.clone(), log.clone());
+        }
+        if session_id.is_empty() || self.active_session_id.as_deref() == Some(session_id.as_str()) {
+            self.terminal_status = format!("session error: {message}");
+            self.append_terminal_log(log);
+        } else {
+            self.append_terminal_log_for_session(Some(&session_id), &log, true);
+        }
+        true
     }
 
     fn handle_session_output_event(

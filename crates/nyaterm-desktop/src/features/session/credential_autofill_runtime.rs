@@ -106,6 +106,14 @@ impl NyaTermApp {
         &mut self,
         cx: &mut Context<Self>,
     ) -> bool {
+        // Common idle path: no credentials, no detection, no match pipeline reply.
+        if self.credential_autofill_pending_request.is_none()
+            && !self.credential_autofill_detection_pending
+            && self.connection_saved_credentials.is_empty()
+            && self.credential_autofill_pending.is_none()
+        {
+            return false;
+        }
         let mut dirty = self.drain_credential_autofill_match_events(cx);
         let detection_was_pending = self.credential_autofill_detection_pending;
         if credential_autofill_snapshot_detection_can_run(

@@ -1,7 +1,7 @@
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::sync::{
     Arc, Mutex,
-    atomic::{AtomicBool, AtomicU64, Ordering},
+    atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering},
 };
 use std::thread;
 use std::time::{Duration, Instant};
@@ -51,6 +51,8 @@ pub(crate) struct SessionEventBridge {
 struct SessionEventBridgeState {
     control: Mutex<SessionEventBridgeControl>,
     ui_queue: SessionEventBridgeQueue,
+    source_queued_events: AtomicUsize,
+    source_queued_output_bytes: AtomicUsize,
     direct_output_events: AtomicU64,
     direct_output_bytes: AtomicU64,
     direct_backpressure_events: AtomicU64,
@@ -107,6 +109,8 @@ impl SessionEventBridge {
                 source_queued_output_bytes: 0,
             }),
             ui_queue: SessionEventBridgeQueue::new(),
+            source_queued_events: AtomicUsize::new(0),
+            source_queued_output_bytes: AtomicUsize::new(0),
             direct_output_events: AtomicU64::new(0),
             direct_output_bytes: AtomicU64::new(0),
             direct_backpressure_events: AtomicU64::new(0),
@@ -174,10 +178,11 @@ impl SessionEventBridge {
             .state
             .direct_backpressure_bytes
             .swap(0, Ordering::Relaxed);
-        if let Ok(control) = self.state.control.lock() {
-            drain.stats.source_queued_events = control.source_queued_events;
-            drain.stats.source_queued_output_bytes = control.source_queued_output_bytes;
-        }
+        drain.stats.source_queued_events = self.state.source_queued_events.load(Ordering::Relaxed);
+        drain.stats.source_queued_output_bytes = self
+            .state
+            .source_queued_output_bytes
+            .load(Ordering::Relaxed);
         drain
     }
 
@@ -187,6 +192,46 @@ impl SessionEventBridge {
 
     pub(crate) fn queued_output_bytes(&self) -> usize {
         self.state.ui_queue.queued_output_bytes()
+    }
+
+    pub(crate) fn source_queued_event_count(&self) -> usize {
+        self.state.source_queued_events.load(Ordering::Relaxed)
+    }
+
+    pub(crate) fn source_queued_output_bytes(&self) -> usize {
+        self.state
+            .source_queued_output_bytes
+            .load(Ordering::Relaxed)
+    }
+
+    pub(crate) fn has_pending_ui_work(&self) -> bool {
+        self.queued_event_count() > 0
+            || self.source_queued_event_count() > 0
+            || self.source_queued_output_bytes() > 0
+    }
+
+    /// Harvest direct/source counters without locking the UI queue.
+    /// Used on idle ticks when there is no UI-routed work to drain.
+    pub(crate) fn harvest_direct_stats(&self) -> SessionEventBridgeStats {
+        SessionEventBridgeStats {
+            direct_output_events: self.state.direct_output_events.swap(0, Ordering::Relaxed),
+            direct_output_bytes: self.state.direct_output_bytes.swap(0, Ordering::Relaxed),
+            direct_backpressure_events: self
+                .state
+                .direct_backpressure_events
+                .swap(0, Ordering::Relaxed),
+            direct_backpressure_bytes: self
+                .state
+                .direct_backpressure_bytes
+                .swap(0, Ordering::Relaxed),
+            drained_ui_events: 0,
+            drained_ui_output_bytes: 0,
+            ui_queued_events: self.queued_event_count(),
+            ui_queued_output_bytes: self.queued_output_bytes(),
+            source_queued_events: self.source_queued_event_count(),
+            source_queued_output_bytes: self.source_queued_output_bytes(),
+            dropped_output_bytes: 0,
+        }
     }
 }
 
@@ -207,6 +252,10 @@ impl SessionEventBridgeState {
     }
 
     fn update_source_stats(&self, stats: &SessionDrainStats) {
+        self.source_queued_events
+            .store(stats.queued_events, Ordering::Relaxed);
+        self.source_queued_output_bytes
+            .store(stats.queued_output_bytes, Ordering::Relaxed);
         if let Ok(mut control) = self.control.lock() {
             control.source_queued_events = stats.queued_events;
             control.source_queued_output_bytes = stats.queued_output_bytes;

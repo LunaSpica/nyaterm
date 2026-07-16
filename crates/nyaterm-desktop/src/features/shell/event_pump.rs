@@ -95,8 +95,10 @@ impl NyaTermApp {
             self.terminal_runtime.session_event_backlog_active,
             self.terminal_runtime.session_event_queued_output_bytes,
             self.pending_session_events.len(),
-            self.session_event_bridge.queued_event_count(),
-            self.session_event_bridge.queued_output_bytes(),
+            self.session_event_bridge.queued_event_count()
+                + self.session_event_bridge.source_queued_event_count(),
+            self.session_event_bridge.queued_output_bytes()
+                + self.session_event_bridge.source_queued_output_bytes(),
             self.pending_terminal_frame_events.len(),
             self.terminal_frame_pipeline.queued_event_count(),
             self.terminal_frame_pipeline.queued_output_bytes(),
