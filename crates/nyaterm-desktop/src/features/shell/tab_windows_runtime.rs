@@ -311,28 +311,8 @@ impl NyaTermApp {
         if !self.settings.startup_restore || !self.settings.startup_restore_window_layout {
             return;
         }
-        // Only multi-leaf layouts are worth persisting; flat strip stores null.
-        let ordered = self
-            .ordered_tab_sessions()
-            .into_iter()
-            .map(|session| session.id)
-            .collect::<Vec<_>>();
-        let layout = self
-            .terminal_windows
-            .as_ref()
-            .filter(|_| self.terminal_windows_is_multi_leaf())
-            .and_then(|root| root.serialize_layout(&ordered));
-        match ConnectionStore::open_with_portable_key_path(
-            self.runtime.config_dir(),
-            self.runtime.portable_key_path().map(ToOwned::to_owned),
-        )
-        .and_then(|store| store.save_terminal_window_layout(layout.as_ref()))
-        {
-            Ok(()) => {}
-            Err(error) => {
-                self.terminal_status = format!("failed to save window layout: {error}");
-            }
-        }
+        // Defer disk write — layout changes must not open redb on the UI hot path.
+        self.terminal_runtime.window_layout_persist_dirty = true;
     }
 
     pub(in crate::features) fn try_restore_terminal_window_layout(&mut self) {
@@ -341,6 +321,10 @@ impl NyaTermApp {
         }
         if !self.settings.startup_restore || !self.settings.startup_restore_window_layout {
             self.terminal_windows_restored = true;
+            return;
+        }
+        // Do not open the config DB during connect/register; wait for idle.
+        if !self.pending_session_starts.is_empty() || self.runtime_output_pressure_active() {
             return;
         }
         let ordered = self

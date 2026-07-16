@@ -122,6 +122,7 @@ impl NyaTermApp {
             self.settings.recording_include_timestamps,
         ) {
             Ok(()) => {
+                self.recording_active_count = self.recording_active_count.saturating_add(1);
                 self.terminal_status = format!("recording started: {path}");
                 self.append_terminal_log(format!("\n# recording started: {path}\n"));
             }
@@ -151,6 +152,7 @@ impl NyaTermApp {
         self.recording_write_pipeline.flush();
         match self.recording_manager.stop(session_id) {
             Ok(path) => {
+                self.recording_active_count = self.recording_active_count.saturating_sub(1);
                 self.terminal_status = format!("recording saved: {path}");
                 self.append_terminal_log(format!("\n# recording saved: {path}\n"));
             }

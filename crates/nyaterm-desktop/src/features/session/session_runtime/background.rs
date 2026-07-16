@@ -441,13 +441,18 @@ impl NyaTermApp {
                         },
                     );
                     self.activate_session_id(&session_id);
-                    self.terminal_status = format!("running {}", short_id(&session_id));
-                    self.append_terminal_log(format!(
-                        "\n# started {} ({})\n",
-                        event.connection_name,
-                        short_id(&session_id)
-                    ));
-                    self.maybe_auto_start_recording(&session_id, &session_info.name);
+                    self.terminal_status = format!(
+                        "running {} · {}",
+                        short_id(&session_id),
+                        event.connection_name
+                    );
+                    // Do not append local log text through the full terminal decode path
+                    // on connect success — that competes with the first SSH/PTY frames.
+                    // Auto-recording file open is deferred to the idle plane.
+                    if self.settings.recording_auto_start {
+                        self.pending_auto_recording_session =
+                            Some((session_id.clone(), session_info.name.clone()));
+                    }
                     if let Some(startup_command) =
                         pending.and_then(|pending| pending.startup_command)
                     {

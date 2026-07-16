@@ -46,7 +46,7 @@ impl NyaTermApp {
         } else {
             "idle".to_string()
         };
-        let recording_count = self.recording_manager.list_recording_sessions().len();
+        let recording_count = self.recording_active_count;
         let recording_status = if recording_count == 0 {
             "off".to_string()
         } else {

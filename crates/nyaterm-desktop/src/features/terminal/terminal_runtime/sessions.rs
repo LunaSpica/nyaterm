@@ -199,7 +199,7 @@ impl NyaTermApp {
         }
         // Persist workspace before exit when startup restore is enabled.
         if self.settings.startup_restore {
-            self.persist_open_tabs();
+            self.flush_open_tabs_now();
         }
         window.remove_window();
     }
@@ -245,7 +245,7 @@ impl NyaTermApp {
         self.close_all_sessions(cx);
         if quit_after {
             if self.settings.startup_restore {
-                self.persist_open_tabs();
+                self.flush_open_tabs_now();
             }
             self.terminal_status = "sessions closed; closing window".to_string();
             window.remove_window();

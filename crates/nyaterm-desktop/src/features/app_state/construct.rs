@@ -406,6 +406,8 @@ impl NyaTermApp {
             session_manager,
             session_event_bridge,
             recording_manager,
+            recording_active_count: 0,
+            pending_auto_recording_session: None,
             recording_write_pipeline,
             recording_search_draft: String::new(),
             recording_search_focus: cx.focus_handle(),

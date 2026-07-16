@@ -354,6 +354,23 @@ impl NyaTermApp {
         let pending_session_start = self.has_pending_session_start();
         let queued_saved_connection_start = !self.pending_saved_connection_queue.is_empty();
 
+        // Durable open-tabs/layout writes were removed from connect/register;
+        // flush here when the UI is not under output/geometry pressure.
+        if self.terminal_runtime.open_tabs_persist_dirty
+            || self.terminal_runtime.window_layout_persist_dirty
+        {
+            self.flush_pending_session_persistence();
+        }
+        if !self.terminal_windows_restored {
+            self.try_restore_terminal_window_layout();
+            if self.terminal_windows.is_some() {
+                self.reconcile_terminal_windows();
+            }
+        }
+        if let Some((session_id, session_name)) = self.pending_auto_recording_session.take() {
+            self.maybe_auto_start_recording(&session_id, &session_name);
+        }
+
         let stage_started_at = Instant::now();
         dirty |= self.drive_startup_restore_queue_tick(window, cx);
         result.startup_restore = stage_started_at.elapsed();

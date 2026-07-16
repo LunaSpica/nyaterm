@@ -334,7 +334,7 @@ impl NyaTermApp {
             ActivityBarEntry::CommandSend => self.bottom_panel == BottomPanelMode::CommandSend,
             ActivityBarEntry::Recording => {
                 self.current_right_panel() == Some(NavItem::Recording)
-                    || !self.recording_manager.list_recording_sessions().is_empty()
+                    || self.recording_active_count > 0
             }
             ActivityBarEntry::Lock => self.is_locked,
         }

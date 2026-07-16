@@ -247,8 +247,8 @@ impl NyaTermApp {
         };
         let entry_id = entry.persistence_id().to_string();
         let context_entry_id = entry_id.clone();
-        let recording_active = matches!(entry, ActivityBarEntry::Recording)
-            && !self.recording_manager.list_recording_sessions().is_empty();
+        let recording_active =
+            matches!(entry, ActivityBarEntry::Recording) && self.recording_active_count > 0;
         let indicator = if recording_active {
             rgb(palette.danger)
         } else if selected {
@@ -445,7 +445,7 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
         let palette = self.theme_palette();
-        let recording_count = self.recording_manager.list_recording_sessions().len();
+        let recording_count = self.recording_active_count;
         let selected = self.right_focus == RightFocus::Recording || recording_count > 0;
         div()
             .id(SharedString::from("activity-recording"))

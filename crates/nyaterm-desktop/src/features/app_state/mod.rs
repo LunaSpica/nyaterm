@@ -187,6 +187,10 @@ pub struct NyaTermApp {
     pub(in crate::features) session_manager: Arc<SessionManager>,
     pub(in crate::features) session_event_bridge: SessionEventBridge,
     pub(in crate::features) recording_manager: Arc<RecordingManager>,
+    /// Cached count of sessions with active file recording (paint-safe).
+    pub(in crate::features) recording_active_count: usize,
+    /// Deferred auto-start recording after connect (avoid file open on success arm).
+    pub(in crate::features) pending_auto_recording_session: Option<(String, String)>,
     pub(in crate::features) recording_write_pipeline: RecordingWritePipeline,
     pub(in crate::features) recording_search_draft: String,
     pub(in crate::features) recording_search_focus: FocusHandle,

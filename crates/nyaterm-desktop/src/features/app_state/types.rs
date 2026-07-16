@@ -13,6 +13,9 @@ pub(in crate::features) struct TerminalRuntimeUiState {
     pub last_pending_session_status_at: Option<Instant>,
     pub last_terminal_resize_at: Option<Instant>,
     pub last_terminal_frame_apply_at: Option<Instant>,
+    /// Open-tabs / window-layout settings need a durable write.
+    pub open_tabs_persist_dirty: bool,
+    pub window_layout_persist_dirty: bool,
     pub cursor_blink_on: bool,
     pub cursor_blink_tick: u8,
     pub visual_bell_ticks: u8,
@@ -84,6 +87,8 @@ impl Default for TerminalRuntimeUiState {
             last_pending_session_status_at: None,
             last_terminal_resize_at: None,
             last_terminal_frame_apply_at: None,
+            open_tabs_persist_dirty: false,
+            window_layout_persist_dirty: false,
             cursor_blink_on: true,
             cursor_blink_tick: 0,
             visual_bell_ticks: 0,

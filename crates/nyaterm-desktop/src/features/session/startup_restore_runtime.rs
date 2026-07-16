@@ -9,24 +9,88 @@ impl NyaTermApp {
         });
     }
 
+    /// Mark open tabs (and multi-leaf layout) dirty for a later idle flush.
+    ///
+    /// Connect/register must not open the config database or rewrite settings on
+    /// the UI thread — that path was a major connect-time freeze source.
     pub(in crate::features) fn persist_open_tabs(&mut self) {
         if !self.settings.startup_restore {
             return;
         }
-        let tabs = self.serialize_open_tabs();
-        match ConnectionStore::open_with_portable_key_path(
-            self.runtime.config_dir(),
-            self.runtime.portable_key_path().map(ToOwned::to_owned),
-        )
-        .and_then(|store| store.save_open_tabs(&tabs))
-        {
-            Ok(()) => {}
-            Err(error) => {
-                self.terminal_status = format!("failed to save open tabs: {error}");
-            }
-        }
+        self.terminal_runtime.open_tabs_persist_dirty = true;
         // Keep multi-leaf layout indexes aligned with the same ordered tab list.
         self.persist_terminal_window_layout();
+    }
+
+    /// Force a durable open-tabs write (window close / explicit quit paths).
+    pub(in crate::features) fn flush_open_tabs_now(&mut self) {
+        if !self.settings.startup_restore {
+            self.terminal_runtime.open_tabs_persist_dirty = false;
+            self.terminal_runtime.window_layout_persist_dirty = false;
+            return;
+        }
+        self.terminal_runtime.open_tabs_persist_dirty = true;
+        self.terminal_runtime.window_layout_persist_dirty = true;
+        self.flush_pending_session_persistence();
+    }
+
+    /// Idle/control-plane: write dirty open-tabs / window layout to disk.
+    pub(in crate::features) fn flush_pending_session_persistence(&mut self) {
+        if !self.settings.startup_restore {
+            self.terminal_runtime.open_tabs_persist_dirty = false;
+            self.terminal_runtime.window_layout_persist_dirty = false;
+            return;
+        }
+        let need_tabs = self.terminal_runtime.open_tabs_persist_dirty;
+        let need_layout = self.terminal_runtime.window_layout_persist_dirty
+            && self.settings.startup_restore_window_layout;
+        if !need_tabs && !need_layout {
+            return;
+        }
+
+        let tabs = need_tabs.then(|| self.serialize_open_tabs());
+        let layout = if need_layout {
+            let ordered = self
+                .ordered_tab_sessions()
+                .into_iter()
+                .map(|session| session.id)
+                .collect::<Vec<_>>();
+            Some(
+                self.terminal_windows
+                    .as_ref()
+                    .filter(|_| self.terminal_windows_is_multi_leaf())
+                    .and_then(|root| root.serialize_layout(&ordered)),
+            )
+        } else {
+            None
+        };
+
+        let config_dir = self.runtime.config_dir().to_path_buf();
+        let portable_key = self.runtime.portable_key_path().map(ToOwned::to_owned);
+        // One store open covers both writes when both are dirty.
+        match ConnectionStore::open_with_portable_key_path(config_dir, portable_key) {
+            Ok(store) => {
+                if let Some(tabs) = tabs.as_ref() {
+                    match store.save_open_tabs(tabs) {
+                        Ok(()) => self.terminal_runtime.open_tabs_persist_dirty = false,
+                        Err(error) => {
+                            self.terminal_status = format!("failed to save open tabs: {error}");
+                        }
+                    }
+                }
+                if let Some(layout) = layout.as_ref() {
+                    match store.save_terminal_window_layout(layout.as_ref()) {
+                        Ok(()) => self.terminal_runtime.window_layout_persist_dirty = false,
+                        Err(error) => {
+                            self.terminal_status = format!("failed to save window layout: {error}");
+                        }
+                    }
+                }
+            }
+            Err(error) => {
+                self.terminal_status = format!("failed to open config store: {error}");
+            }
+        }
     }
 
     pub(in crate::features) fn serialize_open_tabs(&self) -> Vec<RestorableOpenTab> {
