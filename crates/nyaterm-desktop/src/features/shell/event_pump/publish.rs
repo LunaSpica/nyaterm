@@ -2,14 +2,24 @@ use super::*;
 
 impl NyaTermApp {
     pub(in crate::features) fn publish_store_snapshots(&mut self, cx: &mut Context<Self>) {
+        self.publish_store_snapshots_with_scope(cx, true);
+    }
+
+    pub(super) fn publish_store_snapshots_with_scope(
+        &mut self,
+        cx: &mut Context<Self>,
+        include_sideband: bool,
+    ) {
         self.terminal_runtime.last_store_snapshot_publish_at = Some(Instant::now());
 
         let workspace = crate::entities::WorkspaceSnapshot {
             active_session_id: self.active_session_id.clone(),
+            // Local tab-root order only; avoid SessionManager::list_sessions on the UI tick.
             ordered_tab_roots: self
-                .ordered_tab_sessions()
-                .into_iter()
-                .map(|session| session.id)
+                .session_order
+                .iter()
+                .filter(|session_id| !self.is_secondary_pane_session(session_id))
+                .cloned()
                 .collect(),
             selected_nav: self.selected_nav.label().to_string(),
             main_mode: match self.main_mode {
@@ -81,6 +91,10 @@ impl NyaTermApp {
                 cx.notify();
             }
         });
+
+        if !include_sideband {
+            return;
+        }
 
         let settings = crate::entities::SettingsSnapshot {
             active_tab: self.settings_active_tab.label().to_string(),

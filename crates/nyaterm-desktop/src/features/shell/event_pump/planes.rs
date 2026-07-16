@@ -17,6 +17,12 @@ impl NyaTermApp {
     }
 
     fn drive_pending_focus(&mut self, window: &mut Window) -> bool {
+        if !self.ai_chat_focus_pending
+            && !self.transfer_rename_focus_pending
+            && !self.credential_prompt_focus_pending
+        {
+            return false;
+        }
         let mut dirty = false;
         if self.ai_chat_focus_pending {
             window.focus(&self.ai_chat_focus);
@@ -140,16 +146,15 @@ impl NyaTermApp {
         let publish_started_at = Instant::now();
         // Planes above do not drain more output; reuse one final pressure sample.
         let output_pressure = self.runtime_output_pressure_active();
-        let should_publish_snapshots = should_publish_store_snapshots(
-            visual_dirty,
-            output_pressure,
-            store_snapshot_publish_due(
-                self.terminal_runtime.last_store_snapshot_publish_at,
-                publish_started_at,
-            ),
+        let heartbeat_due = store_snapshot_publish_due(
+            self.terminal_runtime.last_store_snapshot_publish_at,
+            publish_started_at,
         );
+        let should_publish_snapshots =
+            should_publish_store_snapshots(visual_dirty, output_pressure, heartbeat_due);
         if should_publish_snapshots {
-            self.publish_store_snapshots(cx);
+            // Core workspace/session/overlay always; sideband stores only on heartbeat.
+            self.publish_store_snapshots_with_scope(cx, heartbeat_due || !visual_dirty);
         }
         let publish_duration = publish_started_at.elapsed();
         let tick_duration = tick_started_at.elapsed();
@@ -404,16 +409,26 @@ impl NyaTermApp {
             !self.pending_saved_connection_queue.is_empty(),
         );
         // Large-output protection recovery accounting.
+        // Under pressure only touch views that already need recovery accounting.
         let visible_session_ids = self.visible_terminal_session_ids();
         for session_id in terminal_performance_tick_session_ids(&visible_session_ids) {
-            if let Some(view) = self.terminal_views.get_mut(&session_id) {
-                let before = view.performance_overlay;
-                let was_render_degraded = view.render_degraded;
-                view.tick_performance_overlay(render_work_pressure);
-                if view.performance_overlay != before || view.render_degraded != was_render_degraded
-                {
-                    dirty = true;
-                }
+            let Some(view) = self.terminal_views.get_mut(&session_id) else {
+                continue;
+            };
+            // Under pressure always account so views can enter degraded mode.
+            // When calm, skip views that have nothing to recover.
+            if !render_work_pressure
+                && !view.render_degraded
+                && view.performance_overlay.is_none()
+                && view.output_burst_bytes == 0
+            {
+                continue;
+            }
+            let before = view.performance_overlay;
+            let was_render_degraded = view.render_degraded;
+            view.tick_performance_overlay(render_work_pressure);
+            if view.performance_overlay != before || view.render_degraded != was_render_degraded {
+                dirty = true;
             }
         }
         // Drop overlay only while a platform drag is active.
