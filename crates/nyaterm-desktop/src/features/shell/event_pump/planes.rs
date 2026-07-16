@@ -217,6 +217,23 @@ impl NyaTermApp {
         let mut timings = RuntimeControlPlaneDrainTimings::default();
         let mut dirty = false;
 
+        // Common idle path: no connecting sessions and no auth/SFTP prompts.
+        if self.pending_session_starts.is_empty()
+            && self.pending_saved_connection_queue.is_empty()
+            && self.active_host_key_prompt.is_none()
+            && self.active_credential_prompt.is_none()
+            && self.active_duplicate_prompt.is_none()
+            && !self.host_key_prompts.has_pending()
+            && !self.credential_prompts.has_pending()
+            && !self.duplicate_prompts.has_pending()
+        {
+            return RuntimeControlPlaneResult {
+                dirty: false,
+                duration: started_at.elapsed(),
+                timings,
+            };
+        }
+
         let stage_started_at = Instant::now();
         dirty |= self.drain_session_start_events(cx);
         timings.session_start = stage_started_at.elapsed();
