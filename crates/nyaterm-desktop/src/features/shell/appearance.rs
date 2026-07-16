@@ -167,6 +167,20 @@ impl NyaTermApp {
         self.cached_keyword_highlight_rules = None;
     }
 
+    pub(in crate::features) fn refresh_visible_terminal_surfaces(
+        &mut self,
+        cx: &mut Context<Self>,
+    ) {
+        let ids = self
+            .visible_terminal_session_ids()
+            .into_iter()
+            .map(str::to_string)
+            .collect::<Vec<_>>();
+        for session_id in ids {
+            self.sync_terminal_surface_paint(&session_id, cx);
+        }
+    }
+
     pub(in crate::features) fn update_appearance_theme(
         &mut self,
         theme: &str,
@@ -429,6 +443,7 @@ impl NyaTermApp {
         {
             Ok(settings) => {
                 self.apply_gpui_settings(settings);
+                self.refresh_visible_terminal_surfaces(cx);
                 self.store_status.message = "appearance settings saved".to_string();
                 self.store_status.ready = true;
                 self.terminal_status = "appearance settings saved".to_string();

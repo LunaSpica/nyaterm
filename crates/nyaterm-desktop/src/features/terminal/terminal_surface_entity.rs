@@ -87,6 +87,10 @@ impl TerminalSurface {
         &self.session_id
     }
 
+    pub(in crate::features) fn has_snapshot(&self) -> bool {
+        self.snapshot.is_some()
+    }
+
     pub(in crate::features) fn set_app(&mut self, app: Entity<NyaTermApp>) {
         self.app = Some(app);
     }

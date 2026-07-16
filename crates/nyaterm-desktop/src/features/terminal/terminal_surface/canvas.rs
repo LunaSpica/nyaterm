@@ -339,9 +339,14 @@ impl NyaTermApp {
         let surface_entity = if session_id.is_empty() {
             None
         } else {
-            // Sync includes decorations/keywords/cursor for the entity grid.
-            self.sync_terminal_surface_paint(&session_id, cx);
-            Some(self.ensure_terminal_surface(&session_id, cx))
+            // Do not rebuild surface paint state on every shell paint — frames and
+            // local interactions already sync the entity. Only cold-start once.
+            let surface = self.ensure_terminal_surface(&session_id, cx);
+            let needs_seed = !surface.read(cx).has_snapshot();
+            if needs_seed {
+                self.sync_terminal_surface_paint(&session_id, cx);
+            }
+            Some(surface)
         };
         let output = if let Some(surface) = surface_entity {
             div()
@@ -903,10 +908,12 @@ impl NyaTermApp {
                                         }
                                     }
                                 }
-                                if this.terminal_selection.is_none() {
+                                if this.terminal_selection.is_none()
+                                    && this.terminal_status != "terminal focused"
+                                {
                                     this.terminal_status = "terminal focused".to_string();
+                                    cx.notify();
                                 }
-                                cx.notify();
                             })
                             })
                             .child(

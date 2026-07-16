@@ -105,6 +105,42 @@ pub(crate) fn terminal_expensive_interactions_enabled(
         && performance_mode != TerminalPerformanceMode::Overloaded
 }
 
+/// Unified paint policy for terminal surfaces (single decision point for
+/// decorations / action links / command marks under pressure).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) struct EffectiveTerminalPaintPolicy {
+    pub enhanced_decorations: bool,
+    pub expensive_interactions: bool,
+    pub include_command_marks: bool,
+}
+
+impl EffectiveTerminalPaintPolicy {
+    pub(crate) fn resolve(
+        is_active: bool,
+        render_degraded: bool,
+        runtime_output_pressure: bool,
+        output_burst_bytes: usize,
+        performance_mode: TerminalPerformanceMode,
+        action_links_enabled: bool,
+    ) -> Self {
+        let enhanced_decorations = !render_degraded;
+        let expensive_interactions = terminal_expensive_interactions_enabled(
+            action_links_enabled,
+            is_active,
+            render_degraded,
+            runtime_output_pressure,
+            output_burst_bytes,
+            performance_mode,
+        );
+        let include_command_marks = is_active && enhanced_decorations && !runtime_output_pressure;
+        Self {
+            enhanced_decorations,
+            expensive_interactions,
+            include_command_marks,
+        }
+    }
+}
+
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub(crate) struct TerminalProtocolState {
     pub(crate) focus_reporting: bool,

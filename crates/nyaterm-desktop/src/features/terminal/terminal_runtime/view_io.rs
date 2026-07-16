@@ -1136,15 +1136,16 @@ impl NyaTermApp {
             nyaterm_terminal::CursorShape::Block => self.settings.cursor_style.clone(),
         };
 
-        let enhanced = !render_degraded;
-        let expensive_interactions = terminal_expensive_interactions_enabled(
-            self.settings.terminal_action_links_enabled,
+        let paint_policy = EffectiveTerminalPaintPolicy::resolve(
             is_active,
             render_degraded,
             render_output_pressure,
             burst,
             mode,
+            self.settings.terminal_action_links_enabled,
         );
+        let enhanced = paint_policy.enhanced_decorations;
+        let expensive_interactions = paint_policy.expensive_interactions;
         let action_link_matcher_key = terminal_action_link_matcher_key(
             self.settings.terminal_action_links_enabled,
             &self.settings.terminal_action_links_matchers,
@@ -1215,7 +1216,7 @@ impl NyaTermApp {
                 .hyperlink_lines
                 .iter()
                 .any(|spans| !spans.is_empty());
-        let include_command_marks = is_active && enhanced && !render_output_pressure;
+        let include_command_marks = paint_policy.include_command_marks;
         let has_command_marks =
             include_command_marks && snapshot.command_marks.iter().any(Option::is_some);
         let decorations = if crate::features::terminal_surface::terminal_line_decorations_needed(

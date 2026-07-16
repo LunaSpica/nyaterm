@@ -22,6 +22,7 @@ impl NyaTermApp {
         });
         self.terminal_selection_dragging = false;
         self.terminal_status = "selected all visible terminal text".to_string();
+        self.notify_active_terminal_surface(cx);
         cx.notify();
     }
 
@@ -58,6 +59,7 @@ impl NyaTermApp {
         };
         cx.write_to_clipboard(ClipboardItem::new_string(text));
         self.terminal_status = "copied terminal selection".to_string();
+        self.notify_active_terminal_surface(cx);
         self.terminal_actions_open = false;
         cx.notify();
         true
@@ -104,6 +106,7 @@ impl NyaTermApp {
                 selection.head = cell;
                 self.terminal_selection_dragging = true;
                 self.terminal_status = "selection extended".to_string();
+                self.notify_active_terminal_surface(cx);
                 cx.notify();
                 return;
             }
@@ -115,6 +118,7 @@ impl NyaTermApp {
             });
             self.terminal_selection_dragging = false;
             self.terminal_status = format!("selected line {}", cell.row + 1);
+            self.notify_active_terminal_surface(cx);
             cx.notify();
             return;
         }
@@ -126,6 +130,7 @@ impl NyaTermApp {
             });
             self.terminal_selection_dragging = false;
             self.terminal_status = "selected word".to_string();
+            self.notify_active_terminal_surface(cx);
             cx.notify();
             return;
         }
