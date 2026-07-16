@@ -60,10 +60,15 @@ impl NyaTermApp {
             self.settings.terminal_action_links_enabled,
             &self.settings.terminal_action_links_matchers,
         );
-        let keyword_rules = if render_degraded || !is_active {
-            std::sync::Arc::new(Vec::new())
+        let keyword_rules = if session_id.is_empty() {
+            if render_degraded || !is_active {
+                std::sync::Arc::new(Vec::new())
+            } else {
+                self.resolved_keyword_highlight_rules()
+            }
         } else {
-            self.resolved_keyword_highlight_rules()
+            // Live sessions paint keywords on TerminalSurface.
+            std::sync::Arc::new(Vec::new())
         };
         let snapshot_stage_started_at = Instant::now();
         let layout_cache = self
@@ -283,7 +288,7 @@ impl NyaTermApp {
                 pad + row as f32 * cell_h,
             )
         });
-        let gutter = if gutter_enabled {
+        let gutter = if session_id.is_empty() && gutter_enabled {
             let ts_w = self.terminal_timestamp_gutter_width_px();
             let ln_w = self.terminal_line_number_gutter_width_px();
             let mut gutter = div().flex().flex_col().flex_none();
