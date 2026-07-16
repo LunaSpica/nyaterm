@@ -15,6 +15,10 @@ pub(in crate::features) struct TerminalRuntimeUiState {
     pub last_terminal_frame_apply_at: Option<Instant>,
     /// After connect success, demote idle/visual work until this time (no faster tick).
     pub connect_settle_until: Option<Instant>,
+    /// Last full-shell cx.notify from the runtime tick (paint throttle).
+    pub last_ui_notify_at: Option<Instant>,
+    /// A visual update was deferred by paint throttle and still needs a notify.
+    pub pending_ui_notify: bool,
     /// Open-tabs / window-layout settings need a durable write.
     pub open_tabs_persist_dirty: bool,
     pub window_layout_persist_dirty: bool,
@@ -90,6 +94,8 @@ impl Default for TerminalRuntimeUiState {
             last_terminal_resize_at: None,
             last_terminal_frame_apply_at: None,
             connect_settle_until: None,
+            last_ui_notify_at: None,
+            pending_ui_notify: false,
             open_tabs_persist_dirty: false,
             window_layout_persist_dirty: false,
             cursor_blink_on: true,

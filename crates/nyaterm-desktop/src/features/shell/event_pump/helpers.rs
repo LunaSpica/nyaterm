@@ -16,6 +16,8 @@ pub(super) const WINDOW_GEOMETRY_CHURN_HOLD: Duration = Duration::from_millis(20
 /// After a session becomes live, demote idle/visual for this long so first-frame
 /// output does not compete with chrome rebuilds (does not raise tick cadence).
 pub(super) const CONNECT_SETTLE_HOLD: Duration = Duration::from_millis(750);
+/// Under output pressure / connect settle, coalesce full-shell paints.
+pub(super) const UI_PAINT_THROTTLE: Duration = Duration::from_millis(33);
 pub(super) const TERMINAL_FRAME_APPLY_PRESSURE_INTERVAL: Duration = Duration::from_millis(16);
 pub(super) const SLOW_DIAGNOSTIC_THROTTLE: Duration = Duration::from_secs(2);
 pub(super) const RUNTIME_TICK_SLOW_THRESHOLD: Duration = Duration::from_millis(40);
@@ -166,6 +168,32 @@ pub(super) fn window_geometry_churn_active(
 
 pub(super) fn connect_settle_active(until: Option<Instant>, now: Instant) -> bool {
     until.is_some_and(|until| now < until)
+}
+
+/// Whether a runtime tick should call cx.notify immediately.
+/// Under pressure/settle, terminal-driven dirtiness is coalesced to ~30fps so
+/// the full shell (title/tabs/status/sidebars) is not rebuilt every frame tick.
+pub(super) fn runtime_ui_notify_allowed(
+    visual_dirty: bool,
+    pending_ui_notify: bool,
+    force_immediate: bool,
+    throttle_active: bool,
+    last_ui_notify_at: Option<Instant>,
+    now: Instant,
+) -> bool {
+    if force_immediate {
+        return visual_dirty || pending_ui_notify;
+    }
+    if !visual_dirty && !pending_ui_notify {
+        return false;
+    }
+    if !throttle_active {
+        return true;
+    }
+    last_ui_notify_at.is_none_or(|last| {
+        now.checked_duration_since(last)
+            .is_none_or(|elapsed| elapsed >= UI_PAINT_THROTTLE)
+    })
 }
 
 pub(super) fn runtime_output_pressure_active_from_counts(
@@ -460,6 +488,49 @@ mod tests {
         ));
         assert!(!connect_settle_active(
             Some(now - Duration::from_millis(1)),
+            now
+        ));
+    }
+
+    #[test]
+    fn runtime_ui_notify_throttles_under_pressure() {
+        let now = Instant::now();
+        assert!(!runtime_ui_notify_allowed(
+            false, false, false, true, None, now
+        ));
+        assert!(runtime_ui_notify_allowed(
+            true, false, false, true, None, now
+        ));
+        assert!(!runtime_ui_notify_allowed(
+            true,
+            false,
+            false,
+            true,
+            Some(now),
+            now
+        ));
+        assert!(runtime_ui_notify_allowed(
+            true,
+            false,
+            false,
+            true,
+            Some(now - UI_PAINT_THROTTLE),
+            now
+        ));
+        assert!(runtime_ui_notify_allowed(
+            true,
+            false,
+            true,
+            true,
+            Some(now),
+            now
+        ));
+        assert!(runtime_ui_notify_allowed(
+            false,
+            true,
+            false,
+            false,
+            Some(now),
             now
         ));
     }

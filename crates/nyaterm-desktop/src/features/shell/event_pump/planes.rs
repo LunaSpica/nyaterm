@@ -204,8 +204,29 @@ impl NyaTermApp {
         let pending_session_status_duration = pending_session_stage_started_at.elapsed();
         let visual_dirty = dirty;
         let notify_started_at = Instant::now();
+        let notify_now = notify_started_at;
+        let connect_settle =
+            connect_settle_active(self.terminal_runtime.connect_settle_until, notify_now);
+        let output_pressure_for_notify = self.runtime_output_pressure_active();
+        // Control-plane dirtiness (session start/prompts) must paint immediately.
+        let force_immediate_notify = control.dirty;
+        let throttle_active =
+            !force_immediate_notify && (output_pressure_for_notify || connect_settle);
         if visual_dirty {
+            self.terminal_runtime.pending_ui_notify = true;
+        }
+        let should_notify = runtime_ui_notify_allowed(
+            visual_dirty,
+            self.terminal_runtime.pending_ui_notify,
+            force_immediate_notify,
+            throttle_active,
+            self.terminal_runtime.last_ui_notify_at,
+            notify_now,
+        );
+        if should_notify {
             cx.notify();
+            self.terminal_runtime.last_ui_notify_at = Some(notify_now);
+            self.terminal_runtime.pending_ui_notify = false;
         }
         let notify_duration = notify_started_at.elapsed();
         let publish_started_at = Instant::now();

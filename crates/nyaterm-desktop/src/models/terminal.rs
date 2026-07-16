@@ -691,7 +691,9 @@ impl TerminalViewState {
         skipped_output_bytes: usize,
         revision: u64,
     ) {
-        if !visible_text.is_empty() {
+        // UI output tail is only used for copy/export helpers. Skip rebuilding a
+        // large String during output pressure / degraded paint so frame apply stays cheap.
+        if !visible_text.is_empty() && !self.render_degraded {
             append_terminal_ui_output_tail(&mut self.output, visible_text);
         }
         self.frame_snapshot = Some(snapshot);

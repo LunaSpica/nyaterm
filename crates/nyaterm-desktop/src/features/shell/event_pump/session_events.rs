@@ -66,7 +66,15 @@ impl NyaTermApp {
         let mut bridge_drained_ui_events = 0usize;
         let mut bridge_drained_ui_output_bytes = 0usize;
         let mut pending_frame_outputs: Vec<(String, Vec<u8>)> = Vec::new();
-        let drain_budget = session_event_drain_budget(self.runtime_output_pressure_active());
+        let settle =
+            connect_settle_active(self.terminal_runtime.connect_settle_until, Instant::now());
+        let mut drain_budget =
+            session_event_drain_budget(self.runtime_output_pressure_active() || settle);
+        if settle {
+            // First frames after connect: smaller wall budget leaves room for paint.
+            drain_budget.wall_budget = Duration::from_millis(4);
+            drain_budget.max_output_bytes = drain_budget.max_output_bytes.min(4 * 1024);
+        }
 
         if self.pending_session_events.is_empty() {
             if self.session_event_bridge.has_pending_ui_work() {
