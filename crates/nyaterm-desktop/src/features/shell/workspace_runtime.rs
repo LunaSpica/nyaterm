@@ -94,6 +94,7 @@ impl NyaTermApp {
     pub(in crate::features) fn sync_workspace_split_from_active_tab(&mut self) {
         let Some(active) = self.active_session_id.clone() else {
             self.workspace_split = None;
+            self.sync_terminal_frame_snapshot_priority();
             return;
         };
         let tab_root = self.tab_root_for_session(&active);
@@ -102,6 +103,7 @@ impl NyaTermApp {
             .get(&tab_root)
             .filter(|root| root.is_split())
             .cloned();
+        self.sync_terminal_frame_snapshot_priority();
     }
 
     fn write_back_active_tab_pane_root(&mut self) {

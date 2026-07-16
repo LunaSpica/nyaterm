@@ -2,6 +2,7 @@ use std::borrow::Cow;
 use std::fmt::Write as _;
 
 use super::*;
+use crate::models::append_terminal_ui_output_tail;
 
 const MAX_OSC52_REPLY_CHARS: usize = 1_048_576;
 
@@ -67,13 +68,18 @@ impl NyaTermApp {
         session_id: &str,
         offset: usize,
     ) -> bool {
-        if session_id.is_empty() || offset == 0 {
+        if session_id.is_empty() {
             return false;
         }
         let Some(view) = self.terminal_views.get_mut(session_id) else {
             return false;
         };
-        if view.scrollback_snapshots.contains_key(&offset)
+        // offset 0 is live viewport recovery (after worker skipped hidden snaps).
+        if offset == 0 {
+            if view.frame_snapshot.is_some() || !view.pending_snapshot_offsets.insert(0) {
+                return false;
+            }
+        } else if view.scrollback_snapshots.contains_key(&offset)
             || !view.pending_snapshot_offsets.insert(offset)
         {
             return false;
@@ -85,6 +91,20 @@ impl NyaTermApp {
             self.settings.terminal_action_links_matchers.clone(),
         );
         true
+    }
+
+    pub(in crate::features) fn request_terminal_live_snapshot(&mut self, session_id: &str) -> bool {
+        self.request_terminal_frame_snapshot(session_id, 0)
+    }
+
+    pub(in crate::features) fn sync_terminal_frame_snapshot_priority(&self) {
+        let session_ids = self
+            .visible_terminal_session_ids()
+            .into_iter()
+            .map(str::to_string)
+            .collect::<Vec<_>>();
+        self.terminal_frame_pipeline
+            .set_snapshot_priority(session_ids);
     }
 
     pub(in crate::features) fn request_terminal_frame_snapshot_when_idle(
@@ -141,10 +161,31 @@ impl NyaTermApp {
         if !allow_deferred_work {
             return false;
         }
-        let visible_session_ids = self.visible_terminal_session_ids();
+        let visible_session_ids = self
+            .visible_terminal_session_ids()
+            .into_iter()
+            .map(str::to_string)
+            .collect::<Vec<_>>();
+        let live_recovery_ids = visible_session_ids
+            .iter()
+            .filter(|session_id| {
+                self.terminal_views
+                    .get(session_id.as_str())
+                    .is_some_and(|view| view.frame_snapshot.is_none() && view.scroll_offset == 0)
+            })
+            .cloned()
+            .collect::<Vec<_>>();
+        let visible_refs = visible_session_ids
+            .iter()
+            .map(String::as_str)
+            .collect::<Vec<_>>();
         let snapshot_requests =
-            terminal_frame_snapshot_request_candidates(&self.terminal_views, &visible_session_ids);
+            terminal_frame_snapshot_request_candidates(&self.terminal_views, &visible_refs);
         let mut requested = false;
+        for session_id in live_recovery_ids {
+            // Recover live paint after worker skipped hidden snapshots.
+            requested |= self.request_terminal_live_snapshot(&session_id);
+        }
         for (session_id, offset) in snapshot_requests {
             requested |= self.request_terminal_frame_snapshot(&session_id, offset);
         }
@@ -287,6 +328,7 @@ impl NyaTermApp {
         let is_visible = self.terminal_session_has_visible_surface(&session_id);
         let effects_need_ui_apply = terminal_effects_need_ui_apply(&effects);
         // Under output pressure, skip retaining full snapshots for hidden tabs.
+        // Worker may already omit snapshot for low-priority sessions.
         let keep_hidden_snapshot = !self.runtime_output_pressure_active();
         let view = self
             .terminal_views
@@ -297,19 +339,45 @@ impl NyaTermApp {
             view.has_unread = true;
         }
         let unread_changed = !is_active && !had_unread;
+        let mut need_live_snapshot = false;
         if is_visible {
-            view.apply_terminal_frame_parts(
-                &visible_text,
-                snapshot,
-                action_links,
-                protocol_state,
-                accepted_bytes,
-                skipped_output_bytes,
-                revision,
-            );
+            if let Some(snapshot) = snapshot {
+                view.apply_terminal_frame_parts(
+                    &visible_text,
+                    snapshot,
+                    action_links,
+                    protocol_state,
+                    accepted_bytes,
+                    skipped_output_bytes,
+                    revision,
+                );
+            } else {
+                // Priority lag: visible surface without a snapshot yet — keep
+                // protocol/revision current and request a live snapshot.
+                view.apply_terminal_background_frame_parts(
+                    None,
+                    None,
+                    protocol_state,
+                    skipped_output_bytes,
+                    revision,
+                );
+                if accepted_bytes > 0 {
+                    view.output_burst_bytes =
+                        view.output_burst_bytes.saturating_add(accepted_bytes);
+                    view.enter_render_degraded_mode();
+                }
+                if !visible_text.is_empty() && !view.render_degraded {
+                    append_terminal_ui_output_tail(&mut view.output, &visible_text);
+                }
+                if view.scroll_offset > 0 {
+                    view.has_new_while_scrolled = true;
+                }
+                need_live_snapshot = true;
+            }
         } else {
+            let retain = keep_hidden_snapshot.then_some(snapshot).flatten();
             view.apply_terminal_background_frame_parts(
-                keep_hidden_snapshot.then_some(snapshot),
+                retain,
                 if keep_hidden_snapshot {
                     action_links
                 } else {
@@ -319,6 +387,9 @@ impl NyaTermApp {
                 skipped_output_bytes,
                 revision,
             );
+        }
+        if need_live_snapshot {
+            self.request_terminal_live_snapshot(&session_id);
         }
         if effects_need_ui_apply {
             self.apply_terminal_effects(&session_id, effects, command_running, cx);
@@ -390,25 +461,35 @@ impl NyaTermApp {
             return false;
         };
         view.pending_snapshot_offsets.remove(&frame.offset);
-        view.scrollback_snapshots
-            .insert(frame.offset, frame.snapshot.clone());
-        if let Some(action_links) = frame.action_links {
-            view.scrollback_action_links
-                .insert(frame.offset, action_links);
+        if frame.offset == 0 {
+            // Live viewport recovery for sessions that had worker snapshot skipped.
+            view.frame_snapshot = Some(frame.snapshot.clone());
+            view.frame_action_links = frame.action_links;
+            if frame.revision > view.screen_revision {
+                view.screen_revision = frame.revision;
+            }
+            view.clear_scrollback_query_caches();
         } else {
-            view.scrollback_action_links.remove(&frame.offset);
-        }
-        while view.scrollback_snapshots.len() > 16 {
-            let Some(drop_offset) = view
-                .scrollback_snapshots
-                .keys()
-                .copied()
-                .find(|offset| *offset != frame.offset)
-            else {
-                break;
-            };
-            view.scrollback_snapshots.remove(&drop_offset);
-            view.scrollback_action_links.remove(&drop_offset);
+            view.scrollback_snapshots
+                .insert(frame.offset, frame.snapshot.clone());
+            if let Some(action_links) = frame.action_links {
+                view.scrollback_action_links
+                    .insert(frame.offset, action_links);
+            } else {
+                view.scrollback_action_links.remove(&frame.offset);
+            }
+            while view.scrollback_snapshots.len() > 16 {
+                let Some(drop_offset) = view
+                    .scrollback_snapshots
+                    .keys()
+                    .copied()
+                    .find(|offset| *offset != frame.offset)
+                else {
+                    break;
+                };
+                view.scrollback_snapshots.remove(&drop_offset);
+                view.scrollback_action_links.remove(&drop_offset);
+            }
         }
         if frame.process_duration >= Duration::from_millis(20)
             && self.should_log_slow_diagnostic("terminal_frame_snapshot", Instant::now())
@@ -422,13 +503,19 @@ impl NyaTermApp {
                 "slow terminal frame snapshot"
             );
         }
-        // Scrollback snapshot applies only dirties the surface, not chrome.
-        if self.terminal_session_has_visible_surface(&frame.session_id)
+        // Snapshot applies only dirties the surface, not chrome.
+        let should_paint = self.terminal_session_has_visible_surface(&frame.session_id)
             && self
                 .terminal_views
                 .get(&frame.session_id)
-                .is_some_and(|view| view.scroll_offset == frame.offset)
-        {
+                .is_some_and(|view| {
+                    if frame.offset == 0 {
+                        view.scroll_offset == 0
+                    } else {
+                        view.scroll_offset == frame.offset
+                    }
+                });
+        if should_paint {
             self.sync_terminal_surface_paint(&frame.session_id, cx);
             self.terminal_runtime.terminal_surface_frame_notify_count = self
                 .terminal_runtime
@@ -875,6 +962,7 @@ fn merge_terminal_output_frame_for_apply(
         .skipped_output_bytes
         .saturating_add(newer.skipped_output_bytes);
     append_terminal_apply_visible_tail(&mut older.visible_text, &newer.visible_text);
+    // Prefer the newest revision's snapshot even when None (avoids stale grids).
     older.snapshot = newer.snapshot;
     older.action_links = newer.action_links;
     older.protocol_state = newer.protocol_state;
@@ -975,9 +1063,9 @@ mod frame_event_queue_tests {
             session_id: session_id.to_string(),
             visible_text: format!("rev-{revision}"),
             recording_text_bytes: 0,
-            snapshot: std::sync::Arc::new(
+            snapshot: Some(std::sync::Arc::new(
                 nyaterm_terminal::TerminalScreen::default().viewport_snapshot(0),
-            ),
+            )),
             action_links: None,
             protocol_state: TerminalProtocolState::default(),
             effects: TerminalEffects::default(),

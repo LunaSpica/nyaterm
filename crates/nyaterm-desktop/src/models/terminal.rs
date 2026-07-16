@@ -804,7 +804,7 @@ impl TerminalViewState {
         ));
     }
 
-    fn clear_scrollback_query_caches(&mut self) {
+    pub(crate) fn clear_scrollback_query_caches(&mut self) {
         self.scrollback_snapshots.clear();
         self.scrollback_action_links.clear();
         self.pending_snapshot_offsets.clear();
@@ -1012,6 +1012,12 @@ impl TerminalFramePipeline {
             });
     }
 
+    pub(crate) fn set_snapshot_priority(&self, session_ids: Vec<String>) {
+        let _ = self
+            .command_tx
+            .send(TerminalFrameCommand::SetSnapshotPriority { session_ids });
+    }
+
     pub(crate) fn drain_events_into(
         &self,
         events: &mut VecDeque<TerminalFrameEvent>,
@@ -1082,6 +1088,11 @@ enum TerminalFrameCommand {
         session_id: String,
         max_bytes: usize,
         request_id: String,
+    },
+    /// Prefer building full viewport snapshots for these sessions (visible tabs).
+    /// Empty list means no session is paint-priority (all background).
+    SetSnapshotPriority {
+        session_ids: Vec<String>,
     },
 }
 
@@ -1155,7 +1166,9 @@ pub(crate) struct TerminalFrameOutputEvent {
     pub(crate) session_id: String,
     pub(crate) visible_text: String,
     pub(crate) recording_text_bytes: usize,
-    pub(crate) snapshot: Arc<TerminalSnapshot>,
+    /// Full viewport grid for paint. Worker omits this for low-priority
+    /// (hidden) sessions to avoid per-frame snapshot CPU/memory.
+    pub(crate) snapshot: Option<Arc<TerminalSnapshot>>,
     pub(crate) action_links: Option<TerminalFrameActionLinks>,
     pub(crate) protocol_state: TerminalProtocolState,
     pub(crate) effects: TerminalEffects,
@@ -1239,6 +1252,8 @@ struct TerminalFrameSession {
     output_decoder: TerminalOutputDecoder,
     recording_decoder: TerminalOutputDecoder,
     revision: u64,
+    /// When false, output frames omit full viewport_snapshot (hidden tabs).
+    include_live_snapshot: bool,
 }
 
 impl TerminalFrameSession {
@@ -1255,6 +1270,8 @@ impl TerminalFrameSession {
             output_decoder,
             recording_decoder,
             revision: 0,
+            // New sessions start high-priority until UI reports visibility.
+            include_live_snapshot: true,
         }
     }
 
@@ -1342,7 +1359,13 @@ impl TerminalFrameSession {
     ) -> TerminalFrameOutputEvent {
         let command_running = self.screen.command_running();
         let protocol_state = TerminalProtocolState::from_screen(&self.screen);
-        let snapshot = Arc::new(self.screen.viewport_snapshot(0));
+        // Hidden/low-priority sessions keep protocol/effects without paying for a
+        // full grid snapshot every output frame.
+        let snapshot = if self.include_live_snapshot {
+            Some(Arc::new(self.screen.viewport_snapshot(0)))
+        } else {
+            None
+        };
         TerminalFrameOutputEvent {
             session_id,
             visible_text: batch.visible_text,
@@ -1644,6 +1667,7 @@ fn compact_stale_terminal_frame_commands(commands: &mut VecDeque<TerminalFrameCo
     }
     let mut seen_snapshots: HashSet<(String, usize)> = HashSet::new();
     let mut seen_searches: HashSet<String> = HashSet::new();
+    let mut kept_snapshot_priority = false;
     let mut compacted = VecDeque::with_capacity(commands.len());
 
     for command in commands.drain(..).rev() {
@@ -1653,6 +1677,14 @@ fn compact_stale_terminal_frame_commands(commands: &mut VecDeque<TerminalFrameCo
             } => seen_snapshots.insert((session_id.clone(), *offset)),
             TerminalFrameCommand::RequestSearch { session_id, .. } => {
                 seen_searches.insert(session_id.clone())
+            }
+            TerminalFrameCommand::SetSnapshotPriority { .. } => {
+                if kept_snapshot_priority {
+                    false
+                } else {
+                    kept_snapshot_priority = true;
+                    true
+                }
             }
             _ => true,
         };
@@ -1687,6 +1719,11 @@ fn run_terminal_frame_processor(
     recording_writer: RecordingWriteHandle,
 ) {
     let mut sessions: HashMap<String, TerminalFrameSession> = HashMap::new();
+    // Sessions that should include full live viewport snapshots on every output.
+    // Default (empty) keeps include_live_snapshot as-is for existing sessions and
+    // true for newly created ones until the first priority update arrives.
+    let mut snapshot_priority: HashSet<String> = HashSet::new();
+    let mut priority_initialized = false;
     let mut pending_commands = VecDeque::new();
     while let Some(command) = next_terminal_frame_command(&command_rx, &mut pending_commands) {
         match command {
@@ -1695,10 +1732,12 @@ fn run_terminal_frame_processor(
                 encoding,
                 scrollback_limit,
             } => {
-                sessions
+                let include = !priority_initialized || snapshot_priority.contains(&session_id);
+                let session = sessions
                     .entry(session_id)
-                    .or_insert_with(|| TerminalFrameSession::new(&encoding, scrollback_limit))
-                    .set_encoding_and_limit(&encoding, scrollback_limit);
+                    .or_insert_with(|| TerminalFrameSession::new(&encoding, scrollback_limit));
+                session.set_encoding_and_limit(&encoding, scrollback_limit);
+                session.include_live_snapshot = include;
             }
             TerminalFrameCommand::SeedSession {
                 session_id,
@@ -1706,13 +1745,16 @@ fn run_terminal_frame_processor(
                 encoding,
                 scrollback_limit,
             } => {
+                let include = !priority_initialized || snapshot_priority.contains(&session_id);
                 let session = sessions
-                    .entry(session_id)
+                    .entry(session_id.clone())
                     .or_insert_with(|| TerminalFrameSession::new(&encoding, scrollback_limit));
                 session.seed(output, &encoding, scrollback_limit);
+                session.include_live_snapshot = include;
             }
             TerminalFrameCommand::RemoveSession { session_id } => {
                 sessions.remove(&session_id);
+                snapshot_priority.remove(&session_id);
             }
             TerminalFrameCommand::ResizeSession {
                 session_id,
@@ -1771,6 +1813,14 @@ fn run_terminal_frame_processor(
                 if let Some(session) = sessions.get(&session_id) {
                     let event = session.buffer_text_event(session_id, request_id, max_bytes);
                     event_queue.push(TerminalFrameEvent::BufferText(event));
+                }
+            }
+            TerminalFrameCommand::SetSnapshotPriority { session_ids } => {
+                priority_initialized = true;
+                snapshot_priority.clear();
+                snapshot_priority.extend(session_ids);
+                for (session_id, session) in sessions.iter_mut() {
+                    session.include_live_snapshot = snapshot_priority.contains(session_id);
                 }
             }
         }
@@ -1960,7 +2010,7 @@ mod tests {
             session_id: "s1".to_string(),
             visible_text: "x".to_string(),
             recording_text_bytes: 1,
-            snapshot: Arc::new(TerminalScreen::default().viewport_snapshot(0)),
+            snapshot: Some(Arc::new(TerminalScreen::default().viewport_snapshot(0))),
             action_links: None,
             protocol_state: TerminalProtocolState::default(),
             effects: TerminalEffects::default(),
@@ -1983,6 +2033,16 @@ mod tests {
             revision,
             ..
         } = frame;
+        let Some(snapshot) = snapshot else {
+            view.apply_terminal_background_frame_parts(
+                None,
+                None,
+                protocol_state,
+                skipped_output_bytes,
+                revision,
+            );
+            return;
+        };
         view.apply_terminal_frame_parts(
             &visible_text,
             snapshot,
@@ -2116,7 +2176,7 @@ mod tests {
         let frame = output_frame_with_sizes((32 * 1024) + 1, 0);
 
         view.apply_terminal_background_frame_parts(
-            Some(frame.snapshot.clone()),
+            frame.snapshot.clone(),
             frame.action_links.clone(),
             frame.protocol_state,
             frame.skipped_output_bytes,
@@ -2130,6 +2190,68 @@ mod tests {
         assert!(!view.render_degraded);
         assert_eq!(view.performance_mode, TerminalPerformanceMode::Normal);
         assert_eq!(view.performance_overlay, None);
+    }
+
+    #[test]
+    fn terminal_frame_output_skips_snapshot_when_low_priority() {
+        let mut session = TerminalFrameSession::new("UTF-8", 1000);
+        session.include_live_snapshot = false;
+        session.screen.advance_decoded_text("hidden-output");
+        let mut batch = TerminalFrameOutputBatch::default();
+        batch.visible_text = "hidden-output".to_string();
+        batch.accepted_bytes = 13;
+        let event = session.output_event_from_batch("hidden".to_string(), batch, Instant::now());
+        assert!(event.snapshot.is_none());
+        assert_eq!(event.visible_text, "hidden-output");
+        assert!(event.revision >= 1 || event.accepted_bytes == 13);
+    }
+
+    #[test]
+    fn terminal_frame_output_includes_snapshot_when_high_priority() {
+        let mut session = TerminalFrameSession::new("UTF-8", 1000);
+        session.include_live_snapshot = true;
+        session.screen.advance_decoded_text("visible-output");
+        session.revision = 3;
+        let mut batch = TerminalFrameOutputBatch::default();
+        batch.visible_text = "visible-output".to_string();
+        batch.accepted_bytes = 14;
+        let event = session.output_event_from_batch("visible".to_string(), batch, Instant::now());
+        assert!(event.snapshot.is_some());
+        let snap = event.snapshot.unwrap();
+        assert!(
+            snap.lines
+                .iter()
+                .any(|line| line.contains("visible-output") || !line.is_empty())
+        );
+    }
+
+    #[test]
+    fn terminal_frame_set_snapshot_priority_compacts_to_latest() {
+        let mut commands = VecDeque::new();
+        commands.push_back(TerminalFrameCommand::SetSnapshotPriority {
+            session_ids: vec!["a".to_string()],
+        });
+        commands.push_back(TerminalFrameCommand::Output {
+            session_id: "a".to_string(),
+            data: b"x".to_vec(),
+            encoding: "UTF-8".to_string(),
+            scrollback_limit: 1000,
+        });
+        commands.push_back(TerminalFrameCommand::SetSnapshotPriority {
+            session_ids: vec!["b".to_string(), "c".to_string()],
+        });
+        compact_stale_terminal_frame_commands(&mut commands);
+        let priorities: Vec<_> = commands
+            .iter()
+            .filter_map(|command| match command {
+                TerminalFrameCommand::SetSnapshotPriority { session_ids } => {
+                    Some(session_ids.clone())
+                }
+                _ => None,
+            })
+            .collect();
+        assert_eq!(priorities.len(), 1);
+        assert_eq!(priorities[0], vec!["b".to_string(), "c".to_string()]);
     }
 
     #[test]
@@ -2674,7 +2796,15 @@ mod tests {
         assert_eq!(event.recording_text_bytes, 3);
         assert_eq!(event.accepted_bytes, 3);
         assert_eq!(event.revision, 2);
-        assert!(event.snapshot.lines.join("").contains("abc"));
+        assert!(
+            event
+                .snapshot
+                .as_ref()
+                .unwrap()
+                .lines
+                .join("")
+                .contains("abc")
+        );
         assert!(pending.is_empty());
     }
 

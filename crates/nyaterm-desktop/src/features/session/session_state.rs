@@ -277,6 +277,15 @@ impl NyaTermApp {
             self.write_terminal_focus_report_to_session(session_id, true);
         }
         self.sync_terminal_windows_active_tab(session_id);
+        // Priority was refreshed via sync_workspace_split_from_active_tab.
+        // Recover paint immediately if this tab was backgrounded without grids.
+        if self
+            .terminal_views
+            .get(session_id)
+            .is_some_and(|view| view.frame_snapshot.is_none())
+        {
+            self.request_terminal_live_snapshot(session_id);
+        }
     }
 
     pub(in crate::features) fn select_session(
