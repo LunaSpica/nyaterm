@@ -97,6 +97,12 @@ mod terminal_selection_runtime;
 pub(in crate::features) use terminal_selection_runtime::terminal_bounds_tracker;
 #[path = "terminal/terminal_surface.rs"]
 mod terminal_surface;
+#[path = "terminal/terminal_surface_entity.rs"]
+mod terminal_surface_entity;
+pub(in crate::features) use terminal_surface_entity::{
+    FULL_SHELL_PAINT_COUNT, TERMINAL_SURFACE_PAINT_COUNT, TerminalSurface, full_shell_paint_count,
+    terminal_surface_paint_count,
+};
 #[path = "transfers/transfer_events.rs"]
 mod transfer_events;
 #[path = "transfers/transfer_jobs.rs"]
@@ -178,7 +184,7 @@ pub(in crate::features) use transfer_widgets::{
 };
 pub(in crate::features) use view_widgets::*;
 
-const LEGACY_ROOT: &str = "nyaterm-tauri";
+const LEGACY_ROOT: &str = "./temp/nyaterm-tauri";
 pub(crate) const INITIAL_TERMINAL_BANNER: &str = "$ nyaterm --native\nGPUI shell initialized.\nStart a local terminal or open a saved connection.\n";
 const AI_AGENT_OBSERVATION_MIN_WAIT: Duration = Duration::from_millis(700);
 const AI_AGENT_OBSERVATION_QUIET: Duration = Duration::from_millis(900);

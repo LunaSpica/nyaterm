@@ -307,26 +307,70 @@ impl NyaTermApp {
         } else {
             None
         };
-        let mut grid = NyaTerminalElement::new(
-            snapshot,
-            keyword_rules,
-            line_decorations,
-            show_cursor,
-            cursor_style,
-            cell_w,
-            cell_h,
-            palette,
-            terminal_font_family.clone(),
-            self.settings.terminal_font_size as f32,
-            self.settings.terminal_font_weight as f32,
-            self.settings.terminal_font_weight_bold as f32,
-        );
-        if let Some(cache) = layout_cache {
-            grid = grid.with_layout_cache(cache);
-        }
-        let output = if let Some(gutter) = gutter {
+        // Grid paint is owned by TerminalSurface so frame notify does not rebuild
+        // the full shell. Push current paint inputs then embed the entity.
+        let surface_entity = if session_id.is_empty() {
+            None
+        } else {
+            self.sync_terminal_surface_paint(&session_id, cx);
+            let surface = self.ensure_terminal_surface(&session_id, cx);
+            // Shell paint has full decoration context (selection/search/links).
+            surface.update(cx, |surface, _cx| {
+                surface.set_decorations_and_keywords(
+                    line_decorations.clone(),
+                    keyword_rules.clone(),
+                    show_cursor,
+                    cursor_style.clone(),
+                );
+            });
+            Some(surface)
+        };
+        let output = if let Some(surface) = surface_entity {
+            div()
+                .flex()
+                .flex_row()
+                .flex_1()
+                .min_h_0()
+                .min_w_0()
+                .child(surface)
+        } else if let Some(gutter) = gutter {
+            // Fallback empty session: keep a local element path.
+            let mut grid = NyaTerminalElement::new(
+                snapshot,
+                keyword_rules,
+                line_decorations,
+                show_cursor,
+                cursor_style,
+                cell_w,
+                cell_h,
+                palette,
+                terminal_font_family.clone(),
+                self.settings.terminal_font_size as f32,
+                self.settings.terminal_font_weight as f32,
+                self.settings.terminal_font_weight_bold as f32,
+            );
+            if let Some(cache) = layout_cache {
+                grid = grid.with_layout_cache(cache);
+            }
             div().flex().flex_row().child(gutter).child(grid)
         } else {
+            let mut grid = NyaTerminalElement::new(
+                snapshot,
+                keyword_rules,
+                line_decorations,
+                show_cursor,
+                cursor_style,
+                cell_w,
+                cell_h,
+                palette,
+                terminal_font_family.clone(),
+                self.settings.terminal_font_size as f32,
+                self.settings.terminal_font_weight as f32,
+                self.settings.terminal_font_weight_bold as f32,
+            );
+            if let Some(cache) = layout_cache {
+                grid = grid.with_layout_cache(cache);
+            }
             div().flex().flex_row().child(grid)
         };
         let pane_title = self

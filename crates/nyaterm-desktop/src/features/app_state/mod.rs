@@ -437,6 +437,8 @@ pub struct NyaTermApp {
     pub(in crate::features) session_tab_colors: HashMap<String, u32>,
     pub(in crate::features) ssh_multiplex_handles: HashMap<String, SshMultiplexHandle>,
     pub(in crate::features) terminal_views: HashMap<String, TerminalViewState>,
+    /// Per-session terminal grid entities (frame notify isolation).
+    pub(in crate::features) terminal_surfaces: HashMap<String, Entity<TerminalSurface>>,
     pub(in crate::features) tab_actions_session_id: Option<String>,
     pub(in crate::features) tab_actions_anchor: Option<(f32, f32)>,
     pub(in crate::features) tab_actions_focus: FocusHandle,

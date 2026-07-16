@@ -240,6 +240,7 @@ impl NyaTermApp {
         self.session_event_bridge.clear_session(session_id);
         self.session_tab_colors.remove(session_id);
         self.terminal_views.remove(session_id);
+        self.remove_terminal_surface(session_id);
         self.terminal_frame_pipeline
             .remove_session(session_id.to_string());
         self.terminal_session_surface_bounds.remove(session_id);

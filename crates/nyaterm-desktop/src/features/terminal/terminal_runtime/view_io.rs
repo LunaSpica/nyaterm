@@ -1036,6 +1036,146 @@ impl NyaTermApp {
     ) -> Option<Vec<u8>> {
         terminal_key_release_bytes_with_mode(event, self.terminal_key_mode_for_session(session_id))
     }
+
+    pub(in crate::features) fn ensure_terminal_surface(
+        &mut self,
+        session_id: &str,
+        cx: &mut Context<Self>,
+    ) -> Entity<TerminalSurface> {
+        if let Some(surface) = self.terminal_surfaces.get(session_id) {
+            return surface.clone();
+        }
+        let layout_cache = self
+            .terminal_views
+            .get(session_id)
+            .map(|view| view.render_cache.layout_cache.clone())
+            .unwrap_or_else(|| {
+                std::sync::Arc::new(std::sync::Mutex::new(NyaTerminalLayoutCache::default()))
+            });
+        let session_id_owned = session_id.to_string();
+        let surface = cx.new(|_| {
+            let mut surface = TerminalSurface::new(session_id_owned);
+            surface.set_layout_cache(layout_cache);
+            surface
+        });
+        self.terminal_surfaces
+            .insert(session_id.to_string(), surface.clone());
+        surface
+    }
+
+    pub(in crate::features) fn remove_terminal_surface(&mut self, session_id: &str) {
+        self.terminal_surfaces.remove(session_id);
+    }
+
+    /// Push the current view/frame paint state into the session surface and notify it.
+    pub(in crate::features) fn sync_terminal_surface_paint(
+        &mut self,
+        session_id: &str,
+        cx: &mut Context<Self>,
+    ) {
+        if session_id.is_empty() {
+            return;
+        }
+        self.ensure_paint_theme_caches();
+        let surface = self.ensure_terminal_surface(session_id, cx);
+        let is_active = self.active_session_id.as_deref() == Some(session_id);
+        let is_disconnected = self.is_session_disconnected(session_id);
+        let render_output_pressure = self.runtime_output_pressure_active();
+        let (
+            scroll_offset,
+            has_new,
+            performance_overlay,
+            skipped,
+            layout_cache,
+            render_degraded,
+            burst,
+            mode,
+        ) = self
+            .terminal_views
+            .get(session_id)
+            .map(|view| {
+                (
+                    view.scroll_offset,
+                    view.has_new_while_scrolled,
+                    view.performance_overlay,
+                    view.skipped_output_chars,
+                    view.render_cache.layout_cache.clone(),
+                    view.render_degraded,
+                    view.output_burst_bytes,
+                    view.performance_mode,
+                )
+            })
+            .unwrap_or((
+                0,
+                false,
+                None,
+                0,
+                std::sync::Arc::new(std::sync::Mutex::new(NyaTerminalLayoutCache::default())),
+                false,
+                0,
+                TerminalPerformanceMode::Normal,
+            ));
+        let _ = (render_degraded, burst, mode, render_output_pressure);
+        let snapshot = self.terminal_snapshot_for_session(Some(session_id), scroll_offset);
+        let cursor_row = snapshot.cursor_row;
+        let remote_cursor_visible = snapshot.cursor.visible
+            && snapshot.cursor.shape != nyaterm_terminal::CursorShape::Hidden
+            && cursor_row != usize::MAX;
+        let blink_enabled = self.settings.cursor_blink || snapshot.cursor.blinking;
+        let show_cursor = is_active
+            && !is_disconnected
+            && scroll_offset == 0
+            && remote_cursor_visible
+            && (!blink_enabled || self.terminal_runtime.cursor_blink_on);
+        let cursor_style = match snapshot.cursor.shape {
+            nyaterm_terminal::CursorShape::Underline => "underline".to_string(),
+            nyaterm_terminal::CursorShape::Beam => "bar".to_string(),
+            nyaterm_terminal::CursorShape::Hidden => self.settings.cursor_style.clone(),
+            nyaterm_terminal::CursorShape::Block => self.settings.cursor_style.clone(),
+        };
+        let palette = self.terminal_theme_palette();
+        let font_family = self.gpui_terminal_font_family();
+        let (cell_w, cell_h) = self.terminal_cell_metrics.unwrap_or((
+            (self.settings.terminal_font_size as f32 * 0.6).max(6.0),
+            (self.settings.terminal_font_size as f32 * 1.35).max(12.0),
+        ));
+        let visual_bell = is_active && self.terminal_runtime.visual_bell_ticks > 0;
+        surface.update(cx, |surface, cx| {
+            surface.set_layout_cache(layout_cache);
+            surface.set_paint_chrome(
+                palette,
+                font_family,
+                self.settings.terminal_font_size as f32,
+                self.settings.terminal_font_weight as f32,
+                self.settings.terminal_font_weight_bold as f32,
+                cell_w,
+                cell_h,
+                self.settings.terminal_show_line_numbers,
+                self.settings.terminal_show_timestamps,
+                self.settings.terminal_show_timestamp_milliseconds,
+                is_active,
+                visual_bell,
+            );
+            surface.apply_frame_snapshot(
+                snapshot,
+                scroll_offset,
+                has_new,
+                performance_overlay,
+                skipped,
+                show_cursor,
+                cursor_style,
+            );
+            cx.notify();
+        });
+    }
+
+    /// Notify surface only (no full shell). Used for cursor blink / visual bell.
+    pub(in crate::features) fn notify_active_terminal_surface(&mut self, cx: &mut Context<Self>) {
+        let Some(session_id) = self.active_session_id.clone() else {
+            return;
+        };
+        self.sync_terminal_surface_paint(&session_id, cx);
+    }
 }
 
 fn terminal_key_bytes_for_mode_and_settings(

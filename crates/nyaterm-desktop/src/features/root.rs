@@ -358,6 +358,11 @@ impl NyaTermApp {
 
 impl Render for NyaTermApp {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        FULL_SHELL_PAINT_COUNT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        self.terminal_runtime.full_shell_paint_count = self
+            .terminal_runtime
+            .full_shell_paint_count
+            .saturating_add(1);
         let content = self.root_chrome(cx);
         self.overlay_host(content, cx)
     }

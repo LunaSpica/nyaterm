@@ -254,7 +254,9 @@ impl NyaTermApp {
     ) -> bool {
         match event {
             TerminalFrameEvent::Output(frame) => self.apply_terminal_output_frame(frame, cx),
-            TerminalFrameEvent::Snapshot(snapshot) => self.apply_terminal_snapshot_frame(snapshot),
+            TerminalFrameEvent::Snapshot(snapshot) => {
+                self.apply_terminal_snapshot_frame(snapshot, cx)
+            }
             TerminalFrameEvent::Search(search) => self.apply_terminal_search_frame(search),
             TerminalFrameEvent::BufferText(buffer) => {
                 self.apply_terminal_buffer_text_frame(buffer, cx)
@@ -329,7 +331,24 @@ impl NyaTermApp {
                 "slow terminal frame processing"
             );
         }
-        terminal_output_frame_needs_notify(is_visible, unread_changed, effects_need_ui_apply)
+        let surface_notify = terminal_output_frame_needs_surface_notify(is_visible);
+        let chrome_notify =
+            terminal_output_frame_needs_chrome_notify(unread_changed, effects_need_ui_apply);
+        if surface_notify {
+            self.sync_terminal_surface_paint(&session_id, cx);
+            self.terminal_runtime.terminal_surface_frame_notify_count = self
+                .terminal_runtime
+                .terminal_surface_frame_notify_count
+                .saturating_add(1);
+        }
+        if chrome_notify {
+            self.terminal_runtime.terminal_chrome_frame_notify_count = self
+                .terminal_runtime
+                .terminal_chrome_frame_notify_count
+                .saturating_add(1);
+        }
+        // Only chrome dirtiness bubbles to NyaTermApp full-shell notify.
+        chrome_notify
     }
 
     fn terminal_session_has_visible_surface(&self, session_id: &str) -> bool {
@@ -356,7 +375,11 @@ impl NyaTermApp {
         self.active_session_id.iter().map(String::as_str).collect()
     }
 
-    fn apply_terminal_snapshot_frame(&mut self, frame: TerminalFrameSnapshotEvent) -> bool {
+    fn apply_terminal_snapshot_frame(
+        &mut self,
+        frame: TerminalFrameSnapshotEvent,
+        cx: &mut Context<Self>,
+    ) -> bool {
         let Some(view) = self.terminal_views.get_mut(&frame.session_id) else {
             return false;
         };
@@ -393,7 +416,20 @@ impl NyaTermApp {
                 "slow terminal frame snapshot"
             );
         }
-        true
+        // Scrollback snapshot applies only dirties the surface, not chrome.
+        if self.terminal_session_has_visible_surface(&frame.session_id)
+            && self
+                .terminal_views
+                .get(&frame.session_id)
+                .is_some_and(|view| view.scroll_offset == frame.offset)
+        {
+            self.sync_terminal_surface_paint(&frame.session_id, cx);
+            self.terminal_runtime.terminal_surface_frame_notify_count = self
+                .terminal_runtime
+                .terminal_surface_frame_notify_count
+                .saturating_add(1);
+        }
+        false
     }
 
     fn apply_terminal_search_frame(&mut self, frame: TerminalFrameSearchEvent) -> bool {
@@ -1208,12 +1244,17 @@ fn terminal_effects_need_ui_apply(effects: &TerminalEffects) -> bool {
         || !effects.clipboard_loads.is_empty()
 }
 
-fn terminal_output_frame_needs_notify(
-    is_visible: bool,
+fn terminal_output_frame_needs_surface_notify(is_visible: bool) -> bool {
+    is_visible
+}
+
+fn terminal_output_frame_needs_chrome_notify(
     unread_changed: bool,
     effects_need_ui_apply: bool,
 ) -> bool {
-    is_visible || unread_changed || effects_need_ui_apply
+    // Chrome-level notify only: unread badges / effects that change shell chrome.
+    // Visible grid updates are handled by TerminalSurface entity notify.
+    unread_changed || effects_need_ui_apply
 }
 
 fn terminal_window_node_visible_tab_ids(root: &TerminalWindowNode) -> Vec<&str> {
@@ -1292,10 +1333,12 @@ mod tests {
 
     #[test]
     fn terminal_output_frame_notify_tracks_visible_unread_or_effects() {
-        assert!(!terminal_output_frame_needs_notify(false, false, false));
-        assert!(terminal_output_frame_needs_notify(true, false, false));
-        assert!(terminal_output_frame_needs_notify(false, true, false));
-        assert!(terminal_output_frame_needs_notify(false, false, true));
+        assert!(!terminal_output_frame_needs_chrome_notify(false, false));
+        assert!(!terminal_output_frame_needs_chrome_notify(false, false));
+        assert!(terminal_output_frame_needs_chrome_notify(true, false));
+        assert!(terminal_output_frame_needs_chrome_notify(false, true));
+        assert!(terminal_output_frame_needs_surface_notify(true));
+        assert!(!terminal_output_frame_needs_surface_notify(false));
     }
 
     #[test]

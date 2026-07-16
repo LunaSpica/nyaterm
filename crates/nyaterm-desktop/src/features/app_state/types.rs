@@ -19,6 +19,14 @@ pub(in crate::features) struct TerminalRuntimeUiState {
     pub last_ui_notify_at: Option<Instant>,
     /// A visual update was deferred by paint throttle and still needs a notify.
     pub pending_ui_notify: bool,
+    /// Full NyaTermApp shell paints (chrome + workspace structure).
+    pub full_shell_paint_count: u64,
+    /// TerminalSurface entity paints (grid only).
+    pub terminal_surface_paint_count: u64,
+    /// Output frames that notified only a TerminalSurface.
+    pub terminal_surface_frame_notify_count: u64,
+    /// Output frames that also dirtied chrome (unread/effects).
+    pub terminal_chrome_frame_notify_count: u64,
     /// Open-tabs / window-layout settings need a durable write.
     pub open_tabs_persist_dirty: bool,
     pub window_layout_persist_dirty: bool,
@@ -96,6 +104,10 @@ impl Default for TerminalRuntimeUiState {
             connect_settle_until: None,
             last_ui_notify_at: None,
             pending_ui_notify: false,
+            full_shell_paint_count: 0,
+            terminal_surface_paint_count: 0,
+            terminal_surface_frame_notify_count: 0,
+            terminal_chrome_frame_notify_count: 0,
             open_tabs_persist_dirty: false,
             window_layout_persist_dirty: false,
             cursor_blink_on: true,

@@ -639,6 +639,7 @@ impl NyaTermApp {
             session_tab_colors: HashMap::new(),
             ssh_multiplex_handles: HashMap::new(),
             terminal_views: HashMap::new(),
+            terminal_surfaces: HashMap::new(),
             tab_actions_session_id: None,
             tab_actions_anchor: None,
             tab_actions_focus: cx.focus_handle(),

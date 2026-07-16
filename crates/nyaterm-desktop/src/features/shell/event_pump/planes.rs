@@ -286,6 +286,12 @@ impl NyaTermApp {
                 output_pressure,
                 next_tick_delay_ms = self.window_runtime_tick_delay().as_millis(),
                 visual_dirty,
+                full_shell_paint_count = self.terminal_runtime.full_shell_paint_count,
+                surface_frame_notify_count =
+                    self.terminal_runtime.terminal_surface_frame_notify_count,
+                chrome_frame_notify_count =
+                    self.terminal_runtime.terminal_chrome_frame_notify_count,
+                surface_paint_count = terminal_surface_paint_count(),
                 notify_requested = visual_dirty,
                 publish_snapshots = should_publish_snapshots,
                 "slow runtime tick"
@@ -517,19 +523,20 @@ impl NyaTermApp {
             || connect_settle_active(self.terminal_runtime.connect_settle_until, Instant::now());
         // ~530ms blink half-period (50ms * 11 ticks) when enabled.
         // Under output pressure / connect settle, keep last blink phase.
+        let mut surface_visual_dirty = false;
         if runtime_cursor_blink_allowed(output_pressure, self.settings.cursor_blink) {
             self.terminal_runtime.cursor_blink_tick =
                 self.terminal_runtime.cursor_blink_tick.wrapping_add(1);
             if self.terminal_runtime.cursor_blink_tick >= 11 {
                 self.terminal_runtime.cursor_blink_tick = 0;
                 self.terminal_runtime.cursor_blink_on = !self.terminal_runtime.cursor_blink_on;
-                dirty = true;
+                surface_visual_dirty = true;
             }
         } else if !self.settings.cursor_blink {
             if !self.terminal_runtime.cursor_blink_on
                 || self.terminal_runtime.cursor_blink_tick != 0
             {
-                dirty = true;
+                surface_visual_dirty = true;
             }
             self.terminal_runtime.cursor_blink_on = true;
             self.terminal_runtime.cursor_blink_tick = 0;
@@ -538,7 +545,11 @@ impl NyaTermApp {
         if self.terminal_runtime.visual_bell_ticks > 0 {
             self.terminal_runtime.visual_bell_ticks =
                 self.terminal_runtime.visual_bell_ticks.saturating_sub(1);
-            dirty = true;
+            surface_visual_dirty = true;
+        }
+        if surface_visual_dirty {
+            // Cursor blink / bell are terminal-local; do not rebuild full shell.
+            self.notify_active_terminal_surface(cx);
         }
         let render_work_pressure = terminal_render_work_pressure_active(
             output_pressure,
