@@ -96,8 +96,10 @@ impl NyaTermApp {
         }
         if let Some((session_id, offset)) = snapshot_request {
             self.request_terminal_frame_snapshot_when_idle(&session_id, offset);
+            self.notify_terminal_surface_only(Some(session_id.as_str()), cx);
+        } else {
+            self.notify_active_terminal_surface(cx);
         }
-        cx.notify();
     }
 
     /// Insert quoted local file paths into the active session (Tauri Local drop).
@@ -251,7 +253,7 @@ impl NyaTermApp {
         } else {
             self.terminal_scroll_offset = 0;
         }
-        cx.notify();
+        self.notify_active_terminal_surface(cx);
     }
 
     pub(in crate::features) fn scroll_terminal_to_top(&mut self, cx: &mut Context<Self>) {
@@ -268,8 +270,10 @@ impl NyaTermApp {
         }
         if let Some((session_id, offset)) = snapshot_request {
             self.request_terminal_frame_snapshot_when_idle(&session_id, offset);
+            self.notify_terminal_surface_only(Some(session_id.as_str()), cx);
+        } else {
+            self.notify_active_terminal_surface(cx);
         }
-        cx.notify();
     }
 
     pub(in crate::features) fn set_terminal_scroll_offset(
@@ -294,8 +298,10 @@ impl NyaTermApp {
         }
         if let Some((session_id, offset)) = snapshot_request {
             self.request_terminal_frame_snapshot_when_idle(&session_id, offset);
+            self.notify_terminal_surface_only(Some(session_id.as_str()), cx);
+        } else {
+            self.notify_active_terminal_surface(cx);
         }
-        cx.notify();
     }
 
     pub(in crate::features) fn active_terminal_scroll_max(&self) -> usize {
@@ -346,8 +352,10 @@ impl NyaTermApp {
         }
         if let Some((session_id, offset)) = snapshot_request {
             self.request_terminal_frame_snapshot_when_idle(&session_id, offset);
+            self.notify_terminal_surface_only(Some(session_id.as_str()), cx);
+        } else {
+            self.notify_active_terminal_surface(cx);
         }
-        cx.notify();
     }
 
     /// Map a vertical pointer position (0..=1 top→bottom of track) to scroll_offset.
