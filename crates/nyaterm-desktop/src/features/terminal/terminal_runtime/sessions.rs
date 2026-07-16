@@ -123,12 +123,12 @@ impl NyaTermApp {
         }
         self.prune_workspace_split();
 
+        // After close_session_batch, local metadata is the source of truth for
+        // remaining tabs (includes disconnected). Avoid transport map lock.
         let live_ids = self
-            .session_manager
-            .list_sessions()
-            .unwrap_or_default()
-            .into_iter()
-            .map(|session| session.id)
+            .session_metadata
+            .keys()
+            .cloned()
             .collect::<HashSet<_>>();
         let active_is_live = active_before
             .as_deref()
@@ -255,13 +255,7 @@ impl NyaTermApp {
     }
 
     pub(in crate::features) fn close_all_sessions(&mut self, cx: &mut Context<Self>) {
-        let ids = self
-            .session_manager
-            .list_sessions()
-            .unwrap_or_default()
-            .into_iter()
-            .map(|session| session.id)
-            .collect::<Vec<_>>();
+        let ids = self.session_metadata.keys().cloned().collect::<Vec<_>>();
         self.close_session_batch(ids, "active");
         cx.notify();
     }

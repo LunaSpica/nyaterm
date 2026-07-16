@@ -198,12 +198,7 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         if send_to_all {
-            if self
-                .session_manager
-                .list_sessions()
-                .unwrap_or_default()
-                .is_empty()
-            {
+            if self.live_session_count() == 0 {
                 self.terminal_status =
                     "start a terminal session before using a quick command".to_string();
                 cx.notify();
@@ -283,7 +278,11 @@ impl NyaTermApp {
         }
 
         if send_to_all {
-            let sessions = self.session_manager.list_sessions().unwrap_or_default();
+            let sessions = self
+                .ordered_sessions()
+                .into_iter()
+                .filter(|session| !self.is_session_disconnected(&session.id))
+                .collect::<Vec<_>>();
             if sessions.is_empty() {
                 self.terminal_status =
                     "start a terminal session before using a quick command".to_string();

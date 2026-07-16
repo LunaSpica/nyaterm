@@ -514,11 +514,7 @@ impl NyaTermApp {
                 SharedString::from(label)
             }
             NavItem::ActiveSessions => {
-                let count = self
-                    .session_manager
-                    .list_sessions()
-                    .map(|sessions| sessions.len())
-                    .unwrap_or(0);
+                let count = self.live_session_count();
                 if count == 0 {
                     SharedString::from("")
                 } else {
@@ -578,11 +574,8 @@ impl NyaTermApp {
                 }
             }
             NavItem::Recording => {
-                let count = self
-                    .session_manager
-                    .list_sessions()
-                    .map(|sessions| sessions.len())
-                    .unwrap_or(0);
+                // Badge reflects open session panes (local metadata), not transport lock.
+                let count = self.ordered_session_count();
                 if count == 0 {
                     SharedString::from("")
                 } else {

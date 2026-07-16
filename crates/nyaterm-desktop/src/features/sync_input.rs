@@ -128,11 +128,10 @@ impl NyaTermApp {
 
     pub(in crate::features) fn sync_peer_session_ids(&self, session_id: &str) -> Vec<String> {
         let live_ids = self
-            .session_manager
-            .list_sessions()
-            .unwrap_or_default()
-            .into_iter()
-            .map(|session| session.id)
+            .session_metadata
+            .iter()
+            .filter(|(_, metadata)| !metadata.disconnected)
+            .map(|(session_id, _)| session_id.clone())
             .collect::<HashSet<_>>();
         let mut peers = HashSet::new();
         for group in &self.sync_groups {

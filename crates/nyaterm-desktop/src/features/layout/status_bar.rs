@@ -2,8 +2,8 @@ use super::*;
 
 impl NyaTermApp {
     pub(in crate::features) fn status_bar(&mut self, cx: &mut Context<Self>) -> impl IntoElement {
-        let tab_count = self.ordered_tab_sessions().len();
-        let pane_count = self.ordered_sessions().len();
+        let tab_count = self.ordered_tab_session_count();
+        let pane_count = self.ordered_session_count();
         let session_status = if let Some(pending) = self.pending_session_status_label() {
             pending
         } else if let Some(session_id) = self.active_session_id.as_deref() {

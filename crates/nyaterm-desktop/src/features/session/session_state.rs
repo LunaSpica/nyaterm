@@ -37,18 +37,8 @@ impl NyaTermApp {
         {
             return Some(name.clone());
         }
-        if let Some(session) = self
-            .session_manager
-            .list_sessions()
-            .ok()
-            .into_iter()
-            .flatten()
-            .find(|session| session.id == session_id)
-        {
-            return Some(session.name);
-        }
-        self.disconnected_session_info(session_id)
-            .map(|session| session.name)
+        // Prefer local metadata — never take the transport session map lock for chrome.
+        self.session_info(session_id).map(|session| session.name)
     }
 
     pub(in crate::features) fn session_endpoint(&self, session_id: &str) -> Option<String> {
@@ -131,12 +121,7 @@ impl NyaTermApp {
     fn active_session_info_line(&self) -> Option<String> {
         let session_id = self.active_session_id.as_deref()?;
         let name = self.session_display_name(session_id)?;
-        let session = self
-            .session_manager
-            .list_sessions()
-            .ok()?
-            .into_iter()
-            .find(|session| session.id == session_id)?;
+        let session = self.session_info(session_id)?;
         let endpoint = self
             .session_endpoint(session_id)
             .unwrap_or_else(|| "unknown endpoint".to_string());
@@ -156,12 +141,7 @@ impl NyaTermApp {
     ) -> Option<Vec<(&'static str, String)>> {
         let session_id = self.active_session_id.as_deref()?;
         let name = self.session_display_name(session_id)?;
-        let session = self
-            .session_manager
-            .list_sessions()
-            .ok()?
-            .into_iter()
-            .find(|session| session.id == session_id)?;
+        let session = self.session_info(session_id)?;
         let metadata = self.session_metadata.get(session_id)?;
         let endpoint = self
             .session_endpoint(session_id)
@@ -290,14 +270,10 @@ impl NyaTermApp {
         session_id: String,
         cx: &mut Context<Self>,
     ) {
-        let live = self
-            .session_manager
-            .list_sessions()
-            .unwrap_or_default()
-            .into_iter()
-            .any(|session| session.id == session_id);
+        // Local metadata is authoritative for tab existence; transport lock not needed.
+        let known = self.session_metadata.contains_key(&session_id);
         let disconnected = self.is_session_disconnected(&session_id);
-        if !live && !disconnected {
+        if !known && !disconnected {
             self.terminal_status = "session no longer exists".to_string();
             self.remove_session_state(&session_id);
             cx.notify();

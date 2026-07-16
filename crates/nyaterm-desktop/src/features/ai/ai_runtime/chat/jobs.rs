@@ -210,16 +210,7 @@ impl NyaTermApp {
             _ if session_id == self.active_session_id.as_deref() => self.active_ssh_config.as_ref(),
             _ => None,
         };
-        let session = session_id.and_then(|session_id| {
-            self.session_manager
-                .list_sessions()
-                .ok()
-                .and_then(|sessions| {
-                    sessions
-                        .into_iter()
-                        .find(|session| session.id == session_id)
-                })
-        });
+        let session = session_id.and_then(|session_id| self.session_info(session_id));
         let cwd = metadata
             .and_then(|metadata| match &metadata.launch_config {
                 SessionLaunchConfig::Local(config) => config.working_dir.as_ref(),

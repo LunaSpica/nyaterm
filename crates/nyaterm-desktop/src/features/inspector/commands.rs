@@ -6,7 +6,11 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
         let palette = self.theme_palette();
-        let sessions = self.session_manager.list_sessions().unwrap_or_default();
+        let sessions = self
+            .ordered_sessions()
+            .into_iter()
+            .filter(|session| !self.is_session_disconnected(&session.id))
+            .collect::<Vec<_>>();
         let active_label = self
             .active_session_id
             .as_deref()

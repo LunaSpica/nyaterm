@@ -258,7 +258,12 @@ impl NyaTermApp {
     }
 
     pub(in crate::features) fn send_command_target_session_ids(&self) -> Vec<String> {
-        let sessions = self.session_manager.list_sessions().unwrap_or_default();
+        // Live sessions only from local metadata (skip disconnected tabs).
+        let sessions = self
+            .ordered_sessions()
+            .into_iter()
+            .filter(|session| !self.is_session_disconnected(&session.id))
+            .collect::<Vec<_>>();
         let live_session_ids = sessions
             .iter()
             .map(|session| session.id.as_str())
@@ -325,7 +330,11 @@ impl NyaTermApp {
     pub(in crate::features) fn send_command_group_target_options(
         &self,
     ) -> Vec<(String, String, usize)> {
-        let sessions = self.session_manager.list_sessions().unwrap_or_default();
+        let sessions = self
+            .ordered_sessions()
+            .into_iter()
+            .filter(|session| !self.is_session_disconnected(&session.id))
+            .collect::<Vec<_>>();
         let active_kind = self.active_session_kind();
         let is_compatible = |kind: SessionKind| -> bool {
             match active_kind {
@@ -403,12 +412,10 @@ impl NyaTermApp {
 
     pub(in crate::features) fn active_session_kind(&self) -> Option<SessionKind> {
         let active_id = self.active_session_id.as_deref()?;
-        self.session_manager
-            .list_sessions()
-            .ok()?
-            .into_iter()
-            .find(|session| session.id == active_id)
-            .map(|session| session.kind)
+        if self.is_session_disconnected(active_id) {
+            return None;
+        }
+        self.session_info(active_id).map(|session| session.kind)
     }
 
     pub(in crate::features) fn adjust_send_command_count(

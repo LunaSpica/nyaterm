@@ -264,18 +264,12 @@ impl NyaTermApp {
     }
 
     pub(in crate::features) fn next_session_after(&self, session_id: &str) -> Option<String> {
-        let mut known_ids = self
-            .session_manager
-            .list_sessions()
-            .unwrap_or_default()
-            .into_iter()
-            .map(|session| session.id)
+        // Local metadata includes live + disconnected tabs; no transport lock.
+        let known_ids = self
+            .session_metadata
+            .keys()
+            .cloned()
             .collect::<HashSet<_>>();
-        for (id, meta) in &self.session_metadata {
-            if meta.disconnected {
-                known_ids.insert(id.clone());
-            }
-        }
         self.session_order
             .iter()
             .find(|candidate| candidate.as_str() != session_id && known_ids.contains(*candidate))

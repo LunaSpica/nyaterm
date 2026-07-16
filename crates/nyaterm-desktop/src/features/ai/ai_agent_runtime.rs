@@ -242,11 +242,8 @@ impl NyaTermApp {
             );
         };
         let session = self
-            .session_manager
-            .list_sessions()
-            .map_err(|error| error.to_string())?
-            .into_iter()
-            .find(|session| session.id == terminal_session_id)
+            .session_info(&terminal_session_id)
+            .filter(|_| !self.is_session_disconnected(&terminal_session_id))
             .ok_or_else(|| "Active terminal session was not found".to_string())?;
         let (target, target_label) = match session.kind {
             SessionKind::Ssh => {
@@ -538,14 +535,8 @@ impl NyaTermApp {
         let Some(session_id) = self.active_session_id.as_deref() else {
             return AiExecutionProfile::SendOnly;
         };
-        self.session_manager
-            .list_sessions()
-            .ok()
-            .and_then(|sessions| {
-                sessions
-                    .into_iter()
-                    .find(|session| session.id == session_id)
-            })
+        self.session_info(session_id)
+            .filter(|_| !self.is_session_disconnected(session_id))
             .map(|session| match session.kind {
                 SessionKind::LocalPty
                 | SessionKind::Ssh

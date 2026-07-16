@@ -36,11 +36,9 @@ impl NyaTermApp {
             return;
         }
         let exists = self
-            .session_manager
-            .list_sessions()
-            .unwrap_or_default()
-            .into_iter()
-            .any(|session| session.id == session_id);
+            .session_metadata
+            .get(&session_id)
+            .is_some_and(|metadata| !metadata.disconnected);
         if !exists {
             self.terminal_status = "session no longer exists".to_string();
             self.remove_session_state(&session_id);

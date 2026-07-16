@@ -64,23 +64,70 @@ impl NyaTermApp {
         self.session_order.insert(index, session_id);
     }
 
+    /// UI-facing session list built from local metadata only.
+    ///
+    /// Avoids `SessionManager::list_sessions()` (transport map lock + sort) so
+    /// tab strip / sidebar / status bar paints never contend with the I/O thread.
     pub(in crate::features) fn ordered_sessions(&self) -> Vec<SessionInfo> {
-        let sessions = self.session_manager.list_sessions().unwrap_or_default();
-        let mut by_id = sessions
-            .into_iter()
-            .map(|session| (session.id.clone(), session))
-            .collect::<HashMap<_, _>>();
-        let mut ordered = Vec::new();
+        let mut ordered = Vec::with_capacity(self.session_order.len());
+        let mut seen = HashSet::with_capacity(self.session_order.len());
         for session_id in &self.session_order {
-            if let Some(session) = by_id.remove(session_id) {
-                ordered.push(session);
-            } else if let Some(info) = self.disconnected_session_info(session_id) {
-                // Keep disconnected tabs in the strip for reconnect (Tauri parity).
-                ordered.push(info);
+            if !seen.insert(session_id.as_str()) {
+                continue;
+            }
+            if let Some(metadata) = self.session_metadata.get(session_id) {
+                // Live and disconnected tabs both come from local metadata
+                // (Tauri keeps disconnected panes in the strip for reconnect).
+                ordered.push(session_info_from_metadata(session_id, metadata));
             }
         }
-        ordered.extend(by_id.into_values());
+        // Defensive: metadata present but missing from session_order.
+        for (session_id, metadata) in &self.session_metadata {
+            if seen.insert(session_id.as_str()) {
+                ordered.push(session_info_from_metadata(session_id, metadata));
+            }
+        }
         ordered
+    }
+
+    /// SessionInfo for a single id from local metadata (no transport lock).
+    pub(in crate::features) fn session_info(&self, session_id: &str) -> Option<SessionInfo> {
+        self.session_metadata
+            .get(session_id)
+            .map(|metadata| session_info_from_metadata(session_id, metadata))
+    }
+
+    /// Tab-root count for chrome (status bar) without allocating SessionInfo.
+    pub(in crate::features) fn ordered_tab_session_count(&self) -> usize {
+        self.session_order
+            .iter()
+            .filter(|session_id| !self.is_secondary_pane_session(session_id))
+            .count()
+    }
+
+    /// Pane / leaf count for chrome without allocating SessionInfo.
+    pub(in crate::features) fn ordered_session_count(&self) -> usize {
+        let mut seen = HashSet::with_capacity(self.session_order.len());
+        let mut count = 0;
+        for session_id in &self.session_order {
+            if seen.insert(session_id.as_str()) && self.session_metadata.contains_key(session_id) {
+                count += 1;
+            }
+        }
+        for session_id in self.session_metadata.keys() {
+            if seen.insert(session_id.as_str()) {
+                count += 1;
+            }
+        }
+        count
+    }
+
+    /// Live (non-disconnected) session count from local metadata only.
+    pub(in crate::features) fn live_session_count(&self) -> usize {
+        self.session_metadata
+            .values()
+            .filter(|metadata| !metadata.disconnected)
+            .count()
     }
 
     /// True when this session is a secondary leaf inside another tab's pane tree

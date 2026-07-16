@@ -25,12 +25,7 @@ impl NyaTermApp {
             .count();
         let categories =
             quick_command_category_options(&self.quick_commands, &self.quick_command_categories);
-        let can_send_to_all = self
-            .session_manager
-            .list_sessions()
-            .unwrap_or_default()
-            .len()
-            > 1;
+        let can_send_to_all = self.live_session_count() > 1;
         let palette = self.theme_palette();
 
         let category_sidebar = self.quick_command_category_sidebar(categories, palette, cx);
