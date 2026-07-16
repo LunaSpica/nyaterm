@@ -73,6 +73,9 @@ impl NyaTermApp {
     }
 
     pub(in crate::features) fn drain_ai_discovery_events(&mut self) -> bool {
+        if !self.ai_discovery_pending {
+            return false;
+        }
         let mut dirty = false;
         for _ in 0..AI_DISCOVERY_EVENT_DRAIN_LIMIT {
             let Ok(event) = self.ai_discovery_rx.try_recv() else {

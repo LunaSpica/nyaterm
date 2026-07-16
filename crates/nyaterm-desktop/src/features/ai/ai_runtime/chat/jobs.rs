@@ -284,6 +284,9 @@ impl NyaTermApp {
     }
 
     pub(in crate::features) fn drain_ai_chat_events(&mut self, cx: &mut Context<Self>) -> bool {
+        if !self.ai_chat_pending {
+            return false;
+        }
         let mut dirty = false;
         for _ in 0..AI_CHAT_EVENT_DRAIN_LIMIT {
             let Ok(event) = self.ai_chat_rx.try_recv() else {

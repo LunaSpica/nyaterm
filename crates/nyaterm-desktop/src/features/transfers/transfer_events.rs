@@ -4,6 +4,9 @@ const TRANSFER_EVENT_DRAIN_LIMIT: usize = 256;
 
 impl NyaTermApp {
     pub(super) fn drain_transfer_events(&mut self, cx: &mut Context<Self>) -> bool {
+        if self.transfer_jobs.is_empty() {
+            return false;
+        }
         let mut dirty = false;
         for _ in 0..TRANSFER_EVENT_DRAIN_LIMIT {
             let Ok(event) = self.transfer_rx.try_recv() else {

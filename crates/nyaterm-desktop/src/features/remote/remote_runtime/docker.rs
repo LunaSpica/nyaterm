@@ -504,6 +504,9 @@ impl NyaTermApp {
     }
 
     pub(in crate::features) fn drain_docker_events(&mut self) -> bool {
+        if !self.docker_pending {
+            return false;
+        }
         let mut dirty = false;
         for _ in 0..DOCKER_EVENT_DRAIN_LIMIT {
             let Ok(event) = self.docker_rx.try_recv() else {

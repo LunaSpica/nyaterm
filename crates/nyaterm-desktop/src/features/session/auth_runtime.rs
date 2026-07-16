@@ -304,6 +304,13 @@ impl SftpDuplicatePromptBroker {
             .ok()
             .and_then(|mut pending| pending.pop_front())
     }
+
+    pub(in crate::features) fn has_pending(&self) -> bool {
+        self.pending
+            .lock()
+            .ok()
+            .is_some_and(|pending| !pending.is_empty())
+    }
 }
 
 impl SftpDuplicateResolver for SftpDuplicatePromptBroker {
@@ -369,6 +376,13 @@ impl HostKeyPromptBroker {
             .ok()
             .and_then(|mut pending| pending.pop_front())
     }
+
+    pub(in crate::features) fn has_pending(&self) -> bool {
+        self.pending
+            .lock()
+            .ok()
+            .is_some_and(|pending| !pending.is_empty())
+    }
 }
 
 #[derive(Debug)]
@@ -414,6 +428,13 @@ impl CredentialPromptBroker {
             .lock()
             .ok()
             .and_then(|mut pending| pending.pop_front())
+    }
+
+    pub(in crate::features) fn has_pending(&self) -> bool {
+        self.pending
+            .lock()
+            .ok()
+            .is_some_and(|pending| !pending.is_empty())
     }
 }
 

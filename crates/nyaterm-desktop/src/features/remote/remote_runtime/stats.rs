@@ -44,6 +44,9 @@ impl NyaTermApp {
     }
 
     pub(in crate::features) fn drain_stats_events(&mut self) -> bool {
+        if !self.stats_pending {
+            return false;
+        }
         let mut dirty = false;
         for _ in 0..STATS_EVENT_DRAIN_LIMIT {
             let Ok(event) = self.stats_rx.try_recv() else {

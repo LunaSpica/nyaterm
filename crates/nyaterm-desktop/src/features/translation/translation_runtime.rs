@@ -416,6 +416,9 @@ impl NyaTermApp {
     }
 
     pub(super) fn drain_translate_events(&mut self) -> bool {
+        if !self.translate_pending {
+            return false;
+        }
         let mut dirty = false;
         for _ in 0..TRANSLATE_EVENT_DRAIN_LIMIT {
             let Ok(event) = self.translate_rx.try_recv() else {

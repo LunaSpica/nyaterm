@@ -23,6 +23,9 @@ impl NyaTermApp {
     }
 
     pub(super) fn drain_update_events(&mut self) -> bool {
+        if !self.update_pending {
+            return false;
+        }
         let mut dirty = false;
         for _ in 0..UPDATE_EVENT_DRAIN_LIMIT {
             let Ok(event) = self.update_rx.try_recv() else {

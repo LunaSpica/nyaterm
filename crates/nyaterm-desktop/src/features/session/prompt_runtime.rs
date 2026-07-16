@@ -120,7 +120,7 @@ impl NyaTermApp {
     }
 
     pub(super) fn drain_host_key_prompts(&mut self) -> bool {
-        if self.active_host_key_prompt.is_some() {
+        if self.active_host_key_prompt.is_some() || !self.host_key_prompts.has_pending() {
             return false;
         }
 
@@ -136,7 +136,7 @@ impl NyaTermApp {
     }
 
     pub(super) fn drain_credential_prompts(&mut self) -> bool {
-        if self.active_credential_prompt.is_some() {
+        if self.active_credential_prompt.is_some() || !self.credential_prompts.has_pending() {
             return false;
         }
 
@@ -158,7 +158,7 @@ impl NyaTermApp {
     }
 
     pub(super) fn drain_duplicate_prompts(&mut self) -> bool {
-        if self.active_duplicate_prompt.is_some() {
+        if self.active_duplicate_prompt.is_some() || !self.duplicate_prompts.has_pending() {
             return false;
         }
 

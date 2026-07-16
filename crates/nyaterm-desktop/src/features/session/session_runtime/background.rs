@@ -325,6 +325,9 @@ impl NyaTermApp {
         &mut self,
         cx: &mut Context<Self>,
     ) -> bool {
+        if self.pending_session_starts.is_empty() {
+            return false;
+        }
         let mut dirty = false;
         for _ in 0..SESSION_START_EVENT_DRAIN_LIMIT {
             let Ok(event) = self.session_start_rx.try_recv() else {

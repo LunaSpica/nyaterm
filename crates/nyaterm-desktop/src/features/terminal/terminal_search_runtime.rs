@@ -154,6 +154,9 @@ impl NyaTermApp {
     }
 
     pub(in crate::features) fn drain_recording_pipeline_events(&mut self) -> bool {
+        if self.terminal_history_search_pending_key.is_none() {
+            return false;
+        }
         let mut dirty = false;
         while let Some(event) = self.recording_write_pipeline.try_recv_event() {
             match event {

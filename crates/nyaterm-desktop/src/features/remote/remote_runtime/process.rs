@@ -415,6 +415,9 @@ impl NyaTermApp {
     }
 
     pub(in crate::features) fn drain_process_events(&mut self) -> bool {
+        if !self.process_pending {
+            return false;
+        }
         let mut dirty = false;
         for _ in 0..PROCESS_EVENT_DRAIN_LIMIT {
             let Ok(event) = self.process_rx.try_recv() else {

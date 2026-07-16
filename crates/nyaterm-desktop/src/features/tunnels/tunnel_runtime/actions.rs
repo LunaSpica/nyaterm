@@ -363,6 +363,9 @@ impl NyaTermApp {
     }
 
     pub(in crate::features) fn drain_tunnel_events(&mut self) -> bool {
+        if self.pending_tunnels.is_empty() {
+            return false;
+        }
         let mut dirty = false;
         for _ in 0..TUNNEL_EVENT_DRAIN_LIMIT {
             let Ok(event) = self.tunnel_rx.try_recv() else {
