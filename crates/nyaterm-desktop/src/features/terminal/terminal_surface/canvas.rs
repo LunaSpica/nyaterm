@@ -1,7 +1,5 @@
 use super::*;
 use crate::models::TerminalPerformanceMode;
-use std::collections::hash_map::DefaultHasher;
-use std::hash::{Hash, Hasher};
 
 impl NyaTermApp {
     pub(in crate::features) fn terminal_canvas(
@@ -80,22 +78,38 @@ impl NyaTermApp {
             .get(&session_id)
             .map(|view| view.scroll_offset)
             .unwrap_or(self.terminal_scroll_offset);
-        let frame_action_links = self
-            .terminal_views
-            .get(&session_id)
-            .filter(|_| expensive_interactions_enabled)
-            .and_then(|view| {
-                if scroll_offset == 0 {
-                    view.frame_action_links.as_ref()
-                } else {
-                    view.scrollback_action_links.get(&scroll_offset)
-                }
-            })
-            .filter(|links| links.matcher_key == action_link_matcher_key);
-        let snapshot = self.terminal_snapshot_for_session(
-            (!session_id.is_empty()).then_some(session_id.as_str()),
-            scroll_offset,
-        );
+        let frame_action_links = if session_id.is_empty() {
+            self.terminal_views
+                .get(&session_id)
+                .filter(|_| expensive_interactions_enabled)
+                .and_then(|view| {
+                    if scroll_offset == 0 {
+                        view.frame_action_links.as_ref()
+                    } else {
+                        view.scrollback_action_links.get(&scroll_offset)
+                    }
+                })
+                .filter(|links| links.matcher_key == action_link_matcher_key)
+        } else {
+            // Live surfaces own action-link paint; shell only needs links for empty session.
+            None
+        };
+        // Live sessions already paint the grid on TerminalSurface. Skip cloning /
+        // building a shell-side viewport snapshot except when IME preedit needs
+        // cursor placement, or when there is no session (empty bootstrap canvas).
+        let needs_shell_viewport_snapshot = session_id.is_empty()
+            || (is_active
+                && self.settings.interaction_mac_ime_compatibility
+                && !self.terminal_ime_marked_text.is_empty());
+        let snapshot = if needs_shell_viewport_snapshot {
+            self.terminal_snapshot_for_session(
+                (!session_id.is_empty()).then_some(session_id.as_str()),
+                scroll_offset,
+            )
+        } else {
+            // Cheap placeholder: chrome wrappers do not paint cells from this value.
+            std::sync::Arc::new(TerminalScreen::default().viewport_snapshot(0))
+        };
         let line_count = snapshot.lines.len();
         let cursor_row = snapshot.cursor_row;
         let cursor_col = snapshot.cursor_col;
