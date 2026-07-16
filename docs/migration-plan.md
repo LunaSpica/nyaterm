@@ -1,6 +1,6 @@
 # NyaTerm Native Migration Plan
 
-The repository root is now the Rust native workspace. The ignored `nyaterm-tauri/`
+The repository root is now the Rust native workspace. The ignored `./temp/nyaterm-tauri/`
 directory remains the source-of-truth input for migration until every service has
 been ported or replaced.
 
@@ -807,7 +807,7 @@ service boundary first:
 
 ## 2026-07-11 ThemePalette Tauri field parity + workspace chrome
 - Expand `ThemePalette` to Tauri surface tokens: section_header, hover, input, text_dimmed, success/warning/danger.
-- Align github-light / catppuccin(-mocha) hex values with `nyaterm-tauri/src/lib/themes.ts`.
+- Align github-light / catppuccin(-mocha) hex values with `./temp/nyaterm-tauri/src/lib/themes.ts`.
 - Panel headers use section_header; tab strip, empty workspace, bottom panel, security-auth lists use palette.
 
 ## 2026-07-11 Activity chrome + Connections palette pass
@@ -857,7 +857,7 @@ service boundary first:
 - Semantic status colors (job state dots, risk pills, close-red) intentionally retained.
 
 ## 2026-07-11 Full Tauri theme catalog + Network/shell densify
-- Expand `theme_palette` to all 17 Tauri theme ids from `nyaterm-tauri/src/lib/themes.ts`.
+- Expand `theme_palette` to all 17 Tauri theme ids from `./temp/nyaterm-tauri/src/lib/themes.ts`.
 - Interactive accent uses Tauri `link`/`focusRing` (github-light blue, not green brand accent).
 - Settings Appearance lists every theme via `APPEARANCE_THEME_IDS` chips; legacy `catppuccin` normalizes to `catppuccin-mocha`.
 - Densify Network tunnel/proxy rows/editors, title/status bar extras, terminal search/canvas chrome, session overlays, translation chips, and quick-command helper fields.

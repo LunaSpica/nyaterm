@@ -36,7 +36,7 @@ dist-ssr
 .codex
 .trae
 
-nyaterm-tauri/
+temp/
 
 # Rust / native app
 target/
