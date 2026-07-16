@@ -22,7 +22,8 @@ impl NyaTermApp {
     ) -> impl IntoElement {
         let palette = self.theme_palette();
         // Match the Tauri shell: tab strip sits directly above the terminal surface.
-        self.reconcile_terminal_windows();
+        // Do not reconcile/prune layout here — paint must stay pure. Session
+        // register/close/idle already keep terminal_windows coherent.
         let multi_leaf = self.terminal_windows_is_multi_leaf();
         let mut workspace = div()
             .flex_1()
@@ -41,8 +42,6 @@ impl NyaTermApp {
 
     fn workspace_terminal_area(&mut self, cx: &mut Context<Self>) -> gpui::AnyElement {
         let palette = self.theme_palette();
-        self.prune_workspace_split();
-        self.reconcile_terminal_windows();
         if self.active_session_id.is_none() {
             return self.empty_workspace_state(cx).into_any_element();
         }

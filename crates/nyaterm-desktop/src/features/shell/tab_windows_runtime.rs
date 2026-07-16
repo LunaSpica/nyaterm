@@ -3,10 +3,20 @@ use super::*;
 impl NyaTermApp {
     /// Ensure every live session appears in the multi-leaf layout once it is enabled.
     pub(in crate::features) fn reconcile_terminal_windows(&mut self) {
+        // Flat strip mode (default): nothing to reconcile. Avoid allocating a full
+        // SessionInfo list on every residual call.
+        if self.terminal_windows.is_none() {
+            return;
+        }
+
         let live_ids = self
-            .ordered_tab_sessions()
-            .into_iter()
-            .map(|session| session.id)
+            .session_order
+            .iter()
+            .filter(|session_id| {
+                self.session_metadata.contains_key(*session_id)
+                    && !self.is_secondary_pane_session(session_id)
+            })
+            .cloned()
             .collect::<Vec<_>>();
         if live_ids.is_empty() {
             self.terminal_windows = None;
@@ -26,12 +36,6 @@ impl NyaTermApp {
                     }
                 }
             }
-        }
-
-        if self.terminal_windows.is_none() {
-            // Flat mode: multi-leaf restore runs on the idle plane only so
-            // register_session never opens the config DB on connect success.
-            return;
         }
 
         if let Some(root) = self.terminal_windows.as_mut() {
