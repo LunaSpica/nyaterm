@@ -404,9 +404,9 @@ pub(crate) struct TerminalViewState {
     pub(crate) output: String,
     pub(crate) screen: TerminalScreen,
     /// Latest live viewport prepared by the background terminal frame processor.
-    pub(crate) frame_snapshot: Option<TerminalSnapshot>,
+    pub(crate) frame_snapshot: Option<Arc<TerminalSnapshot>>,
     pub(crate) frame_action_links: Option<TerminalFrameActionLinks>,
-    pub(crate) scrollback_snapshots: HashMap<usize, TerminalSnapshot>,
+    pub(crate) scrollback_snapshots: HashMap<usize, Arc<TerminalSnapshot>>,
     pub(crate) scrollback_action_links: HashMap<usize, TerminalFrameActionLinks>,
     pub(crate) pending_snapshot_offsets: HashSet<usize>,
     pub(crate) search_result: Option<TerminalFrameSearchResult>,
@@ -518,7 +518,7 @@ impl TerminalViewState {
         }
         self.screen.advance_decoded_text(text);
         self.screen_revision = self.screen_revision.saturating_add(1);
-        self.frame_snapshot = Some(self.screen.viewport_snapshot(0));
+        self.frame_snapshot = Some(Arc::new(self.screen.viewport_snapshot(0)));
         self.frame_action_links = None;
         self.enter_render_degraded_mode();
         self.clear_scrollback_query_caches();
@@ -539,7 +539,7 @@ impl TerminalViewState {
         }
         self.screen.advance(data);
         self.screen_revision = self.screen_revision.saturating_add(1);
-        self.frame_snapshot = Some(self.screen.viewport_snapshot(0));
+        self.frame_snapshot = Some(Arc::new(self.screen.viewport_snapshot(0)));
         self.frame_action_links = None;
         self.enter_render_degraded_mode();
         self.clear_scrollback_query_caches();
@@ -684,7 +684,7 @@ impl TerminalViewState {
     pub(crate) fn apply_terminal_frame_parts(
         &mut self,
         visible_text: &str,
-        snapshot: TerminalSnapshot,
+        snapshot: Arc<TerminalSnapshot>,
         action_links: Option<TerminalFrameActionLinks>,
         protocol_state: TerminalProtocolState,
         accepted_bytes: usize,
@@ -716,7 +716,7 @@ impl TerminalViewState {
 
     pub(crate) fn apply_terminal_background_frame_parts(
         &mut self,
-        snapshot: TerminalSnapshot,
+        snapshot: Arc<TerminalSnapshot>,
         action_links: Option<TerminalFrameActionLinks>,
         protocol_state: TerminalProtocolState,
         skipped_output_bytes: usize,
@@ -1111,7 +1111,7 @@ pub(crate) struct TerminalFrameOutputEvent {
     pub(crate) session_id: String,
     pub(crate) visible_text: String,
     pub(crate) recording_text_bytes: usize,
-    pub(crate) snapshot: TerminalSnapshot,
+    pub(crate) snapshot: Arc<TerminalSnapshot>,
     pub(crate) action_links: Option<TerminalFrameActionLinks>,
     pub(crate) protocol_state: TerminalProtocolState,
     pub(crate) effects: TerminalEffects,
@@ -1126,7 +1126,7 @@ pub(crate) struct TerminalFrameOutputEvent {
 pub(crate) struct TerminalFrameSnapshotEvent {
     pub(crate) session_id: String,
     pub(crate) offset: usize,
-    pub(crate) snapshot: TerminalSnapshot,
+    pub(crate) snapshot: Arc<TerminalSnapshot>,
     pub(crate) action_links: Option<TerminalFrameActionLinks>,
     pub(crate) revision: u64,
     pub(crate) process_duration: Duration,
@@ -1298,7 +1298,7 @@ impl TerminalFrameSession {
     ) -> TerminalFrameOutputEvent {
         let command_running = self.screen.command_running();
         let protocol_state = TerminalProtocolState::from_screen(&self.screen);
-        let snapshot = self.screen.viewport_snapshot(0);
+        let snapshot = Arc::new(self.screen.viewport_snapshot(0));
         TerminalFrameOutputEvent {
             session_id,
             visible_text: batch.visible_text,
@@ -1323,7 +1323,7 @@ impl TerminalFrameSession {
         action_link_matchers: ActionLinksMatcherSettings,
     ) -> TerminalFrameSnapshotEvent {
         let started_at = Instant::now();
-        let snapshot = self.screen.viewport_snapshot(offset);
+        let snapshot = Arc::new(self.screen.viewport_snapshot(offset));
         let action_links = prepare_terminal_frame_action_links(
             &snapshot,
             action_links_enabled,
@@ -1916,7 +1916,7 @@ mod tests {
             session_id: "s1".to_string(),
             visible_text: "x".to_string(),
             recording_text_bytes: 1,
-            snapshot: TerminalScreen::default().viewport_snapshot(0),
+            snapshot: Arc::new(TerminalScreen::default().viewport_snapshot(0)),
             action_links: None,
             protocol_state: TerminalProtocolState::default(),
             effects: TerminalEffects::default(),

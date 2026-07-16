@@ -128,7 +128,7 @@ mod layout_cache_tests {
         snapshot.lines[0] = "same".to_string();
         snapshot.line_signatures[0] = 7;
         let element = NyaTerminalElement::new(
-            snapshot,
+            Arc::new(snapshot),
             Vec::new(),
             Vec::new(),
             false,
@@ -246,7 +246,7 @@ mod layout_cache_tests {
 }
 
 pub struct NyaTerminalElement {
-    snapshot: TerminalSnapshot,
+    snapshot: Arc<TerminalSnapshot>,
     keyword_rules: Vec<ResolvedKeywordHighlightRule>,
     decorations: Vec<TerminalLineDecorations>,
     layout_cache: Option<Arc<Mutex<NyaTerminalLayoutCache>>>,
@@ -309,7 +309,7 @@ fn image_mask(
 impl NyaTerminalElement {
     #[allow(clippy::too_many_arguments)]
     pub fn new(
-        snapshot: TerminalSnapshot,
+        snapshot: Arc<TerminalSnapshot>,
         keyword_rules: Vec<ResolvedKeywordHighlightRule>,
         decorations: Vec<TerminalLineDecorations>,
         show_cursor: bool,
@@ -515,32 +515,6 @@ impl Element for NyaTerminalElement {
                 default_decorations = TerminalLineDecorations::default();
                 &default_decorations
             };
-            // Base spans drive cell/keyword backgrounds only (under images).
-            let base_spans = terminal_highlight_spans(
-                display_line,
-                ansi,
-                &self.keyword_rules,
-                &[],
-                &[],
-                None,
-                &decorations.link_ranges,
-                self.palette,
-            );
-            // Full spans include search/selection fg tweaks for the glyph layer.
-            let spans = if terminal_glyph_decorations_needed(decorations) {
-                terminal_highlight_spans(
-                    display_line,
-                    ansi,
-                    &self.keyword_rules,
-                    &decorations.search_ranges,
-                    &decorations.active_search_ranges,
-                    decorations.selection_cols,
-                    &decorations.link_ranges,
-                    self.palette,
-                )
-            } else {
-                base_spans.clone()
-            };
             let y = px(f32::from(bounds.top()) + row as f32 * cell_h);
 
             if !decorations.active_search_ranges.is_empty() {
@@ -572,6 +546,7 @@ impl Element for NyaTerminalElement {
                 ));
             }
 
+            // Plain/degraded rows skip full highlight span work entirely.
             if terminal_plain_row_fast_path(ansi, &self.keyword_rules, decorations) {
                 let text = display_line.to_string();
                 let text_runs = vec![TextRun {
@@ -593,6 +568,33 @@ impl Element for NyaTerminalElement {
                 plan.rows.push(TerminalPaintRow { y, line: shaped });
                 continue;
             }
+
+            // Base spans drive cell/keyword backgrounds only (under images).
+            let base_spans = terminal_highlight_spans(
+                display_line,
+                ansi,
+                &self.keyword_rules,
+                &[],
+                &[],
+                None,
+                &decorations.link_ranges,
+                self.palette,
+            );
+            // Full spans include search/selection fg tweaks for the glyph layer.
+            let spans = if terminal_glyph_decorations_needed(decorations) {
+                terminal_highlight_spans(
+                    display_line,
+                    ansi,
+                    &self.keyword_rules,
+                    &decorations.search_ranges,
+                    &decorations.active_search_ranges,
+                    decorations.selection_cols,
+                    &decorations.link_ranges,
+                    self.palette,
+                )
+            } else {
+                base_spans.clone()
+            };
 
             // Cell / keyword backgrounds (OxideTerm layers 2–3).
             let mut col = 0usize;

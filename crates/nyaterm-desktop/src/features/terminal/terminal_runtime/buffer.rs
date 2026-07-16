@@ -933,7 +933,9 @@ mod frame_event_queue_tests {
             session_id: session_id.to_string(),
             visible_text: format!("rev-{revision}"),
             recording_text_bytes: 0,
-            snapshot: nyaterm_terminal::TerminalScreen::default().viewport_snapshot(0),
+            snapshot: std::sync::Arc::new(
+                nyaterm_terminal::TerminalScreen::default().viewport_snapshot(0),
+            ),
             action_links: None,
             protocol_state: TerminalProtocolState::default(),
             effects: TerminalEffects::default(),

@@ -156,7 +156,7 @@ impl NyaTermApp {
         let Some(prompt_text) = self
             .terminal_views
             .get(&session_id)
-            .and_then(|view| view.frame_snapshot.as_ref())
+            .and_then(|view| view.frame_snapshot.as_deref())
             .and_then(credential_autofill_prompt_text_from_snapshot)
         else {
             return self.sync_credential_autofill_prompt_text(&session_id, String::new(), cx);

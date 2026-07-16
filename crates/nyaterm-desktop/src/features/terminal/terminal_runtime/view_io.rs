@@ -94,26 +94,26 @@ impl NyaTermApp {
         &self,
         session_id: Option<&str>,
         offset: usize,
-    ) -> TerminalSnapshot {
+    ) -> std::sync::Arc<TerminalSnapshot> {
         if let Some(session_id) = session_id.filter(|id| !id.is_empty()) {
             if let Some(view) = self.terminal_views.get(session_id) {
                 if offset == 0 {
                     return view
                         .frame_snapshot
                         .clone()
-                        .unwrap_or_else(|| view.screen.viewport_snapshot(0));
+                        .unwrap_or_else(|| std::sync::Arc::new(view.screen.viewport_snapshot(0)));
                 }
                 return view
                     .scrollback_snapshots
                     .get(&offset)
                     .cloned()
-                    .unwrap_or_else(|| view.screen.viewport_snapshot(offset));
+                    .unwrap_or_else(|| std::sync::Arc::new(view.screen.viewport_snapshot(offset)));
             }
         }
-        self.terminal_screen.viewport_snapshot(offset)
+        std::sync::Arc::new(self.terminal_screen.viewport_snapshot(offset))
     }
 
-    pub(in crate::features) fn active_terminal_snapshot(&self) -> TerminalSnapshot {
+    pub(in crate::features) fn active_terminal_snapshot(&self) -> std::sync::Arc<TerminalSnapshot> {
         self.terminal_snapshot_for_session(
             self.active_session_id.as_deref(),
             self.active_terminal_scroll_offset(),
