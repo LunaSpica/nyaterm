@@ -15,9 +15,6 @@ The connection layer only produces and consumes bytes. It does not render text.
 The terminal model parses terminal bytes into an Alacritty-backed grid. The GPUI
 layer renders snapshots of that grid.
 
-This mirrors the useful part of the OxideTerm design: SSH, local PTY, Telnet,
-Raw TCP, and Serial all converge into one terminal model instead of each
-connection type owning a separate renderer.
 
 ## End-To-End Flow
 
@@ -472,7 +469,7 @@ Command-mark colors (left 2px bar, same layer as active-search):
 When both an active-search mark and a command mark exist on the same row, the
 command bar is offset 1 cell-edge (2px) so both remain visible.
 
-`paint` emits those layers in OxideTerm-aligned order so protocol images sit
+`paint` emits those layers in aligned order so protocol images sit
 between cell backgrounds and selection/search, and glyphs stay above selection:
 
 ```text
@@ -646,7 +643,7 @@ under the pointer instead of the previously active pane. Remote mouse capture is
 also tied to the session that received the press, so later drag/release reports
 continue to that session even if focus changes before mouse-up.
 
-## Current Differences From OxideTerm Reference
+## Current Differences
 
 NyaTerm follows the same broad layered architecture, but the current
 implementation is simpler in several places:

@@ -596,7 +596,7 @@ impl Element for NyaTerminalElement {
                 base_spans.clone()
             };
 
-            // Cell / keyword backgrounds (OxideTerm layers 2–3).
+            // Cell / keyword backgrounds.
             let mut col = 0usize;
             let mut pending_bg: Option<(u32, usize, usize)> = None;
             for span in &base_spans {
@@ -642,7 +642,7 @@ impl Element for NyaTerminalElement {
                 &mut plan.backgrounds,
             );
 
-            // Search + selection washes (OxideTerm layers 5/7) — filled after under-images.
+            // Search + selection washes — filled after under-images.
             for &(start, end) in &decorations.search_ranges {
                 push_col_range_bg(
                     row,
@@ -813,7 +813,6 @@ impl Element for NyaTerminalElement {
         window: &mut Window,
         cx: &mut App,
     ) {
-        // OxideTerm-aligned layers:
         // cell/keyword bg → under images → search/selection → marks → text → above images → cursor
         for quad in prepaint.backgrounds.drain(..) {
             window.paint_quad(quad);
