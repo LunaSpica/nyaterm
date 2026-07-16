@@ -1,5 +1,21 @@
 use super::*;
 
+#[derive(Clone, Copy)]
+enum SessionOutputDrainStep {
+    SidebandOnly { chunk_duration: Duration },
+    Accepted { chunk_duration: Duration },
+}
+
+impl SessionOutputDrainStep {
+    fn chunk_duration(self) -> Duration {
+        match self {
+            Self::SidebandOnly { chunk_duration } | Self::Accepted { chunk_duration } => {
+                chunk_duration
+            }
+        }
+    }
+}
+
 impl NyaTermApp {
     pub(in crate::features) fn drain_session_events(&mut self, cx: &mut Context<Self>) -> bool {
         let drain_started_at = Instant::now();
@@ -60,125 +76,29 @@ impl NyaTermApp {
                 match event {
                     SessionEvent::Output { session_id, data } => {
                         output_event_count += 1;
-                        let chunk_started_at = Instant::now();
                         let chunk_input_bytes = data.len();
                         processed_output_bytes =
                             processed_output_bytes.saturating_add(chunk_input_bytes);
-                        let mut chunk_timings = SessionEventDrainTimings::default();
-                        let sideband_bypass =
-                            self.session_output_can_bypass_sideband_detectors(&session_id, &data);
-                        let data = if sideband_bypass {
-                            data
-                        } else {
-                            let stage_started_at = Instant::now();
-                            let data = self.process_zmodem_output(&session_id, &data, cx);
-                            let stage_duration = stage_started_at.elapsed();
-                            drain_timings.zmodem += stage_duration;
-                            chunk_timings.zmodem += stage_duration;
-                            if data.is_empty() {
-                                let chunk_duration = chunk_started_at.elapsed();
-                                drain_timings.output_total += chunk_duration;
-                                chunk_timings.output_total += chunk_duration;
-                                max_output_chunk_duration =
-                                    max_output_chunk_duration.max(chunk_duration);
-                                self.maybe_log_slow_session_output_chunk(
-                                    &session_id,
-                                    chunk_input_bytes,
-                                    chunk_duration,
-                                    &chunk_timings,
-                                );
-                                if session_event_drain_should_yield(
-                                    drain_started_at,
-                                    !self.pending_session_events.is_empty(),
-                                    transport_queued_events,
-                                    transport_queued_output_bytes,
-                                    drain_budget,
-                                ) {
-                                    break;
-                                }
-                                continue;
-                            }
-                            // Consume side-band markers after active transfer payloads are removed.
-                            let stage_started_at = Instant::now();
-                            let data = self.process_trzsz_output(&session_id, &data, cx);
-                            let stage_duration = stage_started_at.elapsed();
-                            drain_timings.trzsz += stage_duration;
-                            chunk_timings.trzsz += stage_duration;
-                            if data.is_empty() {
-                                let chunk_duration = chunk_started_at.elapsed();
-                                drain_timings.output_total += chunk_duration;
-                                chunk_timings.output_total += chunk_duration;
-                                max_output_chunk_duration =
-                                    max_output_chunk_duration.max(chunk_duration);
-                                self.maybe_log_slow_session_output_chunk(
-                                    &session_id,
-                                    chunk_input_bytes,
-                                    chunk_duration,
-                                    &chunk_timings,
-                                );
-                                if session_event_drain_should_yield(
-                                    drain_started_at,
-                                    !self.pending_session_events.is_empty(),
-                                    transport_queued_events,
-                                    transport_queued_output_bytes,
-                                    drain_budget,
-                                ) {
-                                    break;
-                                }
-                                continue;
-                            }
-                            data
-                        };
-                        if self.session_has_active_ai_capture(&session_id) {
-                            self.flush_pending_session_frame_outputs(
-                                &mut pending_frame_outputs,
-                                &mut drain_timings,
-                            );
-                            let stage_started_at = Instant::now();
-                            let text = self.decode_session_output_for_recording(&session_id, &data);
-                            let stage_duration = stage_started_at.elapsed();
-                            drain_timings.decode += stage_duration;
-                            chunk_timings.decode += stage_duration;
-                            let stage_started_at = Instant::now();
-                            let result = self.ai_agent_capture.process(&text);
-                            let stage_duration = stage_started_at.elapsed();
-                            drain_timings.ai_capture += stage_duration;
-                            chunk_timings.ai_capture += stage_duration;
-                            if !result.visible_text.is_empty() {
-                                let stage_started_at = Instant::now();
-                                let visible_bytes = self.encode_visible_terminal_text_for_output(
-                                    &session_id,
-                                    &result.visible_text,
-                                );
-                                self.submit_terminal_frame_output(&session_id, visible_bytes);
-                                let stage_duration = stage_started_at.elapsed();
-                                drain_timings.terminal_append += stage_duration;
-                                chunk_timings.terminal_append += stage_duration;
-                            }
-                            let stage_started_at = Instant::now();
-                            for captured in result.completed {
-                                self.handle_ai_agent_captured_output(captured, cx);
-                            }
-                            let stage_duration = stage_started_at.elapsed();
-                            drain_timings.ai_capture += stage_duration;
-                            chunk_timings.ai_capture += stage_duration;
-                        } else {
-                            pending_frame_outputs.push((session_id.clone(), data));
-                        }
-                        // Routing only changes when sideband detectors activate/deactivate.
-                        if !sideband_bypass {
-                            self.sync_session_event_bridge_session_policy(&session_id);
-                        }
-                        let chunk_duration = chunk_started_at.elapsed();
-                        drain_timings.output_total += chunk_duration;
-                        chunk_timings.output_total += chunk_duration;
-                        max_output_chunk_duration = max_output_chunk_duration.max(chunk_duration);
-                        self.maybe_log_slow_session_output_chunk(
-                            &session_id,
-                            chunk_input_bytes,
-                            chunk_duration,
-                            &chunk_timings,
+                        let step = self.handle_session_output_event(
+                            session_id,
+                            data,
+                            &mut pending_frame_outputs,
+                            &mut drain_timings,
+                            cx,
                         );
+                        max_output_chunk_duration =
+                            max_output_chunk_duration.max(step.chunk_duration());
+                        if matches!(step, SessionOutputDrainStep::SidebandOnly { .. })
+                            && session_event_drain_should_yield(
+                                drain_started_at,
+                                !self.pending_session_events.is_empty(),
+                                transport_queued_events,
+                                transport_queued_output_bytes,
+                                drain_budget,
+                            )
+                        {
+                            break;
+                        }
                     }
                     SessionEvent::OutputDropped { session_id, bytes } => {
                         self.flush_pending_session_frame_outputs(
@@ -319,6 +239,105 @@ impl NyaTermApp {
             );
         }
         dirty
+    }
+
+    fn handle_session_output_event(
+        &mut self,
+        session_id: String,
+        data: Vec<u8>,
+        pending_frame_outputs: &mut Vec<(String, Vec<u8>)>,
+        drain_timings: &mut SessionEventDrainTimings,
+        cx: &mut Context<Self>,
+    ) -> SessionOutputDrainStep {
+        let chunk_started_at = Instant::now();
+        let chunk_input_bytes = data.len();
+        let mut chunk_timings = SessionEventDrainTimings::default();
+        let sideband_bypass = self.session_output_can_bypass_sideband_detectors(&session_id, &data);
+        let data = if sideband_bypass {
+            data
+        } else {
+            let stage_started_at = Instant::now();
+            let data = self.process_zmodem_output(&session_id, &data, cx);
+            let stage_duration = stage_started_at.elapsed();
+            drain_timings.zmodem += stage_duration;
+            chunk_timings.zmodem += stage_duration;
+            if data.is_empty() {
+                let chunk_duration = chunk_started_at.elapsed();
+                drain_timings.output_total += chunk_duration;
+                chunk_timings.output_total += chunk_duration;
+                self.maybe_log_slow_session_output_chunk(
+                    &session_id,
+                    chunk_input_bytes,
+                    chunk_duration,
+                    &chunk_timings,
+                );
+                return SessionOutputDrainStep::SidebandOnly { chunk_duration };
+            }
+            // Consume side-band markers after active transfer payloads are removed.
+            let stage_started_at = Instant::now();
+            let data = self.process_trzsz_output(&session_id, &data, cx);
+            let stage_duration = stage_started_at.elapsed();
+            drain_timings.trzsz += stage_duration;
+            chunk_timings.trzsz += stage_duration;
+            if data.is_empty() {
+                let chunk_duration = chunk_started_at.elapsed();
+                drain_timings.output_total += chunk_duration;
+                chunk_timings.output_total += chunk_duration;
+                self.maybe_log_slow_session_output_chunk(
+                    &session_id,
+                    chunk_input_bytes,
+                    chunk_duration,
+                    &chunk_timings,
+                );
+                return SessionOutputDrainStep::SidebandOnly { chunk_duration };
+            }
+            data
+        };
+        if self.session_has_active_ai_capture(&session_id) {
+            self.flush_pending_session_frame_outputs(pending_frame_outputs, drain_timings);
+            let stage_started_at = Instant::now();
+            let text = self.decode_session_output_for_recording(&session_id, &data);
+            let stage_duration = stage_started_at.elapsed();
+            drain_timings.decode += stage_duration;
+            chunk_timings.decode += stage_duration;
+            let stage_started_at = Instant::now();
+            let result = self.ai_agent_capture.process(&text);
+            let stage_duration = stage_started_at.elapsed();
+            drain_timings.ai_capture += stage_duration;
+            chunk_timings.ai_capture += stage_duration;
+            if !result.visible_text.is_empty() {
+                let stage_started_at = Instant::now();
+                let visible_bytes =
+                    self.encode_visible_terminal_text_for_output(&session_id, &result.visible_text);
+                self.submit_terminal_frame_output(&session_id, visible_bytes);
+                let stage_duration = stage_started_at.elapsed();
+                drain_timings.terminal_append += stage_duration;
+                chunk_timings.terminal_append += stage_duration;
+            }
+            let stage_started_at = Instant::now();
+            for captured in result.completed {
+                self.handle_ai_agent_captured_output(captured, cx);
+            }
+            let stage_duration = stage_started_at.elapsed();
+            drain_timings.ai_capture += stage_duration;
+            chunk_timings.ai_capture += stage_duration;
+        } else {
+            pending_frame_outputs.push((session_id.clone(), data));
+        }
+        // Routing only changes when sideband detectors activate/deactivate.
+        if !sideband_bypass {
+            self.sync_session_event_bridge_session_policy(&session_id);
+        }
+        let chunk_duration = chunk_started_at.elapsed();
+        drain_timings.output_total += chunk_duration;
+        chunk_timings.output_total += chunk_duration;
+        self.maybe_log_slow_session_output_chunk(
+            &session_id,
+            chunk_input_bytes,
+            chunk_duration,
+            &chunk_timings,
+        );
+        SessionOutputDrainStep::Accepted { chunk_duration }
     }
 
     pub(super) fn maybe_log_slow_session_output_chunk(
