@@ -1081,41 +1081,36 @@ impl NyaTermApp {
         let is_active = self.active_session_id.as_deref() == Some(session_id);
         let is_disconnected = self.is_session_disconnected(session_id);
         let render_output_pressure = self.runtime_output_pressure_active();
-        let (
-            scroll_offset,
-            has_new,
-            performance_overlay,
-            skipped,
-            layout_cache,
-            render_degraded,
-            burst,
-            mode,
-        ) = self
-            .terminal_views
-            .get(session_id)
-            .map(|view| {
-                (
-                    view.scroll_offset,
-                    view.has_new_while_scrolled,
-                    view.performance_overlay,
-                    view.skipped_output_chars,
-                    view.render_cache.layout_cache.clone(),
-                    view.render_degraded,
-                    view.output_burst_bytes,
-                    view.performance_mode,
-                )
-            })
-            .unwrap_or((
-                0,
-                false,
-                None,
-                0,
-                std::sync::Arc::new(std::sync::Mutex::new(NyaTerminalLayoutCache::default())),
-                false,
-                0,
-                TerminalPerformanceMode::Normal,
-            ));
-        let _ = (render_degraded, burst, mode, render_output_pressure);
+        let view = self.terminal_views.get(session_id);
+        let scroll_offset = view.map(|v| v.scroll_offset).unwrap_or(0);
+        let has_new = view.map(|v| v.has_new_while_scrolled).unwrap_or(false);
+        let performance_overlay = view.and_then(|v| v.performance_overlay);
+        let skipped = view.map(|v| v.skipped_output_chars).unwrap_or(0);
+        let layout_cache = view
+            .map(|v| v.render_cache.layout_cache.clone())
+            .unwrap_or_else(|| {
+                std::sync::Arc::new(std::sync::Mutex::new(NyaTerminalLayoutCache::default()))
+            });
+        let render_degraded_view = view.map(|v| v.render_degraded).unwrap_or(false);
+        let burst = view.map(|v| v.output_burst_bytes).unwrap_or(0);
+        let mode = view
+            .map(|v| v.performance_mode)
+            .unwrap_or(TerminalPerformanceMode::Normal);
+        let frame_action_links = view.and_then(|v| {
+            if v.scroll_offset == 0 {
+                v.frame_action_links.clone()
+            } else {
+                v.scrollback_action_links.get(&v.scroll_offset).cloned()
+            }
+        });
+        let render_pressure =
+            render_output_pressure || burst > 0 || mode == TerminalPerformanceMode::Overloaded;
+        let render_degraded = render_degraded_view || render_pressure;
+        let keyword_rules = if render_degraded || !is_active {
+            std::sync::Arc::new(Vec::new())
+        } else {
+            self.resolved_keyword_highlight_rules()
+        };
         let snapshot = self.terminal_snapshot_for_session(Some(session_id), scroll_offset);
         let cursor_row = snapshot.cursor_row;
         let remote_cursor_visible = snapshot.cursor.visible
@@ -1133,26 +1128,156 @@ impl NyaTermApp {
             nyaterm_terminal::CursorShape::Hidden => self.settings.cursor_style.clone(),
             nyaterm_terminal::CursorShape::Block => self.settings.cursor_style.clone(),
         };
+
+        let enhanced = !render_degraded;
+        let expensive_interactions = terminal_expensive_interactions_enabled(
+            self.settings.terminal_action_links_enabled,
+            is_active,
+            render_degraded,
+            render_output_pressure,
+            burst,
+            mode,
+        );
+        let action_link_matcher_key = terminal_action_link_matcher_key(
+            self.settings.terminal_action_links_enabled,
+            &self.settings.terminal_action_links_matchers,
+        );
+        let frame_action_links = frame_action_links
+            .as_ref()
+            .filter(|_| expensive_interactions)
+            .filter(|links| links.matcher_key == action_link_matcher_key);
+
+        let mut search_ranges_by_line: HashMap<usize, Vec<(usize, usize)>> = HashMap::new();
+        let mut active_search_ranges_by_line: HashMap<usize, Vec<(usize, usize)>> = HashMap::new();
+        if enhanced
+            && is_active
+            && self.terminal_search_open
+            && self.terminal_search_mode == TerminalSearchMode::Buffer
+        {
+            let search_matches = self.terminal_buffer_matches().unwrap_or_default();
+            let (abs_start, abs_end) =
+                crate::features::terminal_surface::terminal_snapshot_absolute_range(&snapshot);
+            let active_match_abs = search_matches
+                .get(
+                    self.terminal_search_active_index
+                        .min(search_matches.len().saturating_sub(1)),
+                )
+                .map(|search_match| search_match.line_index);
+            for (match_index, search_match) in search_matches.iter().enumerate() {
+                let abs = search_match.line_index;
+                if abs < abs_start || abs >= abs_end {
+                    continue;
+                }
+                let view_row = abs - abs_start;
+                let range = (search_match.start_col, search_match.end_col);
+                search_ranges_by_line
+                    .entry(view_row)
+                    .or_default()
+                    .push(range);
+                if Some(abs) == active_match_abs
+                    && match_index
+                        == self
+                            .terminal_search_active_index
+                            .min(search_matches.len().saturating_sub(1))
+                {
+                    active_search_ranges_by_line
+                        .entry(view_row)
+                        .or_default()
+                        .push(range);
+                }
+            }
+        }
+
+        let terminal_selection = if enhanced {
+            is_active.then_some(self.terminal_selection).flatten()
+        } else {
+            None
+        };
+        let has_selection = terminal_selection.is_some();
+        let has_search_decorations =
+            !search_ranges_by_line.is_empty() || !active_search_ranges_by_line.is_empty();
+        let has_frame_action_links = expensive_interactions
+            && frame_action_links.is_some_and(|links| {
+                links
+                    .cell_ranges_by_line
+                    .iter()
+                    .any(|ranges| !ranges.is_empty())
+            });
+        let has_hyperlinks = expensive_interactions
+            && snapshot
+                .hyperlink_lines
+                .iter()
+                .any(|spans| !spans.is_empty());
+        let include_command_marks = is_active && enhanced && !render_output_pressure;
+        let has_command_marks =
+            include_command_marks && snapshot.command_marks.iter().any(Option::is_some);
+        let decorations = if crate::features::terminal_surface::terminal_line_decorations_needed(
+            has_selection,
+            has_search_decorations,
+            has_frame_action_links,
+            has_hyperlinks,
+            has_command_marks,
+        ) {
+            let include_action_links = expensive_interactions;
+            let include_hyperlinks = expensive_interactions;
+            let decoration_cache_key =
+                crate::features::terminal_surface::terminal_line_decorations_cache_key(
+                    &snapshot,
+                    terminal_selection,
+                    &search_ranges_by_line,
+                    &active_search_ranges_by_line,
+                    frame_action_links,
+                    include_action_links,
+                    include_hyperlinks,
+                    include_command_marks,
+                );
+            let build = || {
+                crate::features::terminal_surface::build_terminal_line_decorations(
+                    &snapshot,
+                    terminal_selection,
+                    &search_ranges_by_line,
+                    &active_search_ranges_by_line,
+                    frame_action_links,
+                    include_action_links,
+                    include_hyperlinks,
+                    include_command_marks,
+                )
+            };
+            if let Some(view) = self.terminal_views.get(session_id) {
+                view.render_cache
+                    .line_decorations(decoration_cache_key, build)
+            } else {
+                build()
+            }
+        } else {
+            Vec::new()
+        };
+
         let palette = self.terminal_theme_palette();
         let font_family = self.gpui_terminal_font_family();
-        let (cell_w, cell_h) = self.terminal_cell_metrics.unwrap_or((
-            (self.settings.terminal_font_size as f32 * 0.6).max(6.0),
-            (self.settings.terminal_font_size as f32 * 1.35).max(12.0),
-        ));
+        let font_size = self.settings.terminal_font_size as f32;
+        let normal_weight = self.settings.terminal_font_weight as f32;
+        let bold_weight = self.settings.terminal_font_weight_bold as f32;
+        let show_line_numbers = self.settings.terminal_show_line_numbers;
+        let show_timestamps = self.settings.terminal_show_timestamps;
+        let show_timestamp_ms = self.settings.terminal_show_timestamp_milliseconds;
+        let (cell_w, cell_h) = self
+            .terminal_cell_metrics
+            .unwrap_or(((font_size * 0.6).max(6.0), (font_size * 1.35).max(12.0)));
         let visual_bell = is_active && self.terminal_runtime.visual_bell_ticks > 0;
         surface.update(cx, |surface, cx| {
             surface.set_layout_cache(layout_cache);
             surface.set_paint_chrome(
                 palette,
                 font_family,
-                self.settings.terminal_font_size as f32,
-                self.settings.terminal_font_weight as f32,
-                self.settings.terminal_font_weight_bold as f32,
+                font_size,
+                normal_weight,
+                bold_weight,
                 cell_w,
                 cell_h,
-                self.settings.terminal_show_line_numbers,
-                self.settings.terminal_show_timestamps,
-                self.settings.terminal_show_timestamp_milliseconds,
+                show_line_numbers,
+                show_timestamps,
+                show_timestamp_ms,
                 is_active,
                 visual_bell,
             );
@@ -1162,6 +1287,12 @@ impl NyaTermApp {
                 has_new,
                 performance_overlay,
                 skipped,
+                show_cursor,
+                cursor_style.clone(),
+            );
+            surface.set_decorations_and_keywords(
+                decorations,
+                keyword_rules,
                 show_cursor,
                 cursor_style,
             );
@@ -1174,6 +1305,24 @@ impl NyaTermApp {
         let Some(session_id) = self.active_session_id.clone() else {
             return;
         };
+        self.sync_terminal_surface_paint(&session_id, cx);
+    }
+
+    /// Surface-only repaint for the given session (scroll / selection / frame).
+    pub(in crate::features) fn notify_terminal_surface_only(
+        &mut self,
+        session_id: Option<&str>,
+        cx: &mut Context<Self>,
+    ) {
+        let session_id = session_id
+            .map(str::to_string)
+            .or_else(|| self.active_session_id.clone());
+        let Some(session_id) = session_id else {
+            return;
+        };
+        if session_id.is_empty() {
+            return;
+        }
         self.sync_terminal_surface_paint(&session_id, cx);
     }
 }

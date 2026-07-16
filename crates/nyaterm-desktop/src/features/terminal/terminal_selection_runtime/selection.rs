@@ -5,7 +5,7 @@ impl NyaTermApp {
         if self.terminal_selection.is_some() || self.terminal_selection_dragging {
             self.terminal_selection = None;
             self.terminal_selection_dragging = false;
-            cx.notify();
+            self.notify_active_terminal_surface(cx);
         }
     }
 
@@ -13,7 +13,7 @@ impl NyaTermApp {
         let (rows, cols) = self.active_terminal_grid_size();
         if rows == 0 || cols == 0 {
             self.terminal_selection = None;
-            cx.notify();
+            self.notify_active_terminal_surface(cx);
             return;
         }
         self.terminal_selection = Some(TerminalSelection {
@@ -132,7 +132,7 @@ impl NyaTermApp {
         self.terminal_selection = Some(TerminalSelection::new(cell));
         self.terminal_selection_dragging = true;
         let _ = rows;
-        cx.notify();
+        self.notify_active_terminal_surface(cx);
     }
 
     pub(in crate::features) fn update_terminal_selection_drag(
@@ -171,7 +171,7 @@ impl NyaTermApp {
         if let Some(selection) = self.terminal_selection.as_mut() {
             if selection.head != cell {
                 selection.head = cell;
-                cx.notify();
+                self.notify_active_terminal_surface(cx);
             }
         }
     }
@@ -227,7 +227,7 @@ impl NyaTermApp {
         } else if self.settings.interaction_copy_on_select {
             let _ = self.copy_terminal_selection(cx);
         }
-        cx.notify();
+        self.notify_active_terminal_surface(cx);
     }
 
     pub(in crate::features) fn word_bounds_at(&self, cell: TerminalCellPos) -> (usize, usize) {

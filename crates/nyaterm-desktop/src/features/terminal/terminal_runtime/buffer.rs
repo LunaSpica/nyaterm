@@ -286,6 +286,8 @@ impl NyaTermApp {
         let is_active = self.active_session_id.as_deref() == Some(session_id.as_str());
         let is_visible = self.terminal_session_has_visible_surface(&session_id);
         let effects_need_ui_apply = terminal_effects_need_ui_apply(&effects);
+        // Under output pressure, skip retaining full snapshots for hidden tabs.
+        let keep_hidden_snapshot = !self.runtime_output_pressure_active();
         let view = self
             .terminal_views
             .entry(session_id.clone())
@@ -307,8 +309,12 @@ impl NyaTermApp {
             );
         } else {
             view.apply_terminal_background_frame_parts(
-                snapshot,
-                action_links,
+                keep_hidden_snapshot.then_some(snapshot),
+                if keep_hidden_snapshot {
+                    action_links
+                } else {
+                    None
+                },
                 protocol_state,
                 skipped_output_bytes,
                 revision,

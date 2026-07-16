@@ -716,14 +716,22 @@ impl TerminalViewState {
 
     pub(crate) fn apply_terminal_background_frame_parts(
         &mut self,
-        snapshot: Arc<TerminalSnapshot>,
+        snapshot: Option<Arc<TerminalSnapshot>>,
         action_links: Option<TerminalFrameActionLinks>,
         protocol_state: TerminalProtocolState,
         skipped_output_bytes: usize,
         revision: u64,
     ) {
-        self.frame_snapshot = Some(snapshot);
-        self.frame_action_links = action_links;
+        // Hidden sessions keep protocol/revision current without retaining a full
+        // viewport snapshot until the surface becomes visible again.
+        if let Some(snapshot) = snapshot {
+            self.frame_snapshot = Some(snapshot);
+            self.frame_action_links = action_links;
+        } else {
+            // Drop heavy paint state while backgrounded under pressure.
+            self.frame_snapshot = None;
+            self.frame_action_links = None;
+        }
         self.protocol_state = protocol_state;
         self.screen_revision = revision;
         if skipped_output_bytes > 0 {
@@ -2072,7 +2080,7 @@ mod tests {
         let frame = output_frame_with_sizes((32 * 1024) + 1, 0);
 
         view.apply_terminal_background_frame_parts(
-            frame.snapshot.clone(),
+            Some(frame.snapshot.clone()),
             frame.action_links.clone(),
             frame.protocol_state,
             frame.skipped_output_bytes,

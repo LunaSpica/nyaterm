@@ -119,99 +119,106 @@ impl NyaTermApp {
             nyaterm_terminal::CursorShape::Hidden => self.settings.cursor_style.clone(),
             nyaterm_terminal::CursorShape::Block => self.settings.cursor_style.clone(),
         };
-        let search_stage_started_at = Instant::now();
-        let search_matches = if render_profile.enhanced_decorations_enabled()
-            && is_active
-            && self.terminal_search_open
-            && self.terminal_search_mode == TerminalSearchMode::Buffer
-        {
-            self.terminal_buffer_matches().unwrap_or_default()
-        } else {
-            Vec::new()
-        };
-        // Buffer matches use absolute history indices; map into current viewport rows.
         let (abs_start, abs_end) = terminal_snapshot_absolute_range(&snapshot);
-        let active_match_abs = search_matches
-            .get(
-                self.terminal_search_active_index
-                    .min(search_matches.len().saturating_sub(1)),
+        let _ = abs_end;
+        let (
+            line_decorations,
+            search_mapping_duration,
+            action_link_duration,
+            decorations_duration,
+            search_matches_len,
+        ) = if !session_id.is_empty() {
+            // Decorations live on TerminalSurface (sync_terminal_surface_paint).
+            (
+                Vec::new(),
+                Duration::ZERO,
+                Duration::ZERO,
+                Duration::ZERO,
+                0usize,
             )
-            .map(|search_match| search_match.line_index);
-        let mut search_ranges_by_line: HashMap<usize, Vec<(usize, usize)>> = HashMap::new();
-        let mut active_search_ranges_by_line: HashMap<usize, Vec<(usize, usize)>> = HashMap::new();
-        for (match_index, search_match) in search_matches.iter().enumerate() {
-            let abs = search_match.line_index;
-            if abs < abs_start || abs >= abs_end {
-                continue;
-            }
-            let view_row = abs - abs_start;
-            let range = (search_match.start_col, search_match.end_col);
-            search_ranges_by_line
-                .entry(view_row)
-                .or_default()
-                .push(range);
-            if Some(abs) == active_match_abs
-                && match_index
-                    == self
-                        .terminal_search_active_index
-                        .min(search_matches.len().saturating_sub(1))
+        } else {
+            let search_stage_started_at = Instant::now();
+            let search_matches = if render_profile.enhanced_decorations_enabled()
+                && is_active
+                && self.terminal_search_open
+                && self.terminal_search_mode == TerminalSearchMode::Buffer
             {
-                active_search_ranges_by_line
+                self.terminal_buffer_matches().unwrap_or_default()
+            } else {
+                Vec::new()
+            };
+            // Buffer matches use absolute history indices; map into current viewport rows.
+            let active_match_abs = search_matches
+                .get(
+                    self.terminal_search_active_index
+                        .min(search_matches.len().saturating_sub(1)),
+                )
+                .map(|search_match| search_match.line_index);
+            let mut search_ranges_by_line: HashMap<usize, Vec<(usize, usize)>> = HashMap::new();
+            let mut active_search_ranges_by_line: HashMap<usize, Vec<(usize, usize)>> =
+                HashMap::new();
+            for (match_index, search_match) in search_matches.iter().enumerate() {
+                let abs = search_match.line_index;
+                if abs < abs_start || abs >= abs_end {
+                    continue;
+                }
+                let view_row = abs - abs_start;
+                let range = (search_match.start_col, search_match.end_col);
+                search_ranges_by_line
                     .entry(view_row)
                     .or_default()
                     .push(range);
+                if Some(abs) == active_match_abs
+                    && match_index
+                        == self
+                            .terminal_search_active_index
+                            .min(search_matches.len().saturating_sub(1))
+                {
+                    active_search_ranges_by_line
+                        .entry(view_row)
+                        .or_default()
+                        .push(range);
+                }
             }
-        }
-        let search_mapping_duration = search_stage_started_at.elapsed();
-        let decoration_stage_started_at = Instant::now();
-        let mut action_link_duration = Duration::ZERO;
-        let terminal_selection = if render_profile.enhanced_decorations_enabled() {
-            is_active.then_some(self.terminal_selection).flatten()
-        } else {
-            None
-        };
-        let has_selection = terminal_selection.is_some();
-        let has_search_decorations =
-            !search_ranges_by_line.is_empty() || !active_search_ranges_by_line.is_empty();
-        let has_frame_action_links = expensive_interactions_enabled
-            && frame_action_links.is_some_and(|links| {
-                links
-                    .cell_ranges_by_line
+            let search_mapping_duration = search_stage_started_at.elapsed();
+            let decoration_stage_started_at = Instant::now();
+            let mut action_link_duration = Duration::ZERO;
+            let terminal_selection = if render_profile.enhanced_decorations_enabled() {
+                is_active.then_some(self.terminal_selection).flatten()
+            } else {
+                None
+            };
+            let has_selection = terminal_selection.is_some();
+            let has_search_decorations =
+                !search_ranges_by_line.is_empty() || !active_search_ranges_by_line.is_empty();
+            let has_frame_action_links = expensive_interactions_enabled
+                && frame_action_links.is_some_and(|links| {
+                    links
+                        .cell_ranges_by_line
+                        .iter()
+                        .any(|ranges| !ranges.is_empty())
+                });
+            let has_hyperlinks = expensive_interactions_enabled
+                && snapshot
+                    .hyperlink_lines
                     .iter()
-                    .any(|ranges| !ranges.is_empty())
-            });
-        let has_hyperlinks = expensive_interactions_enabled
-            && snapshot
-                .hyperlink_lines
-                .iter()
-                .any(|spans| !spans.is_empty());
-        let include_command_marks =
-            is_active && render_profile.enhanced_decorations_enabled() && !render_output_pressure;
-        let has_command_marks =
-            include_command_marks && snapshot.command_marks.iter().any(Option::is_some);
-        let needs_line_decorations = terminal_line_decorations_needed(
-            has_selection,
-            has_search_decorations,
-            has_frame_action_links,
-            has_hyperlinks,
-            has_command_marks,
-        );
-        let line_decorations = if needs_line_decorations {
-            let include_action_links = expensive_interactions_enabled;
-            let include_hyperlinks = expensive_interactions_enabled;
-            let decoration_cache_key = terminal_line_decorations_cache_key(
-                &snapshot,
-                terminal_selection,
-                &search_ranges_by_line,
-                &active_search_ranges_by_line,
-                frame_action_links,
-                include_action_links,
-                include_hyperlinks,
-                include_command_marks,
+                    .any(|spans| !spans.is_empty());
+            let include_command_marks = is_active
+                && render_profile.enhanced_decorations_enabled()
+                && !render_output_pressure;
+            let has_command_marks =
+                include_command_marks && snapshot.command_marks.iter().any(Option::is_some);
+            let needs_line_decorations = terminal_line_decorations_needed(
+                has_selection,
+                has_search_decorations,
+                has_frame_action_links,
+                has_hyperlinks,
+                has_command_marks,
             );
-            let mut build = || {
-                let action_link_started_at = Instant::now();
-                let decorations = build_terminal_line_decorations(
+            let line_decorations = if needs_line_decorations {
+                let include_action_links = expensive_interactions_enabled;
+                let include_hyperlinks = expensive_interactions_enabled;
+                let decoration_cache_key = terminal_line_decorations_cache_key(
                     &snapshot,
                     terminal_selection,
                     &search_ranges_by_line,
@@ -221,19 +228,39 @@ impl NyaTermApp {
                     include_hyperlinks,
                     include_command_marks,
                 );
-                action_link_duration += action_link_started_at.elapsed();
-                decorations
-            };
-            if let Some(view) = self.terminal_views.get(&session_id) {
-                view.render_cache
-                    .line_decorations(decoration_cache_key, build)
+                let mut build = || {
+                    let action_link_started_at = Instant::now();
+                    let decorations = build_terminal_line_decorations(
+                        &snapshot,
+                        terminal_selection,
+                        &search_ranges_by_line,
+                        &active_search_ranges_by_line,
+                        frame_action_links,
+                        include_action_links,
+                        include_hyperlinks,
+                        include_command_marks,
+                    );
+                    action_link_duration += action_link_started_at.elapsed();
+                    decorations
+                };
+                if let Some(view) = self.terminal_views.get(&session_id) {
+                    view.render_cache
+                        .line_decorations(decoration_cache_key, build)
+                } else {
+                    build()
+                }
             } else {
-                build()
-            }
-        } else {
-            Vec::new()
+                Vec::new()
+            };
+            let decorations_duration = decoration_stage_started_at.elapsed();
+            (
+                line_decorations,
+                search_mapping_duration,
+                action_link_duration,
+                decorations_duration,
+                search_matches.len(),
+            )
         };
-        let decorations_duration = decoration_stage_started_at.elapsed();
         let element_stage_started_at = Instant::now();
         let (cell_w, cell_h) = self.terminal_cell_size();
         let terminal_font_family = self.gpui_terminal_font_family();
@@ -312,18 +339,9 @@ impl NyaTermApp {
         let surface_entity = if session_id.is_empty() {
             None
         } else {
+            // Sync includes decorations/keywords/cursor for the entity grid.
             self.sync_terminal_surface_paint(&session_id, cx);
-            let surface = self.ensure_terminal_surface(&session_id, cx);
-            // Shell paint has full decoration context (selection/search/links).
-            surface.update(cx, |surface, _cx| {
-                surface.set_decorations_and_keywords(
-                    line_decorations.clone(),
-                    keyword_rules.clone(),
-                    show_cursor,
-                    cursor_style.clone(),
-                );
-            });
-            Some(surface)
+            Some(self.ensure_terminal_surface(&session_id, cx))
         };
         let output = if let Some(surface) = surface_entity {
             div()
@@ -1253,7 +1271,7 @@ impl NyaTermApp {
                 ?performance_mode,
                 action_links_enabled = self.settings.terminal_action_links_enabled,
                 search_open = self.terminal_search_open,
-                search_matches = search_matches.len(),
+                search_matches = search_matches_len,
                 render_cache_hits,
                 render_cache_misses,
                 layout_cache_hits,
@@ -1269,145 +1287,6 @@ impl NyaTermApp {
         }
         canvas
     }
-}
-
-fn terminal_snapshot_absolute_range(
-    snapshot: &nyaterm_terminal::TerminalSnapshot,
-) -> (usize, usize) {
-    let end = snapshot.total_rows.saturating_sub(snapshot.display_offset);
-    let start = end.saturating_sub(snapshot.rows);
-    (start, end)
-}
-
-fn terminal_line_decorations_cache_key(
-    snapshot: &nyaterm_terminal::TerminalSnapshot,
-    selection: Option<TerminalSelection>,
-    search_ranges_by_line: &HashMap<usize, Vec<(usize, usize)>>,
-    active_search_ranges_by_line: &HashMap<usize, Vec<(usize, usize)>>,
-    frame_action_links: Option<&TerminalFrameActionLinks>,
-    include_action_links: bool,
-    include_hyperlinks: bool,
-    include_command_marks: bool,
-) -> u64 {
-    let mut hasher = DefaultHasher::new();
-    snapshot.rows.hash(&mut hasher);
-    snapshot.cols.hash(&mut hasher);
-    snapshot.display_offset.hash(&mut hasher);
-    snapshot.line_signatures.hash(&mut hasher);
-    selection.hash(&mut hasher);
-    include_action_links.hash(&mut hasher);
-    include_hyperlinks.hash(&mut hasher);
-    include_command_marks.hash(&mut hasher);
-    hash_ranges_by_line(search_ranges_by_line, &mut hasher);
-    hash_ranges_by_line(active_search_ranges_by_line, &mut hasher);
-    if include_action_links {
-        if let Some(links) = frame_action_links {
-            links.matcher_key.hash(&mut hasher);
-            links.cell_ranges_by_line.hash(&mut hasher);
-        } else {
-            0u64.hash(&mut hasher);
-        }
-    }
-    if include_hyperlinks {
-        snapshot.hyperlink_lines.len().hash(&mut hasher);
-        for spans in &snapshot.hyperlink_lines {
-            spans.len().hash(&mut hasher);
-            for span in spans {
-                span.start_col.hash(&mut hasher);
-                span.end_col.hash(&mut hasher);
-                span.uri.hash(&mut hasher);
-            }
-        }
-    }
-    if include_command_marks {
-        snapshot.command_marks.hash(&mut hasher);
-    }
-    hasher.finish()
-}
-
-fn hash_ranges_by_line<H: Hasher>(
-    ranges_by_line: &HashMap<usize, Vec<(usize, usize)>>,
-    hasher: &mut H,
-) {
-    let mut lines = ranges_by_line.keys().copied().collect::<Vec<_>>();
-    lines.sort_unstable();
-    lines.len().hash(hasher);
-    for line in lines {
-        line.hash(hasher);
-        ranges_by_line
-            .get(&line)
-            .map(Vec::as_slice)
-            .unwrap_or(&[])
-            .hash(hasher);
-    }
-}
-
-fn build_terminal_line_decorations(
-    snapshot: &nyaterm_terminal::TerminalSnapshot,
-    selection: Option<TerminalSelection>,
-    search_ranges_by_line: &HashMap<usize, Vec<(usize, usize)>>,
-    active_search_ranges_by_line: &HashMap<usize, Vec<(usize, usize)>>,
-    frame_action_links: Option<&TerminalFrameActionLinks>,
-    include_action_links: bool,
-    include_hyperlinks: bool,
-    include_command_marks: bool,
-) -> Vec<TerminalLineDecorations> {
-    let line_count = snapshot.lines.len();
-    let mut line_decorations = Vec::with_capacity(line_count);
-    let empty_ranges: [(usize, usize); 0] = [];
-    for line_index in 0..line_count {
-        let selection_cols = selection.and_then(|selection| selection.cols_for_row(line_index));
-        let mut link_ranges: Vec<(usize, usize)> = if include_action_links {
-            frame_action_links
-                .and_then(|links| links.cell_ranges_by_line.get(line_index))
-                .cloned()
-                .unwrap_or_default()
-        } else {
-            Vec::new()
-        };
-        if include_hyperlinks && let Some(spans) = snapshot.hyperlink_lines.get(line_index) {
-            for span in spans {
-                let start = span.start_col;
-                let end = span.end_col.saturating_add(1);
-                if end > start {
-                    link_ranges.push((start, end));
-                }
-            }
-        }
-        let line_search_ranges = search_ranges_by_line
-            .get(&line_index)
-            .map(|ranges| ranges.as_slice())
-            .unwrap_or(&empty_ranges);
-        let line_active_search_ranges = active_search_ranges_by_line
-            .get(&line_index)
-            .map(|ranges| ranges.as_slice())
-            .unwrap_or(&empty_ranges);
-        let command_mark = include_command_marks
-            .then(|| snapshot.command_marks.get(line_index).copied().flatten())
-            .flatten();
-        line_decorations.push(TerminalLineDecorations {
-            search_ranges: line_search_ranges.to_vec(),
-            active_search_ranges: line_active_search_ranges.to_vec(),
-            selection_cols,
-            link_ranges,
-            command_mark,
-        });
-    }
-    line_decorations
-}
-
-fn terminal_line_decorations_needed(
-    has_selection: bool,
-    has_search_decorations: bool,
-    has_frame_action_links: bool,
-    has_hyperlinks: bool,
-    has_command_marks: bool,
-) -> bool {
-    has_selection
-        || has_search_decorations
-        || has_frame_action_links
-        || has_hyperlinks
-        || has_command_marks
 }
 
 fn terminal_render_pressure_active(

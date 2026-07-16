@@ -97,6 +97,10 @@ mod terminal_selection_runtime;
 pub(in crate::features) use terminal_selection_runtime::terminal_bounds_tracker;
 #[path = "terminal/terminal_surface.rs"]
 mod terminal_surface;
+pub(in crate::features) use terminal_surface::{
+    build_terminal_line_decorations, terminal_line_decorations_cache_key,
+    terminal_line_decorations_needed, terminal_snapshot_absolute_range,
+};
 #[path = "terminal/terminal_surface_entity.rs"]
 mod terminal_surface_entity;
 pub(in crate::features) use terminal_surface_entity::{

@@ -559,6 +559,7 @@ impl NyaTermApp {
         // Large-output protection recovery accounting.
         // Under pressure only touch views that already need recovery accounting.
         let visible_session_ids = self.visible_terminal_session_ids();
+        let mut surface_paint_sessions = Vec::new();
         for session_id in terminal_performance_tick_session_ids(&visible_session_ids) {
             let Some(view) = self.terminal_views.get_mut(&session_id) else {
                 continue;
@@ -576,8 +577,11 @@ impl NyaTermApp {
             let was_render_degraded = view.render_degraded;
             view.tick_performance_overlay(render_work_pressure);
             if view.performance_overlay != before || view.render_degraded != was_render_degraded {
-                dirty = true;
+                surface_paint_sessions.push(session_id.to_string());
             }
+        }
+        for session_id in surface_paint_sessions {
+            self.notify_terminal_surface_only(Some(session_id.as_str()), cx);
         }
         // Drop overlay only while a platform drag is active.
         if self.terminal_file_drop_hover.is_some() && !cx.has_active_drag() {
