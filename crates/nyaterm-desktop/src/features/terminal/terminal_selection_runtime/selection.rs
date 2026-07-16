@@ -105,9 +105,8 @@ impl NyaTermApp {
             if let Some(selection) = self.terminal_selection.as_mut() {
                 selection.head = cell;
                 self.terminal_selection_dragging = true;
-                self.terminal_status = "selection extended".to_string();
+                // Defer status-bar shell notify until selection finishes.
                 self.notify_active_terminal_surface(cx);
-                cx.notify();
                 return;
             }
         }
@@ -119,6 +118,7 @@ impl NyaTermApp {
             self.terminal_selection_dragging = false;
             self.terminal_status = format!("selected line {}", cell.row + 1);
             self.notify_active_terminal_surface(cx);
+            // Discrete click: status bar update is fine (not a high-frequency path).
             cx.notify();
             return;
         }
@@ -231,6 +231,10 @@ impl NyaTermApp {
             self.clear_terminal_selection(cx);
         } else if self.settings.interaction_copy_on_select {
             let _ = self.copy_terminal_selection(cx);
+        } else if self.terminal_selection.is_some() {
+            // One shell notify for status after drag ends (not per mouse move).
+            self.terminal_status = "selection ready".to_string();
+            cx.notify();
         }
         self.notify_active_terminal_surface(cx);
     }
