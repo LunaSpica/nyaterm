@@ -100,6 +100,9 @@ impl NyaTermApp {
         } else {
             self.notify_active_terminal_surface(cx);
         }
+        // Scrollbar track/thumb still paints on the shell canvas wrapper around
+        // TerminalSurface; keep a shell notify so the thumb tracks scroll_offset.
+        cx.notify();
     }
 
     /// Insert quoted local file paths into the active session (Tauri Local drop).
@@ -254,6 +257,8 @@ impl NyaTermApp {
             self.terminal_scroll_offset = 0;
         }
         self.notify_active_terminal_surface(cx);
+        // Shell scrollbar chrome (see scroll helpers above).
+        cx.notify();
     }
 
     pub(in crate::features) fn scroll_terminal_to_top(&mut self, cx: &mut Context<Self>) {
@@ -274,6 +279,9 @@ impl NyaTermApp {
         } else {
             self.notify_active_terminal_surface(cx);
         }
+        // Scrollbar track/thumb still paints on the shell canvas wrapper around
+        // TerminalSurface; keep a shell notify so the thumb tracks scroll_offset.
+        cx.notify();
     }
 
     pub(in crate::features) fn set_terminal_scroll_offset(
@@ -302,6 +310,9 @@ impl NyaTermApp {
         } else {
             self.notify_active_terminal_surface(cx);
         }
+        // Scrollbar track/thumb still paints on the shell canvas wrapper around
+        // TerminalSurface; keep a shell notify so the thumb tracks scroll_offset.
+        cx.notify();
     }
 
     pub(in crate::features) fn active_terminal_scroll_max(&self) -> usize {
@@ -356,6 +367,9 @@ impl NyaTermApp {
         } else {
             self.notify_active_terminal_surface(cx);
         }
+        // Scrollbar track/thumb still paints on the shell canvas wrapper around
+        // TerminalSurface; keep a shell notify so the thumb tracks scroll_offset.
+        cx.notify();
     }
 
     /// Map a vertical pointer position (0..=1 top→bottom of track) to scroll_offset.
