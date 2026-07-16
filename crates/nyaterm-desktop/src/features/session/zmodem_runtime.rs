@@ -111,6 +111,7 @@ impl NyaTermApp {
     pub(in crate::features) fn clear_zmodem_session(&mut self, session_id: &str) {
         if let Some(mut state) = self.zmodem_sessions.remove(session_id) {
             state.stop_worker();
+            self.sync_session_event_bridge_session_policy(session_id);
         }
     }
 

@@ -477,6 +477,7 @@ impl NyaTermApp {
         for view in self.terminal_views.values_mut() {
             trim_terminal_output_to(&mut view.output, ui_output_tail_cap);
         }
+        self.sync_session_event_bridge_config();
     }
 
     pub(in crate::features) fn decode_session_output_for_recording(

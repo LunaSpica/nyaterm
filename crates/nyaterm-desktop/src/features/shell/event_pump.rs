@@ -228,7 +228,8 @@ impl NyaTermApp {
     pub(in crate::features) fn drain_session_events(&mut self, cx: &mut Context<Self>) -> bool {
         let drain_started_at = Instant::now();
         let mut dirty = false;
-        self.sync_session_event_bridge_policy();
+        // Bridge encoding/scrollback and per-session routing are updated on the
+        // state transitions that need them, not on every runtime tick.
         dirty |= self.drain_zmodem_worker_events(cx);
         dirty |= self.drain_trzsz_download_worker_events(cx);
         dirty |= self.drain_trzsz_upload_prepare_events(cx);
@@ -288,9 +289,9 @@ impl NyaTermApp {
                         processed_output_bytes =
                             processed_output_bytes.saturating_add(chunk_input_bytes);
                         let mut chunk_timings = SessionEventDrainTimings::default();
-                        let data = if self
-                            .session_output_can_bypass_sideband_detectors(&session_id, &data)
-                        {
+                        let sideband_bypass =
+                            self.session_output_can_bypass_sideband_detectors(&session_id, &data);
+                        let data = if sideband_bypass {
                             data
                         } else {
                             let stage_started_at = Instant::now();
@@ -388,7 +389,10 @@ impl NyaTermApp {
                         } else {
                             pending_frame_outputs.push((session_id.clone(), data));
                         }
-                        self.sync_session_event_bridge_session_policy(&session_id);
+                        // Routing only changes when sideband detectors activate/deactivate.
+                        if !sideband_bypass {
+                            self.sync_session_event_bridge_session_policy(&session_id);
+                        }
                         let chunk_duration = chunk_started_at.elapsed();
                         drain_timings.output_total += chunk_duration;
                         chunk_timings.output_total += chunk_duration;
@@ -1086,11 +1090,14 @@ impl NyaTermApp {
             || self.terminal_frame_pipeline.queued_event_count() > 0
     }
 
-    pub(in crate::features) fn sync_session_event_bridge_policy(&self) {
+    pub(in crate::features) fn sync_session_event_bridge_config(&self) {
         self.session_event_bridge.configure(
             self.settings.interaction_default_encoding.clone(),
             self.terminal_scrollback_line_limit(),
         );
+    }
+
+    pub(in crate::features) fn sync_session_event_bridge_routing(&self) {
         let mut session_ids = self.session_metadata.keys().cloned().collect::<Vec<_>>();
         if let Some(active_session_id) = self.active_session_id.clone()
             && !session_ids.contains(&active_session_id)
@@ -1100,6 +1107,11 @@ impl NyaTermApp {
         for session_id in session_ids {
             self.sync_session_event_bridge_session_policy(&session_id);
         }
+    }
+
+    pub(in crate::features) fn sync_session_event_bridge_policy(&self) {
+        self.sync_session_event_bridge_config();
+        self.sync_session_event_bridge_routing();
     }
 
     pub(in crate::features) fn sync_session_event_bridge_session_policy(&self, session_id: &str) {

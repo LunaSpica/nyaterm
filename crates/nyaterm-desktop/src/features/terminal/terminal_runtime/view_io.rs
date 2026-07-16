@@ -807,6 +807,7 @@ impl NyaTermApp {
         for view in self.terminal_views.values_mut() {
             view.set_encoding(&label);
         }
+        self.sync_session_event_bridge_config();
     }
 
     pub(in crate::features) fn ensure_terminal_focus_reporting(

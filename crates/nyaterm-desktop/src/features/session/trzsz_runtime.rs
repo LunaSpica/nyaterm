@@ -266,6 +266,7 @@ impl NyaTermApp {
         if let Some(mut state) = self.trzsz_sessions.remove(session_id) {
             state.stop_download_worker();
             state.stop_upload_worker();
+            self.sync_session_event_bridge_session_policy(session_id);
         }
     }
 

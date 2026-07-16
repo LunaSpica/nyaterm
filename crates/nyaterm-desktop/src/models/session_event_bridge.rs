@@ -125,6 +125,9 @@ impl SessionEventBridge {
         let Ok(mut control) = self.state.control.lock() else {
             return;
         };
+        if control.encoding == encoding && control.scrollback_limit == scrollback_limit {
+            return;
+        }
         control.encoding = encoding;
         control.scrollback_limit = scrollback_limit;
     }
@@ -134,6 +137,9 @@ impl SessionEventBridge {
             return;
         }
         if let Ok(mut control) = self.state.control.lock() {
+            if control.ui_routed_sessions.contains(session_id) {
+                return;
+            }
             control.ui_routed_sessions.insert(session_id.to_string());
         }
     }
