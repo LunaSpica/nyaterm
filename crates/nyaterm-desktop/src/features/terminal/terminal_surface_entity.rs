@@ -308,6 +308,8 @@ impl TerminalSurface {
                 let _ = app.update(cx, |this, cx| {
                     this.scroll_terminal_to_bottom(cx);
                     this.terminal_status = "scrolled to live output".to_string();
+                    // Status bar is shell chrome; user-triggered, not hot path.
+                    cx.notify();
                 });
             }))
             .child(
