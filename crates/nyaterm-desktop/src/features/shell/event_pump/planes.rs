@@ -313,31 +313,33 @@ impl NyaTermApp {
         let mut result = RuntimeIdlePlaneResult::default();
         // Idle-plane work does not drain output; one pressure sample is enough for the stage.
         let output_pressure = self.runtime_output_pressure_active();
+        result.render_request_output_pressure = output_pressure;
+
+        // Focus transitions remain latency-sensitive even under pressure.
+        let stage_started_at = Instant::now();
+        dirty |= self.drive_pending_focus(window);
+        result.pending_focus = stage_started_at.elapsed();
+
+        if !runtime_idle_plane_allowed(output_pressure) {
+            result.dirty = dirty;
+            return result;
+        }
+
         let pending_session_start = self.has_pending_session_start();
         let queued_saved_connection_start = !self.pending_saved_connection_queue.is_empty();
-        let idle_plane_allowed = runtime_idle_plane_allowed(output_pressure);
 
         let stage_started_at = Instant::now();
-        if idle_plane_allowed {
-            dirty |= self.drive_startup_restore_queue_tick(window, cx);
-        }
+        dirty |= self.drive_startup_restore_queue_tick(window, cx);
         result.startup_restore = stage_started_at.elapsed();
 
         let stage_started_at = Instant::now();
         // Bounds paint path already resizes; polling is idle-plane maintenance.
-        if idle_plane_allowed {
-            dirty |= self.drive_terminal_resize();
-        }
+        dirty |= self.drive_terminal_resize();
         result.terminal_resize = stage_started_at.elapsed();
 
         let stage_started_at = Instant::now();
-        dirty |= self.drive_terminal_render_requests(!output_pressure);
-        result.render_request_output_pressure = output_pressure;
+        dirty |= self.drive_terminal_render_requests(true);
         result.render_requests = stage_started_at.elapsed();
-
-        let stage_started_at = Instant::now();
-        dirty |= self.drive_pending_focus(window);
-        result.pending_focus = stage_started_at.elapsed();
 
         let stage_started_at = Instant::now();
         if connection_hover_poll_allowed(
@@ -350,21 +352,15 @@ impl NyaTermApp {
         result.connection_hover = stage_started_at.elapsed();
 
         let stage_started_at = Instant::now();
-        if idle_plane_allowed {
-            dirty |= self.poll_action_link_tooltip_delay(cx);
-        }
+        dirty |= self.poll_action_link_tooltip_delay(cx);
         result.action_link_tooltip = stage_started_at.elapsed();
 
         let stage_started_at = Instant::now();
-        if idle_plane_allowed {
-            dirty |= self.drive_remote_auto_refresh(window, cx);
-        }
+        dirty |= self.drive_remote_auto_refresh(window, cx);
         result.remote_refresh = stage_started_at.elapsed();
 
         let stage_started_at = Instant::now();
-        if idle_plane_allowed {
-            dirty |= self.drive_idle_lock();
-        }
+        dirty |= self.drive_idle_lock();
         result.idle_lock = stage_started_at.elapsed();
         result.dirty = dirty;
         result
