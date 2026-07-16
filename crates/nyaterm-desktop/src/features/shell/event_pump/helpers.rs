@@ -13,6 +13,9 @@ pub(super) const RUNTIME_IDLE_TICK_INTERVAL: Duration = Duration::from_millis(50
 pub(super) const RUNTIME_PRESSURE_TICK_INTERVAL: Duration = Duration::from_millis(16);
 /// After viewport size changes, hold pressure cadence for this long.
 pub(super) const WINDOW_GEOMETRY_CHURN_HOLD: Duration = Duration::from_millis(200);
+/// After a session becomes live, demote idle/visual for this long so first-frame
+/// output does not compete with chrome rebuilds (does not raise tick cadence).
+pub(super) const CONNECT_SETTLE_HOLD: Duration = Duration::from_millis(750);
 pub(super) const TERMINAL_FRAME_APPLY_PRESSURE_INTERVAL: Duration = Duration::from_millis(16);
 pub(super) const SLOW_DIAGNOSTIC_THROTTLE: Duration = Duration::from_secs(2);
 pub(super) const RUNTIME_TICK_SLOW_THRESHOLD: Duration = Duration::from_millis(40);
@@ -159,6 +162,10 @@ pub(super) fn window_geometry_churn_active(
         now.checked_duration_since(at)
             .is_some_and(|elapsed| elapsed < WINDOW_GEOMETRY_CHURN_HOLD)
     })
+}
+
+pub(super) fn connect_settle_active(until: Option<Instant>, now: Instant) -> bool {
+    until.is_some_and(|until| now < until)
 }
 
 pub(super) fn runtime_output_pressure_active_from_counts(
@@ -439,6 +446,20 @@ mod tests {
         assert!(window_geometry_churn_active(Some(now), now));
         assert!(!window_geometry_churn_active(
             Some(now - WINDOW_GEOMETRY_CHURN_HOLD - Duration::from_millis(1)),
+            now
+        ));
+    }
+
+    #[test]
+    fn connect_settle_active_until_deadline() {
+        let now = Instant::now();
+        assert!(!connect_settle_active(None, now));
+        assert!(connect_settle_active(
+            Some(now + Duration::from_millis(100)),
+            now
+        ));
+        assert!(!connect_settle_active(
+            Some(now - Duration::from_millis(1)),
             now
         ));
     }

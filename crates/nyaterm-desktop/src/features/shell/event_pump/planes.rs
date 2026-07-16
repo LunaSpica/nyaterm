@@ -111,19 +111,65 @@ impl NyaTermApp {
         let mut dirty = self.refresh_window_render_inputs(window, cx);
         let render_input_duration = stage_started_at.elapsed();
 
-        // Pure geometry churn (resize/drag with size changes): skip session drains
-        // and sideband so compositor paints stay free. Normal idle still runs full
-        // planes so remote refresh / prompts keep working.
-        let geometry_churn =
-            window_geometry_churn_active(self.last_viewport_change_at, Instant::now());
-        if geometry_churn
-            && !self.runtime_output_pressure_active()
+        // Skip full planes when the compositor is moving/resizing the window, or
+        // when there is simply nothing pending (common during pure window drag).
+        let now = Instant::now();
+        if self
+            .terminal_runtime
+            .connect_settle_until
+            .is_some_and(|until| now >= until)
+        {
+            self.terminal_runtime.connect_settle_until = None;
+        }
+        let geometry_churn = window_geometry_churn_active(self.last_viewport_change_at, now);
+        let calm_tick = !self.runtime_output_pressure_active()
             && self.pending_session_starts.is_empty()
+            && self.pending_saved_connection_queue.is_empty()
             && self.pending_session_events.is_empty()
             && !self.session_event_bridge.has_pending_ui_work()
             && !self.terminal_frame_backlog_active()
+            && self.zmodem_sessions.is_empty()
+            && self.trzsz_sessions.is_empty()
+            && self.active_host_key_prompt.is_none()
+            && self.active_credential_prompt.is_none()
+            && self.active_duplicate_prompt.is_none()
+            && !self.host_key_prompts.has_pending()
+            && !self.credential_prompts.has_pending()
+            && !self.duplicate_prompts.has_pending();
+        if geometry_churn && calm_tick {
+            dirty |= self.drive_pending_focus(window);
+            if dirty {
+                cx.notify();
+            }
+            return true;
+        }
+        // Ultra-light idle: focus + optional blink only. Used for pure window drag
+        // (viewport often unchanged) and quiet connected sessions with no sideband.
+        // Remote auto-refresh only matters when Stats/Processes/Docker/Transfers is open.
+        let remote_panels_need_poll = (self.active_ssh_config.is_some()
+            && matches!(
+                self.current_right_panel(),
+                Some(NavItem::Stats | NavItem::Processes | NavItem::Docker)
+            ))
+            || self.current_left_panel() == Some(NavItem::Transfers);
+        if calm_tick
+            && !remote_panels_need_poll
+            && self.transfer_jobs.is_empty()
+            && self.pending_tunnels.is_empty()
+            && self.pending_auto_recording_session.is_none()
+            && !self.terminal_runtime.open_tabs_persist_dirty
+            && !self.terminal_runtime.window_layout_persist_dirty
+            && self.terminal_windows_restored
+            && !self.ai_chat_pending
+            && self.ai_agent_loop.is_none()
+            && !self.ai_discovery_pending
         {
             dirty |= self.drive_pending_focus(window);
+            // During connect settle, skip blink notifies so first frames stay free.
+            if !connect_settle_active(self.terminal_runtime.connect_settle_until, now) {
+                let visual = self.drive_runtime_visual_plane(cx);
+                dirty |= visual.dirty;
+            }
             if dirty {
                 cx.notify();
             }
@@ -354,10 +400,11 @@ impl NyaTermApp {
         let mut result = RuntimeIdlePlaneResult::default();
         // Idle-plane work does not drain output; one pressure sample is enough for the stage.
         let output_pressure = self.runtime_output_pressure_active();
-        let geometry_churn =
-            window_geometry_churn_active(self.last_viewport_change_at, Instant::now());
-        // Treat recent window geometry churn like output pressure: keep focus only.
-        let demote_idle = output_pressure || geometry_churn;
+        let now = Instant::now();
+        let geometry_churn = window_geometry_churn_active(self.last_viewport_change_at, now);
+        let connect_settle = connect_settle_active(self.terminal_runtime.connect_settle_until, now);
+        // Geometry churn / connect settle: keep focus only (no remote/layout/DB).
+        let demote_idle = output_pressure || geometry_churn || connect_settle;
         result.render_request_output_pressure = demote_idle;
 
         // Focus transitions remain latency-sensitive even under pressure.
@@ -385,6 +432,7 @@ impl NyaTermApp {
         if !self.terminal_windows_restored
             && self.pending_session_starts.is_empty()
             && !self.runtime_output_pressure_active()
+            && !connect_settle
         {
             self.try_restore_terminal_window_layout();
             if self.terminal_windows.is_some() {
@@ -394,6 +442,7 @@ impl NyaTermApp {
         // Auto-recording opens files; keep it off the first calm frames after connect.
         if self.pending_session_starts.is_empty()
             && !self.runtime_output_pressure_active()
+            && !connect_settle
             && let Some((session_id, session_name)) = self.pending_auto_recording_session.take()
         {
             self.maybe_auto_start_recording(&session_id, &session_name);
@@ -443,9 +492,10 @@ impl NyaTermApp {
     ) -> RuntimeVisualPlaneResult {
         let visual_stage_started_at = Instant::now();
         let mut dirty = false;
-        let output_pressure = self.runtime_output_pressure_active();
+        let output_pressure = self.runtime_output_pressure_active()
+            || connect_settle_active(self.terminal_runtime.connect_settle_until, Instant::now());
         // ~530ms blink half-period (50ms * 11 ticks) when enabled.
-        // Under output pressure, keep last blink phase so we do not force redraws.
+        // Under output pressure / connect settle, keep last blink phase.
         if runtime_cursor_blink_allowed(output_pressure, self.settings.cursor_blink) {
             self.terminal_runtime.cursor_blink_tick =
                 self.terminal_runtime.cursor_blink_tick.wrapping_add(1);

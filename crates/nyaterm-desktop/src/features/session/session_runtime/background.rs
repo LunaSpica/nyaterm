@@ -76,9 +76,9 @@ impl NyaTermApp {
             },
         );
         self.terminal_status = status_message;
-        if append_start_log && self.active_session_id.is_none() {
-            self.append_terminal_log(format!("\n# connecting to {connection_name}\n"));
-        }
+        // Status + connecting tab already show progress; avoid full terminal decode
+        // work on the click path before the worker even starts.
+        let _ = append_start_log;
         self.selected_nav = NavItem::Workspace;
         self.main_mode = MainMode::Workspace;
         cx.notify();
