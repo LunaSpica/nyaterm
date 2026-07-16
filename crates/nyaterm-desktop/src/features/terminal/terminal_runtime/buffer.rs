@@ -199,11 +199,13 @@ impl NyaTermApp {
     ) -> bool {
         let started_at = Instant::now();
         let mut dirty = false;
+        let surface_paint_count_before = terminal_surface_paint_count();
         let mut drained_events = 0usize;
         let mut output_events = 0usize;
         let mut coalesced_output_events = 0usize;
         let mut accepted_bytes = 0usize;
         let mut max_apply_duration = Duration::ZERO;
+        let mut dirty_surface_sessions = Vec::new();
         let visible_session_ids = self
             .visible_terminal_session_ids()
             .into_iter()
@@ -241,7 +243,11 @@ impl NyaTermApp {
                     accepted_bytes = accepted_bytes.saturating_add(output.accepted_bytes);
                 }
                 let apply_started_at = Instant::now();
-                dirty |= self.apply_terminal_frame_event(frame, cx);
+                let result = self.apply_terminal_frame_event(frame, cx);
+                dirty |= result.chrome_dirty;
+                if let Some(session_id) = result.surface_session {
+                    push_unique_terminal_surface_session(&mut dirty_surface_sessions, session_id);
+                }
                 max_apply_duration = max_apply_duration.max(apply_started_at.elapsed());
                 drained_events += 1;
 
@@ -261,17 +267,39 @@ impl NyaTermApp {
         if drained_events > 0 {
             self.terminal_runtime.last_terminal_frame_apply_at = Some(started_at);
         }
+        let surface_notify_count = dirty_surface_sessions.len();
+        for session_id in dirty_surface_sessions {
+            self.sync_terminal_surface_paint(&session_id, cx);
+            self.terminal_runtime.terminal_surface_frame_notify_count = self
+                .terminal_runtime
+                .terminal_surface_frame_notify_count
+                .saturating_add(1);
+        }
         let total_duration = started_at.elapsed();
         if (total_duration >= TERMINAL_FRAME_EVENT_DRAIN_SLOW_TOTAL
             || max_apply_duration >= TERMINAL_FRAME_EVENT_APPLY_SLOW)
             && self.should_log_slow_diagnostic("terminal_frame_event_drain", Instant::now())
         {
+            let (layout_cache_hits, layout_cache_misses) = terminal_layout_cache_stats_for_sessions(
+                &self.terminal_views,
+                &visible_session_ids,
+            );
+            let surface_paint_delta =
+                terminal_surface_paint_count().saturating_sub(surface_paint_count_before);
             tracing::warn!(
                 diagnostic = "terminal_frame_event_drain",
                 drained_events,
                 output_events,
                 coalesced_output_events,
                 accepted_bytes,
+                surface_notify_count,
+                surface_paint_delta,
+                layout_cache_hits,
+                layout_cache_misses,
+                connect_settle_active = self
+                    .terminal_runtime
+                    .connect_settle_until
+                    .is_some_and(|until| Instant::now() < until),
                 pending_events = self.pending_terminal_frame_events.len(),
                 total_ms = total_duration.as_millis(),
                 max_apply_ms = max_apply_duration.as_millis(),
@@ -292,15 +320,17 @@ impl NyaTermApp {
         &mut self,
         event: TerminalFrameEvent,
         cx: &mut Context<Self>,
-    ) -> bool {
+    ) -> TerminalFrameApplyResult {
         match event {
             TerminalFrameEvent::Output(frame) => self.apply_terminal_output_frame(frame, cx),
             TerminalFrameEvent::Snapshot(snapshot) => {
                 self.apply_terminal_snapshot_frame(snapshot, cx)
             }
-            TerminalFrameEvent::Search(search) => self.apply_terminal_search_frame(search),
+            TerminalFrameEvent::Search(search) => {
+                TerminalFrameApplyResult::chrome(self.apply_terminal_search_frame(search))
+            }
             TerminalFrameEvent::BufferText(buffer) => {
-                self.apply_terminal_buffer_text_frame(buffer, cx)
+                TerminalFrameApplyResult::chrome(self.apply_terminal_buffer_text_frame(buffer, cx))
             }
         }
     }
@@ -309,7 +339,7 @@ impl NyaTermApp {
         &mut self,
         frame: TerminalFrameOutputEvent,
         cx: &mut Context<Self>,
-    ) -> bool {
+    ) -> TerminalFrameApplyResult {
         let TerminalFrameOutputEvent {
             session_id,
             visible_text,
@@ -326,6 +356,15 @@ impl NyaTermApp {
         } = frame;
         let is_active = self.active_session_id.as_deref() == Some(session_id.as_str());
         let is_visible = self.terminal_session_has_visible_surface(&session_id);
+        if is_visible
+            && accepted_bytes > 0
+            && self
+                .terminal_runtime
+                .connect_settle_until
+                .is_none_or(|until| Instant::now() >= until)
+        {
+            self.enter_connect_settle();
+        }
         let effects_need_ui_apply = terminal_effects_need_ui_apply(&effects);
         // Under output pressure, skip retaining full snapshots for hidden tabs.
         // Worker may already omit snapshot for low-priority sessions.
@@ -411,13 +450,6 @@ impl NyaTermApp {
         let surface_notify = terminal_output_frame_needs_surface_notify(is_visible);
         let chrome_notify =
             terminal_output_frame_needs_chrome_notify(unread_changed, effects_need_ui_apply);
-        if surface_notify {
-            self.sync_terminal_surface_paint(&session_id, cx);
-            self.terminal_runtime.terminal_surface_frame_notify_count = self
-                .terminal_runtime
-                .terminal_surface_frame_notify_count
-                .saturating_add(1);
-        }
         if chrome_notify {
             self.terminal_runtime.terminal_chrome_frame_notify_count = self
                 .terminal_runtime
@@ -425,7 +457,10 @@ impl NyaTermApp {
                 .saturating_add(1);
         }
         // Only chrome dirtiness bubbles to NyaTermApp full-shell notify.
-        chrome_notify
+        TerminalFrameApplyResult {
+            chrome_dirty: chrome_notify,
+            surface_session: surface_notify.then_some(session_id),
+        }
     }
 
     fn terminal_session_has_visible_surface(&self, session_id: &str) -> bool {
@@ -455,10 +490,10 @@ impl NyaTermApp {
     fn apply_terminal_snapshot_frame(
         &mut self,
         frame: TerminalFrameSnapshotEvent,
-        cx: &mut Context<Self>,
-    ) -> bool {
+        _cx: &mut Context<Self>,
+    ) -> TerminalFrameApplyResult {
         let Some(view) = self.terminal_views.get_mut(&frame.session_id) else {
-            return false;
+            return TerminalFrameApplyResult::default();
         };
         view.pending_snapshot_offsets.remove(&frame.offset);
         if frame.offset == 0 {
@@ -515,14 +550,10 @@ impl NyaTermApp {
                         view.scroll_offset == frame.offset
                     }
                 });
-        if should_paint {
-            self.sync_terminal_surface_paint(&frame.session_id, cx);
-            self.terminal_runtime.terminal_surface_frame_notify_count = self
-                .terminal_runtime
-                .terminal_surface_frame_notify_count
-                .saturating_add(1);
+        TerminalFrameApplyResult {
+            chrome_dirty: false,
+            surface_session: should_paint.then_some(frame.session_id),
         }
-        false
     }
 
     fn apply_terminal_search_frame(&mut self, frame: TerminalFrameSearchEvent) -> bool {
@@ -816,6 +847,46 @@ impl NyaTermApp {
             }
         }
     }
+}
+
+#[derive(Default)]
+struct TerminalFrameApplyResult {
+    chrome_dirty: bool,
+    surface_session: Option<String>,
+}
+
+impl TerminalFrameApplyResult {
+    fn chrome(chrome_dirty: bool) -> Self {
+        Self {
+            chrome_dirty,
+            surface_session: None,
+        }
+    }
+}
+
+fn push_unique_terminal_surface_session(sessions: &mut Vec<String>, session_id: String) {
+    if !sessions.iter().any(|existing| existing == &session_id) {
+        sessions.push(session_id);
+    }
+}
+
+fn terminal_layout_cache_stats_for_sessions(
+    terminal_views: &HashMap<String, TerminalViewState>,
+    session_ids: &[String],
+) -> (u64, u64) {
+    let mut hits = 0u64;
+    let mut misses = 0u64;
+    for session_id in session_ids {
+        let Some(view) = terminal_views.get(session_id) else {
+            continue;
+        };
+        let Ok(cache) = view.render_cache.layout_cache.lock() else {
+            continue;
+        };
+        hits = hits.saturating_add(cache.hits);
+        misses = misses.saturating_add(cache.misses);
+    }
+    (hits, misses)
 }
 
 fn pop_terminal_frame_events_for_apply(
@@ -1263,6 +1334,17 @@ mod frame_event_queue_tests {
             Some(TerminalFrameEvent::BufferText(_))
         ));
         assert!(events.is_empty());
+    }
+
+    #[test]
+    fn terminal_surface_notify_sessions_are_unique_per_drain() {
+        let mut sessions = Vec::new();
+
+        push_unique_terminal_surface_session(&mut sessions, "a".to_string());
+        push_unique_terminal_surface_session(&mut sessions, "a".to_string());
+        push_unique_terminal_surface_session(&mut sessions, "b".to_string());
+
+        assert_eq!(sessions, vec!["a".to_string(), "b".to_string()]);
     }
 
     #[test]

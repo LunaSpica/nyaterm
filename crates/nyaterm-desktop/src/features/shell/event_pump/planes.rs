@@ -122,20 +122,7 @@ impl NyaTermApp {
             self.terminal_runtime.connect_settle_until = None;
         }
         let geometry_churn = window_geometry_churn_active(self.last_viewport_change_at, now);
-        let calm_tick = !self.runtime_output_pressure_active()
-            && self.pending_session_starts.is_empty()
-            && self.pending_saved_connection_queue.is_empty()
-            && self.pending_session_events.is_empty()
-            && !self.session_event_bridge.has_pending_ui_work()
-            && !self.terminal_frame_backlog_active()
-            && self.zmodem_sessions.is_empty()
-            && self.trzsz_sessions.is_empty()
-            && self.active_host_key_prompt.is_none()
-            && self.active_credential_prompt.is_none()
-            && self.active_duplicate_prompt.is_none()
-            && !self.host_key_prompts.has_pending()
-            && !self.credential_prompts.has_pending()
-            && !self.duplicate_prompts.has_pending();
+        let calm_tick = self.runtime_quiet_tick_allowed();
         if geometry_churn && calm_tick {
             dirty |= self.drive_pending_focus(window);
             if dirty {
@@ -296,6 +283,100 @@ impl NyaTermApp {
                 publish_snapshots = should_publish_snapshots,
                 "slow runtime tick"
             );
+        }
+        let heartbeat_now = Instant::now();
+        let heartbeat_due = diagnostic_log_due(
+            self.terminal_runtime.last_terminal_perf_heartbeat_at,
+            heartbeat_now,
+            TERMINAL_PERF_HEARTBEAT_INTERVAL,
+        );
+        if heartbeat_due {
+            let full_shell_paints = full_shell_paint_count();
+            let surface_paints = terminal_surface_paint_count();
+            let surface_frame_notifies = self.terminal_runtime.terminal_surface_frame_notify_count;
+            let chrome_frame_notifies = self.terminal_runtime.terminal_chrome_frame_notify_count;
+            let (layout_cache_hits, layout_cache_misses) =
+                self.visible_terminal_layout_cache_stats();
+            let full_shell_paint_delta = full_shell_paints
+                .saturating_sub(self.terminal_runtime.last_perf_full_shell_paint_count);
+            let surface_paint_delta =
+                surface_paints.saturating_sub(self.terminal_runtime.last_perf_surface_paint_count);
+            let surface_frame_notify_delta = surface_frame_notifies
+                .saturating_sub(self.terminal_runtime.last_perf_surface_frame_notify_count);
+            let chrome_frame_notify_delta = chrome_frame_notifies
+                .saturating_sub(self.terminal_runtime.last_perf_chrome_frame_notify_count);
+            let layout_cache_hit_delta =
+                layout_cache_hits.saturating_sub(self.terminal_runtime.last_perf_layout_cache_hits);
+            let layout_cache_miss_delta = layout_cache_misses
+                .saturating_sub(self.terminal_runtime.last_perf_layout_cache_misses);
+            let active_session_id = self.active_session_id.as_deref().unwrap_or("");
+            let active_scroll_offset = self.active_terminal_scroll_offset();
+            let visible_session_count = self.visible_terminal_session_ids().len();
+            let has_runtime_activity = !active_session_id.is_empty()
+                || full_shell_paint_delta > 0
+                || surface_paint_delta > 0
+                || surface_frame_notify_delta > 0
+                || chrome_frame_notify_delta > 0
+                || self.terminal_runtime.session_event_queued_events > 0
+                || self.terminal_runtime.session_event_queued_output_bytes > 0
+                || self.session_event_bridge.queued_output_bytes() > 0
+                || self.terminal_frame_pipeline.queued_output_bytes() > 0
+                || self.terminal_frame_pipeline.queued_event_count() > 0
+                || !self.pending_terminal_frame_events.is_empty();
+            if has_runtime_activity {
+                tracing::info!(
+                    diagnostic = "terminal_perf_heartbeat",
+                    active_session_id,
+                    visible_session_count,
+                    active_scroll_offset,
+                    connect_settle_active = self
+                        .terminal_runtime
+                        .connect_settle_until
+                        .is_some_and(|until| heartbeat_now < until),
+                    output_pressure,
+                    visual_dirty,
+                    tick_ms = tick_duration.as_millis(),
+                    render_input_ms = render_input_duration.as_millis(),
+                    control_ms = control.duration.as_millis(),
+                    session_events_ms = session_events_duration.as_millis(),
+                    background_runtime_ms = data.background_total.as_millis(),
+                    terminal_frames_deferred = data.background_timings.terminal_frames_deferred,
+                    terminal_frames_deferred_after_output = data.defer_terminal_frame_after_output,
+                    terminal_frames_deferred_for_pacing = data.terminal_frame_apply_paced,
+                    visual_runtime_ms = visual.duration.as_millis(),
+                    notify_ms = notify_duration.as_millis(),
+                    publish_snapshots_ms = publish_duration.as_millis(),
+                    publish_snapshots = should_publish_snapshots,
+                    queued_session_events = self.terminal_runtime.session_event_queued_events,
+                    queued_session_output_bytes =
+                        self.terminal_runtime.session_event_queued_output_bytes,
+                    bridge_output_bytes = self.session_event_bridge.queued_output_bytes(),
+                    frame_command_count = self.terminal_frame_pipeline.queued_command_count(),
+                    frame_command_output_bytes = self.terminal_frame_pipeline.queued_output_bytes(),
+                    frame_event_count = self.terminal_frame_pipeline.queued_event_count(),
+                    pending_frame_events = self.pending_terminal_frame_events.len(),
+                    full_shell_paint_delta,
+                    surface_paint_delta,
+                    surface_frame_notify_delta,
+                    chrome_frame_notify_delta,
+                    full_shell_paint_count = full_shell_paints,
+                    surface_paint_count = surface_paints,
+                    surface_frame_notify_count = surface_frame_notifies,
+                    chrome_frame_notify_count = chrome_frame_notifies,
+                    layout_cache_hit_delta,
+                    layout_cache_miss_delta,
+                    layout_cache_hits,
+                    layout_cache_misses,
+                    "terminal perf heartbeat"
+                );
+            }
+            self.terminal_runtime.last_terminal_perf_heartbeat_at = Some(heartbeat_now);
+            self.terminal_runtime.last_perf_full_shell_paint_count = full_shell_paints;
+            self.terminal_runtime.last_perf_surface_paint_count = surface_paints;
+            self.terminal_runtime.last_perf_surface_frame_notify_count = surface_frame_notifies;
+            self.terminal_runtime.last_perf_chrome_frame_notify_count = chrome_frame_notifies;
+            self.terminal_runtime.last_perf_layout_cache_hits = layout_cache_hits;
+            self.terminal_runtime.last_perf_layout_cache_misses = layout_cache_misses;
         }
         self.terminal_runtime.event_pump_started
     }
@@ -519,27 +600,33 @@ impl NyaTermApp {
     ) -> RuntimeVisualPlaneResult {
         let visual_stage_started_at = Instant::now();
         let mut dirty = false;
+        let now = Instant::now();
         let output_pressure = self.runtime_output_pressure_active()
-            || connect_settle_active(self.terminal_runtime.connect_settle_until, Instant::now());
-        // ~530ms blink half-period (50ms * 11 ticks) when enabled.
+            || connect_settle_active(self.terminal_runtime.connect_settle_until, now);
+        // ~530ms blink half-period. This is time based so quiet runtime ticks
+        // can stay slow without stretching cursor blink to multi-second periods.
         // Under output pressure / connect settle, keep last blink phase.
         let mut surface_visual_dirty = false;
         if runtime_cursor_blink_allowed(output_pressure, self.settings.cursor_blink) {
-            self.terminal_runtime.cursor_blink_tick =
-                self.terminal_runtime.cursor_blink_tick.wrapping_add(1);
-            if self.terminal_runtime.cursor_blink_tick >= 11 {
-                self.terminal_runtime.cursor_blink_tick = 0;
+            let next_blink_at = self
+                .terminal_runtime
+                .cursor_blink_next_at
+                .unwrap_or(now + CURSOR_BLINK_INTERVAL);
+            if now >= next_blink_at {
                 self.terminal_runtime.cursor_blink_on = !self.terminal_runtime.cursor_blink_on;
+                self.terminal_runtime.cursor_blink_next_at = Some(now + CURSOR_BLINK_INTERVAL);
                 surface_visual_dirty = true;
+            } else {
+                self.terminal_runtime.cursor_blink_next_at = Some(next_blink_at);
             }
         } else if !self.settings.cursor_blink {
-            if !self.terminal_runtime.cursor_blink_on
-                || self.terminal_runtime.cursor_blink_tick != 0
-            {
+            if !self.terminal_runtime.cursor_blink_on {
                 surface_visual_dirty = true;
             }
             self.terminal_runtime.cursor_blink_on = true;
-            self.terminal_runtime.cursor_blink_tick = 0;
+            self.terminal_runtime.cursor_blink_next_at = None;
+        } else {
+            self.terminal_runtime.cursor_blink_next_at = Some(now + CURSOR_BLINK_INTERVAL);
         }
         // Visual BEL flash (~200ms at 50ms ticks).
         if self.terminal_runtime.visual_bell_ticks > 0 {

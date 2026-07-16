@@ -1,7 +1,8 @@
 use super::*;
-use std::collections::hash_map::DefaultHasher;
+use std::collections::{HashMap, hash_map::DefaultHasher};
 use std::hash::{Hash, Hasher};
 use std::sync::{Arc, Mutex};
+use std::time::Instant;
 
 #[derive(Debug, Clone)]
 pub struct TerminalBufferMatch {
@@ -30,45 +31,65 @@ pub struct TerminalLineDecorations {
 
 #[derive(Debug, Clone)]
 struct CachedTerminalPaintRow {
-    key: u64,
-    line: ShapedLine,
+    line: Arc<ShapedLine>,
 }
 
 #[derive(Debug, Default)]
 pub struct NyaTerminalLayoutCache {
-    rows: Vec<Option<CachedTerminalPaintRow>>,
+    rows: HashMap<u64, CachedTerminalPaintRow>,
+    compiled_keyword_key: Option<u64>,
+    compiled_keyword_rules: CompiledKeywordRules,
     pub hits: u64,
     pub misses: u64,
 }
 
+const TERMINAL_LAYOUT_CACHE_ROW_CAP: usize = 4096;
+const TERMINAL_ELEMENT_PREPAINT_SLOW_MS: u128 = 12;
+const TERMINAL_ELEMENT_PAINT_SLOW_MS: u128 = 12;
+
 impl NyaTerminalLayoutCache {
     pub fn clear(&mut self) {
         self.rows.clear();
+        self.compiled_keyword_key = None;
+        self.compiled_keyword_rules.clear();
         self.hits = 0;
         self.misses = 0;
     }
 
+    fn compiled_keyword_rules(
+        &mut self,
+        key: u64,
+        rules: &[ResolvedKeywordHighlightRule],
+    ) -> CompiledKeywordRules {
+        if self.compiled_keyword_key == Some(key) {
+            return self.compiled_keyword_rules.clone();
+        }
+        self.compiled_keyword_key = Some(key);
+        self.compiled_keyword_rules = compile_keyword_rules(rules);
+        self.compiled_keyword_rules.clone()
+    }
+
     fn shaped_line(
         &mut self,
-        row: usize,
+        _row: usize,
         key: u64,
-        shape: impl FnOnce() -> ShapedLine,
-    ) -> ShapedLine {
-        if self.rows.len() <= row {
-            self.rows.resize_with(row + 1, || None);
-        }
-        if let Some(cached) = self.rows[row].as_ref()
-            && cached.key == key
-        {
+        shape: impl FnOnce() -> Arc<ShapedLine>,
+    ) -> Arc<ShapedLine> {
+        if let Some(cached) = self.rows.get(&key) {
             self.hits = self.hits.saturating_add(1);
-            return cached.line.clone();
+            return Arc::clone(&cached.line);
         }
         self.misses = self.misses.saturating_add(1);
+        if self.rows.len() >= TERMINAL_LAYOUT_CACHE_ROW_CAP {
+            self.rows.clear();
+        }
         let line = shape();
-        self.rows[row] = Some(CachedTerminalPaintRow {
+        self.rows.insert(
             key,
-            line: line.clone(),
-        });
+            CachedTerminalPaintRow {
+                line: Arc::clone(&line),
+            },
+        );
         line
     }
 }
@@ -81,8 +102,10 @@ mod layout_cache_tests {
     fn shaped_line_cache_reuses_matching_row_key() {
         let mut cache = NyaTerminalLayoutCache::default();
 
-        let _ = cache.shaped_line(0, 42, ShapedLine::default);
-        let _ = cache.shaped_line(0, 42, || panic!("matching key should reuse cached row"));
+        let _ = cache.shaped_line(0, 42, || Arc::new(ShapedLine::default()));
+        let _ = cache.shaped_line(7, 42, || {
+            panic!("matching key should reuse cached row even at another viewport row")
+        });
 
         assert_eq!(cache.misses, 1);
         assert_eq!(cache.hits, 1);
@@ -91,14 +114,25 @@ mod layout_cache_tests {
     #[test]
     fn clear_resets_shaped_line_cache() {
         let mut cache = NyaTerminalLayoutCache::default();
-        let _ = cache.shaped_line(0, 42, ShapedLine::default);
+        let _ = cache.shaped_line(0, 42, || Arc::new(ShapedLine::default()));
 
         cache.clear();
 
         assert_eq!(cache.misses, 0);
         assert_eq!(cache.hits, 0);
-        let _ = cache.shaped_line(0, 42, ShapedLine::default);
+        let _ = cache.shaped_line(0, 42, || Arc::new(ShapedLine::default()));
         assert_eq!(cache.misses, 1);
+    }
+
+    #[test]
+    fn shaped_line_cache_misses_on_style_key_change() {
+        let mut cache = NyaTerminalLayoutCache::default();
+
+        let _ = cache.shaped_line(0, 42, || Arc::new(ShapedLine::default()));
+        let _ = cache.shaped_line(0, 43, || Arc::new(ShapedLine::default()));
+
+        assert_eq!(cache.misses, 2);
+        assert_eq!(cache.hits, 0);
     }
 
     #[test]
@@ -263,7 +297,7 @@ pub struct NyaTerminalElement {
 
 struct TerminalPaintRow {
     y: Pixels,
-    line: ShapedLine,
+    line: Arc<ShapedLine>,
 }
 
 pub struct TerminalImagePaint {
@@ -381,6 +415,28 @@ impl NyaTerminalElement {
         hasher.finish()
     }
 
+    fn keyword_rules_key(&self) -> u64 {
+        let mut hasher = DefaultHasher::new();
+        for rule in self.keyword_rules.iter() {
+            rule.id.hash(&mut hasher);
+            rule.name.hash(&mut hasher);
+            rule.patterns.hash(&mut hasher);
+            rule.color.hash(&mut hasher);
+            rule.enabled.hash(&mut hasher);
+        }
+        hasher.finish()
+    }
+
+    fn compiled_keyword_rules(&self) -> CompiledKeywordRules {
+        let key = self.keyword_rules_key();
+        if let Some(cache) = self.layout_cache.as_ref()
+            && let Ok(mut cache) = cache.lock()
+        {
+            return cache.compiled_keyword_rules(key, self.keyword_rules.as_slice());
+        }
+        compile_keyword_rules(self.keyword_rules.as_slice())
+    }
+
     fn shape_row(
         &self,
         row: usize,
@@ -389,14 +445,14 @@ impl NyaTerminalElement {
         text_runs: Vec<TextRun>,
         font_size: Pixels,
         window: &mut Window,
-    ) -> ShapedLine {
+    ) -> Arc<ShapedLine> {
         let shape_row = |window: &mut Window| {
-            window.text_system().shape_line(
+            Arc::new(window.text_system().shape_line(
                 SharedString::from(text.clone()),
                 font_size,
                 &text_runs,
                 None,
-            )
+            ))
         };
         if let Some(cache) = self.layout_cache.as_ref() {
             match cache.lock() {
@@ -493,13 +549,23 @@ impl Element for NyaTerminalElement {
         window: &mut Window,
         _cx: &mut App,
     ) -> Self::PrepaintState {
+        let started_at = Instant::now();
+        let cache_stats_before = self
+            .layout_cache
+            .as_ref()
+            .and_then(|cache| cache.lock().ok().map(|cache| (cache.hits, cache.misses)));
         let mut plan = NyaTerminalPaintPlan::default();
         let cell_w = self.cell_width.max(1.);
         let cell_h = self.cell_height.max(1.);
         let font_size = px(self.font_size.max(8.));
         let base_font = font(SharedString::from(self.font_family.clone()));
+        let compiled_keyword_rules = self.compiled_keyword_rules();
 
-        for row in 0..self.snapshot.rows {
+        let visible_rows = terminal_visible_rows_for_bounds(bounds, cell_h, self.snapshot.rows);
+        let visible_row_start = visible_rows.start;
+        let visible_row_end = visible_rows.end;
+        let visible_row_count = visible_rows.len();
+        for row in visible_rows {
             let line = self
                 .snapshot
                 .lines
@@ -570,10 +636,10 @@ impl Element for NyaTerminalElement {
             }
 
             // Base spans drive cell/keyword backgrounds only (under images).
-            let base_spans = terminal_highlight_spans(
+            let base_spans = terminal_highlight_spans_compiled(
                 display_line,
                 ansi,
-                self.keyword_rules.as_slice(),
+                &compiled_keyword_rules,
                 &[],
                 &[],
                 None,
@@ -582,10 +648,10 @@ impl Element for NyaTerminalElement {
             );
             // Full spans include search/selection fg tweaks for the glyph layer.
             let spans = if terminal_glyph_decorations_needed(decorations) {
-                terminal_highlight_spans(
+                terminal_highlight_spans_compiled(
                     display_line,
                     ansi,
-                    self.keyword_rules.as_slice(),
+                    &compiled_keyword_rules,
                     &decorations.search_ranges,
                     &decorations.active_search_ranges,
                     decorations.selection_cols,
@@ -800,6 +866,48 @@ impl Element for NyaTerminalElement {
             plan.cursor = Some(fill(cursor_bounds, rgb(self.palette.terminal_cursor)));
         }
 
+        let elapsed = started_at.elapsed();
+        if elapsed.as_millis() >= TERMINAL_ELEMENT_PREPAINT_SLOW_MS {
+            let (cache_hits, cache_misses) = self
+                .layout_cache
+                .as_ref()
+                .and_then(|cache| cache.lock().ok().map(|cache| (cache.hits, cache.misses)))
+                .unwrap_or((0, 0));
+            let (cache_hit_delta, cache_miss_delta) =
+                cache_stats_before.map_or((0, 0), |(before_hits, before_misses)| {
+                    (
+                        cache_hits.saturating_sub(before_hits),
+                        cache_misses.saturating_sub(before_misses),
+                    )
+                });
+            tracing::warn!(
+                diagnostic = "terminal_element_prepaint",
+                total_ms = elapsed.as_millis(),
+                visible_row_start,
+                visible_row_end,
+                visible_row_count,
+                snapshot_rows = self.snapshot.rows,
+                snapshot_cols = self.snapshot.cols,
+                styled_lines = self.snapshot.styled_lines.len(),
+                decorations = self.decorations.len(),
+                keyword_rules = self.keyword_rules.len(),
+                images = self.snapshot.images.len(),
+                backgrounds = plan.backgrounds.len(),
+                decoration_backgrounds = plan.decoration_backgrounds.len(),
+                active_markers = plan.active_markers.len(),
+                shaped_rows = plan.rows.len(),
+                images_under = plan.images_under.len(),
+                images_above = plan.images_above.len(),
+                placeholders_under = plan.placeholders_under.len(),
+                placeholders_above = plan.placeholders_above.len(),
+                cache_hit_delta,
+                cache_miss_delta,
+                cache_hits,
+                cache_misses,
+                "slow terminal element prepaint"
+            );
+        }
+
         plan
     }
 
@@ -813,6 +921,16 @@ impl Element for NyaTerminalElement {
         window: &mut Window,
         cx: &mut App,
     ) {
+        let started_at = Instant::now();
+        let backgrounds = prepaint.backgrounds.len();
+        let images_under = prepaint.images_under.len();
+        let placeholders_under = prepaint.placeholders_under.len();
+        let decoration_backgrounds = prepaint.decoration_backgrounds.len();
+        let active_markers = prepaint.active_markers.len();
+        let shaped_rows = prepaint.rows.len();
+        let images_above = prepaint.images_above.len();
+        let placeholders_above = prepaint.placeholders_above.len();
+        let cursor = prepaint.cursor.is_some();
         // cell/keyword bg → under images → search/selection → marks → text → above images → cursor
         for quad in prepaint.backgrounds.drain(..) {
             window.paint_quad(quad);
@@ -869,5 +987,38 @@ impl Element for NyaTerminalElement {
         if let Some(cursor) = prepaint.cursor.take() {
             window.paint_quad(cursor);
         }
+        let elapsed = started_at.elapsed();
+        if elapsed.as_millis() >= TERMINAL_ELEMENT_PAINT_SLOW_MS {
+            tracing::warn!(
+                diagnostic = "terminal_element_paint",
+                total_ms = elapsed.as_millis(),
+                snapshot_rows = self.snapshot.rows,
+                snapshot_cols = self.snapshot.cols,
+                backgrounds,
+                decoration_backgrounds,
+                active_markers,
+                shaped_rows,
+                images_under,
+                images_above,
+                placeholders_under,
+                placeholders_above,
+                cursor,
+                "slow terminal element paint"
+            );
+        }
     }
+}
+
+fn terminal_visible_rows_for_bounds(
+    bounds: Bounds<Pixels>,
+    cell_h: f32,
+    row_limit: usize,
+) -> std::ops::Range<usize> {
+    if row_limit == 0 {
+        return 0..0;
+    }
+    let cell_h = cell_h.max(1.);
+    let visible_rows = (f32::from(bounds.size.height).max(0.) / cell_h).ceil() as usize;
+    let overscan_rows = 1usize;
+    0..visible_rows.saturating_add(overscan_rows).min(row_limit)
 }

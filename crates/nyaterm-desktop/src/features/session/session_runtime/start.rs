@@ -614,6 +614,7 @@ mod tests {
                 has_password: false,
             })
             .expect("save password");
+        drop(store);
         let context = test_ssh_build_context(dir.clone());
         let auth = ConnectionAuth {
             mode: "password".to_string(),

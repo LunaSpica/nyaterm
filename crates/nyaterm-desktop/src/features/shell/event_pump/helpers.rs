@@ -9,6 +9,7 @@ pub(super) const SESSION_EVENT_DRAIN_WALL_BUDGET: Duration = Duration::from_mill
 pub(super) const RUNTIME_BACKGROUND_EVENT_DRAIN_WALL_BUDGET: Duration = Duration::from_millis(6);
 pub(super) const RUNTIME_BACKGROUND_EVENT_DRAIN_SLOW: Duration = Duration::from_millis(12);
 pub(super) const RUNTIME_IDLE_TICK_INTERVAL: Duration = Duration::from_millis(50);
+pub(super) const RUNTIME_QUIET_TICK_INTERVAL: Duration = Duration::from_millis(500);
 /// Match display frame pacing; 8ms stacked full ticks under pressure contended with window drag paints.
 pub(super) const RUNTIME_PRESSURE_TICK_INTERVAL: Duration = Duration::from_millis(16);
 /// After viewport size changes, hold pressure cadence for this long.
@@ -19,7 +20,9 @@ pub(super) const CONNECT_SETTLE_HOLD: Duration = Duration::from_millis(750);
 /// Under output pressure / connect settle, coalesce full-shell paints.
 pub(super) const UI_PAINT_THROTTLE: Duration = Duration::from_millis(33);
 pub(super) const TERMINAL_FRAME_APPLY_PRESSURE_INTERVAL: Duration = Duration::from_millis(16);
+pub(super) const CURSOR_BLINK_INTERVAL: Duration = Duration::from_millis(530);
 pub(super) const SLOW_DIAGNOSTIC_THROTTLE: Duration = Duration::from_secs(2);
+pub(super) const TERMINAL_PERF_HEARTBEAT_INTERVAL: Duration = Duration::from_secs(1);
 pub(super) const RUNTIME_TICK_SLOW_THRESHOLD: Duration = Duration::from_millis(40);
 pub(super) const SESSION_EVENT_DRAIN_SLOW_TOTAL: Duration = Duration::from_millis(20);
 pub(super) const SESSION_EVENT_DRAIN_SLOW_CHUNK: Duration = Duration::from_millis(8);
@@ -168,6 +171,10 @@ pub(super) fn window_geometry_churn_active(
 
 pub(super) fn connect_settle_active(until: Option<Instant>, now: Instant) -> bool {
     until.is_some_and(|until| now < until)
+}
+
+pub(super) fn connect_settle_deadline(now: Instant) -> Instant {
+    now + CONNECT_SETTLE_HOLD
 }
 
 /// Whether a runtime tick should call cx.notify immediately.
@@ -655,6 +662,18 @@ mod tests {
             Some(now),
             now + TERMINAL_FRAME_APPLY_PRESSURE_INTERVAL,
             true
+        ));
+    }
+
+    #[test]
+    fn connect_settle_deadline_uses_hold_window() {
+        let now = Instant::now();
+        let deadline = connect_settle_deadline(now);
+
+        assert!(connect_settle_active(Some(deadline), now));
+        assert!(!connect_settle_active(
+            Some(deadline),
+            now + CONNECT_SETTLE_HOLD
         ));
     }
 

@@ -1,4 +1,4 @@
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use gpui::{Context, Entity, Timer, Window};
 
@@ -22,13 +22,41 @@ impl WindowRuntimeStore {
         app.update(cx, |app, _| app.mark_window_runtime_started());
         window
             .spawn(cx, async move |cx| {
+                let mut skipped_updates = 0u64;
+                let mut last_skip_log_at = Instant::now();
                 loop {
                     let delay = app
-                        .update(cx, |app, _| app.window_runtime_tick_delay())
+                        .read_with(cx, |app, _| app.window_runtime_tick_delay())
                         .unwrap_or_else(|_| Duration::from_millis(50));
                     Timer::after(delay).await;
                     let keep_running = cx
                         .update(|window, cx| {
+                            let now = Instant::now();
+                            let viewport_size = window.viewport_size();
+                            let viewport_size = (
+                                f32::from(viewport_size.width),
+                                f32::from(viewport_size.height),
+                            );
+                            let should_update = app.read_with(cx, |app, _| {
+                                app.window_runtime_tick_needs_update(viewport_size, now)
+                            });
+                            if !should_update {
+                                skipped_updates = skipped_updates.saturating_add(1);
+                                if skipped_updates > 0
+                                    && now.saturating_duration_since(last_skip_log_at)
+                                        >= Duration::from_secs(5)
+                                {
+                                    tracing::info!(
+                                        diagnostic = "runtime_tick_skip",
+                                        skipped_updates,
+                                        next_tick_delay_ms = delay.as_millis(),
+                                        "skipped idle window runtime updates"
+                                    );
+                                    skipped_updates = 0;
+                                    last_skip_log_at = now;
+                                }
+                                return app.read_with(cx, |app, _| app.window_runtime_running());
+                            }
                             app.update(cx, |app, cx| app.drive_window_runtime_tick(window, cx))
                         })
                         .unwrap_or(false);

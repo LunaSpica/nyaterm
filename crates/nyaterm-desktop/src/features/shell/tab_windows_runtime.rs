@@ -333,8 +333,14 @@ impl NyaTermApp {
             .into_iter()
             .map(|session| session.id)
             .collect::<Vec<_>>();
-        // Wait until sessions exist so tab indexes can map correctly.
+        // Wait until startup restore has created sessions so tab indexes can map
+        // correctly. Once startup restore is complete, an empty session list
+        // means there is nothing to restore; mark this done so the runtime can
+        // enter the quiet cadence.
         if ordered.is_empty() {
+            if self.startup_restore_complete {
+                self.terminal_windows_restored = true;
+            }
             return;
         }
         self.terminal_windows_restored = true;

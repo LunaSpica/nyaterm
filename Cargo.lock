@@ -4253,6 +4253,7 @@ dependencies = [
  "nyaterm-ui",
  "regex",
  "smallvec",
+ "tracing",
 ]
 
 [[package]]

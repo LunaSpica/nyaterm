@@ -1,13 +1,13 @@
 use super::*;
 
-pub(super) fn ansi_to_highlight_spans(
+pub(super) fn ansi_to_highlight_spans_compiled(
     ansi: &[nyaterm_terminal::StyledSpan],
     palette: nyaterm_ui::ThemePalette,
-    keyword_rules: &[ResolvedKeywordHighlightRule],
+    compiled_keyword_rules: &[(regex::Regex, u32)],
 ) -> Vec<TerminalHighlightSpan> {
     // Build plain line for keyword overlay, then prefer keyword fg over default ANSI fg.
     let line: String = ansi.iter().map(|s| s.text.as_str()).collect();
-    let keyword = keyword_highlight_spans(&line, keyword_rules);
+    let keyword = keyword_highlight_spans_compiled(&line, compiled_keyword_rules);
     if keyword.iter().all(|s| !s.keyword) {
         return ansi
             .iter()

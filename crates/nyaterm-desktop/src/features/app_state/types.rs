@@ -27,11 +27,19 @@ pub(in crate::features) struct TerminalRuntimeUiState {
     pub terminal_surface_frame_notify_count: u64,
     /// Output frames that also dirtied chrome (unread/effects).
     pub terminal_chrome_frame_notify_count: u64,
+    /// Last periodic terminal performance heartbeat.
+    pub last_terminal_perf_heartbeat_at: Option<Instant>,
+    pub last_perf_full_shell_paint_count: u64,
+    pub last_perf_surface_paint_count: u64,
+    pub last_perf_surface_frame_notify_count: u64,
+    pub last_perf_chrome_frame_notify_count: u64,
+    pub last_perf_layout_cache_hits: u64,
+    pub last_perf_layout_cache_misses: u64,
     /// Open-tabs / window-layout settings need a durable write.
     pub open_tabs_persist_dirty: bool,
     pub window_layout_persist_dirty: bool,
     pub cursor_blink_on: bool,
-    pub cursor_blink_tick: u8,
+    pub cursor_blink_next_at: Option<Instant>,
     pub visual_bell_ticks: u8,
 }
 
@@ -108,10 +116,17 @@ impl Default for TerminalRuntimeUiState {
             terminal_surface_paint_count: 0,
             terminal_surface_frame_notify_count: 0,
             terminal_chrome_frame_notify_count: 0,
+            last_terminal_perf_heartbeat_at: None,
+            last_perf_full_shell_paint_count: 0,
+            last_perf_surface_paint_count: 0,
+            last_perf_surface_frame_notify_count: 0,
+            last_perf_chrome_frame_notify_count: 0,
+            last_perf_layout_cache_hits: 0,
+            last_perf_layout_cache_misses: 0,
             open_tabs_persist_dirty: false,
             window_layout_persist_dirty: false,
             cursor_blink_on: true,
-            cursor_blink_tick: 0,
+            cursor_blink_next_at: None,
             visual_bell_ticks: 0,
         }
     }

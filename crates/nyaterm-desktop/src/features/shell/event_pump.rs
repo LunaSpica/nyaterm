@@ -60,6 +60,19 @@ impl NyaTermApp {
         }
     }
 
+    pub(in crate::features) fn visible_terminal_layout_cache_stats(&self) -> (u64, u64) {
+        self.visible_terminal_session_ids()
+            .into_iter()
+            .filter_map(|session_id| self.terminal_views.get(session_id))
+            .filter_map(|view| view.render_cache.layout_cache.lock().ok())
+            .fold((0u64, 0u64), |(hits, misses), cache| {
+                (
+                    hits.saturating_add(cache.hits),
+                    misses.saturating_add(cache.misses),
+                )
+            })
+    }
+
     pub(in crate::features) fn drive_idle_lock(&mut self) -> bool {
         if self.is_locked
             || !self.settings.enable_screen_lock
@@ -90,13 +103,136 @@ impl NyaTermApp {
         self.terminal_runtime.event_pump_started = true;
     }
 
+    pub(crate) fn window_runtime_running(&self) -> bool {
+        self.terminal_runtime.event_pump_started
+    }
+
     pub(crate) fn window_runtime_tick_delay(&self) -> Duration {
         // During recent viewport geometry churn (window resize/drag), prefer the
         // idle cadence so full plane ticks do not stack on compositor paints.
         if window_geometry_churn_active(self.last_viewport_change_at, Instant::now()) {
             return RUNTIME_IDLE_TICK_INTERVAL;
         }
+        if self.runtime_quiet_tick_allowed() {
+            return RUNTIME_QUIET_TICK_INTERVAL;
+        }
         runtime_tick_interval_for_pressure(self.runtime_output_pressure_active())
+    }
+
+    pub(crate) fn window_runtime_tick_needs_update(
+        &self,
+        viewport_size: (f32, f32),
+        now: Instant,
+    ) -> bool {
+        if !self.terminal_runtime.event_pump_started {
+            return false;
+        }
+        if self.last_viewport_size != viewport_size
+            || terminal_cell_metrics_refresh_needed(self.terminal_cell_metrics)
+        {
+            return true;
+        }
+        if self
+            .terminal_runtime
+            .connect_settle_until
+            .is_some_and(|until| now >= until)
+        {
+            return true;
+        }
+
+        let output_pressure = self.runtime_output_pressure_active();
+        let connect_settle = connect_settle_active(self.terminal_runtime.connect_settle_until, now);
+        if runtime_ui_notify_allowed(
+            false,
+            self.terminal_runtime.pending_ui_notify,
+            false,
+            output_pressure || connect_settle,
+            self.terminal_runtime.last_ui_notify_at,
+            now,
+        ) {
+            return true;
+        }
+        if !self.runtime_quiet_tick_allowed() {
+            return true;
+        }
+        self.window_runtime_quiet_tick_has_due_work(now)
+    }
+
+    fn window_runtime_quiet_tick_has_due_work(&self, now: Instant) -> bool {
+        if self.ai_chat_focus_pending
+            || self.transfer_rename_focus_pending
+            || self.credential_prompt_focus_pending
+        {
+            return true;
+        }
+        if self.terminal_file_drop_hover.is_some() {
+            return true;
+        }
+        if self.terminal_runtime.visual_bell_ticks > 0 {
+            return true;
+        }
+        if self.settings.cursor_blink
+            && !self.visible_terminal_session_ids().is_empty()
+            && self
+                .terminal_runtime
+                .cursor_blink_next_at
+                .is_some_and(|next| now >= next)
+        {
+            return true;
+        }
+        if self.visible_terminal_performance_recovery_due() {
+            return true;
+        }
+        self.terminal_render_requests_pending()
+    }
+
+    fn visible_terminal_performance_recovery_due(&self) -> bool {
+        self.visible_terminal_session_ids()
+            .into_iter()
+            .any(|session_id| {
+                self.terminal_views.get(session_id).is_some_and(|view| {
+                    view.render_degraded
+                        || view.performance_overlay.is_some()
+                        || view.output_burst_bytes > 0
+                })
+            })
+    }
+
+    fn terminal_render_requests_pending(&self) -> bool {
+        let visible_session_ids = self.visible_terminal_session_ids();
+        if visible_session_ids.iter().any(|session_id| {
+            self.terminal_views
+                .get(*session_id)
+                .is_some_and(|view| view.frame_snapshot.is_none() && view.scroll_offset == 0)
+        }) {
+            return true;
+        }
+        if visible_session_ids.iter().any(|session_id| {
+            self.terminal_views
+                .get(*session_id)
+                .is_some_and(|view| view.scroll_offset > 0)
+        }) {
+            return true;
+        }
+        if !self.terminal_search_open || self.terminal_search_mode != TerminalSearchMode::Buffer {
+            return false;
+        }
+        let Some(session_id) = self.active_session_id.as_deref() else {
+            return false;
+        };
+        let Some(key) = self.terminal_search_key() else {
+            return false;
+        };
+        self.terminal_views.get(session_id).is_some_and(|view| {
+            view.pending_search_key.as_ref() != Some(&key)
+                && !view.search_result.as_ref().is_some_and(|result| {
+                    terminal_frame_search_result_is_current(result, &key, view.screen_revision)
+                })
+        })
+    }
+
+    pub(in crate::features) fn enter_connect_settle(&mut self) {
+        self.terminal_runtime.connect_settle_until = Some(connect_settle_deadline(Instant::now()));
     }
 
     pub(in crate::features) fn runtime_output_pressure_active(&self) -> bool {
@@ -112,6 +248,48 @@ impl NyaTermApp {
             self.terminal_frame_pipeline.queued_event_count(),
             self.terminal_frame_pipeline.queued_output_bytes(),
         )
+    }
+
+    pub(in crate::features) fn runtime_quiet_tick_allowed(&self) -> bool {
+        !self.runtime_output_pressure_active()
+            && self.pending_session_starts.is_empty()
+            && self.pending_saved_connection_queue.is_empty()
+            && self.pending_session_events.is_empty()
+            && !self.session_event_bridge.has_pending_ui_work()
+            && !self.terminal_frame_backlog_active()
+            && self.zmodem_sessions.is_empty()
+            && self.trzsz_sessions.is_empty()
+            && self.active_host_key_prompt.is_none()
+            && self.active_credential_prompt.is_none()
+            && self.active_duplicate_prompt.is_none()
+            && !self.host_key_prompts.has_pending()
+            && !self.credential_prompts.has_pending()
+            && !self.duplicate_prompts.has_pending()
+            && self.connection_hover_pending.is_none()
+            && self.action_link_hover_pending.is_none()
+            && self.pending_auto_recording_session.is_none()
+            && self.pending_tunnels.is_empty()
+            && self.transfer_jobs.is_empty()
+            && !self.terminal_runtime.open_tabs_persist_dirty
+            && !self.terminal_runtime.window_layout_persist_dirty
+            && self.terminal_windows_restored
+            && !self.ai_chat_pending
+            && self.ai_agent_loop.is_none()
+            && !self.ai_discovery_pending
+            && !self.stats_pending
+            && !self.process_pending
+            && !self.docker_pending
+            && !self.translate_pending
+            && !self.update_pending
+            && !self.ai_chat_focus_pending
+            && !self.transfer_rename_focus_pending
+            && !self.credential_prompt_focus_pending
+            && !((self.active_ssh_config.is_some()
+                && matches!(
+                    self.current_right_panel(),
+                    Some(NavItem::Stats | NavItem::Processes | NavItem::Docker)
+                ))
+                || self.current_left_panel() == Some(NavItem::Transfers))
     }
 
     pub(super) fn drive_pending_session_status(&mut self) -> bool {

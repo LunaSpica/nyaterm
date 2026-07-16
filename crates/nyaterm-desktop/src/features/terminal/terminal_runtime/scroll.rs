@@ -244,16 +244,22 @@ impl NyaTermApp {
         let _ = command_running;
     }
 
-    pub(in crate::features) fn scroll_terminal_to_bottom(&mut self, cx: &mut Context<Self>) {
+    pub(in crate::features) fn scroll_terminal_to_bottom_state_only(&mut self) -> Option<String> {
         if let Some(session_id) = self.active_session_id.clone() {
             if let Some(view) = self.terminal_views.get_mut(&session_id) {
                 view.scroll_offset = 0;
                 view.has_new_while_scrolled = false;
             }
+            Some(session_id)
         } else {
             self.terminal_scroll_offset = 0;
+            None
         }
-        self.notify_active_terminal_surface(cx);
+    }
+
+    pub(in crate::features) fn scroll_terminal_to_bottom(&mut self, cx: &mut Context<Self>) {
+        let session_id = self.scroll_terminal_to_bottom_state_only();
+        self.notify_terminal_surface_only(session_id.as_deref(), cx);
     }
 
     pub(in crate::features) fn scroll_terminal_to_top(&mut self, cx: &mut Context<Self>) {
@@ -335,6 +341,16 @@ impl NyaTermApp {
         offset: usize,
         cx: &mut Context<Self>,
     ) {
+        let repaint_session_id =
+            self.set_terminal_scroll_offset_for_session_state_only(session_id, offset);
+        self.notify_terminal_surface_only(repaint_session_id.as_deref(), cx);
+    }
+
+    pub(in crate::features) fn set_terminal_scroll_offset_for_session_state_only(
+        &mut self,
+        session_id: Option<&str>,
+        offset: usize,
+    ) -> Option<String> {
         let mut snapshot_request: Option<(String, usize)> = None;
         if let Some(session_id) = session_id.filter(|id| !id.is_empty()) {
             if let Some(view) = self.terminal_views.get_mut(session_id) {
@@ -352,10 +368,12 @@ impl NyaTermApp {
         }
         if let Some((session_id, offset)) = snapshot_request {
             self.request_terminal_frame_snapshot_when_idle(&session_id, offset);
-            self.notify_terminal_surface_only(Some(session_id.as_str()), cx);
-        } else {
-            self.notify_active_terminal_surface(cx);
+            return Some(session_id);
         }
+        session_id
+            .filter(|id| !id.is_empty())
+            .map(str::to_string)
+            .or_else(|| self.active_session_id.clone())
     }
 
     /// Map a vertical pointer position (0..=1 top→bottom of track) to scroll_offset.
@@ -379,15 +397,24 @@ impl NyaTermApp {
         ratio: f32,
         cx: &mut Context<Self>,
     ) {
+        let repaint_session_id =
+            self.set_terminal_scroll_from_track_ratio_for_session_state_only(session_id, ratio);
+        self.notify_terminal_surface_only(repaint_session_id.as_deref(), cx);
+    }
+
+    pub(in crate::features) fn set_terminal_scroll_from_track_ratio_for_session_state_only(
+        &mut self,
+        session_id: Option<&str>,
+        ratio: f32,
+    ) -> Option<String> {
         let max = self.terminal_scroll_max_for_session(session_id);
         if max == 0 {
-            self.set_terminal_scroll_offset_for_session(session_id, 0, cx);
-            return;
+            return self.set_terminal_scroll_offset_for_session_state_only(session_id, 0);
         }
         let ratio = ratio.clamp(0.0, 1.0);
         // ratio 0 (top) -> max, ratio 1 (bottom) -> 0
         let offset = ((1.0 - ratio) * max as f32).round() as usize;
-        self.set_terminal_scroll_offset_for_session(session_id, offset.min(max), cx);
+        self.set_terminal_scroll_offset_for_session_state_only(session_id, offset.min(max))
     }
 
     pub(in crate::features) fn begin_terminal_scrollbar_drag(
@@ -395,10 +422,17 @@ impl NyaTermApp {
         session_id: Option<String>,
         cx: &mut Context<Self>,
     ) {
+        let repaint_session_id = self.begin_terminal_scrollbar_drag_state_only(session_id);
+        self.notify_terminal_surface_only(repaint_session_id.as_deref(), cx);
+    }
+
+    pub(in crate::features) fn begin_terminal_scrollbar_drag_state_only(
+        &mut self,
+        session_id: Option<String>,
+    ) -> Option<String> {
         self.terminal_scrollbar_dragging = true;
         self.terminal_scrollbar_drag_session_id = session_id.clone();
-        // Thumb lives on TerminalSurface now.
-        self.notify_terminal_surface_only(session_id.as_deref(), cx);
+        session_id.or_else(|| self.active_session_id.clone())
     }
 
     pub(in crate::features) fn update_terminal_scrollbar_drag(

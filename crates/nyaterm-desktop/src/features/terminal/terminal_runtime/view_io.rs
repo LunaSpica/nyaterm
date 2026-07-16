@@ -1043,12 +1043,7 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) -> Entity<TerminalSurface> {
         if let Some(surface) = self.terminal_surfaces.get(session_id) {
-            let surface = surface.clone();
-            let app = cx.entity();
-            surface.update(cx, |surface, _cx| {
-                surface.set_app(app);
-            });
-            return surface;
+            return surface.clone();
         }
         let layout_cache = self
             .terminal_views

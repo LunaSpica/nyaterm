@@ -151,6 +151,9 @@ pub fn cached_render_image(placement_id: u64, data: &[u8]) -> Option<Arc<RenderI
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::Mutex;
+
+    static TEST_CACHE_LOCK: Mutex<()> = Mutex::new(());
 
     fn clear_cache() {
         *cache() = None;
@@ -211,6 +214,7 @@ mod tests {
 
     #[test]
     fn cache_returns_same_arc_for_same_payload() {
+        let _guard = TEST_CACHE_LOCK.lock().unwrap();
         clear_cache();
         let png = tiny_png();
         let a = cached_render_image(42, &png).expect("a");
@@ -220,13 +224,18 @@ mod tests {
 
     #[test]
     fn cache_prunes_least_recently_used_image() {
+        let _guard = TEST_CACHE_LOCK.lock().unwrap();
         clear_cache();
         let first = tiny_nyar([0, 0, 0, 255]);
         let first_image = cached_render_image(1, &first).expect("first");
+        let mut second_image = None;
         for placement_id in 2..=MAX_DECODE_CACHE_IMAGES as u64 {
             let value = placement_id as u8;
             let payload = tiny_nyar([value, 0, 0, 255]);
-            cached_render_image(placement_id, &payload).expect("fill");
+            let image = cached_render_image(placement_id, &payload).expect("fill");
+            if placement_id == 2 {
+                second_image = Some(image);
+            }
         }
         assert!(Arc::ptr_eq(
             &first_image,
@@ -234,7 +243,7 @@ mod tests {
         ));
 
         let second = tiny_nyar([2, 0, 0, 255]);
-        let second_image = cached_render_image(2, &second).expect("second before eviction");
+        let second_image = second_image.expect("second before eviction");
         let overflow = tiny_nyar([255, 0, 0, 255]);
         cached_render_image(999, &overflow).expect("overflow");
 

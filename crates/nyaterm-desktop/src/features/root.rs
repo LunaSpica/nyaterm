@@ -177,7 +177,7 @@ impl NyaTermApp {
         }
     }
 
-    fn overlay_host(&mut self, content: Stateful<Div>, cx: &mut Context<Self>) -> impl IntoElement {
+    fn overlay_host(&mut self, content: Stateful<Div>, cx: &mut Context<Self>) -> Stateful<Div> {
         let overlay = self
             .stores
             .overlays
@@ -358,12 +358,39 @@ impl NyaTermApp {
 
 impl Render for NyaTermApp {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let render_started_at = Instant::now();
         FULL_SHELL_PAINT_COUNT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         self.terminal_runtime.full_shell_paint_count = self
             .terminal_runtime
             .full_shell_paint_count
             .saturating_add(1);
+        let root_started_at = Instant::now();
         let content = self.root_chrome(cx);
-        self.overlay_host(content, cx)
+        let root_duration = root_started_at.elapsed();
+        let overlay_started_at = Instant::now();
+        let output = self.overlay_host(content, cx);
+        let overlay_duration = overlay_started_at.elapsed();
+        let render_duration = render_started_at.elapsed();
+        if render_duration >= Duration::from_millis(12)
+            && self.should_log_slow_diagnostic("root_render", Instant::now())
+        {
+            tracing::warn!(
+                diagnostic = "root_render",
+                total_ms = render_duration.as_millis(),
+                root_chrome_ms = root_duration.as_millis(),
+                overlay_host_ms = overlay_duration.as_millis(),
+                active_session_id = self.active_session_id.as_deref().unwrap_or(""),
+                visible_session_count = self.visible_terminal_session_ids().len(),
+                connect_settle_active = self
+                    .terminal_runtime
+                    .connect_settle_until
+                    .is_some_and(|until| Instant::now() < until),
+                output_pressure = self.runtime_output_pressure_active(),
+                full_shell_paint_count = self.terminal_runtime.full_shell_paint_count,
+                surface_paint_count = terminal_surface_paint_count(),
+                "slow root render"
+            );
+        }
+        output
     }
 }

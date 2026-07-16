@@ -153,14 +153,38 @@ pub(super) fn terminal_highlight_spans(
     link_ranges: &[(usize, usize)],
     palette: nyaterm_ui::ThemePalette,
 ) -> Vec<TerminalHighlightSpan> {
+    let compiled = compile_keyword_rules(keyword_rules);
+    terminal_highlight_spans_compiled(
+        line,
+        ansi_spans,
+        &compiled,
+        search_ranges,
+        active_search_ranges,
+        selection_cols,
+        link_ranges,
+        palette,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+pub(super) fn terminal_highlight_spans_compiled(
+    line: &str,
+    ansi_spans: Option<&[nyaterm_terminal::StyledSpan]>,
+    compiled_keyword_rules: &[(regex::Regex, u32)],
+    search_ranges: &[(usize, usize)],
+    active_search_ranges: &[(usize, usize)],
+    selection_cols: Option<(usize, usize)>,
+    link_ranges: &[(usize, usize)],
+    palette: nyaterm_ui::ThemePalette,
+) -> Vec<TerminalHighlightSpan> {
     let mut spans = if let Some(ansi) = ansi_spans {
         if ansi.is_empty() || (ansi.len() == 1 && ansi[0].text.is_empty()) {
-            keyword_highlight_spans(line, keyword_rules)
+            keyword_highlight_spans_compiled(line, compiled_keyword_rules)
         } else {
-            ansi_to_highlight_spans(ansi, palette, keyword_rules)
+            ansi_to_highlight_spans_compiled(ansi, palette, compiled_keyword_rules)
         }
     } else {
-        keyword_highlight_spans(line, keyword_rules)
+        keyword_highlight_spans_compiled(line, compiled_keyword_rules)
     };
     if !link_ranges.is_empty() {
         spans = apply_action_link_ranges(spans, link_ranges, palette);

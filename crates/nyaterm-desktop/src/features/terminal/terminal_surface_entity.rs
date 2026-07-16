@@ -182,6 +182,18 @@ impl TerminalSurface {
         self.cursor_style = cursor_style.into();
     }
 
+    fn defer_surface_repaint(
+        app: Entity<NyaTermApp>,
+        session_id: Option<String>,
+        cx: &mut Context<Self>,
+    ) {
+        cx.defer(move |cx| {
+            let _ = app.update(cx, |this, cx| {
+                this.notify_terminal_surface_only(session_id.as_deref(), cx);
+            });
+        });
+    }
+
     fn scrollbar_element(&self, cx: &mut Context<Self>) -> impl IntoElement {
         use gpui::relative;
         let palette = self.palette;
@@ -232,13 +244,16 @@ impl TerminalSurface {
                             let Some(app) = app.clone() else {
                                 return;
                             };
-                            let _ = app.update(cx, |this, cx| {
+                            let repaint_session_id = app.update(cx, |this, cx| {
                                 if !session_id.is_empty() {
                                     this.activate_workspace_pane(session_id.clone(), cx);
                                 }
                                 let drag_session_id =
                                     (!session_id.is_empty()).then_some(session_id.clone());
-                                this.begin_terminal_scrollbar_drag(drag_session_id.clone(), cx);
+                                let mut repaint_session_id = this
+                                    .begin_terminal_scrollbar_drag_state_only(
+                                        drag_session_id.clone(),
+                                    );
                                 let Some(bounds) = (if session_id.is_empty() {
                                     this.terminal_surface_bounds
                                 } else {
@@ -247,15 +262,18 @@ impl TerminalSurface {
                                         .copied()
                                         .or(this.terminal_surface_bounds)
                                 }) else {
-                                    return;
+                                    return repaint_session_id;
                                 };
                                 let ratio = terminal_scroll_track_ratio(bounds, event.position.y);
-                                this.set_terminal_scroll_from_track_ratio_for_session(
-                                    drag_session_id.as_deref(),
-                                    ratio,
-                                    cx,
-                                );
+                                repaint_session_id = this
+                                    .set_terminal_scroll_from_track_ratio_for_session_state_only(
+                                        drag_session_id.as_deref(),
+                                        ratio,
+                                    )
+                                    .or(repaint_session_id);
+                                repaint_session_id
                             });
+                            Self::defer_surface_repaint(app, repaint_session_id, cx);
                             cx.stop_propagation();
                         })
                     })
@@ -305,16 +323,21 @@ impl TerminalSurface {
             .gap_1()
             .cursor_pointer()
             .hover(move |style| style.bg(rgb(palette.hover)))
-            .on_click(cx.listener(move |_this, _, _, cx| {
+            .on_click(cx.listener(move |this, _, _, cx| {
                 let Some(app) = app.clone() else {
                     return;
                 };
-                let _ = app.update(cx, |this, cx| {
-                    this.scroll_terminal_to_bottom(cx);
+                let repaint_session_id = app.update(cx, |this, cx| {
+                    let repaint_session_id = this.scroll_terminal_to_bottom_state_only();
                     this.terminal_status = "scrolled to live output".to_string();
                     // Status bar is shell chrome; user-triggered, not hot path.
                     cx.notify();
+                    repaint_session_id
                 });
+                this.scroll_offset = 0;
+                this.has_new_while_scrolled = false;
+                cx.notify();
+                Self::defer_surface_repaint(app, repaint_session_id, cx);
             }))
             .child(
                 div()

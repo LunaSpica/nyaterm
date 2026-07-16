@@ -1,24 +1,12 @@
 use super::*;
 
-pub(super) fn keyword_highlight_spans(
-    line: &str,
-    rules: &[ResolvedKeywordHighlightRule],
-) -> Vec<TerminalHighlightSpan> {
-    if rules.is_empty() || line.is_empty() {
-        return vec![TerminalHighlightSpan {
-            text: line.to_string(),
-            color: None,
-            bg: None,
-            keyword: false,
-            underline: false,
-            strikeout: false,
-            bold: false,
-            italic: false,
-        }];
-    }
+pub(super) type CompiledKeywordRules = Vec<(regex::Regex, u32)>;
 
-    let compiled = compile_keyword_rules(rules);
-    if compiled.is_empty() {
+pub(super) fn keyword_highlight_spans_compiled(
+    line: &str,
+    compiled: &[(regex::Regex, u32)],
+) -> Vec<TerminalHighlightSpan> {
+    if compiled.is_empty() || line.is_empty() {
         return vec![TerminalHighlightSpan {
             text: line.to_string(),
             color: None,
@@ -35,7 +23,7 @@ pub(super) fn keyword_highlight_spans(
     let mut cursor = 0;
     while cursor < line.len() {
         let mut best: Option<(usize, usize, u32)> = None;
-        for (regex, color) in &compiled {
+        for (regex, color) in compiled {
             if let Some(found) = regex.find_at(line, cursor) {
                 let start = found.start();
                 let end = found.end();
@@ -107,7 +95,7 @@ pub(super) fn keyword_highlight_spans(
 }
 pub(super) fn compile_keyword_rules(
     rules: &[ResolvedKeywordHighlightRule],
-) -> Vec<(regex::Regex, u32)> {
+) -> CompiledKeywordRules {
     let mut compiled = Vec::new();
     for rule in rules.iter().filter(|rule| rule.enabled) {
         let color = parse_hex_rgb(&rule.color).unwrap_or(0x79c0ff);

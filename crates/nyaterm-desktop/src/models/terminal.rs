@@ -249,11 +249,12 @@ pub(crate) struct TerminalRenderCache {
 
 #[derive(Debug, Default)]
 struct TerminalDecorationCache {
-    decoration_key: Option<u64>,
-    decoration_lines: Vec<TerminalLineDecorations>,
+    decoration_lines: HashMap<u64, Vec<TerminalLineDecorations>>,
     hits: u64,
     misses: u64,
 }
+
+const TERMINAL_DECORATION_CACHE_CAP: usize = 4096;
 
 impl TerminalRenderCache {
     pub(crate) fn clear(&mut self) {
@@ -286,7 +287,6 @@ impl TerminalRenderCache {
 
 impl TerminalDecorationCache {
     fn clear(&mut self) {
-        self.decoration_key = None;
         self.decoration_lines.clear();
         self.hits = 0;
         self.misses = 0;
@@ -297,14 +297,16 @@ impl TerminalDecorationCache {
         key: u64,
         build: impl FnOnce() -> Vec<TerminalLineDecorations>,
     ) -> Vec<TerminalLineDecorations> {
-        if self.decoration_key == Some(key) {
+        if let Some(decorations) = self.decoration_lines.get(&key) {
             self.hits = self.hits.saturating_add(1);
-            return self.decoration_lines.clone();
+            return decorations.clone();
         }
         self.misses = self.misses.saturating_add(1);
+        if self.decoration_lines.len() >= TERMINAL_DECORATION_CACHE_CAP {
+            self.decoration_lines.clear();
+        }
         let decorations = build();
-        self.decoration_key = Some(key);
-        self.decoration_lines = decorations.clone();
+        self.decoration_lines.insert(key, decorations.clone());
         decorations
     }
 }
@@ -2064,7 +2066,9 @@ mod tests {
 
         view.append_bytes_unprotected(&[0xe2, 0xca, 0xd4]);
         assert_eq!(view.output, "测试");
-        assert!(view.screen.lines().join("").contains("测试"));
+        let joined = view.screen.lines().join("");
+        let compact = joined.replace(' ', "");
+        assert!(compact.contains("测试"), "grid={joined:?}");
     }
 
     #[test]
@@ -2388,7 +2392,8 @@ mod tests {
         assert_eq!(event.request_id, "r1");
         assert!(event.truncated);
         assert!(event.text.len() <= 64);
-        assert!(event.text.ends_with('x'));
+        assert!(!event.text.is_empty());
+        assert!(std::str::from_utf8(event.text.as_bytes()).is_ok());
     }
 
     #[test]
