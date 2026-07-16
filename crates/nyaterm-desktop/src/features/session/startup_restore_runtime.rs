@@ -31,11 +31,91 @@ impl NyaTermApp {
         }
         self.terminal_runtime.open_tabs_persist_dirty = true;
         self.terminal_runtime.window_layout_persist_dirty = true;
-        self.flush_pending_session_persistence();
+        self.flush_pending_session_persistence_sync();
     }
 
-    /// Idle/control-plane: write dirty open-tabs / window layout to disk.
+    /// Idle plane: snapshot dirty state and write config on a background thread.
+    ///
+    /// Serialization stays on the UI thread (local maps only). Opening redb and
+    /// rewriting settings is never done on the UI tick — that freezes connect
+    /// and the first idle frame after connect.
     pub(in crate::features) fn flush_pending_session_persistence(&mut self) {
+        if !self.settings.startup_restore {
+            self.terminal_runtime.open_tabs_persist_dirty = false;
+            self.terminal_runtime.window_layout_persist_dirty = false;
+            return;
+        }
+        let need_tabs = self.terminal_runtime.open_tabs_persist_dirty;
+        let need_layout = self.terminal_runtime.window_layout_persist_dirty
+            && self.settings.startup_restore_window_layout;
+        if !need_tabs && !need_layout {
+            return;
+        }
+
+        let tabs = need_tabs.then(|| self.serialize_open_tabs());
+        let layout = if need_layout {
+            let ordered = self
+                .ordered_tab_sessions()
+                .into_iter()
+                .map(|session| session.id)
+                .collect::<Vec<_>>();
+            Some(
+                self.terminal_windows
+                    .as_ref()
+                    .filter(|_| self.terminal_windows_is_multi_leaf())
+                    .and_then(|root| root.serialize_layout(&ordered)),
+            )
+        } else {
+            None
+        };
+
+        // Clear dirty before spawn so repeated idle ticks do not re-queue while
+        // the worker is still writing. Window-close uses the sync path below.
+        if need_tabs {
+            self.terminal_runtime.open_tabs_persist_dirty = false;
+        }
+        if need_layout {
+            self.terminal_runtime.window_layout_persist_dirty = false;
+        }
+
+        let config_dir = self.runtime.config_dir().to_path_buf();
+        let portable_key = self.runtime.portable_key_path().map(ToOwned::to_owned);
+        std::thread::Builder::new()
+            .name("nyaterm-persist-tabs".into())
+            .spawn(move || {
+                let Ok(store) =
+                    ConnectionStore::open_with_portable_key_path(config_dir, portable_key)
+                else {
+                    tracing::warn!(
+                        diagnostic = "session_persist",
+                        "failed to open config store for deferred tab persist"
+                    );
+                    return;
+                };
+                if let Some(tabs) = tabs.as_ref() {
+                    if let Err(error) = store.save_open_tabs(tabs) {
+                        tracing::warn!(
+                            diagnostic = "session_persist",
+                            error = %error,
+                            "failed to save open tabs in background"
+                        );
+                    }
+                }
+                if let Some(layout) = layout.as_ref() {
+                    if let Err(error) = store.save_terminal_window_layout(layout.as_ref()) {
+                        tracing::warn!(
+                            diagnostic = "session_persist",
+                            error = %error,
+                            "failed to save window layout in background"
+                        );
+                    }
+                }
+            })
+            .ok();
+    }
+
+    /// Synchronous durable write used by window-close / quit (must not race exit).
+    fn flush_pending_session_persistence_sync(&mut self) {
         if !self.settings.startup_restore {
             self.terminal_runtime.open_tabs_persist_dirty = false;
             self.terminal_runtime.window_layout_persist_dirty = false;
@@ -67,7 +147,6 @@ impl NyaTermApp {
 
         let config_dir = self.runtime.config_dir().to_path_buf();
         let portable_key = self.runtime.portable_key_path().map(ToOwned::to_owned);
-        // One store open covers both writes when both are dirty.
         match ConnectionStore::open_with_portable_key_path(config_dir, portable_key) {
             Ok(store) => {
                 if let Some(tabs) = tabs.as_ref() {

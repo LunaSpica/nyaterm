@@ -111,6 +111,25 @@ impl NyaTermApp {
         let mut dirty = self.refresh_window_render_inputs(window, cx);
         let render_input_duration = stage_started_at.elapsed();
 
+        // Pure geometry churn (resize/drag with size changes): skip session drains
+        // and sideband so compositor paints stay free. Normal idle still runs full
+        // planes so remote refresh / prompts keep working.
+        let geometry_churn =
+            window_geometry_churn_active(self.last_viewport_change_at, Instant::now());
+        if geometry_churn
+            && !self.runtime_output_pressure_active()
+            && self.pending_session_starts.is_empty()
+            && self.pending_session_events.is_empty()
+            && !self.session_event_bridge.has_pending_ui_work()
+            && !self.terminal_frame_backlog_active()
+        {
+            dirty |= self.drive_pending_focus(window);
+            if dirty {
+                cx.notify();
+            }
+            return true;
+        }
+
         let control = self.drive_runtime_control_plane(window, cx);
         dirty |= control.dirty;
 
@@ -361,13 +380,22 @@ impl NyaTermApp {
         {
             self.flush_pending_session_persistence();
         }
-        if !self.terminal_windows_restored {
+        // Layout restore opens the config DB — never do it while sessions are
+        // still connecting or the data plane is under pressure.
+        if !self.terminal_windows_restored
+            && self.pending_session_starts.is_empty()
+            && !self.runtime_output_pressure_active()
+        {
             self.try_restore_terminal_window_layout();
             if self.terminal_windows.is_some() {
                 self.reconcile_terminal_windows();
             }
         }
-        if let Some((session_id, session_name)) = self.pending_auto_recording_session.take() {
+        // Auto-recording opens files; keep it off the first calm frames after connect.
+        if self.pending_session_starts.is_empty()
+            && !self.runtime_output_pressure_active()
+            && let Some((session_id, session_name)) = self.pending_auto_recording_session.take()
+        {
             self.maybe_auto_start_recording(&session_id, &session_name);
         }
 

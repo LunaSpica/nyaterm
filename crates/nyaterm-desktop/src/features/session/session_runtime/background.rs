@@ -441,6 +441,12 @@ impl NyaTermApp {
                         },
                     );
                     self.activate_session_id(&session_id);
+                    // First connected frames often land with a login banner burst.
+                    // Enter degraded paint immediately so tab-strip/status repaint
+                    // does not stack full terminal decorations on connect.
+                    if let Some(view) = self.terminal_views.get_mut(&session_id) {
+                        view.enter_render_degraded_mode();
+                    }
                     self.terminal_status = format!(
                         "running {} · {}",
                         short_id(&session_id),

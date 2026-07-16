@@ -29,12 +29,9 @@ impl NyaTermApp {
         }
 
         if self.terminal_windows.is_none() {
-            // Attempt one-shot restore of multi-leaf layout from settings.
-            self.try_restore_terminal_window_layout();
-            if self.terminal_windows.is_none() {
-                // Flat mode: no multi-leaf layout until user splits a tab out.
-                return;
-            }
+            // Flat mode: multi-leaf restore runs on the idle plane only so
+            // register_session never opens the config DB on connect success.
+            return;
         }
 
         if let Some(root) = self.terminal_windows.as_mut() {

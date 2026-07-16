@@ -245,9 +245,23 @@ impl NyaTermApp {
             self.active_ssh_config = None;
             self.active_ai_execution_profile = AiExecutionProfile::SendOnly;
         }
-        self.sync_transfer_browser_favorites_for_active_session();
-        if !self.restore_transfer_browser_session_cache(session_id) {
-            self.reset_transfer_browser_for_active_session();
+        // Transfer browser state is only needed when the transfers panel is open
+        // or we already have cached browser state for this session. Skipping the
+        // full reset on every activate keeps connect/switch chrome responsive.
+        let transfers_panel_visible = self.active_left_panel == Some(NavItem::Transfers)
+            || self.active_right_panel == Some(NavItem::Transfers)
+            || self.selected_nav == NavItem::Transfers;
+        if transfers_panel_visible
+            || self.transfer_browser_session_cache.contains_key(session_id)
+            || !self.transfer_browser_entries.is_empty()
+        {
+            self.sync_transfer_browser_favorites_for_active_session();
+            if !self.restore_transfer_browser_session_cache(session_id) {
+                self.reset_transfer_browser_for_active_session();
+            }
+        } else {
+            // Keep favorites map coherent for the active connection without wiping UI.
+            self.sync_transfer_browser_favorites_for_active_session();
         }
         if let Some(view) = self.terminal_views.get_mut(session_id) {
             view.has_unread = false;

@@ -20,6 +20,32 @@ impl NyaTermApp {
     pub(in crate::features) fn drain_session_events(&mut self, cx: &mut Context<Self>) -> bool {
         let drain_started_at = Instant::now();
         let mut dirty = false;
+        // Common calm path: no local pending events, no bridge UI work, no file
+        // transfer sideband. Skip harvest/atomics so idle and window-drag ticks
+        // do not touch the session event pipeline at all.
+        if self.pending_session_events.is_empty()
+            && !self.session_event_bridge.has_pending_ui_work()
+            && self.zmodem_sessions.is_empty()
+            && self.trzsz_sessions.is_empty()
+        {
+            if self.terminal_runtime.session_event_queued_events != 0
+                || self.terminal_runtime.session_event_queued_output_bytes != 0
+                || self.terminal_runtime.session_event_backlog_active
+                || self.terminal_runtime.session_event_last_output_event_count != 0
+                || self
+                    .terminal_runtime
+                    .session_event_last_drained_output_bytes
+                    != 0
+            {
+                self.terminal_runtime.session_event_queued_events = 0;
+                self.terminal_runtime.session_event_queued_output_bytes = 0;
+                self.terminal_runtime.session_event_backlog_active = false;
+                self.terminal_runtime.session_event_last_output_event_count = 0;
+                self.terminal_runtime
+                    .session_event_last_drained_output_bytes = 0;
+            }
+            return false;
+        }
         // Bridge encoding/scrollback and per-session routing are updated on the
         // state transitions that need them, not on every runtime tick.
         dirty |= self.drain_zmodem_worker_events(cx);
