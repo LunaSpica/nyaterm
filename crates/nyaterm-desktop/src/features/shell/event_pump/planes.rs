@@ -122,6 +122,13 @@ impl NyaTermApp {
         {
             self.terminal_runtime.connect_settle_until = None;
         }
+        if self.title_drag_active(now) {
+            dirty |= self.drive_pending_focus(window);
+            if dirty {
+                cx.notify();
+            }
+            return true;
+        }
         let geometry_churn = window_geometry_churn_active(self.last_viewport_change_at, now);
         let calm_tick = self.runtime_quiet_tick_allowed();
         if geometry_churn && calm_tick {

@@ -518,6 +518,8 @@ pub struct NyaTermApp {
     pub(in crate::features) last_viewport_size: (f32, f32),
     /// When the window viewport last changed (resize/drag geometry).
     pub(in crate::features) last_viewport_change_at: Option<Instant>,
+    /// Deadline for treating title-bar window dragging as active.
+    pub(in crate::features) title_drag_active_until: Option<Instant>,
     pub(in crate::features) selected_nav: NavItem,
     pub(in crate::features) main_mode: MainMode,
     pub(in crate::features) settings_active_tab: SettingsTab,

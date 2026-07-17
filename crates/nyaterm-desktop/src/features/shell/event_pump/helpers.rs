@@ -14,6 +14,10 @@ pub(super) const RUNTIME_QUIET_TICK_INTERVAL: Duration = Duration::from_millis(5
 pub(super) const RUNTIME_PRESSURE_TICK_INTERVAL: Duration = Duration::from_millis(16);
 /// After viewport size changes, hold pressure cadence for this long.
 pub(super) const WINDOW_GEOMETRY_CHURN_HOLD: Duration = Duration::from_millis(200);
+/// Window move drags may not resize the viewport, especially on Windows. Hold a
+/// short quiet window from title-bar mouse down so terminal paints do not fight
+/// compositor movement.
+pub(super) const TITLE_DRAG_ACTIVE_HOLD: Duration = Duration::from_millis(1200);
 /// After a session becomes live, demote idle/visual for this long so first-frame
 /// output does not compete with chrome rebuilds (does not raise tick cadence).
 pub(super) const CONNECT_SETTLE_HOLD: Duration = Duration::from_millis(750);
@@ -167,6 +171,10 @@ pub(super) fn window_geometry_churn_active(
         now.checked_duration_since(at)
             .is_some_and(|elapsed| elapsed < WINDOW_GEOMETRY_CHURN_HOLD)
     })
+}
+
+pub(super) fn title_drag_active(title_drag_active_until: Option<Instant>, now: Instant) -> bool {
+    title_drag_active_until.is_some_and(|until| now < until)
 }
 
 pub(super) fn connect_settle_active(until: Option<Instant>, now: Instant) -> bool {
@@ -512,6 +520,14 @@ mod tests {
             Some(now - WINDOW_GEOMETRY_CHURN_HOLD - Duration::from_millis(1)),
             now
         ));
+    }
+
+    #[test]
+    fn title_drag_active_until_deadline() {
+        let now = Instant::now();
+        assert!(!title_drag_active(None, now));
+        assert!(title_drag_active(Some(now + Duration::from_millis(1)), now));
+        assert!(!title_drag_active(Some(now), now));
     }
 
     #[test]

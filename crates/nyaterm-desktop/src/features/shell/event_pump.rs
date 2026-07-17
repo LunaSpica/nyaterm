@@ -43,6 +43,14 @@ impl NyaTermApp {
         }
     }
 
+    pub(in crate::features) fn mark_title_drag_activity(&mut self) {
+        self.title_drag_active_until = Some(Instant::now() + TITLE_DRAG_ACTIVE_HOLD);
+    }
+
+    pub(in crate::features) fn title_drag_active(&self, now: Instant) -> bool {
+        title_drag_active(self.title_drag_active_until, now)
+    }
+
     pub(in crate::features) fn should_log_slow_diagnostic(
         &mut self,
         key: &'static str,
@@ -110,7 +118,10 @@ impl NyaTermApp {
     pub(crate) fn window_runtime_tick_delay(&self) -> Duration {
         // During recent viewport geometry churn (window resize/drag), prefer the
         // idle cadence so full plane ticks do not stack on compositor paints.
-        if window_geometry_churn_active(self.last_viewport_change_at, Instant::now()) {
+        let now = Instant::now();
+        if self.title_drag_active(now)
+            || window_geometry_churn_active(self.last_viewport_change_at, now)
+        {
             return RUNTIME_IDLE_TICK_INTERVAL;
         }
         if self.runtime_quiet_tick_allowed() {
@@ -137,6 +148,9 @@ impl NyaTermApp {
             .connect_settle_until
             .is_some_and(|until| now >= until)
         {
+            return true;
+        }
+        if self.title_drag_active(now) {
             return true;
         }
 

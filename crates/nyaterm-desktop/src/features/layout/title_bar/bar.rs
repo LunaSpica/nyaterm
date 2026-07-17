@@ -20,6 +20,13 @@ impl NyaTermApp {
                     .gap_2()
                     .px_3()
                     .window_control_area(WindowControlArea::Drag)
+                    .on_mouse_down(
+                        MouseButton::Left,
+                        cx.listener(|this, _, _, cx| {
+                            this.mark_title_drag_activity();
+                            cx.notify();
+                        }),
+                    )
                     .child(
                         div()
                             .flex()
@@ -48,6 +55,13 @@ impl NyaTermApp {
                     .justify_center()
                     .flex_1()
                     .window_control_area(WindowControlArea::Drag)
+                    .on_mouse_down(
+                        MouseButton::Left,
+                        cx.listener(|this, _, _, cx| {
+                            this.mark_title_drag_activity();
+                            cx.notify();
+                        }),
+                    )
                     .child(
                         div()
                             .max_w(px(520.))
@@ -66,7 +80,14 @@ impl NyaTermApp {
                         div()
                             .w(px(10.))
                             .h_full()
-                            .window_control_area(WindowControlArea::Drag),
+                            .window_control_area(WindowControlArea::Drag)
+                            .on_mouse_down(
+                                MouseButton::Left,
+                                cx.listener(|this, _, _, cx| {
+                                    this.mark_title_drag_activity();
+                                    cx.notify();
+                                }),
+                            ),
                     )
                     .child(window_control_button(
                         palette,
