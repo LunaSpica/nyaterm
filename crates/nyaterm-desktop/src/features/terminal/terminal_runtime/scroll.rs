@@ -535,8 +535,6 @@ impl NyaTermApp {
                 let _ = self.request_terminal_frame_snapshot_for_user_scroll(&session_id, offset);
             }
             self.queue_terminal_scroll_position_after_local_surface_update(&session_id, cx);
-        } else {
-            self.notify_terminal_surface_only(Some(session_id.as_str()), cx);
         }
         Some(visual_state)
     }
