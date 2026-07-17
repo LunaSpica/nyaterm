@@ -4,6 +4,7 @@ use crate::features::terminal_runtime::{
     terminal_local_scroll_delta_lines_from_state, terminal_scroll_needs_text_first_repaint,
     terminal_scroll_track_ratio, terminal_visual_scroll_active_for_state,
 };
+use crate::features::terminal_selection_runtime::terminal_gutter_metrics;
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
@@ -1615,12 +1616,15 @@ impl Render for TerminalSurface {
             .with_visual_y_offset(visual_y_offset);
 
         let gutter = if gutter_enabled {
-            let ts_w = if self.show_timestamps {
-                if self.show_timestamp_ms { 88.0 } else { 72.0 }
-            } else {
-                0.0
-            };
-            let ln_w = if self.show_line_numbers { 40.0 } else { 0.0 };
+            let gutter_metrics = terminal_gutter_metrics(
+                cell_w,
+                self.font_size,
+                self.show_timestamps,
+                self.show_timestamp_ms,
+                self.show_line_numbers,
+            );
+            let ts_w = gutter_metrics.timestamp_width;
+            let ln_w = gutter_metrics.line_number_width;
             let abs_start = snapshot
                 .total_rows
                 .saturating_sub(snapshot.display_offset)

@@ -60,64 +60,39 @@ impl NyaTermApp {
     }
 
     pub(in crate::features) fn terminal_gutter_width_px(&self) -> f32 {
-        // Keep in sync with terminal_surface gutter column widths.
         let (cell_w, _) = self.terminal_cell_size();
-        let gutter_font = (self.settings.terminal_font_size.max(8) as f32 * 0.85).max(8.);
-        // Gutter text uses 0.85x terminal font; approximate char width proportionally.
-        let gutter_cell_w =
-            (cell_w * (gutter_font / self.settings.terminal_font_size.max(8) as f32)).max(4.);
-        let mut width = 0.;
-        if self.settings.terminal_show_timestamps {
-            // HH:MM:SS = 8 chars, HH:MM:SS.mmm = 12 chars (+ small pad like Tauri).
-            let cols = if self.settings.terminal_show_timestamp_milliseconds {
-                12.
-            } else {
-                8.
-            };
-            width += (gutter_cell_w * cols + 2.).max(
-                if self.settings.terminal_show_timestamp_milliseconds {
-                    96.
-                } else {
-                    72.
-                },
-            );
-        }
-        if self.settings.terminal_show_line_numbers {
-            // 5-digit absolute line numbers + pad.
-            width += (gutter_cell_w * 5. + 2.).max(40.);
-        }
-        if self.settings.terminal_show_timestamps && self.settings.terminal_show_line_numbers {
-            width += 4.; // gap_1
-        }
-        if width > 0. {
-            width += 4.; // pr_1 trailing gutter padding
-        }
-        width
+        terminal_gutter_metrics(
+            cell_w,
+            self.settings.terminal_font_size as f32,
+            self.settings.terminal_show_timestamps,
+            self.settings.terminal_show_timestamp_milliseconds,
+            self.settings.terminal_show_line_numbers,
+        )
+        .total_width()
     }
 
     pub(in crate::features) fn terminal_timestamp_gutter_width_px(&self) -> f32 {
         let (cell_w, _) = self.terminal_cell_size();
-        let gutter_font = (self.settings.terminal_font_size.max(8) as f32 * 0.85).max(8.);
-        let gutter_cell_w =
-            (cell_w * (gutter_font / self.settings.terminal_font_size.max(8) as f32)).max(4.);
-        let cols = if self.settings.terminal_show_timestamp_milliseconds {
-            12.
-        } else {
-            8.
-        };
-        (gutter_cell_w * cols + 2.).max(if self.settings.terminal_show_timestamp_milliseconds {
-            96.
-        } else {
-            72.
-        })
+        terminal_gutter_metrics(
+            cell_w,
+            self.settings.terminal_font_size as f32,
+            true,
+            self.settings.terminal_show_timestamp_milliseconds,
+            false,
+        )
+        .timestamp_width
     }
 
     pub(in crate::features) fn terminal_line_number_gutter_width_px(&self) -> f32 {
         let (cell_w, _) = self.terminal_cell_size();
-        let gutter_font = (self.settings.terminal_font_size.max(8) as f32 * 0.85).max(8.);
-        let gutter_cell_w =
-            (cell_w * (gutter_font / self.settings.terminal_font_size.max(8) as f32)).max(4.);
-        (gutter_cell_w * 5. + 2.).max(40.)
+        terminal_gutter_metrics(
+            cell_w,
+            self.settings.terminal_font_size as f32,
+            false,
+            false,
+            true,
+        )
+        .line_number_width
     }
 
     pub(in crate::features) fn active_terminal_grid_size(&self) -> (usize, usize) {
@@ -197,5 +172,92 @@ impl NyaTermApp {
         } else {
             self.resize_terminal_to_bounds_for_session(None, bounds)
         }
+    }
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq)]
+pub(in crate::features) struct TerminalGutterMetrics {
+    pub timestamp_width: f32,
+    pub line_number_width: f32,
+    pub gap_width: f32,
+    pub trailing_padding_width: f32,
+}
+
+impl TerminalGutterMetrics {
+    pub(in crate::features) fn total_width(self) -> f32 {
+        self.timestamp_width + self.line_number_width + self.gap_width + self.trailing_padding_width
+    }
+}
+
+pub(in crate::features) fn terminal_gutter_metrics(
+    cell_width: f32,
+    font_size: f32,
+    show_timestamps: bool,
+    show_timestamp_ms: bool,
+    show_line_numbers: bool,
+) -> TerminalGutterMetrics {
+    let font_size = font_size.max(8.0);
+    let gutter_font = (font_size * 0.85).max(8.0);
+    // Gutter text is painted at 0.85x terminal font; derive its column width
+    // from the measured terminal cell so hit-testing, resize, and paint agree.
+    let gutter_cell_w = (cell_width.max(1.0) * (gutter_font / font_size)).max(4.0);
+    let timestamp_width = if show_timestamps {
+        let cols = if show_timestamp_ms { 12.0 } else { 8.0 };
+        (gutter_cell_w * cols + 2.0).max(if show_timestamp_ms { 96.0 } else { 72.0 })
+    } else {
+        0.0
+    };
+    let line_number_width = if show_line_numbers {
+        (gutter_cell_w * 5.0 + 2.0).max(40.0)
+    } else {
+        0.0
+    };
+    let gap_width = if show_timestamps && show_line_numbers {
+        4.0
+    } else {
+        0.0
+    };
+    let trailing_padding_width = if timestamp_width > 0.0 || line_number_width > 0.0 {
+        4.0
+    } else {
+        0.0
+    };
+
+    TerminalGutterMetrics {
+        timestamp_width,
+        line_number_width,
+        gap_width,
+        trailing_padding_width,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn gutter_metrics_use_same_widths_for_ms_timestamps_and_total_hit_area() {
+        let metrics = terminal_gutter_metrics(8.0, 14.0, true, true, true);
+
+        assert_eq!(metrics.timestamp_width, 96.0);
+        assert_eq!(metrics.line_number_width, 40.0);
+        assert_eq!(metrics.gap_width, 4.0);
+        assert_eq!(metrics.trailing_padding_width, 4.0);
+        assert_eq!(metrics.total_width(), 144.0);
+    }
+
+    #[test]
+    fn gutter_metrics_expand_with_large_terminal_font() {
+        let metrics = terminal_gutter_metrics(18.0, 28.0, true, false, true);
+
+        assert!(metrics.timestamp_width > 120.0);
+        assert!(metrics.line_number_width > 70.0);
+        assert_eq!(
+            metrics.total_width(),
+            metrics.timestamp_width
+                + metrics.line_number_width
+                + metrics.gap_width
+                + metrics.trailing_padding_width
+        );
     }
 }
