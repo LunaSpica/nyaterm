@@ -167,7 +167,13 @@ impl NyaTermApp {
         } else {
             None
         };
-        let line = snapshot.lines.get(cell.row)?;
+        let snapshot_row = self.terminal_snapshot_row_for_session_viewport_row(
+            session_id,
+            snapshot.as_ref(),
+            offset,
+            cell.row,
+        )?;
+        let line = snapshot.lines.get(snapshot_row)?;
         if line.is_empty() {
             return None;
         }
@@ -175,7 +181,7 @@ impl NyaTermApp {
         let item = if let Some(links) = frame_action_links.as_ref() {
             links
                 .matches_by_line
-                .get(cell.row)?
+                .get(snapshot_row)?
                 .iter()
                 .find(|item| byte_offset >= item.start && byte_offset < item.end)
                 .cloned()?
@@ -296,7 +302,15 @@ impl NyaTermApp {
         let display_offset = self.active_terminal_display_offset();
         let snapshot =
             self.terminal_snapshot_for_session(Some(session_id.as_str()), display_offset);
-        let Some(spans) = snapshot.hyperlink_lines.get(pos.row) else {
+        let Some(snapshot_row) = self.terminal_snapshot_row_for_session_viewport_row(
+            Some(session_id.as_str()),
+            snapshot.as_ref(),
+            display_offset,
+            pos.row,
+        ) else {
+            return false;
+        };
+        let Some(spans) = snapshot.hyperlink_lines.get(snapshot_row) else {
             return false;
         };
         let col = pos.col;

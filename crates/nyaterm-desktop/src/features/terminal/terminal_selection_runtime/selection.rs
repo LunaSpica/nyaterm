@@ -39,7 +39,16 @@ impl NyaTermApp {
         let (start, end) = selection.ordered();
         let mut parts = Vec::new();
         for row in start.row..=end.row {
-            let line = snapshot.lines.get(row).map(String::as_str).unwrap_or("");
+            let snapshot_row = self.terminal_snapshot_row_for_session_viewport_row(
+                self.active_session_id.as_deref(),
+                snapshot.as_ref(),
+                offset,
+                row,
+            );
+            let line = snapshot_row
+                .and_then(|row| snapshot.lines.get(row))
+                .map(String::as_str)
+                .unwrap_or("");
             let cells = terminal_text_cells(line);
             let (col_start, col_end_excl) = selection.cols_for_row(row)?;
             let col_end = col_end_excl.min(cells.len().max(col_start));
@@ -280,9 +289,14 @@ impl NyaTermApp {
         let offset = self.active_terminal_display_offset();
         let snapshot =
             self.terminal_snapshot_for_session(self.active_session_id.as_deref(), offset);
-        let line = snapshot
-            .lines
-            .get(cell.row)
+        let snapshot_row = self.terminal_snapshot_row_for_session_viewport_row(
+            self.active_session_id.as_deref(),
+            snapshot.as_ref(),
+            offset,
+            cell.row,
+        );
+        let line = snapshot_row
+            .and_then(|row| snapshot.lines.get(row))
             .map(String::as_str)
             .unwrap_or("");
         let cells = terminal_text_cells(line);

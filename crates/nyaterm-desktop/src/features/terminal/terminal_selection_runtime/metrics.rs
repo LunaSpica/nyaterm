@@ -105,15 +105,51 @@ impl NyaTermApp {
     ) -> (usize, usize) {
         let offset = self.terminal_display_offset_for_session(session_id);
         let snapshot = self.terminal_snapshot_for_session(session_id, offset);
-        let rows = snapshot.lines.len().max(1);
-        let cols = snapshot
-            .lines
-            .iter()
-            .map(|line| terminal_cell_count(line))
-            .max()
-            .unwrap_or(80)
-            .max(80);
+        let rows = self.terminal_viewport_rows_for_session(session_id);
+        let cols = snapshot.cols.max(80);
         (rows, cols)
+    }
+
+    pub(in crate::features) fn terminal_viewport_rows_for_session(
+        &self,
+        session_id: Option<&str>,
+    ) -> usize {
+        let session_id = session_id.filter(|id| !id.is_empty());
+        if let Some(session_id) = session_id
+            && let Some(view) = self.terminal_views.get(session_id)
+        {
+            return view.viewport_rows_for_ui();
+        }
+        self.terminal_screen.viewport_snapshot(0).lines.len().max(1)
+    }
+
+    pub(in crate::features) fn terminal_scrollback_len_for_session(
+        &self,
+        session_id: Option<&str>,
+    ) -> usize {
+        let session_id = session_id.filter(|id| !id.is_empty());
+        if let Some(session_id) = session_id
+            && let Some(view) = self.terminal_views.get(session_id)
+        {
+            return view.scrollback_len_for_ui();
+        }
+        self.terminal_screen.scrollback_len()
+    }
+
+    pub(in crate::features) fn terminal_snapshot_row_for_session_viewport_row(
+        &self,
+        session_id: Option<&str>,
+        snapshot: &nyaterm_terminal::TerminalSnapshot,
+        display_offset: usize,
+        viewport_row: usize,
+    ) -> Option<usize> {
+        terminal_snapshot_row_for_viewport_row(
+            snapshot,
+            display_offset,
+            self.terminal_viewport_rows_for_session(session_id),
+            self.terminal_scrollback_len_for_session(session_id),
+            viewport_row,
+        )
     }
 
     pub(in crate::features) fn point_to_terminal_cell(
@@ -231,10 +267,79 @@ pub(in crate::features) fn terminal_gutter_metrics(
     }
 }
 
+pub(in crate::features) fn terminal_snapshot_row_for_viewport_row(
+    snapshot: &nyaterm_terminal::TerminalSnapshot,
+    display_offset: usize,
+    viewport_rows: usize,
+    scrollback_len: usize,
+    viewport_row: usize,
+) -> Option<usize> {
+    if viewport_row >= viewport_rows.max(1) {
+        return None;
+    }
+    let anchor = terminal_snapshot_anchor_row_for_display_offset(
+        snapshot,
+        display_offset,
+        viewport_rows,
+        scrollback_len,
+    );
+    anchor
+        .checked_add(viewport_row)
+        .filter(|row| *row < snapshot.lines.len())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
+    fn terminal_output_lines(count: usize) -> String {
+        (0..count)
+            .map(|index| format!("line {index:03}\n"))
+            .collect::<String>()
+    }
+
+    #[test]
+    fn snapshot_row_mapping_anchors_viewport_rows_inside_retained_snapshot() {
+        let mut screen = nyaterm_terminal::TerminalScreen::default();
+        screen.advance_decoded_text(&terminal_output_lines(80));
+        let base = screen.viewport_snapshot(0);
+        let viewport_rows = base.rows.max(1);
+        let older = screen.viewport_snapshot(viewport_rows);
+        let retained_older_rows = older.rows.min(viewport_rows);
+        assert!(retained_older_rows > 0);
+
+        let mut snapshot = base.clone();
+        let mut lines = older
+            .lines
+            .into_iter()
+            .take(retained_older_rows)
+            .collect::<Vec<_>>();
+        lines.extend(snapshot.lines);
+        snapshot.lines = lines;
+        snapshot.rows = snapshot.rows.saturating_add(retained_older_rows);
+
+        let first_visible_row = terminal_snapshot_row_for_viewport_row(
+            &snapshot,
+            0,
+            viewport_rows,
+            snapshot.scrollback_len,
+            0,
+        );
+        let last_visible_row = terminal_snapshot_row_for_viewport_row(
+            &snapshot,
+            0,
+            viewport_rows,
+            snapshot.scrollback_len,
+            viewport_rows.saturating_sub(1),
+        );
+
+        assert_eq!(first_visible_row, Some(retained_older_rows));
+        assert_eq!(snapshot.lines[first_visible_row.unwrap()], base.lines[0],);
+        assert_eq!(
+            snapshot.lines[last_visible_row.unwrap()],
+            base.lines[viewport_rows.saturating_sub(1)],
+        );
+    }
     #[test]
     fn gutter_metrics_use_same_widths_for_ms_timestamps_and_total_hit_area() {
         let metrics = terminal_gutter_metrics(8.0, 14.0, true, true, true);

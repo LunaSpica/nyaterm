@@ -954,10 +954,7 @@ impl TerminalViewState {
     }
 
     pub(crate) fn viewport_rows_for_ui(&self) -> usize {
-        self.frame_snapshot
-            .as_ref()
-            .map(|snapshot| snapshot.lines.len().max(1))
-            .unwrap_or_else(|| self.screen.viewport_snapshot(0).lines.len().max(1))
+        self.screen.viewport_snapshot(0).lines.len().max(1)
     }
 
     pub(crate) fn total_rows_for_ui(&self) -> usize {
@@ -2550,6 +2547,22 @@ mod tests {
         assert!(snapshot.rows > viewport_rows);
         assert!(snapshot_covers_offset(snapshot.as_ref(), 0, viewport_rows));
         assert!(snapshot_covers_offset(snapshot.as_ref(), 1, viewport_rows));
+    }
+
+    #[test]
+    fn terminal_view_ui_viewport_rows_ignore_retained_snapshot_rows() {
+        let mut view = TerminalViewState::from_output(terminal_output_lines(80));
+        let viewport_rows = view.screen.viewport_snapshot(0).rows;
+
+        view.append_text("local status\n");
+
+        let snapshot_rows = view
+            .frame_snapshot
+            .as_ref()
+            .expect("local append should publish a live snapshot")
+            .rows;
+        assert!(snapshot_rows > viewport_rows);
+        assert_eq!(view.viewport_rows_for_ui(), viewport_rows);
     }
 
     #[test]
