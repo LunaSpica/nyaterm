@@ -39,12 +39,18 @@ impl NyaTermApp {
             return None;
         }
         let snapshot = self.terminal_snapshot_for_session(self.active_session_id.as_deref(), 0);
-        if cell.row != snapshot.cursor_row {
+        let snapshot_row = self.terminal_snapshot_row_for_session_viewport_row(
+            self.active_session_id.as_deref(),
+            snapshot.as_ref(),
+            0,
+            cell.row,
+        )?;
+        if snapshot_row != snapshot.cursor_row {
             return None;
         }
         let line = snapshot
             .lines
-            .get(cell.row)
+            .get(snapshot_row)
             .map(String::as_str)
             .unwrap_or("");
         let line_cells = smart_input_cells(line);
@@ -138,13 +144,19 @@ impl NyaTermApp {
         }
         let snapshot = self.terminal_snapshot_for_session(self.active_session_id.as_deref(), 0);
 
-        if start.row != snapshot.cursor_row {
+        let snapshot_row = self.terminal_snapshot_row_for_session_viewport_row(
+            self.active_session_id.as_deref(),
+            snapshot.as_ref(),
+            0,
+            start.row,
+        )?;
+        if snapshot_row != snapshot.cursor_row {
             return None;
         }
 
         let line = snapshot
             .lines
-            .get(start.row)
+            .get(snapshot_row)
             .map(String::as_str)
             .unwrap_or("");
         let line_cells = smart_input_cells(line);
