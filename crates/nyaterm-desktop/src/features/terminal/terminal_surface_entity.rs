@@ -1726,6 +1726,9 @@ impl Render for TerminalSurface {
             .text_color(rgb(palette.terminal_fg))
             .font_family(self.font_family.clone())
             .text_size(px(self.font_size))
+            .when(!self.protocol_state.mouse_reporting, |this| {
+                this.cursor_text()
+            })
             .on_scroll_wheel(cx.listener(|this, event: &ScrollWheelEvent, _, cx| {
                 this.handle_scroll_wheel(event, cx);
             }))

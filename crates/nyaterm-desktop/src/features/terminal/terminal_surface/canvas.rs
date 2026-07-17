@@ -21,6 +21,10 @@ impl NyaTermApp {
         let palette = self.terminal_theme_palette();
         let is_active = self.active_session_id.as_deref() == Some(session_id.as_str());
         let is_disconnected = !session_id.is_empty() && self.is_session_disconnected(&session_id);
+        let terminal_mouse_reporting = !session_id.is_empty()
+            && self
+                .terminal_protocol_state_for_session(&session_id)
+                .mouse_reporting;
         let render_output_pressure = self.runtime_output_pressure_active();
         let render_pressure = self
             .terminal_views
@@ -727,6 +731,9 @@ impl NyaTermApp {
                             .relative()
                             .flex_1()
                             .min_h_0()
+                            .when(!is_disconnected && !terminal_mouse_reporting, |this| {
+                                this.cursor_text()
+                            })
                             .when(is_active && self.action_link_tooltip.is_some(), |this| {
                                 this.cursor_pointer()
                             })
