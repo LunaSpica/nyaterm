@@ -158,10 +158,12 @@ mod tests {
     #[test]
     fn selection_decorations_map_viewport_rows_through_snapshot_anchor() {
         let snapshot = nyaterm_terminal::TerminalScreen::default().viewport_snapshot(0);
-        let selection = TerminalSelection {
-            anchor: TerminalCellPos::new(0, 2),
-            head: TerminalCellPos::new(1, 4),
-        };
+        let selection = TerminalSelection::from_range(
+            TerminalCellPos::new(0, 2),
+            TerminalCellPos::new(1, 4),
+            0,
+            2,
+        );
 
         let decorations = build_terminal_line_decorations(
             &snapshot,

@@ -164,6 +164,14 @@ impl NyaTermApp {
         session_id: Option<&str>,
         position: Point<Pixels>,
     ) -> Option<TerminalCellPos> {
+        let geometry = self.terminal_hit_test_geometry_for_session(session_id)?;
+        Some(terminal_cell_for_visual_geometry(position, &geometry))
+    }
+
+    pub(in crate::features) fn terminal_hit_test_geometry_for_session(
+        &self,
+        session_id: Option<&str>,
+    ) -> Option<TerminalHitTestGeometry> {
         let session_id = session_id.filter(|id| !id.is_empty());
         let bounds = session_id
             .and_then(|id| self.terminal_session_surface_bounds.get(id).copied())
@@ -171,18 +179,49 @@ impl NyaTermApp {
         let (cell_w, cell_h) = self.terminal_cell_size();
         let pad = self.terminal_content_padding_px();
         let gutter = self.terminal_gutter_width_px();
-        let local_x = f32::from(position.x - bounds.origin.x) - pad - gutter;
-        let local_y = f32::from(position.y - bounds.origin.y) - pad;
-        if local_y < -cell_h || local_x < -cell_w {
-            // Still allow clamping when slightly outside.
-        }
         let (rows, cols) = self.terminal_grid_size_for_session(session_id);
-        let row = (local_y / cell_h).floor().max(0.) as usize;
-        let col = (local_x / cell_w).floor().max(0.) as usize;
-        Some(TerminalCellPos::new(
-            row.min(rows.saturating_sub(1)),
-            col.min(cols.saturating_sub(1)),
-        ))
+        let display_offset = self.terminal_display_offset_for_session(session_id);
+        let snapshot = self.terminal_snapshot_for_session(session_id, display_offset);
+        let viewport_rows = self.terminal_viewport_rows_for_session(session_id);
+        let scrollback_len = self.terminal_scrollback_len_for_session(session_id);
+        let viewport_anchor_row = terminal_snapshot_anchor_row_for_display_offset(
+            snapshot.as_ref(),
+            display_offset,
+            viewport_rows,
+            scrollback_len,
+        );
+        let (scroll_offset, residual_lines) = if let Some(session_id) = session_id {
+            self.terminal_views
+                .get(session_id)
+                .map(|view| {
+                    (
+                        view.scroll_offset,
+                        self.terminal_scroll_residual_for_session(Some(session_id)),
+                    )
+                })
+                .unwrap_or((display_offset, 0.0))
+        } else {
+            (
+                self.terminal_scroll_offset,
+                self.terminal_scroll_residual_for_session(None),
+            )
+        };
+        let visual_y_offset = ((scroll_offset as isize - display_offset as isize) as f32
+            + residual_lines)
+            * cell_h.max(1.0)
+            - (viewport_anchor_row as f32) * cell_h.max(1.0);
+        Some(TerminalHitTestGeometry {
+            bounds,
+            cell_w,
+            cell_h,
+            padding: pad,
+            gutter,
+            rows,
+            cols,
+            display_offset,
+            viewport_anchor_row,
+            visual_y_offset,
+        })
     }
 
     /// Capture painted bounds for hit-testing; called from a canvas prepaint under the output area.
@@ -209,6 +248,40 @@ impl NyaTermApp {
             self.resize_terminal_to_bounds_for_session(None, bounds)
         }
     }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub(in crate::features) struct TerminalHitTestGeometry {
+    pub(in crate::features) bounds: Bounds<Pixels>,
+    pub(in crate::features) cell_w: f32,
+    pub(in crate::features) cell_h: f32,
+    pub(in crate::features) padding: f32,
+    pub(in crate::features) gutter: f32,
+    pub(in crate::features) rows: usize,
+    pub(in crate::features) cols: usize,
+    pub(in crate::features) display_offset: usize,
+    pub(in crate::features) viewport_anchor_row: usize,
+    pub(in crate::features) visual_y_offset: f32,
+}
+
+pub(in crate::features) fn terminal_cell_for_visual_geometry(
+    position: Point<Pixels>,
+    geometry: &TerminalHitTestGeometry,
+) -> TerminalCellPos {
+    let cell_w = geometry.cell_w.max(1.0);
+    let cell_h = geometry.cell_h.max(1.0);
+    let local_x =
+        f32::from(position.x - geometry.bounds.origin.x) - geometry.padding - geometry.gutter;
+    let local_y = f32::from(position.y - geometry.bounds.origin.y) - geometry.padding;
+    let snapshot_row = ((local_y - geometry.visual_y_offset) / cell_h)
+        .floor()
+        .max(0.0) as usize;
+    let row = snapshot_row.saturating_sub(geometry.viewport_anchor_row);
+    let col = (local_x / cell_w).floor().max(0.0) as usize;
+    TerminalCellPos::new(
+        row.min(geometry.rows.saturating_sub(1)),
+        col.min(geometry.cols.saturating_sub(1)),
+    )
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq)]
@@ -364,5 +437,75 @@ mod tests {
                 + metrics.gap_width
                 + metrics.trailing_padding_width
         );
+    }
+
+    #[test]
+    fn terminal_visual_hit_test_maps_through_snapshot_anchor() {
+        let geometry = TerminalHitTestGeometry {
+            bounds: gpui::bounds(
+                Point {
+                    x: px(10.0),
+                    y: px(20.0),
+                },
+                Size {
+                    width: px(400.0),
+                    height: px(300.0),
+                },
+            ),
+            cell_w: 8.0,
+            cell_h: 16.0,
+            padding: 4.0,
+            gutter: 12.0,
+            rows: 24,
+            cols: 80,
+            display_offset: 10,
+            viewport_anchor_row: 5,
+            visual_y_offset: -80.0,
+        };
+
+        let cell = terminal_cell_for_visual_geometry(
+            Point {
+                x: px(10.0 + 4.0 + 12.0 + 3.0 * 8.0),
+                y: px(20.0 + 4.0 + 10.0 * 16.0),
+            },
+            &geometry,
+        );
+
+        assert_eq!(cell, TerminalCellPos::new(10, 3));
+    }
+
+    #[test]
+    fn terminal_visual_hit_test_follows_fractional_visual_offset() {
+        let geometry = TerminalHitTestGeometry {
+            bounds: gpui::bounds(
+                Point {
+                    x: px(0.0),
+                    y: px(0.0),
+                },
+                Size {
+                    width: px(400.0),
+                    height: px(300.0),
+                },
+            ),
+            cell_w: 8.0,
+            cell_h: 16.0,
+            padding: 0.0,
+            gutter: 0.0,
+            rows: 24,
+            cols: 80,
+            display_offset: 3,
+            viewport_anchor_row: 5,
+            visual_y_offset: -72.0,
+        };
+
+        let cell = terminal_cell_for_visual_geometry(
+            Point {
+                x: px(4.0 * 8.0),
+                y: px(10.0 * 16.0),
+            },
+            &geometry,
+        );
+
+        assert_eq!(cell, TerminalCellPos::new(9, 4));
     }
 }

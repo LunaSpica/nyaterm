@@ -2015,16 +2015,9 @@ impl NyaTermApp {
         } else {
             None
         };
-        let selection_viewport_anchor_row = if terminal_selection.is_some() {
-            terminal_snapshot_anchor_row_for_display_offset(
-                snapshot.as_ref(),
-                display_offset,
-                viewport_rows,
-                scrollback_len,
-            )
-        } else {
-            0
-        };
+        let selection_viewport_anchor_row = terminal_selection
+            .map(|selection| selection.viewport_anchor_row)
+            .unwrap_or(0);
         let has_selection = terminal_selection.is_some();
         let has_search_decorations =
             !search_ranges_by_line.is_empty() || !active_search_ranges_by_line.is_empty();

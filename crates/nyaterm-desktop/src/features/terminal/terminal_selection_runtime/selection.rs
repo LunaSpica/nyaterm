@@ -18,10 +18,14 @@ impl NyaTermApp {
             self.notify_active_terminal_surface(cx);
             return;
         }
-        self.terminal_selection = Some(TerminalSelection {
-            anchor: TerminalCellPos::new(0, 0),
-            head: TerminalCellPos::new(rows.saturating_sub(1), cols.saturating_sub(1)),
-        });
+        let (display_offset, viewport_anchor_row) =
+            self.terminal_selection_viewport_state(self.active_session_id.as_deref());
+        self.terminal_selection = Some(TerminalSelection::from_range(
+            TerminalCellPos::new(0, 0),
+            TerminalCellPos::new(rows.saturating_sub(1), cols.saturating_sub(1)),
+            display_offset,
+            viewport_anchor_row,
+        ));
         self.terminal_selection_dragging = false;
         self.terminal_status = "selected all visible terminal text".to_string();
         self.notify_active_terminal_surface(cx);
@@ -33,18 +37,16 @@ impl NyaTermApp {
         if selection.is_empty() {
             return None;
         }
-        let offset = self.active_terminal_display_offset();
+        let offset = selection.display_offset;
         let snapshot =
             self.terminal_snapshot_for_session(self.active_session_id.as_deref(), offset);
         let (start, end) = selection.ordered();
         let mut parts = Vec::new();
         for row in start.row..=end.row {
-            let snapshot_row = self.terminal_snapshot_row_for_session_viewport_row(
-                self.active_session_id.as_deref(),
-                snapshot.as_ref(),
-                offset,
-                row,
-            );
+            let snapshot_row = selection
+                .viewport_anchor_row
+                .checked_add(row)
+                .filter(|row| *row < snapshot.lines.len());
             let line = snapshot_row
                 .and_then(|row| snapshot.lines.get(row))
                 .map(String::as_str)
@@ -94,9 +96,12 @@ impl NyaTermApp {
         if event.button != MouseButton::Left {
             return;
         }
-        let Some(cell) = self.point_to_terminal_cell(event.position) else {
+        let Some(geometry) =
+            self.terminal_hit_test_geometry_for_session(self.active_session_id.as_deref())
+        else {
             return;
         };
+        let cell = terminal_cell_for_visual_geometry(event.position, &geometry);
         // Applications with mouse tracking (vim/less/tmux) consume left presses.
         if self.maybe_send_mouse_report(
             0,
@@ -122,10 +127,12 @@ impl NyaTermApp {
             }
         }
         if event.click_count >= 3 {
-            self.terminal_selection = Some(TerminalSelection {
-                anchor: TerminalCellPos::new(cell.row, 0),
-                head: TerminalCellPos::new(cell.row, cols.saturating_sub(1).max(0)),
-            });
+            self.terminal_selection = Some(TerminalSelection::from_range(
+                TerminalCellPos::new(cell.row, 0),
+                TerminalCellPos::new(cell.row, cols.saturating_sub(1).max(0)),
+                geometry.display_offset,
+                geometry.viewport_anchor_row,
+            ));
             self.terminal_selection_dragging = false;
             self.terminal_status = format!("selected line {}", cell.row + 1);
             self.notify_active_terminal_surface(cx);
@@ -134,18 +141,28 @@ impl NyaTermApp {
             return;
         }
         if event.click_count == 2 {
-            let word = self.word_bounds_at(cell);
-            self.terminal_selection = Some(TerminalSelection {
-                anchor: TerminalCellPos::new(cell.row, word.0),
-                head: TerminalCellPos::new(cell.row, word.1.saturating_sub(1).max(word.0)),
-            });
+            let word = self.word_bounds_at_for_viewport(
+                cell,
+                geometry.display_offset,
+                geometry.viewport_anchor_row,
+            );
+            self.terminal_selection = Some(TerminalSelection::from_range(
+                TerminalCellPos::new(cell.row, word.0),
+                TerminalCellPos::new(cell.row, word.1.saturating_sub(1).max(word.0)),
+                geometry.display_offset,
+                geometry.viewport_anchor_row,
+            ));
             self.terminal_selection_dragging = false;
             self.terminal_status = "selected word".to_string();
             self.notify_active_terminal_surface(cx);
             cx.notify();
             return;
         }
-        self.terminal_selection = Some(TerminalSelection::new(cell));
+        self.terminal_selection = Some(TerminalSelection::with_viewport(
+            cell,
+            geometry.display_offset,
+            geometry.viewport_anchor_row,
+        ));
         self.terminal_selection_dragging = true;
         let _ = rows;
         self.notify_active_terminal_surface(cx);
@@ -181,9 +198,12 @@ impl NyaTermApp {
         if !self.terminal_selection_dragging {
             return;
         }
-        let Some(cell) = self.point_to_terminal_cell(event.position) else {
+        let Some(geometry) =
+            self.terminal_hit_test_geometry_for_session(self.active_session_id.as_deref())
+        else {
             return;
         };
+        let cell = terminal_cell_for_visual_geometry(event.position, &geometry);
         if let Some(selection) = self.terminal_selection.as_mut() {
             if selection.head != cell {
                 selection.head = cell;
@@ -212,7 +232,10 @@ impl NyaTermApp {
             }
             return;
         }
-        if let Some(cell) = self.point_to_terminal_cell(event.position) {
+        if let Some(geometry) =
+            self.terminal_hit_test_geometry_for_session(self.active_session_id.as_deref())
+        {
+            let cell = terminal_cell_for_visual_geometry(event.position, &geometry);
             if let Some(selection) = self.terminal_selection.as_mut() {
                 selection.head = cell;
             }
@@ -289,12 +312,35 @@ impl NyaTermApp {
         let offset = self.active_terminal_display_offset();
         let snapshot =
             self.terminal_snapshot_for_session(self.active_session_id.as_deref(), offset);
-        let snapshot_row = self.terminal_snapshot_row_for_session_viewport_row(
-            self.active_session_id.as_deref(),
+        let viewport_anchor_row = terminal_snapshot_anchor_row_for_display_offset(
             snapshot.as_ref(),
             offset,
-            cell.row,
+            self.terminal_viewport_rows_for_session(self.active_session_id.as_deref()),
+            self.terminal_scrollback_len_for_session(self.active_session_id.as_deref()),
         );
+        self.word_bounds_at_for_snapshot(cell, snapshot.as_ref(), viewport_anchor_row)
+    }
+
+    fn word_bounds_at_for_viewport(
+        &self,
+        cell: TerminalCellPos,
+        display_offset: usize,
+        viewport_anchor_row: usize,
+    ) -> (usize, usize) {
+        let snapshot =
+            self.terminal_snapshot_for_session(self.active_session_id.as_deref(), display_offset);
+        self.word_bounds_at_for_snapshot(cell, snapshot.as_ref(), viewport_anchor_row)
+    }
+
+    fn word_bounds_at_for_snapshot(
+        &self,
+        cell: TerminalCellPos,
+        snapshot: &TerminalSnapshot,
+        viewport_anchor_row: usize,
+    ) -> (usize, usize) {
+        let snapshot_row = viewport_anchor_row
+            .checked_add(cell.row)
+            .filter(|row| *row < snapshot.lines.len());
         let line = snapshot_row
             .and_then(|row| snapshot.lines.get(row))
             .map(String::as_str)
@@ -319,6 +365,21 @@ impl NyaTermApp {
             end += 1;
         }
         (start, end)
+    }
+
+    fn terminal_selection_viewport_state(&self, session_id: Option<&str>) -> (usize, usize) {
+        if let Some(geometry) = self.terminal_hit_test_geometry_for_session(session_id) {
+            return (geometry.display_offset, geometry.viewport_anchor_row);
+        }
+        let display_offset = self.terminal_display_offset_for_session(session_id);
+        let snapshot = self.terminal_snapshot_for_session(session_id, display_offset);
+        let viewport_anchor_row = terminal_snapshot_anchor_row_for_display_offset(
+            snapshot.as_ref(),
+            display_offset,
+            self.terminal_viewport_rows_for_session(session_id),
+            self.terminal_scrollback_len_for_session(session_id),
+        );
+        (display_offset, viewport_anchor_row)
     }
 }
 

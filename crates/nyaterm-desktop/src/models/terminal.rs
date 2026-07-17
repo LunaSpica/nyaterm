@@ -4242,13 +4242,39 @@ impl TerminalCellPos {
 pub(crate) struct TerminalSelection {
     pub(crate) anchor: TerminalCellPos,
     pub(crate) head: TerminalCellPos,
+    pub(crate) display_offset: usize,
+    pub(crate) viewport_anchor_row: usize,
 }
 
 impl TerminalSelection {
     pub(crate) fn new(anchor: TerminalCellPos) -> Self {
+        Self::with_viewport(anchor, 0, 0)
+    }
+
+    pub(crate) fn with_viewport(
+        anchor: TerminalCellPos,
+        display_offset: usize,
+        viewport_anchor_row: usize,
+    ) -> Self {
         Self {
             anchor,
             head: anchor,
+            display_offset,
+            viewport_anchor_row,
+        }
+    }
+
+    pub(crate) fn from_range(
+        anchor: TerminalCellPos,
+        head: TerminalCellPos,
+        display_offset: usize,
+        viewport_anchor_row: usize,
+    ) -> Self {
+        Self {
+            anchor,
+            head,
+            display_offset,
+            viewport_anchor_row,
         }
     }
 

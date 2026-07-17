@@ -214,6 +214,9 @@ impl NyaTermApp {
             } else {
                 None
             };
+            let selection_viewport_anchor_row = terminal_selection
+                .map(|selection| selection.viewport_anchor_row)
+                .unwrap_or(0);
             let has_selection = terminal_selection.is_some();
             let has_search_decorations =
                 !search_ranges_by_line.is_empty() || !active_search_ranges_by_line.is_empty();
@@ -247,7 +250,7 @@ impl NyaTermApp {
                 let decoration_cache_key = terminal_line_decorations_cache_key(
                     &snapshot,
                     terminal_selection,
-                    0,
+                    selection_viewport_anchor_row,
                     &search_ranges_by_line,
                     &active_search_ranges_by_line,
                     frame_action_links,
@@ -260,7 +263,7 @@ impl NyaTermApp {
                     let decorations = build_terminal_line_decorations(
                         &snapshot,
                         terminal_selection,
-                        0,
+                        selection_viewport_anchor_row,
                         &search_ranges_by_line,
                         &active_search_ranges_by_line,
                         frame_action_links,
@@ -1402,10 +1405,12 @@ mod tests {
         );
         let with_selection = terminal_line_decorations_cache_key(
             &snapshot,
-            Some(TerminalSelection {
-                anchor: TerminalCellPos::new(0, 1),
-                head: TerminalCellPos::new(0, 3),
-            }),
+            Some(TerminalSelection::from_range(
+                TerminalCellPos::new(0, 1),
+                TerminalCellPos::new(0, 3),
+                0,
+                0,
+            )),
             0,
             &search,
             &active,
