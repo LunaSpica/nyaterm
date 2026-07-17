@@ -444,7 +444,7 @@ mod layout_cache_tests {
 pub struct NyaTerminalElement {
     snapshot: Arc<TerminalSnapshot>,
     keyword_rules: Arc<Vec<ResolvedKeywordHighlightRule>>,
-    decorations: Vec<TerminalLineDecorations>,
+    decorations: Arc<[TerminalLineDecorations]>,
     layout_cache: Option<Arc<Mutex<NyaTerminalLayoutCache>>>,
     show_cursor: bool,
     cursor_style: String,
@@ -503,7 +503,7 @@ impl NyaTerminalElement {
     pub fn new(
         snapshot: Arc<TerminalSnapshot>,
         keyword_rules: Arc<Vec<ResolvedKeywordHighlightRule>>,
-        decorations: Vec<TerminalLineDecorations>,
+        decorations: impl Into<Arc<[TerminalLineDecorations]>>,
         show_cursor: bool,
         cursor_style: impl Into<String>,
         cell_width: f32,
@@ -517,7 +517,7 @@ impl NyaTerminalElement {
         Self {
             snapshot,
             keyword_rules,
-            decorations,
+            decorations: decorations.into(),
             layout_cache: None,
             show_cursor,
             cursor_style: cursor_style.into(),
@@ -548,12 +548,30 @@ impl NyaTerminalElement {
         self
     }
 
+    #[cfg(test)]
     fn row_layout_key(
         &self,
         row: usize,
         display_line: &str,
         ansi_spans: Option<&[nyaterm_terminal::StyledSpan]>,
         decorations: &TerminalLineDecorations,
+    ) -> u64 {
+        self.row_layout_key_with_keyword_key(
+            row,
+            display_line,
+            ansi_spans,
+            decorations,
+            self.keyword_rules_key(),
+        )
+    }
+
+    fn row_layout_key_with_keyword_key(
+        &self,
+        row: usize,
+        display_line: &str,
+        ansi_spans: Option<&[nyaterm_terminal::StyledSpan]>,
+        decorations: &TerminalLineDecorations,
+        keyword_rules_key: u64,
     ) -> u64 {
         let mut hasher = DefaultHasher::new();
         self.snapshot
@@ -565,13 +583,7 @@ impl NyaTerminalElement {
         display_line.hash(&mut hasher);
         hash_styled_spans(ansi_spans, &mut hasher);
         hash_stable_glyph_decorations(decorations, &mut hasher);
-        for rule in self.keyword_rules.iter() {
-            rule.id.hash(&mut hasher);
-            rule.name.hash(&mut hasher);
-            rule.patterns.hash(&mut hasher);
-            rule.color.hash(&mut hasher);
-            rule.enabled.hash(&mut hasher);
-        }
+        keyword_rules_key.hash(&mut hasher);
         self.palette.bg.hash(&mut hasher);
         self.palette.surface.hash(&mut hasher);
         self.palette.accent.hash(&mut hasher);
@@ -597,8 +609,7 @@ impl NyaTerminalElement {
         hasher.finish()
     }
 
-    fn compiled_keyword_rules(&self) -> CompiledKeywordRules {
-        let key = self.keyword_rules_key();
+    fn compiled_keyword_rules_for_key(&self, key: u64) -> CompiledKeywordRules {
         if let Some(cache) = self.layout_cache.as_ref()
             && let Ok(mut cache) = cache.lock()
         {
@@ -789,7 +800,8 @@ impl Element for NyaTerminalElement {
         let cell_h = self.cell_height.max(1.);
         let font_size = px(self.font_size.max(8.));
         let base_font = font(SharedString::from(self.font_family.clone()));
-        let compiled_keyword_rules = self.compiled_keyword_rules();
+        let keyword_rules_key = self.keyword_rules_key();
+        let compiled_keyword_rules = self.compiled_keyword_rules_for_key(keyword_rules_key);
 
         let visual_y_offset = self.visual_y_offset;
         let visible_rows =
@@ -871,7 +883,13 @@ impl Element for NyaTerminalElement {
                     underline: None,
                     strikethrough: None,
                 }];
-                let row_key = self.row_layout_key(row, display_line, ansi, decorations);
+                let row_key = self.row_layout_key_with_keyword_key(
+                    row,
+                    display_line,
+                    ansi,
+                    decorations,
+                    keyword_rules_key,
+                );
                 plan.text_run_count = plan.text_run_count.saturating_add(text_runs.len());
                 let (shaped, did_shape, shape_duration) =
                     self.shape_row(row, row_key, text, text_runs, font_size, window);
@@ -1011,7 +1029,13 @@ impl Element for NyaTerminalElement {
                     strikethrough: None,
                 });
             }
-            let row_key = self.row_layout_key(row, display_line, ansi, decorations);
+            let row_key = self.row_layout_key_with_keyword_key(
+                row,
+                display_line,
+                ansi,
+                decorations,
+                keyword_rules_key,
+            );
             plan.text_run_count = plan.text_run_count.saturating_add(text_runs.len());
             let (shaped, did_shape, shape_duration) =
                 self.shape_row(row, row_key, text, text_runs, font_size, window);

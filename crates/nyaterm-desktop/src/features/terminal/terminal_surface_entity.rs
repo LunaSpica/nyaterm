@@ -63,7 +63,7 @@ pub(in crate::features) struct TerminalSurface {
     retained_snapshots: Vec<Arc<TerminalSnapshot>>,
     retained_rows: BTreeMap<usize, TerminalSurfaceRetainedRow>,
     keyword_rules: Arc<Vec<nyaterm_core::ResolvedKeywordHighlightRule>>,
-    decorations: Vec<TerminalLineDecorations>,
+    decorations: Arc<[TerminalLineDecorations]>,
     palette: ThemePalette,
     font_family: String,
     font_size: f32,
@@ -108,7 +108,7 @@ impl TerminalSurface {
             retained_snapshots: Vec::new(),
             retained_rows: BTreeMap::new(),
             keyword_rules: Arc::new(Vec::new()),
-            decorations: Vec::new(),
+            decorations: Arc::from(Vec::<TerminalLineDecorations>::new()),
             palette: crate::theme::theme_palette("github-dark"),
             font_family: "monospace".to_string(),
             font_size: 14.0,
@@ -389,7 +389,7 @@ impl TerminalSurface {
     fn clear_retained_scroll_state(&mut self) {
         self.retained_snapshots.clear();
         self.retained_rows.clear();
-        self.decorations.clear();
+        self.decorations = Arc::from(Vec::<TerminalLineDecorations>::new());
         self.has_action_link_decorations = false;
         self.scroll_snapshot_pending = false;
         self.scroll_snapshot_pending_since = None;
@@ -443,7 +443,7 @@ impl TerminalSurface {
             scrollback_len,
         );
         if self.snapshot.as_ref().map(terminal_snapshot_identity) != previous_snapshot_key {
-            self.decorations.clear();
+            self.decorations = Arc::from(Vec::<TerminalLineDecorations>::new());
             self.has_action_link_decorations = false;
             self.show_cursor = false;
         }
@@ -898,7 +898,7 @@ impl TerminalSurface {
         show_cursor: bool,
         cursor_style: impl Into<String>,
     ) {
-        self.decorations = decorations;
+        self.decorations = decorations.into();
         self.keyword_rules = keyword_rules;
         self.show_cursor = show_cursor && !self.visual_scroll_active();
         self.cursor_style = cursor_style.into();
