@@ -174,7 +174,7 @@ impl NyaTermApp {
         if self.active_session_id.as_deref() == Some(session_id.as_str()) {
             return;
         }
-        self.activate_session_id(&session_id);
+        self.activate_session_id_with_surface_sync(&session_id, cx);
         self.sync_workspace_split_from_active_tab();
         self.selected_nav = NavItem::Workspace;
         self.main_mode = MainMode::Workspace;
@@ -273,7 +273,7 @@ impl NyaTermApp {
                     self.terminal_status = "collapsed focused split".to_string();
                 }
                 WorkspacePaneNode::Leaf { session_id } => {
-                    self.activate_session_id(&session_id);
+                    self.activate_session_id_with_surface_sync(&session_id, cx);
                     self.terminal_status = "workspace split closed".to_string();
                 }
             }

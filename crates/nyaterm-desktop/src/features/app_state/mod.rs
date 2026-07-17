@@ -480,6 +480,8 @@ pub struct NyaTermApp {
     pub(in crate::features) terminal_frame_pipeline: TerminalFramePipeline,
     /// Scroll offset for the fallback/global terminal screen (no session view).
     pub(in crate::features) terminal_scroll_offset: usize,
+    /// Fractional wheel/touchpad scroll deltas that have not yet reached one row.
+    pub(in crate::features) terminal_scroll_delta_residuals: HashMap<String, f32>,
     pub(in crate::features) terminal_status: String,
     pub(in crate::features) terminal_runtime: TerminalRuntimeUiState,
     pub(in crate::features) pending_terminal_frame_events: VecDeque<TerminalFrameEvent>,

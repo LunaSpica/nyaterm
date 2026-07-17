@@ -221,6 +221,7 @@ pub(crate) struct CommandSuggestionItem {
 
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) struct CommandSuggestionState {
+    pub(crate) session_id: String,
     pub(crate) draft: String,
     pub(crate) items: Vec<CommandSuggestionItem>,
     pub(crate) selected_index: usize,

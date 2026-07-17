@@ -128,14 +128,7 @@ impl NyaTermApp {
         &self,
         session_id: Option<&str>,
     ) -> (usize, usize) {
-        let offset = if let Some(session_id) = session_id.filter(|id| !id.is_empty()) {
-            self.terminal_views
-                .get(session_id)
-                .map(|view| view.scroll_offset)
-                .unwrap_or(0)
-        } else {
-            self.terminal_scroll_offset
-        };
+        let offset = self.terminal_display_offset_for_session(session_id);
         let snapshot = self.terminal_snapshot_for_session(session_id, offset);
         let rows = snapshot.lines.len().max(1);
         let cols = snapshot

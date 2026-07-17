@@ -134,6 +134,7 @@ impl NyaTermApp {
             x11_forwarding: false,
             x11_display: String::new(),
             deferred_pty: true,
+            keep_alive_interval_secs: self.settings.terminal_keep_alive_interval,
             cols: 80,
             rows: 24,
             pixel_width: 0,

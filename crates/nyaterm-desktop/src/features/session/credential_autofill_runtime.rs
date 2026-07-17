@@ -91,7 +91,7 @@ impl NyaTermApp {
     }
 
     fn active_terminal_cursor_cell_for_autofill(&self) -> (usize, usize) {
-        let offset = self.active_terminal_scroll_offset();
+        let offset = self.active_terminal_display_offset();
         let snapshot =
             self.terminal_snapshot_for_session(self.active_session_id.as_deref(), offset);
         let row = if snapshot.cursor_row == usize::MAX {
@@ -357,7 +357,7 @@ impl NyaTermApp {
             return;
         }
         if self.active_session_id.as_deref() != Some(session_id) {
-            self.activate_session_id(session_id);
+            self.activate_session_id_with_surface_sync(session_id, cx);
         }
         match kind {
             CredentialPromptKind::Username => {
@@ -512,29 +512,17 @@ impl NyaTermApp {
             return div().into_any_element();
         }
 
-        let bounds = self.terminal_surface_bounds_for_session(Some(&state.session_id));
-        let (cell_w, cell_h) = self.terminal_cell_size();
-        let pad = self.terminal_content_padding_px();
-        let gutter = self.terminal_gutter_width_px();
-        let (base_x, base_y) = if let Some(bounds) = bounds {
-            (
-                f32::from(bounds.origin.x) + pad + gutter + state.cursor_col as f32 * cell_w,
-                f32::from(bounds.origin.y) + pad + (state.cursor_row as f32 + 1.0) * cell_h,
-            )
-        } else {
-            (24.0, 120.0)
-        };
-        let (viewport_w, viewport_h) = self.last_viewport_size;
         let menu_w = 340.0_f32;
         let menu_h = (state.matches.len() as f32 * 36.0 + 52.0).min(320.0);
-        let mut x = base_x;
-        let mut y = base_y + 4.0;
-        if x + menu_w + 8.0 > viewport_w {
-            x = (viewport_w - menu_w - 8.0).max(8.0);
-        }
-        if y + menu_h + 8.0 > viewport_h {
-            y = (base_y - menu_h - 4.0).max(8.0);
-        }
+        let (x, y) = self
+            .suggestion_overlay_position_for_session(
+                Some(&state.session_id),
+                state.cursor_row,
+                state.cursor_col,
+                menu_w,
+                menu_h,
+            )
+            .unwrap_or((24.0, 120.0));
 
         let title = match state.kind {
             CredentialPromptKind::Password => "PASSWORD",

@@ -312,8 +312,7 @@ impl NyaTermApp {
                         cx.listener(|this, _, _, cx| {
                             this.terminal_search_mode = TerminalSearchMode::Buffer;
                             this.terminal_search_active_index = 0;
-                            this.request_active_terminal_search();
-                            cx.notify();
+                            this.refresh_terminal_search_state(cx);
                         }),
                     ))
                     .child(mode_button(
@@ -324,8 +323,7 @@ impl NyaTermApp {
                         cx.listener(|this, _, _, cx| {
                             this.terminal_search_mode = TerminalSearchMode::History;
                             this.terminal_search_active_index = 0;
-                            this.request_active_terminal_search();
-                            cx.notify();
+                            this.refresh_terminal_search_state(cx);
                         }),
                     ))
                     .child(div().flex_1())
@@ -384,8 +382,7 @@ impl NyaTermApp {
                             this.terminal_search_case_sensitive =
                                 !this.terminal_search_case_sensitive;
                             this.terminal_search_active_index = 0;
-                            this.request_active_terminal_search();
-                            cx.notify();
+                            this.refresh_terminal_search_state(cx);
                         }),
                     ))
                     .child(mode_button(
@@ -396,8 +393,7 @@ impl NyaTermApp {
                         cx.listener(|this, _, _, cx| {
                             this.terminal_search_regex = !this.terminal_search_regex;
                             this.terminal_search_active_index = 0;
-                            this.request_active_terminal_search();
-                            cx.notify();
+                            this.refresh_terminal_search_state(cx);
                         }),
                     ))
                     .child(mode_button(
@@ -408,8 +404,7 @@ impl NyaTermApp {
                         cx.listener(|this, _, _, cx| {
                             this.terminal_search_whole_word = !this.terminal_search_whole_word;
                             this.terminal_search_active_index = 0;
-                            this.request_active_terminal_search();
-                            cx.notify();
+                            this.refresh_terminal_search_state(cx);
                         }),
                     ))
                     .when(

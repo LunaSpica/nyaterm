@@ -6,6 +6,7 @@ pub(in crate::features) struct SshSessionConfigBuildContext {
     pub(in crate::features) portable_key_path: Option<PathBuf>,
     pub(in crate::features) host_key_policy: String,
     pub(in crate::features) x11_display: String,
+    pub(in crate::features) keep_alive_interval_secs: u32,
     pub(in crate::features) host_key_prompts: Arc<HostKeyPromptBroker>,
     pub(in crate::features) credential_prompts: Arc<CredentialPromptBroker>,
     pub(in crate::features) otp_provider: Arc<NativeOtpProvider>,
@@ -298,6 +299,7 @@ impl NyaTermApp {
             portable_key_path: self.runtime.portable_key_path().map(ToOwned::to_owned),
             host_key_policy: self.settings.host_key_policy.clone(),
             x11_display: self.settings.x11_display.clone(),
+            keep_alive_interval_secs: self.settings.terminal_keep_alive_interval,
             host_key_prompts: self.host_key_prompts.clone(),
             credential_prompts: self.credential_prompts.clone(),
             otp_provider: self.otp_provider.clone(),
@@ -396,6 +398,7 @@ pub(in crate::features) fn build_ssh_session_config_with_context(
         x11_forwarding,
         x11_display: context.x11_display.clone(),
         deferred_pty: true,
+        keep_alive_interval_secs: context.keep_alive_interval_secs,
         cols: 80,
         rows: 24,
         pixel_width: 0,
@@ -579,6 +582,7 @@ mod tests {
             portable_key_path: None,
             host_key_policy: "accept".to_string(),
             x11_display: String::new(),
+            keep_alive_interval_secs: 30,
             host_key_prompts: Arc::new(HostKeyPromptBroker::default()),
             credential_prompts: Arc::new(CredentialPromptBroker::default()),
             otp_provider: Arc::new(NativeOtpProvider::new(config_dir, None)),
@@ -642,6 +646,44 @@ mod tests {
         let error = load_ssh_connection_password_with_context(&context, &auth).unwrap_err();
 
         assert!(error.contains("locked"));
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn ssh_session_config_uses_context_keep_alive_interval() {
+        let dir = unique_temp_dir("ssh-keepalive");
+        let mut context = test_ssh_build_context(dir.clone());
+        context.keep_alive_interval_secs = 45;
+        let connection = SavedConnection {
+            id: "conn-1".to_string(),
+            name: "SSH".to_string(),
+            config: ConnectionType::Ssh {
+                host: "example.com".to_string(),
+                port: 22,
+                username: "user".to_string(),
+                backspace_mode: "del".to_string(),
+                ai_execution_profile: AiExecutionProfile::Posix,
+                x11_forwarding: false,
+            },
+            group_id: None,
+            description: None,
+            sort_order: 0,
+            icon: None,
+            auth: Some(ConnectionAuth {
+                mode: "none".to_string(),
+                ..ConnectionAuth::default()
+            }),
+            network: None,
+            post_login: None,
+            created_at_ms: None,
+            updated_at_ms: None,
+            last_used_at_ms: None,
+        };
+
+        let config =
+            build_ssh_session_config_with_context(&connection, &mut Vec::new(), &context).unwrap();
+
+        assert_eq!(config.keep_alive_interval_secs, 45);
         let _ = std::fs::remove_dir_all(dir);
     }
 }

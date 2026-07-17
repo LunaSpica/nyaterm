@@ -270,7 +270,7 @@ impl NyaTermApp {
             .into_iter()
             .filter_map(|session| (session.id != keep_session_id).then_some(session.id))
             .collect::<Vec<_>>();
-        self.activate_session_id(&keep_session_id);
+        self.activate_session_id_with_surface_sync(&keep_session_id, cx);
         self.close_session_batch(ids, "inactive");
         cx.notify();
     }

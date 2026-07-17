@@ -125,7 +125,7 @@ impl NyaTermApp {
             let _ = root.set_active_tab(&session_id);
         }
         self.focused_terminal_window_leaf_id = Some(leaf_id);
-        self.activate_session_id(&session_id);
+        self.activate_session_id_with_surface_sync(&session_id, cx);
         self.selected_nav = NavItem::Workspace;
         self.main_mode = MainMode::Workspace;
         cx.notify();
@@ -196,7 +196,7 @@ impl NyaTermApp {
             let _ = root.set_active_tab(&tab_id);
             self.focused_terminal_window_leaf_id =
                 find_leaf_with_tab(root, &tab_id).or_else(|| root.first_leaf_id());
-            self.activate_session_id(&tab_id);
+            self.activate_session_id_with_surface_sync(&tab_id, cx);
             self.terminal_status = format!(
                 "moved tab {} before {}",
                 short_id(&tab_id),
@@ -253,7 +253,7 @@ impl NyaTermApp {
         let _ = root.set_active_tab(&tab_id);
         self.focused_terminal_window_leaf_id =
             find_leaf_with_tab(root, &tab_id).or_else(|| root.first_leaf_id());
-        self.activate_session_id(&tab_id);
+        self.activate_session_id_with_surface_sync(&tab_id, cx);
         self.selected_nav = NavItem::Workspace;
         self.main_mode = MainMode::Workspace;
         let zone_label = match zone {

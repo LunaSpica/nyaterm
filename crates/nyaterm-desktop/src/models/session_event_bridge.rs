@@ -566,10 +566,12 @@ fn run_session_event_bridge(
                         .ui_queue
                         .push(SessionEvent::OutputDropped { session_id, bytes });
                 }
-                SessionEvent::Exited { session_id } => {
+                SessionEvent::Exited { session_id, reason } => {
                     flush_bridge_direct_outputs(&frame_pipeline, &mut pending_direct_outputs);
                     sideband_probe_sessions.remove(&session_id);
-                    state.ui_queue.push(SessionEvent::Exited { session_id });
+                    state
+                        .ui_queue
+                        .push(SessionEvent::Exited { session_id, reason });
                 }
                 SessionEvent::Error {
                     session_id,

@@ -34,7 +34,7 @@ impl NyaTermApp {
             return None;
         }
         let cell = self.point_to_terminal_cell(position)?;
-        let offset = self.active_terminal_scroll_offset();
+        let offset = self.active_terminal_display_offset();
         if offset != 0 {
             return None;
         }
@@ -131,7 +131,7 @@ impl NyaTermApp {
             return None;
         }
 
-        let offset = self.active_terminal_scroll_offset();
+        let offset = self.active_terminal_display_offset();
         if offset != 0 {
             // Selection in history is not the live input line.
             return None;

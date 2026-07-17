@@ -105,6 +105,7 @@ pub(in crate::features) use terminal_surface::{
 mod terminal_surface_entity;
 pub(in crate::features) use terminal_surface_entity::{
     FULL_SHELL_PAINT_COUNT, TERMINAL_SURFACE_PAINT_COUNT, TerminalSurface, full_shell_paint_count,
+    terminal_snapshot_anchor_row_for_display_offset, terminal_snapshot_covers_display_offset,
     terminal_surface_paint_count,
 };
 #[path = "transfers/transfer_events.rs"]

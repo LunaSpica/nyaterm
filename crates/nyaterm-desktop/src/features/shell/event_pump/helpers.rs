@@ -250,12 +250,24 @@ pub(super) fn session_event_backlog_active(
         || queued_output_bytes > 0
 }
 
+pub(super) fn terminal_frame_backlog_active_from_counts(
+    pending_events: usize,
+    queued_events: usize,
+    queued_commands: usize,
+) -> bool {
+    pending_events > 0 || queued_events > 0 || queued_commands > 0
+}
+
 pub(super) fn runtime_background_should_defer_terminal_frames(
     output_event_count: usize,
     drained_output_bytes: usize,
     terminal_frame_backlog_active: bool,
     terminal_frame_apply_paced: bool,
+    user_scroll_frame_pending: bool,
 ) -> bool {
+    if user_scroll_frame_pending {
+        return false;
+    }
     let drained_output = output_event_count > 0 || drained_output_bytes > 0;
     drained_output && (!terminal_frame_backlog_active || terminal_frame_apply_paced)
 }
@@ -264,10 +276,27 @@ pub(super) fn terminal_frame_apply_should_defer(
     last_apply_at: Option<Instant>,
     now: Instant,
     output_pressure: bool,
+    user_scroll_frame_pending: bool,
 ) -> bool {
+    if user_scroll_frame_pending {
+        return false;
+    }
     output_pressure
         && last_apply_at.is_some_and(|last_apply_at| {
             now.saturating_duration_since(last_apply_at) < TERMINAL_FRAME_APPLY_PRESSURE_INTERVAL
+        })
+}
+
+pub(super) fn terminal_user_scroll_frame_apply_pending(
+    last_user_scroll_at: Option<Instant>,
+    visible_scrolled_surface: bool,
+    now: Instant,
+    active_window: Duration,
+) -> bool {
+    visible_scrolled_surface
+        && last_user_scroll_at.is_some_and(|last| {
+            now.checked_duration_since(last)
+                .is_some_and(|elapsed| elapsed < active_window)
         })
 }
 
@@ -629,25 +658,36 @@ mod tests {
     }
 
     #[test]
+    fn terminal_frame_backlog_tracks_pending_events_and_commands() {
+        assert!(!terminal_frame_backlog_active_from_counts(0, 0, 0));
+        assert!(terminal_frame_backlog_active_from_counts(1, 0, 0));
+        assert!(terminal_frame_backlog_active_from_counts(0, 1, 0));
+        assert!(terminal_frame_backlog_active_from_counts(0, 0, 1));
+    }
+
+    #[test]
     fn runtime_background_defers_terminal_frames_after_output() {
         assert!(!runtime_background_should_defer_terminal_frames(
-            0, 0, false, false
+            0, 0, false, false, false
         ));
         assert!(runtime_background_should_defer_terminal_frames(
-            1, 0, false, false
+            1, 0, false, false, false
         ));
         assert!(runtime_background_should_defer_terminal_frames(
-            0, 1, false, false
+            0, 1, false, false, false
+        ));
+        assert!(!runtime_background_should_defer_terminal_frames(
+            1, 1024, true, true, true
         ));
     }
 
     #[test]
     fn runtime_background_does_not_starve_due_terminal_frame_apply() {
         assert!(runtime_background_should_defer_terminal_frames(
-            1, 1024, true, true
+            1, 1024, true, true, false
         ));
         assert!(!runtime_background_should_defer_terminal_frames(
-            1, 1024, true, false
+            1, 1024, true, false, false
         ));
     }
 
@@ -655,13 +695,60 @@ mod tests {
     fn terminal_frame_apply_pacing_only_defers_under_recent_pressure() {
         let now = Instant::now();
 
-        assert!(!terminal_frame_apply_should_defer(None, now, true));
-        assert!(!terminal_frame_apply_should_defer(Some(now), now, false));
-        assert!(terminal_frame_apply_should_defer(Some(now), now, true));
+        assert!(!terminal_frame_apply_should_defer(None, now, true, false));
+        assert!(!terminal_frame_apply_should_defer(
+            Some(now),
+            now,
+            false,
+            false
+        ));
+        assert!(terminal_frame_apply_should_defer(
+            Some(now),
+            now,
+            true,
+            false
+        ));
         assert!(!terminal_frame_apply_should_defer(
             Some(now),
             now + TERMINAL_FRAME_APPLY_PRESSURE_INTERVAL,
+            true,
+            false
+        ));
+        assert!(!terminal_frame_apply_should_defer(
+            Some(now),
+            now,
+            true,
             true
+        ));
+    }
+
+    #[test]
+    fn terminal_user_scroll_frame_apply_pending_tracks_recent_scrolled_surface() {
+        let now = Instant::now();
+
+        assert!(terminal_user_scroll_frame_apply_pending(
+            Some(now),
+            true,
+            now,
+            TERMINAL_FRAME_APPLY_PRESSURE_INTERVAL
+        ));
+        assert!(!terminal_user_scroll_frame_apply_pending(
+            Some(now),
+            false,
+            now,
+            TERMINAL_FRAME_APPLY_PRESSURE_INTERVAL
+        ));
+        assert!(!terminal_user_scroll_frame_apply_pending(
+            Some(now - TERMINAL_FRAME_APPLY_PRESSURE_INTERVAL),
+            true,
+            now,
+            TERMINAL_FRAME_APPLY_PRESSURE_INTERVAL
+        ));
+        assert!(!terminal_user_scroll_frame_apply_pending(
+            None,
+            true,
+            now,
+            TERMINAL_FRAME_APPLY_PRESSURE_INTERVAL
         ));
     }
 

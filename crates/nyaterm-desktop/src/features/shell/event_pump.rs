@@ -207,11 +207,10 @@ impl NyaTermApp {
         }) {
             return true;
         }
-        if visible_session_ids.iter().any(|session_id| {
-            self.terminal_views
-                .get(*session_id)
-                .is_some_and(|view| view.scroll_offset > 0)
-        }) {
+        if visible_session_ids
+            .iter()
+            .any(|session_id| self.terminal_visual_scroll_active_for_session(Some(session_id)))
+        {
             return true;
         }
         if !self.terminal_search_open || self.terminal_search_mode != TerminalSearchMode::Buffer {

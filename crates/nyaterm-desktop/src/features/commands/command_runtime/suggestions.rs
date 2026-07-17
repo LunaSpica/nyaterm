@@ -1,4 +1,5 @@
 use super::*;
+use gpui::{Bounds, Pixels};
 
 impl NyaTermApp {
     pub(in crate::features) fn dismiss_command_suggestions(&mut self, cx: &mut Context<Self>) {
@@ -137,7 +138,7 @@ impl NyaTermApp {
     }
 
     pub(in crate::features) fn read_active_terminal_input_line(&self) -> Option<String> {
-        let offset = self.active_terminal_scroll_offset();
+        let offset = self.active_terminal_display_offset();
         let snapshot =
             self.terminal_snapshot_for_session(self.active_session_id.as_deref(), offset);
         if snapshot.cursor_row == usize::MAX {
@@ -148,16 +149,24 @@ impl NyaTermApp {
     }
 
     pub(in crate::features) fn refresh_command_suggestions(&mut self, cx: &mut Context<Self>) {
+        let Some(session_id) = self
+            .active_session_id
+            .as_deref()
+            .filter(|session_id| !session_id.is_empty())
+            .map(ToOwned::to_owned)
+        else {
+            self.hide_command_suggestions_if_present(cx);
+            return;
+        };
         if self.credential_suggestions.is_some()
             || self.is_credential_prompt_input_mode()
             || self.command_suggestions_suppressed
         {
-            self.command_suggestions = None;
+            self.hide_command_suggestions_if_present(cx);
             return;
         }
         if !self.settings.interaction_command_suggestions_enabled {
-            self.command_suggestions = None;
-            cx.notify();
+            self.hide_command_suggestions_if_present(cx);
             return;
         }
         let pattern = get_tracked_command(&self.command_input_tracker);
@@ -170,14 +179,12 @@ impl NyaTermApp {
             .interaction_command_suggestion_max_chars
             .max(min_chars as u32) as usize;
         if pattern.chars().count() < min_chars {
-            self.command_suggestions = None;
-            cx.notify();
+            self.hide_command_suggestions_if_present(cx);
             return;
         }
         // Pager/search-like prefixes: hide suggestions.
         if pattern.starts_with('/') || pattern.starts_with('?') || pattern.starts_with(':') {
-            self.command_suggestions = None;
-            cx.notify();
+            self.hide_command_suggestions_if_present(cx);
             return;
         }
         let results = search_command_sources(
@@ -189,17 +196,18 @@ impl NyaTermApp {
             Some(max_chars),
         );
         if results.is_empty() {
-            self.command_suggestions = None;
-            cx.notify();
+            self.hide_command_suggestions_if_present(cx);
             return;
         }
         let (cursor_row, cursor_col) = self.active_terminal_cursor_cell();
         let selected_index = self
             .command_suggestions
             .as_ref()
+            .filter(|state| state.session_id == session_id)
             .map(|state| state.selected_index.min(results.len().saturating_sub(1)))
             .unwrap_or(0);
         self.command_suggestions = Some(CommandSuggestionState {
+            session_id,
             draft: pattern,
             items: results
                 .into_iter()
@@ -218,8 +226,14 @@ impl NyaTermApp {
         cx.notify();
     }
 
+    fn hide_command_suggestions_if_present(&mut self, cx: &mut Context<Self>) {
+        if self.command_suggestions.take().is_some() {
+            cx.notify();
+        }
+    }
+
     pub(in crate::features) fn active_terminal_cursor_cell(&self) -> (usize, usize) {
-        let offset = self.active_terminal_scroll_offset();
+        let offset = self.active_terminal_display_offset();
         let snapshot =
             self.terminal_snapshot_for_session(self.active_session_id.as_deref(), offset);
         let row = if snapshot.cursor_row == usize::MAX {
@@ -241,6 +255,16 @@ impl NyaTermApp {
             return false;
         };
         if state.items.is_empty() {
+            return false;
+        }
+        let session_id = state.session_id.clone();
+        if self.active_session_id.as_deref() != Some(session_id.as_str())
+            || self
+                .terminal_surface_bounds_for_session(Some(&session_id))
+                .is_none()
+        {
+            self.command_suggestions = None;
+            cx.notify();
             return false;
         }
         let keystroke = &event.keystroke;
@@ -380,29 +404,20 @@ impl NyaTermApp {
         if state.items.is_empty() {
             return div().into_any_element();
         }
-        let bounds = self.terminal_surface_bounds;
-        let (cell_w, cell_h) = self.terminal_cell_size();
-        let pad = self.terminal_content_padding_px();
-        let gutter = self.terminal_gutter_width_px();
-        let (base_x, base_y) = if let Some(bounds) = bounds {
-            (
-                f32::from(bounds.origin.x) + pad + gutter + state.cursor_col as f32 * cell_w,
-                f32::from(bounds.origin.y) + pad + (state.cursor_row as f32 + 1.0) * cell_h,
-            )
-        } else {
-            (24.0, 120.0)
-        };
-        let (viewport_w, viewport_h) = self.last_viewport_size;
+        if self.active_session_id.as_deref() != Some(state.session_id.as_str()) {
+            return div().into_any_element();
+        }
         let menu_w = 380.0_f32;
         let menu_h = (state.items.len() as f32 * 28.0 + 44.0).min(320.0);
-        let mut x = base_x;
-        let mut y = base_y + 4.0;
-        if x + menu_w + 8.0 > viewport_w {
-            x = (viewport_w - menu_w - 8.0).max(8.0);
-        }
-        if y + menu_h + 8.0 > viewport_h {
-            y = (base_y - menu_h - 4.0).max(8.0);
-        }
+        let Some((x, y)) = self.suggestion_overlay_position_for_session(
+            Some(&state.session_id),
+            state.cursor_row,
+            state.cursor_col,
+            menu_w,
+            menu_h,
+        ) else {
+            return div().into_any_element();
+        };
 
         let mut list = div()
             .id(SharedString::from("command-suggestions-list"))
@@ -511,8 +526,8 @@ impl NyaTermApp {
         div()
             .id(SharedString::from("command-suggestions-overlay"))
             .absolute()
-            .left(px(x.max(8.0)))
-            .top(px(y.max(8.0)))
+            .left(px(x))
+            .top(px(y))
             .w(px(menu_w))
             .rounded_md()
             .border_1()
@@ -555,6 +570,96 @@ impl NyaTermApp {
                     .child("↑↓ select · Enter run · Tab fill · Esc dismiss"),
             )
             .into_any_element()
+    }
+
+    pub(in crate::features) fn suggestion_overlay_position_for_session(
+        &self,
+        session_id: Option<&str>,
+        cursor_row: usize,
+        cursor_col: usize,
+        menu_w: f32,
+        menu_h: f32,
+    ) -> Option<(f32, f32)> {
+        let bounds = self.terminal_surface_bounds_for_session(session_id)?;
+        Some(suggestion_overlay_position(
+            bounds,
+            self.terminal_cell_size(),
+            self.terminal_content_padding_px(),
+            self.terminal_gutter_width_px(),
+            self.last_viewport_size,
+            cursor_row,
+            cursor_col,
+            menu_w,
+            menu_h,
+        ))
+    }
+}
+
+pub(in crate::features) fn suggestion_overlay_position(
+    bounds: Bounds<Pixels>,
+    cell_size: (f32, f32),
+    pad: f32,
+    gutter: f32,
+    viewport_size: (f32, f32),
+    cursor_row: usize,
+    cursor_col: usize,
+    menu_w: f32,
+    menu_h: f32,
+) -> (f32, f32) {
+    let (cell_w, cell_h) = cell_size;
+    let base_x = f32::from(bounds.origin.x) + pad + gutter + cursor_col as f32 * cell_w;
+    let base_y = f32::from(bounds.origin.y) + pad + (cursor_row as f32 + 1.0) * cell_h;
+    let (viewport_w, viewport_h) = viewport_size;
+    let mut x = base_x;
+    let mut y = base_y + 4.0;
+    if x + menu_w + 8.0 > viewport_w {
+        x = (viewport_w - menu_w - 8.0).max(8.0);
+    }
+    if y + menu_h + 8.0 > viewport_h {
+        y = (base_y - menu_h - 4.0).max(8.0);
+    }
+    (x.max(8.0), y.max(8.0))
+}
+
+#[cfg(test)]
+mod overlay_position_tests {
+    use super::*;
+    use gpui::{point, size};
+
+    #[test]
+    fn suggestion_overlay_position_anchors_below_cursor() {
+        let (x, y) = suggestion_overlay_position(
+            Bounds::new(point(px(10.0), px(20.0)), size(px(800.0), px(400.0))),
+            (8.0, 16.0),
+            8.0,
+            0.0,
+            (1024.0, 768.0),
+            2,
+            4,
+            300.0,
+            120.0,
+        );
+
+        assert_eq!(x, 50.0);
+        assert_eq!(y, 80.0);
+    }
+
+    #[test]
+    fn suggestion_overlay_position_clamps_and_flips_inside_viewport() {
+        let (x, y) = suggestion_overlay_position(
+            Bounds::new(point(px(700.0), px(500.0)), size(px(200.0), px(160.0))),
+            (8.0, 16.0),
+            8.0,
+            0.0,
+            (900.0, 620.0),
+            4,
+            30,
+            300.0,
+            140.0,
+        );
+
+        assert_eq!(x, 592.0);
+        assert_eq!(y, 444.0);
     }
 }
 

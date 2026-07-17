@@ -43,6 +43,11 @@ pub(crate) const TERMINAL_OUTPUT_VISIBLE_BURST_OVERLOAD: usize = 256 * 1024;
 /// AI context snippets, reconnect seed text, and compact tab actions.
 pub(crate) const TERMINAL_UI_OUTPUT_TAIL_CAP: usize = 128 * 1024;
 const TERMINAL_FRAME_VISIBLE_TEXT_TAIL_CAP: usize = 16 * 1024;
+const TERMINAL_FRAME_SCROLL_WINDOW_MIN_EXTRA_ROWS: usize = 32;
+const TERMINAL_FRAME_SCROLL_WINDOW_MAX_EXTRA_ROWS: usize = 192;
+const TERMINAL_FRAME_PRIORITY_SCROLL_WINDOW_MIN_EXTRA_ROWS: usize = 128;
+const TERMINAL_FRAME_PRIORITY_SCROLL_WINDOW_MAX_EXTRA_ROWS: usize = 768;
+const TERMINAL_SCROLLBACK_SNAPSHOT_CACHE_LIMIT: usize = 16;
 /// ~3s recovery notice at the 50ms event-pump cadence.
 pub(crate) const TERMINAL_PERFORMANCE_RECOVERY_TICKS: u8 = 60;
 /// Require a short calm window before re-enabling expensive render decorations.
@@ -447,6 +452,7 @@ pub(crate) struct TerminalViewState {
     pub(crate) scrollback_snapshots: HashMap<usize, Arc<TerminalSnapshot>>,
     pub(crate) scrollback_action_links: HashMap<usize, TerminalFrameActionLinks>,
     pub(crate) pending_snapshot_offsets: HashSet<usize>,
+    pub(crate) priority_pending_snapshot_offsets: HashSet<usize>,
     pub(crate) search_result: Option<TerminalFrameSearchResult>,
     pub(crate) pending_search_key: Option<TerminalFrameSearchKey>,
     pub(crate) protocol_state: TerminalProtocolState,
@@ -485,6 +491,7 @@ impl TerminalViewState {
             scrollback_snapshots: HashMap::new(),
             scrollback_action_links: HashMap::new(),
             pending_snapshot_offsets: HashSet::new(),
+            priority_pending_snapshot_offsets: HashSet::new(),
             search_result: None,
             pending_search_key: None,
             protocol_state: TerminalProtocolState::default(),
@@ -517,6 +524,7 @@ impl TerminalViewState {
             scrollback_snapshots: HashMap::new(),
             scrollback_action_links: HashMap::new(),
             pending_snapshot_offsets: HashSet::new(),
+            priority_pending_snapshot_offsets: HashSet::new(),
             search_result: None,
             pending_search_key: None,
             protocol_state,
@@ -538,6 +546,74 @@ impl TerminalViewState {
         }
     }
 
+    fn scrollback_len_for_anchor(&self) -> usize {
+        self.frame_snapshot
+            .as_ref()
+            .map(|snapshot| snapshot.scrollback_len)
+            .unwrap_or_else(|| self.screen.scrollback_len())
+    }
+
+    pub(crate) fn live_snapshot_with_scroll_window(&self) -> Arc<TerminalSnapshot> {
+        terminal_frame_snapshot_with_scroll_window(&self.screen, 0, true)
+    }
+
+    fn clone_snapshot_with_scrollback_delta(
+        snapshot: &Arc<TerminalSnapshot>,
+        delta: usize,
+    ) -> Arc<TerminalSnapshot> {
+        let mut snapshot = (**snapshot).clone();
+        snapshot.scrollback_len = snapshot.scrollback_len.saturating_add(delta);
+        snapshot.total_rows = snapshot.total_rows.saturating_add(delta);
+        snapshot.display_offset = snapshot.display_offset.saturating_add(delta);
+        Arc::new(snapshot)
+    }
+
+    fn rekey_scrollback_query_caches_for_growth(&mut self, delta: usize) {
+        if delta == 0 {
+            return;
+        }
+        self.scrollback_snapshots = self
+            .scrollback_snapshots
+            .drain()
+            .map(|(offset, snapshot)| {
+                (
+                    offset.saturating_add(delta),
+                    Self::clone_snapshot_with_scrollback_delta(&snapshot, delta),
+                )
+            })
+            .collect();
+        self.scrollback_action_links = self
+            .scrollback_action_links
+            .drain()
+            .map(|(offset, links)| (offset.saturating_add(delta), links))
+            .collect();
+        // In-flight worker requests carry the old literal offset. Once output
+        // grows scrollback, the anchored target needs a new offset request.
+        self.pending_snapshot_offsets.clear();
+        self.priority_pending_snapshot_offsets.clear();
+    }
+
+    fn anchor_scrollback_after_len_change(&mut self, old_len: usize, new_len: usize) {
+        if new_len < old_len {
+            self.clear_scrollback_query_caches();
+            self.clamp_scroll_offset();
+            return;
+        }
+        let delta = new_len.saturating_sub(old_len);
+        if self.scroll_offset == 0 {
+            if delta > 0 {
+                self.clear_scrollback_query_caches();
+            }
+            return;
+        }
+        if delta > 0 {
+            self.scroll_offset = self.scroll_offset.saturating_add(delta).min(new_len);
+            self.rekey_scrollback_query_caches_for_growth(delta);
+            self.has_new_while_scrolled = true;
+        }
+        self.clamp_scroll_offset();
+    }
+
     pub(crate) fn from_output_with_encoding(output: String, encoding: &str) -> Self {
         let mut view = Self::from_output(output);
         view.set_encoding(encoding);
@@ -554,18 +630,18 @@ impl TerminalViewState {
         if text.is_empty() {
             return;
         }
+        let old_scrollback_len = self.scrollback_len_for_anchor();
         self.screen.advance_decoded_text(text);
         self.screen_revision = self.screen_revision.saturating_add(1);
-        self.frame_snapshot = Some(Arc::new(self.screen.viewport_snapshot(0)));
+        self.frame_snapshot = Some(self.live_snapshot_with_scroll_window());
         self.frame_action_links = None;
         self.enter_render_degraded_mode();
-        self.clear_scrollback_query_caches();
         self.protocol_state = TerminalProtocolState::from_screen(&self.screen);
         append_terminal_ui_output_tail(&mut self.output, text);
-        if self.scroll_offset > 0 {
-            self.has_new_while_scrolled = true;
-        }
-        self.clamp_scroll_offset();
+        self.anchor_scrollback_after_len_change(
+            old_scrollback_len,
+            self.scrollback_len_for_anchor(),
+        );
     }
 
     /// Feed already-protected bytes into the view (used when the caller applies
@@ -575,21 +651,21 @@ impl TerminalViewState {
         if data.is_empty() {
             return;
         }
+        let old_scrollback_len = self.scrollback_len_for_anchor();
         self.screen.advance(data);
         self.screen_revision = self.screen_revision.saturating_add(1);
-        self.frame_snapshot = Some(Arc::new(self.screen.viewport_snapshot(0)));
+        self.frame_snapshot = Some(self.live_snapshot_with_scroll_window());
         self.frame_action_links = None;
         self.enter_render_degraded_mode();
-        self.clear_scrollback_query_caches();
         self.protocol_state = TerminalProtocolState::from_screen(&self.screen);
         append_terminal_ui_output_tail(
             &mut self.output,
             &self.output_decoder.decode_output_text(data),
         );
-        if self.scroll_offset > 0 {
-            self.has_new_while_scrolled = true;
-        }
-        self.clamp_scroll_offset();
+        self.anchor_scrollback_after_len_change(
+            old_scrollback_len,
+            self.scrollback_len_for_anchor(),
+        );
     }
 
     /// Drop the oldest part of an oversized burst so the latest screen state wins
@@ -734,9 +810,10 @@ impl TerminalViewState {
         if !visible_text.is_empty() && !self.render_degraded {
             append_terminal_ui_output_tail(&mut self.output, visible_text);
         }
+        let old_scrollback_len = self.scrollback_len_for_anchor();
+        let new_scrollback_len = snapshot.scrollback_len;
         self.frame_snapshot = Some(snapshot);
         self.frame_action_links = action_links;
-        self.clear_scrollback_query_caches();
         self.protocol_state = protocol_state;
         self.screen_revision = revision;
         self.output_burst_bytes = self.output_burst_bytes.saturating_add(accepted_bytes);
@@ -746,10 +823,23 @@ impl TerminalViewState {
         if skipped_output_bytes > 0 {
             self.note_skipped_output(skipped_output_bytes);
         }
-        if self.scroll_offset > 0 {
-            self.has_new_while_scrolled = true;
+        self.anchor_scrollback_after_len_change(old_scrollback_len, new_scrollback_len);
+    }
+
+    pub(crate) fn apply_terminal_live_snapshot_frame(
+        &mut self,
+        snapshot: Arc<TerminalSnapshot>,
+        action_links: Option<TerminalFrameActionLinks>,
+        revision: u64,
+    ) {
+        let old_scrollback_len = self.scrollback_len_for_anchor();
+        let new_scrollback_len = snapshot.scrollback_len;
+        self.frame_snapshot = Some(snapshot);
+        self.frame_action_links = action_links;
+        if revision > self.screen_revision {
+            self.screen_revision = revision;
         }
-        self.clamp_scroll_offset();
+        self.anchor_scrollback_after_len_change(old_scrollback_len, new_scrollback_len);
     }
 
     pub(crate) fn apply_terminal_background_frame_parts(
@@ -810,6 +900,44 @@ impl TerminalViewState {
         self.scrollback_snapshots.clear();
         self.scrollback_action_links.clear();
         self.pending_snapshot_offsets.clear();
+        self.priority_pending_snapshot_offsets.clear();
+    }
+
+    pub(crate) fn remember_scrollback_snapshot(
+        &mut self,
+        offset: usize,
+        snapshot: Arc<TerminalSnapshot>,
+    ) {
+        if offset == 0 {
+            self.frame_snapshot = Some(snapshot);
+            return;
+        }
+        self.scrollback_snapshots.insert(offset, snapshot);
+        self.prune_scrollback_snapshot_cache(offset);
+    }
+
+    pub(crate) fn prune_scrollback_snapshot_cache(&mut self, keep_offset: usize) {
+        while self.scrollback_snapshots.len() > TERMINAL_SCROLLBACK_SNAPSHOT_CACHE_LIMIT {
+            let Some(drop_offset) = self
+                .scrollback_snapshots
+                .keys()
+                .copied()
+                .filter(|offset| *offset != keep_offset)
+                .max_by_key(|offset| {
+                    (
+                        offset.abs_diff(keep_offset),
+                        // Prefer dropping the older/farther side on ties. Newer
+                        // offsets are more likely to be reached while returning
+                        // to live output.
+                        *offset > keep_offset,
+                    )
+                })
+            else {
+                break;
+            };
+            self.scrollback_snapshots.remove(&drop_offset);
+            self.scrollback_action_links.remove(&drop_offset);
+        }
     }
 
     fn clear_terminal_query_caches(&mut self) {
@@ -977,11 +1105,45 @@ impl TerminalFramePipeline {
         action_links_enabled: bool,
         action_link_matchers: ActionLinksMatcherSettings,
     ) {
+        self.request_snapshot_with_priority(
+            session_id,
+            offset,
+            action_links_enabled,
+            action_link_matchers,
+            false,
+        );
+    }
+
+    pub(crate) fn request_priority_snapshot(
+        &self,
+        session_id: impl Into<String>,
+        offset: usize,
+        action_links_enabled: bool,
+        action_link_matchers: ActionLinksMatcherSettings,
+    ) {
+        self.request_snapshot_with_priority(
+            session_id,
+            offset,
+            action_links_enabled,
+            action_link_matchers,
+            true,
+        );
+    }
+
+    fn request_snapshot_with_priority(
+        &self,
+        session_id: impl Into<String>,
+        offset: usize,
+        action_links_enabled: bool,
+        action_link_matchers: ActionLinksMatcherSettings,
+        priority: bool,
+    ) {
         let _ = self.command_tx.send(TerminalFrameCommand::RequestSnapshot {
             session_id: session_id.into(),
             offset,
             action_links_enabled,
             action_link_matchers,
+            priority,
         });
     }
 
@@ -1081,6 +1243,7 @@ enum TerminalFrameCommand {
         offset: usize,
         action_links_enabled: bool,
         action_link_matchers: ActionLinksMatcherSettings,
+        priority: bool,
     },
     RequestSearch {
         session_id: String,
@@ -1205,6 +1368,214 @@ pub(crate) struct TerminalFrameBufferTextEvent {
     pub(crate) text: String,
     pub(crate) truncated: bool,
     pub(crate) process_duration: Duration,
+}
+
+#[derive(Clone)]
+struct TerminalFrameSnapshotRowSlice {
+    cells: Vec<nyaterm_terminal::RenderCell>,
+    line: String,
+    styled_line: Vec<nyaterm_terminal::StyledSpan>,
+    line_signature: u64,
+    line_timestamp_ms: Option<u64>,
+    hyperlink_line: Vec<nyaterm_terminal::HyperlinkSpan>,
+    command_mark: Option<nyaterm_terminal::ShellCommandMark>,
+}
+
+fn terminal_frame_scroll_window_extra_rows(viewport_rows: usize, priority: bool) -> usize {
+    let viewport_rows = viewport_rows.max(1);
+    if priority {
+        return viewport_rows
+            .saturating_mul(6)
+            .max(TERMINAL_FRAME_PRIORITY_SCROLL_WINDOW_MIN_EXTRA_ROWS)
+            .min(TERMINAL_FRAME_PRIORITY_SCROLL_WINDOW_MAX_EXTRA_ROWS);
+    }
+    viewport_rows
+        .saturating_mul(2)
+        .max(TERMINAL_FRAME_SCROLL_WINDOW_MIN_EXTRA_ROWS)
+        .min(TERMINAL_FRAME_SCROLL_WINDOW_MAX_EXTRA_ROWS)
+}
+
+fn terminal_frame_snapshot_row_slice(
+    snapshot: &TerminalSnapshot,
+    row: usize,
+) -> Option<TerminalFrameSnapshotRowSlice> {
+    if snapshot.cols == 0 || row >= snapshot.rows {
+        return None;
+    }
+    let start = row.checked_mul(snapshot.cols)?;
+    let end = start.checked_add(snapshot.cols)?;
+    let cells = snapshot.cells.get(start..end)?.to_vec();
+    Some(TerminalFrameSnapshotRowSlice {
+        cells,
+        line: snapshot.lines.get(row).cloned().unwrap_or_default(),
+        styled_line: snapshot.styled_lines.get(row).cloned().unwrap_or_default(),
+        line_signature: *snapshot.line_signatures.get(row).unwrap_or(&0),
+        line_timestamp_ms: *snapshot.line_timestamps_ms.get(row).unwrap_or(&None),
+        hyperlink_line: snapshot
+            .hyperlink_lines
+            .get(row)
+            .cloned()
+            .unwrap_or_default(),
+        command_mark: *snapshot.command_marks.get(row).unwrap_or(&None),
+    })
+}
+
+fn terminal_frame_snapshot_row_slices(
+    snapshot: &TerminalSnapshot,
+    start_row: usize,
+    row_count: usize,
+) -> Vec<TerminalFrameSnapshotRowSlice> {
+    if row_count == 0 || start_row >= snapshot.rows {
+        return Vec::new();
+    }
+    let end_row = start_row.saturating_add(row_count).min(snapshot.rows);
+    (start_row..end_row)
+        .filter_map(|row| terminal_frame_snapshot_row_slice(snapshot, row))
+        .collect()
+}
+
+fn terminal_frame_snapshot_with_scroll_window(
+    screen: &TerminalScreen,
+    offset: usize,
+    priority: bool,
+) -> Arc<TerminalSnapshot> {
+    let base = Arc::new(screen.viewport_snapshot(offset));
+    if base.cols == 0 || base.rows == 0 {
+        return base;
+    }
+
+    let scrollback_len = base.scrollback_len;
+    if scrollback_len == 0 {
+        return base;
+    }
+
+    let extra = terminal_frame_scroll_window_extra_rows(base.rows, priority);
+    let older_count = scrollback_len.saturating_sub(offset).min(extra);
+    let newer_count = offset.min(extra);
+    if older_count == 0 && newer_count == 0 {
+        return base;
+    }
+
+    let mut snapshot = (*base).clone();
+    let mut retained_older_count = 0usize;
+    if older_count > 0 {
+        let older_rows = terminal_frame_snapshot_older_row_slices(screen, offset, older_count);
+        retained_older_count = older_rows.len();
+        if !older_rows.is_empty() {
+            let mut cells = Vec::with_capacity((snapshot.rows + older_rows.len()) * snapshot.cols);
+            let mut lines = Vec::with_capacity(snapshot.lines.len() + older_rows.len());
+            let mut styled_lines =
+                Vec::with_capacity(snapshot.styled_lines.len() + older_rows.len());
+            let mut line_signatures =
+                Vec::with_capacity(snapshot.line_signatures.len() + older_rows.len());
+            let mut line_timestamps_ms =
+                Vec::with_capacity(snapshot.line_timestamps_ms.len() + older_rows.len());
+            let mut hyperlink_lines =
+                Vec::with_capacity(snapshot.hyperlink_lines.len() + older_rows.len());
+            let mut command_marks =
+                Vec::with_capacity(snapshot.command_marks.len() + older_rows.len());
+            for row in older_rows {
+                cells.extend(row.cells);
+                lines.push(row.line);
+                styled_lines.push(row.styled_line);
+                line_signatures.push(row.line_signature);
+                line_timestamps_ms.push(row.line_timestamp_ms);
+                hyperlink_lines.push(row.hyperlink_line);
+                command_marks.push(row.command_mark);
+            }
+            cells.extend(snapshot.cells);
+            lines.extend(snapshot.lines);
+            styled_lines.extend(snapshot.styled_lines);
+            line_signatures.extend(snapshot.line_signatures);
+            line_timestamps_ms.extend(snapshot.line_timestamps_ms);
+            hyperlink_lines.extend(snapshot.hyperlink_lines);
+            command_marks.extend(snapshot.command_marks);
+            snapshot.cells = cells;
+            snapshot.lines = lines;
+            snapshot.styled_lines = styled_lines;
+            snapshot.line_signatures = line_signatures;
+            snapshot.line_timestamps_ms = line_timestamps_ms;
+            snapshot.hyperlink_lines = hyperlink_lines;
+            snapshot.command_marks = command_marks;
+            snapshot.rows = snapshot.rows.saturating_add(retained_older_count);
+            if snapshot.cursor_row != usize::MAX {
+                snapshot.cursor_row = snapshot.cursor_row.saturating_add(retained_older_count);
+                snapshot.cursor.row = snapshot.cursor.row.saturating_add(retained_older_count);
+            }
+        }
+    }
+
+    if newer_count > 0 {
+        for row in terminal_frame_snapshot_newer_row_slices(screen, offset, newer_count) {
+            snapshot.cells.extend(row.cells);
+            snapshot.lines.push(row.line);
+            snapshot.styled_lines.push(row.styled_line);
+            snapshot.line_signatures.push(row.line_signature);
+            snapshot.line_timestamps_ms.push(row.line_timestamp_ms);
+            snapshot.hyperlink_lines.push(row.hyperlink_line);
+            snapshot.command_marks.push(row.command_mark);
+            snapshot.rows = snapshot.rows.saturating_add(1);
+            snapshot.total_rows = snapshot.total_rows.saturating_add(1);
+        }
+    }
+
+    snapshot.images = screen
+        .viewport_snapshot(offset)
+        .images
+        .into_iter()
+        .filter(|image| image.row < base.rows)
+        .map(|mut image| {
+            image.row = image.row.saturating_add(retained_older_count);
+            image
+        })
+        .collect();
+    Arc::new(snapshot)
+}
+
+fn terminal_frame_snapshot_older_row_slices(
+    screen: &TerminalScreen,
+    offset: usize,
+    row_count: usize,
+) -> Vec<TerminalFrameSnapshotRowSlice> {
+    let mut rows = Vec::new();
+    let mut remaining = row_count;
+    while remaining > 0 {
+        let snapshot = screen.viewport_snapshot(offset.saturating_add(remaining));
+        if snapshot.rows == 0 {
+            break;
+        }
+        let take = remaining.min(snapshot.rows);
+        rows.extend(terminal_frame_snapshot_row_slices(&snapshot, 0, take));
+        remaining = remaining.saturating_sub(take);
+    }
+    rows
+}
+
+fn terminal_frame_snapshot_newer_row_slices(
+    screen: &TerminalScreen,
+    offset: usize,
+    row_count: usize,
+) -> Vec<TerminalFrameSnapshotRowSlice> {
+    let mut rows = Vec::new();
+    let mut consumed = 0usize;
+    let viewport_rows = screen.viewport_snapshot(offset).rows.max(1);
+    while consumed < row_count {
+        let remaining = row_count - consumed;
+        let take = remaining.min(viewport_rows);
+        let offset_delta = consumed.saturating_add(take);
+        let snapshot = screen.viewport_snapshot(offset.saturating_sub(offset_delta));
+        if snapshot.rows == 0 {
+            break;
+        }
+        let take = take.min(snapshot.rows);
+        rows.extend(terminal_frame_snapshot_row_slices(
+            &snapshot,
+            snapshot.rows.saturating_sub(take),
+            take,
+        ));
+        consumed = consumed.saturating_add(take);
+    }
+    rows
 }
 
 fn compact_terminal_frame_event_queue(
@@ -1364,7 +1735,11 @@ impl TerminalFrameSession {
         // Hidden/low-priority sessions keep protocol/effects without paying for a
         // full grid snapshot every output frame.
         let snapshot = if self.include_live_snapshot {
-            Some(Arc::new(self.screen.viewport_snapshot(0)))
+            Some(terminal_frame_snapshot_with_scroll_window(
+                &self.screen,
+                0,
+                true,
+            ))
         } else {
             None
         };
@@ -1390,9 +1765,10 @@ impl TerminalFrameSession {
         offset: usize,
         action_links_enabled: bool,
         action_link_matchers: ActionLinksMatcherSettings,
+        priority: bool,
     ) -> TerminalFrameSnapshotEvent {
         let started_at = Instant::now();
-        let snapshot = Arc::new(self.screen.viewport_snapshot(offset));
+        let snapshot = terminal_frame_snapshot_with_scroll_window(&self.screen, offset, priority);
         let action_links = prepare_terminal_frame_action_links(
             &snapshot,
             action_links_enabled,
@@ -1645,6 +2021,28 @@ fn push_terminal_frame_command(
                 rows,
             });
         }
+        TerminalFrameCommand::RequestSnapshot {
+            session_id,
+            offset,
+            action_links_enabled,
+            action_link_matchers,
+            priority: true,
+        } => {
+            let insert_at = commands
+                .iter()
+                .position(terminal_frame_command_priority_snapshot_insert_before)
+                .unwrap_or(commands.len());
+            commands.insert(
+                insert_at,
+                TerminalFrameCommand::RequestSnapshot {
+                    session_id,
+                    offset,
+                    action_links_enabled,
+                    action_link_matchers,
+                    priority: true,
+                },
+            );
+        }
         other => commands.push_back(other),
     }
     compact_terminal_frame_command_queue(commands, TERMINAL_FRAME_COMMAND_QUEUE_CAP);
@@ -1701,7 +2099,20 @@ fn compact_stale_terminal_frame_commands(commands: &mut VecDeque<TerminalFrameCo
 fn terminal_frame_command_can_drop_under_pressure(command: &TerminalFrameCommand) -> bool {
     matches!(
         command,
-        TerminalFrameCommand::RequestSnapshot { .. } | TerminalFrameCommand::RequestSearch { .. }
+        TerminalFrameCommand::RequestSnapshot {
+            priority: false,
+            ..
+        } | TerminalFrameCommand::RequestSearch { .. }
+    )
+}
+
+fn terminal_frame_command_priority_snapshot_insert_before(command: &TerminalFrameCommand) -> bool {
+    matches!(
+        command,
+        TerminalFrameCommand::Output { .. }
+            | TerminalFrameCommand::RequestSnapshot { .. }
+            | TerminalFrameCommand::RequestSearch { .. }
+            | TerminalFrameCommand::RequestBufferText { .. }
     )
 }
 
@@ -1790,6 +2201,7 @@ fn run_terminal_frame_processor(
                 offset,
                 action_links_enabled,
                 action_link_matchers,
+                priority,
             } => {
                 if let Some(session) = sessions.get(&session_id) {
                     let event = session.snapshot_event(
@@ -1797,6 +2209,7 @@ fn run_terminal_frame_processor(
                         offset,
                         action_links_enabled,
                         action_link_matchers,
+                        priority,
                     );
                     event_queue.push(TerminalFrameEvent::Snapshot(event));
                 }
@@ -2056,6 +2469,44 @@ mod tests {
         );
     }
 
+    fn terminal_output_lines(count: usize) -> String {
+        (0..count)
+            .map(|index| format!("line {index:03}\n"))
+            .collect::<String>()
+    }
+
+    fn screen_from_line_count(count: usize) -> TerminalScreen {
+        terminal_screen_from_output(&terminal_output_lines(count))
+    }
+
+    fn snapshot_covers_offset(
+        snapshot: &TerminalSnapshot,
+        display_offset: usize,
+        viewport_rows: usize,
+    ) -> bool {
+        let viewport_rows = viewport_rows.max(1);
+        let real_total_rows = snapshot.scrollback_len.saturating_add(viewport_rows);
+        let snapshot_end = snapshot.total_rows.saturating_sub(snapshot.display_offset);
+        let snapshot_start = snapshot_end.saturating_sub(snapshot.rows);
+        let desired_end = real_total_rows.saturating_sub(display_offset);
+        let desired_start = desired_end.saturating_sub(viewport_rows);
+        snapshot_start <= desired_start && desired_end <= snapshot_end
+    }
+
+    fn snapshot_anchor_row_for_offset(
+        snapshot: &TerminalSnapshot,
+        display_offset: usize,
+        viewport_rows: usize,
+    ) -> usize {
+        let viewport_rows = viewport_rows.max(1);
+        let real_total_rows = snapshot.scrollback_len.saturating_add(viewport_rows);
+        let snapshot_end = snapshot.total_rows.saturating_sub(snapshot.display_offset);
+        let snapshot_start = snapshot_end.saturating_sub(snapshot.rows);
+        let desired_end = real_total_rows.saturating_sub(display_offset);
+        let desired_start = desired_end.saturating_sub(viewport_rows);
+        desired_start.saturating_sub(snapshot_start)
+    }
+
     #[test]
     fn terminal_view_output_decodes_session_charset() {
         let mut view = TerminalViewState::new();
@@ -2083,6 +2534,380 @@ mod tests {
         let compact = joined.replace(' ', "");
         assert!(compact.contains("本地提示"), "grid={joined:?}");
         assert!(!joined.contains('\u{fffd}'), "grid={joined:?}");
+    }
+
+    #[test]
+    fn terminal_view_local_text_live_snapshot_keeps_scroll_window() {
+        let mut view = TerminalViewState::from_output(terminal_output_lines(80));
+        let viewport_rows = view.screen.viewport_snapshot(0).rows;
+
+        view.append_text("local status\n");
+
+        let snapshot = view
+            .frame_snapshot
+            .as_ref()
+            .expect("local append should publish a live snapshot");
+        assert!(snapshot.rows > viewport_rows);
+        assert!(snapshot_covers_offset(snapshot.as_ref(), 0, viewport_rows));
+        assert!(snapshot_covers_offset(snapshot.as_ref(), 1, viewport_rows));
+    }
+
+    #[test]
+    fn terminal_view_live_snapshot_covers_priority_scroll_burst() {
+        let view = TerminalViewState::from_output(terminal_output_lines(320));
+        let viewport_rows = view.screen.viewport_snapshot(0).rows;
+        let priority_offset = viewport_rows.saturating_mul(4);
+
+        let snapshot = view.live_snapshot_with_scroll_window();
+
+        assert!(
+            snapshot.rows
+                >= viewport_rows
+                    .saturating_add(terminal_frame_scroll_window_extra_rows(viewport_rows, true))
+        );
+        assert!(snapshot_covers_offset(snapshot.as_ref(), 0, viewport_rows));
+        assert!(snapshot_covers_offset(
+            snapshot.as_ref(),
+            priority_offset,
+            viewport_rows
+        ));
+    }
+
+    #[test]
+    fn terminal_view_unprotected_bytes_live_snapshot_keeps_scroll_window() {
+        let mut view = TerminalViewState::from_output(terminal_output_lines(80));
+        let viewport_rows = view.screen.viewport_snapshot(0).rows;
+
+        view.append_bytes_unprotected(b"byte status\n");
+
+        let snapshot = view
+            .frame_snapshot
+            .as_ref()
+            .expect("byte append should publish a live snapshot");
+        assert!(snapshot.rows > viewport_rows);
+        assert!(snapshot_covers_offset(snapshot.as_ref(), 0, viewport_rows));
+        assert!(snapshot_covers_offset(snapshot.as_ref(), 1, viewport_rows));
+    }
+
+    #[test]
+    fn terminal_view_append_anchors_scrollback_when_output_adds_history() {
+        let mut view = TerminalViewState::from_output(terminal_output_lines(40));
+        let old_len = view.scrollback_len_for_ui();
+        assert!(old_len > 3);
+        view.scroll_offset = 3;
+        view.scrollback_snapshots
+            .insert(3, Arc::new(view.screen.viewport_snapshot(3)));
+        view.scrollback_action_links
+            .insert(3, TerminalFrameActionLinks::default());
+        view.pending_snapshot_offsets.insert(3);
+        view.priority_pending_snapshot_offsets.insert(3);
+
+        view.append_text("new anchored line\n");
+
+        let new_len = view.scrollback_len_for_ui();
+        let delta = new_len.saturating_sub(old_len);
+        assert!(delta > 0);
+        assert_eq!(view.scroll_offset, 3 + delta);
+        assert!(view.has_new_while_scrolled);
+        assert!(!view.scrollback_snapshots.contains_key(&3));
+        let remapped = view
+            .scrollback_snapshots
+            .get(&(3 + delta))
+            .expect("cached scrolled snapshot should be rekeyed");
+        assert_eq!(remapped.display_offset, 3 + delta);
+        assert_eq!(remapped.scrollback_len, new_len);
+        assert!(view.scrollback_action_links.contains_key(&(3 + delta)));
+        assert!(view.pending_snapshot_offsets.is_empty());
+        assert!(view.priority_pending_snapshot_offsets.is_empty());
+    }
+
+    #[test]
+    fn terminal_view_frame_apply_anchors_scrolled_offset() {
+        let old_screen = screen_from_line_count(40);
+        let mut view = TerminalViewState::new();
+        view.frame_snapshot = Some(Arc::new(old_screen.viewport_snapshot(0)));
+        let old_len = view.scrollback_len_for_ui();
+        assert!(old_len > 4);
+        view.scroll_offset = 4;
+        view.scrollback_snapshots
+            .insert(4, Arc::new(old_screen.viewport_snapshot(4)));
+
+        let new_screen = screen_from_line_count(43);
+        view.apply_terminal_frame_parts(
+            "",
+            Arc::new(new_screen.viewport_snapshot(0)),
+            None,
+            TerminalProtocolState::default(),
+            1,
+            0,
+            2,
+        );
+
+        let new_len = view.scrollback_len_for_ui();
+        let delta = new_len.saturating_sub(old_len);
+        assert!(delta > 0);
+        assert_eq!(view.scroll_offset, 4 + delta);
+        assert!(view.scrollback_snapshots.contains_key(&(4 + delta)));
+    }
+
+    #[test]
+    fn terminal_view_live_snapshot_preserves_scrolled_cache() {
+        let old_screen = screen_from_line_count(40);
+        let mut view = TerminalViewState::new();
+        view.frame_snapshot = Some(Arc::new(old_screen.viewport_snapshot(0)));
+        let old_len = view.scrollback_len_for_ui();
+        assert!(old_len > 4);
+        view.scroll_offset = 4;
+        view.scrollback_snapshots
+            .insert(4, Arc::new(old_screen.viewport_snapshot(4)));
+        view.pending_snapshot_offsets.insert(4);
+        view.priority_pending_snapshot_offsets.insert(4);
+
+        let new_screen = screen_from_line_count(43);
+        view.apply_terminal_live_snapshot_frame(Arc::new(new_screen.viewport_snapshot(0)), None, 2);
+
+        let new_len = view.scrollback_len_for_ui();
+        let delta = new_len.saturating_sub(old_len);
+        assert!(delta > 0);
+        assert_eq!(view.scroll_offset, 4 + delta);
+        assert!(view.has_new_while_scrolled);
+        assert!(!view.scrollback_snapshots.contains_key(&4));
+        assert!(view.scrollback_snapshots.contains_key(&(4 + delta)));
+        assert!(view.pending_snapshot_offsets.is_empty());
+        assert!(view.priority_pending_snapshot_offsets.is_empty());
+    }
+
+    #[test]
+    fn terminal_frame_snapshot_event_returns_scroll_window() {
+        let mut session = TerminalFrameSession::new("UTF-8", 1000);
+        session.screen = screen_from_line_count(120);
+        let offset = 20;
+        let viewport_rows = session.screen.viewport_snapshot(offset).rows;
+
+        let event = session.snapshot_event(
+            "s1".to_string(),
+            offset,
+            false,
+            ActionLinksMatcherSettings::default(),
+            false,
+        );
+
+        assert_eq!(event.offset, offset);
+        assert!(event.snapshot.rows > viewport_rows);
+        assert!(snapshot_covers_offset(
+            event.snapshot.as_ref(),
+            offset,
+            viewport_rows
+        ));
+        assert!(snapshot_covers_offset(
+            event.snapshot.as_ref(),
+            offset - 1,
+            viewport_rows
+        ));
+        assert!(snapshot_covers_offset(
+            event.snapshot.as_ref(),
+            offset + 1,
+            viewport_rows
+        ));
+    }
+
+    #[test]
+    fn terminal_frame_snapshot_event_covers_multi_viewport_fast_scroll_runs() {
+        let mut session = TerminalFrameSession::new("UTF-8", 1000);
+        session.screen = screen_from_line_count(240);
+        let offset = 80;
+        let viewport_rows = session.screen.viewport_snapshot(offset).rows;
+        let fast_delta = viewport_rows.saturating_mul(2);
+
+        let event = session.snapshot_event(
+            "s1".to_string(),
+            offset,
+            false,
+            ActionLinksMatcherSettings::default(),
+            false,
+        );
+
+        assert_eq!(event.offset, offset);
+        assert_eq!(
+            event.snapshot.cells.len(),
+            event.snapshot.rows * event.snapshot.cols
+        );
+        assert!(snapshot_covers_offset(
+            event.snapshot.as_ref(),
+            offset.saturating_sub(fast_delta),
+            viewport_rows
+        ));
+        assert!(snapshot_covers_offset(
+            event.snapshot.as_ref(),
+            offset,
+            viewport_rows
+        ));
+        assert!(snapshot_covers_offset(
+            event.snapshot.as_ref(),
+            offset + fast_delta,
+            viewport_rows
+        ));
+    }
+
+    #[test]
+    fn terminal_priority_snapshot_event_covers_long_user_scroll_runs() {
+        let mut session = TerminalFrameSession::new("UTF-8", 2000);
+        session.screen = screen_from_line_count(900);
+        let offset = 300;
+        let viewport_rows = session.screen.viewport_snapshot(offset).rows;
+        let fast_delta = viewport_rows.saturating_mul(6);
+
+        let event = session.snapshot_event(
+            "s1".to_string(),
+            offset,
+            false,
+            ActionLinksMatcherSettings::default(),
+            true,
+        );
+
+        assert_eq!(event.offset, offset);
+        assert!(snapshot_covers_offset(
+            event.snapshot.as_ref(),
+            offset.saturating_sub(fast_delta),
+            viewport_rows
+        ));
+        assert!(snapshot_covers_offset(
+            event.snapshot.as_ref(),
+            offset + fast_delta,
+            viewport_rows
+        ));
+    }
+
+    #[test]
+    fn terminal_frame_scroll_window_extra_rows_covers_fast_scroll_runs() {
+        assert_eq!(terminal_frame_scroll_window_extra_rows(12, false), 32);
+        assert_eq!(terminal_frame_scroll_window_extra_rows(40, false), 80);
+        assert_eq!(terminal_frame_scroll_window_extra_rows(120, false), 192);
+        assert_eq!(terminal_frame_scroll_window_extra_rows(12, true), 128);
+        assert_eq!(terminal_frame_scroll_window_extra_rows(40, true), 240);
+        assert_eq!(terminal_frame_scroll_window_extra_rows(160, true), 768);
+    }
+
+    #[test]
+    fn terminal_live_frame_snapshot_covers_first_scrollback_step() {
+        let mut session = TerminalFrameSession::new("UTF-8", 1000);
+        session.screen = screen_from_line_count(80);
+        let offset = 0;
+        let viewport_rows = session.screen.viewport_snapshot(offset).rows;
+        assert!(session.screen.scrollback_len() > 0);
+
+        let event = session.snapshot_event(
+            "s1".to_string(),
+            offset,
+            false,
+            ActionLinksMatcherSettings::default(),
+            false,
+        );
+
+        assert_eq!(event.offset, offset);
+        assert!(event.snapshot.rows > viewport_rows);
+        assert!(snapshot_covers_offset(
+            event.snapshot.as_ref(),
+            offset,
+            viewport_rows
+        ));
+        assert!(snapshot_covers_offset(
+            event.snapshot.as_ref(),
+            1,
+            viewport_rows
+        ));
+    }
+
+    #[test]
+    fn terminal_scroll_window_offsets_live_cursor_by_prepended_rows() {
+        let mut session = TerminalFrameSession::new("UTF-8", 1000);
+        session.screen = screen_from_line_count(80);
+        let base = session.screen.viewport_snapshot(0);
+        assert!(session.screen.scrollback_len() > 0);
+
+        let event = session.snapshot_event(
+            "s1".to_string(),
+            0,
+            false,
+            ActionLinksMatcherSettings::default(),
+            false,
+        );
+
+        let prepended_rows = event.snapshot.rows.saturating_sub(base.rows);
+        assert!(prepended_rows > 0);
+        assert_eq!(
+            event.snapshot.cursor_row,
+            base.cursor_row.saturating_add(prepended_rows)
+        );
+        assert_eq!(
+            event.snapshot.cursor.row,
+            base.cursor.row.saturating_add(prepended_rows)
+        );
+    }
+
+    #[test]
+    fn terminal_view_bottom_output_clears_stale_scrollback_cache() {
+        let mut view = TerminalViewState::from_output(terminal_output_lines(40));
+        view.scrollback_snapshots
+            .insert(2, Arc::new(view.screen.viewport_snapshot(2)));
+        view.pending_snapshot_offsets.insert(2);
+        view.priority_pending_snapshot_offsets.insert(2);
+
+        view.append_text("bottom line\n");
+
+        assert_eq!(view.scroll_offset, 0);
+        assert!(view.scrollback_snapshots.is_empty());
+        assert!(view.pending_snapshot_offsets.is_empty());
+        assert!(view.priority_pending_snapshot_offsets.is_empty());
+    }
+
+    #[test]
+    fn terminal_view_remember_scrollback_snapshot_prunes_to_recent_window_budget() {
+        let mut view = TerminalViewState::from_output(terminal_output_lines(80));
+
+        for offset in 1..=20 {
+            view.remember_scrollback_snapshot(
+                offset,
+                Arc::new(view.screen.viewport_snapshot(offset)),
+            );
+        }
+
+        assert_eq!(view.scrollback_snapshots.len(), 16);
+        assert!(view.scrollback_snapshots.contains_key(&20));
+        assert!((5..=20).all(|offset| view.scrollback_snapshots.contains_key(&offset)));
+        assert!((1..5).all(|offset| !view.scrollback_snapshots.contains_key(&offset)));
+    }
+
+    #[test]
+    fn terminal_view_prunes_scrollback_snapshots_around_keep_offset() {
+        let mut view = TerminalViewState::from_output(terminal_output_lines(160));
+
+        for offset in [
+            1usize, 4, 8, 12, 16, 20, 24, 28, 32, 36, 40, 44, 48, 52, 56, 60, 64,
+        ] {
+            view.scrollback_snapshots
+                .insert(offset, Arc::new(view.screen.viewport_snapshot(offset)));
+            view.scrollback_action_links.insert(
+                offset,
+                TerminalFrameActionLinks {
+                    matcher_key: 0,
+                    matches_by_line: Vec::new(),
+                    cell_ranges_by_line: Vec::new(),
+                },
+            );
+        }
+
+        view.prune_scrollback_snapshot_cache(32);
+
+        assert_eq!(
+            view.scrollback_snapshots.len(),
+            TERMINAL_SCROLLBACK_SNAPSHOT_CACHE_LIMIT
+        );
+        assert!(view.scrollback_snapshots.contains_key(&32));
+        assert!(!view.scrollback_snapshots.contains_key(&64));
+        assert!(!view.scrollback_action_links.contains_key(&64));
+        assert!(view.scrollback_snapshots.contains_key(&28));
+        assert!(view.scrollback_snapshots.contains_key(&36));
     }
 
     #[test]
@@ -2226,6 +3051,96 @@ mod tests {
             snap.lines
                 .iter()
                 .any(|line| line.contains("visible-output") || !line.is_empty())
+        );
+    }
+
+    #[test]
+    fn terminal_frame_output_live_snapshot_covers_first_scroll_step() {
+        let mut session = TerminalFrameSession::new("UTF-8", 1000);
+        session.include_live_snapshot = true;
+        session.screen = screen_from_line_count(80);
+        let viewport_rows = session.screen.viewport_snapshot(0).rows;
+        let event = session.output_event_from_batch(
+            "visible".to_string(),
+            TerminalFrameOutputBatch::default(),
+            Instant::now(),
+        );
+        let snapshot = event
+            .snapshot
+            .expect("visible output should include a live snapshot");
+
+        assert!(snapshot.rows > viewport_rows);
+        assert!(snapshot_covers_offset(snapshot.as_ref(), 0, viewport_rows));
+        assert!(snapshot_covers_offset(snapshot.as_ref(), 1, viewport_rows));
+    }
+
+    #[test]
+    fn terminal_frame_output_live_snapshot_covers_viewport_scroll_burst() {
+        let mut session = TerminalFrameSession::new("UTF-8", 1000);
+        session.include_live_snapshot = true;
+        session.screen = screen_from_line_count(160);
+        let viewport_rows = session.screen.viewport_snapshot(0).rows;
+        let event = session.output_event_from_batch(
+            "visible".to_string(),
+            TerminalFrameOutputBatch::default(),
+            Instant::now(),
+        );
+        let snapshot = event
+            .snapshot
+            .expect("visible output should include a live snapshot");
+
+        assert!(snapshot.rows >= viewport_rows.saturating_mul(2));
+        assert!(snapshot_covers_offset(snapshot.as_ref(), 0, viewport_rows));
+        assert!(snapshot_covers_offset(
+            snapshot.as_ref(),
+            viewport_rows,
+            viewport_rows
+        ));
+        let anchor =
+            snapshot_anchor_row_for_offset(snapshot.as_ref(), viewport_rows, viewport_rows);
+        assert_eq!(
+            snapshot.lines[anchor],
+            session.screen.viewport_snapshot(viewport_rows).lines[0]
+        );
+    }
+
+    #[test]
+    fn terminal_frame_output_live_snapshot_covers_priority_scroll_burst() {
+        let mut session = TerminalFrameSession::new("UTF-8", 1000);
+        session.include_live_snapshot = true;
+        session.screen = screen_from_line_count(320);
+        let viewport_rows = session.screen.viewport_snapshot(0).rows;
+        let priority_offset = viewport_rows.saturating_mul(4);
+        let event = session.output_event_from_batch(
+            "visible".to_string(),
+            TerminalFrameOutputBatch::default(),
+            Instant::now(),
+        );
+        let snapshot = event
+            .snapshot
+            .expect("visible output should include a live snapshot");
+
+        assert!(
+            snapshot.rows
+                >= viewport_rows
+                    .saturating_add(terminal_frame_scroll_window_extra_rows(viewport_rows, true,))
+        );
+        assert!(snapshot_covers_offset(
+            snapshot.as_ref(),
+            priority_offset,
+            viewport_rows
+        ));
+        let anchor =
+            snapshot_anchor_row_for_offset(snapshot.as_ref(), priority_offset, viewport_rows);
+        assert_eq!(
+            snapshot.lines[anchor],
+            session
+                .screen
+                .viewport_snapshot(priority_offset)
+                .lines
+                .first()
+                .cloned()
+                .unwrap_or_default()
         );
     }
 
@@ -3052,6 +3967,7 @@ mod tests {
                 offset,
                 action_links_enabled: false,
                 action_link_matchers: ActionLinksMatcherSettings::default(),
+                priority: false,
             }));
         }
 
@@ -3065,6 +3981,88 @@ mod tests {
             drained += 1;
         }
         assert_eq!(drained, TERMINAL_FRAME_COMMAND_QUEUE_CAP);
+    }
+
+    #[test]
+    fn terminal_frame_command_queue_prioritizes_user_scroll_snapshot() {
+        let (tx, rx) = terminal_frame_command_channel();
+        assert!(tx.send(TerminalFrameCommand::Output {
+            session_id: "s1".to_string(),
+            data: b"abc".to_vec(),
+            encoding: "UTF-8".to_string(),
+            scrollback_limit: 1000,
+        }));
+        assert!(tx.send(TerminalFrameCommand::RequestSearch {
+            session_id: "s1".to_string(),
+            key: TerminalFrameSearchKey {
+                query: "needle".to_string(),
+                case_sensitive: false,
+                regex: false,
+                whole_word: false,
+                limit: 100,
+            },
+        }));
+        assert!(tx.send(TerminalFrameCommand::RequestSnapshot {
+            session_id: "s1".to_string(),
+            offset: 12,
+            action_links_enabled: false,
+            action_link_matchers: ActionLinksMatcherSettings::default(),
+            priority: true,
+        }));
+
+        assert!(matches!(
+            rx.try_recv(),
+            Some(TerminalFrameCommand::RequestSnapshot {
+                offset: 12,
+                priority: true,
+                ..
+            })
+        ));
+        assert!(matches!(
+            rx.try_recv(),
+            Some(TerminalFrameCommand::Output { .. })
+        ));
+        assert!(matches!(
+            rx.try_recv(),
+            Some(TerminalFrameCommand::RequestSearch { .. })
+        ));
+    }
+
+    #[test]
+    fn terminal_frame_command_queue_keeps_priority_snapshot_under_cap() {
+        let (tx, rx) = terminal_frame_command_channel();
+        assert!(tx.send(TerminalFrameCommand::RequestSnapshot {
+            session_id: "active".to_string(),
+            offset: 9,
+            action_links_enabled: false,
+            action_link_matchers: ActionLinksMatcherSettings::default(),
+            priority: true,
+        }));
+        for offset in 0..TERMINAL_FRAME_COMMAND_QUEUE_CAP + 32 {
+            assert!(tx.send(TerminalFrameCommand::RequestSnapshot {
+                session_id: format!("s{offset}"),
+                offset,
+                action_links_enabled: false,
+                action_link_matchers: ActionLinksMatcherSettings::default(),
+                priority: false,
+            }));
+        }
+
+        let mut saw_priority = false;
+        while let Some(command) = rx.try_recv() {
+            if matches!(
+                command,
+                TerminalFrameCommand::RequestSnapshot {
+                    session_id,
+                    offset: 9,
+                    priority: true,
+                    ..
+                } if session_id == "active"
+            ) {
+                saw_priority = true;
+            }
+        }
+        assert!(saw_priority);
     }
 
     #[test]

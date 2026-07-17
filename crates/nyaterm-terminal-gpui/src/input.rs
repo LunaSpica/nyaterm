@@ -80,6 +80,7 @@ pub fn terminal_key_bytes_with_mode(
             "enter" => return Some(b"\r".to_vec()),
             "backspace" => return Some(vec![0x7f]),
             "tab" => return Some(b"\t".to_vec()),
+            "space" => return Some(b" ".to_vec()),
             "escape" => return Some(vec![0x1b]),
             "up" => {
                 return Some(if mode.application_cursor {

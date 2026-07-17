@@ -156,12 +156,12 @@ impl NyaTermApp {
                         );
                         dirty |= self.handle_session_output_dropped_event(session_id, bytes, cx);
                     }
-                    SessionEvent::Exited { session_id } => {
+                    SessionEvent::Exited { session_id, reason } => {
                         self.flush_pending_session_frame_outputs(
                             &mut pending_frame_outputs,
                             &mut drain_timings,
                         );
-                        dirty |= self.handle_session_exited_event(session_id, cx);
+                        dirty |= self.handle_session_exited_event(session_id, reason, cx);
                     }
                     SessionEvent::Error {
                         session_id,
@@ -270,14 +270,34 @@ impl NyaTermApp {
         false
     }
 
-    fn handle_session_exited_event(&mut self, session_id: String, cx: &mut Context<Self>) -> bool {
+    fn handle_session_exited_event(
+        &mut self,
+        session_id: String,
+        reason: String,
+        cx: &mut Context<Self>,
+    ) -> bool {
+        let known_session = self.session_metadata.contains_key(&session_id);
+        tracing::warn!(
+            diagnostic = "session_exited",
+            session_id = %session_id,
+            reason = %reason,
+            known_session,
+            "session exited or disconnected"
+        );
+        let log_reason = terminal_log_plain_text(&reason);
+        let log = format!("\n# session disconnected: {log_reason}\n");
+        if !session_id.is_empty() {
+            self.recording_write_pipeline
+                .write_output(session_id.clone(), log.clone());
+            self.append_terminal_log_for_session(Some(&session_id), &log, true);
+        }
         self.clear_trzsz_session(&session_id);
         self.clear_zmodem_session(&session_id);
         self.session_event_bridge.clear_session(&session_id);
         self.recording_write_pipeline
             .cleanup_session(session_id.clone());
         let _ = self.session_manager.close(&session_id);
-        if self.session_metadata.contains_key(&session_id) {
+        if known_session {
             // Keep the tab so the user can reconnect (Tauri disconnected pane).
             self.mark_session_disconnected(&session_id, cx);
             self.terminal_status = format!("session disconnected {}", short_id(&session_id));
@@ -288,6 +308,12 @@ impl NyaTermApp {
     }
 
     fn handle_session_error_event(&mut self, session_id: String, message: String) -> bool {
+        tracing::warn!(
+            diagnostic = "session_error",
+            session_id = %session_id,
+            message = %message,
+            "session error"
+        );
         let log_message = terminal_log_plain_text(&message);
         let log = format!("\n# session error: {log_message}\n");
         if !session_id.is_empty() {
@@ -456,8 +482,11 @@ impl NyaTermApp {
     }
 
     pub(super) fn terminal_frame_backlog_active(&self) -> bool {
-        !self.pending_terminal_frame_events.is_empty()
-            || self.terminal_frame_pipeline.queued_event_count() > 0
+        terminal_frame_backlog_active_from_counts(
+            self.pending_terminal_frame_events.len(),
+            self.terminal_frame_pipeline.queued_event_count(),
+            self.terminal_frame_pipeline.queued_command_count(),
+        )
     }
 
     pub(super) fn session_sideband_detectors_idle(&self, session_id: &str) -> bool {

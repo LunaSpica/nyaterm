@@ -135,6 +135,8 @@ pub struct SshSessionConfig {
     pub x11_forwarding: bool,
     pub x11_display: String,
     pub deferred_pty: bool,
+    /// Seconds between SSH keepalive packets. Zero disables keepalive.
+    pub keep_alive_interval_secs: u32,
     pub cols: u16,
     pub rows: u16,
     /// Total terminal pixel width (cols * cell_width). Zero means unknown.
@@ -195,6 +197,7 @@ impl std::fmt::Debug for SshSessionConfig {
             .field("x11_forwarding", &self.x11_forwarding)
             .field("x11_display", &self.x11_display)
             .field("deferred_pty", &self.deferred_pty)
+            .field("keep_alive_interval_secs", &self.keep_alive_interval_secs)
             .field("cols", &self.cols)
             .field("rows", &self.rows)
             .field("pixel_width", &self.pixel_width)
@@ -1012,6 +1015,7 @@ impl Default for SshSessionConfig {
             x11_forwarding: false,
             x11_display: String::new(),
             deferred_pty: false,
+            keep_alive_interval_secs: 30,
             cols: 80,
             rows: 24,
             pixel_width: 0,
@@ -2952,7 +2956,7 @@ pub enum SessionKind {
 pub enum SessionEvent {
     Output { session_id: String, data: Vec<u8> },
     OutputDropped { session_id: String, bytes: usize },
-    Exited { session_id: String },
+    Exited { session_id: String, reason: String },
     Error { session_id: String, message: String },
 }
 
@@ -3919,6 +3923,7 @@ fn spawn_reader_thread(
                 Ok(0) => {
                     event_queue.push(SessionEvent::Exited {
                         session_id: session_id.clone(),
+                        reason: "reader reached EOF".to_string(),
                     });
                     break;
                 }
@@ -3954,6 +3959,11 @@ fn spawn_tcp_reader_thread(
                 Ok(0) => {
                     event_queue.push(SessionEvent::Exited {
                         session_id: session_id.clone(),
+                        reason: if config.raw_tcp {
+                            "raw TCP peer closed connection".to_string()
+                        } else {
+                            "telnet peer closed connection".to_string()
+                        },
                     });
                     break;
                 }
@@ -4235,9 +4245,31 @@ async fn run_open_ssh_shell_session(
                             data: data.to_vec(),
                         });
                     }
-                    Some(ChannelMsg::ExitStatus { .. }) | Some(ChannelMsg::Eof) | Some(ChannelMsg::Close) | None => {
+                    Some(ChannelMsg::ExitStatus { exit_status }) => {
                         event_queue.push(SessionEvent::Exited {
                             session_id: session_id.clone(),
+                            reason: format!("SSH channel exit status {exit_status}"),
+                        });
+                        break;
+                    }
+                    Some(ChannelMsg::Eof) => {
+                        event_queue.push(SessionEvent::Exited {
+                            session_id: session_id.clone(),
+                            reason: "SSH channel EOF".to_string(),
+                        });
+                        break;
+                    }
+                    Some(ChannelMsg::Close) => {
+                        event_queue.push(SessionEvent::Exited {
+                            session_id: session_id.clone(),
+                            reason: "SSH channel closed by remote".to_string(),
+                        });
+                        break;
+                    }
+                    None => {
+                        event_queue.push(SessionEvent::Exited {
+                            session_id: session_id.clone(),
+                            reason: "SSH connection task ended".to_string(),
                         });
                         break;
                     }
@@ -4402,9 +4434,18 @@ impl SshPtyDimensions {
     }
 }
 
-fn ssh_client_config() -> Arc<russh::client::Config> {
+fn ssh_client_config(config: &SshSessionConfig) -> Arc<russh::client::Config> {
+    let keepalive_interval = if config.keep_alive_interval_secs == 0 {
+        None
+    } else {
+        Some(Duration::from_secs(u64::from(
+            config.keep_alive_interval_secs,
+        )))
+    };
     Arc::new(russh::client::Config {
-        inactivity_timeout: Some(Duration::from_secs(30)),
+        inactivity_timeout: None,
+        keepalive_interval,
+        keepalive_max: 3,
         ..Default::default()
     })
 }
@@ -5690,7 +5731,7 @@ fn open_authenticated_ssh_handle_with_sender_registry(
             let mut handle = tokio::time::timeout(
                 Duration::from_secs(30),
                 client::connect_stream(
-                    ssh_client_config(),
+                    ssh_client_config(config),
                     direct_channel.into_stream(),
                     SshClientHandler {
                         host: config.host.clone(),
@@ -5734,7 +5775,7 @@ async fn connect_ssh_transport(
     };
     let Some(proxy) = config.proxy.as_ref() else {
         return client::connect(
-            ssh_client_config(),
+            ssh_client_config(config),
             (config.host.as_str(), config.port),
             handler,
         )
@@ -5762,7 +5803,7 @@ async fn connect_ssh_transport(
                 _ => tokio_socks::tcp::Socks5Stream::connect(proxy_addr.as_str(), target).await,
             }
             .map_err(|error| anyhow::anyhow!("SOCKS5 proxy connection failed: {error}"))?;
-            client::connect_stream(ssh_client_config(), stream.into_inner(), handler)
+            client::connect_stream(ssh_client_config(config), stream.into_inner(), handler)
                 .await
                 .map_err(|error| anyhow::anyhow!("SSH connection via SOCKS5 proxy failed: {error}"))
         }
@@ -5791,7 +5832,7 @@ async fn connect_ssh_transport(
                 }
             }
             .map_err(|error| anyhow::anyhow!("HTTP proxy tunnel failed: {error}"))?;
-            client::connect_stream(ssh_client_config(), stream, handler)
+            client::connect_stream(ssh_client_config(config), stream, handler)
                 .await
                 .map_err(|error| anyhow::anyhow!("SSH connection via HTTP proxy failed: {error}"))
         }
@@ -5803,7 +5844,7 @@ async fn connect_ssh_transport(
                 &config.username,
             )
             .await?;
-            client::connect_stream(ssh_client_config(), stream, handler)
+            client::connect_stream(ssh_client_config(config), stream, handler)
                 .await
                 .map_err(|error| anyhow::anyhow!("SSH connection via ProxyCommand failed: {error}"))
         }

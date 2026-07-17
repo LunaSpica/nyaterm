@@ -2,16 +2,17 @@ use super::*;
 
 impl NyaTermApp {
     pub(in crate::features) fn clear_action_link_tooltip(&mut self, cx: &mut Context<Self>) {
-        let mut changed = false;
-        if self.action_link_tooltip.take().is_some() {
-            changed = true;
-        }
-        if self.action_link_hover_pending.take().is_some() {
-            changed = true;
-        }
-        if changed {
+        let visible_changed = self.clear_action_link_tooltip_state();
+        if visible_changed {
             cx.notify();
         }
+    }
+
+    fn clear_action_link_tooltip_state(&mut self) -> bool {
+        clear_action_link_tooltip_state(
+            &mut self.action_link_tooltip,
+            &mut self.action_link_hover_pending,
+        )
     }
 
     pub(in crate::features) fn poll_action_link_tooltip_delay(
@@ -97,10 +98,6 @@ impl NyaTermApp {
         // Already visible for this link: track position.
         if let Some(current) = self.action_link_tooltip.as_ref() {
             if current.match_key == match_key {
-                if current.x != next.x || current.y != next.y {
-                    self.action_link_tooltip = Some(next);
-                    cx.notify();
-                }
                 return;
             }
         }
@@ -116,9 +113,11 @@ impl NyaTermApp {
             }
         }
         // New link under cursor: start 250ms delay (Tauri ActionLinkTooltip).
-        self.action_link_tooltip = None;
+        let visible_changed = self.action_link_tooltip.take().is_some();
         self.action_link_hover_pending = Some((match_key, Instant::now(), next));
-        cx.notify();
+        if visible_changed {
+            cx.notify();
+        }
     }
 
     pub(in crate::features) fn action_link_at_point(
@@ -152,14 +151,7 @@ impl NyaTermApp {
             self.settings.terminal_action_links_enabled,
             &self.settings.terminal_action_links_matchers,
         );
-        let offset = if let Some(session_id) = session_id.filter(|id| !id.is_empty()) {
-            self.terminal_views
-                .get(session_id)
-                .map(|view| view.scroll_offset)
-                .unwrap_or(0)
-        } else {
-            self.terminal_scroll_offset
-        };
+        let offset = self.terminal_display_offset_for_session(session_id);
         let snapshot = self.terminal_snapshot_for_session(session_id, offset);
         let frame_action_links = if let Some(session_id) = session_id.filter(|id| !id.is_empty()) {
             let Some(view) = self.terminal_views.get(session_id) else {
@@ -301,8 +293,9 @@ impl NyaTermApp {
             return false;
         };
         let session_id = self.active_session_id.clone().unwrap_or_default();
-        let scroll_offset = self.active_terminal_scroll_offset();
-        let snapshot = self.terminal_snapshot_for_session(Some(session_id.as_str()), scroll_offset);
+        let display_offset = self.active_terminal_display_offset();
+        let snapshot =
+            self.terminal_snapshot_for_session(Some(session_id.as_str()), display_offset);
         let Some(spans) = snapshot.hyperlink_lines.get(pos.row) else {
             return false;
         };
@@ -392,6 +385,52 @@ impl NyaTermApp {
             view.performance_mode,
         )
     }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn tooltip(match_key: &str) -> ActionLinkTooltipState {
+        ActionLinkTooltipState {
+            x: px(10.0),
+            y: px(20.0),
+            kind_label: "host".to_string(),
+            value: "example.com".to_string(),
+            default_action_label: "Open".to_string(),
+            default_action_preview: "https://example.com".to_string(),
+            has_more_actions: false,
+            match_key: match_key.to_string(),
+        }
+    }
+
+    #[test]
+    fn action_link_clear_pending_only_is_not_visible_change() {
+        let mut visible = None;
+        let mut pending = Some(("pending".to_string(), Instant::now(), tooltip("pending")));
+
+        assert!(!clear_action_link_tooltip_state(&mut visible, &mut pending));
+        assert!(pending.is_none());
+    }
+
+    #[test]
+    fn action_link_clear_visible_tooltip_is_visible_change() {
+        let mut visible = Some(tooltip("visible"));
+        let mut pending = Some(("pending".to_string(), Instant::now(), tooltip("pending")));
+
+        assert!(clear_action_link_tooltip_state(&mut visible, &mut pending));
+        assert!(visible.is_none());
+        assert!(pending.is_none());
+    }
+}
+
+fn clear_action_link_tooltip_state(
+    tooltip: &mut Option<ActionLinkTooltipState>,
+    pending: &mut Option<(String, Instant, ActionLinkTooltipState)>,
+) -> bool {
+    let visible_changed = tooltip.take().is_some();
+    *pending = None;
+    visible_changed
 }
 
 fn terminal_bounds_contains(bounds: Bounds<Pixels>, position: Point<Pixels>) -> bool {

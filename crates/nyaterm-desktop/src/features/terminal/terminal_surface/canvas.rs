@@ -78,15 +78,18 @@ impl NyaTermApp {
             .get(&session_id)
             .map(|view| view.scroll_offset)
             .unwrap_or(self.terminal_scroll_offset);
+        let display_offset = self.terminal_display_offset_for_session(
+            (!session_id.is_empty()).then_some(session_id.as_str()),
+        );
         let frame_action_links = if session_id.is_empty() {
             self.terminal_views
                 .get(&session_id)
                 .filter(|_| expensive_interactions_enabled)
                 .and_then(|view| {
-                    if scroll_offset == 0 {
+                    if display_offset == 0 {
                         view.frame_action_links.as_ref()
                     } else {
-                        view.scrollback_action_links.get(&scroll_offset)
+                        view.scrollback_action_links.get(&display_offset)
                     }
                 })
                 .filter(|links| links.matcher_key == action_link_matcher_key)
@@ -104,7 +107,7 @@ impl NyaTermApp {
         let snapshot = if needs_shell_viewport_snapshot {
             self.terminal_snapshot_for_session(
                 (!session_id.is_empty()).then_some(session_id.as_str()),
-                scroll_offset,
+                display_offset,
             )
         } else {
             // Cheap placeholder: chrome wrappers do not paint cells from this value.
@@ -129,7 +132,7 @@ impl NyaTermApp {
         let show_cursor = is_active
             && !session_id.is_empty()
             && !is_disconnected
-            && scroll_offset == 0
+            && display_offset == 0
             && remote_cursor_visible
             && (!blink_enabled || self.terminal_runtime.cursor_blink_on);
         let cursor_style = match snapshot.cursor.shape {
@@ -722,12 +725,9 @@ impl NyaTermApp {
                             .relative()
                             .flex_1()
                             .min_h_0()
-                            .when(
-                                is_active
-                                    && (self.action_link_tooltip.is_some()
-                                        || self.action_link_hover_pending.is_some()),
-                                |this| this.cursor_pointer(),
-                            )
+                            .when(is_active && self.action_link_tooltip.is_some(), |this| {
+                                this.cursor_pointer()
+                            })
                             .p(if self.settings.terminal_show_workspace_padding {
                                 px(16.)
                             } else {
@@ -761,64 +761,6 @@ impl NyaTermApp {
                                         );
                                     },
                                 )
-                            })
-                            .on_scroll_wheel({
-                                let session_id = output_session_id.clone();
-                                cx.listener(move |this, event: &ScrollWheelEvent, _, cx| {
-                                    if !session_id.is_empty()
-                                        && this.active_session_id.as_deref()
-                                            != Some(session_id.as_str())
-                                    {
-                                        this.activate_workspace_pane(session_id.clone(), cx);
-                                    }
-                                    // Positive wheel delta.y scrolls into history (larger offset).
-                                    let delta = match event.delta {
-                                        ScrollDelta::Lines(delta) => delta.y.round() as i32,
-                                        ScrollDelta::Pixels(delta) => {
-                                            let py = f32::from(delta.y);
-                                            let (_, cell_h) = this.terminal_cell_size();
-                                            (py / cell_h.max(1.)).round() as i32
-                                        }
-                                    };
-                                    if delta == 0 {
-                                        return;
-                                    }
-                                    // Mouse tracking: wheel becomes button 64/65 reports.
-                                    if let Some(cell) = this.point_to_terminal_cell_for_session(
-                                        Some(session_id.as_str()),
-                                        event.position,
-                                    ) {
-                                        let button = if delta > 0 { 64u8 } else { 65u8 };
-                                        let steps = delta.unsigned_abs().min(8);
-                                        let mut reported = false;
-                                        for _ in 0..steps {
-                                            if this.maybe_send_mouse_report_for_session(
-                                                &session_id,
-                                                button,
-                                                cell.col as u16,
-                                                cell.row as u16,
-                                                true,
-                                                false,
-                                                event.modifiers,
-                                                cx,
-                                            ) {
-                                                reported = true;
-                                            } else {
-                                                break;
-                                            }
-                                        }
-                                        if reported {
-                                            cx.stop_propagation();
-                                            return;
-                                        }
-                                    }
-                                    if this.maybe_send_alternate_scroll_for_session(&session_id, delta, cx) {
-                                        cx.stop_propagation();
-                                        return;
-                                    }
-                                    this.scroll_terminal_by_for_session(Some(&session_id), delta, cx);
-                                    cx.stop_propagation();
-                                })
                             })
                             .on_mouse_down(
                                 MouseButton::Left,

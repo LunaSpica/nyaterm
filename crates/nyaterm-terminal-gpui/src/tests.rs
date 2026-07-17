@@ -25,6 +25,11 @@ fn buffer_matches_report_column_ranges() {
 
 #[test]
 fn terminal_key_bytes_include_common_xterm_keys() {
+    assert_eq!(key_bytes("space", None, mods(false, false, false)), b" ");
+    assert_eq!(
+        key_bytes("space", Some(" "), mods(false, false, false)),
+        b" "
+    );
     assert_eq!(key_bytes("tab", None, mods(true, false, false)), b"\x1b[Z");
     assert_eq!(
         key_bytes("insert", None, mods(false, false, false)),

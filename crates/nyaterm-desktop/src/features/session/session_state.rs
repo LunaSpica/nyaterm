@@ -210,7 +210,7 @@ impl NyaTermApp {
         Some(details)
     }
 
-    pub(in crate::features) fn activate_session_id(&mut self, session_id: &str) {
+    pub(in crate::features) fn activate_session_id(&mut self, session_id: &str) -> Option<String> {
         self.open_tabs_menu_open = false;
         self.new_session_menu_open = false;
         // Session switch resets terminal-output credential autofill (Tauri XTerminal remount).
@@ -286,6 +286,58 @@ impl NyaTermApp {
         {
             self.request_terminal_live_snapshot(session_id);
         }
+        previous_session_id
+    }
+
+    pub(in crate::features) fn activate_session_id_with_surface_sync(
+        &mut self,
+        session_id: &str,
+        cx: &mut Context<Self>,
+    ) {
+        let previous_session_id = self.activate_session_id(session_id);
+        self.sync_terminal_activation_surfaces(previous_session_id, session_id, cx);
+    }
+
+    fn sync_terminal_activation_surfaces(
+        &mut self,
+        previous_session_id: Option<String>,
+        session_id: &str,
+        cx: &mut Context<Self>,
+    ) {
+        let notify_session_ids =
+            terminal_activation_surface_notify_ids(previous_session_id.as_deref(), session_id);
+        if notify_session_ids.is_empty() {
+            return;
+        }
+        let chrome_changed = self.clear_terminal_activation_interaction_state();
+        for session_id in notify_session_ids {
+            self.notify_terminal_surface_only(Some(session_id.as_str()), cx);
+        }
+        if chrome_changed {
+            cx.notify();
+        }
+    }
+
+    fn clear_terminal_activation_interaction_state(&mut self) -> bool {
+        let mut chrome_changed = false;
+        if self.terminal_selection.take().is_some() {
+            chrome_changed = true;
+        }
+        if self.terminal_selection_dragging {
+            self.terminal_selection_dragging = false;
+            chrome_changed = true;
+        }
+        if self.terminal_context_menu.take().is_some() {
+            chrome_changed = true;
+        }
+        if self.action_link_menu.take().is_some() {
+            chrome_changed = true;
+        }
+        if self.action_link_tooltip.take().is_some() {
+            chrome_changed = true;
+        }
+        self.action_link_hover_pending = None;
+        chrome_changed
     }
 
     pub(in crate::features) fn select_session(
@@ -309,7 +361,7 @@ impl NyaTermApp {
             session_id.clone()
         };
         let disconnected = self.is_session_disconnected(&focus_id) || disconnected;
-        self.activate_session_id(&focus_id);
+        self.activate_session_id_with_surface_sync(&focus_id, cx);
         self.terminal_status = if disconnected {
             format!("disconnected {}", short_id(&focus_id))
         } else {
@@ -342,7 +394,7 @@ impl NyaTermApp {
         let len = sessions.len() as isize;
         let next_index = (active_index as isize + offset).rem_euclid(len) as usize;
         let session_id = sessions[next_index].id.clone();
-        self.activate_session_id(&session_id);
+        self.activate_session_id_with_surface_sync(&session_id, cx);
         self.selected_nav = NavItem::Workspace;
         self.main_mode = MainMode::Workspace;
         self.terminal_status = format!("active {}", short_id(&session_id));
@@ -362,7 +414,7 @@ impl NyaTermApp {
         }
         let index = index.min(sessions.len().saturating_sub(1));
         let session_id = sessions[index].id.clone();
-        self.activate_session_id(&session_id);
+        self.activate_session_id_with_surface_sync(&session_id, cx);
         self.selected_nav = NavItem::Workspace;
         self.main_mode = MainMode::Workspace;
         self.terminal_status = format!("active {}", short_id(&session_id));
@@ -583,5 +635,52 @@ impl NyaTermApp {
         }
         self.color_picker_open = false;
         cx.notify();
+    }
+}
+
+fn terminal_activation_surface_notify_ids(
+    previous_session_id: Option<&str>,
+    session_id: &str,
+) -> Vec<String> {
+    if previous_session_id == Some(session_id) {
+        return Vec::new();
+    }
+    let mut ids = Vec::with_capacity(2);
+    if let Some(previous_session_id) = previous_session_id.filter(|id| !id.is_empty()) {
+        ids.push(previous_session_id.to_string());
+    }
+    if !session_id.is_empty() {
+        ids.push(session_id.to_string());
+    }
+    ids
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn activation_surface_notify_skips_unchanged_session() {
+        assert!(terminal_activation_surface_notify_ids(Some("a"), "a").is_empty());
+    }
+
+    #[test]
+    fn activation_surface_notify_targets_previous_and_current_sessions() {
+        assert_eq!(
+            terminal_activation_surface_notify_ids(Some("old"), "new"),
+            vec!["old".to_string(), "new".to_string()]
+        );
+    }
+
+    #[test]
+    fn activation_surface_notify_ignores_empty_session_ids() {
+        assert_eq!(
+            terminal_activation_surface_notify_ids(None, "new"),
+            vec!["new".to_string()]
+        );
+        assert_eq!(
+            terminal_activation_surface_notify_ids(Some("old"), ""),
+            vec!["old".to_string()]
+        );
     }
 }

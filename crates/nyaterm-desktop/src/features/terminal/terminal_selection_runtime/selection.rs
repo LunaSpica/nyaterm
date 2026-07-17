@@ -1,5 +1,7 @@
 use super::*;
 
+const TERMINAL_SELECTION_DRAG_NOTIFY_DELAY: Duration = Duration::from_millis(8);
+
 impl NyaTermApp {
     pub(in crate::features) fn clear_terminal_selection(&mut self, cx: &mut Context<Self>) {
         if self.terminal_selection.is_some() || self.terminal_selection_dragging {
@@ -31,7 +33,7 @@ impl NyaTermApp {
         if selection.is_empty() {
             return None;
         }
-        let offset = self.active_terminal_scroll_offset();
+        let offset = self.active_terminal_display_offset();
         let snapshot =
             self.terminal_snapshot_for_session(self.active_session_id.as_deref(), offset);
         let (start, end) = selection.ordered();
@@ -176,7 +178,7 @@ impl NyaTermApp {
         if let Some(selection) = self.terminal_selection.as_mut() {
             if selection.head != cell {
                 selection.head = cell;
-                self.notify_active_terminal_surface(cx);
+                self.queue_terminal_selection_drag_visual_notify(cx);
             }
         }
     }
@@ -239,8 +241,43 @@ impl NyaTermApp {
         self.notify_active_terminal_surface(cx);
     }
 
+    fn queue_terminal_selection_drag_visual_notify(&mut self, cx: &mut Context<Self>) {
+        let Some(session_id) = self.active_session_id.clone() else {
+            return;
+        };
+        if session_id.is_empty() {
+            return;
+        }
+        self.terminal_runtime
+            .pending_terminal_selection_drag_sessions
+            .insert(session_id);
+        if self.terminal_runtime.terminal_selection_drag_notify_armed {
+            return;
+        }
+        self.terminal_runtime.terminal_selection_drag_notify_armed = true;
+        cx.spawn(async move |this, cx| {
+            Timer::after(TERMINAL_SELECTION_DRAG_NOTIFY_DELAY).await;
+            let _ = this.update(cx, |this, cx| {
+                this.flush_terminal_selection_drag_visual_notify(cx);
+            });
+        })
+        .detach();
+    }
+
+    fn flush_terminal_selection_drag_visual_notify(&mut self, cx: &mut Context<Self>) {
+        self.terminal_runtime.terminal_selection_drag_notify_armed = false;
+        let session_ids = terminal_selection_drag_flush_sessions(
+            &mut self
+                .terminal_runtime
+                .pending_terminal_selection_drag_sessions,
+        );
+        for session_id in session_ids {
+            self.notify_terminal_surface_only(Some(session_id.as_str()), cx);
+        }
+    }
+
     pub(in crate::features) fn word_bounds_at(&self, cell: TerminalCellPos) -> (usize, usize) {
-        let offset = self.active_terminal_scroll_offset();
+        let offset = self.active_terminal_display_offset();
         let snapshot =
             self.terminal_snapshot_for_session(self.active_session_id.as_deref(), offset);
         let line = snapshot
@@ -278,9 +315,34 @@ fn terminal_text_cell_is_word(cell: &TerminalTextCell, separators: &str) -> bool
         .is_some_and(|ch| !separators.contains(ch))
 }
 
+fn terminal_selection_drag_flush_sessions(pending_sessions: &mut HashSet<String>) -> Vec<String> {
+    let mut sessions = pending_sessions.drain().collect::<Vec<_>>();
+    sessions.sort();
+    sessions
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn terminal_selection_drag_flush_sessions_drains_sorted() {
+        let mut sessions = HashSet::from(["b".to_string(), "a".to_string()]);
+
+        assert_eq!(
+            terminal_selection_drag_flush_sessions(&mut sessions),
+            vec!["a".to_string(), "b".to_string()]
+        );
+        assert!(sessions.is_empty());
+    }
+
+    #[test]
+    fn terminal_selection_drag_notify_delay_is_frame_coalesced() {
+        assert_eq!(
+            TERMINAL_SELECTION_DRAG_NOTIFY_DELAY,
+            Duration::from_millis(8)
+        );
+    }
 
     #[test]
     fn terminal_text_cells_keep_combining_mark_with_previous_cell() {

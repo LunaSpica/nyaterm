@@ -1,4 +1,5 @@
 use super::*;
+use crate::features::terminal_runtime::TERMINAL_USER_SCROLL_ACTIVE_WINDOW;
 
 impl NyaTermApp {
     fn drive_startup_restore_queue_tick(
@@ -311,6 +312,7 @@ impl NyaTermApp {
                 .saturating_sub(self.terminal_runtime.last_perf_layout_cache_misses);
             let active_session_id = self.active_session_id.as_deref().unwrap_or("");
             let active_scroll_offset = self.active_terminal_scroll_offset();
+            let active_display_offset = self.active_terminal_display_offset();
             let visible_session_count = self.visible_terminal_session_ids().len();
             let has_runtime_activity = !active_session_id.is_empty()
                 || full_shell_paint_delta > 0
@@ -329,6 +331,7 @@ impl NyaTermApp {
                     active_session_id,
                     visible_session_count,
                     active_scroll_offset,
+                    active_display_offset,
                     connect_settle_active = self
                         .terminal_runtime
                         .connect_settle_until
@@ -437,11 +440,20 @@ impl NyaTermApp {
         let mut background_timings = RuntimeBackgroundDrainTimings::default();
         let critical_background_only = self.runtime_output_pressure_active();
         let terminal_frame_backlog_active = self.terminal_frame_backlog_active();
+        let user_scroll_frame_pending = terminal_user_scroll_frame_apply_pending(
+            self.terminal_runtime.last_terminal_user_scroll_at,
+            self.visible_terminal_session_ids()
+                .into_iter()
+                .any(|session_id| self.terminal_visual_scroll_active_for_session(Some(session_id))),
+            tick_started_at,
+            TERMINAL_USER_SCROLL_ACTIVE_WINDOW,
+        );
         let terminal_frame_apply_paced = terminal_frame_backlog_active
             && terminal_frame_apply_should_defer(
                 self.terminal_runtime.last_terminal_frame_apply_at,
                 tick_started_at,
                 critical_background_only,
+                user_scroll_frame_pending,
             );
         let defer_terminal_frame_after_output = runtime_background_should_defer_terminal_frames(
             self.terminal_runtime.session_event_last_output_event_count,
@@ -449,6 +461,7 @@ impl NyaTermApp {
                 .session_event_last_drained_output_bytes,
             terminal_frame_backlog_active,
             terminal_frame_apply_paced,
+            user_scroll_frame_pending,
         );
         let defer_terminal_frame_apply =
             defer_terminal_frame_after_output || terminal_frame_apply_paced;

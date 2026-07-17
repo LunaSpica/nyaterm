@@ -116,7 +116,7 @@ impl NyaTermApp {
             cx.notify();
             return;
         }
-        if self.active_terminal_scroll_offset() > 0 {
+        if self.active_terminal_visual_scroll_active() {
             self.scroll_terminal_to_bottom(cx);
         }
 

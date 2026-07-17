@@ -233,7 +233,6 @@ mod layout_cache_tests {
         let base = TerminalLineDecorations::default();
         let dynamic = TerminalLineDecorations {
             search_ranges: vec![(0, 2)],
-            active_search_ranges: vec![(2, 4)],
             selection_cols: Some((1, 3)),
             command_mark: Some(nyaterm_terminal::ShellCommandMark::Prompt),
             ..TerminalLineDecorations::default()
@@ -242,6 +241,37 @@ mod layout_cache_tests {
         assert_eq!(
             element.row_layout_key(0, "same", None, &base),
             element.row_layout_key(0, "same", None, &dynamic)
+        );
+    }
+
+    #[test]
+    fn row_layout_key_tracks_active_search_glyph_decorations() {
+        let mut snapshot = TerminalScreen::default().snapshot();
+        snapshot.lines[0] = "same".to_string();
+        snapshot.line_signatures[0] = 7;
+        let element = NyaTerminalElement::new(
+            Arc::new(snapshot),
+            Arc::new(Vec::new()),
+            Vec::new(),
+            false,
+            "block",
+            8.0,
+            16.0,
+            nyaterm_ui::theme_palette("github-dark"),
+            "monospace".to_string(),
+            14.0,
+            400.0,
+            700.0,
+        );
+        let base = TerminalLineDecorations::default();
+        let active = TerminalLineDecorations {
+            active_search_ranges: vec![(0, 2)],
+            ..TerminalLineDecorations::default()
+        };
+
+        assert_ne!(
+            element.row_layout_key(0, "same", None, &base),
+            element.row_layout_key(0, "same", None, &active)
         );
     }
 
@@ -301,7 +331,7 @@ mod layout_cache_tests {
 
         decorations.search_ranges.clear();
         decorations.active_search_ranges.push((2, 4));
-        assert!(!terminal_glyph_decorations_needed(&decorations));
+        assert!(terminal_glyph_decorations_needed(&decorations));
     }
 
     #[test]
@@ -346,6 +376,10 @@ mod layout_cache_tests {
             command_mark: Some(nyaterm_terminal::ShellCommandMark::Prompt),
             ..TerminalLineDecorations::default()
         };
+        let active_search = TerminalLineDecorations {
+            active_search_ranges: vec![(0, 2)],
+            ..TerminalLineDecorations::default()
+        };
 
         assert!(!terminal_plain_row_fast_path(
             Some(&styled_spans),
@@ -359,6 +393,51 @@ mod layout_cache_tests {
         ));
         assert!(terminal_plain_row_fast_path(None, &[], &selection));
         assert!(terminal_plain_row_fast_path(None, &[], &command_mark));
+        assert!(!terminal_plain_row_fast_path(None, &[], &active_search));
+    }
+
+    #[test]
+    fn dynamic_decoration_backgrounds_include_plain_selection_and_search() {
+        let palette = nyaterm_ui::theme_palette("github-dark");
+        let bounds = Bounds::new(point(px(0.), px(0.)), size(px(120.), px(40.)));
+        let mut out = Vec::new();
+        let decorations = TerminalLineDecorations {
+            search_ranges: vec![(0, 2)],
+            active_search_ranges: vec![(2, 4)],
+            selection_cols: Some((4, 6)),
+            ..TerminalLineDecorations::default()
+        };
+
+        push_dynamic_decoration_backgrounds(0, &decorations, palette, bounds, 8.0, 16.0, &mut out);
+
+        assert_eq!(out.len(), 3);
+    }
+
+    #[test]
+    fn visible_rows_expand_for_visual_scroll_offset() {
+        let bounds = Bounds::new(point(px(0.), px(0.)), size(px(100.), px(32.)));
+
+        assert_eq!(terminal_visible_rows_for_bounds(bounds, 16., 10, 0.0), 0..3);
+        assert_eq!(
+            terminal_visible_rows_for_bounds(bounds, 16., 10, -8.0),
+            0..4
+        );
+        assert_eq!(
+            terminal_visible_rows_for_bounds(bounds, 16., 10, -20.0),
+            0..5
+        );
+        assert_eq!(terminal_visible_rows_for_bounds(bounds, 16., 10, 8.0), 0..3);
+        assert_eq!(
+            terminal_visible_rows_for_bounds(bounds, 16., 10, 20.0),
+            0..2
+        );
+    }
+
+    #[test]
+    fn layout_height_can_use_viewport_rows_instead_of_snapshot_window_rows() {
+        assert_eq!(terminal_layout_height_px(16.0, 80, None), 1280.0);
+        assert_eq!(terminal_layout_height_px(16.0, 80, Some(24)), 384.0);
+        assert_eq!(terminal_layout_height_px(0.0, 0, Some(0)), 1.0);
     }
 }
 
@@ -376,6 +455,8 @@ pub struct NyaTerminalElement {
     font_size: f32,
     normal_weight: f32,
     bold_weight: f32,
+    visual_y_offset: f32,
+    layout_rows: Option<usize>,
 }
 
 struct TerminalPaintRow {
@@ -417,21 +498,6 @@ pub struct NyaTerminalPaintPlan {
     text_run_count: usize,
 }
 
-fn image_mask(
-    bounds: Bounds<Pixels>,
-    cols: usize,
-    rows: usize,
-    cell_w: f32,
-    cell_h: f32,
-) -> ContentMask<Pixels> {
-    ContentMask {
-        bounds: Bounds::new(
-            bounds.origin,
-            size(px(cols as f32 * cell_w), px(rows as f32 * cell_h)),
-        ),
-    }
-}
-
 impl NyaTerminalElement {
     #[allow(clippy::too_many_arguments)]
     pub fn new(
@@ -462,11 +528,23 @@ impl NyaTerminalElement {
             font_size,
             normal_weight,
             bold_weight,
+            visual_y_offset: 0.0,
+            layout_rows: None,
         }
     }
 
     pub fn with_layout_cache(mut self, cache: Arc<Mutex<NyaTerminalLayoutCache>>) -> Self {
         self.layout_cache = Some(cache);
+        self
+    }
+
+    pub fn with_visual_y_offset(mut self, offset: f32) -> Self {
+        self.visual_y_offset = offset;
+        self
+    }
+
+    pub fn with_layout_rows(mut self, rows: usize) -> Self {
+        self.layout_rows = Some(rows.max(1));
         self
     }
 
@@ -564,6 +642,7 @@ impl NyaTerminalElement {
 }
 
 fn hash_stable_glyph_decorations<H: Hasher>(decorations: &TerminalLineDecorations, hasher: &mut H) {
+    decorations.active_search_ranges.hash(hasher);
     decorations.link_ranges.hash(hasher);
 }
 
@@ -583,7 +662,7 @@ fn hash_styled_spans<H: Hasher>(
 }
 
 fn terminal_glyph_decorations_needed(decorations: &TerminalLineDecorations) -> bool {
-    !decorations.link_ranges.is_empty()
+    !decorations.active_search_ranges.is_empty() || !decorations.link_ranges.is_empty()
 }
 
 fn terminal_plain_row_fast_path(
@@ -604,6 +683,53 @@ fn terminal_ansi_spans_are_plain(ansi_spans: Option<&[nyaterm_terminal::StyledSp
     spans
         .iter()
         .all(|span| span.text.is_empty() || span.style == default_style)
+}
+
+fn push_dynamic_decoration_backgrounds(
+    row: usize,
+    decorations: &TerminalLineDecorations,
+    palette: nyaterm_ui::ThemePalette,
+    bounds: Bounds<Pixels>,
+    cell_w: f32,
+    cell_h: f32,
+    out: &mut Vec<PaintQuad>,
+) {
+    for &(start, end) in &decorations.search_ranges {
+        push_col_range_bg(
+            row,
+            start,
+            end,
+            palette.terminal_selection,
+            bounds,
+            cell_w,
+            cell_h,
+            out,
+        );
+    }
+    for &(start, end) in &decorations.active_search_ranges {
+        push_col_range_bg(
+            row,
+            start,
+            end,
+            palette.warning,
+            bounds,
+            cell_w,
+            cell_h,
+            out,
+        );
+    }
+    if let Some((start, end)) = decorations.selection_cols {
+        push_col_range_bg(
+            row,
+            start,
+            end,
+            palette.terminal_selection,
+            bounds,
+            cell_w,
+            cell_h,
+            out,
+        );
+    }
 }
 
 impl IntoElement for NyaTerminalElement {
@@ -635,7 +761,12 @@ impl Element for NyaTerminalElement {
     ) -> (LayoutId, Self::RequestLayoutState) {
         let mut style = Style::default();
         style.size.width = relative(1.).into();
-        style.size.height = px(self.cell_height * self.snapshot.rows.max(1) as f32).into();
+        style.size.height = px(terminal_layout_height_px(
+            self.cell_height,
+            self.snapshot.rows,
+            self.layout_rows,
+        ))
+        .into();
         (window.request_layout(style, [], cx), ())
     }
 
@@ -660,7 +791,9 @@ impl Element for NyaTerminalElement {
         let base_font = font(SharedString::from(self.font_family.clone()));
         let compiled_keyword_rules = self.compiled_keyword_rules();
 
-        let visible_rows = terminal_visible_rows_for_bounds(bounds, cell_h, self.snapshot.rows);
+        let visual_y_offset = self.visual_y_offset;
+        let visible_rows =
+            terminal_visible_rows_for_bounds(bounds, cell_h, self.snapshot.rows, visual_y_offset);
         let visible_row_start = visible_rows.start;
         let visible_row_end = visible_rows.end;
         let visible_row_count = visible_rows.len();
@@ -680,7 +813,7 @@ impl Element for NyaTerminalElement {
                 default_decorations = TerminalLineDecorations::default();
                 &default_decorations
             };
-            let y = px(f32::from(bounds.top()) + row as f32 * cell_h);
+            let y = px(f32::from(bounds.top()) + visual_y_offset + row as f32 * cell_h);
 
             if !decorations.active_search_ranges.is_empty() {
                 plan.active_markers.push(fill(
@@ -710,6 +843,16 @@ impl Element for NyaTerminalElement {
                     rgb(color),
                 ));
             }
+
+            push_dynamic_decoration_backgrounds(
+                row,
+                decorations,
+                self.palette,
+                bounds,
+                cell_w,
+                cell_h,
+                &mut plan.decoration_backgrounds,
+            );
 
             // Plain/degraded rows skip full highlight span work entirely.
             if terminal_plain_row_fast_path(ansi, self.keyword_rules.as_slice(), decorations) {
@@ -758,7 +901,7 @@ impl Element for NyaTerminalElement {
                 ansi,
                 &compiled_keyword_rules,
                 &[],
-                &[],
+                &decorations.active_search_ranges,
                 None,
                 &decorations.link_ranges,
                 self.palette,
@@ -809,44 +952,6 @@ impl Element for NyaTerminalElement {
                 cell_h,
                 &mut plan.backgrounds,
             );
-
-            // Search + selection washes — filled after under-images.
-            for &(start, end) in &decorations.search_ranges {
-                push_col_range_bg(
-                    row,
-                    start,
-                    end,
-                    self.palette.terminal_selection,
-                    bounds,
-                    cell_w,
-                    cell_h,
-                    &mut plan.decoration_backgrounds,
-                );
-            }
-            for &(start, end) in &decorations.active_search_ranges {
-                push_col_range_bg(
-                    row,
-                    start,
-                    end,
-                    self.palette.warning,
-                    bounds,
-                    cell_w,
-                    cell_h,
-                    &mut plan.decoration_backgrounds,
-                );
-            }
-            if let Some((start, end)) = decorations.selection_cols {
-                push_col_range_bg(
-                    row,
-                    start,
-                    end,
-                    self.palette.terminal_selection,
-                    bounds,
-                    cell_w,
-                    cell_h,
-                    &mut plan.decoration_backgrounds,
-                );
-            }
 
             let mut text = String::new();
             let mut text_runs = Vec::new();
@@ -930,6 +1035,7 @@ impl Element for NyaTerminalElement {
             let x = px(f32::from(bounds.left())
                 + (image.col as f32 - image.source_col_cells as f32) * cell_w);
             let y = px(f32::from(bounds.top())
+                + visual_y_offset
                 + (image.row as f32 - image.source_row_cells as f32) * cell_h);
             let w = px(image.image_width_cells as f32 * cell_w);
             let h = px(image.image_height_cells as f32 * cell_h);
@@ -967,11 +1073,16 @@ impl Element for NyaTerminalElement {
         {
             let left =
                 (f32::from(bounds.left()) + self.snapshot.cursor_col as f32 * cell_w).floor();
-            let top = (f32::from(bounds.top()) + self.snapshot.cursor_row as f32 * cell_h).floor();
+            let top = (f32::from(bounds.top())
+                + visual_y_offset
+                + self.snapshot.cursor_row as f32 * cell_h)
+                .floor();
             let right =
                 (f32::from(bounds.left()) + (self.snapshot.cursor_col + 1) as f32 * cell_w).ceil();
-            let bottom =
-                (f32::from(bounds.top()) + (self.snapshot.cursor_row + 1) as f32 * cell_h).ceil();
+            let bottom = (f32::from(bounds.top())
+                + visual_y_offset
+                + (self.snapshot.cursor_row + 1) as f32 * cell_h)
+                .ceil();
             let x = px(left);
             let y = px(top);
             let width = (right - left).max(1.);
@@ -1095,18 +1206,12 @@ impl Element for NyaTerminalElement {
         let shape_line_count = prepaint.shape_line_count;
         let shape_line_ms = prepaint.shape_line_duration.as_millis();
         let text_run_count = prepaint.text_run_count;
-        // cell/keyword bg → under images → search/selection → marks → text → above images → cursor
-        for quad in prepaint.backgrounds.drain(..) {
-            window.paint_quad(quad);
-        }
-        let image_mask = image_mask(
-            bounds,
-            self.snapshot.cols,
-            self.snapshot.rows,
-            self.cell_width.max(1.),
-            self.cell_height.max(1.),
-        );
-        window.with_content_mask(Some(image_mask.clone()), |window| {
+        let viewport_mask = ContentMask { bounds };
+        window.with_content_mask(Some(viewport_mask), |window| {
+            // cell/keyword bg → under images → search/selection → marks → text → above images → cursor
+            for quad in prepaint.backgrounds.drain(..) {
+                window.paint_quad(quad);
+            }
             for image in prepaint.images_under.drain(..) {
                 let _ = window.paint_image(
                     image.bounds,
@@ -1119,22 +1224,20 @@ impl Element for NyaTerminalElement {
             for quad in prepaint.placeholders_under.drain(..) {
                 window.paint_quad(quad);
             }
-        });
-        for quad in prepaint.decoration_backgrounds.drain(..) {
-            window.paint_quad(quad);
-        }
-        for quad in prepaint.active_markers.drain(..) {
-            window.paint_quad(quad);
-        }
-        for row in prepaint.rows.drain(..) {
-            let _ = row.line.paint(
-                point(bounds.left(), row.y),
-                px(self.cell_height.max(1.)),
-                window,
-                cx,
-            );
-        }
-        window.with_content_mask(Some(image_mask), |window| {
+            for quad in prepaint.decoration_backgrounds.drain(..) {
+                window.paint_quad(quad);
+            }
+            for quad in prepaint.active_markers.drain(..) {
+                window.paint_quad(quad);
+            }
+            for row in prepaint.rows.drain(..) {
+                let _ = row.line.paint(
+                    point(bounds.left(), row.y),
+                    px(self.cell_height.max(1.)),
+                    window,
+                    cx,
+                );
+            }
             for image in prepaint.images_above.drain(..) {
                 let _ = window.paint_image(
                     image.bounds,
@@ -1147,18 +1250,18 @@ impl Element for NyaTerminalElement {
             for quad in prepaint.placeholders_above.drain(..) {
                 window.paint_quad(quad);
             }
+            if let Some(cursor) = prepaint.cursor_background.take() {
+                window.paint_quad(cursor);
+            }
+            if let Some(cursor_glyph) = prepaint.cursor_glyph.take() {
+                let _ = cursor_glyph.line.paint(
+                    cursor_glyph.origin,
+                    px(self.cell_height.max(1.)),
+                    window,
+                    cx,
+                );
+            }
         });
-        if let Some(cursor) = prepaint.cursor_background.take() {
-            window.paint_quad(cursor);
-        }
-        if let Some(cursor_glyph) = prepaint.cursor_glyph.take() {
-            let _ = cursor_glyph.line.paint(
-                cursor_glyph.origin,
-                px(self.cell_height.max(1.)),
-                window,
-                cx,
-            );
-        }
         let elapsed = started_at.elapsed();
         if elapsed.as_millis() >= TERMINAL_ELEMENT_PAINT_SLOW_MS {
             tracing::warn!(
@@ -1189,12 +1292,32 @@ fn terminal_visible_rows_for_bounds(
     bounds: Bounds<Pixels>,
     cell_h: f32,
     row_limit: usize,
+    visual_y_offset: f32,
 ) -> std::ops::Range<usize> {
     if row_limit == 0 {
         return 0..0;
     }
     let cell_h = cell_h.max(1.);
-    let visible_rows = (f32::from(bounds.size.height).max(0.) / cell_h).ceil() as usize;
+    let height = f32::from(bounds.size.height).max(0.);
     let overscan_rows = 1usize;
-    0..visible_rows.saturating_add(overscan_rows).min(row_limit)
+    let visible_start = ((-visual_y_offset) / cell_h).floor().max(0.0) as usize;
+    let visible_end = ((height - visual_y_offset) / cell_h).ceil().max(0.0) as usize;
+    let start = visible_start.saturating_sub(overscan_rows).min(row_limit);
+    let end = visible_end.saturating_add(overscan_rows).min(row_limit);
+    if end < start {
+        return start..start;
+    }
+    start..end
+}
+
+fn terminal_layout_rows(snapshot_rows: usize, override_rows: Option<usize>) -> usize {
+    override_rows.unwrap_or(snapshot_rows).max(1)
+}
+
+fn terminal_layout_height_px(
+    cell_height: f32,
+    snapshot_rows: usize,
+    override_rows: Option<usize>,
+) -> f32 {
+    cell_height.max(1.0) * terminal_layout_rows(snapshot_rows, override_rows) as f32
 }
