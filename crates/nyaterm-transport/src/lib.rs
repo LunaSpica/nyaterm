@@ -7613,6 +7613,32 @@ mod tests {
     }
 
     #[test]
+    fn ssh_client_config_disables_idle_timeout_and_maps_keepalive() {
+        let config = SshSessionConfig {
+            keep_alive_interval_secs: 45,
+            ..Default::default()
+        };
+
+        let client_config = ssh_client_config(&config);
+
+        assert_eq!(client_config.inactivity_timeout, None);
+        assert_eq!(
+            client_config.keepalive_interval,
+            Some(Duration::from_secs(45))
+        );
+        assert_eq!(client_config.keepalive_max, 3);
+
+        let disabled = SshSessionConfig {
+            keep_alive_interval_secs: 0,
+            ..Default::default()
+        };
+        let disabled_client_config = ssh_client_config(&disabled);
+
+        assert_eq!(disabled_client_config.inactivity_timeout, None);
+        assert_eq!(disabled_client_config.keepalive_interval, None);
+    }
+
+    #[test]
     fn local_config_defaults_to_unknown_pixel_dimensions() {
         let config = LocalSessionConfig::default();
         assert_eq!(config.cols, 80);
