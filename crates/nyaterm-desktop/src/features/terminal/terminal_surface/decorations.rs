@@ -15,6 +15,7 @@ pub(in crate::features) fn terminal_snapshot_absolute_range(
 pub(in crate::features) fn terminal_line_decorations_cache_key(
     snapshot: &nyaterm_terminal::TerminalSnapshot,
     selection: Option<TerminalSelection>,
+    selection_viewport_anchor_row: usize,
     search_ranges_by_line: &HashMap<usize, Vec<(usize, usize)>>,
     active_search_ranges_by_line: &HashMap<usize, Vec<(usize, usize)>>,
     frame_action_links: Option<&TerminalFrameActionLinks>,
@@ -28,6 +29,7 @@ pub(in crate::features) fn terminal_line_decorations_cache_key(
     snapshot.display_offset.hash(&mut hasher);
     snapshot.line_signatures.hash(&mut hasher);
     selection.hash(&mut hasher);
+    selection_viewport_anchor_row.hash(&mut hasher);
     include_action_links.hash(&mut hasher);
     include_hyperlinks.hash(&mut hasher);
     include_command_marks.hash(&mut hasher);
@@ -78,6 +80,7 @@ fn hash_ranges_by_line<H: Hasher>(
 pub(in crate::features) fn build_terminal_line_decorations(
     snapshot: &nyaterm_terminal::TerminalSnapshot,
     selection: Option<TerminalSelection>,
+    selection_viewport_anchor_row: usize,
     search_ranges_by_line: &HashMap<usize, Vec<(usize, usize)>>,
     active_search_ranges_by_line: &HashMap<usize, Vec<(usize, usize)>>,
     frame_action_links: Option<&TerminalFrameActionLinks>,
@@ -89,7 +92,11 @@ pub(in crate::features) fn build_terminal_line_decorations(
     let mut line_decorations = Vec::with_capacity(line_count);
     let empty_ranges: [(usize, usize); 0] = [];
     for line_index in 0..line_count {
-        let selection_cols = selection.and_then(|selection| selection.cols_for_row(line_index));
+        let selection_cols = line_index
+            .checked_sub(selection_viewport_anchor_row)
+            .and_then(|viewport_row| {
+                selection.and_then(|selection| selection.cols_for_row(viewport_row))
+            });
         let mut link_ranges: Vec<(usize, usize)> = if include_action_links {
             frame_action_links
                 .and_then(|links| links.cell_ranges_by_line.get(line_index))
@@ -141,4 +148,68 @@ pub(in crate::features) fn terminal_line_decorations_needed(
         || has_frame_action_links
         || has_hyperlinks
         || has_command_marks
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::models::TerminalCellPos;
+
+    #[test]
+    fn selection_decorations_map_viewport_rows_through_snapshot_anchor() {
+        let snapshot = nyaterm_terminal::TerminalScreen::default().viewport_snapshot(0);
+        let selection = TerminalSelection {
+            anchor: TerminalCellPos::new(0, 2),
+            head: TerminalCellPos::new(1, 4),
+        };
+
+        let decorations = build_terminal_line_decorations(
+            &snapshot,
+            Some(selection),
+            2,
+            &HashMap::new(),
+            &HashMap::new(),
+            None,
+            false,
+            false,
+            false,
+        );
+
+        assert_eq!(decorations[0].selection_cols, None);
+        assert_eq!(decorations[1].selection_cols, None);
+        assert_eq!(decorations[2].selection_cols, Some((2, usize::MAX)));
+        assert_eq!(decorations[3].selection_cols, Some((0, 5)));
+        assert_eq!(decorations[4].selection_cols, None);
+    }
+
+    #[test]
+    fn decoration_cache_key_tracks_selection_viewport_anchor() {
+        let snapshot = nyaterm_terminal::TerminalScreen::default().viewport_snapshot(0);
+        let selection = TerminalSelection::new(TerminalCellPos::new(0, 2));
+
+        let first = terminal_line_decorations_cache_key(
+            &snapshot,
+            Some(selection),
+            0,
+            &HashMap::new(),
+            &HashMap::new(),
+            None,
+            false,
+            false,
+            false,
+        );
+        let second = terminal_line_decorations_cache_key(
+            &snapshot,
+            Some(selection),
+            1,
+            &HashMap::new(),
+            &HashMap::new(),
+            None,
+            false,
+            false,
+            false,
+        );
+
+        assert_ne!(first, second);
+    }
 }

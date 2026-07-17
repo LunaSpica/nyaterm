@@ -394,6 +394,7 @@ fn terminal_scroll_text_first_decorations(
         return crate::features::terminal_surface::build_terminal_line_decorations(
             snapshot,
             None,
+            0,
             &HashMap::new(),
             &HashMap::new(),
             None,
@@ -426,6 +427,7 @@ fn terminal_scroll_text_first_decorations(
     crate::features::terminal_surface::build_terminal_line_decorations(
         snapshot,
         None,
+        0,
         &search_ranges_by_line,
         &HashMap::new(),
         None,
@@ -2013,6 +2015,16 @@ impl NyaTermApp {
         } else {
             None
         };
+        let selection_viewport_anchor_row = if terminal_selection.is_some() {
+            terminal_snapshot_anchor_row_for_display_offset(
+                snapshot.as_ref(),
+                display_offset,
+                viewport_rows,
+                scrollback_len,
+            )
+        } else {
+            0
+        };
         let has_selection = terminal_selection.is_some();
         let has_search_decorations =
             !search_ranges_by_line.is_empty() || !active_search_ranges_by_line.is_empty();
@@ -2045,6 +2057,7 @@ impl NyaTermApp {
                 crate::features::terminal_surface::terminal_line_decorations_cache_key(
                     &snapshot,
                     terminal_selection,
+                    selection_viewport_anchor_row,
                     &search_ranges_by_line,
                     &active_search_ranges_by_line,
                     frame_action_links,
@@ -2056,6 +2069,7 @@ impl NyaTermApp {
                 crate::features::terminal_surface::build_terminal_line_decorations(
                     &snapshot,
                     terminal_selection,
+                    selection_viewport_anchor_row,
                     &search_ranges_by_line,
                     &active_search_ranges_by_line,
                     frame_action_links,

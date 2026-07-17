@@ -243,6 +243,7 @@ impl NyaTermApp {
                 let decoration_cache_key = terminal_line_decorations_cache_key(
                     &snapshot,
                     terminal_selection,
+                    0,
                     &search_ranges_by_line,
                     &active_search_ranges_by_line,
                     frame_action_links,
@@ -255,6 +256,7 @@ impl NyaTermApp {
                     let decorations = build_terminal_line_decorations(
                         &snapshot,
                         terminal_selection,
+                        0,
                         &search_ranges_by_line,
                         &active_search_ranges_by_line,
                         frame_action_links,
@@ -1389,7 +1391,7 @@ mod tests {
         let search = HashMap::new();
         let active = HashMap::new();
         let without_selection = terminal_line_decorations_cache_key(
-            &snapshot, None, &search, &active, None, false, false, false,
+            &snapshot, None, 0, &search, &active, None, false, false, false,
         );
         let with_selection = terminal_line_decorations_cache_key(
             &snapshot,
@@ -1397,6 +1399,7 @@ mod tests {
                 anchor: TerminalCellPos::new(0, 1),
                 head: TerminalCellPos::new(0, 3),
             }),
+            0,
             &search,
             &active,
             None,
@@ -1421,6 +1424,7 @@ mod tests {
         let first = terminal_line_decorations_cache_key(
             &snapshot,
             None,
+            0,
             &search,
             &active,
             Some(&links),
@@ -1432,6 +1436,7 @@ mod tests {
         let second = terminal_line_decorations_cache_key(
             &snapshot,
             None,
+            0,
             &search,
             &active,
             Some(&links),
@@ -1449,10 +1454,10 @@ mod tests {
         let search = HashMap::new();
         let active = HashMap::new();
         let without_marks = terminal_line_decorations_cache_key(
-            &snapshot, None, &search, &active, None, false, false, false,
+            &snapshot, None, 0, &search, &active, None, false, false, false,
         );
         let with_marks = terminal_line_decorations_cache_key(
-            &snapshot, None, &search, &active, None, false, false, true,
+            &snapshot, None, 0, &search, &active, None, false, false, true,
         );
 
         assert_ne!(without_marks, with_marks);
