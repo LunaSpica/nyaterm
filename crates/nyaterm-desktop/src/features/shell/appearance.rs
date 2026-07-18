@@ -6,8 +6,7 @@ const TERMINAL_FONT_SIZE_MIN: i16 = 8;
 const TERMINAL_FONT_SIZE_MAX: i16 = 72;
 
 impl NyaTermApp {
-    pub(in crate::features) fn apply_gpui_settings(&mut self, mut settings: AppSettingsSummary) {
-        normalize_gpui_font_settings_for_platform(&mut settings);
+    pub(in crate::features) fn apply_gpui_settings(&mut self, settings: AppSettingsSummary) {
         self.settings = settings;
         self.invalidate_paint_theme_caches();
     }
@@ -198,7 +197,7 @@ impl NyaTermApp {
 
     pub(in crate::features) fn update_terminal_font_family(
         &mut self,
-        family: &'static str,
+        family: &str,
         cx: &mut Context<Self>,
     ) {
         if self.settings.terminal_font_family == family {
@@ -302,11 +301,94 @@ impl NyaTermApp {
 
     pub(in crate::features) fn update_ui_font_family(
         &mut self,
-        family: &'static str,
+        family: &str,
         cx: &mut Context<Self>,
     ) {
         self.settings.ui_font_family = family.to_string();
         self.save_appearance_settings(cx);
+    }
+
+    pub(in crate::features) fn set_appearance_font_stack_entry(
+        &mut self,
+        terminal: bool,
+        index: usize,
+        family: String,
+        cx: &mut Context<Self>,
+    ) {
+        let raw = if terminal {
+            &self.settings.terminal_font_family
+        } else {
+            &self.settings.ui_font_family
+        };
+        let fallback = if terminal { "JetBrains Mono" } else { "Inter" };
+        let mut fonts = appearance_font_stack(raw, fallback);
+        let Some(font) = fonts.get_mut(index) else {
+            return;
+        };
+        *font = family;
+        self.appearance_menu_open = None;
+        self.save_appearance_font_stack(terminal, fonts, cx);
+    }
+
+    pub(in crate::features) fn add_appearance_fallback_font(
+        &mut self,
+        terminal: bool,
+        cx: &mut Context<Self>,
+    ) {
+        let raw = if terminal {
+            &self.settings.terminal_font_family
+        } else {
+            &self.settings.ui_font_family
+        };
+        let fallback = if terminal { "JetBrains Mono" } else { "Inter" };
+        let mut fonts = appearance_font_stack(raw, fallback);
+        let next = if terminal {
+            self.appearance_terminal_font_options.first()
+        } else {
+            self.appearance_ui_font_options.first()
+        }
+        .cloned()
+        .unwrap_or_else(|| fallback.to_string());
+        fonts.push(next);
+        self.save_appearance_font_stack(terminal, fonts, cx);
+    }
+
+    pub(in crate::features) fn remove_appearance_font_stack_entry(
+        &mut self,
+        terminal: bool,
+        index: usize,
+        cx: &mut Context<Self>,
+    ) {
+        let raw = if terminal {
+            &self.settings.terminal_font_family
+        } else {
+            &self.settings.ui_font_family
+        };
+        let fallback = if terminal { "JetBrains Mono" } else { "Inter" };
+        let mut fonts = appearance_font_stack(raw, fallback);
+        if index >= fonts.len() {
+            return;
+        }
+        fonts.remove(index);
+        if fonts.is_empty() {
+            fonts.push(fallback.to_string());
+        }
+        self.appearance_menu_open = None;
+        self.save_appearance_font_stack(terminal, fonts, cx);
+    }
+
+    fn save_appearance_font_stack(
+        &mut self,
+        terminal: bool,
+        fonts: Vec<String>,
+        cx: &mut Context<Self>,
+    ) {
+        let stack = fonts.join(", ");
+        if terminal {
+            self.update_terminal_font_family(&stack, cx);
+        } else {
+            self.update_ui_font_family(&stack, cx);
+        }
     }
 
     pub(in crate::features) fn adjust_ui_font_size(&mut self, delta: i16, cx: &mut Context<Self>) {
@@ -365,7 +447,9 @@ impl NyaTermApp {
             files: true,
             directories: false,
             multiple: false,
-            prompt: Some(SharedString::from("Select wallpaper image")),
+            prompt: Some(SharedString::from(
+                self.tr("settings.selectBackgroundImage"),
+            )),
         };
         let receiver = cx.prompt_for_paths(options);
         self.terminal_status = "selecting wallpaper image".to_string();
@@ -394,6 +478,7 @@ impl NyaTermApp {
 
     pub(in crate::features) fn clear_background_image(&mut self, cx: &mut Context<Self>) {
         self.settings.background_image_path = None;
+        self.appearance_menu_open = None;
         self.save_appearance_settings(cx);
         self.terminal_status = "wallpaper cleared".to_string();
     }
@@ -414,22 +499,28 @@ impl NyaTermApp {
         self.terminal_status = format!("wallpaper fit → {normalized}");
     }
 
-    pub(in crate::features) fn adjust_background_image_opacity(
+    pub(in crate::features) fn set_background_image_opacity(
         &mut self,
-        delta: i16,
+        value: u8,
         cx: &mut Context<Self>,
     ) {
-        let next = (self.settings.background_image_opacity as i16 + delta).clamp(5, 100) as u8;
+        let next = value.min(100);
+        if self.settings.background_image_opacity == next {
+            return;
+        }
         self.settings.background_image_opacity = next;
         self.save_appearance_settings(cx);
     }
 
-    pub(in crate::features) fn adjust_background_content_opacity(
+    pub(in crate::features) fn set_background_content_opacity(
         &mut self,
-        delta: i16,
+        value: u8,
         cx: &mut Context<Self>,
     ) {
-        let next = (self.settings.background_content_opacity as i16 + delta).clamp(20, 100) as u8;
+        let next = value.min(100);
+        if self.settings.background_content_opacity == next {
+            return;
+        }
         self.settings.background_content_opacity = next;
         self.save_appearance_settings(cx);
     }
@@ -462,25 +553,62 @@ impl NyaTermApp {
     }
 }
 
-pub(in crate::features) fn normalize_gpui_font_settings_for_platform(
-    settings: &mut AppSettingsSummary,
-) {
-    normalize_gpui_font_settings_for_target(settings, cfg!(target_os = "windows"));
+pub(in crate::features) fn appearance_font_stack(raw: &str, fallback: &str) -> Vec<String> {
+    let fonts = raw
+        .split(',')
+        .map(trim_gpui_font_family)
+        .filter(|family| !family.is_empty())
+        .map(str::to_string)
+        .collect::<Vec<_>>();
+    if fonts.is_empty() {
+        vec![fallback.to_string()]
+    } else {
+        fonts
+    }
 }
 
-fn normalize_gpui_font_settings_for_target(settings: &mut AppSettingsSummary, is_windows: bool) {
-    settings.terminal_font_family = gpui_platform_font_family_for_target(
-        &settings.terminal_font_family,
-        gpui_terminal_font_fallback(),
-        true,
-        is_windows,
-    );
-    settings.ui_font_family = gpui_platform_font_family_for_target(
-        &settings.ui_font_family,
-        gpui_ui_font_fallback(),
-        false,
-        is_windows,
-    );
+pub(in crate::features) fn appearance_font_options(cx: &App) -> (Vec<String>, Vec<String>) {
+    let text_system = cx.text_system();
+    let system_fonts = text_system.all_font_names();
+    let mut ui_fonts = Vec::new();
+    let mut terminal_fonts = Vec::new();
+
+    for family in ["JetBrains Mono", "Noto Sans SC Variable", "Inter"] {
+        push_unique_font(&mut ui_fonts, family.to_string());
+    }
+    for family in &system_fonts {
+        push_unique_font(&mut ui_fonts, family.clone());
+    }
+
+    push_unique_font(&mut terminal_fonts, "JetBrains Mono".to_string());
+    for family in &system_fonts {
+        let font_id = text_system.resolve_font(&gpui::font(SharedString::from(family.clone())));
+        let font_size = px(14.);
+        let widths = ['i', 'W', '0']
+            .into_iter()
+            .filter_map(|ch| text_system.advance(font_id, font_size, ch).ok())
+            .map(|advance| f32::from(advance.width))
+            .collect::<Vec<_>>();
+        let monospace = widths.len() == 3
+            && widths
+                .iter()
+                .all(|width| (*width - widths[0]).abs() <= 0.05);
+        if monospace {
+            push_unique_font(&mut terminal_fonts, family.clone());
+        }
+    }
+    push_unique_font(&mut terminal_fonts, "monospace".to_string());
+
+    (ui_fonts, terminal_fonts)
+}
+
+fn push_unique_font(fonts: &mut Vec<String>, family: String) {
+    if !fonts
+        .iter()
+        .any(|existing| existing.eq_ignore_ascii_case(&family))
+    {
+        fonts.push(family);
+    }
 }
 
 fn parse_minimum_contrast_ratio(raw: &str) -> f32 {
@@ -508,7 +636,7 @@ fn gpui_platform_font_family_for_target(
         .map(trim_gpui_font_family)
         .find(|family| !family.is_empty())
         .unwrap_or(fallback);
-    if is_windows && (raw.contains(',') || windows_gpui_font_should_fallback(primary, monospace)) {
+    if is_windows && windows_gpui_font_should_fallback(primary, monospace) {
         fallback.to_string()
     } else {
         primary.to_string()
@@ -569,15 +697,10 @@ mod tests {
     use super::*;
 
     #[test]
-    fn windows_terminal_font_family_collapses_comma_stack() {
+    fn windows_terminal_font_family_uses_primary_stack_entry() {
         assert_eq!(
-            gpui_platform_font_family_for_target(
-                "FiraCode Nerd Font Mono, Maple Mono CN",
-                "Consolas",
-                true,
-                true,
-            ),
-            "Consolas"
+            gpui_platform_font_family_for_target("Cascadia Mono, Consolas", "Consolas", true, true,),
+            "Cascadia Mono"
         );
     }
 
@@ -602,17 +725,11 @@ mod tests {
     }
 
     #[test]
-    fn windows_font_settings_are_normalized_before_gpui_render() {
-        let mut settings = AppSettingsSummary {
-            terminal_font_family: "FiraCode Nerd Font Mono, Maple Mono CN".to_string(),
-            ui_font_family: "JetBrains Mono, Noto Sans SC Variable, 微软雅黑".to_string(),
-            ..AppSettingsSummary::default()
-        };
-
-        normalize_gpui_font_settings_for_target(&mut settings, true);
-
-        assert_eq!(settings.terminal_font_family, "Consolas");
-        assert_eq!(settings.ui_font_family, "Microsoft YaHei UI");
+    fn appearance_font_stack_preserves_fallback_order() {
+        assert_eq!(
+            appearance_font_stack("JetBrains Mono, Noto Sans SC Variable, Inter", "Inter"),
+            vec!["JetBrains Mono", "Noto Sans SC Variable", "Inter"]
+        );
     }
 
     #[test]

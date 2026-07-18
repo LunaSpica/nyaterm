@@ -865,10 +865,10 @@ pub struct AppSettingsSummary {
     pub background_image_path: Option<String>,
     #[serde(default = "default_background_image_fit")]
     pub background_image_fit: String,
-    /// Wallpaper opacity percent (5..=100).
+    /// Wallpaper opacity percent (0..=100).
     #[serde(default = "default_background_image_opacity")]
     pub background_image_opacity: u8,
-    /// Shell chrome opacity percent when wallpaper is active (20..=100).
+    /// Shell chrome opacity percent when wallpaper is active (0..=100).
     #[serde(default = "default_background_content_opacity")]
     pub background_content_opacity: u8,
     pub language: String,

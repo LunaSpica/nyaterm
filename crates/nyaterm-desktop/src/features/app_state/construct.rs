@@ -172,8 +172,8 @@ impl NyaTermApp {
                 0,
             ),
         };
-        let mut settings = settings;
-        normalize_gpui_font_settings_for_platform(&mut settings);
+        let (appearance_ui_font_options, appearance_terminal_font_options) =
+            appearance_font_options(cx);
         let otp_provider = Arc::new(NativeOtpProvider::new(
             runtime.config_dir().to_path_buf(),
             runtime.portable_key_path().map(ToOwned::to_owned),
@@ -434,6 +434,9 @@ impl NyaTermApp {
             settings_master_password_focus: cx.focus_handle(),
             interaction_word_separators_focus: cx.focus_handle(),
             terminal_x11_display_focus: cx.focus_handle(),
+            appearance_menu_open: None,
+            appearance_ui_font_options,
+            appearance_terminal_font_options,
             keybinding_recording_id: None,
             keybinding_pending_keys: None,
             keybinding_search_draft: String::new(),

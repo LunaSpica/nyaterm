@@ -597,6 +597,7 @@ impl NyaTermApp {
             })
             .on_click(cx.listener(move |this, _, _, cx| {
                 this.settings_active_tab = tab;
+                this.appearance_menu_open = None;
                 cx.notify();
             }))
     }

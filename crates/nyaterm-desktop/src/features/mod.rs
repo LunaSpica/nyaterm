@@ -156,7 +156,7 @@ pub(in crate::features) use app_state::{
     PendingSavedConnectionStart, PendingSessionStart, SavedConnectionStartOptions, SessionPaneState,
 };
 pub(in crate::features) use appearance::{
-    gpui_code_font_family, normalize_gpui_font_settings_for_platform,
+    appearance_font_options, appearance_font_stack, gpui_code_font_family,
 };
 pub(in crate::features) use auth_runtime::{
     CredentialPromptBroker, CredentialPromptState, HostKeyPromptBroker, HostKeyPromptChoice,

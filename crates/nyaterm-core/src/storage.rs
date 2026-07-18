@@ -1199,7 +1199,7 @@ impl ConnectionStore {
                         }
                     })
                     .unwrap_or(45)
-                    .clamp(5, 100);
+                    .clamp(0, 100);
                 pct
             },
             background_content_opacity: {
@@ -1214,7 +1214,7 @@ impl ConnectionStore {
                         }
                     })
                     .unwrap_or(82)
-                    .clamp(20, 100);
+                    .clamp(0, 100);
                 pct
             },
             // Tauri UiConfig.language (not translation.target_language).
@@ -6022,7 +6022,10 @@ mod tests {
         summary.theme = "dracula".to_string();
         summary.terminal_theme = Some("nord".to_string());
         summary.minimum_contrast_ratio = "4.5".to_string();
-        summary.ui_font_family = "Segoe UI".to_string();
+        summary.background_image_opacity = 0;
+        summary.background_content_opacity = 0;
+        summary.ui_font_family = "Segoe UI, Inter".to_string();
+        summary.terminal_font_family = "JetBrains Mono, monospace".to_string();
         summary.ui_font_size = 18;
         summary.terminal_font_weight = 500;
         summary.terminal_font_weight_bold = 800;
@@ -6030,7 +6033,10 @@ mod tests {
         assert_eq!(saved.theme, "dracula");
         assert_eq!(saved.terminal_theme.as_deref(), Some("nord"));
         assert_eq!(saved.minimum_contrast_ratio, "4.5");
-        assert_eq!(saved.ui_font_family, "Segoe UI");
+        assert_eq!(saved.background_image_opacity, 0);
+        assert_eq!(saved.background_content_opacity, 0);
+        assert_eq!(saved.ui_font_family, "Segoe UI, Inter");
+        assert_eq!(saved.terminal_font_family, "JetBrains Mono, monospace");
         assert_eq!(saved.ui_font_size, 18);
         assert_eq!(saved.terminal_font_weight, 500);
         assert_eq!(saved.terminal_font_weight_bold, 800);
@@ -6045,7 +6051,19 @@ mod tests {
         );
         assert_eq!(
             raw["appearance"]["ui_font_family"],
-            serde_json::Value::String("Segoe UI".into())
+            serde_json::Value::String("Segoe UI, Inter".into())
+        );
+        assert_eq!(
+            raw["appearance"]["font_family"],
+            serde_json::Value::String("JetBrains Mono, monospace".into())
+        );
+        assert_eq!(
+            raw["appearance"]["background_image_opacity"],
+            serde_json::json!(0.0)
+        );
+        assert_eq!(
+            raw["appearance"]["background_opacity"],
+            serde_json::json!(0.0)
         );
         assert_eq!(raw["appearance"]["ui_font_size"], serde_json::json!(18));
         assert_eq!(raw["appearance"]["font_weight"], serde_json::json!(500));
