@@ -46,17 +46,11 @@ impl NyaTermApp {
             self.transfer_browser_search.clone()
         };
         let current_browser_path = normalized_transfer_browser_path(&self.transfer_browser_path);
+        let has_parent_entry =
+            can_transfer && current_browser_path != "/" && current_browser_path != ".";
         let auto_sync_cwd = self.transfer_browser_auto_sync_cwd_enabled();
         let cwd_tracking_available = self.active_transfer_browser_connection_id().is_some();
         let mut rows = div().flex().flex_col();
-        if can_transfer && current_browser_path != "/" && current_browser_path != "." {
-            rows = rows.child(transfer_browser_parent_entry_row(
-                palette,
-                current_browser_path.clone(),
-                column_widths,
-                cx,
-            ));
-        }
         if !can_transfer {
             rows = rows.child(
                 div()
@@ -108,29 +102,38 @@ impl NyaTermApp {
                     .child(self.tr("fileExplorer.loading")),
             );
         } else if self.transfer_browser_entries.is_empty() {
-            rows = rows.child(
-                div()
-                    .flex()
-                    .flex_col()
-                    .items_center()
-                    .justify_center()
-                    .px_4()
-                    .py_8()
-                    .gap_1()
-                    .child(
-                        if let Some(error) = self.transfer_browser_error.as_deref() {
-                            div()
-                                .text_size(px(12.))
-                                .text_color(rgb(palette.danger))
-                                .child(truncate_preview(error, 120))
-                        } else {
-                            div()
-                                .text_size(px(12.))
-                                .text_color(rgb(palette.text_muted))
-                                .child(self.tr("fileExplorer.emptyDirectory"))
-                        },
-                    ),
-            );
+            if has_parent_entry && self.transfer_browser_error.is_none() {
+                rows = rows.child(transfer_browser_parent_entry_row(
+                    palette,
+                    current_browser_path.clone(),
+                    column_widths,
+                    cx,
+                ));
+            } else {
+                rows = rows.child(
+                    div()
+                        .flex()
+                        .flex_col()
+                        .items_center()
+                        .justify_center()
+                        .px_4()
+                        .py_8()
+                        .gap_1()
+                        .child(
+                            if let Some(error) = self.transfer_browser_error.as_deref() {
+                                div()
+                                    .text_size(px(12.))
+                                    .text_color(rgb(palette.danger))
+                                    .child(truncate_preview(error, 120))
+                            } else {
+                                div()
+                                    .text_size(px(12.))
+                                    .text_color(rgb(palette.text_muted))
+                                    .child(self.tr("fileExplorer.emptyDirectory"))
+                            },
+                        ),
+                );
+            }
         } else if visible_entries.is_empty() {
             rows = rows.child(
                 div()
@@ -149,7 +152,8 @@ impl NyaTermApp {
                 self.last_viewport_size.1,
                 self.transfer_panel_height,
             );
-            let total_entries = visible_entries.len();
+            let parent_count = usize::from(has_parent_entry);
+            let total_entries = visible_entries.len() + parent_count;
             let window_capacity = viewport_rows + FILE_OVERSCAN * 2;
             let max_offset = total_entries.saturating_sub(viewport_rows.min(total_entries));
             if self.transfer_browser_list_offset > max_offset {
@@ -161,22 +165,27 @@ impl NyaTermApp {
             // padding would only work with a real scroll container.
             let window_start = scroll_row;
             let window_end = (window_start + window_capacity).min(total_entries);
-            for entry in visible_entries
-                .get(window_start..window_end)
-                .unwrap_or(&[])
-                .iter()
-                .cloned()
-            {
-                rows = rows.child(transfer_browser_entry_row(
-                    palette,
-                    entry,
-                    self.transfer_selected_remote_path.clone(),
-                    &self.transfer_selected_remote_paths,
-                    column_widths,
-                    self.transfer_rename.clone(),
-                    self.transfer_rename_focus.clone(),
-                    cx,
-                ));
+            for index in window_start..window_end {
+                if has_parent_entry && index == 0 {
+                    rows = rows.child(transfer_browser_parent_entry_row(
+                        palette,
+                        current_browser_path.clone(),
+                        column_widths,
+                        cx,
+                    ));
+                } else if let Some(entry) = visible_entries.get(index.saturating_sub(parent_count))
+                {
+                    rows = rows.child(transfer_browser_entry_row(
+                        palette,
+                        entry.clone(),
+                        self.transfer_selected_remote_path.clone(),
+                        &self.transfer_selected_remote_paths,
+                        column_widths,
+                        self.transfer_rename.clone(),
+                        self.transfer_rename_focus.clone(),
+                        cx,
+                    ));
+                }
             }
         }
 
@@ -377,7 +386,10 @@ impl NyaTermApp {
                     .overflow_y_hidden()
                     .scrollbar_width(px(8.))
                     .on_scroll_wheel(cx.listener(|this, event: &ScrollWheelEvent, _, cx| {
-                        let total = this.visible_transfer_browser_entries().len();
+                        let current_path =
+                            normalized_transfer_browser_path(&this.transfer_browser_path);
+                        let parent_count = usize::from(current_path != "/" && current_path != ".");
+                        let total = this.visible_transfer_browser_entries().len() + parent_count;
                         let viewport_rows = transfer_browser_viewport_rows(
                             this.last_viewport_size.1,
                             this.transfer_panel_height,
