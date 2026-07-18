@@ -1,7 +1,7 @@
 use gpui::{
     App, ClickEvent, FontStyle, FontWeight, HighlightStyle, IntoElement, SharedString,
-    StrikethroughStyle, StyledText, UnderlineStyle, Window, WindowControlArea, div, prelude::*, px,
-    rgb, rgba, svg,
+    StrikethroughStyle, StyledText, TitlebarOptions, UnderlineStyle, Window, WindowControlArea,
+    div, prelude::*, px, rgb, rgba, svg,
 };
 use nyaterm_core::{
     CloudSyncHistoryEntry, ConnectionType, NativeServiceStatus, SavedConnection, TunnelConfig,

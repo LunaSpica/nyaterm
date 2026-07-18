@@ -161,13 +161,15 @@ impl NyaTermApp {
                 cx.stop_propagation();
                 this.handle_connection_editor_key_down(event, window, cx);
             }))
-            .child(
-                div()
-                    .text_size(px(15.))
-                    .font_weight(FontWeight(700.))
-                    .text_color(rgb(palette.text))
-                    .child(title),
-            )
+            .when(!native_window, |this| {
+                this.child(
+                    div()
+                        .text_size(px(15.))
+                        .font_weight(FontWeight(700.))
+                        .text_color(rgb(palette.text))
+                        .child(title),
+                )
+            })
             .child(
                 div()
                     .flex()

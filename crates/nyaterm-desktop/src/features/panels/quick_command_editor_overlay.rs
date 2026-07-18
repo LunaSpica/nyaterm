@@ -192,15 +192,17 @@ impl NyaTermApp {
                     })
                     .bg(rgb(palette.bg))
                     .p_4()
-                    .child(
-                        div().flex().items_center().gap_3().child(
-                            div()
-                                .text_sm()
-                                .font_weight(FontWeight(800.))
-                                .text_color(rgb(palette.text))
-                                .child(title),
-                        ),
-                    )
+                    .when(!native_window, |this| {
+                        this.child(
+                            div().flex().items_center().gap_3().child(
+                                div()
+                                    .text_sm()
+                                    .font_weight(FontWeight(800.))
+                                    .text_color(rgb(palette.text))
+                                    .child(title),
+                            ),
+                        )
+                    })
                     .when(editor.error.is_some(), |this| {
                         this.child(
                             div()

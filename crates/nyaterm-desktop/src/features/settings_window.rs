@@ -1,9 +1,9 @@
 use gpui::{
-    AppContext, Bounds, Context, Entity, IntoElement, Render, Subscription, TitlebarOptions,
-    Window, WindowBounds, WindowHandle, WindowKind, WindowOptions, div, prelude::*, px, rgb, size,
+    AppContext, Bounds, Context, Entity, IntoElement, Render, Subscription, Window, WindowBounds,
+    WindowHandle, WindowKind, WindowOptions, div, prelude::*, px, rgb, size,
 };
 
-use super::NyaTermApp;
+use super::{NyaTermApp, child_window_header, child_window_titlebar};
 
 pub(in crate::features) struct SettingsWindow {
     app: Entity<NyaTermApp>,
@@ -45,15 +45,28 @@ impl Render for SettingsWindow {
         let content = self
             .app
             .update(cx, |app, cx| app.settings_window_view(viewport_width, cx));
+        let close_app = self.app.clone();
 
         div()
             .size_full()
+            .flex()
+            .flex_col()
             .overflow_hidden()
             .bg(rgb(palette.bg))
             .text_color(rgb(palette.text))
             .font_family(font_family)
             .text_size(px(font_size))
-            .child(content)
+            .child(child_window_header(
+                palette,
+                title,
+                Some("icons/settings.svg"),
+                false,
+                move |_, window, cx| {
+                    close_app.update(cx, |app, cx| app.cancel_settings(cx));
+                    window.remove_window();
+                },
+            ))
+            .child(div().flex_1().min_h_0().overflow_hidden().child(content))
             .into_any_element()
     }
 }
@@ -86,10 +99,7 @@ impl NyaTermApp {
         let view_app = app.clone();
         let result: anyhow::Result<WindowHandle<SettingsWindow>> = cx.open_window(
             WindowOptions {
-                titlebar: Some(TitlebarOptions {
-                    title: Some(title.into()),
-                    ..Default::default()
-                }),
+                titlebar: child_window_titlebar(title),
                 window_bounds: Some(WindowBounds::Windowed(bounds)),
                 window_min_size: Some(size(px(640.), px(480.))),
                 kind: WindowKind::Floating,

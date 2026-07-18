@@ -34,7 +34,7 @@ impl NyaTermApp {
         &mut self,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
-        self.settings_surface(self.last_viewport_size.0, cx)
+        self.settings_surface(self.last_viewport_size.0, false, cx)
     }
 
     pub(in crate::features) fn settings_window_view(
@@ -42,12 +42,14 @@ impl NyaTermApp {
         viewport_width: f32,
         cx: &mut Context<Self>,
     ) -> AnyElement {
-        self.settings_surface(viewport_width, cx).into_any_element()
+        self.settings_surface(viewport_width, true, cx)
+            .into_any_element()
     }
 
     fn settings_surface(
         &mut self,
         viewport_width: f32,
+        native_window: bool,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
         let backup_snapshot_prompt =
@@ -59,13 +61,14 @@ impl NyaTermApp {
                         SnapshotPasswordPromptKind::Export | SnapshotPasswordPromptKind::Import
                     )
                 });
-        self.settings_shell(backup_snapshot_prompt, viewport_width, cx)
+        self.settings_shell(backup_snapshot_prompt, viewport_width, native_window, cx)
     }
 
     pub(in crate::features) fn settings_shell(
         &mut self,
         backup_snapshot_prompt: Option<SnapshotPasswordPromptState>,
         viewport_width: f32,
+        native_window: bool,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
         // Tauri SettingsPage shell: compact header + narrow nav + scroll content.
@@ -79,76 +82,78 @@ impl NyaTermApp {
             .flex_col()
             .size_full()
             .bg(rgb(palette.bg))
-            .child(
-                div()
-                    .h(px(36.))
-                    .flex_none()
-                    .flex()
-                    .items_center()
-                    .justify_between()
-                    .px_3()
-                    .border_b_1()
-                    .border_color(rgb(palette.border))
-                    .bg(rgb(palette.section_header))
-                    .child(
-                        div()
-                            .flex()
-                            .items_center()
-                            .gap_2()
-                            .child(
-                                div()
-                                    .text_size(px(12.))
-                                    .font_weight(FontWeight(700.))
-                                    .text_color(rgb(palette.text))
-                                    .child(settings_title),
-                            )
-                            .child(
-                                div()
-                                    .text_size(px(11.))
-                                    .text_color(rgb(palette.text_dimmed))
-                                    .child("·"),
-                            )
-                            .child(
-                                div()
-                                    .text_size(px(11.))
-                                    .text_color(rgb(palette.text_muted))
-                                    .child(active_group),
-                            )
-                            .child(
-                                div()
-                                    .text_size(px(11.))
-                                    .text_color(rgb(palette.text_dimmed))
-                                    .child("/"),
-                            )
-                            .child(
-                                div()
-                                    .text_size(px(11.))
-                                    .font_weight(FontWeight(600.))
-                                    .text_color(rgb(palette.text))
-                                    .child(active_label),
-                            ),
-                    )
-                    .child(
-                        div()
-                            .id(SharedString::from("settings-close"))
-                            .h(px(26.))
-                            .px_2()
-                            .flex()
-                            .items_center()
-                            .rounded_md()
-                            .text_size(px(11.))
-                            .text_color(rgb(palette.text_muted))
-                            .cursor_pointer()
-                            .hover(move |this| {
-                                this.bg(rgb(palette.surface_elevated))
-                                    .text_color(rgb(palette.text))
-                            })
-                            .child(back_label)
-                            .on_click(cx.listener(|this, _, _, cx| {
-                                this.close_settings(cx);
-                            })),
-                    ),
-            )
+            .when(!native_window, |this| {
+                this.child(
+                    div()
+                        .h(px(36.))
+                        .flex_none()
+                        .flex()
+                        .items_center()
+                        .justify_between()
+                        .px_3()
+                        .border_b_1()
+                        .border_color(rgb(palette.border))
+                        .bg(rgb(palette.section_header))
+                        .child(
+                            div()
+                                .flex()
+                                .items_center()
+                                .gap_2()
+                                .child(
+                                    div()
+                                        .text_size(px(12.))
+                                        .font_weight(FontWeight(700.))
+                                        .text_color(rgb(palette.text))
+                                        .child(settings_title),
+                                )
+                                .child(
+                                    div()
+                                        .text_size(px(11.))
+                                        .text_color(rgb(palette.text_dimmed))
+                                        .child("·"),
+                                )
+                                .child(
+                                    div()
+                                        .text_size(px(11.))
+                                        .text_color(rgb(palette.text_muted))
+                                        .child(active_group),
+                                )
+                                .child(
+                                    div()
+                                        .text_size(px(11.))
+                                        .text_color(rgb(palette.text_dimmed))
+                                        .child("/"),
+                                )
+                                .child(
+                                    div()
+                                        .text_size(px(11.))
+                                        .font_weight(FontWeight(600.))
+                                        .text_color(rgb(palette.text))
+                                        .child(active_label),
+                                ),
+                        )
+                        .child(
+                            div()
+                                .id(SharedString::from("settings-close"))
+                                .h(px(26.))
+                                .px_2()
+                                .flex()
+                                .items_center()
+                                .rounded_md()
+                                .text_size(px(11.))
+                                .text_color(rgb(palette.text_muted))
+                                .cursor_pointer()
+                                .hover(move |this| {
+                                    this.bg(rgb(palette.surface_elevated))
+                                        .text_color(rgb(palette.text))
+                                })
+                                .child(back_label)
+                                .on_click(cx.listener(|this, _, _, cx| {
+                                    this.close_settings(cx);
+                                })),
+                        ),
+                )
+            })
             .child(
                 div()
                     .flex()
@@ -307,19 +312,15 @@ impl NyaTermApp {
         let terminal_expanded = self.settings_expanded_groups.contains("terminal_session");
         let ai_expanded = self.settings_expanded_groups.contains("ai_group");
 
-        let mut sidebar = div()
+        let mut sidebar_nav = div()
             .id(SharedString::from("settings-sidebar-scroll"))
-            .w(px(sidebar_width))
-            .flex_none()
-            .h_full()
-            .border_r_1()
-            .border_color(rgb(palette.border))
-            .bg(rgb(palette.surface))
+            .flex_1()
+            .min_h_0()
             .px_2()
             .py_2()
             .overflow_scroll();
 
-        sidebar = sidebar
+        sidebar_nav = sidebar_nav
             .child(self.settings_group_header(
                 "workspace",
                 self.tr("settings.groupWorkspace"),
@@ -432,7 +433,46 @@ impl NyaTermApp {
                 cx,
             ));
 
-        sidebar
+        div()
+            .w(px(sidebar_width))
+            .flex_none()
+            .h_full()
+            .flex()
+            .flex_col()
+            .border_r_1()
+            .border_color(rgb(palette.border))
+            .bg(rgb(palette.surface))
+            .child(
+                div()
+                    .h(px(64.))
+                    .flex_none()
+                    .flex()
+                    .items_center()
+                    .gap_3()
+                    .when(compact, |this| this.justify_center())
+                    .when(!compact, |this| this.px_3())
+                    .border_b_1()
+                    .border_color(rgb(palette.border))
+                    .child(
+                        svg()
+                            .size(px(if compact { 22. } else { 24. }))
+                            .flex_none()
+                            .path("icons/settings.svg")
+                            .text_color(rgb(palette.primary)),
+                    )
+                    .when(!compact, |this| {
+                        this.child(
+                            div()
+                                .min_w_0()
+                                .overflow_hidden()
+                                .text_size(px(16.))
+                                .font_weight(FontWeight(700.))
+                                .text_color(rgb(palette.text))
+                                .child(self.tr("settings.title")),
+                        )
+                    }),
+            )
+            .child(sidebar_nav)
     }
 
     fn settings_group_header(

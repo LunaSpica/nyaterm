@@ -131,7 +131,9 @@ impl NyaTermApp {
                     .flex()
                     .flex_col()
                     .gap_3()
-                    .child(div().text_sm().font_weight(FontWeight(700.)).child(title))
+                    .when(!standalone, |this| {
+                        this.child(div().text_sm().font_weight(FontWeight(700.)).child(title))
+                    })
                     .child(
                         div()
                             .flex_1()

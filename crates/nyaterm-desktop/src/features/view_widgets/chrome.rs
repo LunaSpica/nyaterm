@@ -58,11 +58,101 @@ pub(in crate::features) fn window_control_button(
             if matches!(area, WindowControlArea::Close) {
                 this.bg(rgb(0xe81123)).text_color(rgb(0xffffff))
             } else {
-                this.bg(rgb(palette.hover)).text_color(rgb(0xffffff))
+                this.bg(rgb(palette.hover)).text_color(rgb(palette.text))
             }
         })
         .child(label)
         .on_click(on_click)
+}
+
+pub(in crate::features) fn child_window_header(
+    palette: ThemePalette,
+    title: impl Into<SharedString>,
+    icon_path: Option<&'static str>,
+    window_controls: bool,
+    on_close: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
+) -> impl IntoElement {
+    let title = title.into();
+    div()
+        .h(px(40.))
+        .flex_none()
+        .flex()
+        .items_center()
+        .border_b_1()
+        .border_color(rgb(palette.border))
+        .bg(rgb(palette.surface))
+        .child(
+            div()
+                .h_full()
+                .min_w_0()
+                .flex_1()
+                .flex()
+                .items_center()
+                .gap_2()
+                .px_3()
+                .when(cfg!(target_os = "macos"), |this| this.pl(px(70.)))
+                .window_control_area(WindowControlArea::Drag)
+                .when_some(icon_path, |this, icon_path| {
+                    this.child(
+                        svg()
+                            .size(px(16.))
+                            .flex_none()
+                            .path(icon_path)
+                            .text_color(rgb(palette.primary)),
+                    )
+                })
+                .child(
+                    div()
+                        .min_w_0()
+                        .overflow_hidden()
+                        .text_sm()
+                        .font_weight(FontWeight(500.))
+                        .text_color(rgb(palette.text))
+                        .child(title),
+                ),
+        )
+        .child(
+            div()
+                .h_full()
+                .flex_none()
+                .flex()
+                .items_center()
+                .when(!cfg!(target_os = "macos") && window_controls, |this| {
+                    this.child(window_control_button(
+                        palette,
+                        "child-window-min",
+                        "-",
+                        WindowControlArea::Min,
+                        |_, window, _| window.minimize_window(),
+                    ))
+                    .child(window_control_button(
+                        palette,
+                        "child-window-max",
+                        "□",
+                        WindowControlArea::Max,
+                        |_, window, _| window.zoom_window(),
+                    ))
+                })
+                .when(!cfg!(target_os = "macos"), |this| {
+                    this.child(window_control_button(
+                        palette,
+                        "child-window-close",
+                        "×",
+                        WindowControlArea::Close,
+                        on_close,
+                    ))
+                }),
+        )
+}
+
+pub(in crate::features) fn child_window_titlebar(
+    title: impl Into<SharedString>,
+) -> Option<TitlebarOptions> {
+    cfg!(target_os = "macos").then(|| TitlebarOptions {
+        title: Some(title.into()),
+        appears_transparent: true,
+        ..Default::default()
+    })
 }
 
 pub(in crate::features) fn panel_header_with_actions(
