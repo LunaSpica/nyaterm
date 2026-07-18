@@ -2,6 +2,71 @@ use super::*;
 
 impl NyaTermApp {
     pub(in crate::features) fn docker_view(&mut self, cx: &mut Context<Self>) -> impl IntoElement {
+        let labels = DockerLabels {
+            search: self.tr("dockerManager.search"),
+            no_session: self.tr("dockerManager.noSession"),
+            error: self.tr("dockerManager.error"),
+            unavailable: self.tr("dockerManager.unavailable"),
+            no_matches: self.tr("dockerManager.noMatches"),
+            logs: self.tr("dockerManager.logs"),
+            enter: self.tr("dockerManager.enter"),
+            start: self.tr("dockerManager.start"),
+            stop: self.tr("dockerManager.stop"),
+            restart: self.tr("dockerManager.restart"),
+            kill: self.tr("dockerManager.kill"),
+            delete: self.tr("common.delete"),
+            confirm_action_title: self.tr("dockerManager.confirmActionTitle"),
+            confirm_action_desc: self.tr("dockerManager.confirmActionDesc"),
+            networks: self.tr("dockerManager.networks"),
+            remove_image: self.tr("dockerManager.removeImage"),
+            remove_volume: self.tr("dockerManager.removeVolume"),
+            remove_network: self.tr("dockerManager.removeNetwork"),
+            volume_driver: self.tr("dockerManager.volumeDriver"),
+            up: self.tr("dockerManager.up"),
+            down: self.tr("dockerManager.down"),
+            loading_services: self.tr("dockerManager.loadingServices"),
+            service_load_failed: self.tr("dockerManager.serviceLoadFailed"),
+            no_services: self.tr("dockerManager.noServices"),
+            no_containers: self.tr("dockerManager.noContainers"),
+            not_created: self.tr("dockerManager.notCreated"),
+            retry: self.tr("common.retry"),
+            loading: self.tr("common.loading"),
+            container_details: self.tr("dockerManager.containerDetails"),
+            identity: self.tr("dockerManager.identity"),
+            container_name: self.tr("dockerManager.containerName"),
+            container_id: self.tr("dockerManager.containerId"),
+            image: self.tr("dockerManager.image"),
+            status: self.tr("dockerManager.status"),
+            created_at: self.tr("dockerManager.createdAt"),
+            size: self.tr("dockerManager.size"),
+            started_at: self.tr("dockerManager.startedAt"),
+            finished_at: self.tr("dockerManager.finishedAt"),
+            restart_count: self.tr("dockerManager.restartCount"),
+            entrypoint: self.tr("dockerManager.entrypoint"),
+            command: self.tr("dockerManager.command"),
+            networking: self.tr("dockerManager.networking"),
+            ports: self.tr("dockerManager.ports"),
+            io: self.tr("dockerManager.io"),
+            net_io: self.tr("dockerManager.netIo"),
+            block_io: self.tr("dockerManager.blockIo"),
+            mounts: self.tr("dockerManager.mounts"),
+            cpu: self.tr("dockerManager.cpu"),
+            memory: self.tr("dockerManager.memory"),
+            pids: self.tr("dockerManager.pids"),
+            copy: self.tr("common.copyToClipboard"),
+            refresh: self.tr("common.refresh"),
+            close: self.tr("common.close"),
+            cancel: self.tr("common.cancel"),
+            confirm: self.tr("common.confirm"),
+            state_created: self.tr("dockerManager.stateLabels.created"),
+            state_dead: self.tr("dockerManager.stateLabels.dead"),
+            state_exited: self.tr("dockerManager.stateLabels.exited"),
+            state_paused: self.tr("dockerManager.stateLabels.paused"),
+            state_removing: self.tr("dockerManager.stateLabels.removing"),
+            state_restarting: self.tr("dockerManager.stateLabels.restarting"),
+            state_running: self.tr("dockerManager.stateLabels.running"),
+            state_unknown: self.tr("dockerManager.stateLabels.unknown"),
+        };
         let overview = self.docker_overview.clone().unwrap_or_default();
         let active_tab = if self.docker_tab == DockerTab::Compose && !overview.compose_available {
             DockerTab::Containers
@@ -74,6 +139,7 @@ impl NyaTermApp {
                 query.is_empty(),
                 self.docker_container_menu_id.as_deref(),
                 self.docker_list_offset,
+                labels,
                 cx,
             )
             .into_any_element(),
@@ -81,6 +147,7 @@ impl NyaTermApp {
                 palette,
                 &filtered_images,
                 self.docker_resource_list_offset,
+                labels,
                 cx,
             )
             .into_any_element(),
@@ -88,6 +155,7 @@ impl NyaTermApp {
                 palette,
                 &filtered_volumes,
                 self.docker_resource_list_offset,
+                labels,
                 cx,
             )
             .into_any_element(),
@@ -95,6 +163,7 @@ impl NyaTermApp {
                 palette,
                 &filtered_networks,
                 self.docker_resource_list_offset,
+                labels,
                 cx,
             )
             .into_any_element(),
@@ -105,6 +174,7 @@ impl NyaTermApp {
                 &self.docker_compose_services,
                 &self.docker_compose_service_errors,
                 self.docker_compose_menu_id.as_deref(),
+                labels,
                 cx,
             )
             .into_any_element(),
@@ -150,7 +220,7 @@ impl NyaTermApp {
                         div().flex_1().min_w_0().child(
                             transfer_input(
                                 "docker-search-input",
-                                "Search containers…",
+                                labels.search,
                                 self.docker_search_draft.clone(),
                                 true,
                                 self.theme_palette(),
@@ -205,12 +275,13 @@ impl NyaTermApp {
                             .iter()
                             .find(|container| container.id == container_id)
                             .cloned(),
+                        labels,
                         cx,
                     ))
                 },
             )
             .when_some(self.docker_confirm.clone(), |this, confirm| {
-                this.child(docker_confirm_panel(palette, confirm, cx))
+                this.child(docker_confirm_panel(palette, confirm, labels, cx))
             })
     }
 }

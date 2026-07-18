@@ -8,6 +8,7 @@ pub(in crate::features::pages::remote) fn docker_compose_services_panel(
     services: Option<Vec<DockerComposeService>>,
     error: Option<String>,
     open_menu_id: Option<&str>,
+    labels: DockerLabels,
     cx: &mut Context<NyaTermApp>,
 ) -> impl IntoElement {
     let mut rows = div()
@@ -19,7 +20,7 @@ pub(in crate::features::pages::remote) fn docker_compose_services_panel(
         .flex()
         .flex_col()
         .gap_1();
-    if let Some(error) = error {
+    if let Some(_error) = error {
         rows = rows.child(
             div()
                 .h(px(36.))
@@ -35,12 +36,12 @@ pub(in crate::features::pages::remote) fn docker_compose_services_panel(
                         .text_size(px(11.))
                         .text_color(rgb(0xfca5a5))
                         .overflow_hidden()
-                        .child(truncate_preview(&error, 80)),
+                        .child(labels.service_load_failed),
                 )
                 .child(small_button(
                     palette,
                     format!("docker-compose-retry-{project_name}"),
-                    "Retry",
+                    labels.retry,
                     cx.listener({
                         let project_name = project_name.clone();
                         let config_files = config_files.clone();
@@ -66,7 +67,7 @@ pub(in crate::features::pages::remote) fn docker_compose_services_panel(
                     .justify_center()
                     .text_size(px(12.))
                     .text_color(rgb(palette.text_dimmed))
-                    .child("No compose services reported."),
+                    .child(labels.no_services),
             );
         } else {
             for service in services {
@@ -79,6 +80,7 @@ pub(in crate::features::pages::remote) fn docker_compose_services_panel(
                     service,
                     menu_open,
                     service_menu_id,
+                    labels,
                     cx,
                 ));
             }
@@ -92,7 +94,7 @@ pub(in crate::features::pages::remote) fn docker_compose_services_panel(
                 .justify_center()
                 .text_size(px(11.))
                 .text_color(rgb(palette.text_muted))
-                .child("Loading compose services…"),
+                .child(labels.loading_services),
         );
     }
     rows
@@ -105,10 +107,11 @@ pub(in crate::features::pages::remote) fn docker_compose_service_row(
     service: DockerComposeService,
     menu_open: bool,
     menu_id: String,
+    labels: DockerLabels,
     cx: &mut Context<NyaTermApp>,
 ) -> impl IntoElement {
     let container_summary = if service.containers.is_empty() {
-        "no containers".to_string()
+        labels.no_containers.to_string()
     } else {
         service
             .containers
@@ -120,7 +123,7 @@ pub(in crate::features::pages::remote) fn docker_compose_service_row(
                 } else {
                     truncate_preview(&container.name, 24)
                 };
-                format!("{name} {}", docker_state_label(&container.state))
+                format!("{name} {}", labels.state_label(&container.state))
             })
             .collect::<Vec<_>>()
             .join(" · ")
@@ -128,6 +131,11 @@ pub(in crate::features::pages::remote) fn docker_compose_service_row(
     let service_name = service.name.clone();
     let service_status_label = compose_status_label(&service.status);
     let service_status_color = compose_status_color(palette, service_status_label);
+    let display_status = if service.status.trim().is_empty() {
+        labels.not_created
+    } else {
+        labels.state_label(service_status_label)
+    };
     let running_container_id = service
         .containers
         .iter()
@@ -140,7 +148,7 @@ pub(in crate::features::pages::remote) fn docker_compose_service_row(
     div()
         .id(SharedString::from(row_id.clone()))
         .relative()
-        .h(px(48.))
+        .h(px(58.))
         .rounded_md()
         .bg(rgb(palette.bg))
         .hover(|this| this.bg(rgb(0x151b24)))
@@ -171,7 +179,7 @@ pub(in crate::features::pages::remote) fn docker_compose_service_row(
                                 .child(truncate_preview(&service.name, 42)),
                         )
                         .child(status_pill(
-                            service_status_label,
+                            display_status,
                             service_status_color,
                             rgb(0x17233a),
                         )),
@@ -215,6 +223,7 @@ pub(in crate::features::pages::remote) fn docker_compose_service_row(
                             service_name,
                             running_container_id,
                             can_enter,
+                            labels,
                             cx,
                         ))
                     }),

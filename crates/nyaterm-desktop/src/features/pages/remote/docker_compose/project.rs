@@ -7,12 +7,13 @@ pub(in crate::features::pages::remote) fn docker_compose_panel(
     services_by_project: &HashMap<String, Vec<DockerComposeService>>,
     service_errors: &HashMap<String, String>,
     open_menu_id: Option<&str>,
+    labels: DockerLabels,
     cx: &mut Context<NyaTermApp>,
 ) -> impl IntoElement {
     // Tauri Compose tab: dense project rows (≈74px) + chevron + ⋮ overflow; services ≈58px.
     let mut rows = div().flex().flex_col().gap_1();
     if projects.is_empty() {
-        rows = rows.child(empty_panel("No compose projects loaded.", palette));
+        rows = rows.child(empty_panel(labels.no_matches, palette));
     } else {
         for project in projects {
             let config_files = Some(project.config_files.clone()).filter(|value| {
@@ -34,6 +35,7 @@ pub(in crate::features::pages::remote) fn docker_compose_panel(
                 services,
                 error,
                 open_menu_id,
+                labels,
                 cx,
             ));
         }
@@ -52,6 +54,7 @@ pub(in crate::features::pages::remote) fn docker_compose_project_row(
     services: Option<Vec<DockerComposeService>>,
     error: Option<String>,
     open_menu_id: Option<&str>,
+    labels: DockerLabels,
     cx: &mut Context<NyaTermApp>,
 ) -> impl IntoElement {
     let project_name = project.name.clone();
@@ -59,6 +62,11 @@ pub(in crate::features::pages::remote) fn docker_compose_project_row(
         .filter(|value| !value.trim().is_empty() && value.trim().to_ascii_lowercase() != "n/a");
     let status_label = compose_status_label(&project.status);
     let status_color = compose_status_color(palette, status_label);
+    let display_status = if project.status.trim().is_empty() {
+        "-"
+    } else {
+        labels.state_label(status_label)
+    };
     let chevron = if expanded { "▾" } else { "▸" };
     let key_for_toggle = project_key.to_string();
 
@@ -77,7 +85,7 @@ pub(in crate::features::pages::remote) fn docker_compose_project_row(
         .child(
             div()
                 .relative()
-                .h(px(60.))
+                .h(px(74.))
                 .px_2()
                 .flex()
                 .items_start()
@@ -87,7 +95,7 @@ pub(in crate::features::pages::remote) fn docker_compose_project_row(
                         .id(SharedString::from(format!(
                             "docker-compose-chevron-{project_key}"
                         )))
-                        .mt(px(6.))
+                        .mt(px(10.))
                         .h(px(24.))
                         .w(px(24.))
                         .flex_none()
@@ -158,7 +166,7 @@ pub(in crate::features::pages::remote) fn docker_compose_project_row(
                                         .overflow_hidden()
                                         .child(truncate_preview(&project.name, 42)),
                                 )
-                                .child(status_pill(status_label, status_color, rgb(0x17233a))),
+                                .child(status_pill(display_status, status_color, rgb(0x17233a))),
                         )
                         .child(
                             div()
@@ -198,6 +206,7 @@ pub(in crate::features::pages::remote) fn docker_compose_project_row(
                                     project_name.clone(),
                                     config_files.clone(),
                                     &key_for_toggle,
+                                    labels,
                                     cx,
                                 ))
                             }),
@@ -213,6 +222,7 @@ pub(in crate::features::pages::remote) fn docker_compose_project_row(
                 services,
                 error,
                 open_menu_id,
+                labels,
                 cx,
             ))
         })

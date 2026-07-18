@@ -10,6 +10,7 @@ pub(in crate::features::pages::remote) fn docker_containers_panel(
     query_empty: bool,
     open_menu_id: Option<&str>,
     list_offset: usize,
+    labels: DockerLabels,
     cx: &mut Context<NyaTermApp>,
 ) -> impl IntoElement {
     // Tauri Docker containers tab: dense ~66px rows, left accent, ⋮ action menu.
@@ -21,9 +22,9 @@ pub(in crate::features::pages::remote) fn docker_containers_panel(
             .justify_center()
             .child(empty_panel(
                 if has_session {
-                    "No Docker snapshot loaded."
+                    labels.error
                 } else {
-                    "Start an SSH session to inspect remote Docker."
+                    labels.no_session
                 },
                 palette,
             ))
@@ -35,10 +36,7 @@ pub(in crate::features::pages::remote) fn docker_containers_panel(
             .flex()
             .items_center()
             .justify_center()
-            .child(empty_panel(
-                "Docker is not installed or the daemon is not reachable.",
-                palette,
-            ))
+            .child(empty_panel(labels.unavailable, palette))
             .into_any_element();
     }
     if filtered_containers.is_empty() {
@@ -49,9 +47,9 @@ pub(in crate::features::pages::remote) fn docker_containers_panel(
             .justify_center()
             .child(empty_panel(
                 if query_empty {
-                    "No containers found."
+                    labels.no_containers
                 } else {
-                    "No containers match the Docker search."
+                    labels.no_matches
                 },
                 palette,
             ))
@@ -88,7 +86,9 @@ pub(in crate::features::pages::remote) fn docker_containers_panel(
     }
     for container in visible {
         let menu_open = open_menu_id == Some(container.id.as_str());
-        rows = rows.child(docker_container_row(palette, container, menu_open, cx));
+        rows = rows.child(docker_container_row(
+            palette, container, menu_open, labels, cx,
+        ));
     }
     if pad_bottom > 0. {
         rows = rows.child(div().h(px(pad_bottom)).w_full().flex_none());
@@ -125,6 +125,7 @@ fn docker_container_row(
     palette: crate::theme::ThemePalette,
     container: DockerContainer,
     menu_open: bool,
+    labels: DockerLabels,
     cx: &mut Context<NyaTermApp>,
 ) -> impl IntoElement {
     let container_id = container.id.clone();
@@ -184,7 +185,7 @@ fn docker_container_row(
                                 .child(truncate_preview(&container.name, 40)),
                         )
                         .child(status_pill(
-                            docker_state_label(&container.state),
+                            labels.state_label(&container.state),
                             docker_state_color(palette, &container.state),
                             rgb(0x17233a),
                         )),
@@ -265,6 +266,7 @@ fn docker_container_row(
                             container_id.clone(),
                             container.name.clone(),
                             running,
+                            labels,
                             cx,
                         ))
                     }),
@@ -277,6 +279,7 @@ fn docker_container_action_menu(
     container_id: String,
     container_name: String,
     running: bool,
+    labels: DockerLabels,
     cx: &mut Context<NyaTermApp>,
 ) -> impl IntoElement {
     let short = compact_id(&container_id);
@@ -308,7 +311,7 @@ fn docker_container_action_menu(
         .child(docker_menu_item(
             palette,
             format!("docker-menu-logs-{short}"),
-            "Logs",
+            labels.logs,
             false,
             cx.listener(move |this, _, _, cx| {
                 this.docker_container_menu_id = None;
@@ -318,7 +321,7 @@ fn docker_container_action_menu(
         .child(docker_menu_item(
             palette,
             format!("docker-menu-enter-{short}"),
-            "Enter",
+            labels.enter,
             !running,
             cx.listener(move |this, _, _, cx| {
                 this.docker_container_menu_id = None;
@@ -329,7 +332,7 @@ fn docker_container_action_menu(
         .child(docker_menu_item(
             palette,
             format!("docker-menu-start-{short}"),
-            "Start",
+            labels.start,
             running,
             cx.listener(move |this, _, window, cx| {
                 this.docker_container_menu_id = None;
@@ -339,7 +342,7 @@ fn docker_container_action_menu(
         .child(docker_menu_item(
             palette,
             format!("docker-menu-stop-{short}"),
-            "Stop",
+            labels.stop,
             !running,
             cx.listener(move |this, _, window, cx| {
                 this.docker_container_menu_id = None;
@@ -349,7 +352,7 @@ fn docker_container_action_menu(
         .child(docker_menu_item(
             palette,
             format!("docker-menu-restart-{short}"),
-            "Restart",
+            labels.restart,
             false,
             cx.listener(move |this, _, window, cx| {
                 this.docker_container_menu_id = None;
@@ -360,7 +363,7 @@ fn docker_container_action_menu(
         .child(docker_menu_item(
             palette,
             format!("docker-menu-kill-{short}"),
-            "Kill",
+            labels.kill,
             !running,
             cx.listener(move |this, _, _, cx| {
                 this.docker_container_menu_id = None;
@@ -371,8 +374,8 @@ fn docker_container_action_menu(
                 };
                 this.request_docker_confirm(
                     DockerConfirmState {
-                        title: format!("Kill container {target}"),
-                        detail: format!("docker kill {}", compact_id(&kill_id)),
+                        title: labels.confirm_action_title.to_string(),
+                        detail: labels.confirm_description(labels.kill, &target),
                         action: DockerConfirmAction::ContainerAction {
                             container_id: kill_id.clone(),
                             action: "kill",
@@ -385,7 +388,7 @@ fn docker_container_action_menu(
         .child(docker_menu_item(
             palette,
             format!("docker-menu-remove-{short}"),
-            "Remove",
+            labels.delete,
             false,
             cx.listener(move |this, _, _, cx| {
                 this.docker_container_menu_id = None;
@@ -396,8 +399,8 @@ fn docker_container_action_menu(
                 };
                 this.request_docker_confirm(
                     DockerConfirmState {
-                        title: format!("Remove container {target}"),
-                        detail: format!("docker rm {}", compact_id(&remove_id)),
+                        title: labels.confirm_action_title.to_string(),
+                        detail: labels.confirm_description(labels.delete, &target),
                         action: DockerConfirmAction::ContainerAction {
                             container_id: remove_id.clone(),
                             action: "remove",

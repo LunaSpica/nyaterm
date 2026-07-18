@@ -9,10 +9,11 @@ pub(in crate::features::pages::remote) fn docker_images_panel(
     palette: crate::theme::ThemePalette,
     images: &[DockerImage],
     list_offset: usize,
+    labels: DockerLabels,
     cx: &mut Context<NyaTermApp>,
 ) -> impl IntoElement {
     if images.is_empty() {
-        return docker_resource_empty(palette, "Images", "No images loaded.");
+        return docker_resource_empty(palette, "Images", labels.no_matches);
     }
 
     let total = images.len();
@@ -43,8 +44,8 @@ pub(in crate::features::pages::remote) fn docker_images_panel(
                 cx.listener(move |this, _, _, cx| {
                     this.request_docker_confirm(
                         DockerConfirmState {
-                            title: format!("Remove image {label}"),
-                            detail: format!("docker image rm {}", compact_id(&image_id)),
+                            title: labels.confirm_action_title.to_string(),
+                            detail: labels.confirm_description(labels.remove_image, &label),
                             action: DockerConfirmAction::ImageRemove {
                                 image_id: image_id.clone(),
                                 force: false,
@@ -66,10 +67,11 @@ pub(in crate::features::pages::remote) fn docker_volumes_panel(
     palette: crate::theme::ThemePalette,
     volumes: &[DockerVolume],
     list_offset: usize,
+    labels: DockerLabels,
     cx: &mut Context<NyaTermApp>,
 ) -> impl IntoElement {
     if volumes.is_empty() {
-        return docker_resource_empty(palette, "Volumes", "No volumes loaded.");
+        return docker_resource_empty(palette, "Volumes", labels.no_matches);
     }
 
     let total = volumes.len();
@@ -85,7 +87,7 @@ pub(in crate::features::pages::remote) fn docker_volumes_panel(
             docker_resource_row(
                 palette,
                 volume.name.clone(),
-                format!("driver {}", volume.driver),
+                labels.volume_driver_label(&volume.driver),
             )
             .child(icon_button(
                 format!("docker-volume-remove-{volume_name}"),
@@ -94,8 +96,8 @@ pub(in crate::features::pages::remote) fn docker_volumes_panel(
                 cx.listener(move |this, _, _, cx| {
                     this.request_docker_confirm(
                         DockerConfirmState {
-                            title: format!("Remove volume {volume_name}"),
-                            detail: format!("docker volume rm {volume_name}"),
+                            title: labels.confirm_action_title.to_string(),
+                            detail: labels.confirm_description(labels.remove_volume, &volume_name),
                             action: DockerConfirmAction::VolumeRemove {
                                 volume_name: volume_name.clone(),
                                 force: false,
@@ -117,10 +119,11 @@ pub(in crate::features::pages::remote) fn docker_networks_panel(
     palette: crate::theme::ThemePalette,
     networks: &[DockerNetwork],
     list_offset: usize,
+    labels: DockerLabels,
     cx: &mut Context<NyaTermApp>,
 ) -> impl IntoElement {
     if networks.is_empty() {
-        return docker_resource_empty(palette, "Networks", "No networks loaded.");
+        return docker_resource_empty(palette, "Networks", labels.no_matches);
     }
 
     let total = networks.len();
@@ -151,8 +154,8 @@ pub(in crate::features::pages::remote) fn docker_networks_panel(
                 cx.listener(move |this, _, _, cx| {
                     this.request_docker_confirm(
                         DockerConfirmState {
-                            title: format!("Remove network {name}"),
-                            detail: format!("docker network rm {}", compact_id(&network_id)),
+                            title: labels.confirm_action_title.to_string(),
+                            detail: labels.confirm_description(labels.remove_network, &name),
                             action: DockerConfirmAction::NetworkRemove {
                                 network_id: network_id.clone(),
                             },

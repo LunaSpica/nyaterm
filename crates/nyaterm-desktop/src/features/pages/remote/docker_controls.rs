@@ -291,6 +291,7 @@ fn docker_tab_menu_item(
 pub(in crate::features::pages::remote) fn docker_confirm_panel(
     palette: crate::theme::ThemePalette,
     confirm: DockerConfirmState,
+    labels: DockerLabels,
     cx: &mut Context<NyaTermApp>,
 ) -> impl IntoElement {
     let card = div()
@@ -322,7 +323,7 @@ pub(in crate::features::pages::remote) fn docker_confirm_panel(
                 .child(small_button(
                     palette,
                     "docker-confirm-cancel",
-                    "Cancel",
+                    labels.cancel,
                     cx.listener(|this, _, _, cx| {
                         this.cancel_docker_confirm(cx);
                     }),
@@ -330,7 +331,7 @@ pub(in crate::features::pages::remote) fn docker_confirm_panel(
                 .child(small_button(
                     palette,
                     "docker-confirm-run",
-                    "Confirm",
+                    labels.confirm,
                     cx.listener(|this, _, window, cx| {
                         this.confirm_docker_action(window, cx);
                     }),

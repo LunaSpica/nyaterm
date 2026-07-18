@@ -5,6 +5,7 @@ pub(in crate::features::pages::remote) fn docker_compose_project_action_menu(
     project_name: String,
     config_files: Option<String>,
     project_key: &str,
+    labels: DockerLabels,
     cx: &mut Context<NyaTermApp>,
 ) -> impl IntoElement {
     let short = project_key.replace(['/', ':', ' '], "-");
@@ -28,7 +29,7 @@ pub(in crate::features::pages::remote) fn docker_compose_project_action_menu(
         .child(compose_menu_item(
             palette,
             format!("compose-up-{short}"),
-            "Up",
+            labels.up,
             false,
             cx.listener({
                 let project_name = project_name.clone();
@@ -48,7 +49,7 @@ pub(in crate::features::pages::remote) fn docker_compose_project_action_menu(
         .child(compose_menu_item(
             palette,
             format!("compose-restart-{short}"),
-            "Restart",
+            labels.restart,
             false,
             cx.listener({
                 let project_name = project_name.clone();
@@ -69,14 +70,14 @@ pub(in crate::features::pages::remote) fn docker_compose_project_action_menu(
         .child(compose_menu_item(
             palette,
             format!("compose-down-{short}"),
-            "Down",
+            labels.down,
             false,
             cx.listener(move |this, _, _, cx| {
                 this.docker_compose_menu_id = None;
                 this.request_docker_confirm(
                     DockerConfirmState {
-                        title: format!("Compose down {project_name}"),
-                        detail: format!("docker compose down for project {project_name}"),
+                        title: labels.confirm_action_title.to_string(),
+                        detail: labels.confirm_description(labels.down, &project_name),
                         action: DockerConfirmAction::ComposeAction {
                             project_name: project_name.clone(),
                             config_files: config_files.clone(),
@@ -96,6 +97,7 @@ pub(in crate::features::pages::remote) fn docker_compose_service_action_menu(
     service_name: String,
     running_container_id: Option<String>,
     can_enter: bool,
+    labels: DockerLabels,
     cx: &mut Context<NyaTermApp>,
 ) -> impl IntoElement {
     let short = format!("{project_name}-{service_name}").replace(['/', ':', ' '], "-");
@@ -119,7 +121,7 @@ pub(in crate::features::pages::remote) fn docker_compose_service_action_menu(
         .child(compose_menu_item(
             palette,
             format!("compose-svc-logs-{short}"),
-            "Logs",
+            labels.logs,
             false,
             cx.listener({
                 let project_name = project_name.clone();
@@ -139,7 +141,7 @@ pub(in crate::features::pages::remote) fn docker_compose_service_action_menu(
         .child(compose_menu_item(
             palette,
             format!("compose-svc-enter-{short}"),
-            "Enter",
+            labels.enter,
             !can_enter,
             cx.listener(move |this, _, _, cx| {
                 this.docker_compose_menu_id = None;
@@ -152,7 +154,7 @@ pub(in crate::features::pages::remote) fn docker_compose_service_action_menu(
         .child(compose_menu_item(
             palette,
             format!("compose-svc-up-{short}"),
-            "Up",
+            labels.up,
             false,
             cx.listener({
                 let project_name = project_name.clone();
@@ -174,7 +176,7 @@ pub(in crate::features::pages::remote) fn docker_compose_service_action_menu(
         .child(compose_menu_item(
             palette,
             format!("compose-svc-stop-{short}"),
-            "Stop",
+            labels.stop,
             false,
             cx.listener({
                 let project_name = project_name.clone();
@@ -196,7 +198,7 @@ pub(in crate::features::pages::remote) fn docker_compose_service_action_menu(
         .child(compose_menu_item(
             palette,
             format!("compose-svc-restart-{short}"),
-            "Restart",
+            labels.restart,
             false,
             cx.listener({
                 let project_name = project_name.clone();
