@@ -777,6 +777,8 @@ impl NyaTermApp {
             title_menu_submenu: None,
             open_tabs_menu_open: false,
             new_session_menu_open: false,
+            new_session_all_sessions_open: false,
+            new_session_group_menu_path: Vec::new(),
             session_tab_strip_scroll: ScrollHandle::new(),
             session_tab_scroll_into_view_pending: false,
             last_connect_failure_name: None,

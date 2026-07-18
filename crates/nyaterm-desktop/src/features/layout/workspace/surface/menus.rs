@@ -1,5 +1,99 @@
 use super::*;
 
+const NEW_SESSION_MENU_WIDTH: f32 = 300.;
+const NEW_SESSION_SUBMENU_WIDTH: f32 = 260.;
+const NEW_SESSION_MENU_ROW_HEIGHT: f32 = 32.;
+const NEW_SESSION_MENU_PADDING: f32 = 4.;
+
+fn new_session_visible_group_ids(
+    connections: &[SavedConnection],
+    groups: &[Group],
+) -> HashSet<String> {
+    let parents = groups
+        .iter()
+        .map(|group| (group.id.as_str(), group.parent_id.as_deref()))
+        .collect::<HashMap<_, _>>();
+    let mut visible = HashSet::new();
+
+    for connection in connections {
+        let mut current = connection
+            .group_id
+            .as_deref()
+            .filter(|group_id| parents.contains_key(group_id));
+        let mut visited = HashSet::new();
+        while let Some(group_id) = current {
+            if !visited.insert(group_id) {
+                break;
+            }
+            visible.insert(group_id.to_string());
+            current = parents
+                .get(group_id)
+                .copied()
+                .flatten()
+                .filter(|parent_id| parents.contains_key(parent_id));
+        }
+    }
+
+    visible
+}
+
+fn new_session_groups_for_parent(
+    groups: &[Group],
+    visible_group_ids: &HashSet<String>,
+    parent_id: Option<&str>,
+) -> Vec<Group> {
+    let group_ids: HashSet<&str> = groups.iter().map(|group| group.id.as_str()).collect();
+    let mut children = groups
+        .iter()
+        .filter(|group| {
+            if !visible_group_ids.contains(&group.id) {
+                return false;
+            }
+            let normalized_parent = group
+                .parent_id
+                .as_deref()
+                .filter(|candidate| group_ids.contains(*candidate));
+            normalized_parent == parent_id
+        })
+        .cloned()
+        .collect::<Vec<_>>();
+    children.sort_by(|left, right| {
+        left.sort_order.cmp(&right.sort_order).then_with(|| {
+            left.name
+                .to_ascii_lowercase()
+                .cmp(&right.name.to_ascii_lowercase())
+        })
+    });
+    children
+}
+
+fn new_session_connections_for_group(
+    connections: &[SavedConnection],
+    groups: &[Group],
+    group_id: Option<&str>,
+) -> Vec<SavedConnection> {
+    let group_ids: HashSet<&str> = groups.iter().map(|group| group.id.as_str()).collect();
+    let mut matches = connections
+        .iter()
+        .filter(|connection| {
+            let normalized_group = connection
+                .group_id
+                .as_deref()
+                .filter(|candidate| group_ids.contains(*candidate));
+            normalized_group == group_id
+        })
+        .cloned()
+        .collect::<Vec<_>>();
+    matches.sort_by(|left, right| {
+        left.sort_order.cmp(&right.sort_order).then_with(|| {
+            left.name
+                .to_ascii_lowercase()
+                .cmp(&right.name.to_ascii_lowercase())
+        })
+    });
+    matches
+}
+
 impl NyaTermApp {
     pub(in crate::features) fn render_open_tabs_menu(
         &mut self,
@@ -142,6 +236,7 @@ impl NyaTermApp {
         let no_shell_sessions_label = self.tr("terminal.noShellSessions");
         let recent_sessions_label = self.tr("terminal.recentSessions");
         let no_recent_sessions_label = self.tr("terminal.noRecentSessions");
+        let all_sessions_open = self.new_session_all_sessions_open;
         // Tauri TabBar new-session: shell sessions + recent by last_used.
         let mut shell: Vec<_> = self
             .connections
@@ -177,11 +272,8 @@ impl NyaTermApp {
         }
 
         let mut menu = div()
-            .id("workspace-new-session-dropdown")
-            .absolute()
-            .top(px(36.))
-            .right_0()
-            .w(px(300.))
+            .id("workspace-new-session-dropdown-scroll")
+            .w(px(NEW_SESSION_MENU_WIDTH))
             .max_h(px(460.))
             .overflow_y_scroll()
             .rounded_md()
@@ -202,6 +294,11 @@ impl NyaTermApp {
                     .gap_2()
                     .cursor_pointer()
                     .hover(|this| this.bg(rgb(palette.hover)))
+                    .on_hover(cx.listener(|this, hovered: &bool, _, cx| {
+                        if *hovered {
+                            this.close_new_session_all_sessions_menu(cx);
+                        }
+                    }))
                     .on_click(cx.listener(|this, _, window, cx| {
                         this.close_new_session_menu(cx);
                         this.open_connection_editor(None, None, false, window, cx);
@@ -228,11 +325,19 @@ impl NyaTermApp {
                     .items_center()
                     .gap_2()
                     .cursor_pointer()
+                    .bg(if all_sessions_open {
+                        rgb(palette.hover)
+                    } else {
+                        rgb(palette.surface)
+                    })
                     .hover(|this| this.bg(rgb(palette.hover)))
+                    .on_hover(cx.listener(|this, hovered: &bool, _, cx| {
+                        if *hovered {
+                            this.open_new_session_all_sessions_menu(cx);
+                        }
+                    }))
                     .on_click(cx.listener(|this, _, _, cx| {
-                        this.close_new_session_menu(cx);
-                        this.ensure_panel_open(NavItem::Connections);
-                        cx.notify();
+                        this.toggle_new_session_all_sessions_menu(cx);
                     }))
                     .child(
                         svg()
@@ -242,9 +347,17 @@ impl NyaTermApp {
                     )
                     .child(
                         div()
+                            .min_w_0()
+                            .flex_1()
                             .text_size(px(12.))
                             .text_color(rgb(palette.text))
                             .child(all_sessions_label),
+                    )
+                    .child(
+                        svg()
+                            .size(px(12.))
+                            .path("icons/fe/forward.svg")
+                            .text_color(rgb(palette.text_dimmed)),
                     ),
             );
 
@@ -299,7 +412,305 @@ impl NyaTermApp {
                 menu = menu.child(self.new_session_connection_row(palette, connection, cx));
             }
         }
-        menu
+        div()
+            .id("workspace-new-session-dropdown")
+            .absolute()
+            .top(px(36.))
+            .right_0()
+            .w(px(NEW_SESSION_MENU_WIDTH))
+            .on_mouse_down(
+                MouseButton::Left,
+                cx.listener(|_, _, _, cx| cx.stop_propagation()),
+            )
+            .child(menu)
+            .when(all_sessions_open, |this| {
+                this.child(self.render_new_session_all_sessions_menus(cx))
+            })
+    }
+
+    fn render_new_session_all_sessions_menus(
+        &mut self,
+        cx: &mut Context<Self>,
+    ) -> impl IntoElement {
+        let path = self.new_session_group_menu_path.clone();
+        let visible_group_ids =
+            new_session_visible_group_ids(&self.connections, &self.connection_groups);
+        let mut parent_group_id = None;
+        let mut top = NEW_SESSION_MENU_ROW_HEIGHT + NEW_SESSION_MENU_PADDING;
+        let mut menus = div();
+
+        for depth in 0..=path.len() {
+            let groups = new_session_groups_for_parent(
+                &self.connection_groups,
+                &visible_group_ids,
+                parent_group_id.as_deref(),
+            );
+            let selected_group_id = path.get(depth).cloned();
+            menus = menus.child(self.render_new_session_all_sessions_level(
+                parent_group_id.clone(),
+                selected_group_id.clone(),
+                &visible_group_ids,
+                depth,
+                top,
+                cx,
+            ));
+
+            let Some(selected_group_id) = selected_group_id else {
+                break;
+            };
+            let Some(selected_index) = groups
+                .iter()
+                .position(|group| group.id == selected_group_id)
+            else {
+                break;
+            };
+            top += NEW_SESSION_MENU_PADDING + selected_index as f32 * NEW_SESSION_MENU_ROW_HEIGHT;
+            parent_group_id = Some(selected_group_id);
+        }
+
+        menus
+    }
+
+    fn render_new_session_all_sessions_level(
+        &mut self,
+        parent_group_id: Option<String>,
+        selected_group_id: Option<String>,
+        visible_group_ids: &HashSet<String>,
+        depth: usize,
+        top: f32,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
+        let palette = self.theme_palette();
+        let groups = new_session_groups_for_parent(
+            &self.connection_groups,
+            visible_group_ids,
+            parent_group_id.as_deref(),
+        );
+        let connections = new_session_connections_for_group(
+            &self.connections,
+            &self.connection_groups,
+            parent_group_id.as_deref(),
+        );
+        let has_groups = !groups.is_empty();
+        let no_saved_sessions_label = self.tr("terminal.noSavedSessions");
+        let right = NEW_SESSION_MENU_WIDTH + depth as f32 * NEW_SESSION_SUBMENU_WIDTH;
+        let mut menu = div()
+            .id(SharedString::from(format!(
+                "new-session-all-sessions-level-{depth}"
+            )))
+            .absolute()
+            .top(px(top))
+            .right(px(right))
+            .w(px(NEW_SESSION_SUBMENU_WIDTH))
+            .max_h(px(420.))
+            .overflow_y_scroll()
+            .rounded_md()
+            .border_1()
+            .border_color(rgb(palette.border))
+            .bg(rgb(palette.surface))
+            .shadow_lg()
+            .py_1()
+            .flex()
+            .flex_col();
+
+        if groups.is_empty() && connections.is_empty() {
+            menu = menu.child(
+                div()
+                    .h(px(NEW_SESSION_MENU_ROW_HEIGHT))
+                    .px_3()
+                    .flex()
+                    .items_center()
+                    .text_size(px(11.))
+                    .text_color(rgb(palette.text_dimmed))
+                    .child(no_saved_sessions_label),
+            );
+        } else {
+            for group in groups {
+                menu = menu.child(self.new_session_group_menu_row(
+                    palette,
+                    group,
+                    selected_group_id.as_deref(),
+                    depth,
+                    cx,
+                ));
+            }
+            if has_groups && !connections.is_empty() {
+                menu = menu.child(div().mx_2().my_1().h(px(1.)).bg(rgb(palette.border)));
+            }
+            for connection in connections {
+                menu = menu.child(
+                    self.new_session_all_sessions_connection_row(palette, connection, depth, cx),
+                );
+            }
+        }
+
+        menu.into_any_element()
+    }
+
+    fn new_session_group_menu_row(
+        &mut self,
+        palette: ThemePalette,
+        group: Group,
+        selected_group_id: Option<&str>,
+        depth: usize,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
+        let group_id = group.id.clone();
+        let hover_group_id = group_id.clone();
+        let click_group_id = group_id.clone();
+        let selected = selected_group_id == Some(group_id.as_str());
+        div()
+            .id(SharedString::from(format!(
+                "new-session-group-{depth}-{group_id}"
+            )))
+            .h(px(NEW_SESSION_MENU_ROW_HEIGHT))
+            .px_3()
+            .flex()
+            .items_center()
+            .gap_2()
+            .bg(if selected {
+                rgb(palette.hover)
+            } else {
+                rgb(palette.surface)
+            })
+            .cursor_pointer()
+            .hover(|this| this.bg(rgb(palette.hover)))
+            .on_hover(cx.listener(move |this, hovered: &bool, _, cx| {
+                if *hovered {
+                    this.open_new_session_group_menu(hover_group_id.clone(), depth, cx);
+                }
+            }))
+            .on_click(cx.listener(move |this, _, _, cx| {
+                this.open_new_session_group_menu(click_group_id.clone(), depth, cx);
+            }))
+            .child(
+                svg()
+                    .size(px(13.))
+                    .path("icons/conn/folder.svg")
+                    .text_color(rgb(palette.warning)),
+            )
+            .child(
+                div()
+                    .min_w_0()
+                    .flex_1()
+                    .overflow_hidden()
+                    .text_size(px(12.))
+                    .text_color(rgb(palette.text))
+                    .child(truncate_preview(&group.name, 30)),
+            )
+            .child(
+                svg()
+                    .size(px(12.))
+                    .path("icons/fe/forward.svg")
+                    .text_color(rgb(palette.text_dimmed)),
+            )
+            .into_any_element()
+    }
+
+    fn new_session_all_sessions_connection_row(
+        &mut self,
+        palette: ThemePalette,
+        connection: SavedConnection,
+        depth: usize,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
+        let connection_id = connection.id.clone();
+        let icon = match &connection.config {
+            ConnectionType::Ssh { .. } => "icons/conn/server.svg",
+            ConnectionType::Telnet { .. } => "icons/conn/telnet.svg",
+            ConnectionType::Serial { .. } => "icons/conn/serial.svg",
+            ConnectionType::LocalTerminal { .. } => "icons/conn/terminal.svg",
+        };
+        div()
+            .id(SharedString::from(format!(
+                "new-session-all-connection-{connection_id}"
+            )))
+            .h(px(NEW_SESSION_MENU_ROW_HEIGHT))
+            .px_3()
+            .flex()
+            .items_center()
+            .gap_2()
+            .cursor_pointer()
+            .hover(|this| this.bg(rgb(palette.hover)))
+            .on_hover(cx.listener(move |this, hovered: &bool, _, cx| {
+                if *hovered {
+                    this.truncate_new_session_group_menu(depth, cx);
+                }
+            }))
+            .on_click(cx.listener(move |this, _, window, cx| {
+                this.close_new_session_menu(cx);
+                if let Some(connection) = this
+                    .connections
+                    .iter()
+                    .find(|item| item.id == connection_id)
+                    .cloned()
+                {
+                    this.start_saved_connection(connection, window, cx);
+                }
+            }))
+            .child(
+                svg()
+                    .size(px(12.))
+                    .path(icon)
+                    .text_color(rgb(palette.text_muted)),
+            )
+            .child(
+                div()
+                    .min_w_0()
+                    .flex_1()
+                    .overflow_hidden()
+                    .text_size(px(12.))
+                    .text_color(rgb(palette.text))
+                    .child(truncate_preview(&connection.name, 30)),
+            )
+            .into_any_element()
+    }
+
+    fn open_new_session_all_sessions_menu(&mut self, cx: &mut Context<Self>) {
+        if !self.new_session_all_sessions_open {
+            self.new_session_all_sessions_open = true;
+            self.new_session_group_menu_path.clear();
+            cx.notify();
+        }
+    }
+
+    fn toggle_new_session_all_sessions_menu(&mut self, cx: &mut Context<Self>) {
+        self.new_session_all_sessions_open = !self.new_session_all_sessions_open;
+        self.new_session_group_menu_path.clear();
+        cx.notify();
+    }
+
+    fn close_new_session_all_sessions_menu(&mut self, cx: &mut Context<Self>) {
+        if self.new_session_all_sessions_open || !self.new_session_group_menu_path.is_empty() {
+            self.new_session_all_sessions_open = false;
+            self.new_session_group_menu_path.clear();
+            cx.notify();
+        }
+    }
+
+    fn open_new_session_group_menu(
+        &mut self,
+        group_id: String,
+        depth: usize,
+        cx: &mut Context<Self>,
+    ) {
+        let unchanged = self.new_session_all_sessions_open
+            && self.new_session_group_menu_path.get(depth) == Some(&group_id)
+            && self.new_session_group_menu_path.len() == depth + 1;
+        if unchanged {
+            return;
+        }
+        self.new_session_all_sessions_open = true;
+        self.new_session_group_menu_path.truncate(depth);
+        self.new_session_group_menu_path.push(group_id);
+        cx.notify();
+    }
+
+    fn truncate_new_session_group_menu(&mut self, depth: usize, cx: &mut Context<Self>) {
+        if self.new_session_group_menu_path.len() > depth {
+            self.new_session_group_menu_path.truncate(depth);
+            cx.notify();
+        }
     }
 
     pub(in crate::features) fn new_session_connection_row(
@@ -334,6 +745,11 @@ impl NyaTermApp {
             .gap_2()
             .cursor_pointer()
             .hover(|this| this.bg(rgb(palette.hover)))
+            .on_hover(cx.listener(|this, hovered: &bool, _, cx| {
+                if *hovered {
+                    this.close_new_session_all_sessions_menu(cx);
+                }
+            }))
             .on_click(cx.listener(move |this, _, window, cx| {
                 this.close_new_session_menu(cx);
                 if let Some(connection) = this
@@ -380,5 +796,135 @@ impl NyaTermApp {
                     .text_color(rgb(palette.text_dimmed))
                     .child(kind),
             )
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn group(id: &str, name: &str, parent_id: Option<&str>, sort_order: i32) -> Group {
+        Group {
+            id: id.to_string(),
+            name: name.to_string(),
+            parent_id: parent_id.map(str::to_string),
+            sort_order,
+            created_at_ms: None,
+            updated_at_ms: None,
+        }
+    }
+
+    fn connection(
+        id: &str,
+        name: &str,
+        group_id: Option<&str>,
+        sort_order: i32,
+    ) -> SavedConnection {
+        SavedConnection {
+            id: id.to_string(),
+            name: name.to_string(),
+            config: ConnectionType::LocalTerminal {
+                shell_path: String::new(),
+                shell_args: String::new(),
+                working_dir: None,
+                ai_execution_profile: Default::default(),
+            },
+            group_id: group_id.map(str::to_string),
+            description: None,
+            sort_order,
+            icon: None,
+            auth: None,
+            network: None,
+            post_login: None,
+            created_at_ms: None,
+            updated_at_ms: None,
+            last_used_at_ms: None,
+        }
+    }
+
+    #[test]
+    fn new_session_groups_follow_parent_and_sort_order() {
+        let groups = vec![
+            group("child-b", "Child B", Some("root-a"), 3),
+            group("root-b", "Root B", None, 4),
+            group("root-a", "Root A", None, 1),
+            group("child-a", "Child A", Some("root-a"), 2),
+            group("orphan", "Orphan", Some("missing"), 0),
+        ];
+        let connections = vec![
+            connection("root-a-connection", "Root A", Some("root-a"), 0),
+            connection("child-a-connection", "Child A", Some("child-a"), 0),
+            connection("child-b-connection", "Child B", Some("child-b"), 0),
+            connection("orphan-connection", "Orphan", Some("orphan"), 0),
+        ];
+        let visible = new_session_visible_group_ids(&connections, &groups);
+
+        let roots = new_session_groups_for_parent(&groups, &visible, None);
+        assert_eq!(
+            roots
+                .iter()
+                .map(|group| group.id.as_str())
+                .collect::<Vec<_>>(),
+            vec!["orphan", "root-a", "root-b"]
+        );
+        let children = new_session_groups_for_parent(&groups, &visible, Some("root-a"));
+        assert_eq!(
+            children
+                .iter()
+                .map(|group| group.id.as_str())
+                .collect::<Vec<_>>(),
+            vec!["child-a", "child-b"]
+        );
+    }
+
+    #[test]
+    fn new_session_groups_hide_empty_branches() {
+        let groups = vec![
+            group("parent", "Parent", None, 0),
+            group("populated", "Populated", Some("parent"), 0),
+            group("empty", "Empty", Some("parent"), 1),
+            group("empty-root", "Empty Root", None, 1),
+        ];
+        let connections = vec![connection(
+            "nested-connection",
+            "Nested",
+            Some("populated"),
+            0,
+        )];
+        let visible = new_session_visible_group_ids(&connections, &groups);
+
+        let roots = new_session_groups_for_parent(&groups, &visible, None);
+        assert_eq!(
+            roots
+                .iter()
+                .map(|group| group.id.as_str())
+                .collect::<Vec<_>>(),
+            vec!["parent"]
+        );
+        let children = new_session_groups_for_parent(&groups, &visible, Some("parent"));
+        assert_eq!(children.len(), 1);
+        assert_eq!(children[0].id, "populated");
+    }
+
+    #[test]
+    fn new_session_connections_include_invalid_groups_at_root() {
+        let groups = vec![group("group-a", "Group A", None, 0)];
+        let connections = vec![
+            connection("grouped", "Grouped", Some("group-a"), 0),
+            connection("root-b", "Root B", None, 4),
+            connection("orphan", "Orphan", Some("missing"), 1),
+            connection("root-a", "Root A", None, 1),
+        ];
+
+        let root = new_session_connections_for_group(&connections, &groups, None);
+        assert_eq!(
+            root.iter()
+                .map(|connection| connection.id.as_str())
+                .collect::<Vec<_>>(),
+            vec!["orphan", "root-a", "root-b"]
+        );
+        let grouped = new_session_connections_for_group(&connections, &groups, Some("group-a"));
+        assert_eq!(grouped.len(), 1);
+        assert_eq!(grouped[0].id, "grouped");
     }
 }

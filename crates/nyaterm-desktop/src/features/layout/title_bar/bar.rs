@@ -227,6 +227,10 @@ impl NyaTermApp {
         let palette = self.theme_palette();
         div()
             .relative()
+            .on_mouse_down(
+                MouseButton::Left,
+                cx.listener(|_, _, _, cx| cx.stop_propagation()),
+            )
             .child(
                 div()
                     .id(SharedString::from(format!("title-menu-trigger-{id_label}")))
@@ -270,6 +274,8 @@ impl NyaTermApp {
         if self.title_menu_open.is_some() {
             self.open_tabs_menu_open = false;
             self.new_session_menu_open = false;
+            self.new_session_all_sessions_open = false;
+            self.new_session_group_menu_path.clear();
         }
         cx.notify();
     }

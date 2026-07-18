@@ -36,6 +36,8 @@ impl NyaTermApp {
                             this.close_title_menu(cx);
                             this.open_tabs_menu_open = false;
                             this.new_session_menu_open = false;
+                            this.new_session_all_sessions_open = false;
+                            this.new_session_group_menu_path.clear();
                             this.open_connection_editor(None, None, false, window, cx);
                         }),
                     ))

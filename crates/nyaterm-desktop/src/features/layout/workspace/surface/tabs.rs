@@ -537,6 +537,10 @@ impl NyaTermApp {
                 div()
                     .relative()
                     .h_full()
+                    .on_mouse_down(
+                        MouseButton::Left,
+                        cx.listener(|_, _, _, cx| cx.stop_propagation()),
+                    )
                     .child(
                         div()
                             .id("workspace-open-tabs-menu")
@@ -570,6 +574,10 @@ impl NyaTermApp {
             div()
                 .relative()
                 .h_full()
+                .on_mouse_down(
+                    MouseButton::Left,
+                    cx.listener(|_, _, _, cx| cx.stop_propagation()),
+                )
                 .child(
                     div()
                         .id("workspace-new-session-menu")

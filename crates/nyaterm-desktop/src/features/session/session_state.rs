@@ -213,6 +213,8 @@ impl NyaTermApp {
     pub(in crate::features) fn activate_session_id(&mut self, session_id: &str) -> Option<String> {
         self.open_tabs_menu_open = false;
         self.new_session_menu_open = false;
+        self.new_session_all_sessions_open = false;
+        self.new_session_group_menu_path.clear();
         // Session switch resets terminal-output credential autofill (Tauri XTerminal remount).
         self.credential_suggestions = None;
         self.credential_autofill_buffer.clear();
@@ -439,6 +441,8 @@ impl NyaTermApp {
         self.open_tabs_menu_open = !self.open_tabs_menu_open;
         if self.open_tabs_menu_open {
             self.new_session_menu_open = false;
+            self.new_session_all_sessions_open = false;
+            self.new_session_group_menu_path.clear();
             self.title_menu_open = None;
         }
         cx.notify();
@@ -457,12 +461,19 @@ impl NyaTermApp {
             self.open_tabs_menu_open = false;
             self.title_menu_open = None;
         }
+        self.new_session_all_sessions_open = false;
+        self.new_session_group_menu_path.clear();
         cx.notify();
     }
 
     pub(in crate::features) fn close_new_session_menu(&mut self, cx: &mut Context<Self>) {
-        if self.new_session_menu_open {
-            self.new_session_menu_open = false;
+        let changed = self.new_session_menu_open
+            || self.new_session_all_sessions_open
+            || !self.new_session_group_menu_path.is_empty();
+        self.new_session_menu_open = false;
+        self.new_session_all_sessions_open = false;
+        self.new_session_group_menu_path.clear();
+        if changed {
             cx.notify();
         }
     }

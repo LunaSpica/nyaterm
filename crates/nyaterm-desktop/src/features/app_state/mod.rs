@@ -597,6 +597,10 @@ pub struct NyaTermApp {
     pub(in crate::features) open_tabs_menu_open: bool,
     /// New-session menu next to the tab strip + control.
     pub(in crate::features) new_session_menu_open: bool,
+    /// Whether the Tauri-style "All sessions" submenu is expanded.
+    pub(in crate::features) new_session_all_sessions_open: bool,
+    /// Hovered group ids from the root submenu through the deepest open child menu.
+    pub(in crate::features) new_session_group_menu_path: Vec<String>,
     /// Horizontal scroll handle for the global session tab strip (scroll-into-view).
     pub(in crate::features) session_tab_strip_scroll: ScrollHandle,
     /// Request scroll-into-view of the active tab on next paint (Tauri TabBar).

@@ -57,6 +57,25 @@ impl NyaTermApp {
             .on_click(cx.listener(|this, _, _, _| {
                 this.mark_user_activity();
             }))
+            .on_mouse_down(
+                MouseButton::Left,
+                cx.listener(|this, _, _, cx| {
+                    let changed = this.title_menu_open.is_some()
+                        || this.open_tabs_menu_open
+                        || this.new_session_menu_open
+                        || this.new_session_all_sessions_open
+                        || !this.new_session_group_menu_path.is_empty();
+                    if changed {
+                        this.title_menu_open = None;
+                        this.title_menu_submenu = None;
+                        this.open_tabs_menu_open = false;
+                        this.new_session_menu_open = false;
+                        this.new_session_all_sessions_open = false;
+                        this.new_session_group_menu_path.clear();
+                        cx.notify();
+                    }
+                }),
+            )
             .on_key_down(cx.listener(|this, event: &KeyDownEvent, window, cx| {
                 if this.modal_child_window_open() {
                     this.activate_modal_child_window(cx);
