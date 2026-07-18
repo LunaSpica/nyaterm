@@ -93,13 +93,6 @@ impl NyaTermApp {
         let Some(confirm) = self.connection_group_delete_confirm.clone() else {
             return;
         };
-        if confirm.connection_count > 0 || confirm.child_group_count > 0 {
-            self.terminal_status =
-                "move or delete child groups/connections before deleting this folder".to_string();
-            self.connection_group_delete_confirm = None;
-            cx.notify();
-            return;
-        }
         match self.with_connection_store(|store| store.delete_group(&confirm.group_id)) {
             Ok(()) => {
                 self.expanded_connection_groups.remove(&confirm.group_id);

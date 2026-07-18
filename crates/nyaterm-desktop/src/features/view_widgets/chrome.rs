@@ -268,3 +268,25 @@ pub(in crate::features) fn modal_dialog_footer(
         .child(small_button(palette, cancel_id, "Cancel", on_cancel))
         .child(small_button(palette, save_id, save_label, on_save))
 }
+
+pub(in crate::features) fn modal_dialog_footer_localized(
+    palette: ThemePalette,
+    cancel_id: impl Into<String>,
+    save_id: impl Into<String>,
+    cancel_label: &'static str,
+    save_label: &'static str,
+    on_cancel: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
+    on_save: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
+) -> impl IntoElement {
+    div()
+        .mt_1()
+        .pt_3()
+        .border_t_1()
+        .border_color(rgb(palette.border))
+        .flex()
+        .items_center()
+        .justify_end()
+        .gap_2()
+        .child(small_button(palette, cancel_id, cancel_label, on_cancel))
+        .child(small_button(palette, save_id, save_label, on_save))
+}

@@ -8,9 +8,9 @@ impl NyaTermApp {
     ) -> impl IntoElement {
         let palette = self.theme_palette();
         let title = if editor.id.is_some() {
-            "Edit Group"
+            self.tr("savedConnections.renameFolder")
         } else {
-            "New Group"
+            self.tr("savedConnections.newFolder")
         };
         let card = div()
             .id(SharedString::from("connection-group-editor-panel"))
@@ -37,7 +37,7 @@ impl NyaTermApp {
             .child(editor_field(
                 palette,
                 "connection-group-name",
-                "Group Name",
+                self.tr("savedConnections.folderName"),
                 editor.name.clone(),
                 true,
                 cx.listener(|this, _, window, cx| {
@@ -53,11 +53,12 @@ impl NyaTermApp {
                         .child(error),
                 )
             })
-            .child(modal_dialog_footer(
+            .child(modal_dialog_footer_localized(
                 palette,
                 "connection-group-close",
                 "connection-group-save",
-                "Save",
+                self.tr("common.cancel"),
+                self.tr("common.save"),
                 cx.listener(|this, _, _, cx| {
                     this.close_connection_group_editor(cx);
                 }),
@@ -83,20 +84,24 @@ impl NyaTermApp {
                 div()
                     .text_size(px(15.))
                     .font_weight(FontWeight(700.))
-                    .text_color(rgb(palette.danger))
-                    .child("Delete Connection"),
+                    .text_color(rgb(palette.text))
+                    .child(self.tr("savedConnections.delete")),
             )
             .child(
                 div()
                     .text_size(px(12.))
                     .text_color(rgb(palette.text))
-                    .child(format!("Delete \"{}\"?", confirm.label)),
+                    .child(
+                        self.tr("savedConnections.deleteConfirm")
+                            .replace("{{name}}", &confirm.label),
+                    ),
             )
-            .child(modal_dialog_footer(
+            .child(modal_dialog_footer_localized(
                 palette,
                 "connection-delete-cancel",
                 "connection-delete-confirm",
-                "Delete",
+                self.tr("common.cancel"),
+                self.tr("savedConnections.delete"),
                 cx.listener(|this, _, _, cx| {
                     this.close_connection_delete_confirm(cx);
                 }),
@@ -122,23 +127,24 @@ impl NyaTermApp {
                 div()
                     .text_size(px(15.))
                     .font_weight(FontWeight(700.))
-                    .text_color(rgb(palette.danger))
-                    .child("Delete Group"),
+                    .text_color(rgb(palette.text))
+                    .child(self.tr("savedConnections.deleteFolder")),
             )
             .child(
                 div()
                     .text_size(px(12.))
                     .text_color(rgb(palette.text))
-                    .child(format!(
-                        "Delete \"{}\" ({} connections, {} child groups)?",
-                        confirm.label, confirm.connection_count, confirm.child_group_count
-                    )),
+                    .child(
+                        self.tr("savedConnections.deleteFolderConfirm")
+                            .replace("{{name}}", &confirm.label),
+                    ),
             )
-            .child(modal_dialog_footer(
+            .child(modal_dialog_footer_localized(
                 palette,
                 "connection-group-delete-cancel",
                 "connection-group-delete-confirm",
-                "Delete",
+                self.tr("common.cancel"),
+                self.tr("savedConnections.deleteFolder"),
                 cx.listener(|this, _, _, cx| {
                     this.close_connection_group_delete_confirm(cx);
                 }),
@@ -147,5 +153,64 @@ impl NyaTermApp {
                 }),
             ));
         modal_dialog_shell(palette, "connection-group-delete-modal", 440., card)
+    }
+
+    pub(in crate::features) fn connection_group_open_confirm_panel(
+        &mut self,
+        confirm: ConnectionGroupOpenConfirmState,
+        cx: &mut Context<Self>,
+    ) -> impl IntoElement {
+        let palette = self.theme_palette();
+        let description = self
+            .tr("savedConnections.openAllConnectionsConfirm")
+            .replace("{{name}}", &confirm.label)
+            .replace("{{count}}", &confirm.connection_count.to_string());
+        let card = div()
+            .id("connection-group-open-confirm-panel")
+            .p_4()
+            .flex()
+            .flex_col()
+            .gap_3()
+            .track_focus(&self.connection_group_open_confirm_focus)
+            .on_click(cx.listener(|this, _, window, cx| {
+                window.focus(&this.connection_group_open_confirm_focus);
+                cx.notify();
+            }))
+            .on_key_down(cx.listener(|this, event: &KeyDownEvent, window, cx| {
+                cx.stop_propagation();
+                match event.keystroke.key.as_str() {
+                    "escape" => this.close_connection_group_open_confirm(cx),
+                    "enter" => this.confirm_connection_group_open(window, cx),
+                    _ => {}
+                }
+            }))
+            .child(
+                div()
+                    .text_size(px(15.))
+                    .font_weight(FontWeight(700.))
+                    .text_color(rgb(palette.text))
+                    .child(self.tr("savedConnections.openAllConnections")),
+            )
+            .child(
+                div()
+                    .text_size(px(12.))
+                    .line_height(px(18.))
+                    .text_color(rgb(palette.text_muted))
+                    .child(description),
+            )
+            .child(modal_dialog_footer_localized(
+                palette,
+                "connection-group-open-cancel",
+                "connection-group-open-confirm",
+                self.tr("common.cancel"),
+                self.tr("savedConnections.openAllConnections"),
+                cx.listener(|this, _, _, cx| {
+                    this.close_connection_group_open_confirm(cx);
+                }),
+                cx.listener(|this, _, window, cx| {
+                    this.confirm_connection_group_open(window, cx);
+                }),
+            ));
+        modal_dialog_shell(palette, "connection-group-open-confirm-modal", 400., card)
     }
 }

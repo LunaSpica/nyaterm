@@ -878,6 +878,13 @@ pub(crate) struct ConnectionGroupDeleteConfirmState {
     pub(crate) child_group_count: usize,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct ConnectionGroupOpenConfirmState {
+    pub(crate) group_id: String,
+    pub(crate) label: String,
+    pub(crate) connection_count: usize,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum ConnectionSortMode {
     Default,

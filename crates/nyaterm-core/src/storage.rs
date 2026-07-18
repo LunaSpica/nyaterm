@@ -1028,9 +1028,37 @@ impl ConnectionStore {
     }
 
     pub fn delete_group(&self, group_id: &str) -> Result<(), StorageError> {
+        let groups = self.list_groups()?;
+        let connections = self.list_connections()?;
+        let mut group_ids = std::collections::HashSet::from([group_id.to_string()]);
+        let mut changed = true;
+        while changed {
+            changed = false;
+            for group in &groups {
+                if group
+                    .parent_id
+                    .as_ref()
+                    .is_some_and(|parent| group_ids.contains(parent))
+                    && group_ids.insert(group.id.clone())
+                {
+                    changed = true;
+                }
+            }
+        }
+
         let txn = self.db.begin_write()?;
-        txn.open_table(GROUPS_TABLE)?
-            .remove(entity_key(GROUP_PREFIX, group_id).as_str())?;
+        for connection in connections.iter().filter(|connection| {
+            connection
+                .group_id
+                .as_ref()
+                .is_some_and(|id| group_ids.contains(id))
+        }) {
+            delete_connection_in_txn(&txn, &connection.id)?;
+        }
+        for id in group_ids {
+            txn.open_table(GROUPS_TABLE)?
+                .remove(entity_key(GROUP_PREFIX, &id).as_str())?;
+        }
         txn.commit()?;
         Ok(())
     }
@@ -5734,6 +5762,64 @@ mod tests {
             Some("group-1")
         );
 
+        std::fs::remove_dir_all(dir).ok();
+    }
+
+    #[test]
+    fn deleting_group_removes_descendants_and_grouped_connections() {
+        let dir = unique_temp_dir("delete-group-tree");
+        let store = ConnectionStore::open(&dir).expect("store");
+        let root = Group {
+            id: "root".to_string(),
+            name: "Root".to_string(),
+            parent_id: None,
+            sort_order: 0,
+            created_at_ms: None,
+            updated_at_ms: None,
+        };
+        let child = Group {
+            id: "child".to_string(),
+            name: "Child".to_string(),
+            parent_id: Some(root.id.clone()),
+            sort_order: 0,
+            created_at_ms: None,
+            updated_at_ms: None,
+        };
+        for group in [&root, &child] {
+            store.save_group(group).expect("save group");
+        }
+        for (id, group_id) in [
+            ("root-connection", root.id.clone()),
+            ("child-connection", child.id.clone()),
+        ] {
+            store
+                .save_connection(&SavedConnection {
+                    id: id.to_string(),
+                    name: id.to_string(),
+                    config: ConnectionType::LocalTerminal {
+                        shell_path: "bash".to_string(),
+                        shell_args: String::new(),
+                        working_dir: None,
+                        ai_execution_profile: Default::default(),
+                    },
+                    group_id: Some(group_id),
+                    description: None,
+                    sort_order: 0,
+                    icon: None,
+                    auth: None,
+                    network: None,
+                    post_login: None,
+                    created_at_ms: None,
+                    updated_at_ms: None,
+                    last_used_at_ms: None,
+                })
+                .expect("save connection");
+        }
+
+        store.delete_group(&root.id).expect("delete group tree");
+
+        assert!(store.list_groups().expect("groups").is_empty());
+        assert!(store.list_connections().expect("connections").is_empty());
         std::fs::remove_dir_all(dir).ok();
     }
 

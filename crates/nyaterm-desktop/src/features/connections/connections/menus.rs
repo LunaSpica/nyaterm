@@ -94,7 +94,64 @@ impl NyaTermApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let mut group_ids = std::collections::HashSet::from([group_id.clone()]);
+        let connections = self.saved_connections_in_group_tree(&group_id);
+        if connections.is_empty() {
+            self.terminal_status = "group has no connections".to_string();
+            cx.notify();
+            return;
+        }
+        let queued = self.enqueue_saved_connection_starts(connections, cx);
+        self.terminal_status = format!("queued {queued} connection(s) from group");
+        self.drive_saved_connection_start_queue(window, cx);
+    }
+
+    pub(in crate::features) fn open_connection_group_open_confirm(
+        &mut self,
+        group_id: String,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(group) = self
+            .connection_groups
+            .iter()
+            .find(|group| group.id == group_id)
+        else {
+            return;
+        };
+        let connection_count = self.saved_connections_in_group_tree(&group_id).len();
+        if connection_count == 0 {
+            return;
+        }
+        self.connection_group_open_confirm = Some(ConnectionGroupOpenConfirmState {
+            group_id,
+            label: group.name.clone(),
+            connection_count,
+        });
+        window.focus(&self.connection_group_open_confirm_focus);
+        cx.notify();
+    }
+
+    pub(in crate::features) fn close_connection_group_open_confirm(
+        &mut self,
+        cx: &mut Context<Self>,
+    ) {
+        self.connection_group_open_confirm = None;
+        cx.notify();
+    }
+
+    pub(in crate::features) fn confirm_connection_group_open(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(confirm) = self.connection_group_open_confirm.take() else {
+            return;
+        };
+        self.start_group_connections(confirm.group_id, window, cx);
+    }
+
+    fn saved_connections_in_group_tree(&self, group_id: &str) -> Vec<SavedConnection> {
+        let mut group_ids = std::collections::HashSet::from([group_id.to_string()]);
         let mut changed = true;
         while changed {
             changed = false;
@@ -106,8 +163,7 @@ impl NyaTermApp {
                 }
             }
         }
-        let connections = self
-            .connections
+        self.connections
             .iter()
             .filter(|connection| {
                 connection
@@ -116,15 +172,7 @@ impl NyaTermApp {
                     .is_some_and(|id| group_ids.contains(id))
             })
             .cloned()
-            .collect::<Vec<_>>();
-        if connections.is_empty() {
-            self.terminal_status = "group has no connections".to_string();
-            cx.notify();
-            return;
-        }
-        let queued = self.enqueue_saved_connection_starts(connections, cx);
-        self.terminal_status = format!("queued {queued} connection(s) from group");
-        self.drive_saved_connection_start_queue(window, cx);
+            .collect()
     }
 
     pub(in crate::features) fn enqueue_saved_connection_start(

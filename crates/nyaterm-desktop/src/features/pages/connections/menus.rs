@@ -25,9 +25,12 @@ impl NyaTermApp {
                 .as_ref()
                 .is_some_and(|conn| self.selected_connection_ids.contains(&conn.id))
         {
-            format!("Connect selected ({selected_count})")
+            format!(
+                "{} ({selected_count})",
+                self.tr("savedConnections.connectSelected")
+            )
         } else {
-            "Connect".to_string()
+            self.tr("savedConnections.connect").to_string()
         };
         let connection_id = state.connection_id.clone();
         let connection_for_connect = connection.clone();
@@ -79,7 +82,7 @@ impl NyaTermApp {
                     .child(menu_item(
                         palette,
                         "connection-context-edit",
-                        "Edit",
+                        self.tr("savedConnections.edit"),
                         cx.listener(move |this, _, window, cx| {
                             this.close_connection_context_menus(cx);
                             this.open_connection_editor(
@@ -95,7 +98,7 @@ impl NyaTermApp {
                     .child(menu_item(
                         palette,
                         "connection-context-rename",
-                        "Rename",
+                        self.tr("savedConnections.rename"),
                         cx.listener(move |this, _, window, cx| {
                             this.close_connection_context_menus(cx);
                             this.rename_connection(connection_for_rename.clone(), window, cx);
@@ -105,9 +108,9 @@ impl NyaTermApp {
                         palette,
                         "connection-context-copy",
                         if selected_count > 1 {
-                            "Copy selected"
+                            self.tr("savedConnections.copySelected")
                         } else {
-                            "Copy"
+                            self.tr("savedConnections.copy")
                         },
                         cx.listener(move |this, _, _, cx| {
                             this.close_connection_context_menus(cx);
@@ -123,9 +126,9 @@ impl NyaTermApp {
                         palette,
                         "connection-context-delete",
                         if selected_count > 1 {
-                            "Delete selected"
+                            self.tr("savedConnections.delete")
                         } else {
-                            "Delete"
+                            self.tr("savedConnections.delete")
                         },
                         cx.listener(move |this, _, _, cx| {
                             this.close_connection_context_menus(cx);
@@ -212,7 +215,7 @@ impl NyaTermApp {
                     .child(menu_item(
                         palette,
                         "connection-group-context-new",
-                        "New connection",
+                        self.tr("savedConnections.newConnection"),
                         cx.listener(move |this, _, window, cx| {
                             this.close_connection_context_menus(cx);
                             this.open_connection_editor(
@@ -227,7 +230,7 @@ impl NyaTermApp {
                     .child(menu_item(
                         palette,
                         "connection-group-context-folder",
-                        "New folder",
+                        self.tr("savedConnections.newFolder"),
                         cx.listener(move |this, _, window, cx| {
                             this.close_connection_context_menus(cx);
                             this.open_connection_group_editor(
@@ -242,10 +245,14 @@ impl NyaTermApp {
                         this.child(menu_separator(palette)).child(menu_item(
                             palette,
                             "connection-group-context-open-all",
-                            "Open all",
+                            self.tr("savedConnections.openAllConnections"),
                             cx.listener(move |this, _, window, cx| {
                                 this.close_connection_context_menus(cx);
-                                this.start_group_connections(group_id_open.clone(), window, cx);
+                                this.open_connection_group_open_confirm(
+                                    group_id_open.clone(),
+                                    window,
+                                    cx,
+                                );
                             }),
                         ))
                     })
@@ -253,7 +260,7 @@ impl NyaTermApp {
                     .child(menu_item(
                         palette,
                         "connection-group-context-rename",
-                        "Rename",
+                        self.tr("savedConnections.renameFolder"),
                         cx.listener(move |this, _, window, cx| {
                             this.close_connection_context_menus(cx);
                             this.open_connection_group_editor(
@@ -267,7 +274,7 @@ impl NyaTermApp {
                     .child(menu_item(
                         palette,
                         "connection-group-context-delete",
-                        "Delete",
+                        self.tr("savedConnections.deleteFolder"),
                         cx.listener(move |this, _, _, cx| {
                             this.close_connection_context_menus(cx);
                             this.open_connection_group_delete_confirm(group_id_delete.clone(), cx);

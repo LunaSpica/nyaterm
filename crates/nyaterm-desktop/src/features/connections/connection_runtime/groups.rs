@@ -91,8 +91,9 @@ impl NyaTermApp {
         };
         let name = editor.name.trim().to_string();
         if name.is_empty() {
+            let message = self.tr("savedConnections.folderNameRequired").to_string();
             if let Some(state) = self.connection_group_editor.as_mut() {
-                state.error = Some("Group name is required".to_string());
+                state.error = Some(message);
             }
             cx.notify();
             return;

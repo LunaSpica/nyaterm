@@ -141,6 +141,10 @@ impl NyaTermApp {
                 self.connection_group_delete_confirm.clone(),
                 |this, confirm| this.child(self.connection_group_delete_confirm_panel(confirm, cx)),
             )
+            .when_some(
+                self.connection_group_open_confirm.clone(),
+                |this, confirm| this.child(self.connection_group_open_confirm_panel(confirm, cx)),
+            )
             .when(self.connection_context_menu.is_some(), |this| {
                 this.child(self.connection_context_menu_overlay(cx))
             })
