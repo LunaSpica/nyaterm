@@ -25,19 +25,7 @@ impl ShortcutCategory {
 pub(crate) enum ShortcutNativeStatus {
     Supported,
     Partial,
-    Pending,
     Contextual,
-}
-
-impl ShortcutNativeStatus {
-    pub(crate) fn label(self) -> &'static str {
-        match self {
-            Self::Supported => "native",
-            Self::Partial => "partial",
-            Self::Pending => "pending",
-            Self::Contextual => "context",
-        }
-    }
 }
 
 #[derive(Debug, Clone, Copy)]

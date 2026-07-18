@@ -6,19 +6,10 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
         let palette = self.theme_palette();
-        // Tauri KeyboardShortcutsTab: search + section per category + dense shortcut rows.
-        let supported = SHORTCUT_REGISTRY
-            .iter()
-            .filter(|shortcut| shortcut.native_status == ShortcutNativeStatus::Supported)
-            .count();
-        let pending = SHORTCUT_REGISTRY
-            .iter()
-            .filter(|shortcut| shortcut.native_status == ShortcutNativeStatus::Pending)
-            .count();
         let overrides = self.settings.keybindings.len();
         let search = self.keybinding_search_draft.clone();
         let search_display = if search.is_empty() {
-            "Search shortcuts…".to_string()
+            self.tr("settings.keybindingsSearch").to_string()
         } else {
             search.clone()
         };
@@ -40,48 +31,19 @@ impl NyaTermApp {
             .on_key_down(cx.listener(|this, event: &KeyDownEvent, _, cx| {
                 this.handle_keybinding_key_down(event, cx);
             }))
-            .child(settings_form_section(palette,
-                Some("Keyboard shortcuts"),
-                Some("Record overrides stored in the same keybindings map as the Tauri app."),
+            .child(
                 div()
                     .flex()
-                    .flex_col()
+                    .items_center()
                     .gap_3()
-                    .child(settings_form_row(palette,
-                        "Registry",
-                        Some(SharedString::from(format!(
-                            "{} total · {supported} native · {pending} pending · {overrides} overrides",
-                            SHORTCUT_REGISTRY.len()
-                        ))),
-                        if overrides > 0 {
-                            small_button(palette,
-                                "keybindings-reset-all",
-                                "Reset All",
-                                cx.listener(|this, _, _, cx| {
-                                    this.reset_all_keybindings(cx);
-                                }),
-                            )
-                            .into_any_element()
-                        } else {
-                            div()
-                                .text_size(px(11.))
-                                .text_color(rgb(palette.text_muted))
-                                .child("Defaults")
-                                .into_any_element()
-                        },
-                    ))
-                    .child(settings_form_row(
-                        palette,
-                        "Search",
-                        Some(SharedString::from(
-                            "Filter by action label, shortcut id, or key chords.",
-                        )),
+                    .child(
                         div()
                             .id("settings-keybindings-search")
-                            .min_w(px(220.))
-                            .h(px(28.))
-                            .px_2()
-                            .rounded_md()
+                            .min_w_0()
+                            .flex_1()
+                            .h(px(36.))
+                            .px_3()
+                            .rounded_sm()
                             .border_1()
                             .border_color(rgb(palette.border))
                             .bg(rgb(palette.input))
@@ -103,23 +65,18 @@ impl NyaTermApp {
                             .on_key_down(cx.listener(|this, event: &KeyDownEvent, _, cx| {
                                 this.handle_keybinding_search_key_down(event, cx);
                             })),
-                    ))
-                    .child(
-                        div()
-                            .rounded_md()
-                            .border_1()
-                            .border_color(rgb(palette.surface_elevated))
-                            .bg(rgb(palette.bg))
-                            .px_3()
-                            .py_2()
-                            .text_size(px(11.))
-                            .line_height(px(16.))
-                            .text_color(rgb(palette.text_muted))
-                            .child(
-                                "Press Record, type a shortcut, then Save or Enter. Esc cancels recording. Conflicts block save.",
-                            ),
-                    ),
-            ))
+                    )
+                    .when(overrides > 0, |this| {
+                        this.child(small_button(
+                            palette,
+                            "keybindings-reset-all",
+                            self.tr("settings.keybindingsResetAll"),
+                            cx.listener(|this, _, _, cx| {
+                                this.reset_all_keybindings(cx);
+                            }),
+                        ))
+                    }),
+            )
             .child(groups)
     }
 
@@ -147,8 +104,7 @@ impl NyaTermApp {
                     || keys.to_ascii_lowercase().contains(&needle)
             })
             .collect::<Vec<_>>();
-        let count = shortcuts.len();
-        if !needle.is_empty() && count == 0 {
+        if !needle.is_empty() && shortcuts.is_empty() {
             return div().into_any_element();
         }
         let mut rows = div().flex().flex_col().gap_1();
@@ -156,26 +112,7 @@ impl NyaTermApp {
             rows = rows.child(self.shortcut_registry_row(shortcut, cx));
         }
 
-        settings_form_section(
-            palette,
-            Some(category.label()),
-            None,
-            div()
-                .flex()
-                .flex_col()
-                .gap_2()
-                .child(settings_form_row(
-                    palette,
-                    "Shortcuts",
-                    Some(SharedString::from(format!("{count} in category"))),
-                    div()
-                        .text_size(px(11.))
-                        .text_color(rgb(palette.text_muted))
-                        .child("Native"),
-                ))
-                .child(rows),
-        )
-        .into_any_element()
+        settings_form_section(palette, Some(category.label()), None, rows).into_any_element()
     }
 
     pub(in crate::features) fn shortcut_registry_row(
@@ -184,12 +121,14 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
         let palette = self.theme_palette();
-        let (badge_fg, badge_bg) = match shortcut.native_status {
-            ShortcutNativeStatus::Supported => (rgb(palette.success), rgb(0x12261c)),
-            ShortcutNativeStatus::Partial => (rgb(palette.link), rgb(palette.hover)),
-            ShortcutNativeStatus::Pending => (rgb(palette.danger), rgb(0x2d1215)),
-            ShortcutNativeStatus::Contextual => (rgb(palette.warning), rgb(0x2a2111)),
-        };
+        let _registry_metadata = (
+            shortcut.note,
+            match shortcut.native_status {
+                ShortcutNativeStatus::Supported => "supported",
+                ShortcutNativeStatus::Partial => "partial",
+                ShortcutNativeStatus::Contextual => "contextual",
+            },
+        );
         let is_custom = self.settings.keybindings.contains_key(shortcut.id);
         let is_recording = self.keybinding_recording_id.as_deref() == Some(shortcut.id);
         let effective_keys = shortcut_keys_for(shortcut.id, &self.settings.keybindings)
@@ -201,11 +140,15 @@ impl NyaTermApp {
         } else {
             None
         };
+        let custom_label = self.tr("settings.keybindingsCustom");
+        let recording_label = self.tr("settings.keybindingsRecording");
+        let reset_label = self.tr("settings.keybindingsReset");
+        let indexed_hint = self.tr("settings.keybindingsIndexedHint");
         let key_display = if is_recording {
             self.keybinding_pending_keys
                 .as_deref()
                 .map(format_hotkey_for_display)
-                .unwrap_or_else(|| "Press keys...".to_string())
+                .unwrap_or_else(|| recording_label.to_string())
         } else {
             format_hotkey_for_display(&effective_keys)
         };
@@ -233,41 +176,29 @@ impl NyaTermApp {
             .items_center()
             .gap_2()
             .child(
-                div()
-                    .min_w_0()
-                    .flex_1()
-                    .flex()
-                    .flex_col()
-                    .child(
-                        div()
-                            .flex()
-                            .items_center()
-                            .gap_2()
-                            .child(
+                div().min_w_0().flex_1().flex().flex_col().child(
+                    div()
+                        .flex()
+                        .items_center()
+                        .gap_2()
+                        .child(
+                            div()
+                                .text_size(px(12.))
+                                .font_weight(FontWeight(600.))
+                                .text_color(rgb(palette.text))
+                                .overflow_hidden()
+                                .child(shortcut.label),
+                        )
+                        .when(is_custom, |this| {
+                            this.child(
                                 div()
-                                    .text_size(px(12.))
+                                    .text_size(px(10.))
                                     .font_weight(FontWeight(600.))
-                                    .text_color(rgb(palette.text))
-                                    .overflow_hidden()
-                                    .child(shortcut.label),
+                                    .text_color(rgb(0xbc8cff))
+                                    .child(custom_label),
                             )
-                            .when(is_custom, |this| {
-                                this.child(
-                                    div()
-                                        .text_size(px(10.))
-                                        .font_weight(FontWeight(600.))
-                                        .text_color(rgb(0xbc8cff))
-                                        .child("custom"),
-                                )
-                            }),
-                    )
-                    .child(
-                        div()
-                            .text_size(px(10.))
-                            .text_color(rgb(palette.text_dimmed))
-                            .overflow_hidden()
-                            .child(format!("{} · {}", shortcut.id, shortcut.note)),
-                    ),
+                        }),
+                ),
             )
             .child(
                 div()
@@ -313,45 +244,44 @@ impl NyaTermApp {
                         )
                     }),
             )
-            .child(status_pill(
-                shortcut.native_status.label(),
-                badge_fg,
-                badge_bg,
-            ))
             .child(
                 div()
                     .flex()
                     .items_center()
                     .gap_1()
                     .when(is_recording, |this| {
-                        this.child(small_button(palette,
+                        this.child(small_button(
+                            palette,
                             format!("keybinding-save-{}", shortcut.id),
-                            "Save",
+                            self.tr("common.confirm"),
                             cx.listener(|this, _, _, cx| {
                                 this.confirm_keybinding_recording(cx);
                             }),
                         ))
-                        .child(small_button(palette,
+                        .child(small_button(
+                            palette,
                             format!("keybinding-cancel-{}", shortcut.id),
-                            "Cancel",
+                            self.tr("common.cancel"),
                             cx.listener(|this, _, _, cx| {
                                 this.cancel_keybinding_recording(cx);
                             }),
                         ))
                     })
                     .when(!is_recording, |this| {
-                        this.child(small_button(palette,
+                        this.child(small_button(
+                            palette,
                             format!("keybinding-record-{}", shortcut.id),
-                            "Record",
+                            self.tr("common.edit"),
                             cx.listener(move |this, _, window, cx| {
                                 this.start_keybinding_recording(shortcut_id.clone(), window, cx);
                             }),
                         ))
                     })
                     .when(is_custom && !is_recording, |this| {
-                        this.child(small_button(palette,
+                        this.child(small_button(
+                            palette,
                             format!("keybinding-reset-{}", shortcut.id),
-                            "Reset",
+                            reset_label,
                             cx.listener(move |this, _, _, cx| {
                                 this.reset_keybinding(reset_shortcut_id.clone(), cx);
                             }),
@@ -364,9 +294,7 @@ impl NyaTermApp {
                         .w_full()
                         .text_size(px(10.))
                         .text_color(rgb(palette.text_muted))
-                        .child(
-                            "Tab switch template must end with number 1 (e.g. ctrl+1). Other digits fill 2–9.",
-                        ),
+                        .child(indexed_hint),
                 )
             })
     }
