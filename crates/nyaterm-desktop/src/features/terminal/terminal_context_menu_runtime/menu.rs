@@ -81,7 +81,23 @@ impl NyaTermApp {
             Vec::new()
         };
         let translation_providers: Vec<(String, String)> =
-            available_translation_providers(&self.translation_settings);
+            available_translation_providers(&self.translation_settings)
+                .into_iter()
+                .map(|(id, _)| {
+                    let label = self
+                        .tr(match id.as_str() {
+                            "google" => "translation.google",
+                            "microsoft" => "translation.microsoft",
+                            "deepl" => "translation.deepl",
+                            "baidu" => "translation.baidu",
+                            "ali" => "translation.ali",
+                            "youdao" => "translation.youdao",
+                            _ => "translation.provider",
+                        })
+                        .to_string();
+                    (id, label)
+                })
+                .collect();
         let selection_link_kind: Option<&'static str> = None;
         let selection_actions: Vec<(String, ActionLinkAction)> =
             if self.settings.terminal_action_links_enabled && has_selection {
@@ -143,7 +159,7 @@ impl NyaTermApp {
                 .child(terminal_ctx_item(
                     palette,
                     "term-ctx-copy",
-                    "Copy",
+                    self.tr("terminalCtx.copy"),
                     Some(copy_sc),
                     cx.listener(|this, _, _, cx| {
                         this.close_terminal_context_menu(cx);
@@ -155,7 +171,7 @@ impl NyaTermApp {
                     this.child(terminal_ctx_item(
                         palette,
                         "term-ctx-open-url",
-                        "Open Link",
+                        self.tr("terminalCtx.openLink"),
                         None,
                         cx.listener(move |this, _, _, cx| {
                             this.close_terminal_context_menu(cx);
@@ -203,7 +219,7 @@ impl NyaTermApp {
                 .child(terminal_ctx_item(
                     palette,
                     "term-ctx-find-selection",
-                    "Find",
+                    self.tr("terminalCtx.find"),
                     Some(find_sc),
                     cx.listener(move |this, _, window, cx| {
                         this.close_terminal_context_menu(cx);
@@ -216,7 +232,7 @@ impl NyaTermApp {
                 .child(terminal_ctx_submenu_item(
                     palette,
                     "term-ctx-search-online",
-                    "Search Online",
+                    self.tr("terminalCtx.searchOnline"),
                     menu.submenu == Some(TerminalContextSubmenu::SearchOnline),
                     cx.listener(|this, hovered: &bool, _, cx| {
                         if *hovered {
@@ -237,7 +253,7 @@ impl NyaTermApp {
                     this.child(terminal_ctx_submenu_item(
                         palette,
                         "term-ctx-ai",
-                        "AI",
+                        self.tr("ai.title"),
                         menu.submenu == Some(TerminalContextSubmenu::Ai),
                         cx.listener(|this, hovered: &bool, _, cx| {
                             if *hovered {
@@ -253,7 +269,7 @@ impl NyaTermApp {
                     this.child(terminal_ctx_submenu_item(
                         palette,
                         "term-ctx-translate",
-                        "Translate",
+                        self.tr("terminalCtx.translate"),
                         menu.submenu == Some(TerminalContextSubmenu::Translate),
                         cx.listener(|this, hovered: &bool, _, cx| {
                             if *hovered {
@@ -275,7 +291,7 @@ impl NyaTermApp {
                 .child(terminal_ctx_item(
                     palette,
                     "term-ctx-paste",
-                    "Paste",
+                    self.tr("terminalCtx.paste"),
                     Some(paste_sc),
                     cx.listener(|this, _, window, cx| {
                         this.close_terminal_context_menu(cx);
@@ -285,7 +301,7 @@ impl NyaTermApp {
                 .child(terminal_ctx_item(
                     palette,
                     "term-ctx-paste-selected",
-                    "Paste Selected Text",
+                    self.tr("terminalCtx.pasteSelectedText"),
                     Some(paste_sel_sc),
                     cx.listener(move |this, _, window, cx| {
                         this.close_terminal_context_menu(cx);
@@ -297,7 +313,7 @@ impl NyaTermApp {
                 .child(terminal_ctx_item(
                     palette,
                     "term-ctx-paste",
-                    "Paste",
+                    self.tr("terminalCtx.paste"),
                     Some(paste_sc),
                     cx.listener(|this, _, window, cx| {
                         this.close_terminal_context_menu(cx);
@@ -307,7 +323,7 @@ impl NyaTermApp {
                 .child(terminal_ctx_item(
                     palette,
                     "term-ctx-find",
-                    "Find",
+                    self.tr("terminalCtx.find"),
                     Some(find_sc),
                     cx.listener(|this, _, window, cx| {
                         this.close_terminal_context_menu(cx);
@@ -321,7 +337,7 @@ impl NyaTermApp {
             .child(terminal_ctx_item(
                 palette,
                 "term-ctx-clear-screen",
-                "Clear Screen",
+                self.tr("terminalCtx.clearScreen"),
                 Some(clear_sc),
                 cx.listener(|this, _, _, cx| {
                     this.close_terminal_context_menu(cx);
@@ -331,7 +347,7 @@ impl NyaTermApp {
             .child(terminal_ctx_item(
                 palette,
                 "term-ctx-clear-all",
-                "Clear All",
+                self.tr("terminalCtx.clearAll"),
                 None,
                 cx.listener(|this, _, _, cx| {
                     this.close_terminal_context_menu(cx);
@@ -342,7 +358,7 @@ impl NyaTermApp {
             .child(terminal_ctx_item(
                 palette,
                 "term-ctx-select-all",
-                "Select All",
+                self.tr("terminalCtx.selectAll"),
                 Some(select_all_sc),
                 cx.listener(|this, _, _, cx| {
                     this.close_terminal_context_menu(cx);
@@ -352,7 +368,7 @@ impl NyaTermApp {
             .child(terminal_ctx_item(
                 palette,
                 "term-ctx-more-actions",
-                "More Actions…",
+                self.tr("terminalCtx.moreActions"),
                 None,
                 cx.listener(|this, _, window, cx| {
                     this.close_terminal_context_menu(cx);

@@ -7,6 +7,7 @@ impl NyaTermApp {
     ) -> impl IntoElement {
         let palette = self.theme_palette();
         let input_entity = cx.entity();
+        let (viewport_w, viewport_h) = self.last_viewport_size;
         let items = self.filtered_quick_switch_items();
         if self.quick_switch_selected_index >= items.len() && !items.is_empty() {
             self.quick_switch_selected_index = items.len() - 1;
@@ -22,7 +23,13 @@ impl NyaTermApp {
                     self.quick_switch_query, self.quick_switch_marked_text
                 )
             };
-        let mut rows = div().max_h(px(384.)).overflow_hidden().flex().flex_col();
+        let list_max_height = (self.last_viewport_size.1 * 0.55).clamp(160., 384.);
+        let mut rows = div()
+            .id(SharedString::from("quick-switch-results"))
+            .max_h(px(list_max_height))
+            .overflow_y_scroll()
+            .flex()
+            .flex_col();
 
         if items.is_empty() {
             rows = rows.child(
@@ -40,7 +47,7 @@ impl NyaTermApp {
                     }),
             );
         } else {
-            for (index, item) in items.into_iter().enumerate().take(12) {
+            for (index, item) in items.into_iter().enumerate().take(50) {
                 let selected = index == selected_index;
                 let item_for_click = item.clone();
                 let badge = match &item {
@@ -146,7 +153,7 @@ impl NyaTermApp {
             .flex()
             .items_start()
             .justify_center()
-            .pt(px((self.last_viewport_size.1 * 0.18).max(48.)))
+            .pt(px((viewport_h * 0.18).max(48.)))
             .track_focus(&self.quick_switch_focus)
             .on_click(cx.listener(|this, _, window, cx| {
                 window.focus(&this.quick_switch_focus);
@@ -159,7 +166,7 @@ impl NyaTermApp {
             .child(
                 div()
                     .id(SharedString::from("quick-switch-dialog"))
-                    .w(px(640.))
+                    .w(px((viewport_w - 32.).clamp(280., 640.)))
                     .max_w_full()
                     .mx_4()
                     .rounded_md()

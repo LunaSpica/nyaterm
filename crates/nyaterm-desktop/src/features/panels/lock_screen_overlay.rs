@@ -61,21 +61,21 @@ impl NyaTermApp {
                     .child(window_control_button(
                         palette,
                         "lock-window-min",
-                        "-",
+                        "–",
                         WindowControlArea::Min,
                         |_, window, _| window.minimize_window(),
                     ))
                     .child(window_control_button(
                         palette,
                         "lock-window-max",
-                        "[]",
+                        "□",
                         WindowControlArea::Max,
                         |_, window, _| window.zoom_window(),
                     ))
                     .child(window_control_button(
                         palette,
                         "lock-window-close",
-                        "x",
+                        "×",
                         WindowControlArea::Close,
                         |_, window, _| window.remove_window(),
                     )),

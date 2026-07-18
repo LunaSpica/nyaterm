@@ -449,15 +449,6 @@ impl NyaTermApp {
         cx.notify();
     }
 
-    pub(in crate::features) fn open_tab_actions(
-        &mut self,
-        session_id: String,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        self.open_tab_actions_at(session_id, None, window, cx);
-    }
-
     pub(in crate::features) fn toggle_open_tabs_menu(&mut self, cx: &mut Context<Self>) {
         self.open_tabs_menu_open = !self.open_tabs_menu_open;
         if self.open_tabs_menu_open {

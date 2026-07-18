@@ -240,7 +240,7 @@ impl NyaTermApp {
                                 .border_color(rgb(palette.border))
                                 .text_size(px(10.))
                                 .text_color(rgb(palette.text_muted))
-                                .child("Alt+click for more actions"),
+                                .child(self.tr("terminal.actionLinkAltClickHint")),
                         )
                     }),
             )

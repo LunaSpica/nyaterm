@@ -81,19 +81,30 @@ impl NyaTermApp {
         if query.is_empty() {
             return items;
         }
-        let mut scored = items
-            .into_iter()
-            .filter_map(|item| {
-                let text = item.search_text().to_ascii_lowercase();
-                text.find(&query).map(|index| (index, item))
-            })
+        let candidates = items
+            .iter()
+            .map(|item| (item.search_text(), item.id()))
             .collect::<Vec<_>>();
-        scored.sort_by(|left, right| {
-            left.0
-                .cmp(&right.0)
-                .then(left.1.title().cmp(right.1.title()))
-        });
-        scored.into_iter().map(|(_, item)| item).collect()
+        let candidate_refs = candidates
+            .iter()
+            .map(|(display, id)| (display.as_str(), id.as_str()))
+            .collect::<Vec<_>>();
+        let matches = nyaterm_core::fuzzy_search_items(
+            &candidate_refs,
+            &query,
+            "sessionQuickSwitcher",
+            50,
+            None,
+            None,
+        );
+        let mut items_by_id = items
+            .into_iter()
+            .map(|item| (item.id(), item))
+            .collect::<HashMap<_, _>>();
+        matches
+            .into_iter()
+            .filter_map(|matched| items_by_id.remove(&matched.command))
+            .collect()
     }
 
     pub(in crate::features) fn select_quick_switch_item(

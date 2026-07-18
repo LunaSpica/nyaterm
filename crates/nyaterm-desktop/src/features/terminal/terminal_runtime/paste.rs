@@ -26,6 +26,10 @@ impl NyaTermApp {
             return;
         }
         if self.settings.terminal_show_multi_line_paste_dialog && is_multi_line_paste(&text) {
+            let text = normalize_paste_newlines(&text);
+            self.multi_line_paste_cursor = text.len();
+            self.multi_line_paste_anchor = None;
+            self.multi_line_paste_marked_range = None;
             self.multi_line_paste = Some(MultiLinePasteDraft::new(text));
             self.multi_line_paste_marked_text.clear();
             self.terminal_status = "multi-line paste confirmation opened".to_string();
@@ -165,6 +169,9 @@ impl NyaTermApp {
     pub(in crate::features) fn close_multi_line_paste(&mut self, cx: &mut Context<Self>) {
         self.multi_line_paste = None;
         self.multi_line_paste_marked_text.clear();
+        self.multi_line_paste_marked_range = None;
+        self.multi_line_paste_cursor = 0;
+        self.multi_line_paste_anchor = None;
         self.terminal_status = "multi-line paste cancelled".to_string();
         cx.notify();
     }
@@ -176,6 +183,9 @@ impl NyaTermApp {
             return;
         };
         self.multi_line_paste_marked_text.clear();
+        self.multi_line_paste_marked_range = None;
+        self.multi_line_paste_cursor = 0;
+        self.multi_line_paste_anchor = None;
         let text = draft.normalized_text();
         self.send_terminal_paste_input(&text, cx);
     }
@@ -187,6 +197,9 @@ impl NyaTermApp {
             return;
         };
         self.multi_line_paste_marked_text.clear();
+        self.multi_line_paste_marked_range = None;
+        self.multi_line_paste_cursor = 0;
+        self.multi_line_paste_anchor = None;
         let text = draft.normalized_text();
         let mut bytes = Vec::new();
         for line in text.split('\n') {
@@ -207,6 +220,18 @@ impl NyaTermApp {
         let primary = keystroke.modifiers.control || keystroke.modifiers.platform;
         if primary && !keystroke.modifiers.alt && !keystroke.modifiers.function {
             match keystroke.key.as_str() {
+                "a" | "A" => {
+                    self.multi_line_paste_anchor = Some(0);
+                    self.multi_line_paste_cursor = self
+                        .multi_line_paste
+                        .as_ref()
+                        .map(|draft| draft.text.len())
+                        .unwrap_or_default();
+                    self.multi_line_paste_marked_range = None;
+                    self.multi_line_paste_marked_text.clear();
+                    cx.notify();
+                    return;
+                }
                 "enter" => {
                     self.direct_multi_line_paste(cx);
                     return;
@@ -221,20 +246,87 @@ impl NyaTermApp {
         if keystroke.modifiers.platform || keystroke.modifiers.alt || keystroke.modifiers.control {
             return;
         }
-        let Some(draft) = self.multi_line_paste.as_mut() else {
-            return;
-        };
         match keystroke.key.as_str() {
             "escape" => self.close_multi_line_paste(cx),
             "backspace" => {
-                draft.text.pop();
-                self.multi_line_paste_marked_text.clear();
-                cx.notify();
+                let range = self.multi_line_paste_selected_byte_range();
+                let range = if range.is_empty() {
+                    let start = previous_char_boundary(
+                        self.multi_line_paste_text(),
+                        self.multi_line_paste_cursor,
+                    );
+                    start..self.multi_line_paste_cursor
+                } else {
+                    range
+                };
+                self.replace_multi_line_paste_range(range, "", cx);
             }
             "enter" => {
-                draft.text.push('\n');
-                self.multi_line_paste_marked_text.clear();
-                cx.notify();
+                self.replace_multi_line_paste_selection("\n", cx);
+            }
+            "delete" => {
+                let range = self.multi_line_paste_selected_byte_range();
+                let range = if range.is_empty() {
+                    let end = next_char_boundary(
+                        self.multi_line_paste_text(),
+                        self.multi_line_paste_cursor,
+                    );
+                    self.multi_line_paste_cursor..end
+                } else {
+                    range
+                };
+                self.replace_multi_line_paste_range(range, "", cx);
+            }
+            "left" => {
+                if !keystroke.modifiers.shift {
+                    if let Some(anchor) = self.multi_line_paste_anchor {
+                        let target = anchor.min(self.multi_line_paste_cursor);
+                        self.move_multi_line_paste_cursor(target, false, cx);
+                        return;
+                    }
+                }
+                self.move_multi_line_paste_cursor(
+                    previous_char_boundary(
+                        self.multi_line_paste_text(),
+                        self.multi_line_paste_cursor,
+                    ),
+                    keystroke.modifiers.shift,
+                    cx,
+                );
+            }
+            "right" => {
+                if !keystroke.modifiers.shift {
+                    if let Some(anchor) = self.multi_line_paste_anchor {
+                        let target = anchor.max(self.multi_line_paste_cursor);
+                        self.move_multi_line_paste_cursor(target, false, cx);
+                        return;
+                    }
+                }
+                self.move_multi_line_paste_cursor(
+                    next_char_boundary(self.multi_line_paste_text(), self.multi_line_paste_cursor),
+                    keystroke.modifiers.shift,
+                    cx,
+                );
+            }
+            "home" => {
+                self.move_multi_line_paste_cursor(
+                    line_start(self.multi_line_paste_text(), self.multi_line_paste_cursor),
+                    keystroke.modifiers.shift,
+                    cx,
+                );
+            }
+            "end" => {
+                self.move_multi_line_paste_cursor(
+                    line_end(self.multi_line_paste_text(), self.multi_line_paste_cursor),
+                    keystroke.modifiers.shift,
+                    cx,
+                );
+            }
+            "up" => {
+                self.move_multi_line_paste_vertical(-1, keystroke.modifiers.shift, cx);
+            }
+            "down" => {
+                self.move_multi_line_paste_vertical(1, keystroke.modifiers.shift, cx);
             }
             _ => {
                 if let Some(input) = keystroke
@@ -242,13 +334,144 @@ impl NyaTermApp {
                     .as_deref()
                     .filter(|input| !input.is_empty())
                 {
-                    draft.text.push_str(input);
-                    self.multi_line_paste_marked_text.clear();
-                    cx.notify();
+                    self.replace_multi_line_paste_selection(input, cx);
                 }
             }
         }
     }
+
+    pub(in crate::features) fn multi_line_paste_text(&self) -> &str {
+        self.multi_line_paste
+            .as_ref()
+            .map(|draft| draft.text.as_str())
+            .unwrap_or_default()
+    }
+
+    pub(in crate::features) fn multi_line_paste_selected_byte_range(
+        &self,
+    ) -> std::ops::Range<usize> {
+        let cursor = self
+            .multi_line_paste_cursor
+            .min(self.multi_line_paste_text().len());
+        let anchor = self.multi_line_paste_anchor.unwrap_or(cursor);
+        if anchor <= cursor {
+            anchor..cursor
+        } else {
+            cursor..anchor
+        }
+    }
+
+    pub(in crate::features) fn move_multi_line_paste_cursor(
+        &mut self,
+        cursor: usize,
+        extend: bool,
+        cx: &mut Context<Self>,
+    ) {
+        let cursor = cursor.min(self.multi_line_paste_text().len());
+        if extend {
+            self.multi_line_paste_anchor
+                .get_or_insert(self.multi_line_paste_cursor);
+        } else {
+            self.multi_line_paste_anchor = None;
+        }
+        self.multi_line_paste_cursor = cursor;
+        self.multi_line_paste_marked_range = None;
+        self.multi_line_paste_marked_text.clear();
+        cx.notify();
+    }
+
+    pub(in crate::features) fn move_multi_line_paste_vertical(
+        &mut self,
+        delta: isize,
+        extend: bool,
+        cx: &mut Context<Self>,
+    ) {
+        let text = self.multi_line_paste_text();
+        let cursor = self.multi_line_paste_cursor.min(text.len());
+        let current_start = line_start(text, cursor);
+        let column = text[current_start..cursor].chars().count();
+        let target_start = if delta < 0 {
+            if current_start == 0 {
+                0
+            } else {
+                line_start(text, current_start - 1)
+            }
+        } else {
+            let current_end = line_end(text, cursor);
+            if current_end >= text.len() {
+                current_start
+            } else {
+                current_end + 1
+            }
+        };
+        let target_end = line_end(text, target_start);
+        let target = text[target_start..target_end]
+            .char_indices()
+            .nth(column)
+            .map(|(offset, _)| target_start + offset)
+            .unwrap_or(target_end);
+        self.move_multi_line_paste_cursor(target, extend, cx);
+    }
+
+    pub(in crate::features) fn replace_multi_line_paste_selection(
+        &mut self,
+        text: &str,
+        cx: &mut Context<Self>,
+    ) {
+        let range = self.multi_line_paste_selected_byte_range();
+        self.replace_multi_line_paste_range(range, text, cx);
+    }
+
+    pub(in crate::features) fn replace_multi_line_paste_range(
+        &mut self,
+        range: std::ops::Range<usize>,
+        text: &str,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(draft) = self.multi_line_paste.as_mut() else {
+            return;
+        };
+        let start = range.start.min(draft.text.len());
+        let end = range.end.min(draft.text.len()).max(start);
+        draft.text.replace_range(start..end, text);
+        self.multi_line_paste_cursor = start + text.len();
+        self.multi_line_paste_anchor = None;
+        self.multi_line_paste_marked_range = None;
+        self.multi_line_paste_marked_text.clear();
+        cx.notify();
+    }
+}
+
+fn previous_char_boundary(text: &str, offset: usize) -> usize {
+    text[..offset.min(text.len())]
+        .char_indices()
+        .next_back()
+        .map(|(index, _)| index)
+        .unwrap_or(0)
+}
+
+fn next_char_boundary(text: &str, offset: usize) -> usize {
+    let offset = offset.min(text.len());
+    text[offset..]
+        .chars()
+        .next()
+        .map(|ch| offset + ch.len_utf8())
+        .unwrap_or(offset)
+}
+
+fn line_start(text: &str, offset: usize) -> usize {
+    text[..offset.min(text.len())]
+        .rfind('\n')
+        .map(|index| index + 1)
+        .unwrap_or(0)
+}
+
+fn line_end(text: &str, offset: usize) -> usize {
+    let offset = offset.min(text.len());
+    text[offset..]
+        .find('\n')
+        .map(|index| offset + index)
+        .unwrap_or(text.len())
 }
 
 #[cfg(test)]

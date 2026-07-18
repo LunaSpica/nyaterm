@@ -6,6 +6,10 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
         let palette = self.theme_palette();
+        let (viewport_w, viewport_h) = self.last_viewport_size;
+        let dialog_width = (viewport_w - 24.).clamp(280., 900.);
+        let dialog_height = (viewport_h - 56.).clamp(280., 500.);
+        let groups_width = (dialog_width * 0.23).clamp(160., 208.);
         let search_input_entity = cx.entity();
         let name_input_entity = search_input_entity.clone();
         let selected_group = self.selected_sync_group().cloned();
@@ -334,7 +338,7 @@ impl NyaTermApp {
             .child(
                 div()
                     .id(SharedString::from("sync-groups-dialog"))
-                    .w(px(900.))
+                    .w(px(dialog_width))
                     .max_w_full()
                     .mx_4()
                     .rounded_md()
@@ -342,7 +346,7 @@ impl NyaTermApp {
                     .border_color(rgb(palette.border))
                     .bg(rgb(palette.bg))
                     .shadow_lg()
-                    .h(px(500.))
+                    .h(px(dialog_height))
                     .max_h_full()
                     .p_4()
                     .on_click(|_, _, cx| cx.stop_propagation())
@@ -400,7 +404,7 @@ impl NyaTermApp {
                             .gap_3()
                             .child(
                                 div()
-                                    .w(px(208.))
+                                    .w(px(groups_width))
                                     .flex_none()
                                     .flex()
                                     .flex_col()
@@ -505,7 +509,8 @@ impl NyaTermApp {
                                                                 "sync-group-search-input",
                                                             ))
                                                             .relative()
-                                                            .w(px(260.))
+                                            .flex_1()
+                                            .min_w(px(140.))
                                                             .h(px(30.))
                                                             .px_2()
                                                             .flex()

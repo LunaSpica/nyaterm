@@ -195,10 +195,21 @@ impl NyaTermApp {
                             }))
                             .on_mouse_down(
                                 gpui::MouseButton::Right,
-                                cx.listener(move |this, _, window, cx| {
-                                    cx.stop_propagation();
-                                    this.open_tab_actions(actions_id.clone(), window, cx);
-                                }),
+                                cx.listener(
+                                    move |this, event: &gpui::MouseDownEvent, window, cx| {
+                                        cx.stop_propagation();
+                                        let anchor = Some((
+                                            f32::from(event.position.x),
+                                            f32::from(event.position.y),
+                                        ));
+                                        this.open_tab_actions_at(
+                                            actions_id.clone(),
+                                            anchor,
+                                            window,
+                                            cx,
+                                        );
+                                    },
+                                ),
                             )
                             .on_drag(drag_payload, |payload, position, _, cx| {
                                 cx.new(|_| SessionTabDragPreview::new(payload.clone(), position))

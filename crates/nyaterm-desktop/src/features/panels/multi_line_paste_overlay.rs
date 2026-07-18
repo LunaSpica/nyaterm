@@ -6,23 +6,25 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
         let palette = self.theme_palette();
+        let (viewport_w, viewport_h) = self.last_viewport_size;
         let draft = self
             .multi_line_paste
             .clone()
             .unwrap_or_else(|| MultiLinePasteDraft::new(String::new()));
         let input_entity = cx.entity();
-        let draft_text = format!("{}{}", draft.text, self.multi_line_paste_marked_text);
+        let draft_text = draft.text.clone();
         let normalized = normalize_paste_newlines(&draft_text);
         let stats = self
             .tr("terminal.multiLinePasteStats")
             .replace("{{lines}}", &normalized.split('\n').count().to_string())
             .replace("{{chars}}", &draft_text.chars().count().to_string());
         let can_send = !draft_text.is_empty();
+        let preview_height = (viewport_h * 0.32).clamp(100., 190.);
         let mut preview = div()
             .id(SharedString::from("multi-line-paste-text"))
             .mt_3()
-            .h(px(190.))
-            .overflow_hidden()
+            .h(px(preview_height))
+            .overflow_y_scroll()
             .rounded_sm()
             .border_1()
             .border_color(if can_send {
@@ -35,33 +37,50 @@ impl NyaTermApp {
             .font_family(crate::features::gpui_code_font_family())
             .text_xs()
             .line_height(px(18.))
+            .whitespace_normal()
             .text_color(if can_send {
                 rgb(palette.text)
             } else {
                 rgb(palette.text_muted)
             });
-        let display_lines = normalized
-            .lines()
-            .map(ToString::to_string)
-            .chain(
-                normalized
-                    .ends_with('\n')
-                    .then_some(String::new())
-                    .into_iter(),
-            )
-            .take(10)
-            .collect::<Vec<_>>();
-        if display_lines.is_empty() {
+        if normalized.is_empty() {
             preview = preview.child(self.tr("terminal.multiLinePasteTextPlaceholder"));
         } else {
-            for line in display_lines {
-                let line_preview = if line.is_empty() {
-                    " ".to_string()
-                } else {
-                    truncate_preview(&line, 92)
-                };
-                preview = preview.child(div().whitespace_nowrap().child(line_preview));
+            let selection = self.multi_line_paste_selected_byte_range();
+            let show_caret = selection.is_empty();
+            let cursor = self.multi_line_paste_cursor.min(normalized.len());
+            let display_text = if show_caret {
+                let mut display = normalized.clone();
+                display.insert(cursor, '|');
+                display
+            } else {
+                normalized.clone()
+            };
+            let mut highlights = Vec::new();
+            if !selection.is_empty() {
+                highlights.push((
+                    display_range_after_caret(selection, cursor, show_caret),
+                    gpui::HighlightStyle {
+                        background_color: Some(rgba(0x2f81f750).into()),
+                        ..Default::default()
+                    },
+                ));
             }
+            if let Some(marked_range) = self.multi_line_paste_marked_range.clone() {
+                highlights.push((
+                    display_range_after_caret(marked_range, cursor, show_caret),
+                    gpui::HighlightStyle {
+                        underline: Some(gpui::UnderlineStyle {
+                            color: Some(rgb(palette.text).into()),
+                            thickness: px(1.),
+                            wavy: false,
+                        }),
+                        ..Default::default()
+                    },
+                ));
+            }
+            preview =
+                preview.child(gpui::StyledText::new(display_text).with_highlights(highlights));
         }
 
         div()
@@ -87,7 +106,8 @@ impl NyaTermApp {
             .child(
                 div()
                     .id(SharedString::from("multi-line-paste-dialog"))
-                    .w(px(620.))
+                    .w(px((viewport_w - 32.).clamp(280., 576.)))
+                    .max_h(px((viewport_h - 24.).max(240.)))
                     .max_w_full()
                     .mx_4()
                     .rounded_md()
@@ -184,4 +204,16 @@ impl NyaTermApp {
                     ),
             )
     }
+}
+
+fn display_range_after_caret(
+    range: std::ops::Range<usize>,
+    cursor: usize,
+    show_caret: bool,
+) -> std::ops::Range<usize> {
+    if !show_caret {
+        return range;
+    }
+    let shift = |offset: usize| offset + usize::from(offset >= cursor);
+    shift(range.start)..shift(range.end)
 }

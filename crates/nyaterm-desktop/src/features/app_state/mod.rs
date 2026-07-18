@@ -532,6 +532,9 @@ pub struct NyaTermApp {
     pub(in crate::features) temporary_ssh_link_focus: FocusHandle,
     pub(in crate::features) multi_line_paste: Option<MultiLinePasteDraft>,
     pub(in crate::features) multi_line_paste_marked_text: String,
+    pub(in crate::features) multi_line_paste_marked_range: Option<std::ops::Range<usize>>,
+    pub(in crate::features) multi_line_paste_cursor: usize,
+    pub(in crate::features) multi_line_paste_anchor: Option<usize>,
     pub(in crate::features) multi_line_paste_focus: FocusHandle,
     pub(in crate::features) terminal_focus: FocusHandle,
     /// True while the terminal surface owns keyboard focus.

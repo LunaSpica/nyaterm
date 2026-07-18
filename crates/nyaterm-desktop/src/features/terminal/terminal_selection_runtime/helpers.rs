@@ -49,6 +49,12 @@ impl EntityInputHandler for NyaTermApp {
         window: &mut Window,
         _cx: &mut Context<Self>,
     ) -> Option<String> {
+        if self.multi_line_paste.is_some() && self.multi_line_paste_focus.is_focused(window) {
+            let text = self.multi_line_paste_text();
+            let byte_range = byte_range_from_utf16(text, &range);
+            *adjusted_range = Some(utf16_range_from_bytes(text, &byte_range));
+            return Some(text[byte_range].to_string());
+        }
         if self.security_unlock_prompt_open && !self.security_unlock_marked_text.is_empty() {
             let marked = &self.security_unlock_marked_text;
             let len = marked.encode_utf16().count();
@@ -89,17 +95,6 @@ impl EntityInputHandler for NyaTermApp {
             && !self.sync_groups_name_marked_text.is_empty()
         {
             let marked = &self.sync_groups_name_marked_text;
-            let len = marked.encode_utf16().count();
-            let start = range.start.min(len);
-            let end = range.end.min(len).max(start);
-            *adjusted_range = Some(start..end);
-            return Some(marked.clone());
-        }
-        if self.multi_line_paste.is_some()
-            && self.multi_line_paste_focus.is_focused(window)
-            && !self.multi_line_paste_marked_text.is_empty()
-        {
-            let marked = &self.multi_line_paste_marked_text;
             let len = marked.encode_utf16().count();
             let start = range.start.min(len);
             let end = range.end.min(len).max(start);
@@ -183,14 +178,14 @@ impl EntityInputHandler for NyaTermApp {
             });
         }
         if self.multi_line_paste_focus.is_focused(window) {
-            let cursor = self
-                .multi_line_paste
-                .as_ref()
-                .map(|draft| draft.text.encode_utf16().count())
-                .unwrap_or_default();
+            let text = self.multi_line_paste_text();
+            let range = self.multi_line_paste_selected_byte_range();
+            let reversed = self
+                .multi_line_paste_anchor
+                .is_some_and(|anchor| anchor > self.multi_line_paste_cursor);
             return Some(UTF16Selection {
-                range: cursor..cursor,
-                reversed: false,
+                range: utf16_range_from_bytes(text, &range),
+                reversed,
             });
         }
         if self.rename_session_id.is_some() && self.rename_focus.is_focused(window) {
@@ -236,8 +231,10 @@ impl EntityInputHandler for NyaTermApp {
             return (len > 0).then_some(0..len);
         }
         if self.multi_line_paste.is_some() && self.multi_line_paste_focus.is_focused(window) {
-            let len = self.multi_line_paste_marked_text.encode_utf16().count();
-            return (len > 0).then_some(0..len);
+            return self
+                .multi_line_paste_marked_range
+                .as_ref()
+                .map(|range| utf16_range_from_bytes(self.multi_line_paste_text(), range));
         }
         if self.rename_session_id.is_some() && self.rename_focus.is_focused(window) {
             let len = self.rename_marked_text.encode_utf16().count();
@@ -274,6 +271,7 @@ impl EntityInputHandler for NyaTermApp {
         }
         if self.multi_line_paste.is_some() && self.multi_line_paste_focus.is_focused(window) {
             self.multi_line_paste_marked_text.clear();
+            self.multi_line_paste_marked_range = None;
             return;
         }
         if self.rename_session_id.is_some() && self.rename_focus.is_focused(window) {
@@ -289,7 +287,7 @@ impl EntityInputHandler for NyaTermApp {
 
     fn replace_text_in_range(
         &mut self,
-        _range: Option<Range<usize>>,
+        range: Option<Range<usize>>,
         text: &str,
         window: &mut Window,
         cx: &mut Context<Self>,
@@ -340,11 +338,12 @@ impl EntityInputHandler for NyaTermApp {
             return;
         }
         if self.multi_line_paste.is_some() && self.multi_line_paste_focus.is_focused(window) {
-            self.multi_line_paste_marked_text.clear();
-            if let Some(draft) = self.multi_line_paste.as_mut() {
-                draft.text.push_str(text);
-            }
-            cx.notify();
+            let range = range
+                .as_ref()
+                .map(|range| byte_range_from_utf16(self.multi_line_paste_text(), range))
+                .or_else(|| self.multi_line_paste_marked_range.clone())
+                .unwrap_or_else(|| self.multi_line_paste_selected_byte_range());
+            self.replace_multi_line_paste_range(range, text, cx);
             return;
         }
         if self.rename_session_id.is_some() && self.rename_focus.is_focused(window) {
@@ -384,9 +383,9 @@ impl EntityInputHandler for NyaTermApp {
 
     fn replace_and_mark_text_in_range(
         &mut self,
-        _range: Option<Range<usize>>,
+        range: Option<Range<usize>>,
         new_text: &str,
-        _new_selected_range: Option<Range<usize>>,
+        new_selected_range: Option<Range<usize>>,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
@@ -416,7 +415,22 @@ impl EntityInputHandler for NyaTermApp {
             return;
         }
         if self.multi_line_paste.is_some() && self.multi_line_paste_focus.is_focused(window) {
+            let range = range
+                .as_ref()
+                .map(|range| byte_range_from_utf16(self.multi_line_paste_text(), range))
+                .or_else(|| self.multi_line_paste_marked_range.clone())
+                .unwrap_or_else(|| self.multi_line_paste_selected_byte_range());
+            let start = range.start;
+            self.replace_multi_line_paste_range(range, new_text, cx);
             self.multi_line_paste_marked_text = new_text.to_string();
+            self.multi_line_paste_marked_range =
+                (!new_text.is_empty()).then_some(start..start + new_text.len());
+            if let Some(selected) = new_selected_range {
+                let selected = byte_range_from_utf16(new_text, &selected);
+                self.multi_line_paste_anchor =
+                    (selected.start != selected.end).then_some(start + selected.start);
+                self.multi_line_paste_cursor = start + selected.end;
+            }
             cx.notify();
             return;
         }
@@ -519,12 +533,10 @@ impl EntityInputHandler for NyaTermApp {
             );
         }
         if self.multi_line_paste.is_some() && self.multi_line_paste_focus.is_focused(window) {
-            return Some(
-                self.multi_line_paste
-                    .as_ref()
-                    .map(|draft| draft.text.encode_utf16().count())
-                    .unwrap_or_default(),
-            );
+            return Some(utf16_offset_for_byte(
+                self.multi_line_paste_text(),
+                self.multi_line_paste_cursor,
+            ));
         }
         if self.rename_session_id.is_some() && self.rename_focus.is_focused(window) {
             return Some(self.rename_draft.encode_utf16().count());
@@ -534,6 +546,35 @@ impl EntityInputHandler for NyaTermApp {
         }
         Some(0)
     }
+}
+
+fn byte_offset_from_utf16(text: &str, offset: usize) -> usize {
+    let mut utf16_offset = 0usize;
+    for (byte_offset, ch) in text.char_indices() {
+        if utf16_offset >= offset {
+            return byte_offset;
+        }
+        utf16_offset += ch.len_utf16();
+        if utf16_offset >= offset {
+            return byte_offset + ch.len_utf8();
+        }
+    }
+    text.len()
+}
+
+fn byte_range_from_utf16(text: &str, range: &Range<usize>) -> Range<usize> {
+    let start = byte_offset_from_utf16(text, range.start);
+    let end = byte_offset_from_utf16(text, range.end).max(start);
+    start..end
+}
+
+fn utf16_offset_for_byte(text: &str, offset: usize) -> usize {
+    let offset = offset.min(text.len());
+    text[..offset].encode_utf16().count()
+}
+
+fn utf16_range_from_bytes(text: &str, range: &Range<usize>) -> Range<usize> {
+    utf16_offset_for_byte(text, range.start)..utf16_offset_for_byte(text, range.end)
 }
 
 pub(super) fn open_external_url_for_action(url: &str) -> Result<(), String> {

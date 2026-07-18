@@ -28,7 +28,7 @@ impl NyaTermApp {
         let (menu_x, menu_y) = if let Some((x, y)) = self.tab_actions_anchor {
             clamp_tab_actions_position(x, y, 240., 560., viewport_w, viewport_h)
         } else {
-            (24.0, 74.0)
+            (((viewport_w - 240.).max(16.) * 0.5).max(8.), 74.0)
         };
 
         let mut color_row = div()

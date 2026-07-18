@@ -79,33 +79,7 @@ impl NyaTermApp {
         let buffer_for_ai =
             terminal_action_prompt_text(self.terminal_buffer_tail_for_session(&session_id), 4_000);
 
-        let compact = self.tab_actions_anchor.is_some();
-        if compact {
-            return self.compact_tab_actions_menu(
-                palette,
-                session_id,
-                &session,
-                &display_name,
-                active_color,
-                can_copy_ssh,
-                can_spawn_session,
-                can_multiplex,
-                can_reconnect,
-                can_disconnect,
-                can_use_ai,
-                can_session_info,
-                can_close_inactive,
-                can_close_right,
-                can_unsplit,
-                can_merge_windows,
-                visible_for_ai,
-                buffer_for_ai,
-                sessions.len(),
-                cx,
-            );
-        }
-
-        self.expanded_tab_actions_dialog(
+        self.compact_tab_actions_menu(
             palette,
             session_id,
             &session,
