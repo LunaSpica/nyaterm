@@ -271,7 +271,6 @@ impl NyaTermApp {
                 .iter()
                 .map(|group| group.id.clone())
                 .collect(),
-            connection_list_offset: 0,
             connection_groups,
             connection_editor: None,
             connection_editor_window: None,

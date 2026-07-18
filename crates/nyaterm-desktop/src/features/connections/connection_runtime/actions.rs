@@ -125,7 +125,6 @@ impl NyaTermApp {
         } else {
             self.expanded_connection_groups.insert(group_id);
         }
-        self.connection_list_offset = 0;
         cx.notify();
     }
 
@@ -134,7 +133,6 @@ impl NyaTermApp {
         self.settings.ui_saved_connections_sort_mode =
             self.connection_sort_mode.persistence_id().to_string();
         self.persist_ui_layout();
-        self.connection_list_offset = 0;
         self.terminal_status = format!(
             "connections sorted by {}",
             self.connection_sort_mode.label()
@@ -155,13 +153,11 @@ impl NyaTermApp {
         match keystroke.key.as_str() {
             "escape" => {
                 self.connection_search_draft.clear();
-                self.connection_list_offset = 0;
                 self.terminal_status = "connection search cleared".to_string();
                 cx.notify();
             }
             "backspace" if !keystroke.modifiers.platform && !keystroke.modifiers.control => {
                 self.connection_search_draft.pop();
-                self.connection_list_offset = 0;
                 cx.notify();
             }
             _ if !keystroke.modifiers.platform && !keystroke.modifiers.control => {
@@ -171,7 +167,6 @@ impl NyaTermApp {
                     .filter(|input| !input.is_empty())
                 {
                     self.connection_search_draft.push_str(input);
-                    self.connection_list_offset = 0;
                     cx.notify();
                 }
             }

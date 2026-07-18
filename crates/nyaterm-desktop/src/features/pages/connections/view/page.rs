@@ -23,40 +23,15 @@ impl NyaTermApp {
         let no_results_label = self.tr("savedConnections.noResults");
         let empty_group_label = self.tr("savedConnections.emptyGroup");
 
-        // Flatten expanded tree for virtual window (group header 28px, connection 34px).
+        // Tauri renders the saved-connection tree in a real scroll container.
         let flat_rows = flatten_connection_rows(&sections, &self.expanded_connection_groups);
-        const CONN_VIEWPORT_ROWS: usize = 36;
-        const CONN_OVERSCAN: usize = 8;
-        let total_rows = flat_rows.len();
-        let window_capacity = CONN_VIEWPORT_ROWS + CONN_OVERSCAN * 2;
-        let max_offset = total_rows.saturating_sub(CONN_VIEWPORT_ROWS.min(total_rows));
-        if self.connection_list_offset > max_offset {
-            self.connection_list_offset = max_offset;
-        }
-        let scroll_row = self.connection_list_offset.min(max_offset);
-        let window_start = scroll_row.saturating_sub(CONN_OVERSCAN);
-        let window_end = (window_start + window_capacity).min(total_rows);
-        let pad_top: f32 = flat_rows
-            .iter()
-            .take(window_start)
-            .map(ConnectionListRow::height_px)
-            .sum();
-        let pad_bottom: f32 = flat_rows
-            .iter()
-            .skip(window_end)
-            .map(ConnectionListRow::height_px)
-            .sum();
-        let visible_rows = flat_rows
-            .get(window_start..window_end)
-            .unwrap_or(&[])
-            .to_vec();
         let palette = self.theme_palette();
 
         let mut list = div()
             .id(SharedString::from("connections-list-scroll"))
             .flex_1()
             .min_h_0()
-            .overflow_hidden()
+            .overflow_y_scroll()
             .p_1()
             .flex()
             .flex_col()
@@ -78,24 +53,6 @@ impl NyaTermApp {
                     ConnectionDragKind::Group => {
                         this.move_group_into_group(payload.id.clone(), None, cx);
                     }
-                }
-            }))
-            .on_scroll_wheel(cx.listener(move |this, event: &ScrollWheelEvent, _, cx| {
-                let max_offset = total_rows.saturating_sub(CONN_VIEWPORT_ROWS.min(total_rows));
-                if max_offset == 0 {
-                    return;
-                }
-                let delta_rows = match event.delta {
-                    ScrollDelta::Lines(delta) => delta.y,
-                    ScrollDelta::Pixels(delta) => f32::from(delta.y) / 34.,
-                };
-                let next = (this.connection_list_offset as f32 - delta_rows)
-                    .round()
-                    .clamp(0., max_offset as f32) as usize;
-                if next != this.connection_list_offset {
-                    this.connection_list_offset = next;
-                    cx.stop_propagation();
-                    cx.notify();
                 }
             }));
         if self.connections.is_empty() {
@@ -132,10 +89,7 @@ impl NyaTermApp {
             );
         } else {
             let mut rows = div().flex().flex_col();
-            if pad_top > 0. {
-                rows = rows.child(div().h(px(pad_top)).w_full().flex_none());
-            }
-            for row in visible_rows {
+            for row in flat_rows {
                 match row {
                     ConnectionListRow::Separator => {
                         rows = rows.child(div().mx_2().my_1().h(px(1.)).bg(rgb(palette.border)));
@@ -159,9 +113,6 @@ impl NyaTermApp {
                         rows = rows.child(self.saved_connection_row(connection, depth, cx));
                     }
                 }
-            }
-            if pad_bottom > 0. {
-                rows = rows.child(div().h(px(pad_bottom)).w_full().flex_none());
             }
             list = list.child(rows);
         }
@@ -288,7 +239,6 @@ impl NyaTermApp {
                                 })
                                 .on_click(cx.listener(|this, _, window, cx| {
                                     this.connection_search_draft.clear();
-                                    this.connection_list_offset = 0;
                                     window.focus(&this.connection_search_focus);
                                     cx.notify();
                                 }))

@@ -13,16 +13,6 @@ pub(super) enum ConnectionListRow {
     },
 }
 
-impl ConnectionListRow {
-    pub(super) fn height_px(&self) -> f32 {
-        match self {
-            Self::Separator => 10.,
-            Self::GroupHeader(_) | Self::EmptyGroup { .. } => 28.,
-            Self::Connection { .. } => 34.,
-        }
-    }
-}
-
 pub(super) fn flatten_connection_rows(
     sections: &[ConnectionSection],
     expanded_groups: &std::collections::HashSet<String>,

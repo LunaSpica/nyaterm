@@ -28,7 +28,6 @@ pub struct NyaTermApp {
     pub(in crate::features) ai_execution_menu_open: bool,
     pub(in crate::features) hovered_connection_group_id: Option<String>,
     pub(in crate::features) expanded_connection_groups: HashSet<String>,
-    pub(in crate::features) connection_list_offset: usize,
     pub(in crate::features) connection_editor: Option<ConnectionEditorState>,
     pub(in crate::features) connection_editor_window: Option<WindowHandle<ConnectionEditorWindow>>,
     pub(in crate::features) connection_editor_focus: FocusHandle,
