@@ -11,7 +11,7 @@ impl NyaTermApp {
             x: event.position.x,
             y: event.position.y + px(18.),
         });
-        self.transfer_browser_status = "favorite directories opened".to_string();
+        self.transfer_browser_status = self.tr("fileExplorer.favorites").to_string();
         cx.notify();
     }
 
@@ -35,10 +35,6 @@ impl NyaTermApp {
                     y: px(24.),
                 });
         let current_path = normalized_transfer_browser_path(&self.transfer_browser_path);
-        let is_current_favorite = self
-            .transfer_browser_favorites
-            .iter()
-            .any(|path| path == &current_path);
         let favorite_paths = self
             .transfer_browser_favorites
             .iter()
@@ -145,40 +141,18 @@ impl NyaTermApp {
                         cx.stop_propagation();
                     })
                     .child(
-                        div()
-                            .flex()
-                            .items_center()
-                            .justify_between()
-                            .gap_2()
-                            .child(
-                                div()
-                                    .text_xs()
-                                    .font_weight(FontWeight(800.))
-                                    .text_color(rgb(palette.text))
-                                    .child("Favorite Directories"),
-                            )
-                            .child(status_pill(
-                                if is_current_favorite {
-                                    "saved"
-                                } else {
-                                    "browse"
-                                },
-                                if is_current_favorite {
-                                    rgb(0x86efac)
-                                } else {
-                                    rgb(0x93c5fd)
-                                },
-                                rgb(palette.hover),
-                            )),
+                        div().flex().items_center().justify_between().gap_2().child(
+                            div()
+                                .text_xs()
+                                .font_weight(FontWeight(800.))
+                                .text_color(rgb(palette.text))
+                                .child(self.tr("fileExplorer.favorites")),
+                        ),
                     )
                     .child(favorite_menu_button(
                         palette,
                         "transfer-browser-favorite-menu-add-current",
-                        if is_current_favorite {
-                            "Move Current To Top"
-                        } else {
-                            "Add Current Directory"
-                        },
+                        self.tr("fileExplorer.addCurrentDirToFavorites"),
                         cx.listener(|this, _, _, cx| {
                             this.add_current_transfer_browser_favorite(cx);
                         }),
@@ -202,7 +176,7 @@ impl NyaTermApp {
                                         .py_2()
                                         .text_xs()
                                         .text_color(rgb(palette.text_muted))
-                                        .child("No favorite directories yet."),
+                                        .child(self.tr("fileExplorer.noFavorites")),
                                 )
                             })
                             .when(!self.transfer_browser_favorites.is_empty(), |this| {

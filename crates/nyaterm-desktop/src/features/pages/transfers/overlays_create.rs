@@ -689,19 +689,3 @@ fn permission_toggle(
         .child(label)
         .on_click(on_click)
 }
-
-fn transfer_dialog_width(viewport_width: f32, preferred_width: f32) -> f32 {
-    preferred_width.min((viewport_width - 32.).max(240.))
-}
-
-#[cfg(test)]
-mod tests {
-    use super::transfer_dialog_width;
-
-    #[test]
-    fn dialog_width_uses_preferred_size_with_narrow_viewport_fallback() {
-        assert_eq!(transfer_dialog_width(1280., 500.), 500.);
-        assert_eq!(transfer_dialog_width(420., 500.), 388.);
-        assert_eq!(transfer_dialog_width(200., 500.), 240.);
-    }
-}

@@ -19,17 +19,14 @@ impl NyaTermApp {
             self.tr("fileExplorer.sureDeleteMultiple")
                 .replace("{{count}}", &delete_count.to_string())
         };
-        let preview = if delete_count == 1 {
-            state.remote_path.clone()
-        } else {
-            state
-                .paths
-                .iter()
-                .take(4)
-                .cloned()
-                .collect::<Vec<_>>()
-                .join("\n")
-        };
+        let preview_items = state
+            .paths
+            .iter()
+            .take(6)
+            .map(|path| remote_file_name(path))
+            .collect::<Vec<_>>();
+        let remaining_items = delete_count.saturating_sub(preview_items.len());
+        let dialog_width = transfer_dialog_width(self.last_viewport_size.0, 320.);
 
         div()
             .id(SharedString::from("transfer-delete-overlay"))
@@ -54,10 +51,10 @@ impl NyaTermApp {
             .child(
                 div()
                     .id(SharedString::from("transfer-delete-dialog"))
-                    .w(px(380.))
+                    .w(px(dialog_width))
                     .rounded_md()
                     .border_1()
-                    .border_color(rgb(0x7f1d1d))
+                    .border_color(rgb(palette.border))
                     .bg(rgb(palette.bg))
                     .shadow_lg()
                     .p_4()
@@ -65,32 +62,47 @@ impl NyaTermApp {
                         div()
                             .text_sm()
                             .font_weight(FontWeight(800.))
-                            .text_color(rgb(0xfca5a5))
-                            .child(delete_title),
-                    )
-                    .child(
-                        div()
-                            .mt_2()
-                            .text_sm()
-                            .font_weight(FontWeight(700.))
                             .text_color(rgb(palette.text))
-                            .child(truncate_preview(&state.name, 72)),
-                    )
-                    .child(
-                        div()
-                            .mt_2()
-                            .font_family(crate::features::gpui_code_font_family())
-                            .text_xs()
-                            .text_color(rgb(palette.text_muted))
-                            .child(truncate_preview(&preview, 160)),
+                            .child(delete_title),
                     )
                     .child(
                         div()
                             .mt_3()
                             .text_xs()
-                            .text_color(rgb(0xfca5a5))
+                            .text_color(rgb(palette.text_muted))
                             .child(self.tr("fileExplorer.deleteConfirmHint")),
                     )
+                    .when(delete_count > 1, |this| {
+                        let mut items = div()
+                            .id(SharedString::from("transfer-delete-preview"))
+                            .mt_3()
+                            .max_h(px(160.))
+                            .overflow_y_scroll()
+                            .rounded_sm()
+                            .border_1()
+                            .border_color(rgb(palette.border))
+                            .px_2()
+                            .py_1()
+                            .text_xs()
+                            .text_color(rgb(palette.text_muted));
+                        for item in preview_items {
+                            items = items.child(
+                                div()
+                                    .py(px(2.))
+                                    .font_family(crate::features::gpui_code_font_family())
+                                    .child(truncate_preview(&item, 72)),
+                            );
+                        }
+                        if remaining_items > 0 {
+                            items = items.child(
+                                div().pt_1().text_color(rgb(palette.text)).child(
+                                    self.tr("fileExplorer.moreItems")
+                                        .replace("{{count}}", &remaining_items.to_string()),
+                                ),
+                            );
+                        }
+                        this.child(items)
+                    })
                     .child(
                         div()
                             .mt_4()
@@ -128,14 +140,12 @@ impl NyaTermApp {
             name: String::new(),
             value: String::new(),
         });
-        let target = state.value.trim();
-        let has_error = target.is_empty();
-        let unchanged = target == state.old_path;
         let input_display = if state.value.is_empty() {
             self.tr("fileExplorer.location").to_string()
         } else {
             state.value.clone()
         };
+        let dialog_width = transfer_dialog_width(self.last_viewport_size.0, 384.);
 
         div()
             .id(SharedString::from("transfer-move-overlay"))
@@ -160,7 +170,7 @@ impl NyaTermApp {
             .child(
                 div()
                     .id(SharedString::from("transfer-move-dialog"))
-                    .w(px(430.))
+                    .w(px(dialog_width))
                     .rounded_md()
                     .border_1()
                     .border_color(rgb(palette.border))
@@ -179,26 +189,12 @@ impl NyaTermApp {
                     )
                     .child(
                         div()
-                            .mt_2()
-                            .font_family(crate::features::gpui_code_font_family())
-                            .text_xs()
-                            .text_color(rgb(palette.text_muted))
-                            .child(truncate_preview(&state.old_path, 92)),
-                    )
-                    .child(
-                        div()
                             .id(SharedString::from("transfer-move-input"))
                             .mt_3()
                             .h(px(36.))
                             .rounded_sm()
                             .border_1()
-                            .border_color(if has_error {
-                                rgb(0x7f1d1d)
-                            } else if unchanged {
-                                rgb(palette.border)
-                            } else {
-                                rgb(0x256d3f)
-                            })
+                            .border_color(rgb(palette.border))
                             .bg(rgb(palette.input))
                             .px_3()
                             .flex()
@@ -211,21 +207,6 @@ impl NyaTermApp {
                                 rgb(palette.text)
                             })
                             .child(truncate_preview(&input_display, 92)),
-                    )
-                    .child(
-                        div()
-                            .mt_2()
-                            .text_xs()
-                            .text_color(if has_error {
-                                rgb(0xfca5a5)
-                            } else {
-                                rgb(palette.text_muted)
-                            })
-                            .child(if has_error {
-                                self.tr("fileExplorer.pathRequired")
-                            } else {
-                                ""
-                            }),
                     )
                     .child(
                         div()
@@ -242,15 +223,13 @@ impl NyaTermApp {
                                     this.close_transfer_move_dialog(cx);
                                 }),
                             ))
-                            .child(div().when(has_error, |this| this.opacity(0.45)).child(
-                                small_button(
-                                    palette,
-                                    "transfer-move-save",
-                                    self.tr("common.save"),
-                                    cx.listener(|this, _, window, cx| {
-                                        this.submit_transfer_move(window, cx);
-                                    }),
-                                ),
+                            .child(small_button(
+                                palette,
+                                "transfer-move-save",
+                                self.tr("common.save"),
+                                cx.listener(|this, _, window, cx| {
+                                    this.submit_transfer_move(window, cx);
+                                }),
                             )),
                     ),
             )

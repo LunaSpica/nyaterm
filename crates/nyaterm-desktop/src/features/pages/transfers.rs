@@ -83,6 +83,10 @@ use helpers::*;
 
 const NATIVE_EDITOR_MAX_BYTES: u64 = 512 * 1024;
 
+fn transfer_dialog_width(viewport_width: f32, preferred_width: f32) -> f32 {
+    preferred_width.min((viewport_width - 32.).max(240.))
+}
+
 impl NyaTermApp {
     pub(in crate::features) fn transfers_view(
         &mut self,
@@ -124,5 +128,17 @@ impl NyaTermApp {
                 .overflow_hidden()
                 .child(self.transfer_queue_view(cx)),
         )
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::transfer_dialog_width;
+
+    #[test]
+    fn dialog_width_uses_preferred_size_with_narrow_viewport_fallback() {
+        assert_eq!(transfer_dialog_width(1280., 500.), 500.);
+        assert_eq!(transfer_dialog_width(420., 500.), 388.);
+        assert_eq!(transfer_dialog_width(200., 500.), 240.);
     }
 }
