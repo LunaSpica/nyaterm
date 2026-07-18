@@ -1069,6 +1069,18 @@ impl ConnectionStore {
         Ok(())
     }
 
+    pub fn save_group_and_connection(
+        &self,
+        group: &Group,
+        connection: &SavedConnection,
+    ) -> Result<(), StorageError> {
+        let txn = self.db.begin_write()?;
+        save_group_in_txn(&txn, group)?;
+        save_connection_in_txn(&txn, connection)?;
+        txn.commit()?;
+        Ok(())
+    }
+
     pub fn delete_connection(&self, connection_id: &str) -> Result<(), StorageError> {
         let txn = self.db.begin_write()?;
         delete_connection_in_txn(&txn, connection_id)?;
@@ -5670,6 +5682,57 @@ mod tests {
         assert!(store.get_connection("local-1").expect("get").is_some());
         store.delete_connection("local-1").expect("delete");
         assert!(store.get_connection("local-1").expect("missing").is_none());
+
+        std::fs::remove_dir_all(dir).ok();
+    }
+
+    #[test]
+    fn save_group_and_connection_persists_both_records() {
+        let dir = unique_temp_dir("group-and-connection");
+        let store = ConnectionStore::open(&dir).expect("store");
+        let group = Group {
+            id: "group-1".to_string(),
+            name: "Servers".to_string(),
+            parent_id: None,
+            sort_order: 0,
+            created_at_ms: None,
+            updated_at_ms: None,
+        };
+        let connection = SavedConnection {
+            id: "local-grouped".to_string(),
+            name: "Local".to_string(),
+            config: ConnectionType::LocalTerminal {
+                shell_path: "bash".to_string(),
+                shell_args: String::new(),
+                working_dir: None,
+                ai_execution_profile: Default::default(),
+            },
+            group_id: Some(group.id.clone()),
+            description: None,
+            sort_order: 0,
+            icon: None,
+            auth: None,
+            network: None,
+            post_login: None,
+            created_at_ms: None,
+            updated_at_ms: None,
+            last_used_at_ms: None,
+        };
+
+        store
+            .save_group_and_connection(&group, &connection)
+            .expect("save group and connection");
+
+        assert_eq!(store.list_groups().expect("groups")[0].id, group.id);
+        assert_eq!(
+            store
+                .get_connection(&connection.id)
+                .expect("connection")
+                .expect("saved connection")
+                .group_id
+                .as_deref(),
+            Some("group-1")
+        );
 
         std::fs::remove_dir_all(dir).ok();
     }

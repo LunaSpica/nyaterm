@@ -91,6 +91,7 @@ pub(crate) enum ConnectionEditorTelnetTab {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum ConnectionEditorField {
     Name,
+    NewGroupName,
     Description,
     Host,
     Port,
@@ -215,6 +216,9 @@ pub(crate) struct ConnectionEditorState {
     pub(crate) description: String,
     pub(crate) icon: Option<String>,
     pub(crate) group_id: Option<String>,
+    pub(crate) new_group_name: String,
+    pub(crate) pending_group_name: Option<String>,
+    pub(crate) pending_group_parent_id: Option<String>,
     pub(crate) host: String,
     pub(crate) port: String,
     pub(crate) username: String,

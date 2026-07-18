@@ -31,6 +31,9 @@ pub(super) fn connection_editor_from_saved(
         description: connection.description.unwrap_or_default(),
         icon: connection.icon,
         group_id: connection.group_id,
+        new_group_name: String::new(),
+        pending_group_name: None,
+        pending_group_parent_id: None,
         host: String::new(),
         port: String::new(),
         username: "root".to_string(),
@@ -145,6 +148,7 @@ pub(super) fn connection_editor_from_saved(
 pub(super) fn connection_editor_field_mut(editor: &mut ConnectionEditorState) -> &mut String {
     match editor.focused_field {
         ConnectionEditorField::Name => &mut editor.name,
+        ConnectionEditorField::NewGroupName => &mut editor.new_group_name,
         ConnectionEditorField::Description => &mut editor.description,
         ConnectionEditorField::Host => &mut editor.host,
         ConnectionEditorField::Port => &mut editor.port,
@@ -552,12 +556,17 @@ impl NyaTermApp {
         cx.notify();
     }
 
-    pub(in crate::features) fn persist_saved_connection(
+    pub(in crate::features) fn persist_saved_connection_with_group(
         &mut self,
         connection: SavedConnection,
+        group: Option<&Group>,
     ) -> Result<SavedConnection, String> {
         self.with_connection_store(|store| {
-            store.save_connection(&connection)?;
+            if let Some(group) = group {
+                store.save_group_and_connection(group, &connection)?;
+            } else {
+                store.save_connection(&connection)?;
+            }
             Ok(())
         })?;
         self.refresh_store_from_runtime();

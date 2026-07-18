@@ -336,6 +336,212 @@ pub(super) struct ConnectionEditorChoice {
     pub selected: bool,
 }
 
+#[derive(Clone)]
+pub(super) struct ConnectionGroupChoice {
+    pub value: Option<String>,
+    pub label: String,
+    pub depth: usize,
+    pub selected: bool,
+}
+
+pub(super) fn connection_editor_group_select(
+    palette: crate::theme::ThemePalette,
+    label: &'static str,
+    value: impl Into<SharedString>,
+    open: bool,
+    options: Vec<ConnectionGroupChoice>,
+    draft: String,
+    draft_active: bool,
+    placeholder: &'static str,
+    parent_hint: String,
+    cx: &mut Context<NyaTermApp>,
+) -> impl IntoElement {
+    let value = value.into();
+    let mut option_list = div()
+        .id("connection-group-options")
+        .max_h(px(168.))
+        .flex()
+        .flex_col()
+        .overflow_scroll();
+    for (index, option) in options.into_iter().enumerate() {
+        let option_value = option.value.clone();
+        option_list = option_list.child(
+            div()
+                .id(SharedString::from(format!(
+                    "connection-group-option-{index}"
+                )))
+                .min_h(px(28.))
+                .pr_2()
+                .pl(px(8. + option.depth as f32 * 16.))
+                .flex()
+                .items_center()
+                .text_xs()
+                .cursor_pointer()
+                .text_color(if option.selected {
+                    rgb(palette.primary)
+                } else {
+                    rgb(palette.text)
+                })
+                .bg(if option.selected {
+                    rgba((palette.primary << 8) | 0x18)
+                } else {
+                    rgba(0x00000000)
+                })
+                .hover(|this| this.bg(rgb(palette.hover)))
+                .child(option.label)
+                .on_click(cx.listener(move |this, _, _, cx| {
+                    this.set_connection_editor_menu_value(
+                        ConnectionEditorMenu::Group,
+                        option_value.as_deref(),
+                        cx,
+                    );
+                })),
+        );
+    }
+
+    let can_add = !draft.trim().is_empty();
+    div()
+        .id("connection-editor-group")
+        .relative()
+        .min_w_0()
+        .flex_1()
+        .flex()
+        .flex_col()
+        .gap_1()
+        .child(
+            div()
+                .text_xs()
+                .text_color(rgb(palette.text_muted))
+                .child(label),
+        )
+        .child(
+            div()
+                .id("connection-editor-group-trigger")
+                .h(px(30.))
+                .min_w_0()
+                .px_2()
+                .flex()
+                .items_center()
+                .justify_between()
+                .gap_2()
+                .rounded_sm()
+                .border_1()
+                .border_color(if open {
+                    rgb(palette.primary)
+                } else {
+                    rgb(palette.border)
+                })
+                .bg(rgb(palette.input))
+                .text_xs()
+                .text_color(rgb(palette.text))
+                .cursor_pointer()
+                .hover(|this| this.bg(rgb(palette.hover)))
+                .child(div().min_w_0().overflow_hidden().child(value))
+                .child(
+                    div()
+                        .flex_none()
+                        .text_size(px(10.))
+                        .text_color(rgb(palette.text_dimmed))
+                        .child(if open { "▴" } else { "▾" }),
+                )
+                .on_click(cx.listener(|this, _, _, cx| {
+                    this.toggle_connection_editor_menu(ConnectionEditorMenu::Group, cx);
+                })),
+        )
+        .when(open, |this| {
+            this.child(
+                div()
+                    .mt_1()
+                    .rounded_md()
+                    .border_1()
+                    .border_color(rgb(palette.border))
+                    .bg(rgb(palette.surface_elevated))
+                    .shadow_lg()
+                    .child(option_list)
+                    .child(
+                        div()
+                            .border_t_1()
+                            .border_color(rgb(palette.border))
+                            .p_2()
+                            .flex()
+                            .flex_col()
+                            .gap_1()
+                            .child(
+                                div()
+                                    .flex()
+                                    .items_center()
+                                    .gap_1()
+                                    .child(
+                                        div()
+                                            .id("connection-editor-new-group-input")
+                                            .h(px(28.))
+                                            .min_w_0()
+                                            .flex_1()
+                                            .px_2()
+                                            .flex()
+                                            .items_center()
+                                            .rounded_sm()
+                                            .border_1()
+                                            .border_color(if draft_active {
+                                                rgb(palette.primary)
+                                            } else {
+                                                rgb(palette.border)
+                                            })
+                                            .bg(rgb(palette.input))
+                                            .text_xs()
+                                            .text_color(if draft.is_empty() {
+                                                rgb(palette.text_dimmed)
+                                            } else {
+                                                rgb(palette.text)
+                                            })
+                                            .cursor_text()
+                                            .child(if draft.is_empty() {
+                                                placeholder.to_string()
+                                            } else {
+                                                draft.clone()
+                                            })
+                                            .on_click(cx.listener(|this, _, window, cx| {
+                                                this.focus_connection_editor_new_group(window, cx);
+                                            })),
+                                    )
+                                    .child(
+                                        div()
+                                            .id("connection-editor-new-group-add")
+                                            .size(px(28.))
+                                            .flex_none()
+                                            .flex()
+                                            .items_center()
+                                            .justify_center()
+                                            .rounded_sm()
+                                            .text_size(px(16.))
+                                            .text_color(if can_add {
+                                                rgb(palette.text)
+                                            } else {
+                                                rgb(palette.text_dimmed)
+                                            })
+                                            .opacity(if can_add { 1.0 } else { 0.55 })
+                                            .when(can_add, |this| {
+                                                this.cursor_pointer()
+                                                    .hover(|this| this.bg(rgb(palette.hover)))
+                                                    .on_click(cx.listener(|this, _, _, cx| {
+                                                        this.commit_connection_editor_new_group(cx);
+                                                    }))
+                                            })
+                                            .child("+"),
+                                    ),
+                            )
+                            .child(
+                                div()
+                                    .px_1()
+                                    .text_size(px(10.))
+                                    .text_color(rgb(palette.text_dimmed))
+                                    .child(parent_hint),
+                            ),
+                    ),
+            )
+        })
+}
+
 pub(super) fn connection_editor_select(
     palette: crate::theme::ThemePalette,
     id: &'static str,

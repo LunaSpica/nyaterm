@@ -37,6 +37,9 @@ impl NyaTermApp {
                 description: String::new(),
                 icon: None,
                 group_id: parent_group_id.filter(|value| !value.trim().is_empty()),
+                new_group_name: String::new(),
+                pending_group_name: None,
+                pending_group_parent_id: None,
                 host: String::new(),
                 port: "22".to_string(),
                 username: "root".to_string(),
@@ -132,7 +135,16 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         self.connection_icon_picker_open = false;
-        self.connection_editor_menu = (self.connection_editor_menu != Some(menu)).then_some(menu);
+        let opening = self.connection_editor_menu != Some(menu);
+        self.connection_editor_menu = opening.then_some(menu);
+        if !opening && menu == ConnectionEditorMenu::Group {
+            if let Some(editor) = self.connection_editor.as_mut() {
+                editor.new_group_name.clear();
+                if editor.focused_field == ConnectionEditorField::NewGroupName {
+                    editor.focused_field = ConnectionEditorField::Name;
+                }
+            }
+        }
         cx.notify();
     }
 
@@ -157,7 +169,13 @@ impl NyaTermApp {
                     editor.key_id = None;
                 }
             }
-            ConnectionEditorMenu::Group => editor.group_id = value,
+            ConnectionEditorMenu::Group => {
+                editor.group_id = value;
+                editor.new_group_name.clear();
+                editor.pending_group_name = None;
+                editor.pending_group_parent_id = None;
+                editor.focused_field = ConnectionEditorField::Name;
+            }
             ConnectionEditorMenu::SavedPassword => editor.password_id = value,
             ConnectionEditorMenu::SshKey => editor.key_id = value,
             ConnectionEditorMenu::Otp => {
@@ -273,6 +291,47 @@ impl NyaTermApp {
             editor.error = None;
         }
         window.focus(&self.connection_editor_focus);
+        cx.notify();
+    }
+
+    pub(in crate::features) fn focus_connection_editor_new_group(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if let Some(editor) = self.connection_editor.as_mut() {
+            editor.focused_field = ConnectionEditorField::NewGroupName;
+            editor.error = None;
+        }
+        window.focus(&self.connection_editor_focus);
+        cx.notify();
+    }
+
+    pub(in crate::features) fn commit_connection_editor_new_group(
+        &mut self,
+        cx: &mut Context<Self>,
+    ) {
+        let required_message = self.tr("dialog.groupNameRequired").to_string();
+        let Some(editor) = self.connection_editor.as_mut() else {
+            return;
+        };
+        let name = editor.new_group_name.trim().to_string();
+        if name.is_empty() {
+            editor.error = Some(required_message);
+            cx.notify();
+            return;
+        }
+        editor.pending_group_parent_id = if editor.pending_group_name.is_some() {
+            editor.pending_group_parent_id.clone()
+        } else {
+            editor.group_id.clone()
+        };
+        editor.pending_group_name = Some(name);
+        editor.group_id = None;
+        editor.new_group_name.clear();
+        editor.focused_field = ConnectionEditorField::Name;
+        editor.error = None;
+        self.connection_editor_menu = None;
         cx.notify();
     }
 
@@ -453,6 +512,12 @@ impl NyaTermApp {
                     return;
                 }
                 if self.connection_editor_menu.take().is_some() {
+                    if let Some(editor) = self.connection_editor.as_mut() {
+                        editor.new_group_name.clear();
+                        if editor.focused_field == ConnectionEditorField::NewGroupName {
+                            editor.focused_field = ConnectionEditorField::Name;
+                        }
+                    }
                     cx.notify();
                     return;
                 }
@@ -460,6 +525,14 @@ impl NyaTermApp {
                 return;
             }
             "enter" => {
+                if self.connection_editor_menu == Some(ConnectionEditorMenu::Group)
+                    && self.connection_editor.as_ref().is_some_and(|editor| {
+                        editor.focused_field == ConnectionEditorField::NewGroupName
+                    })
+                {
+                    self.commit_connection_editor_new_group(cx);
+                    return;
+                }
                 self.save_connection_editor(window, cx);
                 return;
             }
@@ -526,9 +599,21 @@ impl NyaTermApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let Some(editor) = self.connection_editor.clone() else {
+        let Some(mut editor) = self.connection_editor.clone() else {
             return;
         };
+
+        let pending_group = editor.pending_group_name.as_ref().map(|name| Group {
+            id: uuid(),
+            name: name.clone(),
+            parent_id: editor.pending_group_parent_id.clone(),
+            sort_order: self.connection_groups.len() as i32,
+            created_at_ms: None,
+            updated_at_ms: None,
+        });
+        if let Some(group) = pending_group.as_ref() {
+            editor.group_id = Some(group.id.clone());
+        }
 
         let built = match build_saved_connection_from_editor(&editor) {
             Ok(connection) => connection,
@@ -538,7 +623,7 @@ impl NyaTermApp {
             }
         };
 
-        match self.persist_saved_connection(built.clone()) {
+        match self.persist_saved_connection_with_group(built.clone(), pending_group.as_ref()) {
             Ok(saved) => {
                 let connect_after_save = editor.connect_after_save;
                 self.connection_icon_picker_open = false;

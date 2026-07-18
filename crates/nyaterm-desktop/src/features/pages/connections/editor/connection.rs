@@ -52,24 +52,44 @@ impl NyaTermApp {
         let save_label = self.tr("common.save");
         let none_label = self.tr("dialog.none");
         let icon_label = self.tr("dialog.icon");
-        let group_label = editor
-            .group_id
-            .as_deref()
-            .and_then(|id| connection_group_path_label(&self.connection_groups, id))
-            .unwrap_or_else(|| none_label.to_string());
-        let mut group_options = vec![ConnectionEditorChoice {
+        let group_label = editor.pending_group_name.clone().unwrap_or_else(|| {
+            editor
+                .group_id
+                .as_deref()
+                .and_then(|id| connection_group_path_label(&self.connection_groups, id))
+                .unwrap_or_else(|| none_label.to_string())
+        });
+        let mut group_options = vec![ConnectionGroupChoice {
             value: None,
             label: none_label.to_string(),
-            selected: editor.group_id.is_none(),
+            depth: 0,
+            selected: editor.group_id.is_none() && editor.pending_group_name.is_none(),
         }];
-        group_options.extend(self.connection_groups.iter().map(|group| {
-            ConnectionEditorChoice {
-                value: Some(group.id.clone()),
-                label: connection_group_path_label(&self.connection_groups, &group.id)
-                    .unwrap_or_else(|| group.name.clone()),
-                selected: editor.group_id.as_deref() == Some(group.id.as_str()),
-            }
-        }));
+        group_options.extend(
+            ordered_connection_groups(&self.connection_groups)
+                .into_iter()
+                .map(|(group, depth)| {
+                    let selected = editor.group_id.as_deref() == Some(group.id.as_str());
+                    ConnectionGroupChoice {
+                        value: Some(group.id),
+                        label: group.name,
+                        depth,
+                        selected,
+                    }
+                }),
+        );
+        let group_parent_id = if editor.pending_group_name.is_some() {
+            editor.pending_group_parent_id.as_deref()
+        } else {
+            editor.group_id.as_deref()
+        };
+        let group_parent_hint = group_parent_id
+            .and_then(|id| connection_group_path_label(&self.connection_groups, id))
+            .map(|path| {
+                self.tr("dialog.newGroupParentHint")
+                    .replace("{{group}}", &path)
+            })
+            .unwrap_or_else(|| self.tr("dialog.newGroupRootHint").to_string());
         let key_label = editor
             .key_id
             .as_deref()
@@ -541,15 +561,17 @@ impl NyaTermApp {
                                 }),
                             )))
                             .child(div().min_w(px(192.)).max_w(px(288.)).flex_1().child(
-                                connection_editor_select(
+                                connection_editor_group_select(
                                     palette,
-                                    "connection-editor-group",
                                     group_title,
                                     group_label,
-                                    ConnectionEditorMenu::Group,
                                     self.connection_editor_menu
                                         == Some(ConnectionEditorMenu::Group),
                                     group_options,
+                                    editor.new_group_name.clone(),
+                                    editor.focused_field == ConnectionEditorField::NewGroupName,
+                                    self.tr("dialog.newGroupPlaceholder"),
+                                    group_parent_hint,
                                     cx,
                                 ),
                             )),
@@ -708,6 +730,115 @@ fn connection_group_path_label(groups: &[Group], group_id: &str) -> Option<Strin
     }
     parts.reverse();
     Some(parts.join(" / "))
+}
+
+fn ordered_connection_groups(groups: &[Group]) -> Vec<(Group, usize)> {
+    let group_ids = groups
+        .iter()
+        .map(|group| group.id.clone())
+        .collect::<HashSet<_>>();
+    let mut children = HashMap::<Option<String>, Vec<Group>>::new();
+    for group in groups {
+        let parent_id = group
+            .parent_id
+            .clone()
+            .filter(|parent_id| parent_id != &group.id && group_ids.contains(parent_id));
+        children.entry(parent_id).or_default().push(group.clone());
+    }
+    for siblings in children.values_mut() {
+        siblings.sort_by(|left, right| {
+            left.sort_order
+                .cmp(&right.sort_order)
+                .then_with(|| {
+                    left.name
+                        .to_ascii_lowercase()
+                        .cmp(&right.name.to_ascii_lowercase())
+                })
+                .then_with(|| left.id.cmp(&right.id))
+        });
+    }
+
+    fn append_group(
+        group: Group,
+        depth: usize,
+        children: &HashMap<Option<String>, Vec<Group>>,
+        visited: &mut HashSet<String>,
+        ordered: &mut Vec<(Group, usize)>,
+    ) {
+        if !visited.insert(group.id.clone()) {
+            return;
+        }
+        let group_id = group.id.clone();
+        ordered.push((group, depth));
+        for child in children.get(&Some(group_id)).cloned().unwrap_or_default() {
+            append_group(child, depth + 1, children, visited, ordered);
+        }
+    }
+
+    let mut ordered = Vec::with_capacity(groups.len());
+    let mut visited = HashSet::new();
+    for group in children.get(&None).cloned().unwrap_or_default() {
+        append_group(group, 0, &children, &mut visited, &mut ordered);
+    }
+    let mut remaining = groups
+        .iter()
+        .filter(|group| !visited.contains(&group.id))
+        .cloned()
+        .collect::<Vec<_>>();
+    remaining.sort_by(|left, right| {
+        left.sort_order
+            .cmp(&right.sort_order)
+            .then_with(|| {
+                left.name
+                    .to_ascii_lowercase()
+                    .cmp(&right.name.to_ascii_lowercase())
+            })
+            .then_with(|| left.id.cmp(&right.id))
+    });
+    for group in remaining {
+        append_group(group, 0, &children, &mut visited, &mut ordered);
+    }
+    ordered
+}
+
+#[cfg(test)]
+mod tests {
+    use super::ordered_connection_groups;
+    use nyaterm_core::Group;
+
+    fn group(id: &str, name: &str, parent_id: Option<&str>, sort_order: i32) -> Group {
+        Group {
+            id: id.to_string(),
+            name: name.to_string(),
+            parent_id: parent_id.map(ToOwned::to_owned),
+            sort_order,
+            created_at_ms: None,
+            updated_at_ms: None,
+        }
+    }
+
+    #[test]
+    fn group_picker_orders_tree_and_keeps_orphans_visible() {
+        let groups = vec![
+            group("child", "Child", Some("parent"), 0),
+            group("orphan", "Orphan", Some("missing"), 2),
+            group("parent", "Parent", None, 1),
+        ];
+
+        let ordered = ordered_connection_groups(&groups)
+            .into_iter()
+            .map(|(group, depth)| (group.id, depth))
+            .collect::<Vec<_>>();
+
+        assert_eq!(
+            ordered,
+            vec![
+                ("parent".to_string(), 0),
+                ("child".to_string(), 1),
+                ("orphan".to_string(), 0),
+            ]
+        );
+    }
 }
 
 fn connection_editor_footer_button(
