@@ -47,6 +47,7 @@ impl NyaTermApp {
         let serial_label = self.tr("dialog.serial");
         let name_label = self.tr("dialog.connectionName");
         let description_label = self.tr("dialog.description");
+        let description_placeholder = self.tr("dialog.descriptionPlaceholder");
         let group_title = self.tr("dialog.group");
         let cancel_label = self.tr("common.cancel");
         let save_label = self.tr("common.save");
@@ -634,10 +635,10 @@ impl NyaTermApp {
                             cx,
                         ))
                     })
-                    .child(editor_field(
+                    .child(connection_description_field(
                         palette,
-                        "connection-editor-description",
                         description_label,
+                        description_placeholder,
                         editor.description.clone(),
                         editor.focused_field == ConnectionEditorField::Description,
                         cx.listener(|this, _, window, cx| {
@@ -799,6 +800,70 @@ fn ordered_connection_groups(groups: &[Group]) -> Vec<(Group, usize)> {
         append_group(group, 0, &children, &mut visited, &mut ordered);
     }
     ordered
+}
+
+fn connection_description_field(
+    palette: crate::theme::ThemePalette,
+    label: &'static str,
+    placeholder: &'static str,
+    value: String,
+    active: bool,
+    on_click: impl Fn(&gpui::ClickEvent, &mut gpui::Window, &mut gpui::App) + 'static,
+) -> impl IntoElement {
+    let empty = value.is_empty();
+    let mut content = div()
+        .min_w_0()
+        .flex()
+        .flex_col()
+        .text_xs()
+        .line_height(px(16.))
+        .text_color(if empty {
+            rgb(palette.text_dimmed)
+        } else {
+            rgb(palette.text)
+        });
+    if empty {
+        content = content.child(placeholder);
+    } else {
+        for line in value.split('\n') {
+            content = content.child(div().min_h(px(16.)).child(if line.is_empty() {
+                " ".to_string()
+            } else {
+                line.to_string()
+            }));
+        }
+    }
+
+    div()
+        .flex()
+        .flex_col()
+        .gap_1()
+        .child(
+            div()
+                .text_xs()
+                .text_color(rgb(palette.text_muted))
+                .child(label),
+        )
+        .child(
+            div()
+                .id("connection-editor-description")
+                .h(px(72.))
+                .min_w_0()
+                .overflow_hidden()
+                .rounded_sm()
+                .border_1()
+                .border_color(if active {
+                    rgb(palette.primary)
+                } else {
+                    rgb(palette.border)
+                })
+                .bg(rgb(palette.input))
+                .px_3()
+                .py_2()
+                .cursor_text()
+                .child(content)
+                .on_click(on_click),
+        )
 }
 
 #[cfg(test)]

@@ -525,6 +525,19 @@ impl NyaTermApp {
                 return;
             }
             "enter" => {
+                if !keystroke.modifiers.platform
+                    && !keystroke.modifiers.control
+                    && self.connection_editor.as_ref().is_some_and(|editor| {
+                        editor.focused_field == ConnectionEditorField::Description
+                    })
+                {
+                    if let Some(editor) = self.connection_editor.as_mut() {
+                        editor.description.push('\n');
+                        editor.error = None;
+                    }
+                    cx.notify();
+                    return;
+                }
                 if self.connection_editor_menu == Some(ConnectionEditorMenu::Group)
                     && self.connection_editor.as_ref().is_some_and(|editor| {
                         editor.focused_field == ConnectionEditorField::NewGroupName
