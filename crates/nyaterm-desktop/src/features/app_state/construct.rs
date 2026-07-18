@@ -330,6 +330,7 @@ impl NyaTermApp {
             quick_command_menu: None,
             quick_command_category_menu: None,
             quick_command_editor: None,
+            quick_command_window: None,
             quick_command_delete: None,
             quick_command_details: None,
             quick_command_category_delete: None,

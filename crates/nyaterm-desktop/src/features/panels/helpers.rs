@@ -173,16 +173,6 @@ pub(in crate::features::panels) fn quick_command_color(
     }
 }
 
-pub(in crate::features::panels) fn quick_command_icon_label(
-    palette: crate::theme::ThemePalette,
-    icon_tag: Option<&str>,
-) -> String {
-    icon_tag
-        .and_then(|tag| quick_command_icon_def(palette, tag))
-        .map(|(label, _)| label.to_string())
-        .unwrap_or_else(|| "none".to_string())
-}
-
 fn quick_command_icon_def(
     palette: crate::theme::ThemePalette,
     icon_tag: &str,
@@ -239,6 +229,8 @@ pub(in crate::features::panels) fn quick_command_editor_field(
     };
     div()
         .id(SharedString::from(id))
+        .min_w_0()
+        .flex_1()
         .rounded_sm()
         .border_1()
         .border_color(if active {
@@ -309,23 +301,12 @@ pub(in crate::features::panels) fn quick_command_editor_script_field(
         .cursor_pointer()
         .on_click(on_click)
         .child(
-            div()
-                .flex()
-                .items_center()
-                .justify_between()
-                .gap_2()
-                .child(
-                    div()
-                        .text_size(px(10.))
-                        .text_color(rgb(palette.text_muted))
-                        .child(label),
-                )
-                .child(
-                    div()
-                        .text_size(px(10.))
-                        .text_color(rgb(palette.text_muted))
-                        .child("Enter inserts newline"),
-                ),
+            div().flex().items_center().child(
+                div()
+                    .text_size(px(10.))
+                    .text_color(rgb(palette.text_muted))
+                    .child(label),
+            ),
         )
         .child(
             div()

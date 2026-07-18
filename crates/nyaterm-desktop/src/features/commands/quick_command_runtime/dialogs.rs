@@ -9,7 +9,9 @@ impl NyaTermApp {
         self.quick_command_menu = None;
         self.quick_command_editor = Some(QuickCommandEditorState::blank());
         self.terminal_status = "quick command editor opened".to_string();
-        window.focus(&self.quick_command_editor_focus);
+        if !self.open_quick_command_window(cx) {
+            window.focus(&self.quick_command_editor_focus);
+        }
         cx.notify();
     }
 
@@ -32,12 +34,15 @@ impl NyaTermApp {
         };
         self.quick_command_editor = Some(QuickCommandEditorState::from_command(command));
         self.terminal_status = "quick command editor opened".to_string();
-        window.focus(&self.quick_command_editor_focus);
+        if !self.open_quick_command_window(cx) {
+            window.focus(&self.quick_command_editor_focus);
+        }
         cx.notify();
     }
 
     pub(in crate::features) fn close_quick_command_editor(&mut self, cx: &mut Context<Self>) {
         self.quick_command_editor = None;
+        self.quick_command_window = None;
         self.terminal_status = "quick command editor closed".to_string();
         cx.notify();
     }

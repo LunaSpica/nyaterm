@@ -53,6 +53,7 @@ mod panels;
 mod prompt_runtime;
 #[path = "commands/quick_command_runtime.rs"]
 mod quick_command_runtime;
+mod quick_command_window;
 #[path = "shell/quick_switch_runtime.rs"]
 mod quick_switch_runtime;
 #[path = "session/recording_runtime.rs"]
@@ -174,6 +175,7 @@ pub(in crate::features) use quick_command_runtime::{
     quick_command_sort_mode_from_setting, quick_command_view_mode_from_setting,
     sorted_quick_commands,
 };
+pub(in crate::features) use quick_command_window::QuickCommandWindow;
 pub(in crate::features) use remote_editor_window::RemoteFileEditorWindow;
 pub(in crate::features) use runtime_jobs::{
     ActivitySide, AiAgentBackgroundTarget, AiAgentLoopState, AiAgentStepStatus, AiAgentStepView,

@@ -4,17 +4,49 @@ impl NyaTermApp {
     pub(in crate::features) fn quick_command_editor_overlay(
         &mut self,
         cx: &mut Context<Self>,
-    ) -> impl IntoElement {
+    ) -> AnyElement {
+        self.quick_command_editor_surface(self.last_viewport_size.0, false, cx)
+    }
+
+    pub(in crate::features) fn quick_command_editor_window_view(
+        &mut self,
+        viewport_width: f32,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
+        self.quick_command_editor_surface(viewport_width, true, cx)
+    }
+
+    fn quick_command_editor_surface(
+        &mut self,
+        viewport_width: f32,
+        native_window: bool,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
         let palette = self.theme_palette();
         let editor = self
             .quick_command_editor
             .clone()
             .unwrap_or_else(QuickCommandEditorState::blank);
-        let title = if editor.original.is_some() {
-            "Edit Quick Command"
-        } else {
-            "Add Quick Command"
-        };
+        let title = self.quick_command_editor_title();
+        let uncategorized_label = self.tr("quickCommands.uncategorized");
+        let category_label_text = self.tr("quickCommands.category");
+        let category_search_label = self.tr("quickCommands.searchOrCreateCategory");
+        let description_label = self.tr("quickCommands.description");
+        let description_placeholder = self.tr("quickCommands.descriptionPlaceholder");
+        let label_name = self.tr("quickCommands.labelName");
+        let label_placeholder = self.tr("quickCommands.labelPlaceholder");
+        let color_tag_label = self.tr("quickCommands.colorTag");
+        let pin_label = self.tr("quickCommands.pin");
+        let execution_mode_label = self.tr("quickCommands.executionMode");
+        let execute_label = self.tr("quickCommands.executeImmediately");
+        let append_label = self.tr("quickCommands.appendOnly");
+        let execute_hint = self.tr("quickCommands.executeHint");
+        let append_hint = self.tr("quickCommands.appendHint");
+        let command_script_label = self.tr("quickCommands.commandScript");
+        let command_placeholder = self.tr("quickCommands.commandPlaceholder");
+        let cancel_label = self.tr("common.cancel");
+        let save_label = self.tr("common.save");
+        let wide_fields = viewport_width >= 768.;
         let category_label = editor
             .category_id
             .as_deref()
@@ -24,7 +56,7 @@ impl NyaTermApp {
                     .find(|category| category.id == id)
             })
             .map(|category| category.name.clone())
-            .unwrap_or_else(|| "Uncategorized".to_string());
+            .unwrap_or_else(|| uncategorized_label.to_string());
         let category_draft = editor.category_draft.trim().to_string();
         let category_query = category_draft.to_lowercase();
         let exact_category_match = self
@@ -34,15 +66,11 @@ impl NyaTermApp {
         let category_display = if category_draft.is_empty() {
             category_label.clone()
         } else if exact_category_match {
-            format!("Use: {category_draft}")
+            category_draft.clone()
         } else {
-            format!("Create: {category_draft}")
+            self.tr("quickCommands.createCategory")
+                .replace("{{name}}", &category_draft)
         };
-        let color_label = editor
-            .color_tag
-            .clone()
-            .unwrap_or_else(|| "default".to_string());
-        let icon_label = quick_command_icon_label(palette, editor.icon_tag.as_deref());
         let mut color_swatches = div().mt_2().flex().items_center().gap_2().flex_wrap();
         for option in QUICK_COMMAND_COLOR_OPTIONS {
             let selected = editor.color_tag.as_deref() == option && editor.icon_tag.is_none();
@@ -80,7 +108,7 @@ impl NyaTermApp {
             category_choices = category_choices.child(quick_command_category_choice(
                 palette,
                 "quick-command-editor-category-none".to_string(),
-                "Uncategorized".to_string(),
+                uncategorized_label.to_string(),
                 uncategorized_selected,
                 cx.listener(|this, _, _, cx| {
                     this.set_quick_command_editor_category(None, cx);
@@ -109,7 +137,9 @@ impl NyaTermApp {
             ));
         }
         if !category_draft.is_empty() && !exact_category_match {
-            let label = format!("Create: {}", truncate_preview(&category_draft, 18));
+            let label = self
+                .tr("quickCommands.createCategory")
+                .replace("{{name}}", &truncate_preview(&category_draft, 18));
             category_choices = category_choices.child(quick_command_category_choice(
                 palette,
                 "quick-command-editor-category-draft".to_string(),
@@ -124,15 +154,22 @@ impl NyaTermApp {
 
         div()
             .id(SharedString::from("quick-command-editor-overlay"))
-            .absolute()
-            .top_0()
-            .bottom_0()
-            .left_0()
-            .right_0()
-            .bg(rgb(0x030508))
+            .when(!native_window, |this| {
+                this.absolute()
+                    .top_0()
+                    .bottom_0()
+                    .left_0()
+                    .right_0()
+                    .bg(rgb(0x030508))
+                    .p_4()
+            })
+            .when(native_window, |this| this.size_full().bg(rgb(palette.bg)))
             .flex()
+            .flex_col()
             .items_center()
-            .justify_center()
+            .when(!native_window, |this| this.justify_center())
+            .when(native_window, |this| this.justify_start())
+            .overflow_y_scroll()
             .track_focus(&self.quick_command_editor_focus)
             .on_click(cx.listener(|this, _, window, cx| {
                 window.focus(&this.quick_command_editor_focus);
@@ -145,39 +182,24 @@ impl NyaTermApp {
             .child(
                 div()
                     .id(SharedString::from("quick-command-editor-dialog"))
-                    .w(px(560.))
-                    .rounded_md()
-                    .border_1()
-                    .border_color(rgb(palette.border))
+                    .w_full()
+                    .max_w(px(560.))
+                    .when(!native_window, |this| {
+                        this.rounded_md()
+                            .border_1()
+                            .border_color(rgb(palette.border))
+                            .shadow_lg()
+                    })
                     .bg(rgb(palette.bg))
-                    .shadow_lg()
                     .p_4()
                     .child(
-                        div()
-                            .flex()
-                            .items_center()
-                            .justify_between()
-                            .gap_3()
-                            .child(
-                                div()
-                                    .text_sm()
-                                    .font_weight(FontWeight(800.))
-                                    .text_color(rgb(palette.text))
-                                    .child(title),
-                            )
-                            .child(status_pill(
-                                if can_save { "ready" } else { "required" },
-                                if can_save {
-                                    rgb(palette.success)
-                                } else {
-                                    rgb(palette.danger)
-                                },
-                                if can_save {
-                                    rgb(palette.hover)
-                                } else {
-                                    rgb(0x3a1717)
-                                },
-                            )),
+                        div().flex().items_center().gap_3().child(
+                            div()
+                                .text_sm()
+                                .font_weight(FontWeight(800.))
+                                .text_color(rgb(palette.text))
+                                .child(title),
+                        ),
                     )
                     .when(editor.error.is_some(), |this| {
                         this.child(
@@ -196,14 +218,15 @@ impl NyaTermApp {
                     .child(
                         div()
                             .mt_3()
-                            .grid()
-                            .grid_cols(2)
+                            .flex()
+                            .when(wide_fields, |this| this.flex_row())
+                            .when(!wide_fields, |this| this.flex_col())
                             .gap_3()
                             .child(quick_command_editor_field(
                                 palette,
                                 "quick-command-editor-label",
-                                "Label",
-                                "Command label",
+                                label_name,
+                                label_placeholder,
                                 editor.label.clone(),
                                 editor.focused_field == QuickCommandEditorField::Label,
                                 cx.listener(|this, _, window, cx| {
@@ -217,17 +240,21 @@ impl NyaTermApp {
                             .child(
                                 div()
                                     .id("quick-command-editor-category")
+                                    .min_w_0()
+                                    .flex_1()
                                     .rounded_sm()
                                     .border_1()
                                     .border_color(
-                                        if editor.focused_field == QuickCommandEditorField::Category {
+                                        if editor.focused_field == QuickCommandEditorField::Category
+                                        {
                                             rgb(0x4ade80)
                                         } else {
                                             rgb(palette.border)
                                         },
                                     )
                                     .bg(
-                                        if editor.focused_field == QuickCommandEditorField::Category {
+                                        if editor.focused_field == QuickCommandEditorField::Category
+                                        {
                                             rgb(0x0f1f18)
                                         } else {
                                             rgb(palette.input)
@@ -246,7 +273,7 @@ impl NyaTermApp {
                                         div()
                                             .text_size(px(10.))
                                             .text_color(rgb(palette.text_muted))
-                                            .child("Category"),
+                                            .child(category_label_text),
                                     )
                                     .child(
                                         div()
@@ -266,7 +293,7 @@ impl NyaTermApp {
                                                 div()
                                                     .text_size(px(10.))
                                                     .text_color(rgb(palette.text_muted))
-                                                    .child("Type to search/create"),
+                                                    .child(category_search_label),
                                             ),
                                     )
                                     .child(category_choices),
@@ -275,8 +302,8 @@ impl NyaTermApp {
                     .child(div().mt_3().child(quick_command_editor_field(
                         palette,
                         "quick-command-editor-description",
-                        "Description",
-                        "Optional description",
+                        description_label,
+                        description_placeholder,
                         editor.description.clone(),
                         editor.focused_field == QuickCommandEditorField::Description,
                         cx.listener(|this, _, window, cx| {
@@ -312,28 +339,15 @@ impl NyaTermApp {
                                                 div()
                                                     .text_size(px(10.))
                                                     .text_color(rgb(palette.text_muted))
-                                                    .child("Color Tag"),
+                                                    .child(color_tag_label),
                                             )
-                                            .child(
-                                                div()
-                                                    .flex()
-                                                    .items_center()
-                                                    .gap_1()
-                                                    .child(quick_command_icon_mark(
-                                                        palette,
-                                                        editor.icon_tag.as_deref(),
-                                                        editor.color_tag.as_deref(),
-                                                    ))
-                                                    .child(
-                                                        div()
-                                                            .text_size(px(10.))
-                                                            .text_color(rgb(palette.text_muted))
-                                                            .child(format!(
-                                                                "{} / {}",
-                                                                color_label, icon_label
-                                                            )),
-                                                    ),
-                                            ),
+                                            .child(div().flex().items_center().gap_1().child(
+                                                quick_command_icon_mark(
+                                                    palette,
+                                                    editor.icon_tag.as_deref(),
+                                                    editor.color_tag.as_deref(),
+                                                ),
+                                            )),
                                     )
                                     .child(color_swatches)
                                     .child(icon_grid),
@@ -351,12 +365,14 @@ impl NyaTermApp {
                                         div()
                                             .text_size(px(10.))
                                             .text_color(rgb(palette.text_muted))
-                                            .child("Pin"),
+                                            .child(pin_label),
                                     )
                                     .child(mode_button(
                                         "quick-command-editor-pinned",
-                                        if editor.pinned { "Pinned" } else { "Pin" },
-                                        editor.pinned, self.theme_palette(),cx.listener(|this, _, _, cx| {
+                                        pin_label,
+                                        editor.pinned,
+                                        self.theme_palette(),
+                                        cx.listener(|this, _, _, cx| {
                                             this.toggle_quick_command_editor_pinned(cx);
                                         }),
                                     )),
@@ -369,7 +385,7 @@ impl NyaTermApp {
                                 div()
                                     .text_size(px(10.))
                                     .text_color(rgb(palette.text_muted))
-                                    .child("Execution Mode"),
+                                    .child(execution_mode_label),
                             )
                             .child(
                                 div()
@@ -379,8 +395,10 @@ impl NyaTermApp {
                                     .gap_2()
                                     .child(mode_button(
                                         "quick-command-editor-execute",
-                                        "Execute Immediately",
-                                        editor.execution_mode != "append", self.theme_palette(),cx.listener(|this, _, _, cx| {
+                                        execute_label,
+                                        editor.execution_mode != "append",
+                                        self.theme_palette(),
+                                        cx.listener(|this, _, _, cx| {
                                             this.set_quick_command_editor_execution_mode(
                                                 "execute", cx,
                                             );
@@ -388,8 +406,10 @@ impl NyaTermApp {
                                     ))
                                     .child(mode_button(
                                         "quick-command-editor-append",
-                                        "Append Only",
-                                        editor.execution_mode == "append", self.theme_palette(),cx.listener(|this, _, _, cx| {
+                                        append_label,
+                                        editor.execution_mode == "append",
+                                        self.theme_palette(),
+                                        cx.listener(|this, _, _, cx| {
                                             this.set_quick_command_editor_execution_mode(
                                                 "append", cx,
                                             );
@@ -402,17 +422,17 @@ impl NyaTermApp {
                                     .text_size(px(10.))
                                     .text_color(rgb(palette.text_muted))
                                     .child(if editor.execution_mode == "append" {
-                                        "Insert the command into the terminal input without running it."
+                                        append_hint
                                     } else {
-                                        "Send the command to the terminal and execute it immediately."
+                                        execute_hint
                                     }),
                             ),
                     )
                     .child(div().mt_3().child(quick_command_editor_script_field(
                         palette,
                         "quick-command-editor-command",
-                        "Command Script",
-                        "Command text",
+                        command_script_label,
+                        command_placeholder,
                         editor.command.clone(),
                         editor.focused_field == QuickCommandEditorField::Command,
                         cx.listener(|this, _, window, cx| {
@@ -428,40 +448,55 @@ impl NyaTermApp {
                             .mt_4()
                             .flex()
                             .items_center()
-                            .justify_between()
+                            .justify_end()
                             .gap_2()
-                            .child(
-                                div()
-                                    .text_size(px(10.))
-                                    .text_color(rgb(palette.text_muted))
-                                    .child("Tab switches fields. Enter saves outside Command. Cmd/Ctrl+S saves."),
-                            )
                             .child(
                                 div()
                                     .flex()
                                     .items_center()
                                     .gap_2()
-                                    .child(small_button(palette,
+                                    .child(small_button(
+                                        palette,
                                         "quick-command-editor-cancel",
-                                        "Cancel",
+                                        cancel_label,
                                         cx.listener(|this, _, _, cx| {
                                             this.close_quick_command_editor(cx);
                                         }),
                                     ))
                                     .child(
-                                        div().when(!can_save, |this| this.opacity(0.45)).child(
-                                            small_button(palette,
-                                                "quick-command-editor-save",
-                                                "Save",
-                                                cx.listener(|this, _, _, cx| {
-                                                    this.save_quick_command_editor(cx);
-                                                }),
-                                            ),
-                                        ),
+                                        div()
+                                            .when(can_save, |this| {
+                                                this.child(small_button(
+                                                    palette,
+                                                    "quick-command-editor-save",
+                                                    save_label,
+                                                    cx.listener(|this, _, _, cx| {
+                                                        this.save_quick_command_editor(cx);
+                                                    }),
+                                                ))
+                                            })
+                                            .when(!can_save, |this| {
+                                                this.child(
+                                                    div()
+                                                        .id("quick-command-editor-save-disabled")
+                                                        .h(px(28.))
+                                                        .px_3()
+                                                        .flex()
+                                                        .items_center()
+                                                        .rounded_sm()
+                                                        .border_1()
+                                                        .border_color(rgb(palette.border))
+                                                        .bg(rgb(palette.surface_elevated))
+                                                        .text_color(rgb(palette.text_dimmed))
+                                                        .text_xs()
+                                                        .child(save_label),
+                                                )
+                                            }),
                                     ),
                             ),
                     ),
             )
+            .into_any_element()
     }
 }
 

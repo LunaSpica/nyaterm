@@ -58,8 +58,8 @@ impl NyaTermApp {
                 this.mark_user_activity();
             }))
             .on_key_down(cx.listener(|this, event: &KeyDownEvent, window, cx| {
-                if this.settings_window.is_some() {
-                    this.activate_settings_window(cx);
+                if this.modal_child_window_open() {
+                    this.activate_modal_child_window(cx);
                     cx.stop_propagation();
                     return;
                 }
@@ -68,7 +68,7 @@ impl NyaTermApp {
                 }
             }))
             .on_mouse_move(cx.listener(|this, event: &MouseMoveEvent, _, cx| {
-                if this.settings_window.is_some() {
+                if this.modal_child_window_open() {
                     return;
                 }
                 this.update_transfer_browser_column_resize(event, cx);
@@ -87,7 +87,7 @@ impl NyaTermApp {
             .on_mouse_up(
                 MouseButton::Left,
                 cx.listener(|this, event: &MouseUpEvent, _, cx| {
-                    if this.settings_window.is_some() {
+                    if this.modal_child_window_open() {
                         return;
                     }
                     this.finish_transfer_browser_column_resize(event, cx);
@@ -104,8 +104,8 @@ impl NyaTermApp {
             .on_mouse_up(
                 MouseButton::Navigate(NavigationDirection::Back),
                 cx.listener(|this, _event: &MouseUpEvent, window, cx| {
-                    if this.settings_window.is_some() {
-                        this.activate_settings_window(cx);
+                    if this.modal_child_window_open() {
+                        this.activate_modal_child_window(cx);
                         return;
                     }
                     if this.current_left_panel() == Some(NavItem::Transfers) {
@@ -117,8 +117,8 @@ impl NyaTermApp {
             .on_mouse_up(
                 MouseButton::Navigate(NavigationDirection::Forward),
                 cx.listener(|this, _event: &MouseUpEvent, window, cx| {
-                    if this.settings_window.is_some() {
-                        this.activate_settings_window(cx);
+                    if this.modal_child_window_open() {
+                        this.activate_modal_child_window(cx);
                         return;
                     }
                     if this.current_left_panel() == Some(NavItem::Transfers) {
@@ -130,7 +130,7 @@ impl NyaTermApp {
             .on_mouse_up(
                 MouseButton::Right,
                 cx.listener(|this, event: &MouseUpEvent, _, cx| {
-                    if this.settings_window.is_some() {
+                    if this.modal_child_window_open() {
                         return;
                     }
                     if this.finish_terminal_mouse_report(event, cx) {
@@ -141,7 +141,7 @@ impl NyaTermApp {
             .on_mouse_up(
                 MouseButton::Middle,
                 cx.listener(|this, event: &MouseUpEvent, _, cx| {
-                    if this.settings_window.is_some() {
+                    if this.modal_child_window_open() {
                         return;
                     }
                     if this.finish_terminal_mouse_report(event, cx) {
@@ -495,9 +495,10 @@ impl NyaTermApp {
             .when(self.sync_groups_open, |this| {
                 this.child(self.sync_groups_overlay(cx))
             })
-            .when(self.quick_command_editor.is_some(), |this| {
-                this.child(self.quick_command_editor_overlay(cx))
-            })
+            .when(
+                self.quick_command_editor.is_some() && self.quick_command_window.is_none(),
+                |this| this.child(self.quick_command_editor_overlay(cx)),
+            )
             .when(self.quick_command_delete.is_some(), |this| {
                 this.child(self.quick_command_delete_overlay(cx))
             })
@@ -538,14 +539,26 @@ impl NyaTermApp {
                 this.child(self.lock_screen_overlay(cx))
             })
             .when(self.about_open, |this| this.child(self.about_overlay(cx)))
-            .when(self.settings_window.is_some(), |this| {
-                this.child(self.settings_owner_backdrop(cx))
+            .when(self.modal_child_window_open(), |this| {
+                this.child(self.modal_owner_backdrop(cx))
             })
     }
 
-    fn settings_owner_backdrop(&mut self, cx: &mut Context<Self>) -> impl IntoElement {
+    fn modal_child_window_open(&self) -> bool {
+        self.settings_window.is_some() || self.quick_command_window.is_some()
+    }
+
+    fn activate_modal_child_window(&mut self, cx: &mut Context<Self>) -> bool {
+        if self.settings_window.is_some() {
+            self.activate_settings_window(cx)
+        } else {
+            self.activate_quick_command_window(cx)
+        }
+    }
+
+    fn modal_owner_backdrop(&mut self, cx: &mut Context<Self>) -> impl IntoElement {
         div()
-            .id("settings-owner-backdrop")
+            .id("modal-owner-backdrop")
             .absolute()
             .inset_0()
             .bg(rgba(0x00000066))
@@ -556,7 +569,7 @@ impl NyaTermApp {
             .on_mouse_up(MouseButton::Middle, |_, _, cx| cx.stop_propagation())
             .on_click(cx.listener(|this, _, _, cx| {
                 cx.stop_propagation();
-                this.activate_settings_window(cx);
+                this.activate_modal_child_window(cx);
             }))
     }
 

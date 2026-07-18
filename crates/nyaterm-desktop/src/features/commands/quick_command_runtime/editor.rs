@@ -110,19 +110,21 @@ impl NyaTermApp {
     }
 
     pub(in crate::features) fn save_quick_command_editor(&mut self, cx: &mut Context<Self>) {
+        let label_required = self.tr("quickCommands.errorLabelRequired").to_string();
+        let command_required = self.tr("quickCommands.errorCommandRequired").to_string();
         let Some(editor) = self.quick_command_editor.as_mut() else {
             return;
         };
         let label = editor.label.trim().to_string();
         let command_text = editor.command.trim().to_string();
         if label.is_empty() {
-            editor.error = Some("Label is required".to_string());
+            editor.error = Some(label_required);
             editor.focused_field = QuickCommandEditorField::Label;
             cx.notify();
             return;
         }
         if command_text.is_empty() {
-            editor.error = Some("Command is required".to_string());
+            editor.error = Some(command_required);
             editor.focused_field = QuickCommandEditorField::Command;
             cx.notify();
             return;
@@ -181,6 +183,7 @@ impl NyaTermApp {
                 self.quick_commands = config.commands;
                 self.quick_command_categories = config.categories;
                 self.quick_command_editor = None;
+                self.quick_command_window = None;
                 self.store_status.message = format!("quick command '{}' saved", command.label);
                 self.store_status.ready = true;
                 self.terminal_status = self.store_status.message.clone();

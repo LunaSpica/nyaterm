@@ -74,6 +74,7 @@ pub struct NyaTermApp {
     /// Open category context menu (Tauri QuickCommands category ContextMenu).
     pub(in crate::features) quick_command_category_menu: Option<QuickCommandCategoryMenuState>,
     pub(in crate::features) quick_command_editor: Option<QuickCommandEditorState>,
+    pub(in crate::features) quick_command_window: Option<WindowHandle<QuickCommandWindow>>,
     pub(in crate::features) quick_command_delete: Option<QuickCommandDeleteState>,
     pub(in crate::features) quick_command_details: Option<QuickCommandDetailsState>,
     pub(in crate::features) quick_command_category_delete: Option<QuickCommandCategoryDeleteState>,
