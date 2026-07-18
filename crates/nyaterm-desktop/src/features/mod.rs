@@ -163,7 +163,9 @@ pub(in crate::features) use auth_runtime::{
     HostKeyPromptIssue, HostKeyPromptRequest, NativeHostKeyVerifier, NativeOtpProvider,
     SftpDuplicatePromptBroker, SftpDuplicatePromptState,
 };
-pub(in crate::features) use cloud_sync_provider::{pull_provider_snapshot, push_provider_snapshot};
+pub(in crate::features) use cloud_sync_provider::{
+    pull_provider_snapshot, push_provider_snapshot, test_provider_connection,
+};
 pub(in crate::features) use connection_editor_window::ConnectionEditorWindow;
 pub(in crate::features) use connection_runtime::ConnectionEditorToggle;
 pub(in crate::features) use connections::{

@@ -366,6 +366,7 @@ pub struct NyaTermApp {
     pub(in crate::features) cloud_sync_status: String,
     pub(in crate::features) cloud_sync_focus: FocusHandle,
     pub(in crate::features) cloud_sync_focused_field: CloudSyncInputField,
+    pub(in crate::features) cloud_sync_provider_menu_open: bool,
     pub(in crate::features) ai_settings: AiSettings,
     pub(in crate::features) ai_model_draft: String,
     pub(in crate::features) ai_base_url_draft: String,

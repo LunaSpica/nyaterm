@@ -1,5 +1,53 @@
 use super::*;
 
+pub(in crate::features) fn test_provider_connection(
+    settings: &CloudSyncSettings,
+) -> Result<(), CloudSyncError> {
+    let remote_root = settings.remote_root.as_str();
+    match settings.provider.as_str() {
+        "webdav" => {
+            let remote = NativeWebdavRemote::new(&settings.webdav)?;
+            nyaterm_core::load_sync_pointer_from_remote(&remote, remote_root)?;
+        }
+        "s3" => {
+            let remote = NativeS3Remote::new(&settings.s3)?;
+            nyaterm_core::load_sync_pointer_from_remote(&remote, remote_root)?;
+        }
+        "google_drive" => {
+            let remote = NativeGoogleDriveRemote::new(&settings.google_drive)?;
+            nyaterm_core::load_sync_pointer_from_remote(&remote, remote_root)?;
+        }
+        "onedrive" => {
+            let remote = NativeOneDriveRemote::new(&settings.onedrive)?;
+            nyaterm_core::load_sync_pointer_from_remote(&remote, remote_root)?;
+        }
+        "aliyun_drive" => {
+            let remote = NativeAliyunDriveRemote::new(&settings.aliyun_drive)?;
+            nyaterm_core::load_sync_pointer_from_remote(&remote, remote_root)?;
+        }
+        "gitee_snippet" => {
+            let backend = GiteeSnippetHttpBackend::new(
+                &settings.gitee_snippet,
+                NativeSnippetHttpClient::new()?,
+            )?;
+            let remote = SnippetRemote::new("gitee_snippet", backend);
+            nyaterm_core::load_sync_pointer_from_remote(&remote, remote_root)?;
+        }
+        "github_gist" => {
+            let backend =
+                GithubGistHttpBackend::new(&settings.github_gist, NativeSnippetHttpClient::new()?)?;
+            let remote = SnippetRemote::new("github_gist", backend);
+            nyaterm_core::load_sync_pointer_from_remote(&remote, remote_root)?;
+        }
+        provider => {
+            return Err(CloudSyncError::Remote(format!(
+                "native cloud provider '{provider}' is not wired yet"
+            )));
+        }
+    }
+    Ok(())
+}
+
 pub(in crate::features) fn push_provider_snapshot(
     settings: &CloudSyncSettings,
     options: &LocalCloudSyncOptions,

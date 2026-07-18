@@ -4,6 +4,7 @@ use std::path::PathBuf;
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum CloudSyncInputField {
     RemoteRoot,
+    DeviceName,
     WebdavEndpoint,
     WebdavRoot,
     WebdavUsername,

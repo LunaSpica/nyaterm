@@ -1,6 +1,33 @@
 use super::*;
 
 impl NyaTermApp {
+    pub(in crate::features) fn run_provider_cloud_sync_test(&mut self, cx: &mut Context<Self>) {
+        if self.block_cloud_sync_for_settings_draft(cx) {
+            return;
+        }
+        let settings = self.cloud_sync_settings.clone();
+        let provider = configured_cloud_sync_provider(&settings);
+        self.cloud_sync_status = format!("testing provider connection via {provider}");
+        self.terminal_status = "provider cloud sync connection test started".to_string();
+        cx.spawn(async move |this, cx| {
+            let result = test_provider_connection(&settings);
+            let _ = this.update(cx, |this, cx| {
+                match result {
+                    Ok(()) => {
+                        this.cloud_sync_status = this.tr("settings.syncTestSuccess").to_string();
+                    }
+                    Err(error) => {
+                        this.cloud_sync_status = format!("provider test failed: {error}");
+                    }
+                }
+                this.terminal_status = this.cloud_sync_status.clone();
+                cx.notify();
+            });
+        })
+        .detach();
+        cx.notify();
+    }
+
     pub(in crate::features) fn run_local_cloud_sync_push(
         &mut self,
         master_password: String,

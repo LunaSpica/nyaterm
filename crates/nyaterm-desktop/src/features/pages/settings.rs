@@ -2,21 +2,21 @@ use gpui::{
     AnyElement, App, ClickEvent, Context, FontWeight, IntoElement, KeyDownEvent, SharedString,
     Window, div, prelude::*, px, rgb, rgba, svg,
 };
-use nyaterm_core::RiskLevel;
+use nyaterm_core::{CloudSyncSettings, RiskLevel};
 use nyaterm_transport::SftpDuplicatePolicy;
 
 use crate::models::{
     AiActionEditorField, AiActionListKind, AiCredentialEditorField, AiInputField,
-    CloudSyncConflictState, CloudSyncInputField, ConfigPathPromptKind, DiagnosticsPathPromptKind,
-    KeywordHighlightEditorField, SearchEngineEditorField, SettingsTab, SnapshotPasswordPromptKind,
-    SnapshotPasswordPromptState, TranslateInputField,
+    CloudSyncConflictState, CloudSyncInputField, KeywordHighlightEditorField,
+    SearchEngineEditorField, SettingsTab, SnapshotPasswordPromptKind, SnapshotPasswordPromptState,
+    TranslateInputField,
 };
 use crate::theme::ThemePalette;
 use crate::widgets::{small_button, status_pill};
 
 use super::super::{
     ChromeTooltip, NyaTermApp, TAB_MOUSE_ACTIONS, TabMouseActionTarget, cloud_secret_display,
-    cloud_sync_history_row, compact_id, configured_cloud_sync_provider, none_if_blank,
+    compact_id, configured_cloud_sync_provider, format_history_timestamp_ms, none_if_blank,
     transfer_input, truncate_preview,
 };
 
@@ -167,13 +167,17 @@ impl NyaTermApp {
                             .min_h_0()
                             .overflow_hidden()
                             .bg(rgb(palette.bg))
-                            .child(self.settings_active_panel(
-                                backup_snapshot_prompt,
-                                viewport_width,
-                                cx,
-                            )),
+                            .child(self.settings_active_panel(viewport_width, cx)),
                     ),
             )
+            .when_some(backup_snapshot_prompt, |this, prompt| {
+                this.child(
+                    div()
+                        .flex_none()
+                        .px_4()
+                        .child(self.snapshot_password_prompt_banner(prompt, cx)),
+                )
+            })
             .child(self.settings_action_footer(cx))
     }
 
@@ -604,14 +608,13 @@ impl NyaTermApp {
 
     fn settings_active_panel(
         &mut self,
-        backup_snapshot_prompt: Option<SnapshotPasswordPromptState>,
         viewport_width: f32,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
         let palette = self.theme_palette();
         let active_tab = self.settings_active_tab;
         let active_label = self.tr(active_tab.i18n_key());
-        let content = self.settings_tab_content(active_tab, backup_snapshot_prompt, cx);
+        let content = self.settings_tab_content(active_tab, cx);
         let compact = viewport_width < 640.;
         let wide = viewport_width >= 1024.;
 
@@ -667,7 +670,6 @@ impl NyaTermApp {
     fn settings_tab_content(
         &mut self,
         active_tab: SettingsTab,
-        backup_snapshot_prompt: Option<SnapshotPasswordPromptState>,
         cx: &mut Context<Self>,
     ) -> AnyElement {
         match active_tab {
@@ -685,14 +687,7 @@ impl NyaTermApp {
             SettingsTab::AiRules => self.ai_rules_settings_section(cx).into_any_element(),
             SettingsTab::Transfer => self.transfer_settings_section(cx).into_any_element(),
             SettingsTab::Security => self.security_settings_section(cx).into_any_element(),
-            SettingsTab::SyncBackup => div()
-                .flex()
-                .flex_col()
-                .gap_4()
-                .child(self.config_backup_settings_section(backup_snapshot_prompt, cx))
-                .child(self.cloud_sync_settings_section(cx))
-                .child(self.diagnostics_settings_section(cx))
-                .into_any_element(),
+            SettingsTab::SyncBackup => self.cloud_sync_settings_section(cx).into_any_element(),
         }
     }
 }

@@ -6,7 +6,11 @@ impl NyaTermApp {
         provider: &'static str,
         cx: &mut Context<Self>,
     ) {
+        if !self.cloud_sync_form_enabled() {
+            return;
+        }
         self.cloud_sync_settings.provider = provider.to_string();
+        self.cloud_sync_provider_menu_open = false;
         self.cloud_sync_status = format!("provider set to {provider}; save to persist");
         cx.notify();
     }
@@ -35,6 +39,9 @@ impl NyaTermApp {
     }
 
     pub(in crate::features) fn toggle_s3_virtual_host_style(&mut self, cx: &mut Context<Self>) {
+        if !self.cloud_sync_form_enabled() {
+            return;
+        }
         self.cloud_sync_settings.s3.virtual_host_style =
             !self.cloud_sync_settings.s3.virtual_host_style;
         self.cloud_sync_status = if self.cloud_sync_settings.s3.virtual_host_style {
@@ -46,34 +53,40 @@ impl NyaTermApp {
         cx.notify();
     }
 
-    pub(in crate::features) fn save_cloud_sync_settings(&mut self, cx: &mut Context<Self>) {
-        let next = self.pending_cloud_sync_settings();
-        if self.defer_settings_persistence(cx) {
-            self.cloud_sync_settings = next;
-            self.cloud_sync_secret_draft = CloudSyncSecretDraft::default();
-            self.cloud_sync_status = "cloud sync settings staged".to_string();
+    pub(in crate::features) fn toggle_cloud_sync_auto_check(&mut self, cx: &mut Context<Self>) {
+        if !self.cloud_sync_form_enabled() || !self.cloud_sync_settings.enabled {
             return;
         }
+        self.cloud_sync_settings.auto_check_on_startup =
+            !self.cloud_sync_settings.auto_check_on_startup;
+        self.cloud_sync_status = "cloud sync auto-check setting edited".to_string();
+        cx.notify();
+    }
 
-        match ConnectionStore::open_with_portable_key_path(
-            self.runtime.config_dir(),
-            self.runtime.portable_key_path().map(ToOwned::to_owned),
-        )
-        .and_then(|store| store.save_cloud_sync_settings(next))
-        {
-            Ok(saved) => {
-                self.cloud_sync_settings = saved;
-                self.cloud_sync_secret_draft = CloudSyncSecretDraft::default();
-                self.cloud_sync_status = "cloud sync settings saved".to_string();
-                self.store_status.message = "cloud sync settings saved".to_string();
-                self.store_status.ready = true;
-            }
-            Err(error) => {
-                self.cloud_sync_status = format!("cloud sync settings save failed: {error}");
-                self.store_status.message = self.cloud_sync_status.clone();
-                self.store_status.ready = false;
-            }
+    pub(in crate::features) fn toggle_cloud_sync_auto_push(&mut self, cx: &mut Context<Self>) {
+        if !self.cloud_sync_form_enabled() || !self.cloud_sync_settings.enabled {
+            return;
         }
+        self.cloud_sync_settings.auto_push_on_change =
+            !self.cloud_sync_settings.auto_push_on_change;
+        self.cloud_sync_status = "cloud sync auto-push setting edited".to_string();
+        cx.notify();
+    }
+
+    pub(in crate::features) fn adjust_cloud_sync_debounce(
+        &mut self,
+        delta: i64,
+        cx: &mut Context<Self>,
+    ) {
+        if !self.cloud_sync_form_enabled()
+            || !self.cloud_sync_settings.enabled
+            || !self.cloud_sync_settings.auto_push_on_change
+        {
+            return;
+        }
+        let current = self.cloud_sync_settings.sync_debounce_seconds as i64;
+        self.cloud_sync_settings.sync_debounce_seconds = (current + delta).clamp(1, 3_600) as u64;
+        self.cloud_sync_status = "cloud sync debounce setting edited".to_string();
         cx.notify();
     }
 
@@ -82,6 +95,9 @@ impl NyaTermApp {
         event: &KeyDownEvent,
         cx: &mut Context<Self>,
     ) {
+        if !self.cloud_sync_form_enabled() {
+            return;
+        }
         self.mark_user_activity();
         let keystroke = &event.keystroke;
         if keystroke.modifiers.platform || keystroke.modifiers.alt || keystroke.modifiers.control {
@@ -115,6 +131,7 @@ impl NyaTermApp {
     pub(in crate::features) fn cloud_sync_input_value_mut(&mut self) -> &mut String {
         match self.cloud_sync_focused_field {
             CloudSyncInputField::RemoteRoot => &mut self.cloud_sync_settings.remote_root,
+            CloudSyncInputField::DeviceName => &mut self.cloud_sync_settings.device_name,
             CloudSyncInputField::WebdavEndpoint => &mut self.cloud_sync_settings.webdav.endpoint,
             CloudSyncInputField::WebdavRoot => &mut self.cloud_sync_settings.webdav.root,
             CloudSyncInputField::WebdavUsername => &mut self.cloud_sync_settings.webdav.username,
@@ -190,5 +207,11 @@ impl NyaTermApp {
             CloudSyncInputField::GithubGistId => &mut self.cloud_sync_settings.github_gist.gist_id,
             CloudSyncInputField::GithubToken => &mut self.cloud_sync_secret_draft.github_token,
         }
+    }
+
+    pub(in crate::features) fn cloud_sync_form_enabled(&self) -> bool {
+        self.settings_master_password_enabled
+            && (self.settings.has_master_password
+                || !self.settings_master_password_draft.is_empty())
     }
 }

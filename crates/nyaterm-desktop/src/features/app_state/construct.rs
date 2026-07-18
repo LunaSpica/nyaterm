@@ -589,6 +589,7 @@ impl NyaTermApp {
             cloud_sync_status: "local provider ready".to_string(),
             cloud_sync_focus: cx.focus_handle(),
             cloud_sync_focused_field: CloudSyncInputField::RemoteRoot,
+            cloud_sync_provider_menu_open: false,
             ai_settings,
             ai_model_draft,
             ai_base_url_draft,
