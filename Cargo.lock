@@ -4195,6 +4195,7 @@ dependencies = [
  "encoding_rs",
  "gpui",
  "hex",
+ "image",
  "md5",
  "nyaterm-core",
  "nyaterm-legacy",

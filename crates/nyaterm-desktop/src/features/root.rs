@@ -5,6 +5,9 @@ use gpui::{
     rgb,
 };
 
+const WALLPAPER_TILE_ELEMENT_LIMIT: usize = 8192;
+const WALLPAPER_TILE_MIN_SIZE: f32 = 8.;
+
 impl NyaTermApp {
     pub(crate) fn start_after_window_open(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.refresh_window_render_inputs(window, cx);
@@ -38,7 +41,11 @@ impl NyaTermApp {
         } else {
             1.0
         };
-        let wallpaper_fit = self.settings.background_image_fit.as_str();
+        let wallpaper_fit = self.settings.background_image_fit.clone();
+        let wallpaper_tile_size = wallpaper_path
+            .as_deref()
+            .filter(|_| wallpaper_fit == "tile")
+            .map(|path| self.wallpaper_tile_size(path));
         div()
             .id(SharedString::from("nyaterm-root"))
             .size_full()
@@ -122,10 +129,32 @@ impl NyaTermApp {
                     std::path::PathBuf::from(path).into_boxed_path(),
                 )
                 .into();
-                let object_fit = match wallpaper_fit {
+                if let Some((tile_width, tile_height)) = wallpaper_tile_size {
+                    let (columns, rows) =
+                        wallpaper_tile_grid(self.last_viewport_size, (tile_width, tile_height));
+                    let mut layer = div()
+                        .absolute()
+                        .inset_0()
+                        .overflow_hidden()
+                        .opacity(wallpaper_opacity);
+                    for row in 0..rows {
+                        for column in 0..columns {
+                            layer = layer.child(
+                                img(source.clone())
+                                    .absolute()
+                                    .left(px(column as f32 * tile_width))
+                                    .top(px(row as f32 * tile_height))
+                                    .w(px(tile_width))
+                                    .h(px(tile_height))
+                                    .object_fit(ObjectFit::None),
+                            );
+                        }
+                    }
+                    return this.child(layer);
+                }
+                let object_fit = match wallpaper_fit.as_str() {
                     "contain" => ObjectFit::Contain,
                     "stretch" | "fill" => ObjectFit::Fill,
-                    "tile" => ObjectFit::None, // native tile is approximate (no CSS repeat)
                     _ => ObjectFit::Cover,
                 };
                 let image = img(source)
@@ -146,6 +175,23 @@ impl NyaTermApp {
                     .child(self.title_bar(cx))
                     .child(self.workspace_surface(palette, cx)),
             )
+    }
+
+    fn wallpaper_tile_size(&mut self, path: &str) -> (f32, f32) {
+        if let Some((cached_path, width, height)) = self.wallpaper_tile_dimensions.as_ref()
+            && cached_path == path
+        {
+            return fit_wallpaper_tile_size(
+                self.last_viewport_size,
+                (*width as f32, *height as f32),
+            );
+        }
+        let (width, height) = image::image_dimensions(path)
+            .ok()
+            .filter(|(width, height)| *width > 0 && *height > 0)
+            .unwrap_or((256, 256));
+        self.wallpaper_tile_dimensions = Some((path.to_string(), width, height));
+        fit_wallpaper_tile_size(self.last_viewport_size, (width as f32, height as f32))
     }
 
     fn workspace_surface(&mut self, palette: ThemePalette, cx: &mut Context<Self>) -> AnyElement {
@@ -493,6 +539,52 @@ impl NyaTermApp {
                         this.child(self.credential_prompt_banner(prompt, cx))
                     }),
             )
+    }
+}
+
+fn wallpaper_tile_grid(viewport: (f32, f32), tile: (f32, f32)) -> (usize, usize) {
+    let columns = ((viewport.0.max(1.) / tile.0.max(WALLPAPER_TILE_MIN_SIZE)).ceil() as usize)
+        .clamp(1, WALLPAPER_TILE_ELEMENT_LIMIT);
+    let requested_rows =
+        ((viewport.1.max(1.) / tile.1.max(WALLPAPER_TILE_MIN_SIZE)).ceil() as usize).max(1);
+    let rows = requested_rows.min((WALLPAPER_TILE_ELEMENT_LIMIT / columns).max(1));
+    (columns, rows)
+}
+
+fn fit_wallpaper_tile_size(viewport: (f32, f32), intrinsic: (f32, f32)) -> (f32, f32) {
+    let mut tile = (
+        intrinsic.0.max(WALLPAPER_TILE_MIN_SIZE),
+        intrinsic.1.max(WALLPAPER_TILE_MIN_SIZE),
+    );
+    for _ in 0..4 {
+        let columns = (viewport.0.max(1.) / tile.0).ceil().max(1.);
+        let rows = (viewport.1.max(1.) / tile.1).ceil().max(1.);
+        let count = columns * rows;
+        if count <= WALLPAPER_TILE_ELEMENT_LIMIT as f32 {
+            break;
+        }
+        let scale = (count / WALLPAPER_TILE_ELEMENT_LIMIT as f32).sqrt() * 1.01;
+        tile.0 *= scale;
+        tile.1 *= scale;
+    }
+    tile
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{fit_wallpaper_tile_size, wallpaper_tile_grid};
+
+    #[test]
+    fn wallpaper_tiles_cover_viewport_and_cap_extreme_counts() {
+        assert_eq!(wallpaper_tile_grid((1280., 800.), (256., 256.)), (5, 4));
+        assert_eq!(wallpaper_tile_grid((1280., 800.), (2048., 2048.)), (1, 1));
+        let (columns, rows) = wallpaper_tile_grid((100_000., 100_000.), (1., 1.));
+        assert!(columns * rows <= 8192);
+        let tile = fit_wallpaper_tile_size((3840., 2160.), (1., 1.));
+        let (columns, rows) = wallpaper_tile_grid((3840., 2160.), tile);
+        assert!(columns * rows <= 8192);
+        assert!(columns as f32 * tile.0 >= 3840.);
+        assert!(rows as f32 * tile.1 >= 2160.);
     }
 }
 

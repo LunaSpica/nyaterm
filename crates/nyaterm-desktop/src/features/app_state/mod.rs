@@ -550,6 +550,8 @@ pub struct NyaTermApp {
     pub(in crate::features) terminal_file_drop_hover: Option<String>,
 
     pub(in crate::features) last_viewport_size: (f32, f32),
+    /// Cached intrinsic dimensions for the current tiled wallpaper path.
+    pub(in crate::features) wallpaper_tile_dimensions: Option<(String, u32, u32)>,
     /// When the window viewport last changed (resize/drag geometry).
     pub(in crate::features) last_viewport_change_at: Option<Instant>,
     /// Deadline for treating title-bar window dragging as active.

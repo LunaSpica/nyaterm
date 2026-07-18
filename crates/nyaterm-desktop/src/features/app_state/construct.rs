@@ -739,6 +739,7 @@ impl NyaTermApp {
             cached_keyword_highlight_rules: None,
             terminal_file_drop_hover: None,
             last_viewport_size: (1280., 800.),
+            wallpaper_tile_dimensions: None,
             last_viewport_change_at: None,
             title_drag_active_until: None,
             selected_nav: NavItem::Workspace,
