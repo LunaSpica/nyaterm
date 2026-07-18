@@ -462,17 +462,23 @@ impl NyaTermApp {
     }
 
     fn finish_settings_page(&mut self, cx: &mut Context<Self>) {
-        self.main_mode = MainMode::Workspace;
-        self.left_sidebar_collapsed = self
-            .settings_previous_left_collapsed
-            .take()
-            .unwrap_or_else(|| self.active_left_panel.is_none());
-        self.right_inspector_collapsed = self
-            .settings_previous_right_collapsed
-            .take()
-            .unwrap_or_else(|| self.active_right_panel.is_none());
-        self.terminal_status = "workspace restored".to_string();
-        self.persist_ui_layout();
+        self.settings_window = None;
+        if self.main_mode == MainMode::Page && self.selected_nav == NavItem::Settings {
+            self.main_mode = MainMode::Workspace;
+            self.left_sidebar_collapsed = self
+                .settings_previous_left_collapsed
+                .take()
+                .unwrap_or_else(|| self.active_left_panel.is_none());
+            self.right_inspector_collapsed = self
+                .settings_previous_right_collapsed
+                .take()
+                .unwrap_or_else(|| self.active_right_panel.is_none());
+            self.persist_ui_layout();
+        } else {
+            self.settings_previous_left_collapsed = None;
+            self.settings_previous_right_collapsed = None;
+        }
+        self.terminal_status = "settings closed".to_string();
         cx.notify();
     }
 }

@@ -748,6 +748,7 @@ impl NyaTermApp {
             settings_active_tab: SettingsTab::General,
             settings_expanded_groups: HashSet::from(["workspace".to_string()]),
             settings_draft_snapshot: None,
+            settings_window: None,
             settings_previous_left_collapsed: None,
             settings_previous_right_collapsed: None,
             active_left_panel,

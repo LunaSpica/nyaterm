@@ -2,7 +2,7 @@ use super::*;
 use gpui::{
     AnyElement, Context, Div, ImageSource, IntoElement, KeyDownEvent, MouseButton, MouseMoveEvent,
     MouseUpEvent, NavigationDirection, ObjectFit, Render, SharedString, Stateful, Window, div, img,
-    rgb,
+    rgb, rgba,
 };
 
 const WALLPAPER_TILE_ELEMENT_LIMIT: usize = 8192;
@@ -58,11 +58,19 @@ impl NyaTermApp {
                 this.mark_user_activity();
             }))
             .on_key_down(cx.listener(|this, event: &KeyDownEvent, window, cx| {
+                if this.settings_window.is_some() {
+                    this.activate_settings_window(cx);
+                    cx.stop_propagation();
+                    return;
+                }
                 if this.handle_global_shortcut(event, window, cx) {
                     cx.stop_propagation();
                 }
             }))
             .on_mouse_move(cx.listener(|this, event: &MouseMoveEvent, _, cx| {
+                if this.settings_window.is_some() {
+                    return;
+                }
                 this.update_transfer_browser_column_resize(event, cx);
                 this.update_panel_resize(event, cx);
                 this.update_transfer_height_resize(event, cx);
@@ -79,6 +87,9 @@ impl NyaTermApp {
             .on_mouse_up(
                 MouseButton::Left,
                 cx.listener(|this, event: &MouseUpEvent, _, cx| {
+                    if this.settings_window.is_some() {
+                        return;
+                    }
                     this.finish_transfer_browser_column_resize(event, cx);
                     this.finish_panel_resize(event, cx);
                     this.finish_transfer_height_resize(event, cx);
@@ -93,6 +104,10 @@ impl NyaTermApp {
             .on_mouse_up(
                 MouseButton::Navigate(NavigationDirection::Back),
                 cx.listener(|this, _event: &MouseUpEvent, window, cx| {
+                    if this.settings_window.is_some() {
+                        this.activate_settings_window(cx);
+                        return;
+                    }
                     if this.current_left_panel() == Some(NavItem::Transfers) {
                         cx.stop_propagation();
                         this.open_transfer_browser_history(1, window, cx);
@@ -102,6 +117,10 @@ impl NyaTermApp {
             .on_mouse_up(
                 MouseButton::Navigate(NavigationDirection::Forward),
                 cx.listener(|this, _event: &MouseUpEvent, window, cx| {
+                    if this.settings_window.is_some() {
+                        this.activate_settings_window(cx);
+                        return;
+                    }
                     if this.current_left_panel() == Some(NavItem::Transfers) {
                         cx.stop_propagation();
                         this.open_transfer_browser_history(-1, window, cx);
@@ -111,6 +130,9 @@ impl NyaTermApp {
             .on_mouse_up(
                 MouseButton::Right,
                 cx.listener(|this, event: &MouseUpEvent, _, cx| {
+                    if this.settings_window.is_some() {
+                        return;
+                    }
                     if this.finish_terminal_mouse_report(event, cx) {
                         cx.stop_propagation();
                     }
@@ -119,6 +141,9 @@ impl NyaTermApp {
             .on_mouse_up(
                 MouseButton::Middle,
                 cx.listener(|this, event: &MouseUpEvent, _, cx| {
+                    if this.settings_window.is_some() {
+                        return;
+                    }
                     if this.finish_terminal_mouse_report(event, cx) {
                         cx.stop_propagation();
                     }
@@ -513,6 +538,26 @@ impl NyaTermApp {
                 this.child(self.lock_screen_overlay(cx))
             })
             .when(self.about_open, |this| this.child(self.about_overlay(cx)))
+            .when(self.settings_window.is_some(), |this| {
+                this.child(self.settings_owner_backdrop(cx))
+            })
+    }
+
+    fn settings_owner_backdrop(&mut self, cx: &mut Context<Self>) -> impl IntoElement {
+        div()
+            .id("settings-owner-backdrop")
+            .absolute()
+            .inset_0()
+            .bg(rgba(0x00000066))
+            .cursor_pointer()
+            .on_mouse_move(|_, _, cx| cx.stop_propagation())
+            .on_mouse_up(MouseButton::Left, |_, _, cx| cx.stop_propagation())
+            .on_mouse_up(MouseButton::Right, |_, _, cx| cx.stop_propagation())
+            .on_mouse_up(MouseButton::Middle, |_, _, cx| cx.stop_propagation())
+            .on_click(cx.listener(|this, _, _, cx| {
+                cx.stop_propagation();
+                this.activate_settings_window(cx);
+            }))
     }
 
     fn ssh_auth_prompt_overlay(&mut self, cx: &mut Context<Self>) -> impl IntoElement {

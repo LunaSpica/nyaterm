@@ -78,6 +78,7 @@ mod session_runtime;
 mod session_state;
 #[path = "settings/settings_runtime.rs"]
 mod settings_runtime;
+mod settings_window;
 #[path = "session/startup_restore_runtime.rs"]
 mod startup_restore_runtime;
 mod sync_input;
@@ -180,6 +181,7 @@ pub(in crate::features) use runtime_jobs::{
     DockerJobResult, ProcessJobOutput, ProcessJobResult, SessionStartResult, SessionStartSuccess,
     StatsJobResult, TranslateJobResult, TunnelJobOutput, TunnelJobResult, UpdateJobResult,
 };
+pub(in crate::features) use settings_window::SettingsWindow;
 pub(in crate::features) use tab_mouse::{
     ChromeTooltip, SessionTabDragPayload, SessionTabDragPreview, SessionTabTooltip,
     TAB_MOUSE_ACTIONS, TabMouseActionTarget, tab_mouse_action_label,

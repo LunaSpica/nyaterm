@@ -7,13 +7,21 @@ impl NyaTermApp {
 
     pub(in crate::features) fn open_page(&mut self, item: NavItem, cx: &mut Context<Self>) {
         if item == NavItem::Settings || item.opens_settings() {
-            if self.main_mode != MainMode::Page {
-                self.settings_previous_left_collapsed = Some(self.left_sidebar_collapsed);
-                self.settings_previous_right_collapsed = Some(self.right_inspector_collapsed);
-            }
             self.begin_settings_draft();
             if let Some(group) = self.settings_active_tab.expandable_group_id() {
                 self.settings_expanded_groups.insert(group.to_string());
+            }
+            if self.open_settings_window(cx) {
+                self.main_mode = MainMode::Workspace;
+                self.settings_previous_left_collapsed = None;
+                self.settings_previous_right_collapsed = None;
+                self.terminal_status = "settings opened".to_string();
+                cx.notify();
+                return;
+            }
+            if self.main_mode != MainMode::Page {
+                self.settings_previous_left_collapsed = Some(self.left_sidebar_collapsed);
+                self.settings_previous_right_collapsed = Some(self.right_inspector_collapsed);
             }
             self.main_mode = MainMode::Page;
             self.selected_nav = NavItem::Settings;

@@ -564,6 +564,7 @@ pub struct NyaTermApp {
     pub(in crate::features) settings_expanded_groups: HashSet<String>,
     /// Committed values captured when the in-window settings page opens.
     pub(in crate::features) settings_draft_snapshot: Option<SettingsDraftSnapshot>,
+    pub(in crate::features) settings_window: Option<WindowHandle<SettingsWindow>>,
     /// Main workspace panel state to restore after leaving the in-window settings page.
     pub(in crate::features) settings_previous_left_collapsed: Option<bool>,
     pub(in crate::features) settings_previous_right_collapsed: Option<bool>,

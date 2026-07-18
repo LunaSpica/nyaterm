@@ -320,7 +320,9 @@ impl NyaTermApp {
 
     pub(in crate::features) fn activity_entry_selected(&self, entry: ActivityBarEntry) -> bool {
         match entry {
-            ActivityBarEntry::Panel(NavItem::Settings) => self.main_mode == MainMode::Page,
+            ActivityBarEntry::Panel(NavItem::Settings) => {
+                self.settings_window.is_some() || self.main_mode == MainMode::Page
+            }
             ActivityBarEntry::Panel(item) if item.is_left_panel() => {
                 if self.panel_multi_open {
                     let id = item.persistence_id();

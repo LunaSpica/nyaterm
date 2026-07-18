@@ -34,6 +34,22 @@ impl NyaTermApp {
         &mut self,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
+        self.settings_surface(self.last_viewport_size.0, cx)
+    }
+
+    pub(in crate::features) fn settings_window_view(
+        &mut self,
+        viewport_width: f32,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
+        self.settings_surface(viewport_width, cx).into_any_element()
+    }
+
+    fn settings_surface(
+        &mut self,
+        viewport_width: f32,
+        cx: &mut Context<Self>,
+    ) -> impl IntoElement {
         let backup_snapshot_prompt =
             self.active_snapshot_password_prompt
                 .clone()
@@ -43,12 +59,13 @@ impl NyaTermApp {
                         SnapshotPasswordPromptKind::Export | SnapshotPasswordPromptKind::Import
                     )
                 });
-        self.settings_shell(backup_snapshot_prompt, cx)
+        self.settings_shell(backup_snapshot_prompt, viewport_width, cx)
     }
 
     pub(in crate::features) fn settings_shell(
         &mut self,
         backup_snapshot_prompt: Option<SnapshotPasswordPromptState>,
+        viewport_width: f32,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
         // Tauri SettingsPage shell: compact header + narrow nav + scroll content.
@@ -138,7 +155,7 @@ impl NyaTermApp {
                     .flex_1()
                     .min_h(px(0.))
                     .size_full()
-                    .child(self.settings_sidebar(cx))
+                    .child(self.settings_sidebar(viewport_width, cx))
                     .child(
                         div()
                             .flex_1()
@@ -272,12 +289,16 @@ impl NyaTermApp {
             )
     }
 
-    fn settings_sidebar(&mut self, cx: &mut Context<Self>) -> impl IntoElement {
+    fn settings_sidebar(
+        &mut self,
+        viewport_width: f32,
+        cx: &mut Context<Self>,
+    ) -> impl IntoElement {
         let palette = self.theme_palette();
-        let compact = self.last_viewport_size.0 < 640.;
+        let compact = viewport_width < 640.;
         let sidebar_width = if compact {
             56.
-        } else if self.last_viewport_size.0 < 1024. {
+        } else if viewport_width < 1024. {
             192.
         } else {
             224.
