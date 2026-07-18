@@ -3,6 +3,7 @@ use super::*;
 impl NyaTermApp {
     pub(in crate::features) fn title_bar(&mut self, cx: &mut Context<Self>) -> impl IntoElement {
         let palette = self.theme_palette();
+        let macos = cfg!(target_os = "macos");
         let compact_layout = !cfg!(target_os = "macos");
         let narrow_left = compact_layout && self.last_viewport_size.0 < 1024.;
         let narrow_right = compact_layout && self.last_viewport_size.0 < 768.;
@@ -22,6 +23,7 @@ impl NyaTermApp {
                     .items_center()
                     .gap_2()
                     .px_3()
+                    .when(macos, |this| this.pl(px(70.)))
                     .window_control_area(WindowControlArea::Drag)
                     .on_mouse_down(
                         MouseButton::Left,
@@ -30,14 +32,16 @@ impl NyaTermApp {
                             cx.notify();
                         }),
                     )
-                    .child(
-                        div()
-                            .flex()
-                            .items_center()
-                            .gap_2()
-                            .mr_2()
-                            .child(logo_mark(palette)),
-                    )
+                    .when(!macos, |this| {
+                        this.child(
+                            div()
+                                .flex()
+                                .items_center()
+                                .gap_2()
+                                .mr_2()
+                                .child(logo_mark(palette)),
+                        )
+                    })
                     .when(narrow_left, |this| {
                         this.child(
                             div()
@@ -127,31 +131,33 @@ impl NyaTermApp {
                                 }),
                             ),
                     )
-                    .child(window_control_button(
-                        palette,
-                        "window-min",
-                        "–",
-                        WindowControlArea::Min,
-                        cx.listener(|this, _, window, cx| {
-                            this.handle_window_minimize(window, cx);
-                        }),
-                    ))
-                    .child(window_control_button(
-                        palette,
-                        "window-max",
-                        "□",
-                        WindowControlArea::Max,
-                        |_, window, _| window.zoom_window(),
-                    ))
-                    .child(window_control_button(
-                        palette,
-                        "window-close",
-                        "×",
-                        WindowControlArea::Close,
-                        cx.listener(|this, _, window, cx| {
-                            this.handle_window_close_request(window, cx);
-                        }),
-                    )),
+                    .when(!macos, |this| {
+                        this.child(window_control_button(
+                            palette,
+                            "window-min",
+                            "–",
+                            WindowControlArea::Min,
+                            cx.listener(|this, _, window, cx| {
+                                this.handle_window_minimize(window, cx);
+                            }),
+                        ))
+                        .child(window_control_button(
+                            palette,
+                            "window-max",
+                            "□",
+                            WindowControlArea::Max,
+                            |_, window, _| window.zoom_window(),
+                        ))
+                        .child(window_control_button(
+                            palette,
+                            "window-close",
+                            "×",
+                            WindowControlArea::Close,
+                            cx.listener(|this, _, window, cx| {
+                                this.handle_window_close_request(window, cx);
+                            }),
+                        ))
+                    }),
             )
     }
 
