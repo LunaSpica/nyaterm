@@ -14,6 +14,7 @@ impl NyaTermApp {
         };
         self.rename_session_id = Some(session_id);
         self.rename_draft = current_name.chars().take(64).collect();
+        self.rename_marked_text.clear();
         self.terminal_status = "rename tab opened".to_string();
         window.focus(&self.rename_focus);
         cx.notify();
@@ -22,6 +23,7 @@ impl NyaTermApp {
     pub(in crate::features) fn close_rename_session(&mut self, cx: &mut Context<Self>) {
         self.rename_session_id = None;
         self.rename_draft.clear();
+        self.rename_marked_text.clear();
         self.terminal_status = "rename tab cancelled".to_string();
         cx.notify();
     }
@@ -39,6 +41,7 @@ impl NyaTermApp {
             .take(64)
             .collect::<String>();
         self.rename_draft.clear();
+        self.rename_marked_text.clear();
         if trimmed.is_empty() {
             self.terminal_status = "tab name cannot be empty".to_string();
             self.rename_session_id = Some(session_id);
@@ -67,6 +70,7 @@ impl NyaTermApp {
             "enter" => self.submit_rename_session(cx),
             "backspace" => {
                 self.rename_draft.pop();
+                self.rename_marked_text.clear();
                 cx.notify();
             }
             _ => {
@@ -80,6 +84,7 @@ impl NyaTermApp {
                 {
                     let remaining = 64usize.saturating_sub(self.rename_draft.chars().count());
                     self.rename_draft.extend(input.chars().take(remaining));
+                    self.rename_marked_text.clear();
                     cx.notify();
                 }
             }
@@ -129,6 +134,7 @@ impl NyaTermApp {
         self.startup_command_open = true;
         self.startup_command_action = action;
         self.startup_command_draft.clear();
+        self.startup_command_marked_text.clear();
         self.startup_command_delay_ms = u64::from(
             self.settings
                 .interaction_duplicate_session_command_delay_ms
@@ -144,6 +150,7 @@ impl NyaTermApp {
         self.startup_command_open = false;
         self.startup_command_action = StartupCommandAction::Duplicate;
         self.startup_command_draft.clear();
+        self.startup_command_marked_text.clear();
         self.startup_command_delay_ms = DEFAULT_DUPLICATE_STARTUP_DELAY_MS;
         self.terminal_status = action.status_cancelled().to_string();
         cx.notify();
@@ -178,6 +185,7 @@ impl NyaTermApp {
         self.startup_command_open = false;
         self.startup_command_action = StartupCommandAction::Duplicate;
         self.startup_command_draft.clear();
+        self.startup_command_marked_text.clear();
         match action {
             StartupCommandAction::Duplicate => {
                 self.duplicate_active_session_with_startup(Some(startup_command), window, cx);
@@ -205,6 +213,7 @@ impl NyaTermApp {
             "enter" => self.submit_startup_command_dialog(window, cx),
             "backspace" => {
                 self.startup_command_draft.pop();
+                self.startup_command_marked_text.clear();
                 cx.notify();
             }
             "up" => self.adjust_startup_command_delay(100, cx),
@@ -216,6 +225,7 @@ impl NyaTermApp {
                     .filter(|input| !input.is_empty())
                 {
                     self.startup_command_draft.push_str(input);
+                    self.startup_command_marked_text.clear();
                     cx.notify();
                 }
             }

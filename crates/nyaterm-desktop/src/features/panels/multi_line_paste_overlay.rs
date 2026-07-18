@@ -10,13 +10,14 @@ impl NyaTermApp {
             .multi_line_paste
             .clone()
             .unwrap_or_else(|| MultiLinePasteDraft::new(String::new()));
-        let normalized = draft.normalized_text();
-        let stats = format!(
-            "{} lines, {} characters",
-            draft.line_count(),
-            draft.character_count()
-        );
-        let can_send = !draft.text.is_empty();
+        let input_entity = cx.entity();
+        let draft_text = format!("{}{}", draft.text, self.multi_line_paste_marked_text);
+        let normalized = normalize_paste_newlines(&draft_text);
+        let stats = self
+            .tr("terminal.multiLinePasteStats")
+            .replace("{{lines}}", &normalized.split('\n').count().to_string())
+            .replace("{{chars}}", &draft_text.chars().count().to_string());
+        let can_send = !draft_text.is_empty();
         let mut preview = div()
             .id(SharedString::from("multi-line-paste-text"))
             .mt_3()
@@ -51,7 +52,7 @@ impl NyaTermApp {
             .take(10)
             .collect::<Vec<_>>();
         if display_lines.is_empty() {
-            preview = preview.child("Paste text");
+            preview = preview.child(self.tr("terminal.multiLinePasteTextPlaceholder"));
         } else {
             for line in display_lines {
                 let line_preview = if line.is_empty() {
@@ -70,7 +71,7 @@ impl NyaTermApp {
             .bottom_0()
             .left_0()
             .right_0()
-            .bg(rgb(0x030508))
+            .bg(rgba(0x000000d9))
             .flex()
             .items_center()
             .justify_center()
@@ -101,7 +102,7 @@ impl NyaTermApp {
                             .text_sm()
                             .font_weight(FontWeight(800.))
                             .text_color(rgb(palette.text))
-                            .child("Multi-line Paste"),
+                            .child(self.tr("terminal.multiLinePasteTitle")),
                     )
                     .child(
                         div()
@@ -110,13 +111,40 @@ impl NyaTermApp {
                             .text_color(rgb(palette.text_muted))
                             .child(stats),
                     )
-                    .child(preview)
+                    .child(
+                        preview
+                            .relative()
+                            .track_focus(&self.multi_line_paste_focus)
+                            .on_click(cx.listener(|this, _, window, cx| {
+                                window.focus(&this.multi_line_paste_focus);
+                                cx.notify();
+                            }))
+                            .child(
+                                gpui::canvas(
+                                    |_bounds, _window, _cx| {},
+                                    move |bounds, _state, window, cx| {
+                                        let focus =
+                                            input_entity.read(cx).multi_line_paste_focus.clone();
+                                        window.handle_input(
+                                            &focus,
+                                            gpui::ElementInputHandler::new(
+                                                bounds,
+                                                input_entity.clone(),
+                                            ),
+                                            cx,
+                                        );
+                                    },
+                                )
+                                .absolute()
+                                .inset_0(),
+                            ),
+                    )
                     .child(
                         div()
                             .mt_2()
                             .text_xs()
                             .text_color(rgb(palette.text_muted))
-                            .child("Review the pasted text before sending."),
+                            .child(self.tr("terminal.multiLinePasteDescription")),
                     )
                     .child(
                         div()
@@ -128,7 +156,7 @@ impl NyaTermApp {
                             .child(small_button(
                                 palette,
                                 "multi-line-paste-cancel",
-                                "Cancel",
+                                self.tr("common.cancel"),
                                 cx.listener(|this, _, _, cx| {
                                     this.close_multi_line_paste(cx);
                                 }),
@@ -137,7 +165,7 @@ impl NyaTermApp {
                                 small_button(
                                     palette,
                                     "multi-line-paste-direct",
-                                    "Direct Paste",
+                                    self.tr("terminal.multiLinePasteDirect"),
                                     cx.listener(|this, _, _, cx| {
                                         this.direct_multi_line_paste(cx);
                                     }),
@@ -147,7 +175,7 @@ impl NyaTermApp {
                                 small_button(
                                     palette,
                                     "multi-line-paste-line",
-                                    "Line By Line",
+                                    self.tr("terminal.multiLinePasteSendLineByLine"),
                                     cx.listener(|this, _, _, cx| {
                                         this.send_multi_line_paste_by_line(cx);
                                     }),

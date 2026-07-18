@@ -27,6 +27,7 @@ impl NyaTermApp {
         }
         if self.settings.terminal_show_multi_line_paste_dialog && is_multi_line_paste(&text) {
             self.multi_line_paste = Some(MultiLinePasteDraft::new(text));
+            self.multi_line_paste_marked_text.clear();
             self.terminal_status = "multi-line paste confirmation opened".to_string();
             window.focus(&self.multi_line_paste_focus);
             cx.notify();
@@ -163,6 +164,7 @@ impl NyaTermApp {
 
     pub(in crate::features) fn close_multi_line_paste(&mut self, cx: &mut Context<Self>) {
         self.multi_line_paste = None;
+        self.multi_line_paste_marked_text.clear();
         self.terminal_status = "multi-line paste cancelled".to_string();
         cx.notify();
     }
@@ -173,6 +175,7 @@ impl NyaTermApp {
             cx.notify();
             return;
         };
+        self.multi_line_paste_marked_text.clear();
         let text = draft.normalized_text();
         self.send_terminal_paste_input(&text, cx);
     }
@@ -183,6 +186,7 @@ impl NyaTermApp {
             cx.notify();
             return;
         };
+        self.multi_line_paste_marked_text.clear();
         let text = draft.normalized_text();
         let mut bytes = Vec::new();
         for line in text.split('\n') {
@@ -224,10 +228,12 @@ impl NyaTermApp {
             "escape" => self.close_multi_line_paste(cx),
             "backspace" => {
                 draft.text.pop();
+                self.multi_line_paste_marked_text.clear();
                 cx.notify();
             }
             "enter" => {
                 draft.text.push('\n');
+                self.multi_line_paste_marked_text.clear();
                 cx.notify();
             }
             _ => {
@@ -237,6 +243,7 @@ impl NyaTermApp {
                     .filter(|input| !input.is_empty())
                 {
                     draft.text.push_str(input);
+                    self.multi_line_paste_marked_text.clear();
                     cx.notify();
                 }
             }

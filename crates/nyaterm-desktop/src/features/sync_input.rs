@@ -7,6 +7,10 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         self.sync_groups_open = true;
+        self.sync_groups_search_draft.clear();
+        self.sync_groups_search_marked_text.clear();
+        self.sync_groups_name_marked_text.clear();
+        self.sync_groups_delete_pending = None;
         if self.sync_groups_selected_id.is_none() {
             self.sync_groups_selected_id = self.sync_groups.first().map(|group| group.id.clone());
         }
@@ -17,6 +21,10 @@ impl NyaTermApp {
 
     pub(in crate::features) fn close_sync_groups(&mut self, cx: &mut Context<Self>) {
         self.sync_groups_open = false;
+        self.sync_groups_search_draft.clear();
+        self.sync_groups_search_marked_text.clear();
+        self.sync_groups_name_marked_text.clear();
+        self.sync_groups_delete_pending = None;
         self.terminal_status = "sync groups closed".to_string();
         cx.notify();
     }
@@ -50,6 +58,168 @@ impl NyaTermApp {
         cx.notify();
     }
 
+    pub(in crate::features) fn request_delete_selected_sync_group(
+        &mut self,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(group_id) = self.sync_groups_selected_id.clone() else {
+            self.terminal_status = "no sync group selected".to_string();
+            cx.notify();
+            return;
+        };
+        self.sync_groups_delete_pending = Some(group_id);
+        cx.notify();
+    }
+
+    pub(in crate::features) fn cancel_delete_sync_group(&mut self, cx: &mut Context<Self>) {
+        self.sync_groups_delete_pending = None;
+        cx.notify();
+    }
+
+    pub(in crate::features) fn confirm_delete_sync_group(&mut self, cx: &mut Context<Self>) {
+        let Some(group_id) = self.sync_groups_delete_pending.take() else {
+            return;
+        };
+        self.sync_groups_selected_id = Some(group_id);
+        self.delete_selected_sync_group(cx);
+    }
+
+    pub(in crate::features) fn set_selected_sync_group_name(
+        &mut self,
+        name: String,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(group_id) = self.sync_groups_selected_id.clone() else {
+            return;
+        };
+        if let Some(group) = self
+            .sync_groups
+            .iter_mut()
+            .find(|group| group.id == group_id)
+        {
+            group.name = name;
+        }
+        cx.notify();
+    }
+
+    pub(in crate::features) fn select_all_sync_group_sessions(&mut self, cx: &mut Context<Self>) {
+        let session_ids = self
+            .ordered_sessions()
+            .into_iter()
+            .map(|session| session.id)
+            .collect::<Vec<_>>();
+        let Some(group) = self.selected_sync_group_mut() else {
+            return;
+        };
+        group.session_ids = session_ids;
+        group.paused_session_ids.clear();
+        cx.notify();
+    }
+
+    pub(in crate::features) fn clear_sync_group_sessions(&mut self, cx: &mut Context<Self>) {
+        let Some(group) = self.selected_sync_group_mut() else {
+            return;
+        };
+        group.session_ids.clear();
+        group.paused_session_ids.clear();
+        cx.notify();
+    }
+
+    pub(in crate::features) fn add_filtered_sync_group_sessions(&mut self, cx: &mut Context<Self>) {
+        let query = self.sync_groups_search_draft.trim().to_ascii_lowercase();
+        let session_ids = self
+            .ordered_sessions()
+            .into_iter()
+            .filter(|session| self.sync_group_session_matches_search(session, &query))
+            .map(|session| session.id)
+            .collect::<Vec<_>>();
+        let Some(group) = self.selected_sync_group_mut() else {
+            return;
+        };
+        for session_id in session_ids {
+            if !group.session_ids.iter().any(|id| id == &session_id) {
+                group.session_ids.push(session_id);
+            }
+        }
+        group.paused_session_ids.clear();
+        cx.notify();
+    }
+
+    pub(in crate::features) fn remove_filtered_sync_group_sessions(
+        &mut self,
+        cx: &mut Context<Self>,
+    ) {
+        let query = self.sync_groups_search_draft.trim().to_ascii_lowercase();
+        let remove_ids = self
+            .ordered_sessions()
+            .into_iter()
+            .filter(|session| self.sync_group_session_matches_search(session, &query))
+            .map(|session| session.id)
+            .collect::<HashSet<_>>();
+        let Some(group) = self.selected_sync_group_mut() else {
+            return;
+        };
+        group.session_ids.retain(|id| !remove_ids.contains(id));
+        group
+            .paused_session_ids
+            .retain(|id| !remove_ids.contains(id));
+        cx.notify();
+    }
+
+    pub(in crate::features) fn select_same_host_sync_group_sessions(
+        &mut self,
+        cx: &mut Context<Self>,
+    ) {
+        let selected_ids = self
+            .selected_sync_group()
+            .map(|group| group.session_ids.clone())
+            .unwrap_or_default();
+        let selected_hosts = selected_ids
+            .iter()
+            .filter_map(|id| self.session_ssh_host(id))
+            .collect::<HashSet<_>>();
+        if selected_hosts.is_empty() {
+            return;
+        }
+        let matching_ids = self
+            .ordered_sessions()
+            .into_iter()
+            .filter(|session| {
+                self.session_ssh_host(&session.id)
+                    .is_some_and(|host| selected_hosts.contains(&host))
+            })
+            .map(|session| session.id)
+            .collect::<Vec<_>>();
+        let Some(group) = self.selected_sync_group_mut() else {
+            return;
+        };
+        group.session_ids = matching_ids;
+        group.paused_session_ids.clear();
+        cx.notify();
+    }
+
+    pub(in crate::features) fn sync_group_session_matches_search(
+        &self,
+        session: &SessionInfo,
+        query: &str,
+    ) -> bool {
+        if query.is_empty() {
+            return true;
+        }
+        let endpoint = self.session_endpoint(&session.id).unwrap_or_default();
+        let host = self.session_ssh_host(&session.id).unwrap_or_default();
+        format!(
+            "{} {:?} {} {} {}",
+            self.session_display_name_by_info(session),
+            session.kind,
+            endpoint,
+            host,
+            session.id
+        )
+        .to_ascii_lowercase()
+        .contains(query)
+    }
+
     pub(in crate::features) fn select_sync_group(
         &mut self,
         group_id: String,
@@ -60,6 +230,70 @@ impl NyaTermApp {
             self.terminal_status = "sync group selected".to_string();
             cx.notify();
         }
+    }
+
+    pub(in crate::features) fn handle_sync_groups_key_down(
+        &mut self,
+        event: &KeyDownEvent,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> bool {
+        if self.sync_groups_delete_pending.is_some() {
+            match event.keystroke.key.as_str() {
+                "escape" => self.cancel_delete_sync_group(cx),
+                "enter" => self.confirm_delete_sync_group(cx),
+                _ => {}
+            }
+            return true;
+        }
+        let search_focused = self.sync_groups_search_focus.is_focused(window);
+        let name_focused = self.sync_groups_name_focus.is_focused(window);
+        if !search_focused && !name_focused {
+            return false;
+        }
+        if event.keystroke.modifiers.platform
+            || event.keystroke.modifiers.alt
+            || event.keystroke.modifiers.control
+        {
+            return true;
+        }
+        match event.keystroke.key.as_str() {
+            "escape" => self.close_sync_groups(cx),
+            "backspace" => {
+                if search_focused {
+                    self.sync_groups_search_draft.pop();
+                    self.sync_groups_search_marked_text.clear();
+                } else if let Some(group) = self.selected_sync_group_mut() {
+                    group.name.pop();
+                    self.sync_groups_name_marked_text.clear();
+                }
+                cx.notify();
+            }
+            "delete" => {
+                if search_focused {
+                    self.sync_groups_search_draft.pop();
+                    self.sync_groups_search_marked_text.clear();
+                    cx.notify();
+                }
+            }
+            "enter" => {}
+            _ => {
+                if let Some(input) = event
+                    .keystroke
+                    .key_char
+                    .as_deref()
+                    .filter(|text| !text.is_empty())
+                {
+                    if search_focused {
+                        self.sync_groups_search_draft.push_str(input);
+                    } else if let Some(group) = self.selected_sync_group_mut() {
+                        group.name.push_str(input);
+                    }
+                    cx.notify();
+                }
+            }
+        }
+        true
     }
 
     pub(in crate::features) fn toggle_selected_sync_group_enabled(

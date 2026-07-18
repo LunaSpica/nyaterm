@@ -6,16 +6,22 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
         let palette = self.theme_palette();
+        let input_entity = cx.entity();
         let items = self.filtered_quick_switch_items();
         if self.quick_switch_selected_index >= items.len() && !items.is_empty() {
             self.quick_switch_selected_index = items.len() - 1;
         }
         let selected_index = self.quick_switch_selected_index;
-        let query_display = if self.quick_switch_query.is_empty() {
-            "Search sessions and saved connections".to_string()
-        } else {
-            self.quick_switch_query.clone()
-        };
+        let query_display =
+            if self.quick_switch_query.is_empty() && self.quick_switch_marked_text.is_empty() {
+                self.tr("sessionQuickSwitcher.searchPlaceholder")
+                    .to_string()
+            } else {
+                format!(
+                    "{}{}",
+                    self.quick_switch_query, self.quick_switch_marked_text
+                )
+            };
         let mut rows = div().max_h(px(384.)).overflow_hidden().flex().flex_col();
 
         if items.is_empty() {
@@ -28,9 +34,9 @@ impl NyaTermApp {
                     .text_xs()
                     .text_color(rgb(palette.text_muted))
                     .child(if self.quick_switch_items().is_empty() {
-                        "No sessions or saved connections."
+                        self.tr("sessionQuickSwitcher.noSessions")
                     } else {
-                        "No matches."
+                        self.tr("sessionQuickSwitcher.noMatches")
                     }),
             );
         } else {
@@ -40,23 +46,40 @@ impl NyaTermApp {
                 let badge = match &item {
                     QuickSwitchItem::Session { active, unread, .. } => {
                         if *active {
-                            status_pill("active", rgb(palette.success), rgb(palette.hover))
-                                .into_any_element()
+                            status_pill(
+                                self.tr("sessionQuickSwitcher.active"),
+                                rgb(palette.success),
+                                rgb(palette.hover),
+                            )
+                            .into_any_element()
                         } else if *unread {
-                            status_pill("unread", rgb(palette.warning), rgb(palette.hover))
-                                .into_any_element()
+                            status_pill(
+                                self.tr("sessionQuickSwitcher.unread"),
+                                rgb(palette.warning),
+                                rgb(palette.hover),
+                            )
+                            .into_any_element()
                         } else {
-                            status_pill("open", rgb(palette.link), rgb(palette.hover))
-                                .into_any_element()
+                            status_pill(
+                                self.tr("sessionQuickSwitcher.open"),
+                                rgb(palette.link),
+                                rgb(palette.hover),
+                            )
+                            .into_any_element()
                         }
                     }
-                    QuickSwitchItem::Connection { .. } => {
-                        status_pill("saved", rgb(0xc4b5fd), rgb(0x2b2142)).into_any_element()
-                    }
-                    QuickSwitchItem::Pending { .. } => {
-                        status_pill("connecting", rgb(palette.warning), rgb(palette.hover))
-                            .into_any_element()
-                    }
+                    QuickSwitchItem::Connection { .. } => status_pill(
+                        self.tr("sessionQuickSwitcher.saved"),
+                        rgb(0xc4b5fd),
+                        rgb(0x2b2142),
+                    )
+                    .into_any_element(),
+                    QuickSwitchItem::Pending { .. } => status_pill(
+                        self.tr("sessionQuickSwitcher.connecting"),
+                        rgb(palette.warning),
+                        rgb(palette.hover),
+                    )
+                    .into_any_element(),
                 };
 
                 rows = rows.child(
@@ -119,11 +142,11 @@ impl NyaTermApp {
             .bottom_0()
             .left_0()
             .right_0()
-            .bg(rgb(0x030508))
+            .bg(rgba(0x000000d9))
             .flex()
             .items_start()
             .justify_center()
-            .pt(px(96.))
+            .pt(px((self.last_viewport_size.1 * 0.18).max(48.)))
             .track_focus(&self.quick_switch_focus)
             .on_click(cx.listener(|this, _, window, cx| {
                 window.focus(&this.quick_switch_focus);
@@ -147,6 +170,7 @@ impl NyaTermApp {
                     .overflow_hidden()
                     .child(
                         div()
+                            .relative()
                             .h(px(44.))
                             .flex()
                             .items_center()
@@ -179,6 +203,25 @@ impl NyaTermApp {
                                         rgb(palette.text)
                                     })
                                     .child(query_display),
+                            )
+                            .child(
+                                gpui::canvas(
+                                    |_bounds, _window, _cx| {},
+                                    move |bounds, _state, window, cx| {
+                                        let focus =
+                                            input_entity.read(cx).quick_switch_focus.clone();
+                                        window.handle_input(
+                                            &focus,
+                                            gpui::ElementInputHandler::new(
+                                                bounds,
+                                                input_entity.clone(),
+                                            ),
+                                            cx,
+                                        );
+                                    },
+                                )
+                                .absolute()
+                                .inset_0(),
                             ),
                     )
                     .child(rows)
@@ -193,12 +236,13 @@ impl NyaTermApp {
                             .border_t_1()
                             .border_color(rgb(palette.border))
                             .bg(rgb(0x0f131a))
-                            .child(
-                                div()
-                                    .text_xs()
-                                    .text_color(rgb(palette.text_muted))
-                                    .child("Enter open / Esc close / Up Down navigate"),
-                            )
+                            .child(div().text_xs().text_color(rgb(palette.text_muted)).child(
+                                format!(
+                                    "Enter {} / Esc {}",
+                                    self.tr("sessionQuickSwitcher.open"),
+                                    self.tr("sessionQuickSwitcher.close")
+                                ),
+                            ))
                             .child(
                                 div()
                                     .flex()
@@ -207,7 +251,7 @@ impl NyaTermApp {
                                     .child(small_button(
                                         palette,
                                         "quick-switch-new-ssh",
-                                        "New SSH",
+                                        self.tr("sessionQuickSwitcher.newSsh"),
                                         cx.listener(|this, _, window, cx| {
                                             this.quick_switch_open = false;
                                             this.open_connection_editor(
@@ -218,7 +262,7 @@ impl NyaTermApp {
                                     .child(small_button(
                                         palette,
                                         "quick-switch-close",
-                                        "Close",
+                                        self.tr("sessionQuickSwitcher.close"),
                                         cx.listener(|this, _, _, cx| {
                                             this.close_quick_switch(cx);
                                         }),

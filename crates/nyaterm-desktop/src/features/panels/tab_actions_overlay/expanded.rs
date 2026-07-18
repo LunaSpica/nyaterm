@@ -132,7 +132,7 @@ impl NyaTermApp {
                                             .text_xs()
                                             .font_weight(FontWeight(800.))
                                             .text_color(rgb(palette.text))
-                                            .child("Tab Actions"),
+                                            .child(self.tr("tabActions.title")),
                                     )
                                     .child(
                                         div()
@@ -173,13 +173,13 @@ impl NyaTermApp {
                                             .text_xs()
                                             .font_weight(FontWeight(800.))
                                             .text_color(rgb(palette.text))
-                                            .child("Color"),
+                                            .child(self.tr("tabCtx.setColor")),
                                     )
                                     .child(div().mt_3().child(swatches))
                                     .child(div().mt_3().child(small_button(
                                         palette,
                                         "tab-actions-color-reset",
-                                        "Reset Color",
+                                        self.tr("tabCtx.resetColor"),
                                         cx.listener(move |this, _, _, cx| {
                                             this.select_session(reset_color_session_id.clone(), cx);
                                             this.close_tab_actions(cx);
@@ -199,7 +199,7 @@ impl NyaTermApp {
                                             .text_xs()
                                             .font_weight(FontWeight(800.))
                                             .text_color(rgb(palette.text))
-                                            .child("Identity"),
+                                            .child(self.tr("tabActions.identity")),
                                     )
                                     .child(
                                         div()
@@ -210,8 +210,8 @@ impl NyaTermApp {
                                             .child(tab_action_button(
                                                 palette,
                                                 "tab-actions-rename",
-                                                "Rename",
-                                                "Edit tab title",
+                                                self.tr("tabCtx.rename"),
+                                                self.tr("tabActions.editTabTitle"),
                                                 cx.listener(move |this, _, window, cx| {
                                                     this.close_tab_actions(cx);
                                                     this.open_rename_session(
@@ -224,8 +224,8 @@ impl NyaTermApp {
                                             .child(tab_action_button(
                                                 palette,
                                                 "tab-actions-copy-name",
-                                                "Copy Name",
-                                                "Clipboard title",
+                                                self.tr("tabCtx.copyName"),
+                                                self.tr("tabActions.clipboardTitle"),
                                                 cx.listener(move |this, _, _, cx| {
                                                     this.select_session(
                                                         copy_name_session_id.clone(),
@@ -238,8 +238,8 @@ impl NyaTermApp {
                                             .child(tab_action_button(
                                                 palette,
                                                 "tab-actions-copy-endpoint",
-                                                "Copy Endpoint",
-                                                "Host or shell",
+                                                self.tr("tabActions.copyEndpoint"),
+                                                self.tr("tabActions.hostOrShell"),
                                                 cx.listener(move |this, _, _, cx| {
                                                     this.select_session(
                                                         copy_endpoint_session_id.clone(),
@@ -253,8 +253,8 @@ impl NyaTermApp {
                                                 this.child(tab_action_button(
                                                     palette,
                                                     "tab-actions-copy-ip",
-                                                    "Copy IP",
-                                                    "SSH host",
+                                                    self.tr("tabCtx.copyIp"),
+                                                    self.tr("tabActions.sshHost"),
                                                     cx.listener(move |this, _, _, cx| {
                                                         this.select_session(
                                                             copy_host_session_id.clone(),
@@ -267,8 +267,8 @@ impl NyaTermApp {
                                                 .child(tab_action_button(
                                                     palette,
                                                     "tab-actions-copy-ssh",
-                                                    "Copy SSH",
-                                                    "user@host",
+                                                    self.tr("tabActions.copySsh"),
+                                                    self.tr("tabActions.userAtHost"),
                                                     cx.listener(move |this, _, _, cx| {
                                                         this.select_session(
                                                             copy_ssh_session_id.clone(),
@@ -291,8 +291,8 @@ impl NyaTermApp {
                             .child(tab_action_button_enabled(
                                 palette,
                                 "tab-actions-duplicate",
-                                "Duplicate",
-                                "New same session",
+                                self.tr("tabCtx.duplicate"),
+                                self.tr("tabActions.newSameSession"),
                                 can_spawn_session,
                                 cx.listener(move |this, _, window, cx| {
                                     this.select_session(duplicate_session_id.clone(), cx);
@@ -310,8 +310,8 @@ impl NyaTermApp {
                                 this.child(tab_action_button(
                                     palette,
                                     "tab-actions-multiplex",
-                                    "Multiplex",
-                                "Reuse SSH channel",
+                                    self.tr("tabActions.multiplex"),
+                                self.tr("tabActions.reuseSshChannel"),
                                 cx.listener(move |this, _, window, cx| {
                                     this.select_session(multiplex_session_id.clone(), cx);
                                     this.close_tab_actions(cx);
@@ -332,8 +332,8 @@ impl NyaTermApp {
                             .child(tab_action_button_enabled(
                                 palette,
                                 "tab-actions-duplicate-command",
-                                "Duplicate + Run",
-                                "Startup command",
+                                self.tr("tabActions.duplicateAndRun"),
+                                self.tr("tabActions.startupCommand"),
                                 can_spawn_session,
                                 cx.listener(move |this, _, window, cx| {
                                     this.select_session(startup_session_id.clone(), cx);
@@ -351,8 +351,8 @@ impl NyaTermApp {
                                 this.child(tab_action_button(
                                     palette,
                                     "tab-actions-multiplex-command",
-                                    "Multiplex + Run",
-                                    "Startup command",
+                                    self.tr("tabActions.multiplexAndRun"),
+                                    self.tr("tabActions.startupCommand"),
                                     cx.listener(move |this, _, window, cx| {
                                         this.select_session(
                                             multiplex_startup_session_id.clone(),
@@ -382,8 +382,8 @@ impl NyaTermApp {
                             .child(tab_action_button_enabled(
                                 palette,
                                 "tab-actions-split-horizontal",
-                                "Split H",
-                                "Duplicate pane",
+                                self.tr("tabActions.splitHorizontalShort"),
+                                self.tr("tabActions.duplicatePane"),
                                 can_spawn_session,
                                 cx.listener(move |this, _, window, cx| {
                                     this.select_session(split_horizontal_session_id.clone(), cx);
@@ -407,8 +407,8 @@ impl NyaTermApp {
                             .child(tab_action_button_enabled(
                                 palette,
                                 "tab-actions-split-vertical",
-                                "Split V",
-                                "Duplicate pane",
+                                self.tr("tabActions.splitVerticalShort"),
+                                self.tr("tabActions.duplicatePane"),
                                 can_spawn_session,
                                 cx.listener(move |this, _, window, cx| {
                                     this.select_session(split_vertical_session_id.clone(), cx);
@@ -432,8 +432,8 @@ impl NyaTermApp {
                             .child(tab_action_button(
                                 palette,
                                 "tab-actions-window-right",
-                                "Window Right",
-                                "Detach to leaf",
+                                self.tr("tabActions.windowRight"),
+                                self.tr("tabActions.detachToLeaf"),
                                 cx.listener(move |this, _, _, cx| {
                                     this.select_session(window_leaf_right_session_id.clone(), cx);
                                     this.close_tab_actions(cx);
@@ -447,8 +447,8 @@ impl NyaTermApp {
                             .child(tab_action_button(
                                 palette,
                                 "tab-actions-window-below",
-                                "Window Below",
-                                "Detach to leaf",
+                                self.tr("tabActions.windowBelow"),
+                                self.tr("tabActions.detachToLeaf"),
                                 cx.listener(move |this, _, _, cx| {
                                     this.select_session(window_leaf_below_session_id.clone(), cx);
                                     this.close_tab_actions(cx);
@@ -462,8 +462,8 @@ impl NyaTermApp {
                             .child(tab_action_button(
                                 palette,
                                 "tab-actions-smart-split",
-                                "Smart Split",
-                                "Tile all tabs",
+                                self.tr("tabActions.smartSplit"),
+                                self.tr("tabActions.tileAllTabs"),
                                 cx.listener(|this, _, _, cx| {
                                     this.close_tab_actions(cx);
                                     this.apply_smart_split(SmartSplitMode::Auto, cx);
@@ -472,8 +472,8 @@ impl NyaTermApp {
                             .child(tab_action_button(
                                 palette,
                                 "tab-actions-tile-h",
-                                "Tile H",
-                                "Side by side",
+                                self.tr("tabActions.tileHorizontalShort"),
+                                self.tr("tabActions.sideBySide"),
                                 cx.listener(|this, _, _, cx| {
                                     this.close_tab_actions(cx);
                                     this.apply_smart_split(SmartSplitMode::Horizontal, cx);
@@ -482,8 +482,8 @@ impl NyaTermApp {
                             .child(tab_action_button(
                                 palette,
                                 "tab-actions-tile-v",
-                                "Tile V",
-                                "Stacked leaves",
+                                self.tr("tabActions.tileVerticalShort"),
+                                self.tr("tabActions.stackedLeaves"),
                                 cx.listener(|this, _, _, cx| {
                                     this.close_tab_actions(cx);
                                     this.apply_smart_split(SmartSplitMode::Vertical, cx);
@@ -493,8 +493,8 @@ impl NyaTermApp {
                                 this.child(tab_action_button(
                                     palette,
                                     "tab-actions-window-merge",
-                                    "Merge Windows",
-                                    "Flat tab strip",
+                                    self.tr("tabActions.mergeWindows"),
+                                    self.tr("tabActions.flatTabStrip"),
                                     cx.listener(|this, _, _, cx| {
                                         this.close_tab_actions(cx);
                                         this.close_terminal_window_layout(cx);
@@ -504,8 +504,8 @@ impl NyaTermApp {
                             .child(tab_action_button_enabled(
                                 palette,
                                 "tab-actions-reconnect",
-                                "Reconnect",
-                                "Restart session",
+                                self.tr("tabCtx.reconnect"),
+                                self.tr("tabActions.restartSession"),
                                 can_reconnect,
                                 cx.listener(move |this, _, window, cx| {
                                     this.select_session(reconnect_session_id.clone(), cx);
@@ -526,8 +526,8 @@ impl NyaTermApp {
                             .child(tab_action_button_enabled(
                                 palette,
                                 "tab-actions-disconnect",
-                                "Disconnect",
-                                "Keep tab, drop backend",
+                                self.tr("tabCtx.disconnect"),
+                                self.tr("tabActions.keepTabDropBackend"),
                                 can_disconnect,
                                 cx.listener(move |this, _, _, cx| {
                                     this.close_tab_actions(cx);
@@ -547,8 +547,8 @@ impl NyaTermApp {
                             .child(tab_action_button_enabled(
                                 palette,
                                 "tab-actions-info",
-                                "Info",
-                                "Connection detail",
+                                self.tr("tabCtx.sessionInfo"),
+                                self.tr("tabActions.connectionDetail"),
                                 can_session_info,
                                 cx.listener(move |this, _, window, cx| {
                                     this.select_session(info_session_id.clone(), cx);
@@ -566,8 +566,8 @@ impl NyaTermApp {
                             .child(tab_action_button_enabled(
                                 palette,
                                 "tab-actions-ai-explain",
-                                "AI Explain",
-                                "visible output",
+                                self.tr("ai.explainRecent"),
+                                self.tr("tabActions.visibleOutput"),
                                 can_use_ai,
                                 cx.listener(move |this, _, window, cx| {
                                     this.select_session(explain_session_id.clone(), cx);
@@ -600,8 +600,8 @@ impl NyaTermApp {
                             .child(tab_action_button_enabled(
                                 palette,
                                 "tab-actions-ai-analyze",
-                                "AI Analyze",
-                                "buffer errors",
+                                self.tr("ai.analyzeError"),
+                                self.tr("tabActions.bufferErrors"),
                                 can_use_ai,
                                 cx.listener(move |this, _, window, cx| {
                                     this.select_session(analyze_session_id.clone(), cx);
@@ -634,8 +634,8 @@ impl NyaTermApp {
                                 this.child(tab_action_button(
                                     palette,
                                     "tab-actions-unsplit",
-                                    "Unsplit",
-                                    "Close split view",
+                                    self.tr("tabCtx.unsplit"),
+                                    self.tr("tabActions.closeSplitView"),
                                     cx.listener(|this, _, _, cx| {
                                         this.close_tab_actions(cx);
                                         this.unsplit_workspace(cx);
@@ -645,8 +645,8 @@ impl NyaTermApp {
                             .child(tab_action_button(
                                 palette,
                                 "tab-actions-close-session",
-                                "Close Tab",
-                                "End this session",
+                                self.tr("tabCtx.close"),
+                                self.tr("tabActions.endThisSession"),
                                 cx.listener(move |this, _, _, cx| {
                                     this.close_tab_actions(cx);
                                     this.close_session(close_session_id.clone(), cx);
@@ -656,8 +656,8 @@ impl NyaTermApp {
                                 this.child(tab_action_button(
                                     palette,
                                     "tab-actions-close-inactive",
-                                    "Close Others",
-                                    "Keep this tab",
+                                    self.tr("tabCtx.closeInactive"),
+                                    self.tr("tabActions.keepThisTab"),
                                     cx.listener(move |this, _, _, cx| {
                                         this.close_tab_actions(cx);
                                         this.close_inactive_sessions(inactive_anchor.clone(), cx);
@@ -668,8 +668,8 @@ impl NyaTermApp {
                                 this.child(tab_action_button(
                                     palette,
                                     "tab-actions-close-right",
-                                    "Close Right",
-                                    "Tabs after this",
+                                    self.tr("tabCtx.closeRight"),
+                                    self.tr("tabActions.tabsAfterThis"),
                                     cx.listener(move |this, _, _, cx| {
                                         this.close_tab_actions(cx);
                                         this.close_sessions_to_right(right_anchor.clone(), cx);
@@ -680,8 +680,8 @@ impl NyaTermApp {
                                 this.child(tab_action_button(
                                     palette,
                                     "tab-actions-close-all",
-                                    "Close All",
-                                    "End all sessions",
+                                    self.tr("tabCtx.closeAll"),
+                                    self.tr("tabActions.endAllSessions"),
                                     cx.listener(|this, _, window, cx| {
                                         this.close_tab_actions(cx);
                                         this.open_close_all_sessions_confirm(window, cx);

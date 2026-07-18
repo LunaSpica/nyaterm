@@ -6,22 +6,25 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
         let palette = self.theme_palette();
-        let password_display = if self.lock_password_draft.is_empty() {
+        let input_entity = cx.entity();
+        let password_length = self.lock_password_draft.chars().count()
+            + self.lock_password_marked_text.chars().count();
+        let password_display = if password_length == 0 {
             " ".to_string()
         } else {
-            "*".repeat(self.lock_password_draft.chars().count())
+            "•".repeat(password_length.min(32))
         };
         let lock_status = if self.lock_status.trim().is_empty() {
             if self.settings.has_master_password {
-                "Enter the master password to unlock.".to_string()
+                self.tr("lockScreen.passwordPlaceholder").to_string()
             } else {
-                "No master password is configured.".to_string()
+                self.tr("settings.masterPasswordRequired").to_string()
             }
         } else {
             self.lock_status.clone()
         };
-        let status_is_error =
-            lock_status.starts_with("Wrong") || lock_status.starts_with("Unlock failed");
+        let status_is_error = lock_status == self.tr("lockScreen.wrongPassword")
+            || lock_status.starts_with(self.tr("lockScreen.unlockFailed"));
 
         div()
             .id(SharedString::from("lock-screen-overlay"))
@@ -32,7 +35,7 @@ impl NyaTermApp {
             .right_0()
             .flex()
             .flex_col()
-            .bg(rgb(0x030508))
+            .bg(rgba(0x000000d9))
             .text_color(rgb(0xffffff))
             .track_focus(&self.lock_focus)
             .on_click(cx.listener(|this, _, window, cx| {
@@ -102,10 +105,12 @@ impl NyaTermApp {
                                             .flex()
                                             .items_center()
                                             .justify_center()
-                                            .text_3xl()
-                                            .font_weight(FontWeight(900.))
-                                            .text_color(rgb(0x062018))
-                                            .child("N"),
+                                            .child(
+                                                svg()
+                                                    .size(px(68.))
+                                                    .path("icons/logo.svg")
+                                                    .text_color(rgb(0x062018)),
+                                            ),
                                     )
                                     .child(
                                         div()
@@ -120,16 +125,19 @@ impl NyaTermApp {
                                             .flex()
                                             .items_center()
                                             .justify_center()
-                                            .text_sm()
-                                            .font_weight(FontWeight(900.))
-                                            .child("LK"),
+                                            .child(
+                                                svg()
+                                                    .size(px(16.))
+                                                    .path("icons/lock.svg")
+                                                    .text_color(rgb(0xffffff)),
+                                            ),
                                     ),
                             )
                             .child(
                                 div()
                                     .text_xl()
                                     .font_weight(FontWeight(800.))
-                                    .child("NyaTerm Locked"),
+                                    .child(self.tr("lockScreen.title")),
                             )
                             .child(
                                 div()
@@ -138,7 +146,7 @@ impl NyaTermApp {
                                     .text_sm()
                                     .line_height(px(20.))
                                     .text_color(rgb(palette.text_muted))
-                                    .child("The workspace is hidden until you unlock this window."),
+                                    .child(self.tr("lockScreen.message")),
                             )
                             .when(self.settings.has_master_password, |this| {
                                 this.child(
@@ -150,6 +158,7 @@ impl NyaTermApp {
                                         .child(
                                             div()
                                                 .id(SharedString::from("lock-password-input"))
+                                                .relative()
                                                 .h(px(42.))
                                                 .px_3()
                                                 .flex()
@@ -173,7 +182,28 @@ impl NyaTermApp {
                                                     window.focus(&this.lock_focus);
                                                     cx.notify();
                                                 }))
-                                                .child(password_display),
+                                                .child(password_display)
+                                                .child(
+                                                    gpui::canvas(
+                                                        |_bounds, _window, _cx| {},
+                                                        move |bounds, _state, window, cx| {
+                                                            let focus = input_entity
+                                                                .read(cx)
+                                                                .lock_focus
+                                                                .clone();
+                                                            window.handle_input(
+                                                                &focus,
+                                                                gpui::ElementInputHandler::new(
+                                                                    bounds,
+                                                                    input_entity.clone(),
+                                                                ),
+                                                                cx,
+                                                            );
+                                                        },
+                                                    )
+                                                    .absolute()
+                                                    .inset_0(),
+                                                ),
                                         )
                                         .child(
                                             div()
@@ -200,7 +230,7 @@ impl NyaTermApp {
                             .child(small_button(
                                 palette,
                                 "lock-screen-unlock",
-                                "Unlock",
+                                self.tr("lockScreen.unlock"),
                                 cx.listener(|this, _, _, cx| {
                                     this.submit_lock_unlock(cx);
                                 }),

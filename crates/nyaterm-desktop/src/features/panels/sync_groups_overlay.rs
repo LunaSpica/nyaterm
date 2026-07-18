@@ -6,9 +6,40 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
         let palette = self.theme_palette();
+        let search_input_entity = cx.entity();
+        let name_input_entity = search_input_entity.clone();
         let selected_group = self.selected_sync_group().cloned();
         let selected_group_id = selected_group.as_ref().map(|group| group.id.clone());
-        let mut group_list = div().flex().flex_col().gap_2();
+        let selected_group_name = selected_group
+            .as_ref()
+            .map(|group| format!("{}{}", group.name, self.sync_groups_name_marked_text))
+            .unwrap_or_default();
+        let search_display = if self.sync_groups_search_draft.is_empty()
+            && self.sync_groups_search_marked_text.is_empty()
+        {
+            self.tr("syncGroup.searchPlaceholder").to_string()
+        } else {
+            format!(
+                "{}{}",
+                self.sync_groups_search_draft, self.sync_groups_search_marked_text
+            )
+        };
+        let pending_delete_name = self
+            .sync_groups_delete_pending
+            .as_deref()
+            .and_then(|id| self.sync_groups.iter().find(|group| group.id == id))
+            .map(|group| group.name.clone());
+        let pending_delete_message = pending_delete_name.as_ref().map(|name| {
+            self.tr("syncGroup.deleteGroupConfirm")
+                .replace("{{name}}", name)
+        });
+        let mut group_list = div()
+            .id(SharedString::from("sync-groups-list"))
+            .max_h(px(350.))
+            .overflow_y_scroll()
+            .flex()
+            .flex_col()
+            .gap_2();
         if self.sync_groups.is_empty() {
             group_list = group_list.child(
                 div()
@@ -19,7 +50,7 @@ impl NyaTermApp {
                     .p_3()
                     .text_xs()
                     .text_color(rgb(palette.text_muted))
-                    .child("No sync groups."),
+                    .child(self.tr("syncGroup.noGroups")),
             );
         }
         for group in self.sync_groups.clone() {
@@ -55,7 +86,13 @@ impl NyaTermApp {
                                     .items_center()
                                     .gap_2()
                                     .min_w_0()
-                                    .child(div().size(px(10.)).rounded_full().bg(rgb(group.color)))
+                                    .child(
+                                        div()
+                                            .w(px(6.))
+                                            .h(px(36.))
+                                            .rounded_full()
+                                            .bg(rgb(group.color)),
+                                    )
                                     .child(
                                         div()
                                             .min_w_0()
@@ -65,26 +102,21 @@ impl NyaTermApp {
                                             .child(truncate_preview(&group.name, 26)),
                                     ),
                             )
-                            .child(status_pill(
-                                if group.enabled { "on" } else { "off" },
-                                if group.enabled {
-                                    rgb(palette.success)
-                                } else {
-                                    rgb(palette.text_muted)
-                                },
-                                if group.enabled {
-                                    rgb(palette.hover)
-                                } else {
-                                    rgb(palette.border)
-                                },
-                            )),
+                            .child(div().size(px(8.)).rounded_full().bg(rgb(if group.enabled {
+                                palette.success
+                            } else {
+                                palette.text_muted
+                            }))),
                     )
                     .child(
                         div()
                             .mt_1()
                             .text_xs()
                             .text_color(rgb(palette.text_muted))
-                            .child(format!("{session_count} session(s)")),
+                            .child(
+                                self.tr("syncGroup.sessionCount")
+                                    .replace("{{count}}", &session_count.to_string()),
+                            ),
                     )
                     .on_click(cx.listener(move |this, _, _, cx| {
                         this.select_sync_group(group.id.clone(), cx);
@@ -106,8 +138,20 @@ impl NyaTermApp {
                     .collect::<HashSet<_>>()
             })
             .unwrap_or_default();
-        let mut session_rows = div().flex().flex_col().gap_2();
-        let sessions = self.ordered_sessions();
+        let mut session_rows = div()
+            .id(SharedString::from("sync-sessions-list"))
+            .max_h(px(290.))
+            .overflow_y_scroll()
+            .flex()
+            .flex_col()
+            .gap_2();
+        let query = self.sync_groups_search_draft.trim().to_ascii_lowercase();
+        let all_sessions = self.ordered_sessions();
+        let has_sessions = !all_sessions.is_empty();
+        let sessions = all_sessions
+            .into_iter()
+            .filter(|session| self.sync_group_session_matches_search(session, &query))
+            .collect::<Vec<_>>();
         if sessions.is_empty() {
             session_rows = session_rows.child(
                 div()
@@ -118,7 +162,11 @@ impl NyaTermApp {
                     .p_3()
                     .text_xs()
                     .text_color(rgb(palette.text_muted))
-                    .child("Start sessions before building a sync group."),
+                    .child(self.tr(if has_sessions {
+                        "syncGroup.noSessionMatches"
+                    } else {
+                        "syncGroup.noSessions"
+                    })),
             );
         }
         for session in sessions {
@@ -173,7 +221,14 @@ impl NyaTermApp {
                                             .child(format!(
                                                 "{}{}",
                                                 session_kind_label(session.kind),
-                                                if active { " · active" } else { "" }
+                                                if active {
+                                                    format!(
+                                                        " · {}",
+                                                        self.tr("sessionQuickSwitcher.active")
+                                                    )
+                                                } else {
+                                                    String::new()
+                                                }
                                             )),
                                     ),
                             )
@@ -184,11 +239,11 @@ impl NyaTermApp {
                                     .gap_2()
                                     .child(status_pill(
                                         if paused {
-                                            "paused"
+                                            self.tr("syncGroup.paused")
                                         } else if in_group {
-                                            "sync"
+                                            self.tr("syncGroup.activeMembers")
                                         } else {
-                                            "out"
+                                            self.tr("syncGroup.filterAvailable")
                                         },
                                         if paused {
                                             rgb(0xfacc15)
@@ -205,9 +260,14 @@ impl NyaTermApp {
                                             rgb(palette.border)
                                         },
                                     ))
-                                    .child(small_button(palette,
+                                    .child(small_button(
+                                        palette,
                                         format!("sync-session-toggle-{session_id}"),
-                                        if in_group { "Remove" } else { "Add" },
+                                        if in_group {
+                                            self.tr("common.remove")
+                                        } else {
+                                            self.tr("common.add")
+                                        },
                                         cx.listener({
                                             let session_id = session_id.clone();
                                             move |this, _, _, cx| {
@@ -219,9 +279,14 @@ impl NyaTermApp {
                                         }),
                                     ))
                                     .when(in_group, |this| {
-                                        this.child(small_button(palette,
+                                        this.child(small_button(
+                                            palette,
                                             format!("sync-session-pause-{session_id}"),
-                                            if paused { "Resume" } else { "Pause" },
+                                            if paused {
+                                                self.tr("syncGroup.resumeSync")
+                                            } else {
+                                                self.tr("syncGroup.pauseSync")
+                                            },
                                             cx.listener({
                                                 let session_id = session_id.clone();
                                                 move |this, _, _, cx| {
@@ -254,19 +319,22 @@ impl NyaTermApp {
                 window.focus(&this.sync_groups_focus);
                 cx.notify();
             }))
-            .on_key_down(cx.listener(|this, event: &KeyDownEvent, _, cx| {
+            .on_key_down(cx.listener(|this, event: &KeyDownEvent, window, cx| {
                 cx.stop_propagation();
+                if this.handle_sync_groups_key_down(event, window, cx) {
+                    return;
+                }
                 match event.keystroke.key.as_str() {
                     "escape" => this.close_sync_groups(cx),
                     "n" | "N" => this.create_sync_group(cx),
-                    "delete" | "backspace" => this.delete_selected_sync_group(cx),
+                    "delete" => this.request_delete_selected_sync_group(cx),
                     _ => {}
                 }
             }))
             .child(
                 div()
                     .id(SharedString::from("sync-groups-dialog"))
-                    .w(px(760.))
+                    .w(px(900.))
                     .max_w_full()
                     .mx_4()
                     .rounded_md()
@@ -274,6 +342,8 @@ impl NyaTermApp {
                     .border_color(rgb(palette.border))
                     .bg(rgb(palette.bg))
                     .shadow_lg()
+                    .h(px(500.))
+                    .max_h_full()
                     .p_4()
                     .on_click(|_, _, cx| cx.stop_propagation())
                     .child(
@@ -292,13 +362,13 @@ impl NyaTermApp {
                                             .text_sm()
                                             .font_weight(FontWeight(800.))
                                             .text_color(rgb(palette.text))
-                                            .child("Sync Input Groups"),
+                                            .child(self.tr("syncGroup.title")),
                                     )
                                     .child(
                                         div()
                                             .text_xs()
                                             .text_color(rgb(palette.text_muted))
-                                            .child("Keyboard input and sent commands broadcast to active peers."),
+                                            .child(self.tr("syncGroup.description")),
                                     ),
                             )
                             .child(
@@ -308,14 +378,14 @@ impl NyaTermApp {
                                     .gap_2()
                                     .child(small_button(palette,
                                         "sync-group-new",
-                                        "New",
+                                        self.tr("syncGroup.newGroup"),
                                         cx.listener(|this, _, _, cx| {
                                             this.create_sync_group(cx);
                                         }),
                                     ))
                                     .child(small_button(palette,
                                         "sync-group-close",
-                                        "Close",
+                                        self.tr("common.close"),
                                         cx.listener(|this, _, _, cx| {
                                             this.close_sync_groups(cx);
                                         }),
@@ -325,11 +395,13 @@ impl NyaTermApp {
                     .child(
                         div()
                             .mt_4()
-                            .grid()
-                            .grid_cols(3)
+                            .flex()
+                            .min_h_0()
                             .gap_3()
                             .child(
                                 div()
+                                    .w(px(208.))
+                                    .flex_none()
                                     .flex()
                                     .flex_col()
                                     .gap_2()
@@ -338,16 +410,77 @@ impl NyaTermApp {
                                             .text_xs()
                                             .font_weight(FontWeight(800.))
                                             .text_color(rgb(palette.text_muted))
-                                            .child("Groups"),
+                                            .child(self.tr("syncGroup.groups")),
                                     )
                                     .child(group_list),
                             )
                             .child(
                                 div()
-                                    .col_span(2)
+                                    .flex_1()
+                                    .min_w_0()
                                     .flex()
                                     .flex_col()
                                     .gap_2()
+                                    .child(
+                                        div()
+                                            .flex()
+                                            .items_center()
+                                            .gap_2()
+                                            .child(
+                                                div()
+                                                    .w(px(6.))
+                                                    .h(px(34.))
+                                                    .rounded_full()
+                                                    .bg(rgb(
+                                                        selected_group
+                                                            .as_ref()
+                                                            .map(|group| group.color)
+                                                            .unwrap_or(palette.border),
+                                                    )),
+                                            )
+                                            .child(
+                                                div()
+                                                    .id(SharedString::from("sync-group-name-input"))
+                                                    .relative()
+                                                    .h(px(34.))
+                                                    .flex_1()
+                                                    .min_w_0()
+                                                    .px_2()
+                                                    .flex()
+                                                    .items_center()
+                                                    .rounded_sm()
+                                                    .border_1()
+                                                    .border_color(rgb(palette.border))
+                                                    .bg(rgb(palette.input))
+                                                    .text_sm()
+                                                    .text_color(rgb(palette.text))
+                                                    .track_focus(&self.sync_groups_name_focus)
+                                                    .on_click(cx.listener(|this, _, window, cx| {
+                                                        window.focus(&this.sync_groups_name_focus);
+                                                        cx.notify();
+                                                    }))
+                                                    .child(selected_group_name)
+                                                    .child(
+                                                        gpui::canvas(
+                                                            |_bounds, _window, _cx| {},
+                                                            move |bounds, _state, window, cx| {
+                                                                window.handle_input(
+                                                                    &name_input_entity
+                                                                        .read(cx)
+                                                                        .sync_groups_name_focus,
+                                                                    gpui::ElementInputHandler::new(
+                                                                        bounds,
+                                                                        name_input_entity.clone(),
+                                                                    ),
+                                                                    cx,
+                                                                );
+                                                            },
+                                                        )
+                                                        .absolute()
+                                                        .inset_0(),
+                                                    ),
+                                            ),
+                                    )
                                     .child(
                                         div()
                                             .flex()
@@ -356,10 +489,73 @@ impl NyaTermApp {
                                             .gap_2()
                                             .child(
                                                 div()
-                                                    .text_xs()
-                                                    .font_weight(FontWeight(800.))
-                                                    .text_color(rgb(palette.text_muted))
-                                                    .child("Sessions"),
+                                                    .flex()
+                                                    .items_center()
+                                                    .gap_2()
+                                                    .child(
+                                                        div()
+                                                            .text_xs()
+                                                            .font_weight(FontWeight(800.))
+                                                            .text_color(rgb(palette.text_muted))
+                                                            .child(self.tr("syncGroup.sessions")),
+                                                    )
+                                                    .child(
+                                                        div()
+                                                            .id(SharedString::from(
+                                                                "sync-group-search-input",
+                                                            ))
+                                                            .relative()
+                                                            .w(px(260.))
+                                                            .h(px(30.))
+                                                            .px_2()
+                                                            .flex()
+                                                            .items_center()
+                                                            .rounded_sm()
+                                                            .border_1()
+                                                            .border_color(rgb(palette.border))
+                                                            .bg(rgb(palette.input))
+                                                            .text_xs()
+                                                            .text_color(if self
+                                                                .sync_groups_search_draft
+                                                                .is_empty()
+                                                            {
+                                                                rgb(palette.text_muted)
+                                                            } else {
+                                                                rgb(palette.text)
+                                                            })
+                                                            .track_focus(
+                                                                &self.sync_groups_search_focus,
+                                                            )
+                                                            .on_click(cx.listener(
+                                                                |this, _, window, cx| {
+                                                                    window.focus(
+                                                                        &this.sync_groups_search_focus,
+                                                                    );
+                                                                    cx.notify();
+                                                                },
+                                                            ))
+                                                            .child(search_display)
+                                                            .child(
+                                                                gpui::canvas(
+                                                                    |_bounds, _window, _cx| {},
+                                                                    move |bounds, _state, window, cx| {
+                                                                        window.handle_input(
+                                                                            &search_input_entity
+                                                                                .read(cx)
+                                                                                .sync_groups_search_focus,
+                                                                            gpui::ElementInputHandler::new(
+                                                                                bounds,
+                                                                                search_input_entity
+                                                                                    .clone(),
+                                                                            ),
+                                                                            cx,
+                                                                        );
+                                                                    },
+                                                                )
+                                                                .absolute()
+                                                                .inset_0(),
+                                                            ),
+                                                    ),
                                             )
                                             .child(
                                                 div()
@@ -372,9 +568,9 @@ impl NyaTermApp {
                                                             .as_ref()
                                                             .is_some_and(|group| group.enabled)
                                                         {
-                                                            "Disable"
+                                                            self.tr("syncGroup.disable")
                                                         } else {
-                                                            "Enable"
+                                                            self.tr("syncGroup.enable")
                                                         },
                                                         cx.listener(|this, _, _, cx| {
                                                             this.toggle_selected_sync_group_enabled(cx);
@@ -382,16 +578,130 @@ impl NyaTermApp {
                                                     ))
                                                     .child(small_button(palette,
                                                         "sync-group-delete",
-                                                        "Delete",
+                                                        self.tr("syncGroup.deleteGroup"),
                                                         cx.listener(|this, _, _, cx| {
-                                                            this.delete_selected_sync_group(cx);
+                                                            this.request_delete_selected_sync_group(cx);
                                                         }),
                                                     )),
                                             ),
                                     )
-                                    .child(session_rows),
+                                    .child(session_rows)
+                                    .child(
+                                        div()
+                                            .flex()
+                                            .items_center()
+                                            .flex_wrap()
+                                            .gap_2()
+                                            .pt_2()
+                                            .border_t_1()
+                                            .border_color(rgb(palette.border))
+                                            .child(small_button(
+                                                palette,
+                                                "sync-group-select-all",
+                                                self.tr("syncGroup.selectAll"),
+                                                cx.listener(|this, _, _, cx| {
+                                                    this.select_all_sync_group_sessions(cx);
+                                                }),
+                                            ))
+                                            .child(small_button(
+                                                palette,
+                                                "sync-group-add-filtered",
+                                                self.tr("syncGroup.addFiltered"),
+                                                cx.listener(|this, _, _, cx| {
+                                                    this.add_filtered_sync_group_sessions(cx);
+                                                }),
+                                            ))
+                                            .child(small_button(
+                                                palette,
+                                                "sync-group-remove-filtered",
+                                                self.tr("syncGroup.removeFiltered"),
+                                                cx.listener(|this, _, _, cx| {
+                                                    this.remove_filtered_sync_group_sessions(cx);
+                                                }),
+                                            ))
+                                            .child(small_button(
+                                                palette,
+                                                "sync-group-same-host",
+                                                self.tr("syncGroup.selectSameHost"),
+                                                cx.listener(|this, _, _, cx| {
+                                                    this.select_same_host_sync_group_sessions(cx);
+                                                }),
+                                            ))
+                                            .child(small_button(
+                                                palette,
+                                                "sync-group-clear-all",
+                                                self.tr("syncGroup.deselectAll"),
+                                                cx.listener(|this, _, _, cx| {
+                                                    this.clear_sync_group_sessions(cx);
+                                                }),
+                                            )),
+                                    ),
                             ),
                     ),
             )
+            .when_some(pending_delete_message, |this, message| {
+                this.child(
+                    div()
+                        .id(SharedString::from("sync-group-delete-backdrop"))
+                        .absolute()
+                        .inset_0()
+                        .flex()
+                        .items_center()
+                        .justify_center()
+                        .bg(rgba(0x00000099))
+                        .on_click(|_, _, cx| cx.stop_propagation())
+                        .child(
+                            div()
+                                .id(SharedString::from("sync-group-delete-dialog"))
+                                .w(px(360.))
+                                .max_w_full()
+                                .mx_4()
+                                .rounded_md()
+                                .border_1()
+                                .border_color(rgb(palette.border))
+                                .bg(rgb(palette.surface_elevated))
+                                .shadow_lg()
+                                .p_4()
+                                .on_click(|_, _, cx| cx.stop_propagation())
+                                .child(
+                                    div()
+                                        .text_sm()
+                                        .font_weight(FontWeight(800.))
+                                        .text_color(rgb(palette.text))
+                                        .child(self.tr("syncGroup.deleteGroup")),
+                                )
+                                .child(
+                                    div()
+                                        .mt_2()
+                                        .text_xs()
+                                        .text_color(rgb(palette.text_muted))
+                                        .child(message),
+                                )
+                                .child(
+                                    div()
+                                        .mt_4()
+                                        .flex()
+                                        .justify_end()
+                                        .gap_2()
+                                        .child(small_button(
+                                            palette,
+                                            "sync-group-delete-cancel",
+                                            self.tr("common.cancel"),
+                                            cx.listener(|this, _, _, cx| {
+                                                this.cancel_delete_sync_group(cx);
+                                            }),
+                                        ))
+                                        .child(small_button(
+                                            palette,
+                                            "sync-group-delete-confirm",
+                                            self.tr("syncGroup.deleteGroup"),
+                                            cx.listener(|this, _, _, cx| {
+                                                this.confirm_delete_sync_group(cx);
+                                            }),
+                                        )),
+                                ),
+                        ),
+                )
+            })
     }
 }

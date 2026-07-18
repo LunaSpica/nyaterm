@@ -46,11 +46,82 @@ impl EntityInputHandler for NyaTermApp {
         &mut self,
         range: Range<usize>,
         adjusted_range: &mut Option<Range<usize>>,
-        _window: &mut Window,
+        window: &mut Window,
         _cx: &mut Context<Self>,
     ) -> Option<String> {
         if self.security_unlock_prompt_open && !self.security_unlock_marked_text.is_empty() {
             let marked = &self.security_unlock_marked_text;
+            let len = marked.encode_utf16().count();
+            let start = range.start.min(len);
+            let end = range.end.min(len).max(start);
+            *adjusted_range = Some(start..end);
+            return Some(marked.clone());
+        }
+        if self.quick_switch_open && !self.quick_switch_marked_text.is_empty() {
+            let marked = &self.quick_switch_marked_text;
+            let len = marked.encode_utf16().count();
+            let start = range.start.min(len);
+            let end = range.end.min(len).max(start);
+            *adjusted_range = Some(start..end);
+            return Some(marked.clone());
+        }
+        if self.is_locked && !self.lock_password_marked_text.is_empty() {
+            let marked = &self.lock_password_marked_text;
+            let len = marked.encode_utf16().count();
+            let start = range.start.min(len);
+            let end = range.end.min(len).max(start);
+            *adjusted_range = Some(start..end);
+            return Some(marked.clone());
+        }
+        if self.sync_groups_open
+            && self.sync_groups_search_focus.is_focused(window)
+            && !self.sync_groups_search_marked_text.is_empty()
+        {
+            let marked = &self.sync_groups_search_marked_text;
+            let len = marked.encode_utf16().count();
+            let start = range.start.min(len);
+            let end = range.end.min(len).max(start);
+            *adjusted_range = Some(start..end);
+            return Some(marked.clone());
+        }
+        if self.sync_groups_open
+            && self.sync_groups_name_focus.is_focused(window)
+            && !self.sync_groups_name_marked_text.is_empty()
+        {
+            let marked = &self.sync_groups_name_marked_text;
+            let len = marked.encode_utf16().count();
+            let start = range.start.min(len);
+            let end = range.end.min(len).max(start);
+            *adjusted_range = Some(start..end);
+            return Some(marked.clone());
+        }
+        if self.multi_line_paste.is_some()
+            && self.multi_line_paste_focus.is_focused(window)
+            && !self.multi_line_paste_marked_text.is_empty()
+        {
+            let marked = &self.multi_line_paste_marked_text;
+            let len = marked.encode_utf16().count();
+            let start = range.start.min(len);
+            let end = range.end.min(len).max(start);
+            *adjusted_range = Some(start..end);
+            return Some(marked.clone());
+        }
+        if self.rename_session_id.is_some()
+            && self.rename_focus.is_focused(window)
+            && !self.rename_marked_text.is_empty()
+        {
+            let marked = &self.rename_marked_text;
+            let len = marked.encode_utf16().count();
+            let start = range.start.min(len);
+            let end = range.end.min(len).max(start);
+            *adjusted_range = Some(start..end);
+            return Some(marked.clone());
+        }
+        if self.startup_command_open
+            && self.startup_command_focus.is_focused(window)
+            && !self.startup_command_marked_text.is_empty()
+        {
+            let marked = &self.startup_command_marked_text;
             let len = marked.encode_utf16().count();
             let start = range.start.min(len);
             let end = range.end.min(len).max(start);
@@ -70,11 +141,67 @@ impl EntityInputHandler for NyaTermApp {
     fn selected_text_range(
         &mut self,
         _ignore_disabled_input: bool,
-        _window: &mut Window,
+        window: &mut Window,
         _cx: &mut Context<Self>,
     ) -> Option<UTF16Selection> {
         if self.security_unlock_prompt_open {
             let cursor = self.security_unlock_draft.encode_utf16().count();
+            return Some(UTF16Selection {
+                range: cursor..cursor,
+                reversed: false,
+            });
+        }
+        if self.quick_switch_open {
+            let cursor = self.quick_switch_query.encode_utf16().count();
+            return Some(UTF16Selection {
+                range: cursor..cursor,
+                reversed: false,
+            });
+        }
+        if self.is_locked {
+            let cursor = self.lock_password_draft.encode_utf16().count();
+            return Some(UTF16Selection {
+                range: cursor..cursor,
+                reversed: false,
+            });
+        }
+        if self.sync_groups_open && self.sync_groups_search_focus.is_focused(window) {
+            let cursor = self.sync_groups_search_draft.encode_utf16().count();
+            return Some(UTF16Selection {
+                range: cursor..cursor,
+                reversed: false,
+            });
+        }
+        if self.sync_groups_open && self.sync_groups_name_focus.is_focused(window) {
+            let cursor = self
+                .selected_sync_group()
+                .map(|group| group.name.encode_utf16().count())
+                .unwrap_or_default();
+            return Some(UTF16Selection {
+                range: cursor..cursor,
+                reversed: false,
+            });
+        }
+        if self.multi_line_paste_focus.is_focused(window) {
+            let cursor = self
+                .multi_line_paste
+                .as_ref()
+                .map(|draft| draft.text.encode_utf16().count())
+                .unwrap_or_default();
+            return Some(UTF16Selection {
+                range: cursor..cursor,
+                reversed: false,
+            });
+        }
+        if self.rename_session_id.is_some() && self.rename_focus.is_focused(window) {
+            let cursor = self.rename_draft.encode_utf16().count();
+            return Some(UTF16Selection {
+                range: cursor..cursor,
+                reversed: false,
+            });
+        }
+        if self.startup_command_open && self.startup_command_focus.is_focused(window) {
+            let cursor = self.startup_command_draft.encode_utf16().count();
             return Some(UTF16Selection {
                 range: cursor..cursor,
                 reversed: false,
@@ -85,20 +212,76 @@ impl EntityInputHandler for NyaTermApp {
 
     fn marked_text_range(
         &self,
-        _window: &mut Window,
+        window: &mut Window,
         _cx: &mut Context<Self>,
     ) -> Option<Range<usize>> {
         if self.security_unlock_prompt_open {
             let len = self.security_unlock_marked_text.encode_utf16().count();
             return (len > 0).then_some(0..len);
         }
+        if self.quick_switch_open {
+            let len = self.quick_switch_marked_text.encode_utf16().count();
+            return (len > 0).then_some(0..len);
+        }
+        if self.is_locked {
+            let len = self.lock_password_marked_text.encode_utf16().count();
+            return (len > 0).then_some(0..len);
+        }
+        if self.sync_groups_open && self.sync_groups_search_focus.is_focused(window) {
+            let len = self.sync_groups_search_marked_text.encode_utf16().count();
+            return (len > 0).then_some(0..len);
+        }
+        if self.sync_groups_open && self.sync_groups_name_focus.is_focused(window) {
+            let len = self.sync_groups_name_marked_text.encode_utf16().count();
+            return (len > 0).then_some(0..len);
+        }
+        if self.multi_line_paste.is_some() && self.multi_line_paste_focus.is_focused(window) {
+            let len = self.multi_line_paste_marked_text.encode_utf16().count();
+            return (len > 0).then_some(0..len);
+        }
+        if self.rename_session_id.is_some() && self.rename_focus.is_focused(window) {
+            let len = self.rename_marked_text.encode_utf16().count();
+            return (len > 0).then_some(0..len);
+        }
+        if self.startup_command_open && self.startup_command_focus.is_focused(window) {
+            let len = self.startup_command_marked_text.encode_utf16().count();
+            return (len > 0).then_some(0..len);
+        }
         let len = self.terminal_ime_marked_text.encode_utf16().count();
         (len > 0).then_some(0..len)
     }
 
-    fn unmark_text(&mut self, _window: &mut Window, _cx: &mut Context<Self>) {
+    fn unmark_text(&mut self, window: &mut Window, _cx: &mut Context<Self>) {
         if self.security_unlock_prompt_open {
             self.security_unlock_marked_text.clear();
+            return;
+        }
+        if self.quick_switch_open {
+            self.quick_switch_marked_text.clear();
+            return;
+        }
+        if self.is_locked {
+            self.lock_password_marked_text.clear();
+            return;
+        }
+        if self.sync_groups_open && self.sync_groups_search_focus.is_focused(window) {
+            self.sync_groups_search_marked_text.clear();
+            return;
+        }
+        if self.sync_groups_open && self.sync_groups_name_focus.is_focused(window) {
+            self.sync_groups_name_marked_text.clear();
+            return;
+        }
+        if self.multi_line_paste.is_some() && self.multi_line_paste_focus.is_focused(window) {
+            self.multi_line_paste_marked_text.clear();
+            return;
+        }
+        if self.rename_session_id.is_some() && self.rename_focus.is_focused(window) {
+            self.rename_marked_text.clear();
+            return;
+        }
+        if self.startup_command_open && self.startup_command_focus.is_focused(window) {
+            self.startup_command_marked_text.clear();
             return;
         }
         self.terminal_ime_marked_text.clear();
@@ -108,13 +291,76 @@ impl EntityInputHandler for NyaTermApp {
         &mut self,
         _range: Option<Range<usize>>,
         text: &str,
-        _window: &mut Window,
+        window: &mut Window,
         cx: &mut Context<Self>,
     ) {
         if self.security_unlock_prompt_open {
             self.security_unlock_marked_text.clear();
             self.security_unlock_draft.push_str(text);
             self.security_unlock_error = None;
+            cx.notify();
+            return;
+        }
+        if self.quick_switch_open {
+            self.quick_switch_marked_text.clear();
+            if !text.is_empty() {
+                self.quick_switch_query.push_str(text);
+                self.quick_switch_selected_index = 0;
+            }
+            cx.notify();
+            return;
+        }
+        if self.is_locked {
+            self.lock_password_marked_text.clear();
+            if !text.is_empty() {
+                self.lock_password_draft.push_str(text);
+                self.lock_status = self.tr("lockScreen.passwordPlaceholder").to_string();
+            }
+            cx.notify();
+            return;
+        }
+        if self.sync_groups_open && self.sync_groups_search_focus.is_focused(window) {
+            self.sync_groups_search_marked_text.clear();
+            if !text.is_empty() {
+                self.sync_groups_search_draft.push_str(text);
+            }
+            cx.notify();
+            return;
+        }
+        if self.sync_groups_open && self.sync_groups_name_focus.is_focused(window) {
+            self.sync_groups_name_marked_text.clear();
+            if !text.is_empty() {
+                let mut name = self
+                    .selected_sync_group()
+                    .map(|group| group.name.clone())
+                    .unwrap_or_default();
+                name.push_str(text);
+                self.set_selected_sync_group_name(name, cx);
+            }
+            return;
+        }
+        if self.multi_line_paste.is_some() && self.multi_line_paste_focus.is_focused(window) {
+            self.multi_line_paste_marked_text.clear();
+            if let Some(draft) = self.multi_line_paste.as_mut() {
+                draft.text.push_str(text);
+            }
+            cx.notify();
+            return;
+        }
+        if self.rename_session_id.is_some() && self.rename_focus.is_focused(window) {
+            self.rename_marked_text.clear();
+            if !text.is_empty() {
+                let remaining = 64usize.saturating_sub(self.rename_draft.chars().count());
+                self.rename_draft.extend(text.chars().take(remaining));
+            }
+            cx.notify();
+            return;
+        }
+        if self.startup_command_open && self.startup_command_focus.is_focused(window) {
+            self.startup_command_marked_text.clear();
+            if !text.is_empty() {
+                self.startup_command_draft.push_str(text);
+            }
             cx.notify();
             return;
         }
@@ -141,11 +387,46 @@ impl EntityInputHandler for NyaTermApp {
         _range: Option<Range<usize>>,
         new_text: &str,
         _new_selected_range: Option<Range<usize>>,
-        _window: &mut Window,
+        window: &mut Window,
         cx: &mut Context<Self>,
     ) {
         if self.security_unlock_prompt_open {
             self.security_unlock_marked_text = new_text.to_string();
+            cx.notify();
+            return;
+        }
+        if self.quick_switch_open {
+            self.quick_switch_marked_text = new_text.to_string();
+            cx.notify();
+            return;
+        }
+        if self.is_locked {
+            self.lock_password_marked_text = new_text.to_string();
+            cx.notify();
+            return;
+        }
+        if self.sync_groups_open && self.sync_groups_search_focus.is_focused(window) {
+            self.sync_groups_search_marked_text = new_text.to_string();
+            cx.notify();
+            return;
+        }
+        if self.sync_groups_open && self.sync_groups_name_focus.is_focused(window) {
+            self.sync_groups_name_marked_text = new_text.to_string();
+            cx.notify();
+            return;
+        }
+        if self.multi_line_paste.is_some() && self.multi_line_paste_focus.is_focused(window) {
+            self.multi_line_paste_marked_text = new_text.to_string();
+            cx.notify();
+            return;
+        }
+        if self.rename_session_id.is_some() && self.rename_focus.is_focused(window) {
+            self.rename_marked_text = new_text.chars().take(64).collect();
+            cx.notify();
+            return;
+        }
+        if self.startup_command_open && self.startup_command_focus.is_focused(window) {
+            self.startup_command_marked_text = new_text.to_string();
             cx.notify();
             return;
         }
@@ -157,7 +438,7 @@ impl EntityInputHandler for NyaTermApp {
         &mut self,
         _range_utf16: Range<usize>,
         element_bounds: Bounds<Pixels>,
-        _window: &mut Window,
+        window: &mut Window,
         _cx: &mut Context<Self>,
     ) -> Option<Bounds<Pixels>> {
         if self.security_unlock_prompt_open {
@@ -171,6 +452,17 @@ impl EntityInputHandler for NyaTermApp {
                     height: px(18.),
                 },
             ));
+        }
+        if self.quick_switch_open
+            || self.is_locked
+            || (self.sync_groups_open
+                && (self.sync_groups_search_focus.is_focused(window)
+                    || self.sync_groups_name_focus.is_focused(window)))
+            || (self.multi_line_paste.is_some() && self.multi_line_paste_focus.is_focused(window))
+            || (self.rename_session_id.is_some() && self.rename_focus.is_focused(window))
+            || (self.startup_command_open && self.startup_command_focus.is_focused(window))
+        {
+            return Some(element_bounds);
         }
         let (cell_w, cell_h) = self.terminal_cell_size();
         let pad = self.terminal_content_padding_px();
@@ -204,11 +496,41 @@ impl EntityInputHandler for NyaTermApp {
     fn character_index_for_point(
         &mut self,
         _point: Point<Pixels>,
-        _window: &mut Window,
+        window: &mut Window,
         _cx: &mut Context<Self>,
     ) -> Option<usize> {
         if self.security_unlock_prompt_open {
             return Some(self.security_unlock_draft.encode_utf16().count());
+        }
+        if self.quick_switch_open {
+            return Some(self.quick_switch_query.encode_utf16().count());
+        }
+        if self.is_locked {
+            return Some(self.lock_password_draft.encode_utf16().count());
+        }
+        if self.sync_groups_open && self.sync_groups_search_focus.is_focused(window) {
+            return Some(self.sync_groups_search_draft.encode_utf16().count());
+        }
+        if self.sync_groups_open && self.sync_groups_name_focus.is_focused(window) {
+            return Some(
+                self.selected_sync_group()
+                    .map(|group| group.name.encode_utf16().count())
+                    .unwrap_or_default(),
+            );
+        }
+        if self.multi_line_paste.is_some() && self.multi_line_paste_focus.is_focused(window) {
+            return Some(
+                self.multi_line_paste
+                    .as_ref()
+                    .map(|draft| draft.text.encode_utf16().count())
+                    .unwrap_or_default(),
+            );
+        }
+        if self.rename_session_id.is_some() && self.rename_focus.is_focused(window) {
+            return Some(self.rename_draft.encode_utf16().count());
+        }
+        if self.startup_command_open && self.startup_command_focus.is_focused(window) {
+            return Some(self.startup_command_draft.encode_utf16().count());
         }
         Some(0)
     }

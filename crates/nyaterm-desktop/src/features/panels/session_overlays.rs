@@ -6,10 +6,11 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
         let palette = self.theme_palette();
+        let input_entity = cx.entity();
         let draft_display = if self.rename_draft.is_empty() {
-            "Tab name".to_string()
+            self.tr("tabCtx.renamePlaceholder").to_string()
         } else {
-            self.rename_draft.clone()
+            format!("{}{}", self.rename_draft, self.rename_marked_text)
         };
         let can_save = !self.rename_draft.trim().is_empty();
 
@@ -20,7 +21,7 @@ impl NyaTermApp {
             .bottom_0()
             .left_0()
             .right_0()
-            .bg(rgb(0x030508))
+            .bg(rgba(0x000000d9))
             .flex()
             .items_center()
             .justify_center()
@@ -48,11 +49,12 @@ impl NyaTermApp {
                             .text_sm()
                             .font_weight(FontWeight(800.))
                             .text_color(rgb(palette.text))
-                            .child("Rename Tab"),
+                            .child(self.tr("tabCtx.renameTitle")),
                     )
                     .child(
                         div()
                             .id(SharedString::from("rename-tab-input"))
+                            .relative()
                             .mt_3()
                             .h(px(36.))
                             .rounded_sm()
@@ -73,14 +75,32 @@ impl NyaTermApp {
                             } else {
                                 rgb(palette.text)
                             })
-                            .child(draft_display),
+                            .child(draft_display)
+                            .child(
+                                gpui::canvas(
+                                    |_bounds, _window, _cx| {},
+                                    move |bounds, _state, window, cx| {
+                                        let focus = input_entity.read(cx).rename_focus.clone();
+                                        window.handle_input(
+                                            &focus,
+                                            gpui::ElementInputHandler::new(
+                                                bounds,
+                                                input_entity.clone(),
+                                            ),
+                                            cx,
+                                        );
+                                    },
+                                )
+                                .absolute()
+                                .inset_0(),
+                            ),
                     )
                     .child(
                         div()
                             .mt_2()
                             .text_xs()
                             .text_color(rgb(palette.text_muted))
-                            .child("Enter save / Esc cancel / 64 characters max"),
+                            .child(self.tr("tabCtx.renameHint")),
                     )
                     .child(
                         div()
@@ -92,7 +112,7 @@ impl NyaTermApp {
                             .child(small_button(
                                 palette,
                                 "rename-tab-cancel",
-                                "Cancel",
+                                self.tr("common.cancel"),
                                 cx.listener(|this, _, _, cx| {
                                     this.close_rename_session(cx);
                                 }),
@@ -101,7 +121,7 @@ impl NyaTermApp {
                                 small_button(
                                     palette,
                                     "rename-tab-save",
-                                    "Save",
+                                    self.tr("common.save"),
                                     cx.listener(|this, _, _, cx| {
                                         this.submit_rename_session(cx);
                                     }),
@@ -151,7 +171,7 @@ impl NyaTermApp {
             .bottom_0()
             .left_0()
             .right_0()
-            .bg(rgb(0x030508))
+            .bg(rgba(0x000000d9))
             .flex()
             .items_center()
             .justify_center()
@@ -181,7 +201,7 @@ impl NyaTermApp {
                             .text_sm()
                             .font_weight(FontWeight(800.))
                             .text_color(rgb(palette.text))
-                            .child("Set Tab Color"),
+                            .child(self.tr("tabCtx.setColor")),
                     )
                     .child(swatches)
                     .child(
@@ -189,7 +209,7 @@ impl NyaTermApp {
                             .mt_3()
                             .text_xs()
                             .text_color(rgb(palette.text_muted))
-                            .child("Pick a swatch / Esc cancel"),
+                            .child(self.tr("tabCtx.colorHint")),
                     )
                     .child(
                         div()
@@ -201,7 +221,7 @@ impl NyaTermApp {
                             .child(small_button(
                                 palette,
                                 "tab-color-reset",
-                                "Reset",
+                                self.tr("tabCtx.resetColor"),
                                 cx.listener(|this, _, _, cx| {
                                     this.set_active_session_tab_color(None, cx);
                                 }),
@@ -209,7 +229,7 @@ impl NyaTermApp {
                             .child(small_button(
                                 palette,
                                 "tab-color-cancel",
-                                "Cancel",
+                                self.tr("common.cancel"),
                                 cx.listener(|this, _, _, cx| {
                                     this.close_tab_color_picker(cx);
                                 }),
@@ -226,9 +246,9 @@ impl NyaTermApp {
         let details = self.active_session_info_details().unwrap_or_default();
         let title = details
             .iter()
-            .find(|(label, _)| *label == "Name")
+            .find(|(label, _)| *label == self.tr("sessionInfo.name"))
             .map(|(_, value)| value.clone())
-            .unwrap_or_else(|| "Session Info".to_string());
+            .unwrap_or_else(|| self.tr("tabCtx.sessionInfo").to_string());
         let mut rows = div().mt_4().flex().flex_col().gap_2();
         if details.is_empty() {
             rows = rows.child(
@@ -240,7 +260,7 @@ impl NyaTermApp {
                     .p_3()
                     .text_sm()
                     .text_color(rgb(palette.text_muted))
-                    .child("No active session details."),
+                    .child(self.tr("tabCtx.noSessionDetails")),
             );
         } else {
             for (label, value) in details {
@@ -255,7 +275,7 @@ impl NyaTermApp {
             .bottom_0()
             .left_0()
             .right_0()
-            .bg(rgb(0x030508))
+            .bg(rgba(0x000000d9))
             .flex()
             .items_center()
             .justify_center()
@@ -301,7 +321,7 @@ impl NyaTermApp {
                                             .text_sm()
                                             .font_weight(FontWeight(800.))
                                             .text_color(rgb(palette.text))
-                                            .child("Session Info"),
+                                            .child(self.tr("tabCtx.sessionInfo")),
                                     )
                                     .child(
                                         div()
@@ -323,7 +343,7 @@ impl NyaTermApp {
                             .child(small_button(
                                 palette,
                                 "session-info-copy",
-                                "Copy",
+                                self.tr("common.copyToClipboard"),
                                 cx.listener(|this, _, _, cx| {
                                     this.copy_active_session_info(cx);
                                 }),
@@ -331,7 +351,7 @@ impl NyaTermApp {
                             .child(small_button(
                                 palette,
                                 "session-info-close",
-                                "Close",
+                                self.tr("common.close"),
                                 cx.listener(|this, _, _, cx| {
                                     this.close_active_session_info(cx);
                                 }),
@@ -345,11 +365,19 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
         let palette = self.theme_palette();
+        let input_entity = cx.entity();
         let action = self.startup_command_action;
+        let action_title = self.tr(match action {
+            StartupCommandAction::Duplicate => "tabCtx.runCommandTitle",
+            StartupCommandAction::Multiplex => "tabCtx.multiplexSshWithCommand",
+        });
         let command_display = if self.startup_command_draft.is_empty() {
-            action.placeholder().to_string()
+            self.tr("tabCtx.commandRequired").to_string()
         } else {
-            self.startup_command_draft.clone()
+            format!(
+                "{}{}",
+                self.startup_command_draft, self.startup_command_marked_text
+            )
         };
         let can_submit = !self.startup_command_draft.trim().is_empty();
         let delay_label = format!("{} ms", self.startup_command_delay_ms);
@@ -361,7 +389,7 @@ impl NyaTermApp {
             .bottom_0()
             .left_0()
             .right_0()
-            .bg(rgb(0x030508))
+            .bg(rgba(0x000000d9))
             .flex()
             .items_center()
             .justify_center()
@@ -389,11 +417,12 @@ impl NyaTermApp {
                             .text_sm()
                             .font_weight(FontWeight(800.))
                             .text_color(rgb(palette.text))
-                            .child(action.title()),
+                            .child(action_title),
                     )
                     .child(
                         div()
                             .id(SharedString::from("startup-command-input"))
+                            .relative()
                             .mt_3()
                             .h(px(38.))
                             .rounded_sm()
@@ -414,7 +443,26 @@ impl NyaTermApp {
                             } else {
                                 rgb(palette.text)
                             })
-                            .child(truncate_preview(&command_display, 76)),
+                            .child(truncate_preview(&command_display, 76))
+                            .child(
+                                gpui::canvas(
+                                    |_bounds, _window, _cx| {},
+                                    move |bounds, _state, window, cx| {
+                                        let focus =
+                                            input_entity.read(cx).startup_command_focus.clone();
+                                        window.handle_input(
+                                            &focus,
+                                            gpui::ElementInputHandler::new(
+                                                bounds,
+                                                input_entity.clone(),
+                                            ),
+                                            cx,
+                                        );
+                                    },
+                                )
+                                .absolute()
+                                .inset_0(),
+                            ),
                     )
                     .child(
                         div()
@@ -432,7 +480,7 @@ impl NyaTermApp {
                                         div()
                                             .text_xs()
                                             .text_color(rgb(palette.text_muted))
-                                            .child("Command Delay"),
+                                            .child(self.tr("tabCtx.commandDelay")),
                                     )
                                     .child(
                                         div()
@@ -479,7 +527,7 @@ impl NyaTermApp {
                             .mt_2()
                             .text_xs()
                             .text_color(rgb(palette.text_muted))
-                            .child("Enter submit / Esc cancel / Up Down adjust delay"),
+                            .child(self.tr("tabCtx.commandDelayHint")),
                     )
                     .child(
                         div()
@@ -491,7 +539,7 @@ impl NyaTermApp {
                             .child(small_button(
                                 palette,
                                 "startup-command-cancel",
-                                "Cancel",
+                                self.tr("common.cancel"),
                                 cx.listener(|this, _, _, cx| {
                                     this.close_startup_command_dialog(cx);
                                 }),
@@ -500,7 +548,7 @@ impl NyaTermApp {
                                 small_button(
                                     palette,
                                     "startup-command-submit",
-                                    action.submit_label(),
+                                    self.tr("common.confirm"),
                                     cx.listener(|this, _, window, cx| {
                                         this.submit_startup_command_dialog(window, cx);
                                     }),

@@ -8,6 +8,7 @@ impl NyaTermApp {
     ) {
         self.quick_switch_open = true;
         self.quick_switch_query.clear();
+        self.quick_switch_marked_text.clear();
         self.quick_switch_selected_index = 0;
         self.terminal_status = "quick switch opened".to_string();
         window.focus(&self.quick_switch_focus);
@@ -17,6 +18,7 @@ impl NyaTermApp {
     pub(in crate::features) fn close_quick_switch(&mut self, cx: &mut Context<Self>) {
         self.quick_switch_open = false;
         self.quick_switch_query.clear();
+        self.quick_switch_marked_text.clear();
         self.quick_switch_selected_index = 0;
         self.terminal_status = "quick switch closed".to_string();
         cx.notify();
@@ -111,7 +113,7 @@ impl NyaTermApp {
                 self.start_saved_connection(connection, window, cx);
             }
             QuickSwitchItem::Pending { .. } => {
-                self.terminal_status = "session is still connecting".to_string();
+                self.terminal_status = self.tr("sessionQuickSwitcher.connecting").to_string();
                 cx.notify();
             }
         }
