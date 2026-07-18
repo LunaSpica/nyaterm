@@ -4,10 +4,11 @@ pub(super) fn compact_transfer_footer_button(
     palette: crate::theme::ThemePalette,
     id: impl Into<String>,
     icon_path: &'static str,
+    enabled: bool,
     on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
 ) -> impl IntoElement {
     // Tauri footer icons: h-6 w-6 (24px)
-    div()
+    let mut button = div()
         .id(SharedString::from(id.into()))
         .size(px(24.))
         .flex()
@@ -15,13 +16,17 @@ pub(super) fn compact_transfer_footer_button(
         .justify_center()
         .rounded_md()
         .text_color(rgb(palette.text_muted))
-        .cursor_pointer()
         .hover(|this| {
             this.bg(rgb(palette.surface_elevated))
                 .text_color(rgb(palette.text))
         })
-        .child(svg().size(px(14.)).flex_none().path(icon_path))
-        .on_click(on_click)
+        .child(svg().size(px(14.)).flex_none().path(icon_path));
+    if enabled {
+        button = button.cursor_pointer().on_click(on_click);
+    } else {
+        button = button.opacity(0.4);
+    }
+    button
 }
 
 pub(super) fn compact_transfer_footer_button_active(
@@ -29,6 +34,7 @@ pub(super) fn compact_transfer_footer_button_active(
     id: impl Into<String>,
     icon_path: &'static str,
     active: bool,
+    enabled: bool,
     on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
 ) -> impl IntoElement {
     let color = if active {
@@ -36,7 +42,7 @@ pub(super) fn compact_transfer_footer_button_active(
     } else {
         rgb(palette.text_muted)
     };
-    div()
+    let mut button = div()
         .id(SharedString::from(id.into()))
         .size(px(24.))
         .flex()
@@ -49,7 +55,6 @@ pub(super) fn compact_transfer_footer_button_active(
             rgb(palette.surface)
         })
         .text_color(color)
-        .cursor_pointer()
         .hover(|this| {
             this.bg(rgb(palette.surface_elevated))
                 .text_color(if active {
@@ -58,8 +63,13 @@ pub(super) fn compact_transfer_footer_button_active(
                     rgb(palette.text)
                 })
         })
-        .child(svg().size(px(14.)).flex_none().path(icon_path))
-        .on_click(on_click)
+        .child(svg().size(px(14.)).flex_none().path(icon_path));
+    if enabled {
+        button = button.cursor_pointer().on_click(on_click);
+    } else {
+        button = button.opacity(0.4);
+    }
+    button
 }
 
 pub(super) fn compact_transfer_upload_menu_button(

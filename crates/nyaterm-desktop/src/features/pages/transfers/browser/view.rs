@@ -47,6 +47,7 @@ impl NyaTermApp {
         };
         let current_browser_path = normalized_transfer_browser_path(&self.transfer_browser_path);
         let auto_sync_cwd = self.transfer_browser_auto_sync_cwd_enabled();
+        let cwd_tracking_available = self.active_transfer_browser_connection_id().is_some();
         let mut rows = div().flex().flex_col();
         if can_transfer && current_browser_path != "/" && current_browser_path != "." {
             rows = rows.child(transfer_browser_parent_entry_row(
@@ -128,12 +129,6 @@ impl NyaTermApp {
                                 .text_color(rgb(palette.text_muted))
                                 .child(self.tr("fileExplorer.emptyDirectory"))
                         },
-                    )
-                    .child(
-                        div()
-                            .text_size(px(11.))
-                            .text_color(rgb(palette.text_dimmed))
-                            .child(truncate_preview(&self.transfer_browser_status, 64)),
                     ),
             );
         } else if visible_entries.is_empty() {
@@ -516,13 +511,20 @@ impl NyaTermApp {
                             .gap_3()
                             .text_size(px(11.))
                             .text_color(rgb(palette.text_muted))
-                            .child(format!("{total_count} item(s)"))
-                            .when(files_total_size > 0, |this| {
-                                this.child(format_file_size(Some(files_total_size)))
-                            })
-                            .when(selected_count > 0, |this| {
-                                this.child(format!("{selected_count} marked"))
-                            }),
+                            .when(
+                                !self.transfer_browser_loading
+                                    && self.transfer_browser_error.is_none()
+                                    && total_count > 0,
+                                |this| {
+                                    this.child(
+                                        self.tr("fileExplorer.totalItems")
+                                            .replace("{{count}}", &total_count.to_string()),
+                                    )
+                                    .when(files_total_size > 0, |this| {
+                                        this.child(format_file_size(Some(files_total_size)))
+                                    })
+                                },
+                            ),
                     )
                     .child(
                         div()
@@ -533,6 +535,7 @@ impl NyaTermApp {
                                 palette,
                                 "transfer-browser-footer-sync-cwd",
                                 "icons/fe/sync.svg",
+                                cwd_tracking_available,
                                 cx.listener(|this, _, window, cx| {
                                     this.start_transfer_sync_cwd_job(window, cx);
                                 }),
@@ -542,6 +545,7 @@ impl NyaTermApp {
                                 "transfer-browser-footer-auto-sync",
                                 "icons/fe/sync.svg",
                                 auto_sync_cwd,
+                                cwd_tracking_available,
                                 cx.listener(|this, _, window, cx| {
                                     this.toggle_transfer_browser_auto_sync_cwd(window, cx);
                                 }),
@@ -550,6 +554,7 @@ impl NyaTermApp {
                                 palette,
                                 "transfer-browser-footer-send-path",
                                 "icons/fe/paste.svg",
+                                true,
                                 cx.listener(|this, _, _, cx| {
                                     this.send_current_transfer_browser_path_to_terminal(cx);
                                 }),
