@@ -173,22 +173,6 @@ impl NyaTermApp {
         self.persist_ai_settings_now(cx);
     }
 
-    pub(in crate::features) fn expand_ai_action(
-        &mut self,
-        kind: AiActionListKind,
-        action_id: String,
-        cx: &mut Context<Self>,
-    ) {
-        let key = (kind, action_id);
-        if self.ai_action_expanded.as_ref() == Some(&key) {
-            self.ai_action_expanded = None;
-            self.ai_action_edit = None;
-        } else {
-            self.ai_action_expanded = Some(key);
-        }
-        cx.notify();
-    }
-
     pub(in crate::features) fn focus_ai_action_field(
         &mut self,
         kind: AiActionListKind,
@@ -197,7 +181,6 @@ impl NyaTermApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        self.ai_action_expanded = Some((kind, action_id.clone()));
         self.ai_action_edit = Some((kind, action_id, field));
         window.focus(&self.ai_action_focus);
         cx.notify();
@@ -239,7 +222,6 @@ impl NyaTermApp {
             AiActionListKind::Terminal => self.ai_settings.terminal_ai_actions.push(action),
             AiActionListKind::File => self.ai_settings.file_ai_actions.push(action),
         }
-        self.ai_action_expanded = Some((kind, id.clone()));
         self.ai_action_edit = Some((kind, id, AiActionEditorField::Name));
         window.focus(&self.ai_action_focus);
         self.ai_status = "AI action added".to_string();
@@ -263,13 +245,6 @@ impl NyaTermApp {
                     .file_ai_actions
                     .retain(|action| action.id != action_id);
             }
-        }
-        if self
-            .ai_action_expanded
-            .as_ref()
-            .is_some_and(|(k, id)| *k == kind && id == &action_id)
-        {
-            self.ai_action_expanded = None;
         }
         if self
             .ai_action_edit

@@ -420,7 +420,6 @@ pub struct NyaTermApp {
     pub(in crate::features) ai_chat_focus_pending: bool,
     pub(in crate::features) ai_focus: FocusHandle,
     pub(in crate::features) ai_focused_field: AiInputField,
-    pub(in crate::features) ai_action_expanded: Option<(AiActionListKind, String)>,
     pub(in crate::features) ai_action_edit: Option<(AiActionListKind, String, AiActionEditorField)>,
     pub(in crate::features) ai_action_focus: FocusHandle,
     pub(in crate::features) ai_model_collapsed_groups: HashSet<String>,

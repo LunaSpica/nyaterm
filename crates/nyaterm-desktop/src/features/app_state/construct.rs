@@ -643,7 +643,6 @@ impl NyaTermApp {
             ai_chat_focus_pending: false,
             ai_focus: cx.focus_handle(),
             ai_focused_field: AiInputField::Model,
-            ai_action_expanded: None,
             ai_action_edit: None,
             ai_action_focus: cx.focus_handle(),
             ai_model_collapsed_groups: HashSet::new(),
