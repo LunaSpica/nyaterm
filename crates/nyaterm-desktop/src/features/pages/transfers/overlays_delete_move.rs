@@ -12,6 +12,13 @@ impl NyaTermApp {
             paths: Vec::new(),
         });
         let delete_count = state.paths.len().max(1);
+        let delete_title = if delete_count == 1 {
+            self.tr("fileExplorer.sureDelete")
+                .replace("{{name}}", &state.name)
+        } else {
+            self.tr("fileExplorer.sureDeleteMultiple")
+                .replace("{{count}}", &delete_count.to_string())
+        };
         let preview = if delete_count == 1 {
             state.remote_path.clone()
         } else {
@@ -59,11 +66,7 @@ impl NyaTermApp {
                             .text_sm()
                             .font_weight(FontWeight(800.))
                             .text_color(rgb(0xfca5a5))
-                            .child(if delete_count == 1 {
-                                "Delete Remote Item"
-                            } else {
-                                "Delete Remote Items"
-                            }),
+                            .child(delete_title),
                     )
                     .child(
                         div()
@@ -82,13 +85,11 @@ impl NyaTermApp {
                             .child(truncate_preview(&preview, 160)),
                     )
                     .child(
-                        div().mt_3().text_xs().text_color(rgb(0xfca5a5)).child(
-                            if delete_count == 1 {
-                                "Enter deletes recursively when this is a directory; Esc cancels."
-                            } else {
-                                "Enter deletes all marked items recursively when directories are included; Esc cancels."
-                            },
-                        ),
+                        div()
+                            .mt_3()
+                            .text_xs()
+                            .text_color(rgb(0xfca5a5))
+                            .child(self.tr("fileExplorer.deleteConfirmHint")),
                     )
                     .child(
                         div()
@@ -97,16 +98,18 @@ impl NyaTermApp {
                             .items_center()
                             .justify_end()
                             .gap_2()
-                            .child(small_button(palette,
+                            .child(small_button(
+                                palette,
                                 "transfer-delete-cancel",
-                                "Cancel",
+                                self.tr("common.cancel"),
                                 cx.listener(|this, _, _, cx| {
                                     this.close_transfer_delete_dialog(cx);
                                 }),
                             ))
-                            .child(small_button(palette,
+                            .child(small_button(
+                                palette,
                                 "transfer-delete-confirm",
-                                "Delete",
+                                self.tr("fileExplorer.delete"),
                                 cx.listener(|this, _, window, cx| {
                                     this.submit_transfer_delete(window, cx);
                                 }),
@@ -129,7 +132,7 @@ impl NyaTermApp {
         let has_error = target.is_empty();
         let unchanged = target == state.old_path;
         let input_display = if state.value.is_empty() {
-            "Target path".to_string()
+            self.tr("fileExplorer.location").to_string()
         } else {
             state.value.clone()
         };
@@ -169,7 +172,10 @@ impl NyaTermApp {
                             .text_sm()
                             .font_weight(FontWeight(800.))
                             .text_color(rgb(palette.text))
-                            .child(format!("Move {}", truncate_preview(&state.name, 48))),
+                            .child(
+                                self.tr("fileExplorer.moveTo")
+                                    .replace("{{name}}", &truncate_preview(&state.name, 48)),
+                            ),
                     )
                     .child(
                         div()
@@ -216,9 +222,9 @@ impl NyaTermApp {
                                 rgb(palette.text_muted)
                             })
                             .child(if has_error {
-                                "Target path is required."
+                                self.tr("fileExplorer.pathRequired")
                             } else {
-                                "Enter saves / Esc cancels."
+                                ""
                             }),
                     )
                     .child(
@@ -231,7 +237,7 @@ impl NyaTermApp {
                             .child(small_button(
                                 palette,
                                 "transfer-move-cancel",
-                                "Cancel",
+                                self.tr("common.cancel"),
                                 cx.listener(|this, _, _, cx| {
                                     this.close_transfer_move_dialog(cx);
                                 }),
@@ -240,7 +246,7 @@ impl NyaTermApp {
                                 small_button(
                                     palette,
                                     "transfer-move-save",
-                                    "Save",
+                                    self.tr("common.save"),
                                     cx.listener(|this, _, window, cx| {
                                         this.submit_transfer_move(window, cx);
                                     }),

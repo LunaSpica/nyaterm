@@ -1,9 +1,7 @@
 use crate::theme::ThemePalette;
 use gpui::{FontWeight, IntoElement, SharedString, div, prelude::*, px, rgb};
 use nyaterm_core::truncate_preview;
-use nyaterm_transport::{
-    SftpDuplicateDecision, SftpDuplicatePolicy, SftpFileType, SftpTransferProgress,
-};
+use nyaterm_transport::{SftpDuplicateDecision, SftpDuplicatePolicy, SftpTransferProgress};
 
 use crate::models::{TransferJobKind, TransferJobState, TransferJobStatus};
 use crate::widgets::status_pill;
@@ -197,15 +195,6 @@ pub(in crate::features) fn format_transfer_progress(progress: &SftpTransferProgr
             )
         }
         None => format!("{transferred} transferred"),
-    }
-}
-
-pub(in crate::features) fn entry_kind_label(file_type: SftpFileType) -> &'static str {
-    match file_type {
-        SftpFileType::Directory => "dir",
-        SftpFileType::File => "file",
-        SftpFileType::Symlink => "link",
-        SftpFileType::Other => "node",
     }
 }
 

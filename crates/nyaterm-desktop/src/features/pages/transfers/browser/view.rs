@@ -1,5 +1,16 @@
 use super::*;
 
+const FILE_ROW_PX: f32 = 30.;
+const FILE_OVERSCAN: usize = 8;
+
+fn transfer_browser_viewport_rows(viewport_height: f32, queue_height: f32) -> usize {
+    // The browser shares the panel with the transfer queue. GPUI does not expose
+    // the nested panel bounds here, so derive the available height from the
+    // window viewport and keep a small allowance for the app chrome.
+    let browser_height = (viewport_height - queue_height.clamp(60., 600.) - 132.).max(FILE_ROW_PX);
+    (browser_height / FILE_ROW_PX).floor().max(1.) as usize
+}
+
 impl NyaTermApp {
     pub(in crate::features) fn transfer_browser_view(
         &mut self,
@@ -138,24 +149,23 @@ impl NyaTermApp {
                     .child(self.tr("fileExplorer.noSearchResults")),
             );
         } else {
-            // Tauri File Explorer virtual list (30px rows, overscan, spacer padding).
-            const FILE_ROW_PX: f32 = 30.;
-            const FILE_VIEWPORT_ROWS: usize = 36;
-            const FILE_OVERSCAN: usize = 8;
+            // Tauri File Explorer virtual list (30px rows and overscan).
+            let viewport_rows = transfer_browser_viewport_rows(
+                self.last_viewport_size.1,
+                self.transfer_panel_height,
+            );
             let total_entries = visible_entries.len();
-            let window_capacity = FILE_VIEWPORT_ROWS + FILE_OVERSCAN * 2;
-            let max_offset = total_entries.saturating_sub(FILE_VIEWPORT_ROWS.min(total_entries));
+            let window_capacity = viewport_rows + FILE_OVERSCAN * 2;
+            let max_offset = total_entries.saturating_sub(viewport_rows.min(total_entries));
             if self.transfer_browser_list_offset > max_offset {
                 self.transfer_browser_list_offset = max_offset;
             }
             let scroll_row = self.transfer_browser_list_offset.min(max_offset);
-            let window_start = scroll_row.saturating_sub(FILE_OVERSCAN);
+            // This panel uses a manual wheel offset and clips vertically, so the
+            // virtual window must be laid out at the top of the viewport. Spacer
+            // padding would only work with a real scroll container.
+            let window_start = scroll_row;
             let window_end = (window_start + window_capacity).min(total_entries);
-            let pad_top = (window_start as f32) * FILE_ROW_PX;
-            let pad_bottom = ((total_entries.saturating_sub(window_end)) as f32) * FILE_ROW_PX;
-            if pad_top > 0. {
-                rows = rows.child(div().h(px(pad_top)).w_full().flex_none());
-            }
             for entry in visible_entries
                 .get(window_start..window_end)
                 .unwrap_or(&[])
@@ -172,9 +182,6 @@ impl NyaTermApp {
                     self.transfer_rename_focus.clone(),
                     cx,
                 ));
-            }
-            if pad_bottom > 0. {
-                rows = rows.child(div().h(px(pad_bottom)).w_full().flex_none());
             }
         }
 
@@ -375,10 +382,12 @@ impl NyaTermApp {
                     .overflow_y_hidden()
                     .scrollbar_width(px(8.))
                     .on_scroll_wheel(cx.listener(|this, event: &ScrollWheelEvent, _, cx| {
-                        const FILE_ROW_PX: f32 = 30.;
-                        const FILE_VIEWPORT_ROWS: usize = 36;
                         let total = this.visible_transfer_browser_entries().len();
-                        let max_offset = total.saturating_sub(FILE_VIEWPORT_ROWS.min(total));
+                        let viewport_rows = transfer_browser_viewport_rows(
+                            this.last_viewport_size.1,
+                            this.transfer_panel_height,
+                        );
+                        let max_offset = total.saturating_sub(viewport_rows.min(total));
                         if max_offset == 0 {
                             return;
                         }
@@ -547,5 +556,22 @@ impl NyaTermApp {
                             )),
                     ),
             )
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::transfer_browser_viewport_rows;
+
+    #[test]
+    fn viewport_rows_follow_window_and_queue_height() {
+        assert_eq!(transfer_browser_viewport_rows(800., 240.), 14);
+        assert_eq!(transfer_browser_viewport_rows(1080., 240.), 23);
+        assert_eq!(transfer_browser_viewport_rows(800., 60.), 20);
+    }
+
+    #[test]
+    fn viewport_rows_keep_one_row_when_queue_consumes_the_panel() {
+        assert_eq!(transfer_browser_viewport_rows(400., 600.), 1);
     }
 }

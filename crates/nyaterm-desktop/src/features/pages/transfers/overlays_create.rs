@@ -18,7 +18,7 @@ impl NyaTermApp {
         let name = state.value.trim();
         let has_error = !valid_remote_child_name(name);
         let input_display = if state.value.is_empty() {
-            "Folder name".to_string()
+            self.tr("fileExplorer.newFolderName").to_string()
         } else {
             state.value.clone()
         };
@@ -58,7 +58,7 @@ impl NyaTermApp {
                             .text_sm()
                             .font_weight(FontWeight(800.))
                             .text_color(rgb(palette.text))
-                            .child("New Remote Folder"),
+                            .child(self.tr("fileExplorer.newFolder")),
                     )
                     .child(
                         div()
@@ -137,9 +137,9 @@ impl NyaTermApp {
                                 palette,
                                 "transfer-new-folder-open-after",
                                 if state.open_after_create {
-                                    "Open: On"
+                                    self.tr("fileExplorer.on")
                                 } else {
-                                    "Open: Off"
+                                    self.tr("fileExplorer.off")
                                 },
                                 cx.listener(|this, _, _, cx| {
                                     if let Some(state) = this.transfer_new_folder.as_mut() {
@@ -159,9 +159,9 @@ impl NyaTermApp {
                                 rgb(palette.text_muted)
                             })
                             .child(if has_error {
-                                "Use a non-empty single folder name."
+                                self.tr("fileExplorer.invalidFolderName")
                             } else {
-                                "Enter creates / Esc cancels."
+                                ""
                             }),
                     )
                     .child(
@@ -174,7 +174,7 @@ impl NyaTermApp {
                             .child(small_button(
                                 palette,
                                 "transfer-new-folder-cancel",
-                                "Cancel",
+                                self.tr("common.cancel"),
                                 cx.listener(|this, _, _, cx| {
                                     this.close_transfer_new_folder_dialog(cx);
                                 }),
@@ -183,7 +183,7 @@ impl NyaTermApp {
                                 small_button(
                                     palette,
                                     "transfer-new-folder-create",
-                                    "Create",
+                                    self.tr("common.confirm"),
                                     cx.listener(|this, _, window, cx| {
                                         this.submit_transfer_new_folder(window, cx);
                                     }),
@@ -209,7 +209,7 @@ impl NyaTermApp {
         let name = state.value.trim();
         let has_error = !valid_remote_child_name(name);
         let input_display = if state.value.is_empty() {
-            "File name".to_string()
+            self.tr("fileExplorer.newFileName").to_string()
         } else {
             state.value.clone()
         };
@@ -249,7 +249,7 @@ impl NyaTermApp {
                             .text_sm()
                             .font_weight(FontWeight(800.))
                             .text_color(rgb(palette.text))
-                            .child("New Remote File"),
+                            .child(self.tr("fileExplorer.newFile")),
                     )
                     .child(
                         div()
@@ -328,7 +328,7 @@ impl NyaTermApp {
                                 div()
                                     .text_xs()
                                     .text_color(rgb(palette.text_muted))
-                                    .child("Creates an empty remote file."),
+                                    .child(self.tr("fileExplorer.file")),
                             ),
                     )
                     .child(
@@ -341,9 +341,9 @@ impl NyaTermApp {
                                 rgb(palette.text_muted)
                             })
                             .child(if has_error {
-                                "Use a non-empty single file name."
+                                self.tr("fileExplorer.invalidFileName")
                             } else {
-                                "Enter creates / Esc cancels."
+                                ""
                             }),
                     )
                     .child(
@@ -356,7 +356,7 @@ impl NyaTermApp {
                             .child(small_button(
                                 palette,
                                 "transfer-new-file-cancel",
-                                "Cancel",
+                                self.tr("common.cancel"),
                                 cx.listener(|this, _, _, cx| {
                                     this.close_transfer_new_file_dialog(cx);
                                 }),
@@ -365,7 +365,7 @@ impl NyaTermApp {
                                 small_button(
                                     palette,
                                     "transfer-new-file-create",
-                                    "Create",
+                                    self.tr("common.confirm"),
                                     cx.listener(|this, _, window, cx| {
                                         this.submit_transfer_new_file(window, cx);
                                     }),
@@ -428,7 +428,7 @@ impl NyaTermApp {
                             .text_sm()
                             .font_weight(FontWeight(800.))
                             .text_color(rgb(palette.text))
-                            .child("New Remote Symlink"),
+                            .child(self.tr("fileExplorer.newSymlink")),
                     )
                     .child(
                         div()
@@ -441,9 +441,9 @@ impl NyaTermApp {
                     .child(symlink_input_row(
                         palette,
                         "transfer-new-symlink-name",
-                        "Name",
+                        self.tr("fileExplorer.symlinkName"),
                         if state.name.is_empty() {
-                            "Symlink name"
+                            self.tr("fileExplorer.symlinkName")
                         } else {
                             &state.name
                         },
@@ -460,7 +460,7 @@ impl NyaTermApp {
                     .child(symlink_input_row(
                         palette,
                         "transfer-new-symlink-target",
-                        "Target",
+                        self.tr("fileExplorer.symlinkTarget"),
                         if state.target.is_empty() {
                             "/path/to/target"
                         } else {
@@ -486,9 +486,9 @@ impl NyaTermApp {
                                 rgb(palette.text_muted)
                             })
                             .child(if has_error {
-                                "Name and target are required; name must not contain '/'."
+                                self.tr("fileExplorer.invalidSymlink")
                             } else {
-                                "Tab switches fields / Enter creates / Esc cancels."
+                                ""
                             }),
                     )
                     .child(
@@ -501,7 +501,7 @@ impl NyaTermApp {
                             .child(small_button(
                                 palette,
                                 "transfer-new-symlink-cancel",
-                                "Cancel",
+                                self.tr("common.cancel"),
                                 cx.listener(|this, _, _, cx| {
                                     this.close_transfer_new_symlink_dialog(cx);
                                 }),
@@ -510,7 +510,7 @@ impl NyaTermApp {
                                 small_button(
                                     palette,
                                     "transfer-new-symlink-create",
-                                    "Create",
+                                    self.tr("common.confirm"),
                                     cx.listener(|this, _, window, cx| {
                                         this.submit_transfer_new_symlink(window, cx);
                                     }),

@@ -197,9 +197,8 @@ pub(in crate::features) use tab_mouse::{
 };
 pub(in crate::features) use transfer_external_sync_window::TransferExternalSyncWindow;
 pub(in crate::features) use transfer_widgets::{
-    compact_transfer_job_row, duplicate_decision_label, duplicate_policy_label, entry_kind_label,
-    format_file_size, format_transfer_progress, transfer_input, transfer_job_title,
-    transfer_status_label,
+    compact_transfer_job_row, duplicate_decision_label, duplicate_policy_label, format_file_size,
+    format_transfer_progress, transfer_input, transfer_job_title, transfer_status_label,
 };
 pub(in crate::features) use view_widgets::*;
 
