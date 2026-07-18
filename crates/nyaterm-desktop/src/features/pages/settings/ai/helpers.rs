@@ -81,12 +81,3 @@ pub(super) fn ai_model_source_label(source: &AiModelSource) -> &'static str {
         AiModelSource::Manual => "manual",
     }
 }
-
-pub(super) fn ai_risk_label(risk: &RiskLevel) -> String {
-    match risk {
-        RiskLevel::Low => "low".to_string(),
-        RiskLevel::Medium => "medium".to_string(),
-        RiskLevel::High => "high".to_string(),
-        RiskLevel::Critical => "critical".to_string(),
-    }
-}

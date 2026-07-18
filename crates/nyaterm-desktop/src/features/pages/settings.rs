@@ -2,7 +2,7 @@ use gpui::{
     AnyElement, App, ClickEvent, Context, FontWeight, IntoElement, KeyDownEvent, SharedString,
     Window, div, prelude::*, px, rgb, rgba, svg,
 };
-use nyaterm_core::{AgentCommandExecutionMode, AiMode, AiModelSource, AiProviderKind, RiskLevel};
+use nyaterm_core::{AiModelSource, AiProviderKind, RiskLevel};
 use nyaterm_transport::SftpDuplicatePolicy;
 
 use crate::models::{

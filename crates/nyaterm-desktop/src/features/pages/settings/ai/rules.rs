@@ -20,9 +20,6 @@ impl NyaTermApp {
             .filter(|action| action.enabled)
             .count();
         let file_size_mb = (self.ai_settings.max_ai_file_size_bytes / (1024 * 1024)).max(1);
-        let step_timeout_s =
-            (self.ai_settings.agent_step_timeout_ms.unwrap_or(30_000) / 1000).max(1);
-        let smart_risk = ai_risk_label(&self.ai_settings.agent_smart_auto_execute_max_risk);
 
         div()
             .flex()
@@ -31,161 +28,44 @@ impl NyaTermApp {
             .child(settings_form_section(
                 palette,
                 Some("Rules"),
-                Some("Limits and auto-execute risk for AI-assisted actions."),
-                div()
-                    .flex()
-                    .flex_col()
-                    .gap_3()
-                    .child(settings_form_row(
-                        palette,
-                        "Max AI file size",
-                        Some(SharedString::from(format!(
-                            "{file_size_mb} MiB per attachment"
-                        ))),
-                        div()
-                            .flex()
-                            .items_center()
-                            .gap_1()
-                            .child(small_button(
-                                palette,
-                                "ai-file-size-minus",
-                                "-1 MiB",
-                                cx.listener(|this, _, _, cx| {
-                                    this.adjust_ai_file_size_mb(-1, cx);
-                                }),
-                            ))
-                            .child(
-                                div()
-                                    .min_w(px(42.))
-                                    .text_center()
-                                    .font_family(crate::features::gpui_code_font_family())
-                                    .text_size(px(12.))
-                                    .font_weight(FontWeight(700.))
-                                    .text_color(rgb(palette.text))
-                                    .child(format!("{file_size_mb}")),
-                            )
-                            .child(small_button(
-                                palette,
-                                "ai-file-size-plus",
-                                "+1 MiB",
-                                cx.listener(|this, _, _, cx| {
-                                    this.adjust_ai_file_size_mb(1, cx);
-                                }),
-                            )),
-                    ))
-                    .child(settings_form_row(
-                        palette,
-                        "Agent step timeout",
-                        Some(SharedString::from(format!(
-                            "{step_timeout_s}s per agent step"
-                        ))),
-                        div()
-                            .flex()
-                            .items_center()
-                            .gap_1()
-                            .child(small_button(
-                                palette,
-                                "ai-agent-step-timeout-minus",
-                                "-1s",
-                                cx.listener(|this, _, _, cx| {
-                                    this.adjust_ai_agent_step_timeout_ms(-1_000, cx);
-                                }),
-                            ))
-                            .child(
-                                div()
-                                    .min_w(px(42.))
-                                    .text_center()
-                                    .font_family(crate::features::gpui_code_font_family())
-                                    .text_size(px(12.))
-                                    .font_weight(FontWeight(700.))
-                                    .text_color(rgb(palette.text))
-                                    .child(format!("{step_timeout_s}s")),
-                            )
-                            .child(small_button(
-                                palette,
-                                "ai-agent-step-timeout-plus",
-                                "+1s",
-                                cx.listener(|this, _, _, cx| {
-                                    this.adjust_ai_agent_step_timeout_ms(1_000, cx);
-                                }),
-                            )),
-                    ))
-                    .child(settings_form_row(
-                        palette,
-                        "Smart auto-execute risk",
-                        Some(SharedString::from(format!("current: {smart_risk}"))),
-                        div()
-                            .flex()
-                            .flex_wrap()
-                            .gap_1()
-                            .child(settings_choice_chip(
-                                palette,
-                                "ai-risk-low",
-                                "Low",
-                                matches!(
-                                    self.ai_settings.agent_smart_auto_execute_max_risk,
-                                    RiskLevel::Low
-                                ),
-                                cx.listener(|this, _, _, cx| {
-                                    this.update_ai_smart_auto_execute_max_risk(RiskLevel::Low, cx);
-                                }),
-                            ))
-                            .child(settings_choice_chip(
-                                palette,
-                                "ai-risk-medium",
-                                "Medium",
-                                matches!(
-                                    self.ai_settings.agent_smart_auto_execute_max_risk,
-                                    RiskLevel::Medium
-                                ),
-                                cx.listener(|this, _, _, cx| {
-                                    this.update_ai_smart_auto_execute_max_risk(
-                                        RiskLevel::Medium,
-                                        cx,
-                                    );
-                                }),
-                            ))
-                            .child(settings_choice_chip(
-                                palette,
-                                "ai-risk-high",
-                                "High",
-                                matches!(
-                                    self.ai_settings.agent_smart_auto_execute_max_risk,
-                                    RiskLevel::High
-                                ),
-                                cx.listener(|this, _, _, cx| {
-                                    this.update_ai_smart_auto_execute_max_risk(RiskLevel::High, cx);
-                                }),
-                            ))
-                            .child(settings_choice_chip(
-                                palette,
-                                "ai-risk-critical",
-                                "Critical",
-                                matches!(
-                                    self.ai_settings.agent_smart_auto_execute_max_risk,
-                                    RiskLevel::Critical
-                                ),
-                                cx.listener(|this, _, _, cx| {
-                                    this.update_ai_smart_auto_execute_max_risk(
-                                        RiskLevel::Critical,
-                                        cx,
-                                    );
-                                }),
-                            )),
-                    ))
-                    .child(settings_form_row(
-                        palette,
-                        "Actions",
-                        Some(SharedString::from(self.ai_status.clone())),
-                        small_button(
+                None,
+                div().flex().flex_col().gap_3().child(settings_form_row(
+                    palette,
+                    "Max AI file size",
+                    Some(SharedString::from(format!(
+                        "{file_size_mb} MiB per attachment"
+                    ))),
+                    div()
+                        .flex()
+                        .items_center()
+                        .gap_1()
+                        .child(small_button(
                             palette,
-                            "ai-rules-save",
-                            "Save",
+                            "ai-file-size-minus",
+                            "-1 MiB",
                             cx.listener(|this, _, _, cx| {
-                                this.save_ai_settings(cx);
+                                this.adjust_ai_file_size_mb(-1, cx);
                             }),
-                        ),
-                    )),
+                        ))
+                        .child(
+                            div()
+                                .min_w(px(42.))
+                                .text_center()
+                                .font_family(crate::features::gpui_code_font_family())
+                                .text_size(px(12.))
+                                .font_weight(FontWeight(700.))
+                                .text_color(rgb(palette.text))
+                                .child(format!("{file_size_mb}")),
+                        )
+                        .child(small_button(
+                            palette,
+                            "ai-file-size-plus",
+                            "+1 MiB",
+                            cx.listener(|this, _, _, cx| {
+                                this.adjust_ai_file_size_mb(1, cx);
+                            }),
+                        )),
+                )),
             ))
             .child(self.ai_action_editor(
                 palette,
