@@ -1,208 +1,278 @@
 use super::*;
 
+#[derive(Clone, Copy)]
+pub(in crate::features::pages::remote) struct ProcessDetailLabels {
+    pub cpu: &'static str,
+    pub memory: &'static str,
+    pub rss: &'static str,
+    pub elapsed: &'static str,
+    pub copy_command: &'static str,
+    pub nice_value: &'static str,
+    pub apply_nice: &'static str,
+}
+
+#[derive(Clone, Copy)]
+pub(in crate::features::pages::remote) struct ProcessSignalLabels {
+    pub title: &'static str,
+    pub description: &'static str,
+    pub cancel: &'static str,
+    pub confirm: &'static str,
+}
+
 pub(in crate::features::pages::remote) fn process_details(
     palette: ThemePalette,
     process: &RemoteProcess,
     mode: ProcessDisplayMode,
+    labels: ProcessDetailLabels,
     nice_draft: String,
     nice_focus: &gpui::FocusHandle,
+    on_copy_command: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
     cx: &mut Context<NyaTermApp>,
 ) -> gpui::AnyElement {
-    // Tauri expanded process details: compact mono command + meta chips + dense actions.
     let command = if process.command_line.trim().is_empty() {
         process.command.clone()
     } else {
         process.command_line.clone()
     };
     let pid = process.pid;
-    let details_h = process_details_height_px(mode) - 2.; // account for mb_1
+    let narrow = matches!(
+        mode,
+        ProcessDisplayMode::Compact | ProcessDisplayMode::Narrow
+    );
+    let command_height = match mode {
+        ProcessDisplayMode::Compact => 80.,
+        ProcessDisplayMode::Narrow => 36.,
+        _ => 36.,
+    };
+    let state_color = match process.state.trim().to_ascii_lowercase().as_str() {
+        "running" | "r" => rgb(0x34d399),
+        "stopped" | "t" => rgb(palette.warning),
+        "zombie" | "z" => rgb(palette.danger),
+        _ => rgb(palette.text_muted),
+    };
+
+    let metrics = div()
+        .grid()
+        .grid_cols(if narrow { 2 } else { 4 })
+        .gap_1()
+        .child(process_metric(
+            palette,
+            labels.cpu,
+            format!("{:.1}%", process.cpu_percent),
+            usage_color(palette, process.cpu_percent / 100.),
+        ))
+        .child(process_metric(
+            palette,
+            labels.memory,
+            format!("{:.1}%", process.memory_percent),
+            usage_color(palette, process.memory_percent / 100.),
+        ))
+        .child(process_metric(
+            palette,
+            labels.rss,
+            format_file_size(Some(process.rss_kb.saturating_mul(1024))),
+            rgb(0xc084fc).into(),
+        ))
+        .child(process_metric(
+            palette,
+            labels.elapsed,
+            process.elapsed.clone(),
+            rgb(0x34d399).into(),
+        ));
+
     div()
-        .mx_2()
-        .mb_1()
-        .h(px(details_h))
+        .h(px(process_details_height_px(mode)))
+        .flex_none()
         .overflow_hidden()
-        .rounded_md()
-        .border_1()
+        .border_t_1()
         .border_color(rgb(palette.border))
         .bg(rgb(palette.bg))
         .px_2()
         .py_2()
         .flex()
         .flex_col()
-        .gap_1()
+        .gap_2()
         .child(
             div()
-                .font_family(crate::features::gpui_code_font_family())
-                .text_size(px(11.))
-                .line_height(px(15.))
-                .text_color(rgb(palette.text))
-                .child(truncate_preview(&command, 180)),
-        )
-        .child(
-            div()
+                .h(px(31.))
+                .flex_none()
                 .flex()
-                .flex_wrap()
+                .items_start()
+                .justify_between()
+                .gap_2()
+                .child(
+                    div()
+                        .min_w_0()
+                        .flex_1()
+                        .flex()
+                        .flex_col()
+                        .child(
+                            div()
+                                .text_size(px(12.))
+                                .font_weight(FontWeight(600.))
+                                .text_color(rgb(palette.text))
+                                .overflow_hidden()
+                                .child(truncate_preview(&process.command, 54)),
+                        )
+                        .child(
+                            div()
+                                .font_family(crate::features::gpui_code_font_family())
+                                .text_size(px(10.))
+                                .text_color(rgb(palette.text_dimmed))
+                                .overflow_hidden()
+                                .child(format!(
+                                    "PID {} · PPID {} · {}",
+                                    process.pid, process.ppid, process.user
+                                )),
+                        ),
+                )
+                .child(
+                    div()
+                        .h(px(22.))
+                        .px_2()
+                        .flex_none()
+                        .flex()
+                        .items_center()
+                        .rounded_md()
+                        .border_1()
+                        .border_color(state_color)
+                        .text_size(px(10.))
+                        .font_weight(FontWeight(700.))
+                        .text_color(state_color)
+                        .child(truncate_preview(&process.state, 12)),
+                ),
+        )
+        .child(metrics)
+        .child(
+            div()
+                .h(px(command_height))
+                .max_h(px(command_height))
+                .flex_none()
+                .min_w_0()
+                .rounded_md()
+                .border_1()
+                .border_color(rgb(0x1d4f67))
+                .bg(rgb(palette.surface))
+                .pl_2()
+                .pr_1()
+                .py_1()
+                .flex()
+                .items_start()
                 .gap_1()
-                .child(process_detail_chip(
+                .child(
+                    div()
+                        .min_w_0()
+                        .flex_1()
+                        .max_h(px(command_height - 10.))
+                        .overflow_hidden()
+                        .font_family(crate::features::gpui_code_font_family())
+                        .text_size(px(10.))
+                        .line_height(px(14.))
+                        .text_color(rgb(palette.text_muted))
+                        .child(command),
+                )
+                .child(small_button(
                     palette,
-                    "PPID",
-                    process.ppid.to_string(),
-                ))
-                .child(process_detail_chip(
-                    palette,
-                    "RSS",
-                    format_file_size(Some(process.rss_kb.saturating_mul(1024))),
-                ))
-                .child(process_detail_chip(palette, "State", process.state.clone()))
-                .child(process_detail_chip(palette, "User", process.user.clone()))
-                .child(process_detail_chip(palette, "PID", process.pid.to_string()))
-                .child(process_detail_chip(
-                    palette,
-                    "Elapsed",
-                    process.elapsed.clone(),
+                    format!("process-copy-command-{pid}"),
+                    labels.copy_command,
+                    on_copy_command,
                 )),
         )
         .child(
             div()
+                .h(px(28.))
+                .flex_none()
                 .flex()
                 .items_center()
-                .gap_1()
-                .flex_wrap()
+                .gap_2()
                 .child(
-                    transfer_input("process-nice-input", "Nice", nice_draft, true, palette)
-                        .w(px(88.))
-                        .h(px(26.))
-                        .track_focus(nice_focus)
-                        .on_click(cx.listener(|this, _, window, cx| {
-                            window.focus(&this.process_nice_focus);
-                            cx.notify();
-                        }))
-                        .on_key_down(cx.listener(|this, event: &KeyDownEvent, window, cx| {
+                    transfer_input(
+                        "process-nice-input",
+                        labels.nice_value,
+                        nice_draft,
+                        true,
+                        palette,
+                    )
+                    .min_w_0()
+                    .w(px(if mode == ProcessDisplayMode::Compact {
+                        140.
+                    } else {
+                        80.
+                    }))
+                    .h(px(28.))
+                    .track_focus(nice_focus)
+                    .on_click(cx.listener(|this, _, window, cx| {
+                        window.focus(&this.process_nice_focus);
+                        cx.notify();
+                    }))
+                    .on_key_down(cx.listener(
+                        |this, event: &KeyDownEvent, window, cx| {
                             cx.stop_propagation();
                             this.handle_process_nice_key_down(event, window, cx);
-                        })),
+                        },
+                    )),
                 )
                 .child(small_button(
                     palette,
                     format!("process-nice-apply-{pid}"),
-                    "Apply",
+                    labels.apply_nice,
                     cx.listener(move |this, _, window, cx| {
                         this.apply_process_nice_draft(window, cx);
-                    }),
-                ))
-                .child(small_button(
-                    palette,
-                    format!("process-nice-low-{pid}"),
-                    "-5",
-                    cx.listener(move |this, _, window, cx| {
-                        this.renice_process(pid, -5, window, cx);
-                    }),
-                ))
-                .child(small_button(
-                    palette,
-                    format!("process-nice-zero-{pid}"),
-                    "0",
-                    cx.listener(move |this, _, window, cx| {
-                        this.renice_process(pid, 0, window, cx);
-                    }),
-                ))
-                .child(small_button(
-                    palette,
-                    format!("process-nice-high-{pid}"),
-                    "+5",
-                    cx.listener(move |this, _, window, cx| {
-                        this.renice_process(pid, 5, window, cx);
-                    }),
-                ))
-                .child(
-                    div()
-                        .mx_1()
-                        .text_size(px(10.))
-                        .font_weight(FontWeight(700.))
-                        .text_color(rgb(palette.text_dimmed))
-                        .child("SIG"),
-                )
-                .child(small_button(
-                    palette,
-                    format!("process-signal-term-{pid}"),
-                    "TERM",
-                    cx.listener(move |this, _, window, cx| {
-                        this.request_process_signal(pid, "TERM", window, cx);
-                    }),
-                ))
-                .child(small_button(
-                    palette,
-                    format!("process-signal-hup-{pid}"),
-                    "HUP",
-                    cx.listener(move |this, _, window, cx| {
-                        this.request_process_signal(pid, "HUP", window, cx);
-                    }),
-                ))
-                .child(small_button(
-                    palette,
-                    format!("process-signal-stop-{pid}"),
-                    "STOP",
-                    cx.listener(move |this, _, window, cx| {
-                        this.request_process_signal(pid, "STOP", window, cx);
-                    }),
-                ))
-                .child(small_button(
-                    palette,
-                    format!("process-signal-cont-{pid}"),
-                    "CONT",
-                    cx.listener(move |this, _, window, cx| {
-                        this.request_process_signal(pid, "CONT", window, cx);
-                    }),
-                ))
-                .child(small_button(
-                    palette,
-                    format!("process-signal-kill-{pid}"),
-                    "KILL",
-                    cx.listener(move |this, _, window, cx| {
-                        this.request_process_signal(pid, "KILL", window, cx);
                     }),
                 )),
         )
         .into_any_element()
 }
 
-pub(in crate::features::pages::remote) fn process_detail_chip(
+fn process_metric(
     palette: ThemePalette,
     label: &'static str,
     value: String,
+    color: gpui::Hsla,
 ) -> impl IntoElement {
     div()
+        .h(px(39.))
+        .min_w_0()
         .rounded_md()
         .border_1()
-        .border_color(rgb(palette.surface_elevated))
+        .border_color(color.opacity(0.35))
         .bg(rgb(palette.surface))
         .px_2()
-        .py_0()
-        .h(px(28.))
+        .py_1()
         .flex()
-        .items_center()
-        .gap_1()
+        .flex_col()
         .child(
             div()
-                .text_size(px(10.))
-                .font_weight(FontWeight(700.))
-                .text_color(rgb(palette.text_dimmed))
+                .text_size(px(9.))
+                .text_color(color.opacity(0.75))
+                .overflow_hidden()
                 .child(label),
         )
         .child(
             div()
                 .font_family(crate::features::gpui_code_font_family())
                 .text_size(px(11.))
-                .text_color(rgb(palette.text))
-                .child(truncate_preview(&value, 24)),
+                .font_weight(FontWeight(700.))
+                .text_color(color)
+                .overflow_hidden()
+                .child(value),
         )
 }
 
 pub(in crate::features::pages::remote) fn process_signal_confirm_panel(
     palette: ThemePalette,
     confirm: RemoteProcessSignalConfirmState,
+    labels: ProcessSignalLabels,
     cx: &mut Context<NyaTermApp>,
 ) -> impl IntoElement {
+    let description = labels
+        .description
+        .replace("{{signal}}", &confirm.signal)
+        .replace("{{pid}}", &confirm.pid.to_string())
+        .replace(
+            "{{command}}",
+            &format!("kill -{} -- {}", confirm.signal, confirm.pid),
+        );
     let card = div()
         .p_4()
         .flex()
@@ -213,23 +283,15 @@ pub(in crate::features::pages::remote) fn process_signal_confirm_panel(
                 .text_size(px(15.))
                 .font_weight(FontWeight(800.))
                 .text_color(rgb(palette.danger))
-                .child(format!(
-                    "Confirm {} for PID {}",
-                    confirm.signal, confirm.pid
-                )),
+                .child(labels.title),
         )
         .child(
             div()
                 .font_family(crate::features::gpui_code_font_family())
                 .text_xs()
                 .line_height(px(17.))
-                .text_color(rgb(0xfecdd3))
-                .child(format!(
-                    "kill -{} -- {} · {}",
-                    confirm.signal,
-                    confirm.pid,
-                    truncate_preview(&confirm.command, 96)
-                )),
+                .text_color(rgb(palette.text_muted))
+                .child(description),
         )
         .child(
             div()
@@ -240,7 +302,7 @@ pub(in crate::features::pages::remote) fn process_signal_confirm_panel(
                 .child(small_button(
                     palette,
                     "process-signal-cancel",
-                    "Cancel",
+                    labels.cancel,
                     cx.listener(|this, _, _, cx| {
                         this.cancel_process_signal_confirm(cx);
                     }),
@@ -248,7 +310,7 @@ pub(in crate::features::pages::remote) fn process_signal_confirm_panel(
                 .child(small_button(
                     palette,
                     "process-signal-confirm",
-                    "Confirm",
+                    labels.confirm,
                     cx.listener(|this, _, window, cx| {
                         this.confirm_process_signal(window, cx);
                     }),

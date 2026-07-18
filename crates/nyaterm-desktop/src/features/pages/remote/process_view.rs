@@ -7,6 +7,35 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
         let palette = self.theme_palette();
+        let table_labels = ProcessTableLabels {
+            process: self.tr("processManager.process"),
+            pid: self.tr("processManager.sortPid"),
+            cpu: self.tr("processManager.sortCpu"),
+            memory: self.tr("processManager.sortMemory"),
+            user: self.tr("processManager.user"),
+            copy_pid: self.tr("processManager.copyPid"),
+            copy_command: self.tr("processManager.copyCommand"),
+            signal_term: self.tr("processManager.signalTerm"),
+            signal_hup: self.tr("processManager.signalHup"),
+            signal_stop: self.tr("processManager.signalStop"),
+            signal_cont: self.tr("processManager.signalCont"),
+            signal_kill: self.tr("processManager.signalKill"),
+        };
+        let detail_labels = ProcessDetailLabels {
+            cpu: self.tr("processManager.sortCpu"),
+            memory: self.tr("resourceMonitor.memory"),
+            rss: "RSS",
+            elapsed: self.tr("processManager.elapsed"),
+            copy_command: self.tr("processManager.copyCommand"),
+            nice_value: self.tr("processManager.niceValue"),
+            apply_nice: self.tr("processManager.applyNice"),
+        };
+        let signal_labels = ProcessSignalLabels {
+            title: self.tr("processManager.confirmSignalTitle"),
+            description: self.tr("processManager.confirmSignalDesc"),
+            cancel: self.tr("common.cancel"),
+            confirm: self.tr("common.confirm"),
+        };
         let normalized_query = self.process_search_draft.trim().to_ascii_lowercase();
         let mut filtered_processes = self
             .processes
@@ -104,15 +133,15 @@ impl NyaTermApp {
         if self.processes.is_empty() {
             rows = rows.child(empty_panel(
                 if self.active_ssh_config.is_some() {
-                    "No process snapshot loaded."
+                    self.tr("processManager.error")
                 } else {
-                    "Start an SSH session to list remote processes."
+                    self.tr("processManager.noSession")
                 },
                 self.theme_palette(),
             ));
         } else if filtered_processes.is_empty() {
             rows = rows.child(empty_panel(
-                "No processes match the current search.",
+                self.tr("processManager.noMatches"),
                 self.theme_palette(),
             ));
         } else {
@@ -127,6 +156,7 @@ impl NyaTermApp {
                         palette,
                         process,
                         mode,
+                        table_labels,
                         selected,
                         self.process_menu_pid == Some(pid),
                         cx.listener(move |this, _, _, cx| {
@@ -190,8 +220,20 @@ impl NyaTermApp {
                                     palette,
                                     selected_process,
                                     mode,
+                                    detail_labels,
                                     self.process_nice_draft.clone(),
                                     &self.process_nice_focus,
+                                    cx.listener({
+                                        let value =
+                                            if selected_process.command_line.trim().is_empty() {
+                                                selected_process.command.clone()
+                                            } else {
+                                                selected_process.command_line.clone()
+                                            };
+                                        move |this, _, _, cx| {
+                                            this.copy_process_text(value.clone(), "command", cx);
+                                        }
+                                    }),
                                     cx,
                                 )
                             })
@@ -208,16 +250,19 @@ impl NyaTermApp {
         let palette = self.theme_palette();
         let count_label = if total_filtered > PROCESS_VIEWPORT_ROWS {
             format!(
-                "{window_start}-{window_end}/{total_filtered} · {} total · {} users",
+                "{window_start}-{window_end}/{total_filtered} · {} {} · {} {}",
                 self.processes.len(),
-                user_count
+                self.tr("processManager.total"),
+                user_count,
+                self.tr("processManager.users")
             )
         } else {
             format!(
-                "{}/{} · {} users",
+                "{}/{} · {} {}",
                 filtered_processes.len(),
                 self.processes.len(),
-                user_count
+                user_count,
+                self.tr("processManager.users")
             )
         };
         let top_label = format!(
@@ -247,7 +292,7 @@ impl NyaTermApp {
                         div().flex_1().min_w_0().child(
                             transfer_input(
                                 "process-search-input",
-                                "Search processes…",
+                                self.tr("processManager.search"),
                                 self.process_search_draft.clone(),
                                 true,
                                 self.theme_palette(),
@@ -310,7 +355,7 @@ impl NyaTermApp {
                         .child(process_sort_button(
                             palette,
                             "process-sort-command",
-                            "Process",
+                            self.tr("processManager.process"),
                             self.process_sort_key == RemoteProcessSortKey::Command,
                             self.process_sort_direction,
                             false,
@@ -321,7 +366,7 @@ impl NyaTermApp {
                         .child(process_sort_button(
                             palette,
                             "process-sort-pid",
-                            "PID",
+                            self.tr("processManager.sortPid"),
                             self.process_sort_key == RemoteProcessSortKey::Pid,
                             self.process_sort_direction,
                             true,
@@ -332,7 +377,7 @@ impl NyaTermApp {
                         .child(process_sort_button(
                             palette,
                             "process-sort-cpu",
-                            "CPU",
+                            self.tr("processManager.sortCpu"),
                             self.process_sort_key == RemoteProcessSortKey::Cpu,
                             self.process_sort_direction,
                             true,
@@ -349,7 +394,7 @@ impl NyaTermApp {
                                 this.child(process_sort_button(
                                     palette,
                                     "process-sort-memory",
-                                    "Mem",
+                                    self.tr("processManager.sortMemory"),
                                     self.process_sort_key == RemoteProcessSortKey::Memory,
                                     self.process_sort_direction,
                                     true,
@@ -363,7 +408,7 @@ impl NyaTermApp {
                             this.child(process_sort_button(
                                 palette,
                                 "process-sort-user",
-                                "User",
+                                self.tr("processManager.user"),
                                 self.process_sort_key == RemoteProcessSortKey::User,
                                 self.process_sort_direction,
                                 false,
@@ -407,7 +452,12 @@ impl NyaTermApp {
                     .child(rows),
             )
             .when_some(self.process_signal_confirm.clone(), |this, confirm| {
-                this.child(process_signal_confirm_panel(palette, confirm, cx))
+                this.child(process_signal_confirm_panel(
+                    palette,
+                    confirm,
+                    signal_labels,
+                    cx,
+                ))
             })
     }
 }

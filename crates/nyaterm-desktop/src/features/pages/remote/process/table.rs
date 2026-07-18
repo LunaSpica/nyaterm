@@ -3,7 +3,7 @@ use super::*;
 pub(in crate::features::pages::remote) fn process_sort_button(
     palette: ThemePalette,
     id: impl Into<String>,
-    label: &'static str,
+    label: &str,
     active: bool,
     direction: RemoteProcessSortDirection,
     numeric: bool,
@@ -45,6 +45,7 @@ pub(in crate::features::pages::remote) fn process_sort_button(
 
 pub(in crate::features::pages::remote) fn process_table_header(
     palette: ThemePalette,
+    labels: ProcessTableLabels,
 ) -> impl IntoElement {
     // Static fallback header; live header uses process_sort_button grid in process_view.
     div()
@@ -61,11 +62,11 @@ pub(in crate::features::pages::remote) fn process_table_header(
         .text_size(px(10.))
         .font_weight(FontWeight(700.))
         .text_color(rgb(palette.text_dimmed))
-        .child("Process")
-        .child(div().text_right().child("PID"))
-        .child(div().text_right().child("CPU"))
-        .child(div().text_right().child("Mem"))
-        .child("User")
+        .child(labels.process)
+        .child(div().text_right().child(labels.pid))
+        .child(div().text_right().child(labels.cpu))
+        .child(div().text_right().child(labels.memory))
+        .child(labels.user)
         .child("")
 }
 
@@ -73,6 +74,7 @@ pub(in crate::features::pages::remote) fn process_table_row(
     palette: ThemePalette,
     process: &RemoteProcess,
     mode: ProcessDisplayMode,
+    labels: ProcessTableLabels,
     selected: bool,
     menu_open: bool,
     on_select: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
@@ -142,44 +144,44 @@ pub(in crate::features::pages::remote) fn process_table_row(
                     .child(process_menu_item(
                         palette,
                         format!("process-copy-pid-{}", process.pid),
-                        "Copy PID",
+                        labels.copy_pid,
                         on_copy_pid,
                     ))
                     .child(process_menu_item(
                         palette,
                         format!("process-copy-cmd-{}", process.pid),
-                        "Copy Command",
+                        labels.copy_command,
                         on_copy_command,
                     ))
                     .child(process_menu_sep(palette))
                     .child(process_menu_item(
                         palette,
                         format!("process-term-{}", process.pid),
-                        "TERM",
+                        labels.signal_term,
                         on_term,
                     ))
                     .child(process_menu_item(
                         palette,
                         format!("process-hup-{}", process.pid),
-                        "HUP",
+                        labels.signal_hup,
                         on_hup,
                     ))
                     .child(process_menu_item(
                         palette,
                         format!("process-stop-{}", process.pid),
-                        "STOP",
+                        labels.signal_stop,
                         on_stop,
                     ))
                     .child(process_menu_item(
                         palette,
                         format!("process-cont-{}", process.pid),
-                        "CONT",
+                        labels.signal_cont,
                         on_cont,
                     ))
                     .child(process_menu_item(
                         palette,
                         format!("process-kill-{}", process.pid),
-                        "KILL",
+                        labels.signal_kill,
                         on_kill,
                     )),
             )
@@ -314,6 +316,22 @@ pub(in crate::features::pages::remote) fn process_table_row(
                 .bg(accent),
         )
         .child(body)
+}
+
+#[derive(Clone, Copy)]
+pub(in crate::features::pages::remote) struct ProcessTableLabels {
+    pub process: &'static str,
+    pub pid: &'static str,
+    pub cpu: &'static str,
+    pub memory: &'static str,
+    pub user: &'static str,
+    pub copy_pid: &'static str,
+    pub copy_command: &'static str,
+    pub signal_term: &'static str,
+    pub signal_hup: &'static str,
+    pub signal_stop: &'static str,
+    pub signal_cont: &'static str,
+    pub signal_kill: &'static str,
 }
 
 fn process_menu_item(
