@@ -146,7 +146,7 @@ impl NyaTermApp {
                         "command-center-update-check",
                         "Updates",
                         cx.listener(|this, _, _, cx| {
-                            this.start_update_check(cx);
+                            this.open_update_dialog(cx);
                         }),
                     )),
             )

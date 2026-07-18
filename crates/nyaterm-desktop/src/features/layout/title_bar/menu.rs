@@ -204,7 +204,7 @@ impl NyaTermApp {
                         None,
                         cx.listener(|this, _, _, cx| {
                             this.close_title_menu(cx);
-                            this.start_update_check(cx);
+                            this.open_update_dialog(cx);
                         }),
                     ))
                     .child(title_menu_item(

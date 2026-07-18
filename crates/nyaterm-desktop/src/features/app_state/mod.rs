@@ -38,6 +38,8 @@ pub struct NyaTermApp {
     pub(in crate::features) connection_delete_confirm: Option<ConnectionDeleteConfirmState>,
     pub(in crate::features) connection_group_delete_confirm:
         Option<ConnectionGroupDeleteConfirmState>,
+    pub(in crate::features) connection_group_open_confirm: Option<ConnectionGroupOpenConfirmState>,
+    pub(in crate::features) connection_group_open_confirm_focus: FocusHandle,
     pub(in crate::features) connection_ssh_keys: Vec<SshKey>,
     pub(in crate::features) connection_otp_entries: Vec<OtpEntry>,
     pub(in crate::features) connection_saved_passwords: Vec<SavedPassword>,
@@ -280,6 +282,7 @@ pub struct NyaTermApp {
     pub(in crate::features) update_status: String,
     pub(in crate::features) update_info: Option<NativeUpdateInfo>,
     pub(in crate::features) update_pending: bool,
+    pub(in crate::features) update_dialog_open: bool,
     pub(in crate::features) about_open: bool,
     pub(in crate::features) docker_tx: mpsc::Sender<DockerJobResult>,
     pub(in crate::features) docker_rx: mpsc::Receiver<DockerJobResult>,

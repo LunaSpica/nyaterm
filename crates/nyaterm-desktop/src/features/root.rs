@@ -567,6 +567,9 @@ impl NyaTermApp {
                 this.child(self.lock_screen_overlay(cx))
             })
             .when(self.about_open, |this| this.child(self.about_overlay(cx)))
+            .when(self.update_dialog_open, |this| {
+                this.child(self.update_overlay(cx))
+            })
             .when(self.modal_child_window_open(), |this| {
                 this.child(self.modal_owner_backdrop(cx))
             })

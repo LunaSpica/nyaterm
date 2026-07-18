@@ -44,6 +44,8 @@ mod tab_actions_overlay;
 mod temporary_ssh_link_overlay;
 #[path = "panels/terminal_actions_overlay.rs"]
 mod terminal_actions_overlay;
+#[path = "panels/update_overlay.rs"]
+mod update_overlay;
 
 pub(in crate::features::panels) use helpers::*;
 

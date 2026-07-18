@@ -5,6 +5,16 @@ use crate::http::update::check_native_update;
 const UPDATE_EVENT_DRAIN_LIMIT: usize = 4;
 
 impl NyaTermApp {
+    pub(in crate::features) fn open_update_dialog(&mut self, cx: &mut Context<Self>) {
+        self.update_dialog_open = true;
+        self.start_update_check(cx);
+    }
+
+    pub(in crate::features) fn close_update_dialog(&mut self, cx: &mut Context<Self>) {
+        self.update_dialog_open = false;
+        cx.notify();
+    }
+
     pub(in crate::features) fn start_update_check(&mut self, cx: &mut Context<Self>) {
         if self.update_pending {
             self.update_status = "update check already running".to_string();
