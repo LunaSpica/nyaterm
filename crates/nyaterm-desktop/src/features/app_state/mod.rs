@@ -424,11 +424,11 @@ pub struct NyaTermApp {
     pub(in crate::features) ai_action_edit: Option<(AiActionListKind, String, AiActionEditorField)>,
     pub(in crate::features) ai_action_focus: FocusHandle,
     pub(in crate::features) ai_model_collapsed_groups: HashSet<String>,
+    pub(in crate::features) ai_settings_model_query: String,
+    pub(in crate::features) ai_settings_model_search_focus: FocusHandle,
     pub(in crate::features) ai_manual_model_drafts: HashMap<String, String>,
     pub(in crate::features) ai_manual_model_focus: FocusHandle,
     pub(in crate::features) ai_manual_model_edit_group: Option<String>,
-    /// Expanded API-key credential card in Settings → AI Models (Tauri AiModelsTab).
-    pub(in crate::features) ai_credential_expanded_id: Option<String>,
     pub(in crate::features) ai_credential_edit: Option<(String, AiCredentialEditorField)>,
     pub(in crate::features) ai_credential_focus: FocusHandle,
     /// Per-credential API-key drafts; empty means keep the stored secret.

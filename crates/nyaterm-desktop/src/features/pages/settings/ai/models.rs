@@ -4,42 +4,35 @@ use super::*;
 mod credential_rows;
 #[path = "models/model_groups.rs"]
 mod model_groups;
+
 impl NyaTermApp {
     pub(in crate::features) fn ai_models_settings_section(
         &mut self,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
         let palette = self.theme_palette();
-        // Tauri AiModelsTab density: compact model rows + credential sections.
-        let enabled_models = self
-            .ai_settings
-            .models
-            .iter()
-            .filter(|model| model.enabled)
-            .count();
-        let total_models = self.ai_settings.models.len();
+        let query = self.ai_settings_model_query.clone();
+        let query_placeholder = self.tr("ai.searchModels");
+        let has_enabled_custom_credential =
+            self.ai_settings
+                .provider_credentials
+                .iter()
+                .any(|credential| {
+                    credential.enabled
+                        && credential.provider_kind
+                            == nyaterm_core::AiProviderKind::OpenaiCompatible
+                });
         let enabled_credentials = self
             .ai_settings
             .provider_credentials
             .iter()
             .filter(|credential| credential.enabled)
             .count();
-        let ai_default_model = self
-            .ai_settings
-            .default_model_id
-            .as_deref()
-            .map(compact_id)
-            .unwrap_or_else(|| "none".to_string());
-        let models_summary =
-            format!("{enabled_models} enabled · {total_models} total · default {ai_default_model}");
-        let credentials_summary = format!("{enabled_credentials} enabled profiles");
-        let active_ai_profile_id = self.ai_settings.active_profile_id.clone();
-        let active_ai_api_key = ai_active_profile_api_key(&self.ai_settings);
-        let ai_key_value = cloud_secret_display(&self.ai_secret_draft, &active_ai_api_key);
-        let ai_discovery_label = if self.ai_discovery_pending {
-            "Pending"
+        let has_enabled_model = self.ai_settings.models.iter().any(|model| model.enabled);
+        let refresh_label = if self.ai_discovery_pending {
+            self.tr("common.loading")
         } else {
-            "Discover"
+            self.tr("ai.refreshModels")
         };
 
         let model_groups = self.ai_model_groups(palette, cx);
@@ -48,163 +41,127 @@ impl NyaTermApp {
         div()
             .flex()
             .flex_col()
-            .gap_3()
+            .gap_5()
             .child(settings_form_section(
                 palette,
-                Some("Models"),
+                Some(self.tr("ai.modelList")),
                 None,
                 div()
                     .flex()
                     .flex_col()
-                    .gap_2()
-                    .child(settings_form_row(
-                        palette,
-                        "Catalog",
-                        Some(SharedString::from(models_summary)),
-                        small_button(
+                    .gap_3()
+                    .child(
+                        div()
+                            .flex()
+                            .items_center()
+                            .gap_2()
+                            .child(
+                                div()
+                                    .id("ai-settings-model-search")
+                                    .h(px(34.))
+                                    .min_w_0()
+                                    .flex_1()
+                                    .px_3()
+                                    .rounded_sm()
+                                    .border_1()
+                                    .border_color(rgb(palette.border))
+                                    .bg(rgb(palette.input))
+                                    .flex()
+                                    .items_center()
+                                    .font_family(crate::features::gpui_code_font_family())
+                                    .text_size(px(12.))
+                                    .text_color(rgb(if query.is_empty() {
+                                        palette.text_dimmed
+                                    } else {
+                                        palette.text
+                                    }))
+                                    .child(if query.is_empty() {
+                                        query_placeholder.to_string()
+                                    } else {
+                                        query
+                                    })
+                                    .track_focus(&self.ai_settings_model_search_focus)
+                                    .on_click(cx.listener(|this, _, window, cx| {
+                                        window.focus(&this.ai_settings_model_search_focus);
+                                        cx.notify();
+                                    }))
+                                    .on_key_down(cx.listener(
+                                        |this, event: &KeyDownEvent, _, cx| {
+                                            this.handle_ai_settings_model_search_key_down(
+                                                event, cx,
+                                            );
+                                        },
+                                    )),
+                            )
+                            .child(
+                                div()
+                                    .opacity(
+                                        if has_enabled_custom_credential
+                                            && !self.ai_discovery_pending
+                                        {
+                                            1.0
+                                        } else {
+                                            0.45
+                                        },
+                                    )
+                                    .child(small_button(
+                                        palette,
+                                        "ai-models-discover",
+                                        refresh_label,
+                                        cx.listener(move |this, _, _, cx| {
+                                            if has_enabled_custom_credential
+                                                && !this.ai_discovery_pending
+                                            {
+                                                this.discover_ai_models(cx);
+                                            }
+                                        }),
+                                    )),
+                            ),
+                    )
+                    .child(model_groups)
+                    .when(enabled_credentials == 0, |this| {
+                        this.child(ai_models_hint(
                             palette,
-                            "ai-models-discover",
-                            ai_discovery_label,
-                            cx.listener(|this, _, _, cx| {
-                                this.discover_ai_models(cx);
-                            }),
-                        ),
-                    ))
-                    .child(model_groups),
+                            self.tr("ai.manualModelNoProvider"),
+                            false,
+                        ))
+                    })
+                    .when(!has_enabled_model, |this| {
+                        this.child(ai_models_hint(
+                            palette,
+                            self.tr("ai.enableOneModelHint"),
+                            true,
+                        ))
+                    }),
             ))
             .child(settings_form_section(
                 palette,
-                Some("API keys"),
-                Some("Per-provider credentials used for discovery and chat (Tauri AiModelsTab)."),
+                Some(self.tr("ai.apiKeys")),
+                None,
                 div()
                     .flex()
                     .flex_col()
                     .gap_3()
-                    .child(settings_form_row(
+                    .child(div().flex().justify_end().child(small_button(
                         palette,
-                        "Profiles",
-                        Some(SharedString::from(credentials_summary)),
-                        small_button(
-                            palette,
-                            "ai-cred-add",
-                            "+ Add",
-                            cx.listener(|this, _, window, cx| {
-                                this.add_ai_credential(window, cx);
-                            }),
-                        ),
-                    ))
-                    .child(credential_rows)
-                    .child(settings_form_row(
-                        palette,
-                        "Legacy active profile",
-                        Some(SharedString::from(
-                            "Optional quick draft for the previously selected provider profile.",
-                        )),
-                        div()
-                            .text_size(px(11.))
-                            .text_color(rgb(palette.text_muted))
-                            .child(active_ai_profile_id.clone()),
-                    ))
-                    .child(
-                        div()
-                            .flex()
-                            .flex_wrap()
-                            .gap_1()
-                            .child(settings_choice_chip(
-                                palette,
-                                "ai-model-provider-openai",
-                                "OpenAI",
-                                active_ai_profile_id == "openai",
-                                cx.listener(|this, _, _, cx| {
-                                    this.update_ai_profile("openai", cx);
-                                }),
-                            ))
-                            .child(settings_choice_chip(
-                                palette,
-                                "ai-model-provider-anthropic",
-                                "Anthropic",
-                                active_ai_profile_id == "anthropic",
-                                cx.listener(|this, _, _, cx| {
-                                    this.update_ai_profile("anthropic", cx);
-                                }),
-                            ))
-                            .child(settings_choice_chip(
-                                palette,
-                                "ai-model-provider-gemini",
-                                "Gemini",
-                                active_ai_profile_id == "gemini",
-                                cx.listener(|this, _, _, cx| {
-                                    this.update_ai_profile("gemini", cx);
-                                }),
-                            ))
-                            .child(settings_choice_chip(
-                                palette,
-                                "ai-model-provider-deepseek",
-                                "DeepSeek",
-                                active_ai_profile_id == "deepseek",
-                                cx.listener(|this, _, _, cx| {
-                                    this.update_ai_profile("deepseek", cx);
-                                }),
-                            ))
-                            .child(settings_choice_chip(
-                                palette,
-                                "ai-model-provider-ollama",
-                                "Ollama",
-                                active_ai_profile_id == "ollama",
-                                cx.listener(|this, _, _, cx| {
-                                    this.update_ai_profile("ollama", cx);
-                                }),
-                            ))
-                            .child(settings_choice_chip(
-                                palette,
-                                "ai-model-provider-xai",
-                                "xAI",
-                                active_ai_profile_id == "xai",
-                                cx.listener(|this, _, _, cx| {
-                                    this.update_ai_profile("xai", cx);
-                                }),
-                            )),
-                    )
-                    .child(
-                        div()
-                            .grid()
-                            .grid_cols(3)
-                            .gap_2()
-                            .child(self.ai_input(
-                                "ai-model-tab-model",
-                                "Model",
-                                self.ai_model_draft.clone(),
-                                AiInputField::Model,
-                                cx,
-                            ))
-                            .child(self.ai_input(
-                                "ai-model-tab-base-url",
-                                "Base URL",
-                                self.ai_base_url_draft.clone(),
-                                AiInputField::BaseUrl,
-                                cx,
-                            ))
-                            .child(self.ai_input(
-                                "ai-model-tab-api-key",
-                                "API Key",
-                                ai_key_value,
-                                AiInputField::ApiKey,
-                                cx,
-                            )),
-                    )
-                    .child(settings_form_row(
-                        palette,
-                        "Actions",
-                        Some(SharedString::from(self.ai_status.clone())),
-                        small_button(
-                            palette,
-                            "ai-model-tab-save",
-                            "Save profile draft",
-                            cx.listener(|this, _, _, cx| {
-                                this.save_ai_settings(cx);
-                            }),
-                        ),
-                    )),
+                        "ai-cred-add",
+                        self.tr("common.add"),
+                        cx.listener(|this, _, window, cx| {
+                            this.add_ai_credential(window, cx);
+                        }),
+                    )))
+                    .child(credential_rows),
             ))
     }
+}
+
+fn ai_models_hint(palette: ThemePalette, text: &'static str, warning: bool) -> impl IntoElement {
+    div()
+        .text_size(px(11.))
+        .text_color(rgb(if warning {
+            palette.warning
+        } else {
+            palette.text_muted
+        }))
+        .child(text)
 }

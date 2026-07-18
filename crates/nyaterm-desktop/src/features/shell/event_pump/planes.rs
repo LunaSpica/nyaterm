@@ -83,7 +83,7 @@ impl NyaTermApp {
         drain_stage!(transfer, self.drain_transfer_events(cx));
         drain_stage!(
             ai,
-            self.drain_ai_discovery_events()
+            self.drain_ai_discovery_events(cx)
                 | self.drain_ai_chat_events(cx)
                 | self.drive_ai_agent_loop(cx)
         );

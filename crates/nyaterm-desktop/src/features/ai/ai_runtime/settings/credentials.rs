@@ -69,20 +69,6 @@ impl NyaTermApp {
         self.persist_ai_settings_now(cx);
     }
 
-    pub(in crate::features) fn expand_ai_credential(
-        &mut self,
-        credential_id: String,
-        cx: &mut Context<Self>,
-    ) {
-        if self.ai_credential_expanded_id.as_deref() == Some(credential_id.as_str()) {
-            self.ai_credential_expanded_id = None;
-            self.ai_credential_edit = None;
-        } else {
-            self.ai_credential_expanded_id = Some(credential_id);
-        }
-        cx.notify();
-    }
-
     pub(in crate::features) fn focus_ai_credential_field(
         &mut self,
         credential_id: String,
@@ -90,7 +76,6 @@ impl NyaTermApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        self.ai_credential_expanded_id = Some(credential_id.clone());
         self.ai_credential_edit = Some((credential_id, field));
         window.focus(&self.ai_credential_focus);
         cx.notify();
@@ -258,14 +243,13 @@ impl NyaTermApp {
         );
         let credential = nyaterm_core::AiProviderCredential {
             id: id.clone(),
-            name: "Custom Provider".to_string(),
+            name: String::new(),
             provider_kind: nyaterm_core::AiProviderKind::OpenaiCompatible,
             base_url: Some(String::new()),
             api_key: None,
             enabled: true,
         };
         self.ai_settings.provider_credentials.insert(0, credential);
-        self.ai_credential_expanded_id = Some(id.clone());
         self.ai_credential_edit = Some((id, AiCredentialEditorField::Name));
         window.focus(&self.ai_credential_focus);
         self.ai_status = "AI credential added".to_string();
@@ -307,10 +291,7 @@ impl NyaTermApp {
                 .find(|model| model.enabled)
                 .map(|model| model.id.clone());
         }
-        if self.ai_credential_expanded_id.as_deref() == Some(credential_id.as_str()) {
-            self.ai_credential_expanded_id = None;
-            self.ai_credential_edit = None;
-        }
+        self.ai_credential_edit = None;
         self.ai_credential_secret_drafts.remove(&credential_id);
         self.ai_status = "AI credential removed".to_string();
         self.persist_ai_settings_now(cx);

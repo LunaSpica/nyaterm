@@ -13,19 +13,63 @@ impl NyaTermApp {
             .find(|model| model.id == model_id)
         {
             model.enabled = !model.enabled;
-            if model.enabled {
-                self.ai_settings.default_model_id = Some(model.id.clone());
-            } else if self.ai_settings.default_model_id.as_deref() == Some(model.id.as_str()) {
-                self.ai_settings.default_model_id = self
+            self.ai_status = "AI model list updated".to_string();
+        }
+        if self
+            .ai_settings
+            .default_model_id
+            .as_deref()
+            .is_none_or(|id| {
+                !self
                     .ai_settings
                     .models
                     .iter()
-                    .find(|candidate| candidate.enabled)
-                    .map(|candidate| candidate.id.clone());
-            }
-            self.ai_status = "AI model list updated".to_string();
+                    .any(|model| model.enabled && model.id == id)
+            })
+        {
+            self.ai_settings.default_model_id = self
+                .ai_settings
+                .models
+                .iter()
+                .find(|model| model.enabled)
+                .map(|model| model.id.clone());
         }
         self.persist_ai_settings_now(cx);
+    }
+
+    pub(in crate::features) fn handle_ai_settings_model_search_key_down(
+        &mut self,
+        event: &KeyDownEvent,
+        cx: &mut Context<Self>,
+    ) {
+        cx.stop_propagation();
+        if event.keystroke.modifiers.platform
+            || event.keystroke.modifiers.control
+            || event.keystroke.modifiers.alt
+        {
+            return;
+        }
+        match event.keystroke.key.as_str() {
+            "escape" => {
+                self.ai_settings_model_query.clear();
+                cx.notify();
+            }
+            "backspace" => {
+                self.ai_settings_model_query.pop();
+                cx.notify();
+            }
+            _ => {
+                if let Some(input) = event
+                    .keystroke
+                    .key_char
+                    .as_deref()
+                    .filter(|value| !value.is_empty())
+                {
+                    self.ai_settings_model_query.push_str(input);
+                    cx.notify();
+                }
+            }
+        }
     }
 
     pub(in crate::features) fn set_ai_default_model(

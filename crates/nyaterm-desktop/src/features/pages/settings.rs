@@ -2,7 +2,7 @@ use gpui::{
     AnyElement, App, ClickEvent, Context, FontWeight, IntoElement, KeyDownEvent, SharedString,
     Window, div, prelude::*, px, rgb, rgba, svg,
 };
-use nyaterm_core::{AiModelSource, AiProviderKind, RiskLevel};
+use nyaterm_core::RiskLevel;
 use nyaterm_transport::SftpDuplicatePolicy;
 
 use crate::models::{
@@ -15,9 +15,9 @@ use crate::theme::ThemePalette;
 use crate::widgets::{small_button, status_pill};
 
 use super::super::{
-    ChromeTooltip, NyaTermApp, TAB_MOUSE_ACTIONS, TabMouseActionTarget, ai_active_profile_api_key,
-    cloud_secret_display, cloud_sync_history_row, compact_id, configured_cloud_sync_provider,
-    none_if_blank, transfer_input, truncate_preview,
+    ChromeTooltip, NyaTermApp, TAB_MOUSE_ACTIONS, TabMouseActionTarget, cloud_secret_display,
+    cloud_sync_history_row, compact_id, configured_cloud_sync_provider, none_if_blank,
+    transfer_input, truncate_preview,
 };
 
 mod ai;

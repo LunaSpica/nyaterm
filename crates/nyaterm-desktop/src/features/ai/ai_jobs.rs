@@ -270,21 +270,6 @@ pub(in crate::features) fn ai_active_profile_drafts(settings: &AiSettings) -> (S
         .unwrap_or_default()
 }
 
-pub(in crate::features) fn ai_active_profile_api_key(settings: &AiSettings) -> Option<String> {
-    settings
-        .provider_credentials
-        .iter()
-        .find(|credential| credential.id == settings.active_profile_id)
-        .and_then(|credential| credential.api_key.clone())
-        .or_else(|| {
-            settings
-                .provider_profiles
-                .iter()
-                .find(|profile| profile.id == settings.active_profile_id)
-                .and_then(|profile| profile.api_key.clone())
-        })
-}
-
 pub(in crate::features) fn ai_usage_counts(store: &ConnectionStore) -> (usize, usize, usize) {
     let history = store.load_ai_history().unwrap_or_default();
     let audit_count = store
