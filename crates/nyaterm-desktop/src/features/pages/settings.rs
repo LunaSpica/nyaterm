@@ -1,6 +1,6 @@
 use gpui::{
     AnyElement, App, ClickEvent, Context, FontWeight, IntoElement, KeyDownEvent, SharedString,
-    Window, div, prelude::*, px, rgb, svg,
+    Window, div, prelude::*, px, rgb, rgba, svg,
 };
 use nyaterm_core::{AgentCommandExecutionMode, AiMode, AiModelSource, AiProviderKind, RiskLevel};
 use nyaterm_transport::SftpDuplicatePolicy;
@@ -168,7 +168,11 @@ impl NyaTermApp {
                             .min_h_0()
                             .overflow_hidden()
                             .bg(rgb(palette.bg))
-                            .child(self.settings_active_panel(backup_snapshot_prompt, cx)),
+                            .child(self.settings_active_panel(
+                                backup_snapshot_prompt,
+                                viewport_width,
+                                cx,
+                            )),
                     ),
             )
             .child(self.settings_action_footer(cx))
@@ -553,7 +557,7 @@ impl NyaTermApp {
             .rounded_md()
             .border_1()
             .border_color(if selected {
-                rgb(palette.primary)
+                rgba((palette.primary << 8) | 0x33)
             } else {
                 rgb(0x00000000)
             })
@@ -601,15 +605,17 @@ impl NyaTermApp {
     fn settings_active_panel(
         &mut self,
         backup_snapshot_prompt: Option<SnapshotPasswordPromptState>,
+        viewport_width: f32,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
         let palette = self.theme_palette();
         let active_tab = self.settings_active_tab;
-        let active_group = self.tr(active_tab.group_i18n_key());
         let active_label = self.tr(active_tab.i18n_key());
         let content = self.settings_tab_content(active_tab, backup_snapshot_prompt, cx);
+        let compact = viewport_width < 640.;
+        let wide = viewport_width >= 1024.;
 
-        // Tauri content pane: no heavy outer card; compact title strip + scroll body.
+        // Match the responsive SettingsPage title and centered content column.
         div()
             .size_full()
             .min_w_0()
@@ -619,34 +625,21 @@ impl NyaTermApp {
             .child(
                 div()
                     .flex_none()
-                    .px_4()
-                    .py_3()
+                    .when(compact, |this| this.px_4().py_4())
+                    .when(!compact, |this| this.px_6().py_5())
                     .border_b_1()
                     .border_color(rgb(palette.border))
                     .flex()
-                    .items_end()
+                    .items_center()
                     .justify_between()
                     .gap_3()
                     .child(
                         div()
                             .min_w_0()
-                            .flex()
-                            .flex_col()
-                            .gap_0()
-                            .child(
-                                div()
-                                    .text_size(px(10.))
-                                    .font_weight(FontWeight(600.))
-                                    .text_color(rgb(palette.text_dimmed))
-                                    .child(active_group),
-                            )
-                            .child(
-                                div()
-                                    .text_size(px(16.))
-                                    .font_weight(FontWeight(700.))
-                                    .text_color(rgb(palette.text))
-                                    .child(active_label),
-                            ),
+                            .text_size(px(if compact { 18. } else { 24. }))
+                            .font_weight(FontWeight(700.))
+                            .text_color(rgb(palette.text))
+                            .child(active_label),
                     ),
             )
             .child(
@@ -655,9 +648,19 @@ impl NyaTermApp {
                     .flex_1()
                     .min_h_0()
                     .overflow_scroll()
-                    .px_4()
-                    .py_3()
-                    .child(div().flex().flex_col().gap_3().child(content)),
+                    .when(compact, |this| this.px_4().py_4())
+                    .when(!compact && !wide, |this| this.px_6().py_6())
+                    .when(wide, |this| this.px_8().py_8())
+                    .child(
+                        div()
+                            .w_full()
+                            .max_w(px(1024.))
+                            .mx_auto()
+                            .flex()
+                            .flex_col()
+                            .gap(if compact { px(20.) } else { px(24.) })
+                            .child(content),
+                    ),
             )
     }
 
