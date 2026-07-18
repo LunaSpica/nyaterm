@@ -94,7 +94,12 @@ impl NyaTermApp {
                             })
                             .child(truncate_preview(&input_display, 80)),
                     )
-                    .child(self.transfer_new_item_permission_grid(palette, state.mode, true, cx))
+                    .child(self.transfer_permission_grid(
+                        palette,
+                        state.mode,
+                        TransferPermissionTarget::NewFolder,
+                        cx,
+                    ))
                     .child(
                         div()
                             .mt_2()
@@ -263,7 +268,12 @@ impl NyaTermApp {
                             })
                             .child(truncate_preview(&input_display, 80)),
                     )
-                    .child(self.transfer_new_item_permission_grid(palette, state.mode, false, cx))
+                    .child(self.transfer_permission_grid(
+                        palette,
+                        state.mode,
+                        TransferPermissionTarget::NewFile,
+                        cx,
+                    ))
                     .child(
                         div()
                             .mt_2()
@@ -485,11 +495,11 @@ impl NyaTermApp {
             )
     }
 
-    fn transfer_new_item_permission_grid(
+    pub(in crate::features) fn transfer_permission_grid(
         &self,
         palette: crate::theme::ThemePalette,
         mode: u32,
-        folder: bool,
+        target: TransferPermissionTarget,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
         let bit = |mask: u32| mode & mask != 0;
@@ -500,7 +510,7 @@ impl NyaTermApp {
                 label.to_string(),
                 bit(mask),
                 cx.listener(move |this, _, _, cx| {
-                    this.toggle_transfer_new_item_mode_bit(folder, mask, cx);
+                    this.toggle_transfer_permission_bit(target, mask, cx);
                 }),
             )
         };
@@ -609,18 +619,31 @@ impl NyaTermApp {
             )
     }
 
-    fn toggle_transfer_new_item_mode_bit(
+    fn toggle_transfer_permission_bit(
         &mut self,
-        folder: bool,
+        target: TransferPermissionTarget,
         bit: u32,
         cx: &mut Context<Self>,
     ) {
-        if folder {
-            if let Some(state) = self.transfer_new_folder.as_mut() {
-                state.mode ^= bit;
+        match target {
+            TransferPermissionTarget::NewFolder => {
+                if let Some(state) = self.transfer_new_folder.as_mut() {
+                    state.mode ^= bit;
+                }
             }
-        } else if let Some(state) = self.transfer_new_file.as_mut() {
-            state.mode ^= bit;
+            TransferPermissionTarget::NewFile => {
+                if let Some(state) = self.transfer_new_file.as_mut() {
+                    state.mode ^= bit;
+                }
+            }
+            TransferPermissionTarget::Properties => {
+                if let Some(state) = self.transfer_properties.as_mut() {
+                    let current = parse_transfer_mode(&state.mode_value)
+                        .or(state.entry.permissions)
+                        .unwrap_or(0o644);
+                    state.mode_value = format_permissions_octal(current ^ bit);
+                }
+            }
         }
         cx.notify();
     }

@@ -21,8 +21,9 @@ use crate::models::{
     TransferExternalSyncPromptState, TransferInputField, TransferJobEvent, TransferJobKind,
     TransferJobMenuState, TransferJobOutput, TransferJobResult, TransferJobState,
     TransferJobStatus, TransferMoveState, TransferNewFileState, TransferNewFolderState,
-    TransferNewSymlinkState, TransferPathPromptKind, TransferPropertiesField,
-    TransferPropertiesState, TransferRenameState, TransferSymlinkField, TransferUnknownFileState,
+    TransferNewSymlinkState, TransferPathPromptKind, TransferPermissionTarget,
+    TransferPropertiesField, TransferPropertiesState, TransferRenameState, TransferSymlinkField,
+    TransferUnknownFileState,
 };
 use crate::widgets::{small_button, status_pill};
 use nyaterm_core::{AiCustomActionConfig, ConnectionStore};

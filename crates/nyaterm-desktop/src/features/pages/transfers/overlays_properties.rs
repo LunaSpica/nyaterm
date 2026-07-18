@@ -75,6 +75,9 @@ impl NyaTermApp {
             .unwrap_or_else(|| "-".to_string());
         let loading = properties.is_none();
         let can_save = !loading && !state.saving;
+        let property_mode = parse_transfer_mode(&state.mode_value)
+            .or(entry.permissions)
+            .unwrap_or(0o644);
         let dialog_width = (self.last_viewport_size.0 - 32.).min(460.).max(280.);
         let dialog_max_height = (self.last_viewport_size.1 * 0.75).clamp(320., 720.);
 
@@ -136,187 +139,206 @@ impl NyaTermApp {
                                 rgb(palette.hover),
                             )),
                     )
-                    .child(property_section_heading(
-                        palette,
-                        self.tr("fileExplorer.general"),
-                    ))
-                    .child(
-                        div()
-                            .mt_4()
-                            .rounded_md()
-                            .border_1()
-                            .border_color(rgb(0x202633))
-                            .bg(rgb(palette.input))
-                            .p_3()
-                            .flex()
-                            .flex_col()
-                            .gap_2()
-                            .child(property_row(
-                                palette,
-                                self.tr("fileExplorer.name"),
-                                truncate_preview(&entry.name, 76),
-                            ))
-                            .child(property_row(
-                                palette,
-                                self.tr("fileExplorer.type"),
-                                entry_type_label,
-                            ))
-                            .child(property_row(
-                                palette,
-                                self.tr("fileExplorer.path"),
-                                truncate_preview(&location, 76),
-                            ))
-                            .child(property_row(
-                                palette,
-                                self.tr("fileExplorer.location"),
-                                truncate_preview(&entry.path, 82),
-                            ))
-                            .child(property_row(
-                                palette,
-                                self.tr("fileExplorer.size"),
-                                format_file_size(size),
-                            ))
-                            .child(property_row(
-                                palette,
-                                self.tr("fileExplorer.mtime"),
-                                format_sftp_modified(modified_at),
-                            ))
-                            .child(property_row(
-                                palette,
-                                self.tr("fileExplorer.atime"),
-                                format_sftp_modified(accessed_at),
-                            ))
-                            .child(property_row(palette, self.tr("fileExplorer.owner"), owner))
-                            .child(property_row(palette, self.tr("fileExplorer.group"), group))
-                            .child(property_row(
-                                palette,
-                                self.tr("fileExplorer.octal"),
-                                permissions,
-                            ))
-                            .child(property_row(
-                                palette,
-                                self.tr("fileExplorer.permissions"),
-                                symbolic,
-                            )),
-                    )
-                    .child(
-                        div()
-                            .mt_3()
-                            .text_xs()
-                            .text_color(rgb(palette.text_muted))
-                            .child(if loading {
-                                self.tr("fileExplorer.loading")
-                            } else {
-                                ""
-                            }),
-                    )
-                    .child(property_section_heading(
-                        palette,
-                        self.tr("fileExplorer.ownership"),
-                    ))
-                    .child(
-                        div()
-                            .mt_4()
-                            .rounded_md()
-                            .border_1()
-                            .border_color(rgb(0x202633))
-                            .bg(rgb(palette.input))
-                            .p_3()
-                            .flex()
-                            .flex_col()
-                            .gap_2()
-                            .child(property_input_row(
-                                palette,
-                                "transfer-properties-owner-input",
-                                self.tr("fileExplorer.owner"),
-                                &state.owner_value,
-                                state.focused_field == TransferPropertiesField::Owner,
-                                loading || state.saving,
-                                cx.listener(|this, _, window, cx| {
-                                    if let Some(state) = this.transfer_properties.as_mut() {
-                                        state.focused_field = TransferPropertiesField::Owner;
-                                    }
-                                    window.focus(&this.transfer_properties_focus);
-                                    cx.notify();
-                                }),
-                            ))
-                            .child(property_input_row(
-                                palette,
-                                "transfer-properties-group-input",
-                                self.tr("fileExplorer.group"),
-                                &state.group_value,
-                                state.focused_field == TransferPropertiesField::Group,
-                                loading || state.saving,
-                                cx.listener(|this, _, window, cx| {
-                                    if let Some(state) = this.transfer_properties.as_mut() {
-                                        state.focused_field = TransferPropertiesField::Group;
-                                    }
-                                    window.focus(&this.transfer_properties_focus);
-                                    cx.notify();
-                                }),
-                            ))
-                            .child(property_section_heading(
-                                palette,
-                                self.tr("fileExplorer.permissions"),
-                            ))
-                            .child(property_input_row(
-                                palette,
-                                "transfer-properties-mode-input",
-                                self.tr("fileExplorer.octal"),
-                                &state.mode_value,
-                                state.focused_field == TransferPropertiesField::Mode,
-                                loading || state.saving,
-                                cx.listener(|this, _, window, cx| {
-                                    if let Some(state) = this.transfer_properties.as_mut() {
-                                        state.focused_field = TransferPropertiesField::Mode;
-                                    }
-                                    window.focus(&this.transfer_properties_focus);
-                                    cx.notify();
-                                }),
-                            ))
-                            .when(entry.file_type == SftpFileType::Directory, |this| {
-                                this.child(
-                                    div()
-                                        .mt_1()
-                                        .flex()
-                                        .items_center()
-                                        .justify_between()
-                                        .gap_3()
-                                        .text_xs()
-                                        .text_color(rgb(0xaeb7c8))
-                                        .child(self.tr("fileExplorer.applyRecursively"))
-                                        .child(small_button(
-                                            palette,
-                                            "transfer-properties-recursive-toggle",
-                                            if state.recursive {
-                                                self.tr("fileExplorer.on")
-                                            } else {
-                                                self.tr("fileExplorer.off")
-                                            },
-                                            cx.listener(|this, _, _, cx| {
-                                                if let Some(state) =
-                                                    this.transfer_properties.as_mut()
-                                                {
-                                                    state.recursive = !state.recursive;
-                                                }
-                                                cx.notify();
-                                            }),
-                                        )),
-                                )
-                            }),
-                    )
-                    .when_some(state.error.clone(), |this, error| {
-                        this.child(
+                    .when(!loading, |this| {
+                        this.child(property_section_heading(
+                            palette,
+                            self.tr("fileExplorer.general"),
+                        ))
+                        .child(
                             div()
-                                .mt_3()
-                                .rounded_sm()
-                                .bg(rgb(0x351216))
-                                .px_3()
-                                .py_2()
-                                .text_xs()
-                                .text_color(rgb(0xfca5a5))
-                                .child(error),
+                                .mt_4()
+                                .rounded_md()
+                                .border_1()
+                                .border_color(rgb(0x202633))
+                                .bg(rgb(palette.input))
+                                .p_3()
+                                .flex()
+                                .flex_col()
+                                .gap_2()
+                                .child(property_row(
+                                    palette,
+                                    self.tr("fileExplorer.name"),
+                                    truncate_preview(&entry.name, 76),
+                                ))
+                                .child(property_row(
+                                    palette,
+                                    self.tr("fileExplorer.type"),
+                                    entry_type_label,
+                                ))
+                                .child(property_row(
+                                    palette,
+                                    self.tr("fileExplorer.path"),
+                                    truncate_preview(&location, 76),
+                                ))
+                                .child(property_row(
+                                    palette,
+                                    self.tr("fileExplorer.location"),
+                                    truncate_preview(&entry.path, 82),
+                                ))
+                                .child(property_row(
+                                    palette,
+                                    self.tr("fileExplorer.size"),
+                                    format_file_size(size),
+                                ))
+                                .child(property_row(
+                                    palette,
+                                    self.tr("fileExplorer.mtime"),
+                                    format_sftp_modified(modified_at),
+                                ))
+                                .child(property_row(
+                                    palette,
+                                    self.tr("fileExplorer.atime"),
+                                    format_sftp_modified(accessed_at),
+                                ))
+                                .child(property_row(palette, self.tr("fileExplorer.owner"), owner))
+                                .child(property_row(palette, self.tr("fileExplorer.group"), group))
+                                .child(property_row(
+                                    palette,
+                                    self.tr("fileExplorer.octal"),
+                                    permissions,
+                                ))
+                                .child(property_row(
+                                    palette,
+                                    self.tr("fileExplorer.permissions"),
+                                    symbolic,
+                                )),
                         )
+                        .child(property_section_heading(
+                            palette,
+                            self.tr("fileExplorer.ownership"),
+                        ))
+                        .child(
+                            div()
+                                .mt_4()
+                                .rounded_md()
+                                .border_1()
+                                .border_color(rgb(0x202633))
+                                .bg(rgb(palette.input))
+                                .p_3()
+                                .flex()
+                                .flex_col()
+                                .gap_2()
+                                .child(property_input_row(
+                                    palette,
+                                    "transfer-properties-owner-input",
+                                    self.tr("fileExplorer.owner"),
+                                    &state.owner_value,
+                                    state.focused_field == TransferPropertiesField::Owner,
+                                    loading || state.saving,
+                                    cx.listener(|this, _, window, cx| {
+                                        if let Some(state) = this.transfer_properties.as_mut() {
+                                            state.focused_field = TransferPropertiesField::Owner;
+                                        }
+                                        window.focus(&this.transfer_properties_focus);
+                                        cx.notify();
+                                    }),
+                                ))
+                                .child(property_input_row(
+                                    palette,
+                                    "transfer-properties-group-input",
+                                    self.tr("fileExplorer.group"),
+                                    &state.group_value,
+                                    state.focused_field == TransferPropertiesField::Group,
+                                    loading || state.saving,
+                                    cx.listener(|this, _, window, cx| {
+                                        if let Some(state) = this.transfer_properties.as_mut() {
+                                            state.focused_field = TransferPropertiesField::Group;
+                                        }
+                                        window.focus(&this.transfer_properties_focus);
+                                        cx.notify();
+                                    }),
+                                ))
+                                .child(property_section_heading(
+                                    palette,
+                                    self.tr("fileExplorer.permissions"),
+                                ))
+                                .child(self.transfer_permission_grid(
+                                    palette,
+                                    property_mode,
+                                    TransferPermissionTarget::Properties,
+                                    cx,
+                                ))
+                                .child(property_input_row(
+                                    palette,
+                                    "transfer-properties-mode-input",
+                                    self.tr("fileExplorer.octal"),
+                                    &state.mode_value,
+                                    state.focused_field == TransferPropertiesField::Mode,
+                                    loading || state.saving,
+                                    cx.listener(|this, _, window, cx| {
+                                        if let Some(state) = this.transfer_properties.as_mut() {
+                                            state.focused_field = TransferPropertiesField::Mode;
+                                        }
+                                        window.focus(&this.transfer_properties_focus);
+                                        cx.notify();
+                                    }),
+                                ))
+                                .when(entry.file_type == SftpFileType::Directory, |this| {
+                                    this.child(
+                                        div()
+                                            .mt_1()
+                                            .flex()
+                                            .items_center()
+                                            .justify_between()
+                                            .gap_3()
+                                            .text_xs()
+                                            .text_color(rgb(0xaeb7c8))
+                                            .child(self.tr("fileExplorer.applyRecursively"))
+                                            .child(small_button(
+                                                palette,
+                                                "transfer-properties-recursive-toggle",
+                                                if state.recursive {
+                                                    self.tr("fileExplorer.on")
+                                                } else {
+                                                    self.tr("fileExplorer.off")
+                                                },
+                                                cx.listener(|this, _, _, cx| {
+                                                    if let Some(state) =
+                                                        this.transfer_properties.as_mut()
+                                                    {
+                                                        state.recursive = !state.recursive;
+                                                    }
+                                                    cx.notify();
+                                                }),
+                                            )),
+                                    )
+                                }),
+                        )
+                        .when_some(state.error.clone(), |this, error| {
+                            this.child(
+                                div()
+                                    .mt_3()
+                                    .rounded_sm()
+                                    .bg(rgb(0x351216))
+                                    .px_3()
+                                    .py_2()
+                                    .text_xs()
+                                    .text_color(rgb(0xfca5a5))
+                                    .child(error),
+                            )
+                        })
+                    })
+                    .when(loading, |this| {
+                        this.child(if let Some(error) = state.error.clone() {
+                            div()
+                                .min_h(px(250.))
+                                .flex()
+                                .items_center()
+                                .justify_center()
+                                .px_4()
+                                .text_xs()
+                                .text_color(rgb(palette.danger))
+                                .child(error)
+                        } else {
+                            div()
+                                .min_h(px(250.))
+                                .flex()
+                                .items_center()
+                                .justify_center()
+                                .text_xs()
+                                .text_color(rgb(palette.text_muted))
+                                .child(self.tr("fileExplorer.loading"))
+                        })
                     })
                     .child(
                         div()

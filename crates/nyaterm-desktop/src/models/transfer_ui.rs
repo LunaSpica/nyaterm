@@ -104,6 +104,13 @@ pub(crate) struct TransferNewFileState {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum TransferPermissionTarget {
+    NewFolder,
+    NewFile,
+    Properties,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum TransferSymlinkField {
     Name,
     Target,
