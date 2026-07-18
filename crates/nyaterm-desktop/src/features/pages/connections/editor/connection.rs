@@ -86,6 +86,16 @@ impl NyaTermApp {
                     .map(|key| key.name.clone())
             })
             .unwrap_or_else(|| none_label.to_string());
+        let password_label = editor
+            .password_id
+            .as_deref()
+            .and_then(|id| {
+                self.connection_saved_passwords
+                    .iter()
+                    .find(|password| password.id == id)
+                    .map(|password| password.name.clone())
+            })
+            .unwrap_or_else(|| self.tr("dialog.selectPassword").to_string());
         let otp_label = editor
             .otp_id
             .as_deref()
@@ -147,9 +157,9 @@ impl NyaTermApp {
             })
             .unwrap_or_else(|| self.tr("dialog.noProxyJump").to_string());
         let auth_options = [
+            ("none", self.tr("dialog.noAuthentication")),
             ("password", self.tr("dialog.password")),
             ("key", self.tr("dialog.privateKey")),
-            ("none", self.tr("dialog.noAuthentication")),
         ]
         .into_iter()
         .map(|(value, label)| ConnectionEditorChoice {
@@ -172,6 +182,18 @@ impl NyaTermApp {
                     selected: editor.key_id.as_deref() == Some(key.id.as_str()),
                 }),
         );
+        let mut password_options = vec![ConnectionEditorChoice {
+            value: None,
+            label: none_label.to_string(),
+            selected: editor.password_id.is_none(),
+        }];
+        password_options.extend(self.connection_saved_passwords.iter().map(|password| {
+            ConnectionEditorChoice {
+                value: Some(password.id.clone()),
+                label: password.name.clone(),
+                selected: editor.password_id.as_deref() == Some(password.id.as_str()),
+            }
+        }));
         let mut otp_options = vec![ConnectionEditorChoice {
             value: None,
             label: self.tr("dialog.noOtp").to_string(),
@@ -510,11 +532,13 @@ impl NyaTermApp {
                             palette,
                             &editor,
                             password_display.clone(),
+                            password_label.clone(),
                             key_label.clone(),
                             otp_label.clone(),
                             proxy_label.clone(),
                             jump_label.clone(),
                             auth_options,
+                            password_options,
                             key_options,
                             otp_options,
                             proxy_options,

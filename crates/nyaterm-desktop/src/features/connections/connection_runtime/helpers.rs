@@ -17,6 +17,13 @@ pub(super) fn connection_editor_from_saved(
             command: String::new(),
             delay_ms: 1000,
         });
+    let password_source = if auth.password_id.is_some() {
+        ConnectionEditorPasswordSource::Saved
+    } else if auth.password.is_some() || auth.has_password {
+        ConnectionEditorPasswordSource::Direct
+    } else {
+        ConnectionEditorPasswordSource::Ask
+    };
     let mut editor = ConnectionEditorState {
         id: Some(connection.id),
         kind: ConnectionKindTab::from_connection_type(&connection.config),
@@ -28,6 +35,8 @@ pub(super) fn connection_editor_from_saved(
         port: String::new(),
         username: "root".to_string(),
         auth_mode: auth.mode,
+        password_source,
+        password_id: auth.password_id,
         password: String::new(),
         existing_password: auth.password.filter(|value| !value.is_empty()),
         key_id: auth.key_id,
@@ -50,6 +59,9 @@ pub(super) fn connection_editor_from_saved(
         post_login_enabled: post_login.enabled,
         post_login_command: post_login.command,
         post_login_delay_ms: post_login.delay_ms.to_string(),
+        advanced_open: false,
+        advanced_network_tab: ConnectionEditorAdvancedTab::Proxy,
+        advanced_behavior_tab: ConnectionEditorAdvancedTab::PostLogin,
         connect_after_save,
         focused_field: ConnectionEditorField::Name,
         error: None,
@@ -151,14 +163,6 @@ pub(super) fn build_saved_connection_from_editor(
             if username.is_empty() {
                 return Err("SSH username is required".to_string());
             }
-            if editor.auth_mode == "key"
-                && editor
-                    .key_id
-                    .as_deref()
-                    .is_none_or(|value| value.trim().is_empty())
-            {
-                return Err("Select an SSH key for key authentication".to_string());
-            }
             ConnectionType::Ssh {
                 host,
                 port,
@@ -229,24 +233,48 @@ pub(super) fn build_saved_connection_from_editor(
         ConnectionKindTab::Ssh => {
             let password = editor.password.trim().to_string();
             let existing = editor.existing_password.clone();
+            let mode = match editor.auth_mode.as_str() {
+                "password" => "password".to_string(),
+                "key"
+                    if editor
+                        .key_id
+                        .as_deref()
+                        .is_some_and(|value| !value.trim().is_empty()) =>
+                {
+                    "key".to_string()
+                }
+                _ => "none".to_string(),
+            };
             Some(ConnectionAuth {
-                mode: non_empty_or(editor.auth_mode.clone(), "password"),
-                password_id: None,
-                password: if !password.is_empty() {
-                    Some(password)
-                } else {
-                    existing
-                },
-                key_id: editor
-                    .key_id
-                    .clone()
-                    .filter(|value| !value.trim().is_empty()),
+                password_id: (mode == "password"
+                    && editor.password_source == ConnectionEditorPasswordSource::Saved)
+                    .then(|| editor.password_id.clone())
+                    .flatten(),
+                password: (mode == "password"
+                    && editor.password_source == ConnectionEditorPasswordSource::Direct)
+                    .then(|| {
+                        if !password.is_empty() {
+                            Some(password)
+                        } else {
+                            existing
+                        }
+                    })
+                    .flatten(),
+                key_id: (mode == "key")
+                    .then(|| {
+                        editor
+                            .key_id
+                            .clone()
+                            .filter(|value| !value.trim().is_empty())
+                    })
+                    .flatten(),
                 otp_id: editor
                     .otp_id
                     .clone()
                     .filter(|value| !value.trim().is_empty()),
                 auto_fill_otp: editor.auto_fill_otp,
                 has_password: false,
+                mode,
             })
         }
         _ => None,
@@ -364,6 +392,49 @@ mod tests {
         let saved = build_saved_connection_from_editor(&editor).expect("valid connection");
         assert_eq!(saved.icon.as_deref(), Some("linux"));
     }
+
+    #[test]
+    fn connection_editor_round_trip_preserves_saved_password_reference() {
+        let connection = SavedConnection {
+            id: "connection-ssh".to_string(),
+            name: "SSH".to_string(),
+            config: ConnectionType::Ssh {
+                host: "example.com".to_string(),
+                port: 22,
+                username: "root".to_string(),
+                backspace_mode: "del".to_string(),
+                ai_execution_profile: AiExecutionProfile::Auto,
+                x11_forwarding: false,
+            },
+            group_id: None,
+            description: None,
+            sort_order: 0,
+            icon: None,
+            auth: Some(ConnectionAuth {
+                mode: "password".to_string(),
+                password_id: Some("password-1".to_string()),
+                ..ConnectionAuth::default()
+            }),
+            network: None,
+            post_login: None,
+            created_at_ms: None,
+            updated_at_ms: None,
+            last_used_at_ms: None,
+        };
+
+        let editor = connection_editor_from_saved(connection, false);
+        assert_eq!(
+            editor.password_source,
+            ConnectionEditorPasswordSource::Saved
+        );
+        assert_eq!(editor.password_id.as_deref(), Some("password-1"));
+
+        let saved = build_saved_connection_from_editor(&editor).expect("valid connection");
+        assert_eq!(
+            saved.auth.and_then(|auth| auth.password_id).as_deref(),
+            Some("password-1")
+        );
+    }
 }
 
 pub(super) fn non_empty_optional(value: &str) -> Option<String> {
@@ -441,4 +512,5 @@ pub(in crate::features) enum ConnectionEditorToggle {
     RawTcp,
     LocalEcho,
     PostLogin,
+    Advanced,
 }

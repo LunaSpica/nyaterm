@@ -50,6 +50,7 @@ impl ConnectionKindTab {
 pub(crate) enum ConnectionEditorMenu {
     Authentication,
     Group,
+    SavedPassword,
     SshKey,
     Otp,
     Proxy,
@@ -60,6 +61,23 @@ pub(crate) enum ConnectionEditorMenu {
     DataBits,
     Parity,
     StopBits,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum ConnectionEditorPasswordSource {
+    Ask,
+    Direct,
+    Saved,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum ConnectionEditorAdvancedTab {
+    Proxy,
+    JumpHost,
+    TwoFactor,
+    PostLogin,
+    X11,
+    Backspace,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -80,16 +98,26 @@ pub(crate) enum ConnectionEditorField {
 }
 
 impl ConnectionEditorField {
-    pub(crate) fn next(self, kind: ConnectionKindTab, auth_mode: &str) -> Self {
+    pub(crate) fn next(
+        self,
+        kind: ConnectionKindTab,
+        auth_mode: &str,
+        password_field_visible: bool,
+        post_login_fields_visible: bool,
+    ) -> Self {
         match kind {
             ConnectionKindTab::Ssh => match self {
                 Self::Name => Self::Description,
                 Self::Description => Self::Host,
                 Self::Host => Self::Port,
                 Self::Port => Self::Username,
-                Self::Username if auth_mode == "password" => Self::Password,
-                Self::Username => Self::PostLoginCommand,
-                Self::Password => Self::PostLoginCommand,
+                Self::Username if auth_mode == "password" && password_field_visible => {
+                    Self::Password
+                }
+                Self::Username if post_login_fields_visible => Self::PostLoginCommand,
+                Self::Username => Self::Name,
+                Self::Password if post_login_fields_visible => Self::PostLoginCommand,
+                Self::Password => Self::Name,
                 Self::PostLoginCommand => Self::PostLoginDelay,
                 Self::PostLoginDelay => Self::Name,
                 other => other.next_fallback(kind),
@@ -129,6 +157,48 @@ impl ConnectionEditorField {
     }
 }
 
+#[cfg(test)]
+mod connection_editor_field_tests {
+    use super::{ConnectionEditorField, ConnectionKindTab};
+
+    #[test]
+    fn ssh_tab_order_skips_collapsed_post_login_fields() {
+        assert_eq!(
+            ConnectionEditorField::Password.next(ConnectionKindTab::Ssh, "password", true, false,),
+            ConnectionEditorField::Name
+        );
+        assert_eq!(
+            ConnectionEditorField::Username.next(ConnectionKindTab::Ssh, "key", false, false),
+            ConnectionEditorField::Name
+        );
+    }
+
+    #[test]
+    fn ssh_tab_order_reaches_visible_post_login_fields() {
+        assert_eq!(
+            ConnectionEditorField::Password.next(ConnectionKindTab::Ssh, "password", true, true,),
+            ConnectionEditorField::PostLoginCommand
+        );
+        assert_eq!(
+            ConnectionEditorField::PostLoginCommand.next(
+                ConnectionKindTab::Ssh,
+                "password",
+                true,
+                true,
+            ),
+            ConnectionEditorField::PostLoginDelay
+        );
+    }
+
+    #[test]
+    fn ssh_tab_order_skips_non_direct_password_field() {
+        assert_eq!(
+            ConnectionEditorField::Username.next(ConnectionKindTab::Ssh, "password", false, false,),
+            ConnectionEditorField::Name
+        );
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct ConnectionEditorState {
     pub(crate) id: Option<String>,
@@ -141,6 +211,8 @@ pub(crate) struct ConnectionEditorState {
     pub(crate) port: String,
     pub(crate) username: String,
     pub(crate) auth_mode: String,
+    pub(crate) password_source: ConnectionEditorPasswordSource,
+    pub(crate) password_id: Option<String>,
     pub(crate) password: String,
     pub(crate) existing_password: Option<String>,
     pub(crate) key_id: Option<String>,
@@ -163,6 +235,9 @@ pub(crate) struct ConnectionEditorState {
     pub(crate) post_login_enabled: bool,
     pub(crate) post_login_command: String,
     pub(crate) post_login_delay_ms: String,
+    pub(crate) advanced_open: bool,
+    pub(crate) advanced_network_tab: ConnectionEditorAdvancedTab,
+    pub(crate) advanced_behavior_tab: ConnectionEditorAdvancedTab,
     pub(crate) connect_after_save: bool,
     pub(crate) focused_field: ConnectionEditorField,
     pub(crate) error: Option<String>,

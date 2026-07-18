@@ -34,6 +34,8 @@ impl NyaTermApp {
                 port: "22".to_string(),
                 username: "root".to_string(),
                 auth_mode: "password".to_string(),
+                password_source: ConnectionEditorPasswordSource::Ask,
+                password_id: None,
                 password: String::new(),
                 existing_password: None,
                 key_id: None,
@@ -60,6 +62,9 @@ impl NyaTermApp {
                 post_login_enabled: false,
                 post_login_command: String::new(),
                 post_login_delay_ms: "1000".to_string(),
+                advanced_open: false,
+                advanced_network_tab: ConnectionEditorAdvancedTab::Proxy,
+                advanced_behavior_tab: ConnectionEditorAdvancedTab::PostLogin,
                 connect_after_save,
                 focused_field: ConnectionEditorField::Name,
                 error: None,
@@ -130,9 +135,17 @@ impl NyaTermApp {
         let value = value.map(ToOwned::to_owned);
         match menu {
             ConnectionEditorMenu::Authentication => {
-                editor.auth_mode = value.unwrap_or_else(|| "password".to_string())
+                editor.auth_mode = value.unwrap_or_else(|| "password".to_string());
+                if editor.auth_mode == "none" {
+                    editor.password_source = ConnectionEditorPasswordSource::Ask;
+                    editor.password_id = None;
+                    editor.password.clear();
+                    editor.existing_password = None;
+                    editor.key_id = None;
+                }
             }
             ConnectionEditorMenu::Group => editor.group_id = value,
+            ConnectionEditorMenu::SavedPassword => editor.password_id = value,
             ConnectionEditorMenu::SshKey => editor.key_id = value,
             ConnectionEditorMenu::Otp => {
                 editor.otp_id = value;
@@ -160,6 +173,57 @@ impl NyaTermApp {
             }
         }
         editor.error = None;
+        self.connection_editor_menu = None;
+        cx.notify();
+    }
+
+    pub(in crate::features) fn set_connection_editor_password_source(
+        &mut self,
+        source: ConnectionEditorPasswordSource,
+        cx: &mut Context<Self>,
+    ) {
+        if let Some(editor) = self.connection_editor.as_mut() {
+            editor.password_source = source;
+            match source {
+                ConnectionEditorPasswordSource::Ask => {
+                    editor.password_id = None;
+                    editor.password.clear();
+                    editor.existing_password = None;
+                }
+                ConnectionEditorPasswordSource::Direct => editor.password_id = None,
+                ConnectionEditorPasswordSource::Saved => {
+                    editor.password.clear();
+                    editor.existing_password = None;
+                }
+            }
+            editor.error = None;
+        }
+        self.connection_editor_menu = None;
+        cx.notify();
+    }
+
+    pub(in crate::features) fn set_connection_editor_advanced_tab(
+        &mut self,
+        tab: ConnectionEditorAdvancedTab,
+        cx: &mut Context<Self>,
+    ) {
+        if let Some(editor) = self.connection_editor.as_mut() {
+            match tab {
+                ConnectionEditorAdvancedTab::Proxy
+                | ConnectionEditorAdvancedTab::JumpHost
+                | ConnectionEditorAdvancedTab::TwoFactor => editor.advanced_network_tab = tab,
+                ConnectionEditorAdvancedTab::PostLogin
+                | ConnectionEditorAdvancedTab::X11
+                | ConnectionEditorAdvancedTab::Backspace => editor.advanced_behavior_tab = tab,
+            }
+            if matches!(
+                editor.focused_field,
+                ConnectionEditorField::PostLoginCommand | ConnectionEditorField::PostLoginDelay
+            ) && tab != ConnectionEditorAdvancedTab::PostLogin
+            {
+                editor.focused_field = ConnectionEditorField::Name;
+            }
+        }
         self.connection_editor_menu = None;
         cx.notify();
     }
@@ -310,6 +374,19 @@ impl NyaTermApp {
                 ConnectionEditorToggle::PostLogin => {
                     editor.post_login_enabled = !editor.post_login_enabled
                 }
+                ConnectionEditorToggle::Advanced => {
+                    editor.advanced_open = !editor.advanced_open;
+                    if !editor.advanced_open
+                        && matches!(
+                            editor.focused_field,
+                            ConnectionEditorField::PostLoginCommand
+                                | ConnectionEditorField::PostLoginDelay
+                        )
+                    {
+                        editor.focused_field = ConnectionEditorField::Name;
+                    }
+                    self.connection_editor_menu = None;
+                }
             }
             editor.error = None;
         }
@@ -348,9 +425,17 @@ impl NyaTermApp {
             }
             "tab" if !keystroke.modifiers.platform && !keystroke.modifiers.control => {
                 if let Some(editor) = self.connection_editor.as_mut() {
-                    editor.focused_field = editor
-                        .focused_field
-                        .next(editor.kind, editor.auth_mode.as_str());
+                    let password_field_visible = editor.auth_mode == "password"
+                        && editor.password_source == ConnectionEditorPasswordSource::Direct;
+                    let post_login_fields_visible = editor.advanced_open
+                        && editor.post_login_enabled
+                        && editor.advanced_behavior_tab == ConnectionEditorAdvancedTab::PostLogin;
+                    editor.focused_field = editor.focused_field.next(
+                        editor.kind,
+                        editor.auth_mode.as_str(),
+                        password_field_visible,
+                        post_login_fields_visible,
+                    );
                     editor.error = None;
                 }
                 cx.notify();
