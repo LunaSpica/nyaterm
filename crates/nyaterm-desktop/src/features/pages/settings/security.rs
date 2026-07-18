@@ -6,139 +6,130 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
         let palette = self.theme_palette();
-        let master_password_status = if !self.settings_master_password_enabled {
-            "Disabled"
-        } else if !self.settings_master_password_draft.is_empty() {
-            "New password staged"
-        } else if self.settings.has_master_password {
-            "Configured"
-        } else if self.cloud_sync_settings.enabled {
-            "Required for cloud sync"
-        } else {
-            "Password required"
-        };
         let master_password_display = if self.settings_master_password_draft.is_empty() {
-            if self.settings.has_master_password {
-                "Stored password unchanged".to_string()
-            } else {
-                " ".to_string()
-            }
+            " ".to_string()
         } else {
             "*".repeat(self.settings_master_password_draft.chars().count().min(24))
         };
-        let idle_label = if self.settings.idle_lock_minutes == 0 {
-            "Manual only".to_string()
-        } else {
-            format!("{} min", self.settings.idle_lock_minutes)
+        let master_password_enabled = self.settings_master_password_enabled;
+        let master_password_switch_enabled = !self.cloud_sync_settings.enabled;
+        let has_stored_master_password = self.settings.has_master_password;
+        let idle_minutes = self.settings.idle_lock_minutes;
+        let host_key_policy = match self.settings.host_key_policy.as_str() {
+            "strict" | "reject" => "strict",
+            "accept" | "accept_new" => "accept",
+            _ => "prompt",
         };
+
+        let master_section_label = self.tr("settings.masterPasswordSection");
+        let master_switch_label = self.tr("settings.masterPasswordSwitch");
+        let master_switch_desc = self.tr("settings.masterPasswordSwitchDesc");
+        let master_locked_desc = self.tr("settings.masterPasswordLockedByCloudSync");
+        let master_set_label = self.tr("settings.masterPasswordIsSet");
+        let master_input_label = self.tr(if has_stored_master_password {
+            "settings.masterPasswordNew"
+        } else {
+            "settings.masterPassword"
+        });
+        let master_input_desc = self.tr("settings.masterPasswordDesc");
+        let master_input_placeholder = self.tr(if has_stored_master_password {
+            "settings.masterPasswordNewPlaceholder"
+        } else {
+            "settings.masterPasswordPlaceholder"
+        });
+        let session_security_label = self.tr("settings.sessionSecurity");
+        let screen_lock_label = self.tr("settings.enableScreenLock");
+        let screen_lock_desc = self.tr("settings.enableScreenLockDesc");
+        let idle_lock_label = self.tr("settings.idleLockMinutes");
+        let idle_lock_desc = self.tr("settings.idleLockMinutesDesc");
+        let minutes_label = self.tr("common.minutes");
+        let host_key_label = self.tr("settings.hostKeyPolicy");
+        let host_key_desc = self.tr("settings.hostKeyPolicyDesc");
 
         div()
             .flex()
             .flex_col()
             .gap_3()
-            .child(settings_form_section(palette,
-                Some("Master password"),
-                Some("Protects encrypted snapshots and the native lock screen."),
+            .child(settings_form_section(
+                palette,
+                Some(master_section_label),
+                None,
                 div()
                     .flex()
                     .flex_col()
                     .gap_3()
                     .child(settings_form_row(
                         palette,
-                        "Enable master password",
-                        Some(SharedString::from(
-                            "Required while cloud sync is enabled.",
-                        )),
-                        settings_switch(
-                            palette,
-                            "settings-master-password-enabled",
-                            self.settings_master_password_enabled,
-                            cx.listener(|this, _, _, cx| {
-                                this.toggle_settings_master_password(cx);
-                            }),
-                        ),
-                    ))
-                    .child(settings_form_row(palette,
-                        "Status",
-                        Some(SharedString::from(master_password_status)),
+                        master_switch_label,
+                        Some(SharedString::from(master_switch_desc)),
                         div()
-                            .text_size(px(11.))
-                            .font_weight(FontWeight(600.))
-                            .text_color(if self.settings_master_password_enabled
-                                && (self.settings.has_master_password
-                                    || !self.settings_master_password_draft.is_empty())
-                            {
-                                rgb(palette.success)
-                            } else {
-                                rgb(palette.warning)
+                            .id("settings-master-password-switch-wrap")
+                            .when(!master_password_switch_enabled, |this| {
+                                this.tooltip(move |_, cx| {
+                                    cx.new(|_| ChromeTooltip::new(master_locked_desc)).into()
+                                })
                             })
-                            .child(if self.settings_master_password_enabled
-                                && (self.settings.has_master_password
-                                    || !self.settings_master_password_draft.is_empty())
-                            {
-                                "Ready"
-                            } else {
-                                "Pending"
-                            }),
-                    ))
-                    .when(self.settings_master_password_enabled, |this| {
-                        this.child(settings_form_row(
-                            palette,
-                            if self.settings.has_master_password {
-                                "New password"
-                            } else {
-                                "Password"
-                            },
-                            Some(SharedString::from(if self.settings.has_master_password {
-                                "Leave unchanged to keep the stored password."
-                            } else {
-                                "Enter a non-empty password before applying."
-                            })),
-                            transfer_input(
-                                "settings-master-password-input",
-                                "Master password",
-                                master_password_display,
-                                !self.settings_master_password_draft.is_empty(),
+                            .child(settings_switch_with_enabled(
                                 palette,
+                                "settings-master-password-enabled",
+                                master_password_enabled,
+                                master_password_switch_enabled,
+                                cx.listener(|this, _, _, cx| {
+                                    this.toggle_settings_master_password(cx);
+                                }),
+                            )),
+                    ))
+                    .when(
+                        has_stored_master_password
+                            && self.settings_master_password_draft.is_empty(),
+                        |this| {
+                            this.child(
+                                div()
+                                    .text_size(px(12.))
+                                    .text_color(rgb(palette.text_muted))
+                                    .child(master_set_label),
                             )
-                            .track_focus(&self.settings_master_password_focus)
-                            .on_click(cx.listener(|this, _, window, cx| {
-                                window.focus(&this.settings_master_password_focus);
-                                cx.notify();
-                            }))
-                            .on_key_down(cx.listener(|this, event: &KeyDownEvent, _, cx| {
-                                this.handle_settings_master_password_key_down(event, cx);
-                            })),
-                        ))
-                    })
-                    .child(settings_form_row(palette,
-                        "Cloud sync dependency",
-                        Some(SharedString::from(
-                            "Push/pull may request this password before encrypted snapshot work.",
-                        )),
-                        div()
-                            .text_size(px(11.))
-                            .text_color(rgb(palette.text_muted))
-                            .child(if self.cloud_sync_settings.enabled {
-                                "Enabled"
-                            } else {
-                                "Disabled"
-                            }),
+                        },
+                    )
+                    .child(settings_form_row(
+                        palette,
+                        master_input_label,
+                        Some(SharedString::from(master_input_desc)),
+                        transfer_input(
+                            "settings-master-password-input",
+                            master_input_placeholder,
+                            master_password_display,
+                            master_password_enabled
+                                && !self.settings_master_password_draft.is_empty(),
+                            palette,
+                        )
+                        .opacity(if master_password_enabled { 1.0 } else { 0.45 })
+                        .when(master_password_enabled, |this| {
+                            this.track_focus(&self.settings_master_password_focus)
+                                .on_click(cx.listener(|this, _, window, cx| {
+                                    window.focus(&this.settings_master_password_focus);
+                                    cx.notify();
+                                }))
+                                .on_key_down(cx.listener(|this, event: &KeyDownEvent, _, cx| {
+                                    this.handle_settings_master_password_key_down(event, cx);
+                                }))
+                        }),
                     )),
             ))
-            .child(settings_form_section(palette,
-                Some("Session security"),
-                Some("Lock the window after idle time or on demand (Tauri SecurityTab)."),
+            .child(settings_form_section(
+                palette,
+                Some(session_security_label),
+                None,
                 div()
                     .flex()
                     .flex_col()
                     .gap_3()
-                    .child(settings_form_row(palette,
-                        "Enable screen lock",
-                        Some(SharedString::from(
-                            "Require the master password to unlock the main window.",
-                        )),
-                        settings_switch(palette,
+                    .child(settings_form_row(
+                        palette,
+                        screen_lock_label,
+                        Some(SharedString::from(screen_lock_desc)),
+                        settings_switch(
+                            palette,
                             "settings-screen-lock-enabled",
                             self.settings.enable_screen_lock,
                             cx.listener(|this, _, _, cx| {
@@ -147,159 +138,108 @@ impl NyaTermApp {
                         ),
                     ))
                     .when(self.settings.enable_screen_lock, |this| {
-                        this.child(
+                        this.child(settings_form_row(
+                            palette,
+                            idle_lock_label,
+                            Some(SharedString::from(idle_lock_desc)),
                             div()
-                                .pl_3()
-                                .ml_1()
-                                .border_l_1()
-                                .border_color(rgb(palette.border))
-                                .child(settings_form_row(
+                                .flex()
+                                .items_center()
+                                .gap_1()
+                                .child(small_button(
                                     palette,
-                                    "Idle lock",
-                                    Some(SharedString::from(
-                                        "Automatically lock after this many minutes of inactivity (0 = manual).",
-                                    )),
+                                    "settings-idle-lock-minus",
+                                    "-",
+                                    cx.listener(|this, _, _, cx| {
+                                        this.adjust_idle_lock_minutes(-1, cx);
+                                    }),
+                                ))
+                                .child(
                                     div()
-                                        .flex()
-                                        .items_center()
-                                        .gap_1()
-                                        .child(
-                                            div()
-                                                .min_w(px(72.))
-                                                .font_family(crate::features::gpui_code_font_family())
-                                                .text_size(px(12.))
-                                                .font_weight(FontWeight(600.))
-                                                .text_color(rgb(palette.text))
-                                                .child(idle_label.clone()),
-                                        )
-                                        .child(small_button(
-                                            palette,
-                                            "settings-idle-lock-minus",
-                                            "−5",
-                                            cx.listener(|this, _, _, cx| {
-                                                this.adjust_idle_lock_minutes(-5, cx);
-                                            }),
-                                        ))
-                                        .child(small_button(
-                                            palette,
-                                            "settings-idle-lock-plus",
-                                            "+5",
-                                            cx.listener(|this, _, _, cx| {
-                                                this.adjust_idle_lock_minutes(5, cx);
-                                            }),
-                                        )),
-                                )),
-                        )
-                    })
-                    .child(settings_form_row(palette,
-                        "Window state",
-                        Some(SharedString::from(format!(
-                            "Last activity {}s ago",
-                            self.last_user_activity_at.elapsed().as_secs()
-                        ))),
-                        div()
-                            .text_size(px(11.))
-                            .font_weight(FontWeight(600.))
-                            .text_color(if self.is_locked {
-                                rgb(palette.danger)
-                            } else {
-                                rgb(palette.success)
-                            })
-                            .child(if self.is_locked { "Locked" } else { "Unlocked" }),
-                    )),
+                                        .min_w(px(42.))
+                                        .text_center()
+                                        .font_family(crate::features::gpui_code_font_family())
+                                        .text_size(px(12.))
+                                        .font_weight(FontWeight(600.))
+                                        .text_color(rgb(palette.text))
+                                        .child(idle_minutes.to_string()),
+                                )
+                                .child(small_button(
+                                    palette,
+                                    "settings-idle-lock-plus",
+                                    "+",
+                                    cx.listener(|this, _, _, cx| {
+                                        this.adjust_idle_lock_minutes(1, cx);
+                                    }),
+                                ))
+                                .child(
+                                    div()
+                                        .text_size(px(11.))
+                                        .text_color(rgb(palette.text_muted))
+                                        .child(minutes_label),
+                                ),
+                        ))
+                    }),
             ))
-            .child(settings_form_section(palette,
-                Some("Host key policy"),
-                Some("How SSH host key changes are handled."),
+            .child(settings_form_section(
+                palette,
+                None,
+                None,
                 div()
                     .flex()
                     .flex_col()
                     .gap_3()
                     .child(
                         div()
-                            .flex()
-                            .flex_wrap()
-                            .gap_1()
-                            .child(settings_choice_chip(palette,
-                                "security-host-ask",
-                                "Ask",
-                                self.settings.host_key_policy == "ask"
-                                    || self.settings.host_key_policy == "prompt",
-                                cx.listener(|this, _, _, cx| {
-                                    this.update_host_key_policy("ask", cx);
-                                }),
-                            ))
-                            .child(settings_choice_chip(palette,
-                                "security-host-accept",
-                                "Accept new",
-                                self.settings.host_key_policy == "accept_new"
-                                    || self.settings.host_key_policy == "accept",
-                                cx.listener(|this, _, _, cx| {
-                                    this.update_host_key_policy("accept_new", cx);
-                                }),
-                            ))
-                            .child(settings_choice_chip(palette,
-                                "security-host-strict",
-                                "Strict",
-                                self.settings.host_key_policy == "strict"
-                                    || self.settings.host_key_policy == "reject",
-                                cx.listener(|this, _, _, cx| {
-                                    this.update_host_key_policy("strict", cx);
-                                }),
-                            )),
+                            .min_w_0()
+                            .child(
+                                div()
+                                    .text_size(px(13.))
+                                    .font_weight(FontWeight(500.))
+                                    .text_color(rgb(palette.text))
+                                    .child(host_key_label),
+                            )
+                            .child(
+                                div()
+                                    .mt_1()
+                                    .text_size(px(11.))
+                                    .text_color(rgb(palette.text_dimmed))
+                                    .child(host_key_desc),
+                            ),
                     )
                     .child(
                         div()
-                            .text_size(px(11.))
-                            .text_color(rgb(palette.text_dimmed))
-                            .child(host_key_policy_detail(&self.settings.host_key_policy)),
+                            .flex()
+                            .flex_wrap()
+                            .gap_1()
+                            .child(settings_choice_chip(
+                                palette,
+                                "security-host-strict",
+                                self.tr("settings.hostKeyStrict"),
+                                host_key_policy == "strict",
+                                cx.listener(|this, _, _, cx| {
+                                    this.update_host_key_policy("strict", cx);
+                                }),
+                            ))
+                            .child(settings_choice_chip(
+                                palette,
+                                "security-host-prompt",
+                                self.tr("settings.hostKeyPrompt"),
+                                host_key_policy == "prompt",
+                                cx.listener(|this, _, _, cx| {
+                                    this.update_host_key_policy("prompt", cx);
+                                }),
+                            ))
+                            .child(settings_choice_chip(
+                                palette,
+                                "security-host-accept",
+                                self.tr("settings.hostKeyAccept"),
+                                host_key_policy == "accept",
+                                cx.listener(|this, _, _, cx| {
+                                    this.update_host_key_policy("accept", cx);
+                                }),
+                            )),
                     ),
             ))
-    }
-}
-
-fn security_hint(
-    palette: crate::theme::ThemePalette,
-    title: &'static str,
-    detail: &'static str,
-) -> impl IntoElement {
-    div()
-        .rounded_sm()
-        .border_1()
-        .border_color(rgb(palette.border))
-        .bg(rgb(palette.input))
-        .p_3()
-        .child(
-            div()
-                .text_xs()
-                .font_weight(FontWeight(800.))
-                .text_color(rgb(palette.text))
-                .child(title),
-        )
-        .child(
-            div()
-                .mt_1()
-                .text_size(px(10.))
-                .text_color(rgb(palette.text_muted))
-                .line_height(px(14.))
-                .child(detail),
-        )
-}
-
-fn host_key_policy_label(policy: &str) -> &'static str {
-    match policy {
-        "strict" => "strict",
-        "accept" => "accept",
-        _ => "prompt",
-    }
-}
-
-fn host_key_policy_detail(policy: &str) -> &'static str {
-    match policy {
-        "strict" | "reject" => "Current policy: strict. Unknown or changed host keys are rejected.",
-        "accept_new" | "accept" => {
-            "Current policy: accept new. New host keys are saved automatically; changes still prompt."
-        }
-        _ => "Current policy: ask. New or changed host keys require confirmation.",
     }
 }

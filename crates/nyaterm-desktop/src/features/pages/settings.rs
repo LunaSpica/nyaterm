@@ -796,6 +796,16 @@ pub(super) fn settings_switch(
     checked: bool,
     on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
 ) -> impl IntoElement {
+    settings_switch_with_enabled(palette, id, checked, true, on_click)
+}
+
+pub(super) fn settings_switch_with_enabled(
+    palette: ThemePalette,
+    id: impl Into<String>,
+    checked: bool,
+    enabled: bool,
+    on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
+) -> impl IntoElement {
     let on_bg = palette.primary;
     let off_bg = palette.border;
     let on_hover = palette.primary_hover;
@@ -809,13 +819,17 @@ pub(super) fn settings_switch(
         .rounded_full()
         .px(px(2.))
         .bg(if checked { rgb(on_bg) } else { rgb(off_bg) })
-        .cursor_pointer()
-        .hover(move |this| {
-            this.bg(if checked {
-                rgb(on_hover)
-            } else {
-                rgb(off_hover)
-            })
+        .opacity(if enabled { 1.0 } else { 0.45 })
+        .when(enabled, |this| {
+            this.cursor_pointer()
+                .hover(move |this| {
+                    this.bg(if checked {
+                        rgb(on_hover)
+                    } else {
+                        rgb(off_hover)
+                    })
+                })
+                .on_click(on_click)
         })
         .child(
             div()
@@ -824,7 +838,6 @@ pub(super) fn settings_switch(
                 .bg(rgb(0xffffff))
                 .when(checked, |this| this.ml_auto()),
         )
-        .on_click(on_click)
 }
 
 /// Compact choice chips for enum-like settings.
