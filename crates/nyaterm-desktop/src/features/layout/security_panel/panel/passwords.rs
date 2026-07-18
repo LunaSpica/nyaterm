@@ -5,13 +5,13 @@ impl NyaTermApp {
         &mut self,
         palette: ThemePalette,
         cx: &mut Context<Self>,
-    ) -> gpui::Div {
-        let mut body = security_auth_body_base();
+    ) -> gpui::Stateful<gpui::Div> {
+        let mut body = security_auth_body_base("security-passwords-body");
         body = body.child(security_tab_toolbar(
             palette,
-            "Passwords",
+            self.tr("passwordManager.title"),
             "security-add-password",
-            "Add",
+            self.tr("passwordManager.add"),
             self.security_password_editor.is_none(),
             cx.listener(|this, _, window, cx| {
                 this.open_security_password_editor(None, window, cx);
@@ -20,7 +20,10 @@ impl NyaTermApp {
         if let Some(editor) = self.security_password_editor.clone() {
             body = body.child(self.security_password_editor_view(editor, cx));
         } else if self.connection_saved_passwords.is_empty() {
-            body = body.child(empty_panel("No saved passwords yet.", self.theme_palette()));
+            body = body.child(empty_panel(
+                self.tr("passwordManager.noPasswords"),
+                self.theme_palette(),
+            ));
         } else {
             for entry in self.connection_saved_passwords.clone() {
                 let id = entry.id.clone();
@@ -35,11 +38,11 @@ impl NyaTermApp {
                     revealed_value
                         .clone()
                         .filter(|v| !v.is_empty())
-                        .unwrap_or_else(|| "empty".to_string())
+                        .unwrap_or_else(|| self.tr("secretUnlock.emptySecret").to_string())
                 } else if entry.has_password {
                     String::new()
                 } else {
-                    "empty".to_string()
+                    self.tr("secretUnlock.emptySecret").to_string()
                 };
                 body = body.child(
                     div()
@@ -93,7 +96,7 @@ impl NyaTermApp {
                                                     this.child(small_button(
                                                         palette,
                                                         format!("security-pw-copy-{id}"),
-                                                        "Copy",
+                                                        self.tr("common.copyToClipboard"),
                                                         cx.listener(move |this, _, window, cx| {
                                                             this.copy_security_password(
                                                                 copy_id.clone(),
@@ -116,7 +119,11 @@ impl NyaTermApp {
                                 .child(small_button(
                                     palette,
                                     format!("security-pw-show-{id}"),
-                                    if is_revealed { "Hide" } else { "Show" },
+                                    self.tr(if is_revealed {
+                                        "passwordManager.hidePassword"
+                                    } else {
+                                        "passwordManager.showPassword"
+                                    }),
                                     cx.listener(move |this, _, window, cx| {
                                         this.reveal_security_password(
                                             reveal_id.clone(),
@@ -128,7 +135,7 @@ impl NyaTermApp {
                                 .child(small_button(
                                     palette,
                                     format!("security-pw-edit-{id}"),
-                                    "Edit",
+                                    self.tr("common.edit"),
                                     cx.listener(move |this, _, window, cx| {
                                         this.open_security_password_editor(
                                             Some(edit_id.clone()),
@@ -140,10 +147,11 @@ impl NyaTermApp {
                                 .child(small_button(
                                     palette,
                                     format!("security-pw-del-{id}"),
-                                    "Del",
-                                    cx.listener(move |this, _, _, cx| {
+                                    self.tr("common.delete"),
+                                    cx.listener(move |this, _, window, cx| {
                                         this.request_delete_security_password(
                                             delete_id.clone(),
+                                            window,
                                             cx,
                                         );
                                     }),

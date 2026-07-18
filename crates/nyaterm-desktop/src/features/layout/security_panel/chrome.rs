@@ -5,8 +5,7 @@ impl NyaTermApp {
         &self,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
-        let unlocked = !self.security_secrets_locked();
-        let has_master = self.settings.has_master_password;
+        let unlocked = self.settings.has_master_password && self.security_secrets_unlocked;
         let palette = self.theme_palette();
         div()
             .flex_none()
@@ -27,33 +26,27 @@ impl NyaTermApp {
                     } else {
                         rgb(palette.warning)
                     })
-                    .child(if !has_master {
-                        "Secrets open (no master password)"
-                    } else if unlocked {
-                        "Secrets unlocked"
+                    .child(self.tr(if unlocked {
+                        "secretUnlock.unlockedTitle"
                     } else {
-                        "Secrets locked"
-                    }),
+                        "secretUnlock.lockedTitle"
+                    })),
             )
             .child(div().flex().items_center().gap_1().child(small_button(
                 palette,
                 "security-secrets-toggle",
-                if unlocked && has_master {
-                    "Lock"
-                } else if unlocked {
-                    "Open"
+                self.tr(if unlocked {
+                    "secretUnlock.lockAction"
                 } else {
-                    "Unlock"
-                },
+                    "secretUnlock.unlockAction"
+                }),
                 cx.listener(|this, _, window, cx| {
                     if this.security_secrets_locked() {
                         this.open_security_unlock_prompt(window, cx);
                     } else if this.settings.has_master_password {
                         this.lock_security_secrets(cx);
                     } else {
-                        this.security_status =
-                            "set a master password in Settings to lock secrets".to_string();
-                        cx.notify();
+                        this.open_security_unlock_prompt(window, cx);
                     }
                 }),
             )))
@@ -96,13 +89,13 @@ impl NyaTermApp {
                             .text_xs()
                             .font_weight(FontWeight(800.))
                             .text_color(rgb(palette.text))
-                            .child("Unlock Secrets"),
+                            .child(self.tr("secretUnlock.unlockTitle")),
                     )
                     .child(
                         div()
                             .text_size(px(10.))
                             .text_color(rgb(palette.text_muted))
-                            .child("Enter master password to view/copy secrets."),
+                            .child(self.tr("secretUnlock.unlockDescription")),
                     )
                     .child(
                         div()
@@ -136,7 +129,7 @@ impl NyaTermApp {
                             .child(small_button(
                                 palette,
                                 "security-unlock-cancel",
-                                "Cancel",
+                                self.tr("common.cancel"),
                                 cx.listener(|this, _, _, cx| {
                                     this.close_security_unlock_prompt(cx);
                                 }),
@@ -144,9 +137,70 @@ impl NyaTermApp {
                             .child(small_button(
                                 palette,
                                 "security-unlock-submit",
-                                "Unlock",
+                                self.tr("secretUnlock.unlock"),
                                 cx.listener(|this, _, _, cx| {
                                     this.submit_security_unlock(cx);
+                                }),
+                            )),
+                    ),
+            )
+    }
+
+    pub(in crate::features) fn security_master_required_prompt(
+        &mut self,
+        cx: &mut Context<Self>,
+    ) -> impl IntoElement {
+        let palette = self.theme_palette();
+        div()
+            .absolute()
+            .inset_0()
+            .flex()
+            .items_center()
+            .justify_center()
+            .bg(rgba(0x0d1117cc))
+            .child(
+                div()
+                    .w(px(320.))
+                    .rounded_md()
+                    .border_1()
+                    .border_color(rgb(palette.border))
+                    .bg(rgb(palette.surface))
+                    .p_3()
+                    .flex()
+                    .flex_col()
+                    .gap_2()
+                    .child(
+                        div()
+                            .text_xs()
+                            .font_weight(FontWeight(800.))
+                            .text_color(rgb(palette.text))
+                            .child(self.tr("settings.masterPasswordRequired")),
+                    )
+                    .child(
+                        div()
+                            .text_size(px(10.))
+                            .text_color(rgb(palette.text_muted))
+                            .child(self.tr("settings.masterPasswordRequiredDesc")),
+                    )
+                    .child(
+                        div()
+                            .flex()
+                            .justify_end()
+                            .gap_2()
+                            .child(small_button(
+                                palette,
+                                "security-master-required-cancel",
+                                self.tr("common.cancel"),
+                                cx.listener(|this, _, _, cx| {
+                                    this.close_security_master_required_prompt(cx);
+                                }),
+                            ))
+                            .child(small_button(
+                                palette,
+                                "security-master-required-settings",
+                                self.tr("settings.security"),
+                                cx.listener(|this, _, _, cx| {
+                                    this.open_security_settings_from_prompt(cx);
                                 }),
                             )),
                     ),
@@ -191,7 +245,7 @@ impl NyaTermApp {
                 })
                 .text_color(rgb(palette.text))
             })
-            .child(tab.label())
+            .child(self.tr(tab.i18n_key()))
             .on_click(cx.listener(move |this, _, _, cx| {
                 this.set_security_auth_tab(tab, cx);
             }))

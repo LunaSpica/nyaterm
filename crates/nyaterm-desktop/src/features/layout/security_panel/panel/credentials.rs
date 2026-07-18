@@ -5,13 +5,13 @@ impl NyaTermApp {
         &mut self,
         palette: ThemePalette,
         cx: &mut Context<Self>,
-    ) -> gpui::Div {
-        let mut body = security_auth_body_base();
+    ) -> gpui::Stateful<gpui::Div> {
+        let mut body = security_auth_body_base("security-credentials-body");
         body = body.child(security_tab_toolbar(
             palette,
-            "Credentials",
+            self.tr("credentialManager.title"),
             "security-add-credential",
-            "Add",
+            self.tr("credentialManager.add"),
             self.security_credential_editor.is_none(),
             cx.listener(|this, _, window, cx| {
                 this.open_security_credential_editor(None, window, cx);
@@ -21,7 +21,7 @@ impl NyaTermApp {
             body = body.child(self.security_credential_editor_view(editor, cx));
         } else if self.connection_saved_credentials.is_empty() {
             body = body.child(empty_panel(
-                "No autofill credentials yet.",
+                self.tr("credentialManager.noCredentials"),
                 self.theme_palette(),
             ));
         } else {
@@ -79,7 +79,11 @@ impl NyaTermApp {
                                                 } else {
                                                     rgb(palette.text_muted)
                                                 })
-                                                .child(if entry.enabled { "on" } else { "off" }),
+                                                .child(self.tr(if entry.enabled {
+                                                    "credentialManager.enabled"
+                                                } else {
+                                                    "credentialManager.disabled"
+                                                })),
                                         ),
                                 )
                                 .child(
@@ -107,10 +111,15 @@ impl NyaTermApp {
                                 .child(small_button(
                                     palette,
                                     format!("security-cred-toggle-{id}"),
-                                    if entry.enabled { "Off" } else { "On" },
-                                    cx.listener(move |this, _, _, cx| {
+                                    self.tr(if entry.enabled {
+                                        "credentialManager.disabled"
+                                    } else {
+                                        "credentialManager.enabled"
+                                    }),
+                                    cx.listener(move |this, _, window, cx| {
                                         this.toggle_security_credential_list_enabled(
                                             toggle_id.clone(),
+                                            window,
                                             cx,
                                         );
                                     }),
@@ -118,7 +127,11 @@ impl NyaTermApp {
                                 .child(small_button(
                                     palette,
                                     format!("security-cred-show-{id}"),
-                                    if is_revealed { "Hide" } else { "Show" },
+                                    self.tr(if is_revealed {
+                                        "credentialManager.hidePassword"
+                                    } else {
+                                        "credentialManager.showPassword"
+                                    }),
                                     cx.listener(move |this, _, window, cx| {
                                         this.reveal_security_credential_password(
                                             reveal_id.clone(),
@@ -130,7 +143,7 @@ impl NyaTermApp {
                                 .child(small_button(
                                     palette,
                                     format!("security-cred-edit-{id}"),
-                                    "Edit",
+                                    self.tr("common.edit"),
                                     cx.listener(move |this, _, window, cx| {
                                         this.open_security_credential_editor(
                                             Some(edit_id.clone()),
@@ -142,10 +155,11 @@ impl NyaTermApp {
                                 .child(small_button(
                                     palette,
                                     format!("security-cred-del-{id}"),
-                                    "Del",
-                                    cx.listener(move |this, _, _, cx| {
+                                    self.tr("common.delete"),
+                                    cx.listener(move |this, _, window, cx| {
                                         this.request_delete_security_credential(
                                             delete_id.clone(),
+                                            window,
                                             cx,
                                         );
                                     }),

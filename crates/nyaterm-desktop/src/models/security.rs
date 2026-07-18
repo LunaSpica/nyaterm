@@ -7,6 +7,15 @@ pub(crate) enum SecurityAuthTab {
 }
 
 impl SecurityAuthTab {
+    pub(crate) fn i18n_key(self) -> &'static str {
+        match self {
+            Self::Keys => "securityAuth.keys",
+            Self::Passwords => "securityAuth.passwords",
+            Self::Credentials => "securityAuth.credentials",
+            Self::Otp => "securityAuth.otp",
+        }
+    }
+
     pub(crate) fn label(self) -> &'static str {
         match self {
             Self::Keys => "Keys",

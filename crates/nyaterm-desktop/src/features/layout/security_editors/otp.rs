@@ -8,13 +8,13 @@ impl NyaTermApp {
     ) -> impl IntoElement {
         let palette = self.theme_palette();
         let title = if editor.id.is_some() {
-            "Edit OTP"
+            self.tr("otpManager.editTitle")
         } else {
-            "New OTP"
+            self.tr("otpManager.newTitle")
         };
         let secret_display = if editor.secret.is_empty() {
             if editor.has_secret {
-                "loaded (unchanged)".to_string()
+                self.tr("otpManager.secretUnchanged").to_string()
             } else {
                 " ".to_string()
             }
@@ -87,7 +87,7 @@ impl NyaTermApp {
             .child(security_editor_field(
                 palette,
                 "security-otp-issuer",
-                "Issuer",
+                self.tr("otpManager.issuerLabel"),
                 if editor.issuer.is_empty() {
                     " ".to_string()
                 } else {
@@ -101,7 +101,7 @@ impl NyaTermApp {
             .child(security_editor_field(
                 palette,
                 "security-otp-username",
-                "Account",
+                self.tr("otpManager.usernameLabel"),
                 if editor.username.is_empty() {
                     " ".to_string()
                 } else {
@@ -115,7 +115,7 @@ impl NyaTermApp {
             .child(security_editor_field(
                 palette,
                 "security-otp-secret",
-                "Secret",
+                self.tr("otpManager.secretLabel"),
                 secret_display,
                 editor.focused_field == SecurityOtpEditorField::Secret,
                 cx.listener(|this, _, window, cx| {
@@ -130,7 +130,7 @@ impl NyaTermApp {
                     .child(security_editor_field(
                         palette,
                         "security-otp-digits",
-                        "Digits",
+                        self.tr("otpManager.digits"),
                         if editor.digits.is_empty() {
                             " ".to_string()
                         } else {
@@ -148,7 +148,7 @@ impl NyaTermApp {
                     .child(security_editor_field(
                         palette,
                         "security-otp-period",
-                        "Period",
+                        self.tr("otpManager.period"),
                         if editor.period.is_empty() {
                             " ".to_string()
                         } else {
@@ -166,7 +166,7 @@ impl NyaTermApp {
                     .child(security_editor_field(
                         palette,
                         "security-otp-counter",
-                        "Counter",
+                        self.tr("otpManager.counter"),
                         if editor.counter.is_empty() {
                             " ".to_string()
                         } else {
@@ -197,7 +197,7 @@ impl NyaTermApp {
                     .child(small_button(
                         palette,
                         "security-otp-save",
-                        "Save",
+                        self.tr("common.save"),
                         cx.listener(|this, _, window, cx| {
                             this.save_security_otp_editor(window, cx);
                         }),
@@ -205,7 +205,7 @@ impl NyaTermApp {
                     .child(small_button(
                         palette,
                         "security-otp-cancel",
-                        "Cancel",
+                        self.tr("common.cancel"),
                         cx.listener(|this, _, _, cx| {
                             this.close_security_otp_editor(cx);
                         }),

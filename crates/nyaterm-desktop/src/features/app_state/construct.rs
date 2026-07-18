@@ -825,6 +825,7 @@ impl NyaTermApp {
             security_status: "security ready".to_string(),
             security_secrets_unlocked,
             security_unlock_prompt_open: false,
+            security_master_required_prompt_open: false,
             security_unlock_draft: String::new(),
             security_unlock_error: None,
             security_unlock_focus: cx.focus_handle(),

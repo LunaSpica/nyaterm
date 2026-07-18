@@ -8,23 +8,23 @@ impl NyaTermApp {
     ) -> impl IntoElement {
         let palette = self.theme_palette();
         let title = if editor.id.is_some() {
-            "Edit SSH Key"
+            self.tr("securityAuth.editKeyTitle")
         } else {
-            "New SSH Key"
+            self.tr("securityAuth.newKeyTitle")
         };
         let key_path_label = if !editor.key_file_path.trim().is_empty() {
             truncate_preview(&editor.key_file_path, 36)
         } else if editor.has_key_data {
-            "loaded (unchanged)".to_string()
+            self.tr("securityAuth.loadedUnchanged").to_string()
         } else {
-            "no key file selected".to_string()
+            self.tr("securityAuth.noKeySelected").to_string()
         };
         let cert_path_label = if !editor.cert_file_path.trim().is_empty() {
             truncate_preview(&editor.cert_file_path, 36)
         } else if editor.has_cert_data {
-            "loaded (unchanged)".to_string()
+            self.tr("securityAuth.loadedUnchanged").to_string()
         } else {
-            "optional certificate".to_string()
+            self.tr("securityAuth.optionalCertificate").to_string()
         };
         let passphrase_display = if editor.passphrase.is_empty() {
             " ".to_string()
@@ -55,7 +55,7 @@ impl NyaTermApp {
             .child(security_editor_field(
                 palette,
                 "security-key-name",
-                "Name",
+                self.tr("securityAuth.nameLabel"),
                 if editor.name.is_empty() {
                     " ".to_string()
                 } else {
@@ -75,7 +75,7 @@ impl NyaTermApp {
                         div()
                             .text_size(px(10.))
                             .text_color(rgb(palette.text_muted))
-                            .child("Private Key"),
+                            .child(self.tr("securityAuth.privateKey")),
                     )
                     .child(
                         div()
@@ -116,7 +116,7 @@ impl NyaTermApp {
                             .child(small_button(
                                 palette,
                                 "security-key-browse",
-                                "Browse",
+                                self.tr("securityAuth.browse"),
                                 cx.listener(|this, _, window, cx| {
                                     this.pick_security_key_file(false, window, cx);
                                 }),
@@ -132,7 +132,7 @@ impl NyaTermApp {
                         div()
                             .text_size(px(10.))
                             .text_color(rgb(palette.text_muted))
-                            .child("Certificate"),
+                            .child(self.tr("securityAuth.certificate")),
                     )
                     .child(
                         div()
@@ -174,7 +174,7 @@ impl NyaTermApp {
                             .child(small_button(
                                 palette,
                                 "security-cert-browse",
-                                "Browse",
+                                self.tr("securityAuth.browse"),
                                 cx.listener(|this, _, window, cx| {
                                     this.pick_security_key_file(true, window, cx);
                                 }),
@@ -184,7 +184,7 @@ impl NyaTermApp {
             .child(security_editor_field(
                 palette,
                 "security-key-passphrase",
-                "Passphrase",
+                self.tr("securityAuth.passphrase"),
                 passphrase_display,
                 editor.focused_field == SecurityKeyEditorField::Passphrase,
                 cx.listener(|this, _, window, cx| {
@@ -206,7 +206,7 @@ impl NyaTermApp {
                     .child(small_button(
                         palette,
                         "security-key-save",
-                        "Save",
+                        self.tr("common.save"),
                         cx.listener(|this, _, window, cx| {
                             this.save_security_key_editor(window, cx);
                         }),
@@ -214,7 +214,7 @@ impl NyaTermApp {
                     .child(small_button(
                         palette,
                         "security-key-cancel",
-                        "Cancel",
+                        self.tr("common.cancel"),
                         cx.listener(|this, _, _, cx| {
                             this.close_security_key_editor(cx);
                         }),

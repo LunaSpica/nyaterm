@@ -5,8 +5,8 @@ impl NyaTermApp {
         &mut self,
         palette: ThemePalette,
         cx: &mut Context<Self>,
-    ) -> gpui::Div {
-        let mut body = security_auth_body_base();
+    ) -> gpui::Stateful<gpui::Div> {
+        let mut body = security_auth_body_base("security-otp-body");
         let actions_enabled = self.security_otp_editor.is_none();
         let has_entries = !self.connection_otp_entries.is_empty();
         body = body.child(
@@ -22,7 +22,7 @@ impl NyaTermApp {
                         .text_xs()
                         .font_weight(FontWeight(600.))
                         .text_color(rgb(palette.text))
-                        .child("OTP Accounts"),
+                        .child(self.tr("otpManager.title")),
                 )
                 .child(
                     div()
@@ -32,7 +32,7 @@ impl NyaTermApp {
                         .child(security_toolbar_action_button(
                             palette,
                             "security-otp-refresh-visible",
-                            "Refresh",
+                            self.tr("common.refresh"),
                             actions_enabled && has_entries,
                             cx.listener(|this, _, window, cx| {
                                 this.refresh_visible_security_otp_codes(window, cx);
@@ -41,7 +41,7 @@ impl NyaTermApp {
                         .child(security_toolbar_action_button(
                             palette,
                             "security-add-otp",
-                            "Add",
+                            self.tr("otpManager.add"),
                             actions_enabled,
                             cx.listener(|this, _, window, cx| {
                                 this.open_security_otp_editor(None, window, cx);
@@ -53,7 +53,7 @@ impl NyaTermApp {
             body = body.child(self.security_otp_editor_view(editor, cx));
         } else if self.connection_otp_entries.is_empty() {
             body = body.child(empty_panel(
-                "No OTP accounts yet. Add TOTP/HOTP for auto-fill.",
+                self.tr("otpManager.noEntries"),
                 self.theme_palette(),
             ));
         } else {
@@ -192,7 +192,7 @@ impl NyaTermApp {
                                 .child(small_button(
                                     palette,
                                     format!("security-otp-code-{otp_id}"),
-                                    if is_totp { "Gen" } else { "Next" },
+                                    self.tr("otp.generateCode"),
                                     cx.listener(move |this, _, window, cx| {
                                         this.generate_security_otp_code(
                                             code_id.clone(),
@@ -204,7 +204,7 @@ impl NyaTermApp {
                                 .child(small_button(
                                     palette,
                                     format!("security-otp-copy-{otp_id}"),
-                                    "Copy",
+                                    self.tr("otp.copyCode"),
                                     cx.listener(move |this, _, window, cx| {
                                         this.copy_security_otp_code(copy_id.clone(), window, cx);
                                     }),
@@ -212,7 +212,7 @@ impl NyaTermApp {
                                 .child(small_button(
                                     palette,
                                     format!("security-otp-edit-{otp_id}"),
-                                    "Edit",
+                                    self.tr("common.edit"),
                                     cx.listener(move |this, _, window, cx| {
                                         this.open_security_otp_editor(
                                             Some(edit_id.clone()),
@@ -224,7 +224,7 @@ impl NyaTermApp {
                                 .child(small_button(
                                     palette,
                                     format!("security-otp-del-{otp_id}"),
-                                    "Del",
+                                    self.tr("common.delete"),
                                     cx.listener(move |this, _, _, cx| {
                                         this.request_delete_security_otp(delete_id.clone(), cx);
                                     }),

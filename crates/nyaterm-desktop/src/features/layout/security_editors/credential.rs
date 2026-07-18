@@ -8,13 +8,13 @@ impl NyaTermApp {
     ) -> impl IntoElement {
         let palette = self.theme_palette();
         let title = if editor.id.is_some() {
-            "Edit Credential"
+            self.tr("credentialManager.editTitle")
         } else {
-            "New Credential"
+            self.tr("credentialManager.newTitle")
         };
         let password_display = if editor.password.is_empty() {
             if editor.has_password {
-                "loaded (unchanged)".to_string()
+                self.tr("credentialManager.passwordUnchanged").to_string()
             } else {
                 " ".to_string()
             }
@@ -51,9 +51,9 @@ impl NyaTermApp {
                         palette,
                         "security-cred-enabled",
                         if editor.enabled {
-                            "Enabled"
+                            self.tr("credentialManager.enabled")
                         } else {
-                            "Disabled"
+                            self.tr("credentialManager.disabled")
                         },
                         cx.listener(|this, _, _, cx| {
                             this.toggle_security_credential_enabled(cx);
@@ -63,7 +63,7 @@ impl NyaTermApp {
             .child(security_editor_field(
                 palette,
                 "security-cred-name",
-                "Name",
+                self.tr("credentialManager.nameLabel"),
                 if editor.name.is_empty() {
                     " ".to_string()
                 } else {
@@ -81,7 +81,7 @@ impl NyaTermApp {
             .child(security_editor_field(
                 palette,
                 "security-cred-user",
-                "Username",
+                self.tr("credentialManager.usernameLabel"),
                 if editor.username.is_empty() {
                     " ".to_string()
                 } else {
@@ -99,7 +99,7 @@ impl NyaTermApp {
             .child(security_editor_field(
                 palette,
                 "security-cred-pass",
-                "Password",
+                self.tr("credentialManager.passwordLabel"),
                 password_display,
                 editor.focused_field == SecurityCredentialEditorField::Password,
                 cx.listener(|this, _, window, cx| {
@@ -113,7 +113,7 @@ impl NyaTermApp {
             .child(security_editor_field(
                 palette,
                 "security-cred-user-re",
-                "User Prompt RE",
+                self.tr("credentialManager.promptRegexLabel"),
                 if editor.username_prompt_regex.is_empty() {
                     " ".to_string()
                 } else {
@@ -131,7 +131,7 @@ impl NyaTermApp {
             .child(security_editor_field(
                 palette,
                 "security-cred-pass-re",
-                "Pass Prompt RE",
+                self.tr("credentialManager.passwordRegexPlaceholder"),
                 if editor.password_prompt_regex.is_empty() {
                     " ".to_string()
                 } else {
@@ -161,7 +161,7 @@ impl NyaTermApp {
                     .child(small_button(
                         palette,
                         "security-cred-save",
-                        "Save",
+                        self.tr("common.save"),
                         cx.listener(|this, _, window, cx| {
                             this.save_security_credential_editor(window, cx);
                         }),
@@ -169,7 +169,7 @@ impl NyaTermApp {
                     .child(small_button(
                         palette,
                         "security-cred-cancel",
-                        "Cancel",
+                        self.tr("common.cancel"),
                         cx.listener(|this, _, _, cx| {
                             this.close_security_credential_editor(cx);
                         }),

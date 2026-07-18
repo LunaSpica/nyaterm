@@ -259,12 +259,9 @@ impl NyaTermApp {
     pub(in crate::features) fn generate_security_otp_code(
         &mut self,
         otp_id: String,
-        window: &mut Window,
+        _window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        if !self.require_security_secrets_unlocked(window, cx) {
-            return;
-        }
         match self.otp_provider.request_otp_code(&otp_id) {
             Ok(Some(code)) => {
                 self.security_otp_codes.insert(otp_id.clone(), code.clone());
@@ -287,9 +284,6 @@ impl NyaTermApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        if self.security_secrets_locked() {
-            return;
-        }
         let ids = self
             .connection_otp_entries
             .iter()

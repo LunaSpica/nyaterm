@@ -90,8 +90,12 @@ impl NyaTermApp {
     pub(in crate::features) fn toggle_security_credential_list_enabled(
         &mut self,
         credential_id: String,
+        window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        if !self.require_security_secrets_unlocked(window, cx) {
+            return;
+        }
         let Some(entry) = self
             .connection_saved_credentials
             .iter()
@@ -243,8 +247,12 @@ impl NyaTermApp {
     pub(in crate::features) fn request_delete_security_credential(
         &mut self,
         credential_id: String,
+        window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        if !self.require_security_secrets_unlocked(window, cx) {
+            return;
+        }
         let label = self
             .connection_saved_credentials
             .iter()

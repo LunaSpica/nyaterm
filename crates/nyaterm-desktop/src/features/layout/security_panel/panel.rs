@@ -25,6 +25,9 @@ impl NyaTermApp {
         };
 
         if let Some(confirm) = self.security_delete_confirm.clone() {
+            let delete_title = self
+                .tr("securityAuth.deleteConfirm")
+                .replace("{{name}}", &confirm.label);
             body = body.child(
                 div()
                     .rounded_md()
@@ -40,7 +43,7 @@ impl NyaTermApp {
                             .text_xs()
                             .font_weight(FontWeight(700.))
                             .text_color(rgb(palette.danger))
-                            .child(format!("Delete {}?", confirm.label)),
+                            .child(delete_title),
                     )
                     .child(
                         div()
@@ -49,7 +52,7 @@ impl NyaTermApp {
                             .child(small_button(
                                 palette,
                                 "security-delete-confirm",
-                                "Delete",
+                                self.tr("common.delete"),
                                 cx.listener(|this, _, _, cx| {
                                     this.confirm_security_delete(cx);
                                 }),
@@ -57,7 +60,7 @@ impl NyaTermApp {
                             .child(small_button(
                                 palette,
                                 "security-delete-cancel",
-                                "Cancel",
+                                self.tr("common.cancel"),
                                 cx.listener(|this, _, _, cx| {
                                     this.cancel_security_delete(cx);
                                 }),
@@ -76,10 +79,7 @@ impl NyaTermApp {
                 div()
                     .px_3()
                     .pt_3()
-                    .pb_2()
-                    .border_b_1()
-                    .border_color(rgb(palette.border))
-                    .bg(rgb(palette.section_header))
+                    .pb_0()
                     .flex()
                     .flex_col()
                     // Tauri SecurityAuthPanel: full-width 4-col segment tabs under PanelHeader.
@@ -110,18 +110,24 @@ impl NyaTermApp {
             .when(self.security_unlock_prompt_open, |this| {
                 this.child(self.security_unlock_prompt(cx))
             })
+            .when(self.security_master_required_prompt_open, |this| {
+                this.child(self.security_master_required_prompt(cx))
+            })
     }
 }
 
-fn security_auth_body_base() -> gpui::Div {
+fn security_auth_body_base(id: &'static str) -> gpui::Stateful<gpui::Div> {
     div()
+        .id(id)
         .flex_1()
         .min_h_0()
-        .overflow_hidden()
+        .overflow_y_scroll()
         .flex()
         .flex_col()
-        .gap_1()
-        .p_2()
+        .gap_2()
+        .px_3()
+        .pt_3()
+        .pb_3()
 }
 
 fn security_tab_toolbar(

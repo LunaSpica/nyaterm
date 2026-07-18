@@ -645,6 +645,7 @@ pub struct NyaTermApp {
     pub(in crate::features) security_status: String,
     pub(in crate::features) security_secrets_unlocked: bool,
     pub(in crate::features) security_unlock_prompt_open: bool,
+    pub(in crate::features) security_master_required_prompt_open: bool,
     pub(in crate::features) security_unlock_draft: String,
     pub(in crate::features) security_unlock_error: Option<String>,
     pub(in crate::features) security_unlock_focus: FocusHandle,

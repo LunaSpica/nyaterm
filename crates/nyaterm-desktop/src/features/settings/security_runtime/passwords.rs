@@ -183,8 +183,12 @@ impl NyaTermApp {
     pub(in crate::features) fn request_delete_security_password(
         &mut self,
         password_id: String,
+        window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        if !self.require_security_secrets_unlocked(window, cx) {
+            return;
+        }
         let label = self
             .connection_saved_passwords
             .iter()

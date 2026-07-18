@@ -10,7 +10,7 @@ impl NyaTermApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> bool {
-        if !self.security_secrets_locked() {
+        if self.settings.has_master_password && self.security_secrets_unlocked {
             return true;
         }
         self.open_security_unlock_prompt(window, cx);
@@ -23,11 +23,15 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         if !self.settings.has_master_password {
-            self.security_secrets_unlocked = true;
-            self.security_status = "no master password required".to_string();
+            self.security_unlock_prompt_open = false;
+            self.security_master_required_prompt_open = true;
+            self.security_unlock_draft.clear();
+            self.security_unlock_error = None;
+            self.security_status = "master password required".to_string();
             cx.notify();
             return;
         }
+        self.security_master_required_prompt_open = false;
         self.security_unlock_prompt_open = true;
         self.security_unlock_draft.clear();
         self.security_unlock_error = None;
@@ -43,12 +47,32 @@ impl NyaTermApp {
         cx.notify();
     }
 
+    pub(in crate::features) fn close_security_master_required_prompt(
+        &mut self,
+        cx: &mut Context<Self>,
+    ) {
+        self.security_master_required_prompt_open = false;
+        cx.notify();
+    }
+
+    pub(in crate::features) fn open_security_settings_from_prompt(
+        &mut self,
+        cx: &mut Context<Self>,
+    ) {
+        self.security_master_required_prompt_open = false;
+        self.settings_active_tab = SettingsTab::Security;
+        self.open_page(NavItem::Settings, cx);
+    }
+
     pub(in crate::features) fn lock_security_secrets(&mut self, cx: &mut Context<Self>) {
         self.security_secrets_unlocked = false;
         self.security_revealed_passwords.clear();
         self.security_revealed_credentials.clear();
-        self.security_otp_codes.clear();
+        self.security_password_editor = None;
+        self.security_credential_editor = None;
+        self.security_delete_confirm = None;
         self.security_unlock_prompt_open = false;
+        self.security_master_required_prompt_open = false;
         self.security_unlock_draft.clear();
         self.security_unlock_error = None;
         self.security_status = "secrets locked".to_string();
@@ -57,8 +81,12 @@ impl NyaTermApp {
 
     pub(in crate::features) fn submit_security_unlock(&mut self, cx: &mut Context<Self>) {
         if !self.settings.has_master_password {
-            self.security_secrets_unlocked = true;
-            self.close_security_unlock_prompt(cx);
+            self.security_unlock_prompt_open = false;
+            self.security_master_required_prompt_open = true;
+            self.security_unlock_draft.clear();
+            self.security_unlock_error = None;
+            self.security_status = "master password required".to_string();
+            cx.notify();
             return;
         }
         match ConnectionStore::open_with_portable_key_path(

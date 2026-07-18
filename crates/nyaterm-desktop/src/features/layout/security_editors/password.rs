@@ -8,13 +8,13 @@ impl NyaTermApp {
     ) -> impl IntoElement {
         let palette = self.theme_palette();
         let title = if editor.id.is_some() {
-            "Edit Password"
+            self.tr("passwordManager.editTitle")
         } else {
-            "New Password"
+            self.tr("passwordManager.newTitle")
         };
         let password_display = if editor.password.is_empty() {
             if editor.has_password {
-                "loaded (unchanged)".to_string()
+                self.tr("passwordManager.passwordUnchanged").to_string()
             } else {
                 " ".to_string()
             }
@@ -46,7 +46,7 @@ impl NyaTermApp {
             .child(security_editor_field(
                 palette,
                 "security-pw-name",
-                "Name",
+                self.tr("passwordManager.nameLabel"),
                 if editor.name.is_empty() {
                     " ".to_string()
                 } else {
@@ -69,7 +69,7 @@ impl NyaTermApp {
                     .child(div().min_w_0().flex_1().child(security_editor_field(
                         palette,
                         "security-pw-value",
-                        "Password",
+                        self.tr("passwordManager.passwordLabel"),
                         password_display,
                         editor.focused_field == SecurityPasswordEditorField::Password,
                         cx.listener(|this, _, window, cx| {
@@ -83,7 +83,11 @@ impl NyaTermApp {
                     .child(small_button(
                         palette,
                         "security-pw-toggle-vis",
-                        if editor.show_password { "Hide" } else { "Show" },
+                        self.tr(if editor.show_password {
+                            "passwordManager.hidePassword"
+                        } else {
+                            "passwordManager.showPassword"
+                        }),
                         cx.listener(|this, _, _, cx| {
                             this.toggle_security_password_editor_visibility(cx);
                         }),
@@ -104,7 +108,7 @@ impl NyaTermApp {
                     .child(small_button(
                         palette,
                         "security-pw-save",
-                        "Save",
+                        self.tr("common.save"),
                         cx.listener(|this, _, window, cx| {
                             this.save_security_password_editor(window, cx);
                         }),
@@ -112,7 +116,7 @@ impl NyaTermApp {
                     .child(small_button(
                         palette,
                         "security-pw-cancel",
-                        "Cancel",
+                        self.tr("common.cancel"),
                         cx.listener(|this, _, _, cx| {
                             this.close_security_password_editor(cx);
                         }),
