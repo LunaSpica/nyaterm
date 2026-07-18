@@ -6,47 +6,21 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) -> gpui::AnyElement {
         let palette = self.theme_palette();
-        let sessions = self.ordered_sessions();
-        let session_count = sessions.len();
-        let mut session_list = div().mt_3().flex().flex_col().gap_1();
-        for session in sessions.into_iter().take(6) {
-            let name = self.session_display_name_by_info(&session);
-            let short_session_id = short_id(&session.id).to_string();
-            session_list = session_list.child(
-                div()
-                    .flex()
-                    .items_center()
-                    .justify_between()
-                    .gap_3()
-                    .rounded_sm()
-                    .bg(rgb(0x121821))
-                    .px_2()
-                    .py_1()
-                    .text_xs()
-                    .child(
-                        div()
-                            .min_w_0()
-                            .overflow_hidden()
-                            .text_color(rgb(palette.text))
-                            .child(truncate_preview(&name, 44)),
-                    )
-                    .child(
-                        div()
-                            .flex_none()
-                            .text_size(px(10.))
-                            .text_color(rgb(palette.text_muted))
-                            .child(short_session_id),
-                    ),
-            );
-        }
-        if session_count > 6 {
-            session_list = session_list.child(
-                div()
-                    .text_xs()
-                    .text_color(rgb(palette.text_muted))
-                    .child(format!("and {} more session(s)", session_count - 6)),
-            );
-        }
+        let title_key = if self.pending_quit_after_close_all {
+            "dialog.confirmClose"
+        } else {
+            "tabCtx.closeAll"
+        };
+        let description_key = if self.pending_quit_after_close_all {
+            "dialog.confirmCloseDesc"
+        } else {
+            "tabCtx.closeAllConfirm"
+        };
+        let action_key = if self.pending_quit_after_close_all {
+            "dialog.confirmCloseAction"
+        } else {
+            "tabCtx.closeAll"
+        };
 
         div()
             .id("close-all-sessions-confirm-overlay")
@@ -76,13 +50,13 @@ impl NyaTermApp {
             .child(
                 div()
                     .id("close-all-sessions-confirm-dialog")
-                    .w(px(430.))
+                    .w(px((self.last_viewport_size.0 - 32.).clamp(280., 400.)))
                     .max_w_full()
                     .mx_4()
                     .rounded_md()
                     .border_1()
-                    .border_color(rgb(0x3f1f27))
-                    .bg(rgb(palette.bg))
+                    .border_color(rgb(palette.border))
+                    .bg(rgb(palette.surface))
                     .shadow_lg()
                     .p_4()
                     .on_click(|_, _, cx| cx.stop_propagation())
@@ -95,18 +69,17 @@ impl NyaTermApp {
                                 div()
                                     .text_sm()
                                     .font_weight(FontWeight(800.))
-                                    .text_color(rgb(0xfca5a5))
-                                    .child(if self.pending_quit_after_close_all {
-                                        "Quit NyaTerm"
-                                    } else {
-                                        "Close All Sessions"
-                                    }),
+                                    .text_color(rgb(palette.text))
+                                    .child(self.tr(title_key)),
                             )
-                            .child(div().text_xs().text_color(rgb(palette.text_muted)).child(
-                                format!("This will close {session_count} active session(s)."),
-                            )),
+                            .child(
+                                div()
+                                    .text_xs()
+                                    .line_height(px(16.))
+                                    .text_color(rgb(palette.text_muted))
+                                    .child(self.tr(description_key)),
+                            ),
                     )
-                    .child(session_list)
                     .child(
                         div()
                             .mt_4()
@@ -117,7 +90,7 @@ impl NyaTermApp {
                             .child(small_button(
                                 palette,
                                 "close-all-sessions-cancel",
-                                "Cancel",
+                                self.tr("common.cancel"),
                                 cx.listener(|this, _, _, cx| {
                                     this.cancel_close_all_sessions_confirm(cx);
                                 }),
@@ -134,14 +107,10 @@ impl NyaTermApp {
                                     .bg(rgb(0x7f1d1d))
                                     .text_xs()
                                     .font_weight(FontWeight(800.))
-                                    .text_color(rgb(0xfee2e2))
+                                    .text_color(rgb(palette.text))
                                     .cursor_pointer()
                                     .hover(|this| this.bg(rgb(0x991b1b)))
-                                    .child(if self.pending_quit_after_close_all {
-                                        "Quit"
-                                    } else {
-                                        "Close All"
-                                    })
+                                    .child(self.tr(action_key))
                                     .on_click(cx.listener(|this, _, window, cx| {
                                         this.confirm_close_all_sessions(window, cx);
                                     })),

@@ -744,6 +744,7 @@ impl NyaTermApp {
             temporary_ssh_link_open: false,
             temporary_ssh_link_draft: String::new(),
             temporary_ssh_link_error: None,
+            temporary_ssh_link_marked_text: String::new(),
             temporary_ssh_link_focus: cx.focus_handle(),
             multi_line_paste: None,
             multi_line_paste_marked_text: String::new(),

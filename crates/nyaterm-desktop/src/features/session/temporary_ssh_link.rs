@@ -14,6 +14,7 @@ impl NyaTermApp {
         }
         self.temporary_ssh_link_open = true;
         self.temporary_ssh_link_error = None;
+        self.temporary_ssh_link_marked_text.clear();
         self.terminal_status = "temporary SSH link opened".to_string();
         window.focus(&self.temporary_ssh_link_focus);
         cx.notify();
@@ -23,6 +24,7 @@ impl NyaTermApp {
         self.temporary_ssh_link_open = false;
         self.temporary_ssh_link_draft.clear();
         self.temporary_ssh_link_error = None;
+        self.temporary_ssh_link_marked_text.clear();
         self.terminal_status = "temporary SSH link cancelled".to_string();
         cx.notify();
     }
@@ -33,8 +35,7 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         if self.has_pending_session_start() {
-            self.temporary_ssh_link_error =
-                Some("A session is already connecting. Try again after it finishes.".to_string());
+            self.temporary_ssh_link_error = Some("temporarySsh.connecting");
             self.terminal_status = "wait for the pending session to finish connecting".to_string();
             cx.notify();
             return;
@@ -43,7 +44,7 @@ impl NyaTermApp {
         let parsed = match parse_temporary_ssh_link(&self.temporary_ssh_link_draft) {
             Ok(parsed) => parsed,
             Err(error) => {
-                self.temporary_ssh_link_error = Some(error.message().to_string());
+                self.temporary_ssh_link_error = Some(error.locale_key());
                 self.terminal_status = "temporary SSH link is invalid".to_string();
                 cx.notify();
                 return;
@@ -53,6 +54,7 @@ impl NyaTermApp {
         self.temporary_ssh_link_open = false;
         self.temporary_ssh_link_draft.clear();
         self.temporary_ssh_link_error = None;
+        self.temporary_ssh_link_marked_text.clear();
         self.begin_background_ssh_start(
             parsed.name,
             config,
@@ -81,6 +83,7 @@ impl NyaTermApp {
             if let Some(text) = cx.read_from_clipboard().and_then(|item| item.text()) {
                 self.temporary_ssh_link_draft.push_str(text.trim());
                 self.temporary_ssh_link_error = None;
+                self.temporary_ssh_link_marked_text.clear();
                 cx.notify();
             }
             return;
@@ -95,11 +98,13 @@ impl NyaTermApp {
             "backspace" => {
                 self.temporary_ssh_link_draft.pop();
                 self.temporary_ssh_link_error = None;
+                self.temporary_ssh_link_marked_text.clear();
                 cx.notify();
             }
             "space" => {
                 self.temporary_ssh_link_draft.push(' ');
                 self.temporary_ssh_link_error = None;
+                self.temporary_ssh_link_marked_text.clear();
                 cx.notify();
             }
             _ => {
@@ -110,6 +115,7 @@ impl NyaTermApp {
                 {
                     self.temporary_ssh_link_draft.push_str(input);
                     self.temporary_ssh_link_error = None;
+                    self.temporary_ssh_link_marked_text.clear();
                     cx.notify();
                 }
             }

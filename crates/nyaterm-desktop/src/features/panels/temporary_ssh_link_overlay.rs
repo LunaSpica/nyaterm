@@ -7,29 +7,22 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
         let palette = self.theme_palette();
+        let input_entity = cx.entity();
         let draft = self.temporary_ssh_link_draft.clone();
-        let input_display = if draft.is_empty() {
-            "ssh://root@example.com:22 or ssh -p 2222 user@example.com".to_string()
+        let marked = self.temporary_ssh_link_marked_text.clone();
+        let input_display = if draft.is_empty() && marked.is_empty() {
+            self.tr("temporarySsh.placeholder").to_string()
         } else {
-            draft.clone()
+            format!("{draft}{marked}")
         };
         let parsed = parse_temporary_ssh_link(&draft);
         let can_submit = draft.trim().len() > 0 && parsed.is_ok();
-        let error = self.temporary_ssh_link_error.clone().or_else(|| {
+        let error_key = self.temporary_ssh_link_error.or_else(|| {
             if draft.trim().is_empty() {
                 None
             } else {
-                parsed
-                    .as_ref()
-                    .err()
-                    .map(|error| error.message().to_string())
+                parsed.as_ref().err().map(|error| error.locale_key())
             }
-        });
-        let preview = parsed.ok().map(|config| {
-            format!(
-                "{}@{}:{} · {}",
-                config.username, config.host, config.port, config.name
-            )
         });
 
         div()
@@ -55,10 +48,10 @@ impl NyaTermApp {
             .child(
                 div()
                     .id(SharedString::from("temporary-ssh-link-dialog"))
-                    .w(px(520.))
+                    .w(px((self.last_viewport_size.0 - 32.).clamp(280., 480.)))
                     .max_w_full()
                     .mx_4()
-                    .rounded_lg()
+                    .rounded_md()
                     .border_1()
                     .border_color(rgb(palette.border))
                     .bg(rgb(palette.surface))
@@ -66,182 +59,143 @@ impl NyaTermApp {
                     .overflow_hidden()
                     .on_click(|_, _, cx| cx.stop_propagation())
                     .child(
-                        div()
-                            .px_4()
-                            .py_3()
-                            .border_b_1()
-                            .border_color(rgb(palette.border))
-                            .bg(rgb(palette.section_header))
-                            .flex()
-                            .items_start()
-                            .justify_between()
-                            .gap_3()
-                            .child(
-                                div()
-                                    .flex()
-                                    .flex_col()
-                                    .gap_1()
-                                    .child(
-                                        div()
-                                            .flex()
-                                            .items_center()
-                                            .gap_2()
-                                            .child(
-                                                div()
-                                                    .text_size(px(14.))
-                                                    .text_color(rgb(palette.link))
-                                                    .child("⚡"),
-                                            )
-                                            .child(
-                                                div()
-                                                    .text_sm()
-                                                    .font_weight(FontWeight(800.))
-                                                    .text_color(rgb(palette.text))
-                                                    .child("Temporary SSH Link"),
-                                            ),
-                                    )
-                                    .child(
-                                        div()
-                                            .text_xs()
-                                            .text_color(rgb(palette.text_muted))
-                                            .line_height(px(16.))
-                                            .child(
-                                                "Paste an ssh:// URL or ssh command. Password is requested securely during connect.",
-                                            ),
-                                    ),
-                            )
-                            .child(small_button(
-                                palette,
-                                "temporary-ssh-link-close",
-                                "Close",
-                                cx.listener(|this, _, _, cx| {
-                                    this.close_temporary_ssh_link_dialog(cx);
-                                }),
-                            )),
+                        div().px_4().pt_4().flex().items_start().gap_3().child(
+                            div()
+                                .flex()
+                                .flex_col()
+                                .gap_1()
+                                .child(
+                                    div()
+                                        .flex()
+                                        .items_center()
+                                        .gap_2()
+                                        .child(
+                                            div()
+                                                .text_size(px(14.))
+                                                .text_color(rgb(palette.link))
+                                                .child("⚡"),
+                                        )
+                                        .child(
+                                            div()
+                                                .text_sm()
+                                                .font_weight(FontWeight(800.))
+                                                .text_color(rgb(palette.text))
+                                                .child(self.tr("temporarySsh.title")),
+                                        ),
+                                )
+                                .child(
+                                    div()
+                                        .text_xs()
+                                        .text_color(rgb(palette.text_muted))
+                                        .line_height(px(16.))
+                                        .child(self.tr("temporarySsh.description")),
+                                ),
+                        ),
                     )
                     .child(
                         div()
-                            .p_4()
+                            .px_4()
+                            .pt_4()
                             .flex()
                             .flex_col()
-                            .gap_3()
+                            .gap_2()
                             .child(
                                 div()
                                     .id(SharedString::from("temporary-ssh-link-input"))
-                                    .min_h(px(42.))
+                                    .relative()
+                                    .h(px(36.))
                                     .rounded_md()
                                     .border_1()
-                                    .border_color(if error.is_some() {
+                                    .border_color(if error_key.is_some() {
                                         rgb(palette.danger)
-                                    } else if can_submit {
-                                        rgb(palette.link)
                                     } else {
                                         rgb(palette.border)
                                     })
                                     .bg(rgb(palette.input))
                                     .px_3()
-                                    .py_2()
+                                    .flex()
+                                    .items_center()
                                     .font_family(crate::features::gpui_code_font_family())
                                     .text_sm()
-                                    .text_color(if self.temporary_ssh_link_draft.is_empty() {
+                                    .text_color(if draft.is_empty() && marked.is_empty() {
                                         rgb(palette.text_muted)
                                     } else {
                                         rgb(palette.text)
                                     })
-                                    .child(truncate_preview(&input_display, 104)),
+                                    .child(div().min_w_0().overflow_hidden().child(input_display))
+                                    .child(
+                                        gpui::canvas(
+                                            |_bounds, _window, _cx| {},
+                                            move |bounds, _state, window, cx| {
+                                                let focus = input_entity
+                                                    .read(cx)
+                                                    .temporary_ssh_link_focus
+                                                    .clone();
+                                                window.handle_input(
+                                                    &focus,
+                                                    gpui::ElementInputHandler::new(
+                                                        bounds,
+                                                        input_entity.clone(),
+                                                    ),
+                                                    cx,
+                                                );
+                                            },
+                                        )
+                                        .absolute()
+                                        .inset_0(),
+                                    ),
                             )
-                            .when_some(error.clone(), |this, message| {
+                            .when_some(error_key, |this, key| {
                                 this.child(
                                     div()
                                         .text_size(px(11.))
                                         .text_color(rgb(palette.danger))
-                                        .child(message),
+                                        .child(self.tr(key)),
                                 )
-                            })
-                            .when_some(preview, |this, summary| {
-                                this.child(
-                                    div()
-                                        .rounded_md()
-                                        .border_1()
-                                        .border_color(rgb(palette.border))
-                                        .bg(rgb(palette.bg))
-                                        .px_3()
-                                        .py_2()
-                                        .flex()
-                                        .flex_col()
-                                        .gap_1()
-                                        .child(
-                                            div()
-                                                .text_size(px(10.))
-                                                .font_weight(FontWeight(700.))
-                                                .text_color(rgb(palette.success))
-                                                .child("Ready to connect"),
-                                        )
-                                        .child(
-                                            div()
-                                                .font_family(crate::features::gpui_code_font_family())
-                                                .text_size(px(11.))
-                                                .text_color(rgb(palette.text))
-                                                .child(summary),
-                                        ),
+                            }),
+                    )
+                    .child(
+                        div()
+                            .px_4()
+                            .py_4()
+                            .flex()
+                            .items_center()
+                            .justify_end()
+                            .gap_2()
+                            .child(small_button(
+                                palette,
+                                "temporary-ssh-link-cancel",
+                                self.tr("common.cancel"),
+                                cx.listener(|this, _, _, cx| {
+                                    this.close_temporary_ssh_link_dialog(cx);
+                                }),
+                            ))
+                            .child(if can_submit {
+                                small_button(
+                                    palette,
+                                    "temporary-ssh-link-connect",
+                                    self.tr("temporarySsh.connect"),
+                                    cx.listener(|this, _, window, cx| {
+                                        this.submit_temporary_ssh_link_dialog(window, cx);
+                                    }),
                                 )
-                            })
-                            .child(
+                                .into_any_element()
+                            } else {
                                 div()
+                                    .id("temporary-ssh-link-connect-disabled")
+                                    .h(px(28.))
+                                    .px_3()
                                     .flex()
                                     .items_center()
-                                    .justify_between()
-                                    .gap_2()
-                                    .child(
-                                        div()
-                                            .text_size(px(10.))
-                                            .text_color(rgb(palette.text_dimmed))
-                                            .child("Enter connects · Esc closes"),
-                                    )
-                                    .child(
-                                        div()
-                                            .flex()
-                                            .items_center()
-                                            .gap_2()
-                                            .child(small_button(
-                                                palette,
-                                                "temporary-ssh-link-clear",
-                                                "Clear",
-                                                cx.listener(|this, _, _, cx| {
-                                                    this.temporary_ssh_link_draft.clear();
-                                                    this.temporary_ssh_link_error = None;
-                                                    cx.notify();
-                                                }),
-                                            ))
-                                            .child(if can_submit {
-                                                small_button(
-                                                    palette,
-                                                    "temporary-ssh-link-connect",
-                                                    "Connect",
-                                                    cx.listener(|this, _, window, cx| {
-                                                        this.submit_temporary_ssh_link_dialog(
-                                                            window, cx,
-                                                        );
-                                                    }),
-                                                )
-                                                .into_any_element()
-                                            } else {
-                                                div()
-                                                    .h(px(28.))
-                                                    .px_3()
-                                                    .flex()
-                                                    .items_center()
-                                                    .rounded_md()
-                                                    .border_1()
-                                                    .border_color(rgb(palette.border))
-                                                    .bg(rgb(palette.input))
-                                                    .text_color(rgb(palette.text_muted))
-                                                    .text_xs()
-                                                    .child("Connect")
-                                                    .into_any_element()
-                                            }),
-                                    ),
-                            ),
+                                    .rounded_sm()
+                                    .border_1()
+                                    .border_color(rgb(palette.border))
+                                    .bg(rgb(palette.input))
+                                    .text_color(rgb(palette.text_muted))
+                                    .text_xs()
+                                    .child(self.tr("temporarySsh.connect"))
+                                    .into_any_element()
+                            }),
                     ),
             )
     }

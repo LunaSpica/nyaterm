@@ -2018,6 +2018,7 @@
   },
   "temporarySsh": {
     "connect": "Connect",
+    "connecting": "A session is already connecting. Try again after it finishes.",
     "description": "Paste or type an SSH target. This opens a direct SSH session without saving it.",
     "empty": "Enter an SSH target.",
     "inlinePassword": "Inline passwords are not supported. NyaTerm will ask for credentials when needed.",

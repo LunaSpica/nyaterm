@@ -48,11 +48,11 @@ impl NyaTermApp {
                     .flex()
                     .flex_col()
                     .items_center()
-                    .gap_3()
+                    .gap_4()
                     .on_click(|_, _, cx| cx.stop_propagation())
                     .child(
                         svg()
-                            .size(px(72.))
+                            .size(px(96.))
                             .path("icons/logo.svg")
                             .text_color(rgb(palette.link)),
                     )
@@ -76,14 +76,14 @@ impl NyaTermApp {
                             .line_height(px(18.))
                             .text_center()
                             .text_color(rgb(palette.text_muted))
-                            .child("A modern, cross-platform terminal built for efficient remote workflows."),
+                            .child(self.tr("about.description")),
                     )
                     .child(
                         div()
                             .mt_2()
                             .w_full()
                             .flex()
-                            .gap_2()
+                            .gap_3()
                             .child(
                                 div()
                                     .id("about-website")
@@ -99,7 +99,7 @@ impl NyaTermApp {
                                     .text_color(rgb(palette.text))
                                     .cursor_pointer()
                                     .hover(|this| this.bg(rgb(palette.hover)))
-                                    .child("Website")
+                                    .child(self.tr("about.website"))
                                     .on_click(cx.listener(|this, _, _, cx| {
                                         this.open_external_url_for_ui("https://nyaterm.app", cx);
                                     })),
@@ -119,7 +119,7 @@ impl NyaTermApp {
                                     .text_color(rgb(palette.text))
                                     .cursor_pointer()
                                     .hover(|this| this.bg(rgb(palette.hover)))
-                                    .child("Issues")
+                                    .child(self.tr("about.issues"))
                                     .on_click(cx.listener(|this, _, _, cx| {
                                         this.open_external_url_for_ui(
                                             "https://github.com/nyakang/nyaterm/issues",
@@ -131,7 +131,7 @@ impl NyaTermApp {
                     .child(small_button(
                         palette,
                         "about-close",
-                        "Close",
+                        self.tr("about.close"),
                         cx.listener(|this, _, _, cx| {
                             this.close_about(cx);
                         }),

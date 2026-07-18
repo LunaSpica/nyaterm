@@ -17,16 +17,14 @@ pub(crate) enum TemporarySshLinkError {
 }
 
 impl TemporarySshLinkError {
-    pub(crate) fn message(self) -> &'static str {
+    pub(crate) fn locale_key(self) -> &'static str {
         match self {
-            Self::Empty => "Paste an ssh:// URL or an ssh command.",
-            Self::UnsupportedOption => {
-                "This temporary link uses an SSH option that is not supported yet."
-            }
-            Self::MissingHost => "The temporary SSH link is missing a host.",
-            Self::InlinePassword => "Inline SSH passwords are not allowed.",
-            Self::InvalidPort => "The SSH port must be between 1 and 65535.",
-            Self::InvalidInput => "The temporary SSH link is not valid.",
+            Self::Empty => "temporarySsh.empty",
+            Self::UnsupportedOption => "temporarySsh.unsupportedOption",
+            Self::MissingHost => "temporarySsh.missingHost",
+            Self::InlinePassword => "temporarySsh.inlinePassword",
+            Self::InvalidPort => "temporarySsh.invalidPort",
+            Self::InvalidInput => "temporarySsh.invalidInput",
         }
     }
 }

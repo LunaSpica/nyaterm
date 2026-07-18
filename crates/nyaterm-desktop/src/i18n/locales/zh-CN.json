@@ -2018,6 +2018,7 @@
   },
   "temporarySsh": {
     "connect": "连接",
+    "connecting": "已有会话正在连接，请稍后再试。",
     "description": "粘贴或输入 SSH 目标，将直接打开一个不保存的 SSH 会话。",
     "empty": "请输入 SSH 目标。",
     "inlinePassword": "不支持在输入中携带密码。需要凭据时 NyaTerm 会再询问。",
