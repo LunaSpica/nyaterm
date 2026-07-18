@@ -23,7 +23,14 @@ impl NyaTermApp {
             preview = preview.replace(&variable.raw, &variable.value);
         }
 
-        let mut rows = div().mt_3().flex().flex_col().gap_2();
+        let mut rows = div()
+            .id("quick-command-variable-fields")
+            .mt_3()
+            .max_h(px((self.last_viewport_size.1 * 0.6).clamp(180., 420.)))
+            .overflow_y_scroll()
+            .flex()
+            .flex_col()
+            .gap_2();
         for (index, variable) in prompt.variables.iter().cloned().enumerate() {
             let focused = prompt.focused_index == index;
             let variable_name = variable.name.clone();
@@ -70,7 +77,7 @@ impl NyaTermApp {
                                     .child(if variable.options.is_empty() {
                                         transfer_input(
                                             field_id,
-                                            "Value",
+                                            self.tr("quickCommands.command"),
                                             variable.value.clone(),
                                             focused,
                                             self.theme_palette(),
@@ -99,7 +106,7 @@ impl NyaTermApp {
                                         .child(small_button(
                                             palette,
                                             format!("quick-command-variable-prev-{index}"),
-                                            "Prev",
+                                            "<",
                                             cx.listener(move |this, _, _, cx| {
                                                 this.cycle_quick_command_variable_option(
                                                     index, -1, cx,
@@ -109,7 +116,7 @@ impl NyaTermApp {
                                         .child(small_button(
                                             palette,
                                             format!("quick-command-variable-next-{index}"),
-                                            "Next",
+                                            ">",
                                             cx.listener(move |this, _, _, cx| {
                                                 this.cycle_quick_command_variable_option(
                                                     index, 1, cx,
@@ -145,7 +152,8 @@ impl NyaTermApp {
             .child(
                 div()
                     .id(SharedString::from("quick-command-variable-dialog"))
-                    .w(px(460.))
+                    .w(px((self.last_viewport_size.0 - 32.).clamp(280., 400.)))
+                    .max_w_full()
                     .rounded_md()
                     .border_1()
                     .border_color(rgb(palette.border))
@@ -169,7 +177,7 @@ impl NyaTermApp {
                                             .text_sm()
                                             .font_weight(FontWeight(800.))
                                             .text_color(rgb(palette.text))
-                                            .child("Fill Quick Command Variables"),
+                                            .child(self.tr("quickCommands.fillVariables")),
                                     )
                                     .child(
                                         div()
@@ -180,11 +188,11 @@ impl NyaTermApp {
                             )
                             .child(status_pill(
                                 if prompt.send_to_all {
-                                    "all"
+                                    self.tr("quickCommands.sendToAll")
                                 } else if prompt.execute {
-                                    "run"
+                                    self.tr("quickCommands.run")
                                 } else {
-                                    "insert"
+                                    self.tr("quickCommands.appendOnly")
                                 },
                                 if prompt.send_to_all || prompt.execute {
                                     rgb(palette.success)
@@ -211,7 +219,7 @@ impl NyaTermApp {
                                 div()
                                     .text_size(px(10.))
                                     .text_color(rgb(palette.text_muted))
-                                    .child("Preview"),
+                                    .child(self.tr("quickCommands.view")),
                             )
                             .child(
                                 div()
@@ -221,7 +229,7 @@ impl NyaTermApp {
                                     .line_height(px(18.))
                                     .text_color(rgb(palette.text_muted))
                                     .child(if preview.trim().is_empty() {
-                                        "Empty command".to_string()
+                                        self.tr("quickCommands.noCommandsFound").to_string()
                                     } else {
                                         truncate_preview(&preview, 280)
                                     }),
@@ -232,26 +240,29 @@ impl NyaTermApp {
                             .mt_4()
                             .flex()
                             .items_center()
-                            .justify_between()
+                            .justify_end()
                             .gap_2()
-                            .child(div().text_size(px(10.)).text_color(rgb(palette.text_muted)).child(
-                                "Tab switches fields. Enter submits. Arrow keys cycle options.",
-                            ))
                             .child(
                                 div()
                                     .flex()
                                     .items_center()
                                     .gap_2()
-                                    .child(small_button(palette,
+                                    .child(small_button(
+                                        palette,
                                         "quick-command-variable-cancel",
-                                        "Cancel",
+                                        self.tr("common.cancel"),
                                         cx.listener(|this, _, _, cx| {
                                             this.cancel_quick_command_variable_prompt(cx);
                                         }),
                                     ))
-                                    .child(small_button(palette,
+                                    .child(small_button(
+                                        palette,
                                         "quick-command-variable-submit",
-                                        if prompt.execute { "Run" } else { "Insert" },
+                                        if prompt.execute {
+                                            self.tr("quickCommands.run")
+                                        } else {
+                                            self.tr("quickCommands.appendOnly")
+                                        },
                                         cx.listener(|this, _, _, cx| {
                                             this.submit_quick_command_variable_prompt(cx);
                                         }),

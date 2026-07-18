@@ -59,7 +59,7 @@ impl NyaTermApp {
                     .child(quick_command_row_menu_item(
                         palette,
                         format!("quick-command-row-menu-edit-{command_id}"),
-                        "Edit",
+                        self.tr("quickCommands.edit"),
                         false,
                         cx.listener(move |this, _, window, cx| {
                             cx.stop_propagation();
@@ -75,7 +75,7 @@ impl NyaTermApp {
                         this.child(quick_command_row_menu_item(
                             palette,
                             format!("quick-command-row-menu-all-{command_id}"),
-                            "Send to all",
+                            self.tr("quickCommands.sendToAll"),
                             false,
                             cx.listener(move |this, _, _, cx| {
                                 cx.stop_propagation();
@@ -88,7 +88,7 @@ impl NyaTermApp {
                     .child(quick_command_row_menu_item(
                         palette,
                         format!("quick-command-row-menu-delete-{command_id}"),
-                        "Delete",
+                        self.tr("common.delete"),
                         true,
                         cx.listener(move |this, _, _, cx| {
                             cx.stop_propagation();

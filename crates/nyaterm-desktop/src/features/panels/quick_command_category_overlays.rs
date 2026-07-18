@@ -40,19 +40,20 @@ impl NyaTermApp {
                         div()
                             .text_sm()
                             .font_weight(FontWeight(800.))
-                            .text_color(rgb(0xfca5a5))
-                            .child("Delete Quick Command Category"),
+                            .text_color(rgb(palette.text))
+                            .child(self.tr("quickCommands.deleteCategory")),
                     )
                     .child(
                         div()
                             .mt_3()
                             .text_xs()
                             .line_height(px(18.))
-                            .text_color(rgb(0xcbd5e1))
-                            .child(format!(
-                                "Delete '{}' and {} command(s) in it? This cannot be undone.",
-                                delete.name, delete.command_count
-                            )),
+                            .text_color(rgb(palette.text_muted))
+                            .child(
+                                self.tr("quickCommands.deleteCategoryConfirm")
+                                    .replace("{{name}}", &delete.name)
+                                    .replace("{{count}}", &delete.command_count.to_string()),
+                            ),
                     )
                     .child(
                         div()
@@ -64,7 +65,7 @@ impl NyaTermApp {
                             .child(small_button(
                                 palette,
                                 "quick-command-category-delete-cancel",
-                                "Cancel",
+                                self.tr("common.cancel"),
                                 cx.listener(|this, _, _, cx| {
                                     this.cancel_delete_quick_command_category(cx);
                                 }),
@@ -72,7 +73,7 @@ impl NyaTermApp {
                             .child(small_button(
                                 palette,
                                 "quick-command-category-delete-confirm",
-                                "Delete",
+                                self.tr("common.delete"),
                                 cx.listener(|this, _, _, cx| {
                                     this.confirm_delete_quick_command_category(cx);
                                 }),
@@ -122,25 +123,17 @@ impl NyaTermApp {
                             .text_sm()
                             .font_weight(FontWeight(800.))
                             .text_color(rgb(palette.text))
-                            .child("Rename Quick Command Category"),
-                    )
-                    .child(
-                        div()
-                            .mt_2()
-                            .text_xs()
-                            .line_height(px(18.))
-                            .text_color(rgb(palette.text_muted))
-                            .child(format!("Current name: {}", rename.original_name)),
+                            .child(self.tr("quickCommands.renameCategory")),
                     )
                     .child(
                         transfer_input(
                             "quick-command-category-rename-input",
-                            "Category Name",
+                            self.tr("quickCommands.categoryName"),
                             rename.draft,
                             true,
                             self.theme_palette(),
                         )
-                        .mt_3()
+                        .mt_4()
                         .track_focus(&self.quick_command_category_rename_focus)
                         .on_click(cx.listener(|this, _, window, cx| {
                             window.focus(&this.quick_command_category_rename_focus);
@@ -172,7 +165,7 @@ impl NyaTermApp {
                             .child(small_button(
                                 palette,
                                 "quick-command-category-rename-cancel",
-                                "Cancel",
+                                self.tr("common.cancel"),
                                 cx.listener(|this, _, _, cx| {
                                     this.cancel_rename_quick_command_category(cx);
                                 }),
@@ -180,7 +173,7 @@ impl NyaTermApp {
                             .child(small_button(
                                 palette,
                                 "quick-command-category-rename-confirm",
-                                "Rename",
+                                self.tr("common.confirm"),
                                 cx.listener(|this, _, _, cx| {
                                     this.confirm_rename_quick_command_category(cx);
                                 }),

@@ -39,19 +39,19 @@ impl NyaTermApp {
                         div()
                             .text_sm()
                             .font_weight(FontWeight(800.))
-                            .text_color(rgb(0xfca5a5))
-                            .child("Delete Quick Command"),
+                            .text_color(rgb(palette.text))
+                            .child(self.tr("quickCommands.delete")),
                     )
                     .child(
                         div()
                             .mt_3()
                             .text_xs()
                             .line_height(px(18.))
-                            .text_color(rgb(0xcbd5e1))
-                            .child(format!(
-                                "Delete '{}' from Quick Commands? This cannot be undone.",
-                                delete.label
-                            )),
+                            .text_color(rgb(palette.text_muted))
+                            .child(
+                                self.tr("quickCommands.deleteConfirm")
+                                    .replace("{{name}}", &delete.label),
+                            ),
                     )
                     .child(
                         div()
@@ -63,7 +63,7 @@ impl NyaTermApp {
                             .child(small_button(
                                 palette,
                                 "quick-command-delete-cancel",
-                                "Cancel",
+                                self.tr("common.cancel"),
                                 cx.listener(|this, _, _, cx| {
                                     this.cancel_delete_quick_command(cx);
                                 }),
@@ -71,7 +71,7 @@ impl NyaTermApp {
                             .child(small_button(
                                 palette,
                                 "quick-command-delete-confirm",
-                                "Delete",
+                                self.tr("common.delete"),
                                 cx.listener(|this, _, _, cx| {
                                     this.confirm_delete_quick_command(cx);
                                 }),

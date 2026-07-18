@@ -6,6 +6,16 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
         let palette = self.theme_palette();
+        let docs_url = if self
+            .settings
+            .language
+            .to_ascii_lowercase()
+            .starts_with("zh")
+        {
+            "https://nyaterm.app/docs/guide/quick-commands#%E5%AF%BC%E5%85%A5%E5%BF%AB%E6%8D%B7%E5%91%BD%E4%BB%A4"
+        } else {
+            "https://nyaterm.app/docs/guide/quick-commands#import-quick-commands"
+        };
         div()
             .id(SharedString::from("quick-command-import-overlay"))
             .absolute()
@@ -31,7 +41,8 @@ impl NyaTermApp {
             .child(
                 div()
                     .id(SharedString::from("quick-command-import-dialog"))
-                    .w(px(420.))
+                    .w(px((self.last_viewport_size.0 - 32.).clamp(280., 380.)))
+                    .max_w_full()
                     .rounded_md()
                     .border_1()
                     .border_color(rgb(palette.border))
@@ -52,19 +63,20 @@ impl NyaTermApp {
                                             .text_sm()
                                             .font_weight(FontWeight(800.))
                                             .text_color(rgb(palette.text))
-                                            .child("Import Quick Commands"),
+                                            .child(self.tr("quickCommands.importTitle")),
                                     )
                                     .child(
                                         div()
                                             .mt_1()
                                             .text_xs()
                                             .text_color(rgb(palette.text_muted))
-                                            .child("WindTerm, Xshell, or NyaTerm JSON"),
+                                            .child(self.tr("quickCommands.importSelectSource")),
                                     ),
                             )
-                            .child(small_button(palette,
+                            .child(small_button(
+                                palette,
                                 "quick-command-import-close-top",
-                                "Close",
+                                self.tr("common.close"),
                                 cx.listener(|this, _, _, cx| {
                                     this.close_quick_command_import_dialog(cx);
                                 }),
@@ -80,8 +92,8 @@ impl NyaTermApp {
                                 palette,
                                 "quick-command-import-windterm-card",
                                 "WT",
-                                "WindTerm Quickbar",
-                                "quickbar.config",
+                                self.tr("quickCommands.importWindTerm"),
+                                self.tr("quickCommands.importWindTermHint"),
                                 0x60a5fa,
                                 cx.listener(|this, _, _, cx| {
                                     this.select_quick_command_import_source(
@@ -94,8 +106,8 @@ impl NyaTermApp {
                                 palette,
                                 "quick-command-import-xshell-card",
                                 "XS",
-                                "Xshell XTS",
-                                ".xts",
+                                self.tr("quickCommands.importXshell"),
+                                self.tr("quickCommands.importXshellHint"),
                                 0xfacc15,
                                 cx.listener(|this, _, _, cx| {
                                     this.select_quick_command_import_source(
@@ -108,8 +120,8 @@ impl NyaTermApp {
                                 palette,
                                 "quick-command-import-json-card",
                                 "{}",
-                                "NyaTerm JSON",
-                                ".json",
+                                self.tr("quickCommands.importNyaTermJson"),
+                                self.tr("quickCommands.importNyaTermJsonHint"),
                                 0x6ee7b7,
                                 cx.listener(|this, _, _, cx| {
                                     this.select_quick_command_import_source(
@@ -131,13 +143,14 @@ impl NyaTermApp {
                                     .text_size(px(11.))
                                     .line_height(px(16.))
                                     .text_color(rgb(palette.text_muted))
-                                    .child("Imports merge with existing commands and update matching IDs."),
+                                    .child(self.tr("quickCommands.importMergeHint")),
                             )
-                            .child(small_button(palette,
-                                "quick-command-import-close",
-                                "Cancel",
-                                cx.listener(|this, _, _, cx| {
-                                    this.close_quick_command_import_dialog(cx);
+                            .child(small_button(
+                                palette,
+                                "quick-command-import-docs",
+                                self.tr("quickCommands.importDocs"),
+                                cx.listener(move |this, _, _, cx| {
+                                    this.open_external_url_for_ui(docs_url, cx);
                                 }),
                             )),
                     ),

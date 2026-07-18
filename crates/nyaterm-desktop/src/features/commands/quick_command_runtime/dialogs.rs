@@ -296,8 +296,9 @@ impl NyaTermApp {
         };
         let name = rename.draft.trim().to_string();
         if name.is_empty() {
+            let message = self.tr("quickCommands.categoryNameRequired").to_string();
             if let Some(state) = self.quick_command_category_rename.as_mut() {
-                state.error = Some("Category name is required".to_string());
+                state.error = Some(message);
             }
             cx.notify();
             return;
@@ -305,8 +306,9 @@ impl NyaTermApp {
         if self.quick_command_categories.iter().any(|category| {
             category.id != rename.id && category.name.trim().eq_ignore_ascii_case(name.as_str())
         }) {
+            let message = self.tr("quickCommands.categoryNameDuplicated").to_string();
             if let Some(state) = self.quick_command_category_rename.as_mut() {
-                state.error = Some("A category with this name already exists".to_string());
+                state.error = Some(message);
             }
             cx.notify();
             return;
@@ -321,8 +323,9 @@ impl NyaTermApp {
             if config.categories.iter().any(|category| {
                 category.id != rename.id && category.name.trim().eq_ignore_ascii_case(name.as_str())
             }) {
+                let message = self.tr("quickCommands.categoryNameDuplicated").to_string();
                 if let Some(state) = self.quick_command_category_rename.as_mut() {
-                    state.error = Some("A category with this name already exists".to_string());
+                    state.error = Some(message);
                 }
                 return Ok((config, false));
             }
