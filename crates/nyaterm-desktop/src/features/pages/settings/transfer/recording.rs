@@ -6,55 +6,110 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
         let palette = self.theme_palette();
-        let path = if self.settings.recording_path.trim().is_empty() {
-            self.runtime
-                .config_dir()
-                .join("recordings")
-                .display()
-                .to_string()
+        let recording_path_value = if self.settings.recording_path.is_empty() {
+            " ".to_string()
         } else {
-            self.settings.recording_path.clone()
+            truncate_preview(&self.settings.recording_path, 34)
         };
         let memory_mib = (self.settings.recording_memory_limit_bytes / (1024 * 1024)).max(1);
 
         div().flex().flex_col().gap_3().child(settings_form_section(
             palette,
-            Some("Recording"),
-            Some("Session capture path, memory cap, and stream annotations."),
+            Some(self.tr("settings.recordingSettings")),
+            Some(self.tr("settings.recordingSettingsDesc")),
             div()
                 .flex()
                 .flex_col()
                 .gap_3()
                 .child(settings_form_row(
                     palette,
-                    "Path",
-                    Some(SharedString::from(truncate_preview(&path, 56))),
+                    self.tr("settings.recordingPath"),
+                    Some(SharedString::from(self.tr("settings.recordingPathDesc"))),
                     div()
+                        .w(px(260.))
                         .flex()
-                        .items_center()
+                        .flex_col()
                         .gap_1()
+                        .child(
+                            transfer_input(
+                                "settings-recording-path-input",
+                                self.tr("settings.recordingPath"),
+                                recording_path_value,
+                                true,
+                                palette,
+                            )
+                            .track_focus(&self.recording_path_focus)
+                            .on_click(cx.listener(|this, _, window, cx| {
+                                window.focus(&this.recording_path_focus);
+                                cx.notify();
+                            }))
+                            .on_key_down(cx.listener(
+                                |this, event: &KeyDownEvent, _, cx| {
+                                    cx.stop_propagation();
+                                    this.handle_recording_path_key_down(event, cx);
+                                },
+                            )),
+                        )
                         .child(small_button(
                             palette,
                             "settings-recording-path-browse",
-                            "Browse",
+                            self.tr("settings.browse"),
                             cx.listener(|this, _, _, cx| {
                                 this.prompt_recording_path_setting(cx);
-                            }),
-                        ))
-                        .child(small_button(
-                            palette,
-                            "settings-recording-path-clear",
-                            "Clear",
-                            cx.listener(|this, _, _, cx| {
-                                this.settings.recording_path.clear();
-                                this.save_recording_settings(cx);
                             }),
                         )),
                 ))
                 .child(settings_form_row(
                     palette,
-                    "Memory limit",
-                    Some(SharedString::from(format!("{memory_mib} MiB buffer"))),
+                    self.tr("settings.recordingAutoStart"),
+                    Some(SharedString::from(
+                        self.tr("settings.recordingAutoStartDesc"),
+                    )),
+                    settings_switch(
+                        palette,
+                        "settings-recording-auto",
+                        self.settings.recording_auto_start,
+                        cx.listener(|this, _, _, cx| {
+                            this.toggle_recording_auto_start(cx);
+                        }),
+                    ),
+                ))
+                .child(settings_form_row(
+                    palette,
+                    self.tr("settings.recordingIncludeIoLabels"),
+                    Some(SharedString::from(
+                        self.tr("settings.recordingIncludeIoLabelsDesc"),
+                    )),
+                    settings_switch(
+                        palette,
+                        "settings-recording-labels",
+                        self.settings.recording_include_io_labels,
+                        cx.listener(|this, _, _, cx| {
+                            this.toggle_recording_io_labels(cx);
+                        }),
+                    ),
+                ))
+                .child(settings_form_row(
+                    palette,
+                    self.tr("settings.recordingIncludeTimestamps"),
+                    Some(SharedString::from(
+                        self.tr("settings.recordingIncludeTimestampsDesc"),
+                    )),
+                    settings_switch(
+                        palette,
+                        "settings-recording-timestamps",
+                        self.settings.recording_include_timestamps,
+                        cx.listener(|this, _, _, cx| {
+                            this.toggle_recording_timestamps(cx);
+                        }),
+                    ),
+                ))
+                .child(settings_form_row(
+                    palette,
+                    self.tr("settings.recordingMemoryLimit"),
+                    Some(SharedString::from(
+                        self.tr("settings.recordingMemoryLimitDesc"),
+                    )),
                     div()
                         .flex()
                         .items_center()
@@ -85,51 +140,6 @@ impl NyaTermApp {
                                 this.adjust_recording_memory_limit(1, cx);
                             }),
                         )),
-                ))
-                .child(settings_form_row(
-                    palette,
-                    "Auto start",
-                    Some(SharedString::from(
-                        "Begin recording when a session connects.",
-                    )),
-                    settings_switch(
-                        palette,
-                        "settings-recording-auto",
-                        self.settings.recording_auto_start,
-                        cx.listener(|this, _, _, cx| {
-                            this.toggle_recording_auto_start(cx);
-                        }),
-                    ),
-                ))
-                .child(settings_form_row(
-                    palette,
-                    "IO labels",
-                    Some(SharedString::from(
-                        "Annotate recorded streams with in/out labels.",
-                    )),
-                    settings_switch(
-                        palette,
-                        "settings-recording-labels",
-                        self.settings.recording_include_io_labels,
-                        cx.listener(|this, _, _, cx| {
-                            this.toggle_recording_io_labels(cx);
-                        }),
-                    ),
-                ))
-                .child(settings_form_row(
-                    palette,
-                    "Timestamps",
-                    Some(SharedString::from(
-                        "Prefix recorded chunks with wall-clock timestamps.",
-                    )),
-                    settings_switch(
-                        palette,
-                        "settings-recording-timestamps",
-                        self.settings.recording_include_timestamps,
-                        cx.listener(|this, _, _, cx| {
-                            this.toggle_recording_timestamps(cx);
-                        }),
-                    ),
                 )),
         ))
     }

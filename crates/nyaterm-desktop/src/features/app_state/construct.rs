@@ -664,6 +664,8 @@ impl NyaTermApp {
             transfer_external_sync_focus: cx.focus_handle(),
             transfer_job_delete_focus: cx.focus_handle(),
             transfer_default_editor_focus: cx.focus_handle(),
+            transfer_download_path_focus: cx.focus_handle(),
+            recording_path_focus: cx.focus_handle(),
             transfer_focused_field: TransferInputField::Remote,
             duplicate_prompts: Arc::new(SftpDuplicatePromptBroker::default()),
             active_duplicate_prompt: None,

@@ -251,4 +251,68 @@ impl NyaTermApp {
             }
         }
     }
+
+    pub(in crate::features) fn handle_transfer_download_path_key_down(
+        &mut self,
+        event: &KeyDownEvent,
+        cx: &mut Context<Self>,
+    ) {
+        self.mark_user_activity();
+        let keystroke = &event.keystroke;
+        if keystroke.modifiers.platform || keystroke.modifiers.alt || keystroke.modifiers.control {
+            return;
+        }
+
+        match keystroke.key.as_str() {
+            "backspace" => {
+                self.settings.transfer_download_path.pop();
+                cx.notify();
+            }
+            "enter" => {
+                self.save_transfer_settings("transfer download path saved", cx);
+            }
+            "escape" => cx.notify(),
+            _ => {
+                if let Some(input) = keystroke
+                    .key_char
+                    .as_deref()
+                    .filter(|input| !input.is_empty())
+                {
+                    self.settings.transfer_download_path.push_str(input);
+                    cx.notify();
+                }
+            }
+        }
+    }
+
+    pub(in crate::features) fn handle_recording_path_key_down(
+        &mut self,
+        event: &KeyDownEvent,
+        cx: &mut Context<Self>,
+    ) {
+        self.mark_user_activity();
+        let keystroke = &event.keystroke;
+        if keystroke.modifiers.platform || keystroke.modifiers.alt || keystroke.modifiers.control {
+            return;
+        }
+
+        match keystroke.key.as_str() {
+            "backspace" => {
+                self.settings.recording_path.pop();
+                cx.notify();
+            }
+            "enter" => self.save_recording_settings(cx),
+            "escape" => cx.notify(),
+            _ => {
+                if let Some(input) = keystroke
+                    .key_char
+                    .as_deref()
+                    .filter(|input| !input.is_empty())
+                {
+                    self.settings.recording_path.push_str(input);
+                    cx.notify();
+                }
+            }
+        }
+    }
 }

@@ -10,7 +10,7 @@ use crate::models::{
     CloudSyncConflictState, CloudSyncInputField, ConfigPathPromptKind, DiagnosticsPathPromptKind,
     KeywordHighlightEditorField, KeywordHighlightPathPromptKind, SearchEngineEditorField,
     SettingsTab, SnapshotPasswordPromptKind, SnapshotPasswordPromptState, TerminalSearchMode,
-    TransferJobStatus, TranslateInputField,
+    TranslateInputField,
 };
 use crate::theme::ThemePalette;
 use crate::widgets::{small_button, status_pill};

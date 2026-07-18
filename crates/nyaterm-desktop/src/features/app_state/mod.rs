@@ -443,6 +443,8 @@ pub struct NyaTermApp {
     pub(in crate::features) transfer_external_sync_focus: FocusHandle,
     pub(in crate::features) transfer_job_delete_focus: FocusHandle,
     pub(in crate::features) transfer_default_editor_focus: FocusHandle,
+    pub(in crate::features) transfer_download_path_focus: FocusHandle,
+    pub(in crate::features) recording_path_focus: FocusHandle,
     pub(in crate::features) transfer_focused_field: TransferInputField,
     pub(in crate::features) duplicate_prompts: Arc<SftpDuplicatePromptBroker>,
     pub(in crate::features) active_duplicate_prompt: Option<SftpDuplicatePromptState>,

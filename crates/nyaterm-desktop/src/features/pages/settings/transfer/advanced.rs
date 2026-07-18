@@ -10,19 +10,18 @@ impl NyaTermApp {
 
         div().flex().flex_col().gap_3().child(settings_form_section(
             palette,
-            Some("Advanced transfer"),
-            Some("Concurrency, buffer size, timestamps, and default permissions."),
+            None,
+            None,
             div()
                 .flex()
                 .flex_col()
                 .gap_3()
                 .child(settings_form_row(
                     palette,
-                    "Download threads",
-                    Some(SharedString::from(format!(
-                        "{} parallel downloads",
-                        self.settings.transfer_download_threads
-                    ))),
+                    self.tr("settings.downloadConcurrentTasks"),
+                    Some(SharedString::from(
+                        self.tr("settings.downloadConcurrentTasksDesc"),
+                    )),
                     div()
                         .flex()
                         .items_center()
@@ -56,11 +55,10 @@ impl NyaTermApp {
                 ))
                 .child(settings_form_row(
                     palette,
-                    "Upload threads",
-                    Some(SharedString::from(format!(
-                        "{} parallel uploads",
-                        self.settings.transfer_upload_threads
-                    ))),
+                    self.tr("settings.uploadConcurrentTasks"),
+                    Some(SharedString::from(
+                        self.tr("settings.uploadConcurrentTasksDesc"),
+                    )),
                     div()
                         .flex()
                         .items_center()
@@ -94,11 +92,10 @@ impl NyaTermApp {
                 ))
                 .child(settings_form_row(
                     palette,
-                    "Max retries",
-                    Some(SharedString::from(format!(
-                        "{} retries",
-                        self.settings.transfer_max_retries
-                    ))),
+                    self.tr("settings.maxTransferRetries"),
+                    Some(SharedString::from(
+                        self.tr("settings.maxTransferRetriesDesc"),
+                    )),
                     div()
                         .flex()
                         .items_center()
@@ -132,11 +129,10 @@ impl NyaTermApp {
                 ))
                 .child(settings_form_row(
                     palette,
-                    "Buffer size",
-                    Some(SharedString::from(format!(
-                        "{} KiB",
-                        self.settings.transfer_buffer_size
-                    ))),
+                    self.tr("settings.transferBufferSize"),
+                    Some(SharedString::from(
+                        self.tr("settings.transferBufferSizeDesc"),
+                    )),
                     div()
                         .flex()
                         .items_center()
@@ -170,9 +166,9 @@ impl NyaTermApp {
                 ))
                 .child(settings_form_row(
                     palette,
-                    "Preserve timestamps",
+                    self.tr("settings.preserveTimestamps"),
                     Some(SharedString::from(
-                        "Keep source mtime when downloading when possible.",
+                        self.tr("settings.preserveTimestampsDesc"),
                     )),
                     settings_switch(
                         palette,
@@ -185,9 +181,9 @@ impl NyaTermApp {
                 ))
                 .child(settings_form_row(
                     palette,
-                    "Resume broken",
+                    self.tr("settings.resumeBrokenTransfer"),
                     Some(SharedString::from(
-                        "Attempt to resume interrupted downloads.",
+                        self.tr("settings.resumeBrokenTransferDesc"),
                     )),
                     settings_switch(
                         palette,
@@ -200,8 +196,10 @@ impl NyaTermApp {
                 ))
                 .child(settings_form_row(
                     palette,
-                    "Default permissions",
-                    Some(SharedString::from(format!("chmod {permissions}"))),
+                    self.tr("settings.defaultFilePermissions"),
+                    Some(SharedString::from(
+                        self.tr("settings.defaultFilePermissionsDesc"),
+                    )),
                     div()
                         .flex()
                         .flex_wrap()
