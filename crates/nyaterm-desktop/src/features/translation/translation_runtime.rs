@@ -225,6 +225,14 @@ impl NyaTermApp {
         let source = dialog.source_text.clone();
         let pending = self.translate_pending;
         let status = self.translate_status.clone();
+        let title_label = self.tr("translation.title");
+        let source_label = self.tr("translation.sourceText");
+        let translated_label = self.tr("translation.translatedText");
+        let loading_label = self.tr("translation.loading");
+        let error_label = self.tr("translation.error");
+        let copy_label = self.tr("translation.copy");
+        let close_label = self.tr("translation.close");
+        let copied_label = self.tr("translation.copied");
         let result = self.translate_result.clone();
         let detected = result
             .as_ref()
@@ -235,26 +243,33 @@ impl NyaTermApp {
             .map(|item| item.translated.clone())
             .unwrap_or_default();
         let can_copy = !translated.trim().is_empty();
+        let error_detail = status
+            .strip_prefix("translation failed:")
+            .map(str::trim)
+            .filter(|detail| !detail.is_empty());
+        let detected_label = detected.as_ref().map(|language| {
+            self.tr("translation.detectedLang")
+                .replace("{{lang}}", language)
+        });
 
-        let mut source_box = div()
+        let source_box = div()
+            .id(SharedString::from("translation-dialog-source"))
             .rounded_sm()
             .border_1()
             .border_color(rgb(palette.border))
             .bg(rgb(palette.input))
             .p_3()
             .max_h(px(120.))
-            .overflow_hidden()
+            .overflow_y_scroll()
+            .scrollbar_width(px(6.))
             .text_sm()
-            .text_color(rgb(palette.text));
-        for line in source.lines().take(8) {
-            source_box =
-                source_box.child(div().whitespace_nowrap().child(truncate_preview(line, 96)));
-        }
-        if source.lines().count() == 0 {
-            source_box = source_box.child(source.clone());
-        }
+            .line_height(px(20.))
+            .whitespace_normal()
+            .text_color(rgb(palette.text))
+            .child(source.clone());
 
         let mut result_box = div()
+            .id(SharedString::from("translation-dialog-result"))
             .rounded_sm()
             .border_1()
             .border_color(rgb(palette.border))
@@ -262,31 +277,29 @@ impl NyaTermApp {
             .p_3()
             .min_h(px(60.))
             .max_h(px(200.))
-            .overflow_hidden()
+            .overflow_y_scroll()
+            .scrollbar_width(px(6.))
             .text_sm()
+            .line_height(px(20.))
+            .whitespace_normal()
             .text_color(rgb(palette.text));
         if pending {
             result_box = result_box.child(
                 div()
                     .text_color(rgb(palette.text_muted))
-                    .child("Translating…"),
+                    .child(loading_label),
             );
-        } else if status.starts_with("translation failed") {
-            result_box =
-                result_box.child(div().text_color(rgb(palette.danger)).child(status.clone()));
-        } else if !translated.is_empty() {
-            for line in translated.lines().take(12) {
-                result_box = result_box.child(div().child(line.to_string()));
-            }
-            if translated.lines().count() == 0 {
-                result_box = result_box.child(translated.clone());
-            }
-        } else {
+        } else if let Some(detail) = error_detail {
             result_box = result_box.child(
                 div()
-                    .text_color(rgb(palette.text_muted))
-                    .child(status.clone()),
+                    .text_color(rgb(palette.danger))
+                    .child(format!("{error_label}: {detail}")),
             );
+        } else if !translated.is_empty() {
+            result_box = result_box.child(translated.clone());
+        } else {
+            result_box =
+                result_box.child(div().text_color(rgb(palette.text_muted)).child(error_label));
         }
 
         div()
@@ -330,7 +343,7 @@ impl NyaTermApp {
                                     .text_sm()
                                     .font_weight(FontWeight(800.))
                                     .text_color(rgb(palette.text))
-                                    .child("Translation"),
+                                    .child(title_label),
                             )
                             .child(
                                 div()
@@ -348,7 +361,7 @@ impl NyaTermApp {
                             .mt_3()
                             .text_size(px(11.))
                             .text_color(rgb(palette.text_muted))
-                            .child("Source"),
+                            .child(source_label),
                     )
                     .child(div().mt_1().child(source_box))
                     .child(
@@ -361,14 +374,14 @@ impl NyaTermApp {
                                 div()
                                     .text_size(px(11.))
                                     .text_color(rgb(palette.text_muted))
-                                    .child("Translated"),
+                                    .child(translated_label),
                             )
-                            .when_some(detected, |this, lang| {
+                            .when_some(detected_label, |this, label| {
                                 this.child(
                                     div()
                                         .text_size(px(11.))
                                         .text_color(rgb(palette.text_dimmed))
-                                        .child(format!("detected: {lang}")),
+                                        .child(label),
                                 )
                             }),
                     )
@@ -384,14 +397,13 @@ impl NyaTermApp {
                                 small_button(
                                     palette,
                                     "translation-dialog-copy",
-                                    "Copy",
+                                    copy_label,
                                     cx.listener(|this, _, _, cx| {
                                         if let Some(result) = this.translate_result.clone() {
                                             cx.write_to_clipboard(ClipboardItem::new_string(
                                                 result.translated,
                                             ));
-                                            this.translate_status =
-                                                "translated text copied".to_string();
+                                            this.translate_status = copied_label.to_string();
                                             cx.notify();
                                         }
                                     }),
@@ -400,7 +412,7 @@ impl NyaTermApp {
                             .child(small_button(
                                 palette,
                                 "translation-dialog-close",
-                                "Close",
+                                close_label,
                                 cx.listener(|this, _, _, cx| {
                                     this.close_translation_dialog(cx);
                                 }),

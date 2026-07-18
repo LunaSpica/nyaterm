@@ -199,18 +199,32 @@ impl NyaTermApp {
                                         "terminal-actions-translate-visible",
                                         "Translate",
                                         "visible screen",
-                                        cx.listener(move |this, _, _, cx| {
+                                        cx.listener(move |this, _, window, cx| {
                                             this.terminal_actions_open = false;
                                             if visible_for_translate.trim().is_empty() {
                                                 this.terminal_status =
                                                     "terminal visible screen is empty".to_string();
                                             } else {
-                                                this.translate_input =
-                                                    visible_for_translate.clone();
-                                                this.translate_result = None;
-                                                this.translate_status =
-                                                    "visible terminal text loaded".to_string();
-                                                this.select(NavItem::Translation, cx);
+                                                let provider = this.translate_provider.clone();
+                                                let provider_label = match provider.as_str() {
+                                                    "google" => this.tr("translation.google"),
+                                                    "microsoft" => {
+                                                        this.tr("translation.microsoft")
+                                                    }
+                                                    "deepl" => this.tr("translation.deepl"),
+                                                    "baidu" => this.tr("translation.baidu"),
+                                                    "ali" => this.tr("translation.ali"),
+                                                    "youdao" => this.tr("translation.youdao"),
+                                                    _ => provider.as_str(),
+                                                }
+                                                .to_string();
+                                                this.open_translation_dialog(
+                                                    visible_for_translate.clone(),
+                                                    provider,
+                                                    provider_label,
+                                                    window,
+                                                    cx,
+                                                );
                                             }
                                             cx.notify();
                                         }),
