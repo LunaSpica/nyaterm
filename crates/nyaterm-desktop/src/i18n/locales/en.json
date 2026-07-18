@@ -498,6 +498,7 @@
     "openExternal": "External",
     "openExternalFailed": "Failed to open external editor.",
     "openExternalTooltip": "Download to a temporary folder and open with your external editor. Saved changes can sync back to the remote file.",
+    "plainText": "Plain Text",
     "previousMatch": "Previous match",
     "ready": "Ready",
     "reload": "Reload",

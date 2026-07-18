@@ -234,7 +234,6 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
         let palette = self.theme_palette();
-        let editor_title_label = self.tr("fileEditor.title");
         let loading_label = self.tr("common.loading");
         let saving_label = self.tr("common.saving");
         let save_label = self.tr("common.save");
@@ -257,8 +256,10 @@ impl NyaTermApp {
         let next_match_label = self.tr("fileEditor.nextMatch");
         let clear_search_label = self.tr("fileEditor.clearSearch");
         let no_match_label = self.tr("fileEditor.noMatch");
-        let lines_label = self.tr("fileEditor.lines");
         let bytes_label = self.tr("fileEditor.bytes");
+        let encoding_label = self.tr("fileEditor.encodingUtf8");
+        let line_ending_label = self.tr("fileEditor.lineEndingLf");
+        let plain_text_label = self.tr("fileEditor.plainText");
         let workspace = self.transfer_editor.clone();
         let state = workspace
             .as_ref()
@@ -301,8 +302,20 @@ impl NyaTermApp {
         } else {
             saved_label
         };
-        let line_count = state.content.lines().count().max(1);
         let byte_count = state.content.len();
+        let language = std::path::Path::new(if state.name.is_empty() {
+            &state.remote_path
+        } else {
+            &state.name
+        })
+        .extension()
+        .and_then(|extension| extension.to_str())
+        .unwrap_or_default();
+        let language_label = if language.is_empty() {
+            plain_text_label.to_string()
+        } else {
+            language.to_ascii_uppercase()
+        };
         let (cursor_line, cursor_column) = cursor_position.unwrap_or_else(|| {
             let before = state.content.as_str();
             let line = before.bytes().filter(|byte| *byte == b'\n').count() + 1;
@@ -328,10 +341,6 @@ impl NyaTermApp {
         let has_native_editor = native_editor.is_some();
         let mut tab_strip = div()
             .id("transfer-editor-tabs")
-            .absolute()
-            .top_0()
-            .left_0()
-            .right_0()
             .h(px(40.))
             .flex_none()
             .flex()
@@ -483,50 +492,162 @@ impl NyaTermApp {
                             .shadow_lg()
                     })
                     .bg(rgb(palette.bg))
-                    .relative()
-                    .p_4()
-                    .pt(px(56.))
+                    .overflow_hidden()
                     .flex()
                     .flex_col()
-                    .gap_3()
                     .child(tab_strip)
                     .child(
                         div()
+                            .h(px(44.))
+                            .flex_none()
+                            .px_3()
                             .flex()
-                            .flex_wrap()
                             .items_center()
                             .justify_between()
-                            .gap_3()
+                            .gap_2()
+                            .border_b_1()
+                            .border_color(rgb(palette.border))
+                            .bg(rgb(palette.surface))
                             .child(
                                 div()
                                     .min_w_0()
-                                    .flex()
-                                    .flex_col()
-                                    .gap_1()
-                                    .child(
-                                        div()
-                                            .text_sm()
-                                            .font_weight(FontWeight(800.))
-                                            .text_color(rgb(palette.text))
-                                            .child(format!(
-                                                "{editor_title_label}: {}",
-                                                truncate_preview(&state.name, 52)
-                                            )),
-                                    )
-                                    .child(
-                                        div()
-                                            .font_family(crate::features::gpui_code_font_family())
-                                            .text_xs()
-                                            .text_color(rgb(palette.text_muted))
-                                            .child(truncate_preview(&state.remote_path, 96)),
-                                    ),
+                                    .flex_1()
+                                    .overflow_hidden()
+                                    .font_family(crate::features::gpui_code_font_family())
+                                    .text_xs()
+                                    .text_color(rgb(palette.text_muted))
+                                    .child(truncate_preview(&state.remote_path, 96)),
                             )
-                            .child(status_pill(status, rgb(palette.link), rgb(palette.hover))),
+                            .child(
+                                div()
+                                    .flex_none()
+                                    .flex()
+                                    .items_center()
+                                    .gap_2()
+                                    .when(!close_confirm, |this| this.child(small_button(
+                                        palette,
+                                        "transfer-editor-reload",
+                                        if state.reload_confirm {
+                                            confirm_reload_label
+                                        } else {
+                                            reload_label
+                                        },
+                                        cx.listener(|this, _, window, cx| {
+                                            if let Some(state) =
+                                                this.active_transfer_editor_tab_mut()
+                                            {
+                                                if state.dirty && !state.reload_confirm {
+                                                    state.reload_confirm = true;
+                                                    state.error =
+                                                        Some(reload_dirty_desc.to_string());
+                                                    this.terminal_status =
+                                                        "confirm remote editor reload".to_string();
+                                                    cx.notify();
+                                                    return;
+                                                }
+                                                state.loading = true;
+                                                state.error = None;
+                                                state.conflict = false;
+                                                state.reload_confirm = false;
+                                                let session_id = state.session_id.clone();
+                                                let remote_path = state.remote_path.clone();
+                                                this.start_sftp_editor_load_job(
+                                                    session_id,
+                                                    remote_path,
+                                                    window,
+                                                    cx,
+                                                );
+                                            }
+                                        }),
+                                    )))
+                                    .when(!close_confirm && state.reload_confirm, |this| {
+                                        this.child(small_button(
+                                            palette,
+                                            "transfer-editor-cancel-reload",
+                                            cancel_label,
+                                            cx.listener(|this, _, _, cx| {
+                                                this.cancel_transfer_editor_reload_confirm(cx);
+                                            }),
+                                        ))
+                                    })
+                                    .when(!close_confirm, |this| this.child(small_button(
+                                        palette,
+                                        "transfer-editor-open-external",
+                                        open_external_label,
+                                        cx.listener(|this, _, _, cx| {
+                                            this.open_active_transfer_editor_external(cx);
+                                        }),
+                                    )))
+                                    .when(!close_confirm, |this| this.child(small_button(
+                                        palette,
+                                        "transfer-editor-save",
+                                        if state.saving {
+                                            saving_label
+                                        } else {
+                                            save_label
+                                        },
+                                        cx.listener(|this, _, window, cx| {
+                                            this.save_transfer_editor(false, window, cx);
+                                        }),
+                                    )))
+                                    .when(!close_confirm && tabs.len() > 1, |this| {
+                                        this.child(small_button(
+                                            palette,
+                                            "transfer-editor-save-all",
+                                            save_all_label,
+                                            cx.listener(|this, _, window, cx| {
+                                                this.save_all_transfer_editor_tabs(window, cx);
+                                            }),
+                                        ))
+                                    })
+                                    .when(!close_confirm && state.conflict, |this| {
+                                        this.child(small_button(
+                                            palette,
+                                            "transfer-editor-force-save",
+                                            force_save_label,
+                                            cx.listener(|this, _, window, cx| {
+                                                this.save_transfer_editor(true, window, cx);
+                                            }),
+                                        ))
+                                    })
+                                    .when(close_confirm, |this| {
+                                        this.child(small_button(
+                                            palette,
+                                            "transfer-editor-save-close",
+                                            if state.saving {
+                                                saving_label
+                                            } else {
+                                                save_close_label
+                                            },
+                                            cx.listener(|this, _, window, cx| {
+                                                this.save_transfer_editor_and_close(window, cx);
+                                            }),
+                                        ))
+                                        .child(small_button(
+                                            palette,
+                                            "transfer-editor-cancel-close",
+                                            cancel_label,
+                                            cx.listener(|this, _, _, cx| {
+                                                this.cancel_transfer_editor_close_confirm(cx);
+                                            }),
+                                        ))
+                                        .child(small_button(
+                                            palette,
+                                            "transfer-editor-discard",
+                                            discard_label,
+                                            cx.listener(|this, _, _, cx| {
+                                                this.discard_transfer_editor(cx);
+                                            }),
+                                        ))
+                                    }),
+                            ),
                     )
                     .when_some(state.error.clone(), |this, error| {
                         this.child(
                             div()
-                                .rounded_sm()
+                                .flex_none()
+                                .border_b_1()
+                                .border_color(rgb(palette.border))
                                 .bg(rgb(0x351216))
                                 .px_3()
                                 .py_2()
@@ -538,7 +659,9 @@ impl NyaTermApp {
                     .when(state.conflict, |this| {
                         this.child(
                             div()
-                                .rounded_sm()
+                                .flex_none()
+                                .border_b_1()
+                                .border_color(rgb(palette.border))
                                 .bg(rgb(0x352912))
                                 .px_3()
                                 .py_2()
@@ -550,7 +673,9 @@ impl NyaTermApp {
                     .when(close_confirm, |this| {
                         this.child(
                             div()
-                                .rounded_sm()
+                                .flex_none()
+                                .border_b_1()
+                                .border_color(rgb(palette.border))
                                 .bg(rgb(0x352912))
                                 .px_3()
                                 .py_2()
@@ -562,7 +687,9 @@ impl NyaTermApp {
                     .when(state.reload_confirm, |this| {
                         this.child(
                             div()
-                                .rounded_sm()
+                                .flex_none()
+                                .border_b_1()
+                                .border_color(rgb(palette.border))
                                 .bg(rgb(0x352912))
                                 .px_3()
                                 .py_2()
@@ -571,94 +698,111 @@ impl NyaTermApp {
                                 .child(reload_dirty_desc),
                         )
                     })
-                    .child(
-                        div()
-                            .flex()
-                            .flex_wrap()
-                            .items_center()
-                            .gap_2()
-                            .child(
-                                div()
-                                    .id(SharedString::from("transfer-editor-search-input"))
-                                    .h(px(32.))
-                                    .flex_1()
-                                    .min_w(px(180.))
-                                    .rounded_sm()
-                                    .border_1()
-                                    .border_color(
-                                        if state.focused_field == TransferEditorField::Search {
+                    .when(
+                        state.focused_field == TransferEditorField::Search
+                            || !state.search_query.is_empty(),
+                        |this| {
+                            let search_bar = div()
+                                .flex_none()
+                                .px_3()
+                                .py_2()
+                                .border_b_1()
+                                .border_color(rgb(palette.border))
+                                .bg(rgb(palette.surface))
+                                .flex()
+                                .flex_wrap()
+                                .items_center()
+                                .gap_2()
+                                .child(
+                                    div()
+                                        .id(SharedString::from("transfer-editor-search-input"))
+                                        .h(px(32.))
+                                        .flex_1()
+                                        .min_w(px(180.))
+                                        .rounded_sm()
+                                        .border_1()
+                                        .border_color(if state.focused_field
+                                            == TransferEditorField::Search
+                                        {
                                             rgb(0x256d3f)
                                         } else {
                                             rgb(palette.border)
-                                        },
-                                    )
-                                    .bg(rgb(palette.input))
-                                    .px_3()
-                                    .flex()
-                                    .items_center()
-                                    .font_family(crate::features::gpui_code_font_family())
-                                    .text_xs()
-                                    .text_color(if state.search_query.is_empty() {
-                                        rgb(palette.text_muted)
-                                    } else {
-                                        rgb(palette.text)
-                                    })
-                                    .cursor_pointer()
-                                    .on_click(cx.listener(|this, _, window, cx| {
+                                        })
+                                        .bg(rgb(palette.input))
+                                        .px_3()
+                                        .flex()
+                                        .items_center()
+                                        .font_family(crate::features::gpui_code_font_family())
+                                        .text_xs()
+                                        .text_color(if state.search_query.is_empty() {
+                                            rgb(palette.text_muted)
+                                        } else {
+                                            rgb(palette.text)
+                                        })
+                                        .cursor_pointer()
+                                        .on_click(cx.listener(|this, _, window, cx| {
+                                            if let Some(state) =
+                                                this.active_transfer_editor_tab_mut()
+                                            {
+                                                state.focused_field = TransferEditorField::Search;
+                                            }
+                                            window.focus(&this.transfer_editor_focus);
+                                            cx.notify();
+                                        }))
+                                        .child(truncate_preview(&search_label, 96)),
+                                )
+                                .child(
+                                    div()
+                                        .text_xs()
+                                        .text_color(rgb(palette.text_muted))
+                                        .child(if state.search_query.is_empty() {
+                                            "0 / 0".to_string()
+                                        } else if search_matches.is_empty() {
+                                            no_match_label.to_string()
+                                        } else {
+                                            format!(
+                                                "{} / {}",
+                                                active_match + 1,
+                                                search_matches.len()
+                                            )
+                                        }),
+                                )
+                                .child(small_button(
+                                    palette,
+                                    "transfer-editor-prev-match",
+                                    previous_match_label,
+                                    cx.listener(|this, _, _, cx| {
+                                        this.advance_transfer_editor_search(-1, cx);
+                                    }),
+                                ))
+                                .child(small_button(
+                                    palette,
+                                    "transfer-editor-next-match",
+                                    next_match_label,
+                                    cx.listener(|this, _, _, cx| {
+                                        this.advance_transfer_editor_search(1, cx);
+                                    }),
+                                ))
+                                .child(small_button(
+                                    palette,
+                                    "transfer-editor-clear-search",
+                                    clear_search_label,
+                                    cx.listener(|this, _, _, cx| {
                                         if let Some(state) = this.active_transfer_editor_tab_mut() {
-                                            state.focused_field = TransferEditorField::Search;
+                                            state.search_query.clear();
+                                            state.active_match = 0;
                                         }
-                                        window.focus(&this.transfer_editor_focus);
                                         cx.notify();
-                                    }))
-                                    .child(truncate_preview(&search_label, 96)),
-                            )
-                            .child(div().text_xs().text_color(rgb(palette.text_muted)).child(
-                                if state.search_query.is_empty() {
-                                    "0 / 0".to_string()
-                                } else if search_matches.is_empty() {
-                                    no_match_label.to_string()
-                                } else {
-                                    format!("{} / {}", active_match + 1, search_matches.len())
-                                },
-                            ))
-                            .child(small_button(
-                                palette,
-                                "transfer-editor-prev-match",
-                                previous_match_label,
-                                cx.listener(|this, _, _, cx| {
-                                    this.advance_transfer_editor_search(-1, cx);
-                                }),
-                            ))
-                            .child(small_button(
-                                palette,
-                                "transfer-editor-next-match",
-                                next_match_label,
-                                cx.listener(|this, _, _, cx| {
-                                    this.advance_transfer_editor_search(1, cx);
-                                }),
-                            ))
-                            .child(small_button(
-                                palette,
-                                "transfer-editor-clear-search",
-                                clear_search_label,
-                                cx.listener(|this, _, _, cx| {
-                                    if let Some(state) = this.active_transfer_editor_tab_mut() {
-                                        state.search_query.clear();
-                                        state.active_match = 0;
-                                    }
-                                    cx.notify();
-                                }),
-                            )),
+                                    }),
+                                ));
+                            this.child(search_bar)
+                        },
                     )
                     .child(
                         div()
                             .id(SharedString::from("transfer-editor-content"))
                             .flex_1()
                             .min_h_0()
-                            .rounded_md()
-                            .border_1()
-                            .border_color(rgb(palette.border))
                             .bg(rgb(palette.input))
                             .relative()
                             .overflow_hidden()
@@ -697,143 +841,39 @@ impl NyaTermApp {
                     )
                     .child(
                         div()
+                            .h(px(24.))
+                            .flex_none()
+                            .px_3()
+                            .border_t_1()
+                            .border_color(rgb(palette.border))
+                            .bg(rgb(palette.surface))
                             .flex()
-                            .flex_wrap()
                             .items_center()
                             .justify_between()
                             .gap_3()
-                            .child(div().text_xs().text_color(rgb(palette.text_muted)).child(
-                                format!(
-                                    "{cursor_label} · {line_count} {lines_label} · {byte_count} {bytes_label}"
-                                ),
-                            ))
                             .child(
                                 div()
+                                    .min_w_0()
+                                    .overflow_hidden()
                                     .flex()
-                                    .flex_1()
-                                    .min_w(px(300.))
-                                    .flex_wrap()
                                     .items_center()
-                                    .justify_end()
                                     .gap_2()
-                                    .child(small_button(
-                                        palette,
-                                        "transfer-editor-reload",
-                                        if state.reload_confirm {
-                                            confirm_reload_label
-                                        } else {
-                                            reload_label
-                                        },
-                                        cx.listener(|this, _, window, cx| {
-                                            if let Some(state) =
-                                                this.active_transfer_editor_tab_mut()
-                                            {
-                                                if state.dirty && !state.reload_confirm {
-                                                    state.reload_confirm = true;
-                                                    state.error =
-                                                        Some(reload_dirty_desc.to_string());
-                                                    this.terminal_status =
-                                                        "confirm remote editor reload".to_string();
-                                                    cx.notify();
-                                                    return;
-                                                }
-                                                state.loading = true;
-                                                state.error = None;
-                                                state.conflict = false;
-                                                state.reload_confirm = false;
-                                                let session_id = state.session_id.clone();
-                                                let remote_path = state.remote_path.clone();
-                                                this.start_sftp_editor_load_job(
-                                                    session_id,
-                                                    remote_path,
-                                                    window,
-                                                    cx,
-                                                );
-                                            }
-                                        }),
-                                    ))
-                                    .when(state.reload_confirm, |this| {
-                                        this.child(small_button(
-                                            palette,
-                                            "transfer-editor-cancel-reload",
-                                            cancel_label,
-                                            cx.listener(|this, _, _, cx| {
-                                                this.cancel_transfer_editor_reload_confirm(cx);
-                                            }),
-                                        ))
-                                    })
-                                    .child(small_button(
-                                        palette,
-                                        "transfer-editor-open-external",
-                                        open_external_label,
-                                        cx.listener(|this, _, _, cx| {
-                                            this.open_active_transfer_editor_external(cx);
-                                        }),
-                                    ))
-                                    .child(small_button(
-                                        palette,
-                                        "transfer-editor-save",
-                                        if state.saving {
-                                            saving_label
-                                        } else {
-                                            save_label
-                                        },
-                                        cx.listener(|this, _, window, cx| {
-                                            this.save_transfer_editor(false, window, cx);
-                                        }),
-                                    ))
-                                    .when(tabs.len() > 1, |this| {
-                                        this.child(small_button(
-                                            palette,
-                                            "transfer-editor-save-all",
-                                            save_all_label,
-                                            cx.listener(|this, _, window, cx| {
-                                                this.save_all_transfer_editor_tabs(window, cx);
-                                            }),
-                                        ))
-                                    })
-                                    .when(state.conflict, |this| {
-                                        this.child(small_button(
-                                            palette,
-                                            "transfer-editor-force-save",
-                                            force_save_label,
-                                            cx.listener(|this, _, window, cx| {
-                                                this.save_transfer_editor(true, window, cx);
-                                            }),
-                                        ))
-                                    })
-                                    .when(close_confirm, |this| {
-                                        this.child(small_button(
-                                            palette,
-                                            "transfer-editor-save-close",
-                                            if state.saving {
-                                                saving_label
-                                            } else {
-                                                save_close_label
-                                            },
-                                            cx.listener(|this, _, window, cx| {
-                                                this.save_transfer_editor_and_close(window, cx);
-                                            }),
-                                        ))
-                                        .child(small_button(
-                                            palette,
-                                            "transfer-editor-cancel-close",
-                                            cancel_label,
-                                            cx.listener(|this, _, _, cx| {
-                                                this.cancel_transfer_editor_close_confirm(cx);
-                                            }),
-                                        ))
-                                        .child(
-                                            small_button(
-                                                palette,
-                                                "transfer-editor-discard",
-                                                discard_label,
-                                                cx.listener(|this, _, _, cx| {
-                                                    this.discard_transfer_editor(cx);
-                                                }),
-                                            ),
-                                        )
-                                    }),
+                                    .font_family(crate::features::gpui_code_font_family())
+                                    .text_size(px(11.))
+                                    .text_color(rgb(palette.text_muted))
+                                    .child(format!(
+                                        "{language_label} · {cursor_label} · {status}"
+                                    )),
+                            )
+                            .child(
+                                div()
+                                    .flex_none()
+                                    .font_family(crate::features::gpui_code_font_family())
+                                    .text_size(px(11.))
+                                    .text_color(rgb(palette.text_muted))
+                                    .child(format!(
+                                        "{byte_count} {bytes_label} · {encoding_label} · {line_ending_label}"
+                                    )),
                             ),
                     ),
             )

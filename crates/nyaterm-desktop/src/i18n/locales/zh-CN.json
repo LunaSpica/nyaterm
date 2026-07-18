@@ -498,6 +498,7 @@
     "openExternal": "外部打开",
     "openExternalFailed": "打开外部编辑器失败。",
     "openExternalTooltip": "下载到临时目录并用外部编辑器打开。外部编辑器保存后可同步回远程文件。",
+    "plainText": "纯文本",
     "previousMatch": "上一个匹配项",
     "ready": "就绪",
     "reload": "重新加载",
