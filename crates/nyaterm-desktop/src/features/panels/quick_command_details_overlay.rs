@@ -6,48 +6,21 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
         let palette = self.theme_palette();
-        let details =
-            self.quick_command_details
-                .clone()
-                .unwrap_or_else(|| QuickCommandDetailsState {
-                    command: QuickCommand {
-                        id: String::new(),
-                        label: "Quick Command".to_string(),
-                        command: String::new(),
-                        description: None,
-                        category_id: None,
-                        color_tag: None,
-                        icon_tag: None,
-                        pinned: None,
-                        execution_mode: None,
-                        source: None,
-                        risk_level: None,
-                        use_count: None,
-                        created_at: None,
-                        updated_at: None,
-                    },
-                    category: "Unsorted".to_string(),
-                    x: px(24.),
-                    y: px(24.),
-                });
+        let details = self
+            .quick_command_details
+            .clone()
+            .expect("quick command details overlay requires open state");
         let anchor_x = details.x;
         let anchor_y = details.y;
         let command = details.command;
         let category = details.category.trim().to_string();
-        let show_category = !category.is_empty()
-            && category != "Unsorted"
-            && category != "Uncategorized"
-            && category != "uncategorized";
+        let show_category = !category.is_empty();
         let description = command
             .description
             .as_deref()
             .map(str::trim)
             .filter(|description| !description.is_empty());
-        let command_text = if command.command.trim().is_empty() {
-            "Empty command".to_string()
-        } else {
-            command.command.clone()
-        };
+        let command_text = command.command.clone();
         let estimated_h = if description.is_some() { 224. } else { 182. };
         let (viewport_w, viewport_h) = self.last_viewport_size;
         let (popover_x, popover_y) = quick_command_details_popover_position(

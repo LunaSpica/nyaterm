@@ -76,7 +76,7 @@ pub(in crate::features) fn quick_command_category_label(
         .as_deref()
         .and_then(|id| categories.iter().find(|category| category.id == id))
         .map(|category| category.name.clone())
-        .unwrap_or_else(|| "Unsorted".to_string())
+        .unwrap_or_default()
 }
 
 pub(super) fn ai_command_card_category_name(card: &AiCommandCard) -> String {
