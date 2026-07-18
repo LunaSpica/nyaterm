@@ -1,12 +1,43 @@
 use super::*;
 
 impl NyaTermApp {
-    pub(in crate::features) fn update_x11_display(
+    pub(in crate::features) fn handle_terminal_x11_display_key_down(
         &mut self,
-        value: &'static str,
+        event: &KeyDownEvent,
         cx: &mut Context<Self>,
     ) {
-        self.settings.x11_display = value.to_string();
+        self.mark_user_activity();
+        let keystroke = &event.keystroke;
+        if keystroke.modifiers.platform || keystroke.modifiers.alt || keystroke.modifiers.control {
+            return;
+        }
+
+        match keystroke.key.as_str() {
+            "backspace" => {
+                self.settings.x11_display.pop();
+                cx.notify();
+            }
+            "enter" => self.save_terminal_settings(cx),
+            "escape" => cx.notify(),
+            _ => {
+                if let Some(input) = keystroke
+                    .key_char
+                    .as_deref()
+                    .filter(|input| !input.is_empty())
+                {
+                    self.settings.x11_display.push_str(input);
+                    cx.notify();
+                }
+            }
+        }
+    }
+
+    pub(in crate::features) fn toggle_terminal_hardware_acceleration(
+        &mut self,
+        cx: &mut Context<Self>,
+    ) {
+        self.settings.terminal_hardware_acceleration =
+            !self.settings.terminal_hardware_acceleration;
         self.save_terminal_settings(cx);
     }
 

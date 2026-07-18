@@ -6,98 +6,117 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
         let palette = self.theme_palette();
-        // Tauri TerminalTab general: number rows + feature switches (no metric cards).
-        let scrollback = self.settings.terminal_scrollback_lines.to_string();
-        let keep_alive = self.settings.terminal_keep_alive_interval.to_string();
-        let remote_stats_interval = self.settings.ui_remote_stats_interval.to_string();
-        let process_interval = self.settings.ui_process_manager_interval.to_string();
-        let docker_interval = self.settings.ui_docker_manager_interval.to_string();
+        let x11_display = if self.settings.x11_display.is_empty() {
+            " ".to_string()
+        } else {
+            truncate_preview(&self.settings.x11_display, 48)
+        };
+        let action_links_enabled = self.settings.terminal_action_links_enabled;
 
         div()
             .flex()
             .flex_col()
             .gap_3()
-            .child(settings_form_section(palette,
-                Some("Session"),
-                Some("Scrollback depth and SSH keep-alive cadence."),
+            .child(settings_form_section(
+                palette,
+                None,
+                None,
                 div()
                     .flex()
                     .flex_col()
                     .gap_3()
-                    .child(settings_form_row(palette,
-                        "Scrollback lines",
-                        Some(SharedString::from("How many terminal lines to retain for scrollback.")),
-                        div()
-                            .flex()
-                            .items_center()
-                            .gap_1()
-                            .child(
-                                div()
-                                    .min_w(px(72.))
-                                    .font_family(crate::features::gpui_code_font_family())
-                                    .text_size(px(12.))
-                                    .font_weight(FontWeight(600.))
-                                    .text_color(rgb(palette.text))
-                                    .child(scrollback),
-                            )
-                            .child(small_button(palette,
-                                "terminal-scrollback-minus",
-                                "−100",
-                                cx.listener(|this, _, _, cx| {
-                                    this.adjust_terminal_scrollback_lines(-100, cx);
-                                }),
-                            ))
-                            .child(small_button(palette,
-                                "terminal-scrollback-plus",
-                                "+100",
-                                cx.listener(|this, _, _, cx| {
-                                    this.adjust_terminal_scrollback_lines(100, cx);
-                                }),
-                            )),
+                    .child(settings_form_row(
+                        palette,
+                        self.tr("settings.scrollbackLines"),
+                        Some(SharedString::from(self.tr("settings.scrollbackLinesDesc"))),
+                        terminal_number_stepper(
+                            palette,
+                            "terminal-scrollback-minus",
+                            "terminal-scrollback-plus",
+                            self.settings.terminal_scrollback_lines.to_string(),
+                            cx.listener(|this, _, _, cx| {
+                                this.adjust_terminal_scrollback_lines(-100, cx);
+                            }),
+                            cx.listener(|this, _, _, cx| {
+                                this.adjust_terminal_scrollback_lines(100, cx);
+                            }),
+                        ),
                     ))
-                    .child(settings_form_row(palette,
-                        "Keep-alive interval",
-                        Some(SharedString::from("Seconds between keep-alive packets (0 disables).")),
+                    .child(settings_form_row(
+                        palette,
+                        self.tr("settings.keepAliveInterval"),
+                        Some(SharedString::from(
+                            self.tr("settings.keepAliveIntervalDesc"),
+                        )),
+                        terminal_number_stepper(
+                            palette,
+                            "terminal-keepalive-minus",
+                            "terminal-keepalive-plus",
+                            self.settings.terminal_keep_alive_interval.to_string(),
+                            cx.listener(|this, _, _, cx| {
+                                this.adjust_terminal_keep_alive_interval(-5, cx);
+                            }),
+                            cx.listener(|this, _, _, cx| {
+                                this.adjust_terminal_keep_alive_interval(5, cx);
+                            }),
+                        ),
+                    ))
+                    .child(
                         div()
                             .flex()
-                            .items_center()
-                            .gap_1()
-                            .child(
-                                div()
-                                    .min_w(px(56.))
-                                    .font_family(crate::features::gpui_code_font_family())
-                                    .text_size(px(12.))
-                                    .font_weight(FontWeight(600.))
-                                    .text_color(rgb(palette.text))
-                                    .child(format!("{keep_alive}s")),
-                            )
-                            .child(small_button(palette,
-                                "terminal-keepalive-minus",
-                                "−5",
-                                cx.listener(|this, _, _, cx| {
-                                    this.adjust_terminal_keep_alive_interval(-5, cx);
-                                }),
+                            .flex_col()
+                            .gap_2()
+                            .child(terminal_settings_field_meta(
+                                palette,
+                                self.tr("settings.x11Display"),
+                                self.tr("settings.x11DisplayDesc"),
                             ))
-                            .child(small_button(palette,
-                                "terminal-keepalive-plus",
-                                "+5",
-                                cx.listener(|this, _, _, cx| {
-                                    this.adjust_terminal_keep_alive_interval(5, cx);
-                                }),
-                            )),
-                    )),
-            ))
-            .child(settings_form_section(palette,
-                Some("Display"),
-                Some("Terminal display toggles for the GPUI surface."),
-                div()
-                    .flex()
-                    .flex_col()
-                    .gap_3()
-                                        .child(settings_form_row(palette,
-                        "Workspace padding",
-                        Some(SharedString::from("Add breathing room around the terminal surface.")),
-                        settings_switch(palette,
+                            .child(
+                                transfer_input(
+                                    "terminal-x11-display",
+                                    self.tr("settings.x11DisplayPlaceholder"),
+                                    x11_display,
+                                    true,
+                                    palette,
+                                )
+                                .w_full()
+                                .max_w(px(520.))
+                                .track_focus(&self.terminal_x11_display_focus)
+                                .on_click(cx.listener(|this, _, window, cx| {
+                                    window.focus(&this.terminal_x11_display_focus);
+                                    cx.notify();
+                                }))
+                                .on_key_down(cx.listener(
+                                    |this, event: &KeyDownEvent, _, cx| {
+                                        cx.stop_propagation();
+                                        this.handle_terminal_x11_display_key_down(event, cx);
+                                    },
+                                )),
+                            ),
+                    )
+                    .child(settings_form_row(
+                        palette,
+                        self.tr("settings.hardwareAcceleration"),
+                        Some(SharedString::from(
+                            self.tr("settings.hardwareAccelerationDesc"),
+                        )),
+                        settings_switch(
+                            palette,
+                            "terminal-hardware-acceleration",
+                            self.settings.terminal_hardware_acceleration,
+                            cx.listener(|this, _, _, cx| {
+                                this.toggle_terminal_hardware_acceleration(cx);
+                            }),
+                        ),
+                    ))
+                    .child(settings_form_row(
+                        palette,
+                        self.tr("settings.showWorkspacePadding"),
+                        Some(SharedString::from(
+                            self.tr("settings.showWorkspacePaddingDesc"),
+                        )),
+                        settings_switch(
+                            palette,
                             "terminal-workspace-padding",
                             self.settings.terminal_show_workspace_padding,
                             cx.listener(|this, _, _, cx| {
@@ -105,10 +124,12 @@ impl NyaTermApp {
                             }),
                         ),
                     ))
-                    .child(settings_form_row(palette,
-                        "Line numbers",
-                        Some(SharedString::from("Prefix rendered terminal rows with line numbers.")),
-                        settings_switch(palette,
+                    .child(settings_form_row(
+                        palette,
+                        self.tr("settings.showLineNumbers"),
+                        Some(SharedString::from(self.tr("settings.showLineNumbersDesc"))),
+                        settings_switch(
+                            palette,
                             "terminal-line-numbers",
                             self.settings.terminal_show_line_numbers,
                             cx.listener(|this, _, _, cx| {
@@ -116,10 +137,12 @@ impl NyaTermApp {
                             }),
                         ),
                     ))
-                    .child(settings_form_row(palette,
-                        "Timestamps",
-                        Some(SharedString::from("Show per-line timestamps when metadata is available.")),
-                        settings_switch(palette,
+                    .child(settings_form_row(
+                        palette,
+                        self.tr("settings.showTimestamps"),
+                        Some(SharedString::from(self.tr("settings.showTimestampsDesc"))),
+                        settings_switch(
+                            palette,
                             "terminal-timestamps",
                             self.settings.terminal_show_timestamps,
                             cx.listener(|this, _, _, cx| {
@@ -128,33 +151,30 @@ impl NyaTermApp {
                         ),
                     ))
                     .when(self.settings.terminal_show_timestamps, |this| {
-                        this.child(
-                            div()
-                                .pl_3()
-                                .ml_1()
-                                .border_l_1()
-                                .border_color(rgb(palette.border))
-                                .child(settings_form_row(
-                                    palette,
-                                    "Timestamp milliseconds",
-                                    Some(SharedString::from(
-                                        "Include millisecond precision on timestamps.",
-                                    )),
-                                    settings_switch(
-                                        palette,
-                                        "terminal-timestamp-ms",
-                                        self.settings.terminal_show_timestamp_milliseconds,
-                                        cx.listener(|this, _, _, cx| {
-                                            this.toggle_terminal_timestamp_milliseconds(cx);
-                                        }),
-                                    ),
-                                )),
-                        )
+                        this.child(settings_form_row(
+                            palette,
+                            self.tr("settings.showTimestampMilliseconds"),
+                            Some(SharedString::from(
+                                self.tr("settings.showTimestampMillisecondsDesc"),
+                            )),
+                            settings_switch(
+                                palette,
+                                "terminal-timestamp-ms",
+                                self.settings.terminal_show_timestamp_milliseconds,
+                                cx.listener(|this, _, _, cx| {
+                                    this.toggle_terminal_timestamp_milliseconds(cx);
+                                }),
+                            ),
+                        ))
                     })
-                    .child(settings_form_row(palette,
-                        "Multi-line paste dialog",
-                        Some(SharedString::from("Confirm multi-line pastes before sending them to the session.")),
-                        settings_switch(palette,
+                    .child(settings_form_row(
+                        palette,
+                        self.tr("terminal.showMultiLinePasteDialog"),
+                        Some(SharedString::from(
+                            self.tr("terminal.showMultiLinePasteDialogDesc"),
+                        )),
+                        settings_switch(
+                            palette,
                             "terminal-multi-line-paste",
                             self.settings.terminal_show_multi_line_paste_dialog,
                             cx.listener(|this, _, _, cx| {
@@ -162,10 +182,12 @@ impl NyaTermApp {
                             }),
                         ),
                     ))
-                    .child(settings_form_row(palette,
-                        "Paste image as path",
-                        Some(SharedString::from("When pasting an image, insert a temp file path instead of binary data.")),
-                        settings_switch(palette,
+                    .child(settings_form_row(
+                        palette,
+                        self.tr("terminal.pasteImageAsPath"),
+                        Some(SharedString::from(self.tr("terminal.pasteImageAsPathDesc"))),
+                        settings_switch(
+                            palette,
                             "terminal-paste-image-path",
                             self.settings.terminal_paste_image_as_path,
                             cx.listener(|this, _, _, cx| {
@@ -173,10 +195,12 @@ impl NyaTermApp {
                             }),
                         ),
                     ))
-                    .child(settings_form_row(palette,
-                        "Remote stats",
-                        Some(SharedString::from("Show remote host resource stats in the activity bar.")),
-                        settings_switch(palette,
+                    .child(settings_form_row(
+                        palette,
+                        self.tr("settings.showRemoteStats"),
+                        Some(SharedString::from(self.tr("settings.showRemoteStatsDesc"))),
+                        settings_switch(
+                            palette,
                             "terminal-remote-stats",
                             self.settings.ui_show_remote_stats,
                             cx.listener(|this, _, _, cx| {
@@ -185,51 +209,34 @@ impl NyaTermApp {
                         ),
                     ))
                     .when(self.settings.ui_show_remote_stats, |this| {
-                        this.child(
-                            div()
-                                .pl_3()
-                                .ml_1()
-                                .border_l_1()
-                                .border_color(rgb(palette.border))
-                                .child(settings_form_row(
-                                    palette,
-                                    "Remote stats interval",
-                                    Some(SharedString::from("Seconds between remote stats refreshes.")),
-                                    div()
-                                        .flex()
-                                        .items_center()
-                                        .gap_1()
-                                        .child(
-                                            div()
-                                                .min_w(px(40.))
-                                                .font_family(crate::features::gpui_code_font_family())
-                                                .text_size(px(11.))
-                                                .text_color(rgb(palette.text))
-                                                .child(format!("{remote_stats_interval}s")),
-                                        )
-                                        .child(small_button(
-                                            palette,
-                                            "terminal-remote-stats-interval-minus",
-                                            "−",
-                                            cx.listener(|this, _, _, cx| {
-                                                this.adjust_remote_stats_interval(-1, cx);
-                                            }),
-                                        ))
-                                        .child(small_button(
-                                            palette,
-                                            "terminal-remote-stats-interval-plus",
-                                            "+",
-                                            cx.listener(|this, _, _, cx| {
-                                                this.adjust_remote_stats_interval(1, cx);
-                                            }),
-                                        )),
-                                )),
-                        )
+                        this.child(settings_form_row(
+                            palette,
+                            self.tr("settings.remoteStatsInterval"),
+                            Some(SharedString::from(
+                                self.tr("settings.remoteStatsIntervalDesc"),
+                            )),
+                            terminal_number_stepper(
+                                palette,
+                                "terminal-remote-stats-interval-minus",
+                                "terminal-remote-stats-interval-plus",
+                                self.settings.ui_remote_stats_interval.to_string(),
+                                cx.listener(|this, _, _, cx| {
+                                    this.adjust_remote_stats_interval(-1, cx);
+                                }),
+                                cx.listener(|this, _, _, cx| {
+                                    this.adjust_remote_stats_interval(1, cx);
+                                }),
+                            ),
+                        ))
                     })
-                    .child(settings_form_row(palette,
-                        "Process manager",
-                        Some(SharedString::from("Show remote process manager panel.")),
-                        settings_switch(palette,
+                    .child(settings_form_row(
+                        palette,
+                        self.tr("settings.showProcessManager"),
+                        Some(SharedString::from(
+                            self.tr("settings.showProcessManagerDesc"),
+                        )),
+                        settings_switch(
+                            palette,
                             "terminal-process-manager",
                             self.settings.ui_show_process_manager,
                             cx.listener(|this, _, _, cx| {
@@ -238,51 +245,34 @@ impl NyaTermApp {
                         ),
                     ))
                     .when(self.settings.ui_show_process_manager, |this| {
-                        this.child(
-                            div()
-                                .pl_3()
-                                .ml_1()
-                                .border_l_1()
-                                .border_color(rgb(palette.border))
-                                .child(settings_form_row(
-                                    palette,
-                                    "Process manager interval",
-                                    Some(SharedString::from("Seconds between process list refreshes.")),
-                                    div()
-                                        .flex()
-                                        .items_center()
-                                        .gap_1()
-                                        .child(
-                                            div()
-                                                .min_w(px(40.))
-                                                .font_family(crate::features::gpui_code_font_family())
-                                                .text_size(px(11.))
-                                                .text_color(rgb(palette.text))
-                                                .child(format!("{process_interval}s")),
-                                        )
-                                        .child(small_button(
-                                            palette,
-                                            "terminal-process-interval-minus",
-                                            "−",
-                                            cx.listener(|this, _, _, cx| {
-                                                this.adjust_process_manager_interval(-1, cx);
-                                            }),
-                                        ))
-                                        .child(small_button(
-                                            palette,
-                                            "terminal-process-interval-plus",
-                                            "+",
-                                            cx.listener(|this, _, _, cx| {
-                                                this.adjust_process_manager_interval(1, cx);
-                                            }),
-                                        )),
-                                )),
-                        )
+                        this.child(settings_form_row(
+                            palette,
+                            self.tr("settings.processManagerInterval"),
+                            Some(SharedString::from(
+                                self.tr("settings.processManagerIntervalDesc"),
+                            )),
+                            terminal_number_stepper(
+                                palette,
+                                "terminal-process-interval-minus",
+                                "terminal-process-interval-plus",
+                                self.settings.ui_process_manager_interval.to_string(),
+                                cx.listener(|this, _, _, cx| {
+                                    this.adjust_process_manager_interval(-1, cx);
+                                }),
+                                cx.listener(|this, _, _, cx| {
+                                    this.adjust_process_manager_interval(1, cx);
+                                }),
+                            ),
+                        ))
                     })
-                    .child(settings_form_row(palette,
-                        "Docker manager",
-                        Some(SharedString::from("Show remote Docker manager panel.")),
-                        settings_switch(palette,
+                    .child(settings_form_row(
+                        palette,
+                        self.tr("settings.showDockerManager"),
+                        Some(SharedString::from(
+                            self.tr("settings.showDockerManagerDesc"),
+                        )),
+                        settings_switch(
+                            palette,
                             "terminal-docker-manager",
                             self.settings.ui_show_docker_manager,
                             cx.listener(|this, _, _, cx| {
@@ -291,112 +281,208 @@ impl NyaTermApp {
                         ),
                     ))
                     .when(self.settings.ui_show_docker_manager, |this| {
-                        this.child(
-                            div()
-                                .pl_3()
-                                .ml_1()
-                                .border_l_1()
-                                .border_color(rgb(palette.border))
-                                .child(settings_form_row(
-                                    palette,
-                                    "Docker manager interval",
-                                    Some(SharedString::from("Seconds between Docker refreshes.")),
-                                    div()
-                                        .flex()
-                                        .items_center()
-                                        .gap_1()
-                                        .child(
-                                            div()
-                                                .min_w(px(40.))
-                                                .font_family(crate::features::gpui_code_font_family())
-                                                .text_size(px(11.))
-                                                .text_color(rgb(palette.text))
-                                                .child(format!("{docker_interval}s")),
-                                        )
-                                        .child(small_button(
-                                            palette,
-                                            "terminal-docker-interval-minus",
-                                            "−",
-                                            cx.listener(|this, _, _, cx| {
-                                                this.adjust_docker_manager_interval(-1, cx);
-                                            }),
-                                        ))
-                                        .child(small_button(
-                                            palette,
-                                            "terminal-docker-interval-plus",
-                                            "+",
-                                            cx.listener(|this, _, _, cx| {
-                                                this.adjust_docker_manager_interval(1, cx);
-                                            }),
-                                        )),
-                                )),
-                        )
+                        this.child(settings_form_row(
+                            palette,
+                            self.tr("settings.dockerManagerInterval"),
+                            Some(SharedString::from(
+                                self.tr("settings.dockerManagerIntervalDesc"),
+                            )),
+                            terminal_number_stepper(
+                                palette,
+                                "terminal-docker-interval-minus",
+                                "terminal-docker-interval-plus",
+                                self.settings.ui_docker_manager_interval.to_string(),
+                                cx.listener(|this, _, _, cx| {
+                                    this.adjust_docker_manager_interval(-1, cx);
+                                }),
+                                cx.listener(|this, _, _, cx| {
+                                    this.adjust_docker_manager_interval(1, cx);
+                                }),
+                            ),
+                        ))
                     }),
             ))
-            .child(settings_form_section(palette,
-                Some("Action links"),
-                Some("Detect IP / host:port / archives in terminal text for quick commands."),
+            .child(settings_form_section(
+                palette,
+                None,
+                None,
                 div()
                     .flex()
                     .flex_col()
                     .gap_3()
-                    .child(settings_form_row(palette,
-                        "Enabled",
-                        Some(SharedString::from("Ctrl/Cmd-click runs the default action; context menu lists all.")),
-                        settings_switch(palette,
+                    .child(settings_form_row(
+                        palette,
+                        self.tr("settings.actionLinks"),
+                        Some(SharedString::from(self.tr("settings.actionLinksDesc"))),
+                        settings_switch(
+                            palette,
                             "terminal-action-links",
-                            self.settings.terminal_action_links_enabled,
+                            action_links_enabled,
                             cx.listener(|this, _, _, cx| {
                                 this.toggle_terminal_action_links(cx);
                             }),
                         ),
                     ))
-                    .when(self.settings.terminal_action_links_enabled, |this| {
-                        this.child(
-                            div()
-                                .pl_3()
-                                .ml_1()
-                                .border_l_1()
-                                .border_color(rgb(palette.border))
-                                .flex()
-                                .flex_col()
-                                .gap_3()
-                                .child(settings_form_row(palette,
-                                    "IPv4 matcher",
-                                    None,
-                                    settings_switch(palette,
-                                        "terminal-action-links-ipv4",
-                                        self.settings.terminal_action_links_matchers.ipv4,
-                                        cx.listener(|this, _, _, cx| {
-                                            this.toggle_terminal_action_links_matcher("ipv4", cx);
-                                        }),
-                                    ),
-                                ))
-                                .child(settings_form_row(palette,
-                                    "Host:Port matcher",
-                                    None,
-                                    settings_switch(palette,
-                                        "terminal-action-links-host-port",
-                                        self.settings.terminal_action_links_matchers.host_port,
-                                        cx.listener(|this, _, _, cx| {
-                                            this.toggle_terminal_action_links_matcher("host_port", cx);
-                                        }),
-                                    ),
-                                ))
-                                .child(settings_form_row(palette,
-                                    "Archive matcher",
-                                    None,
-                                    settings_switch(palette,
-                                        "terminal-action-links-archive",
-                                        self.settings.terminal_action_links_matchers.archive,
-                                        cx.listener(|this, _, _, cx| {
-                                            this.toggle_terminal_action_links_matcher("archive", cx);
-                                        }),
-                                    ),
-                                )),
-                        )
-                    }),
+                    .child(
+                        div()
+                            .text_size(px(13.))
+                            .font_weight(FontWeight(500.))
+                            .text_color(rgb(palette.text))
+                            .child(self.tr("settings.actionLinksMatchers")),
+                    )
+                    .child(
+                        div()
+                            .flex()
+                            .flex_col()
+                            .gap_2()
+                            .child(terminal_action_matcher_row(
+                                palette,
+                                "terminal-action-links-ipv4",
+                                self.tr("settings.actionLinksMatcherIpv4"),
+                                "192.168.1.1",
+                                self.tr("settings.actionLinksMatcherIpv4Desc"),
+                                self.settings.terminal_action_links_matchers.ipv4,
+                                action_links_enabled,
+                                cx.listener(|this, _, _, cx| {
+                                    this.toggle_terminal_action_links_matcher("ipv4", cx);
+                                }),
+                            ))
+                            .child(terminal_action_matcher_row(
+                                palette,
+                                "terminal-action-links-host-port",
+                                self.tr("settings.actionLinksMatcherHostPort"),
+                                "localhost:8080",
+                                self.tr("settings.actionLinksMatcherHostPortDesc"),
+                                self.settings.terminal_action_links_matchers.host_port,
+                                action_links_enabled,
+                                cx.listener(|this, _, _, cx| {
+                                    this.toggle_terminal_action_links_matcher("host_port", cx);
+                                }),
+                            ))
+                            .child(terminal_action_matcher_row(
+                                palette,
+                                "terminal-action-links-archive",
+                                self.tr("settings.actionLinksMatcherArchive"),
+                                "backup.tar.gz",
+                                self.tr("settings.actionLinksMatcherArchiveDesc"),
+                                self.settings.terminal_action_links_matchers.archive,
+                                action_links_enabled,
+                                cx.listener(|this, _, _, cx| {
+                                    this.toggle_terminal_action_links_matcher("archive", cx);
+                                }),
+                            )),
+                    ),
             ))
             .child(self.keyword_highlights_settings_section(cx))
     }
+}
+
+fn terminal_number_stepper(
+    palette: ThemePalette,
+    minus_id: &'static str,
+    plus_id: &'static str,
+    value: String,
+    on_minus: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
+    on_plus: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
+) -> impl IntoElement {
+    div()
+        .flex()
+        .items_center()
+        .gap_1()
+        .child(small_button(palette, minus_id, "-", on_minus))
+        .child(
+            div()
+                .min_w(px(56.))
+                .text_center()
+                .font_family(crate::features::gpui_code_font_family())
+                .text_size(px(11.))
+                .text_color(rgb(palette.text))
+                .child(value),
+        )
+        .child(small_button(palette, plus_id, "+", on_plus))
+}
+
+fn terminal_settings_field_meta(
+    palette: ThemePalette,
+    label: &'static str,
+    desc: &'static str,
+) -> impl IntoElement {
+    div()
+        .min_w_0()
+        .child(
+            div()
+                .text_size(px(13.))
+                .font_weight(FontWeight(500.))
+                .text_color(rgb(palette.text))
+                .child(label),
+        )
+        .child(
+            div()
+                .mt_1()
+                .text_size(px(11.))
+                .text_color(rgb(palette.text_dimmed))
+                .child(desc),
+        )
+}
+
+fn terminal_action_matcher_row(
+    palette: ThemePalette,
+    id: &'static str,
+    label: &'static str,
+    example: &'static str,
+    desc: &'static str,
+    checked: bool,
+    enabled: bool,
+    on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
+) -> impl IntoElement {
+    div()
+        .rounded_md()
+        .border_1()
+        .border_color(rgb(palette.border))
+        .bg(rgb(palette.input))
+        .px_3()
+        .py_2()
+        .flex()
+        .items_center()
+        .justify_between()
+        .gap_3()
+        .child(
+            div()
+                .min_w_0()
+                .flex_1()
+                .child(
+                    div()
+                        .flex()
+                        .items_center()
+                        .gap_2()
+                        .child(
+                            div()
+                                .text_size(px(12.))
+                                .font_weight(FontWeight(500.))
+                                .text_color(rgb(palette.text))
+                                .child(label),
+                        )
+                        .child(
+                            div()
+                                .px_2()
+                                .py(px(1.))
+                                .rounded_sm()
+                                .bg(rgb(palette.surface_elevated))
+                                .font_family(crate::features::gpui_code_font_family())
+                                .text_size(px(10.))
+                                .text_color(rgb(palette.text_muted))
+                                .child(example),
+                        ),
+                )
+                .child(
+                    div()
+                        .mt_1()
+                        .text_size(px(11.))
+                        .text_color(rgb(palette.text_dimmed))
+                        .child(desc),
+                ),
+        )
+        .child(settings_switch_with_enabled(
+            palette, id, checked, enabled, on_click,
+        ))
 }

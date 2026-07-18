@@ -630,48 +630,5 @@ impl NyaTermApp {
                         ),
                     )),
             ))
-            .child(settings_form_section(
-                palette,
-                Some("X11 display"),
-                Some("Optional DISPLAY override for remote X11 forwarding helpers."),
-                settings_form_row(
-                    palette,
-                    "DISPLAY",
-                    Some(SharedString::from(
-                        "Empty uses the environment; pick a common override when needed.",
-                    )),
-                    div()
-                        .flex()
-                        .flex_wrap()
-                        .gap_1()
-                        .child(settings_choice_chip(
-                            palette,
-                            "appearance-x11-auto",
-                            "Auto",
-                            self.settings.x11_display.trim().is_empty(),
-                            cx.listener(|this, _, _, cx| {
-                                this.update_x11_display("", cx);
-                            }),
-                        ))
-                        .child(settings_choice_chip(
-                            palette,
-                            "appearance-x11-localhost0",
-                            "localhost:0",
-                            self.settings.x11_display == "localhost:0",
-                            cx.listener(|this, _, _, cx| {
-                                this.update_x11_display("localhost:0", cx);
-                            }),
-                        ))
-                        .child(settings_choice_chip(
-                            palette,
-                            "appearance-x11-localhost1",
-                            "localhost:1",
-                            self.settings.x11_display == "localhost:1",
-                            cx.listener(|this, _, _, cx| {
-                                this.update_x11_display("localhost:1", cx);
-                            }),
-                        )),
-                ),
-            ))
     }
 }
