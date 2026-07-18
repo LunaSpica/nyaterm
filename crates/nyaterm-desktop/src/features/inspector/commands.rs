@@ -353,7 +353,7 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
         let palette = self.theme_palette();
-        // Tauri CommandHistory: dense mono list; double-click sends. GPUI: click runs (single-click proxy).
+        // Tauri CommandHistory: a double-click sends the command; a single click only focuses it.
         let history = self.active_session_history_commands();
         let mut rows = div().flex().flex_col().gap_0().p_2();
         if history.is_empty() {
@@ -363,7 +363,7 @@ impl NyaTermApp {
                     .text_center()
                     .text_size(px(11.))
                     .text_color(rgb(palette.text_dimmed))
-                    .child("No commands yet"),
+                    .child(self.tr("panel.noCommandsYet")),
             );
         } else {
             for (index, command) in history.into_iter().enumerate() {
@@ -379,8 +379,10 @@ impl NyaTermApp {
                         .gap_1()
                         .cursor_pointer()
                         .hover(|this| this.bg(rgb(palette.hover)))
-                        .on_click(cx.listener(move |this, _, _, cx| {
-                            this.run_history_command(run_index, cx);
+                        .on_click(cx.listener(move |this, event: &ClickEvent, _, cx| {
+                            if event.click_count() >= 2 {
+                                this.run_history_command(run_index, cx);
+                            }
                         }))
                         .child(
                             div()
