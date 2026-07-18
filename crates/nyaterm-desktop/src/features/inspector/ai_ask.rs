@@ -68,7 +68,7 @@ impl NyaTermApp {
                             .text_size(px(12.))
                             .font_weight(FontWeight(700.))
                             .text_color(rgb(0xd97706))
-                            .child("Terminal error detected"),
+                            .child(self.tr("ai.errorDetected")),
                     )
                     .child(
                         div()
@@ -126,14 +126,14 @@ impl NyaTermApp {
                         .text_size(px(10.))
                         .font_weight(FontWeight(700.))
                         .text_color(rgb(palette.text_muted))
-                        .child("Agent Steps"),
+                        .child(self.tr("ai.agentSteps")),
                 );
             if self.ai_agent_steps.is_empty() {
                 agent_step_rows = agent_step_rows.child(
                     div()
                         .text_xs()
                         .text_color(rgb(palette.text_dimmed))
-                        .child("No Agent steps yet."),
+                        .child(self.tr("ai.agentNoSteps")),
                 );
             } else {
                 for step in self.ai_agent_steps.iter().cloned().rev().take(16).rev() {
@@ -267,7 +267,7 @@ impl NyaTermApp {
                                         .flex_none()
                                         .text_size(px(11.))
                                         .text_color(rgb(palette.link))
-                                        .child("Quote"),
+                                        .child(self.tr("ai.quote")),
                                 )
                                 .child(
                                     div()
@@ -309,7 +309,7 @@ impl NyaTermApp {
                                 .text_size(px(10.))
                                 .font_weight(FontWeight(600.))
                                 .text_color(rgb(palette.text_muted))
-                                .child("Target Session:"),
+                                .child(format!("{}:", self.tr("ai.targetSession"))),
                         );
                         for (session_id, target_label) in target_sessions {
                             let remove_id = session_id.clone();
@@ -393,7 +393,7 @@ impl NyaTermApp {
                                     .justify_center()
                                     .text_xs()
                                     .text_color(rgb(palette.text_muted))
-                                    .child("No sessions"),
+                                    .child(self.tr("ai.noSessions")),
                             );
                         } else {
                             for (index, (session, label, kind, selected)) in
@@ -621,7 +621,7 @@ impl NyaTermApp {
                                                                 .text_color(rgb(
                                                                     palette.text_muted,
                                                                 ))
-                                                                .child("No enabled models"),
+                                                                .child(self.tr("ai.noEnabledModels")),
                                                         )
                                                         .child(
                                                             div()
@@ -651,7 +651,7 @@ impl NyaTermApp {
                                                                         );
                                                                     },
                                                                 ))
-                                                                .child("Open Models"),
+                                                                .child(self.tr("ai.models")),
                                                         );
                                                 } else {
                                                     menu = menu.child(
@@ -697,7 +697,7 @@ impl NyaTermApp {
                                                                 .text_color(rgb(
                                                                     palette.text_muted,
                                                                 ))
-                                                                .child("No model matches"),
+                                                                .child(self.tr("ai.noModelMatches")),
                                                         );
                                                     } else {
                                                         let mut rows = div()
@@ -829,7 +829,7 @@ impl NyaTermApp {
                             div()
                                 .text_size(px(10.))
                                 .text_color(rgb(palette.warning))
-                                .child("File action ready — press send to run"),
+                                .child(self.tr("ai.fileActionReady")),
                         )
                     }),
             )

@@ -225,7 +225,7 @@ impl NyaTermApp {
                         .border_color(rgb(palette.surface_elevated))
                         .text_size(px(10.))
                         .text_color(rgb(palette.link))
-                        .child("Executing…"),
+                        .child(self.tr("ai.agentExecuting")),
                 );
             }
 

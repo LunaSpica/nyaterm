@@ -22,7 +22,7 @@ impl NyaTermApp {
 
     pub(in crate::features) fn ai_empty_transcript(
         &self,
-        mode_label: &'static str,
+        _mode_label: &'static str,
         enabled: bool,
         cx: &mut Context<Self>,
     ) -> gpui::AnyElement {
@@ -52,27 +52,7 @@ impl NyaTermApp {
                     div()
                         .text_size(px(12.))
                         .text_color(rgb(palette.text_muted))
-                        .child("Go to Settings to enable AI"),
-                )
-                .child(
-                    div()
-                        .id(SharedString::from("ai-empty-open-settings-disabled"))
-                        .h(px(28.))
-                        .px_3()
-                        .rounded_md()
-                        .bg(rgb(palette.surface_elevated))
-                        .flex()
-                        .items_center()
-                        .text_size(px(11.))
-                        .font_weight(FontWeight(600.))
-                        .text_color(rgb(palette.text))
-                        .cursor_pointer()
-                        .hover(|this| this.bg(rgb(palette.border)))
-                        .on_click(cx.listener(|this, _, _, cx| {
-                            this.settings_active_tab = SettingsTab::AiGeneral;
-                            this.open_page(NavItem::Settings, cx);
-                        }))
-                        .child("Open AI Settings"),
+                        .child(self.tr("ai.goToSettingsToEnable")),
                 )
                 .into_any_element();
         }
@@ -104,10 +84,10 @@ impl NyaTermApp {
                         .text_size(px(13.))
                         .font_weight(FontWeight(700.))
                         .text_color(rgb(palette.text))
-                        .child("Set up AI Assistant"),
+                        .child(self.tr("ai.setupTitle")),
                 )
-                .child(self.ai_setup_step("1", "Add an API key credential"))
-                .child(self.ai_setup_step("2", "Choose and enable a model"))
+                .child(self.ai_setup_step("1", self.tr("ai.setupStep1")))
+                .child(self.ai_setup_step("2", self.tr("ai.setupStep2")))
                 .child(
                     div()
                         .id(SharedString::from("ai-empty-open-settings-setup"))
@@ -128,7 +108,7 @@ impl NyaTermApp {
                             this.settings_active_tab = SettingsTab::AiGeneral;
                             this.open_page(NavItem::Settings, cx);
                         }))
-                        .child("Open AI Settings"),
+                        .child(self.tr("ai.setupAction")),
                 )
                 .into_any_element();
         }
@@ -150,22 +130,7 @@ impl NyaTermApp {
                 div()
                     .text_size(px(12.))
                     .text_color(rgb(palette.text_muted))
-                    .child("Start a conversation"),
-            )
-            .child(
-                div()
-                    .text_size(px(11.))
-                    .text_color(rgb(palette.text_dimmed))
-                    .child("Ask AI to explain terminal output or generate commands."),
-            )
-            .child(
-                div()
-                    .text_size(px(10.))
-                    .text_color(rgb(palette.border))
-                    .child(format!(
-                        "{mode_label} · {}",
-                        compact_id(&self.ai_chat_session_id)
-                    )),
+                    .child(self.tr("ai.empty")),
             )
             .into_any_element()
     }

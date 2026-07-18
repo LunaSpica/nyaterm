@@ -47,8 +47,7 @@ impl NyaTermApp {
             }
             NavItem::Stats => crate::features::inspector::disabled_inspector_panel(
                 palette,
-                "Remote Stats Disabled",
-                "Enable Remote Stats in Settings > Terminal Session > General.",
+                self.tr("panel.resourceMonitorDisabled"),
             )
             .into_any_element(),
             NavItem::Processes if self.settings.ui_show_process_manager => {
@@ -56,8 +55,7 @@ impl NyaTermApp {
             }
             NavItem::Processes => crate::features::inspector::disabled_inspector_panel(
                 palette,
-                "Process Manager Disabled",
-                "Enable Process Manager in Settings > Terminal Session > General.",
+                self.tr("processManager.disabled"),
             )
             .into_any_element(),
             NavItem::Docker if self.settings.ui_show_docker_manager => {
@@ -65,8 +63,7 @@ impl NyaTermApp {
             }
             NavItem::Docker => crate::features::inspector::disabled_inspector_panel(
                 palette,
-                "Docker Manager Disabled",
-                "Enable Docker Manager in Settings > Terminal Session > General.",
+                self.tr("dockerManager.disabled"),
             )
             .into_any_element(),
             NavItem::Translation => self.translation_view(cx).into_any_element(),

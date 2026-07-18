@@ -116,16 +116,14 @@ impl NyaTermApp {
                                     .text_size(px(15.))
                                     .font_weight(FontWeight(800.))
                                     .text_color(rgb(0xfca5a5))
-                                    .child("Enable Auto Execution?"),
+                                    .child(self.tr("ai.autoExecutionConfirmTitle")),
                             )
                             .child(
                                 div()
                                     .text_size(px(12.))
                                     .line_height(px(17.))
                                     .text_color(rgb(palette.text_muted))
-                                    .child(
-                                        "Agent commands may run without confirmation. Only enable this when you trust the current task and terminal context.",
-                                    ),
+                                    .child(self.tr("ai.autoExecutionConfirmDesc")),
                             ),
                     )
                     .child(
@@ -137,7 +135,7 @@ impl NyaTermApp {
                             .child(small_button(
                                 palette,
                                 "ai-auto-execution-cancel",
-                                "Cancel",
+                                self.tr("common.cancel"),
                                 cx.listener(|this, _, _, cx| {
                                     this.cancel_ai_auto_execution_confirm(cx);
                                 }),
@@ -157,7 +155,7 @@ impl NyaTermApp {
                                     .text_color(rgb(0xfee2e2))
                                     .cursor_pointer()
                                     .hover(|this| this.bg(rgb(0x991b1b)))
-                                    .child("Enable Auto Execution")
+                                    .child(self.tr("ai.enableAutoExecution"))
                                     .on_click(cx.listener(|this, _, _, cx| {
                                         this.confirm_ai_auto_execution(cx);
                                     })),
@@ -171,8 +169,6 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
         let palette = self.theme_palette();
-        let session_count = self.ai_sessions.len();
-
         div()
             .id(SharedString::from("ai-clear-history-confirm-overlay"))
             .absolute()
@@ -223,28 +219,14 @@ impl NyaTermApp {
                                     .text_size(px(15.))
                                     .font_weight(FontWeight(800.))
                                     .text_color(rgb(0xfca5a5))
-                                    .child("Clear AI History"),
+                                    .child(self.tr("ai.clearHistoryTitle")),
                             )
                             .child(
                                 div()
                                     .text_size(px(12.))
                                     .text_color(rgb(palette.text_muted))
-                                    .child(format!(
-                                        "This will delete {session_count} chat session(s)."
-                                    )),
+                                    .child(self.tr("ai.clearHistoryDesc")),
                             ),
-                    )
-                    .child(
-                        div()
-                            .rounded_md()
-                            .border_1()
-                            .border_color(rgb(palette.border))
-                            .bg(rgb(palette.surface))
-                            .px_3()
-                            .py_2()
-                            .text_size(px(11.))
-                            .text_color(rgb(palette.text_dimmed))
-                            .child("This action cannot be undone."),
                     )
                     .child(
                         div()
@@ -255,7 +237,7 @@ impl NyaTermApp {
                             .child(small_button(
                                 palette,
                                 "ai-clear-history-cancel",
-                                "Cancel",
+                                self.tr("common.cancel"),
                                 cx.listener(|this, _, _, cx| {
                                     this.cancel_ai_clear_history_confirm(cx);
                                 }),
@@ -275,7 +257,7 @@ impl NyaTermApp {
                                     .text_color(rgb(0xfee2e2))
                                     .cursor_pointer()
                                     .hover(|this| this.bg(rgb(0x991b1b)))
-                                    .child("Clear All")
+                                    .child(self.tr("ai.clearHistory"))
                                     .on_click(cx.listener(|this, _, _, cx| {
                                         this.confirm_ai_clear_history(cx);
                                     })),
@@ -312,28 +294,28 @@ impl NyaTermApp {
                     .text_size(px(11.))
                     .font_weight(FontWeight(700.))
                     .text_color(rgb(palette.text))
-                    .child("Agent command execution"),
+                    .child(self.tr("ai.agentCommandExecutionMode")),
             )
             .child(self.ai_execution_mode_item(
                 "ai-exec-confirm",
-                "Confirm each",
-                "Ask before running every agent command",
+                self.tr("ai.executionModeConfirmEach"),
+                self.tr("ai.executionModeConfirmEachDesc"),
                 AgentCommandExecutionMode::ConfirmEach,
                 current == AgentCommandExecutionMode::ConfirmEach,
                 cx,
             ))
             .child(self.ai_execution_mode_item(
                 "ai-exec-smart",
-                "Smart",
-                "Auto-run low risk; confirm higher risk",
+                self.tr("ai.executionModeSmart"),
+                self.tr("ai.executionModeSmartDesc"),
                 AgentCommandExecutionMode::Smart,
                 current == AgentCommandExecutionMode::Smart,
                 cx,
             ))
             .child(self.ai_execution_mode_item(
                 "ai-exec-auto",
-                "Auto",
-                "Run agent commands without confirmation",
+                self.tr("ai.executionModeAuto"),
+                self.tr("ai.executionModeAutoDesc"),
                 AgentCommandExecutionMode::Auto,
                 current == AgentCommandExecutionMode::Auto,
                 cx,
@@ -346,7 +328,7 @@ impl NyaTermApp {
                     .text_size(px(11.))
                     .font_weight(FontWeight(700.))
                     .text_color(rgb(palette.text))
-                    .child("Execution method"),
+                    .child(self.tr("ai.executionMethod")),
             )
             .child(self.ai_background_execution_item(cx))
     }
@@ -406,13 +388,13 @@ impl NyaTermApp {
                             .text_size(px(12.))
                             .font_weight(FontWeight(600.))
                             .text_color(rgb(palette.text))
-                            .child("Background Agent Execution"),
+                            .child(self.tr("ai.backgroundAgentExecution")),
                     )
                     .child(
                         div()
                             .text_size(px(10.))
                             .text_color(rgb(palette.text_muted))
-                            .child("Run agent commands in the background when possible"),
+                            .child(self.tr("ai.backgroundAgentExecutionDesc")),
                     ),
             )
     }
@@ -698,7 +680,7 @@ impl NyaTermApp {
                             .text_size(px(11.))
                             .font_weight(FontWeight(700.))
                             .text_color(rgb(palette.text))
-                            .child("History"),
+                            .child(self.tr("ai.history")),
                     )
                     .child(
                         div()
@@ -729,7 +711,7 @@ impl NyaTermApp {
                                 }
                                 this.open_ai_clear_history_confirm(window, cx);
                             }))
-                            .child("Clear All"),
+                            .child(self.tr("ai.clearHistory")),
                     ),
             )
             .child(

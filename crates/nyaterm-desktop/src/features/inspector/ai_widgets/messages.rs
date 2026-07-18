@@ -97,7 +97,7 @@ impl NyaTermApp {
                     .child(ai_message_menu_button(
                         palette,
                         "ai-message-menu-quote",
-                        "Quote",
+                        self.tr("ai.quote"),
                         cx.listener(move |this, _, _, cx| {
                             this.quote_ai_message_text(quote_text.clone(), cx);
                         }),
@@ -105,7 +105,7 @@ impl NyaTermApp {
                     .child(ai_message_menu_button(
                         palette,
                         "ai-message-menu-copy",
-                        "Copy",
+                        self.tr("ai.copy"),
                         cx.listener(move |this, _, _, cx| {
                             this.copy_ai_message_text(copy_text.clone(), cx);
                         }),
@@ -226,7 +226,11 @@ impl NyaTermApp {
                             } else {
                                 rgb(palette.text_muted)
                             })
-                            .child(if streaming { "Thinking…" } else { "Thought" }),
+                            .child(if streaming {
+                                self.tr("ai.thinking")
+                            } else {
+                                self.tr("ai.thoughtComplete")
+                            }),
                     )
                     .child(
                         div()
@@ -250,7 +254,7 @@ impl NyaTermApp {
                     .py_2()
                     .text_size(px(11.))
                     .text_color(rgb(palette.link))
-                    .child("Thinking…"),
+                    .child(self.tr("ai.thinking")),
             );
         }
 
