@@ -1,14 +1,91 @@
 use super::*;
 
 const FILE_ROW_PX: f32 = 30.;
+const FILE_HEADER_PX: f32 = 24.;
 const FILE_OVERSCAN: usize = 8;
 
-fn transfer_browser_viewport_rows(viewport_height: f32, queue_height: f32) -> usize {
-    // The browser shares the panel with the transfer queue. GPUI does not expose
-    // the nested panel bounds here, so derive the available height from the
-    // window viewport and keep a small allowance for the app chrome.
-    let browser_height = (viewport_height - queue_height.clamp(60., 600.) - 132.).max(FILE_ROW_PX);
-    (browser_height / FILE_ROW_PX).floor().max(1.) as usize
+fn transfer_browser_viewport_rows(
+    viewport_height: f32,
+    queue_height: f32,
+    measured_table_height: f32,
+) -> usize {
+    // The first frame uses an estimate so rows can render before prepaint. All
+    // later frames use the actual bounds of the table viewport.
+    let rows_height = if measured_table_height > 0. {
+        (measured_table_height - FILE_HEADER_PX).max(FILE_ROW_PX)
+    } else {
+        (viewport_height - queue_height.clamp(60., 600.) - 132.).max(FILE_ROW_PX)
+    };
+    (rows_height / FILE_ROW_PX).floor().max(1.) as usize
+}
+
+struct TransferBrowserViewportElement {
+    app: Entity<NyaTermApp>,
+    child: AnyElement,
+}
+
+impl IntoElement for TransferBrowserViewportElement {
+    type Element = Self;
+
+    fn into_element(self) -> Self::Element {
+        self
+    }
+}
+
+impl Element for TransferBrowserViewportElement {
+    type RequestLayoutState = ();
+    type PrepaintState = ();
+
+    fn id(&self) -> Option<gpui::ElementId> {
+        None
+    }
+
+    fn source_location(&self) -> Option<&'static core::panic::Location<'static>> {
+        None
+    }
+
+    fn request_layout(
+        &mut self,
+        _id: Option<&GlobalElementId>,
+        _inspector_id: Option<&InspectorElementId>,
+        window: &mut Window,
+        cx: &mut App,
+    ) -> (LayoutId, Self::RequestLayoutState) {
+        (self.child.request_layout(window, cx), ())
+    }
+
+    fn prepaint(
+        &mut self,
+        _id: Option<&GlobalElementId>,
+        _inspector_id: Option<&InspectorElementId>,
+        bounds: Bounds<Pixels>,
+        _state: &mut Self::RequestLayoutState,
+        window: &mut Window,
+        cx: &mut App,
+    ) -> Self::PrepaintState {
+        let height = f32::from(bounds.size.height).max(0.);
+        let app = self.app.clone();
+        let _ = app.update(cx, |this, cx| {
+            if (this.transfer_browser_viewport_height - height).abs() > 0.5 {
+                this.transfer_browser_viewport_height = height;
+                cx.notify();
+            }
+        });
+        self.child.prepaint(window, cx);
+    }
+
+    fn paint(
+        &mut self,
+        _id: Option<&GlobalElementId>,
+        _inspector_id: Option<&InspectorElementId>,
+        _bounds: Bounds<Pixels>,
+        _state: &mut Self::RequestLayoutState,
+        _prepaint: &mut Self::PrepaintState,
+        window: &mut Window,
+        cx: &mut App,
+    ) {
+        self.child.paint(window, cx);
+    }
 }
 
 impl NyaTermApp {
@@ -151,6 +228,7 @@ impl NyaTermApp {
             let viewport_rows = transfer_browser_viewport_rows(
                 self.last_viewport_size.1,
                 self.transfer_panel_height,
+                self.transfer_browser_viewport_height,
             );
             let parent_count = usize::from(has_parent_entry);
             let total_entries = visible_entries.len() + parent_count;
@@ -376,8 +454,9 @@ impl NyaTermApp {
                 )
                 .child(self.transfer_browser_path_row(current_browser_path.clone(), cx))
             })
-            .child(
-                div()
+            .child(TransferBrowserViewportElement {
+                app: cx.entity(),
+                child: div()
                     .id(SharedString::from("transfer-browser-table-scroll"))
                     .flex_1()
                     .min_h_0()
@@ -393,6 +472,7 @@ impl NyaTermApp {
                         let viewport_rows = transfer_browser_viewport_rows(
                             this.last_viewport_size.1,
                             this.transfer_panel_height,
+                            this.transfer_browser_viewport_height,
                         );
                         let max_offset = total.saturating_sub(viewport_rows.min(total));
                         if max_offset == 0 {
@@ -500,8 +580,9 @@ impl NyaTermApp {
                                     ),
                             )
                             .child(rows),
-                    ),
-            )
+                    )
+                    .into_any_element(),
+            })
             // Tauri FileExplorer footer: totals left, cwd sync / send icons right.
             .child(
                 div()
@@ -582,13 +663,19 @@ mod tests {
 
     #[test]
     fn viewport_rows_follow_window_and_queue_height() {
-        assert_eq!(transfer_browser_viewport_rows(800., 240.), 14);
-        assert_eq!(transfer_browser_viewport_rows(1080., 240.), 23);
-        assert_eq!(transfer_browser_viewport_rows(800., 60.), 20);
+        assert_eq!(transfer_browser_viewport_rows(800., 240., 0.), 14);
+        assert_eq!(transfer_browser_viewport_rows(1080., 240., 0.), 23);
+        assert_eq!(transfer_browser_viewport_rows(800., 60., 0.), 20);
     }
 
     #[test]
     fn viewport_rows_keep_one_row_when_queue_consumes_the_panel() {
-        assert_eq!(transfer_browser_viewport_rows(400., 600.), 1);
+        assert_eq!(transfer_browser_viewport_rows(400., 600., 0.), 1);
+    }
+
+    #[test]
+    fn viewport_rows_prefer_measured_table_height() {
+        assert_eq!(transfer_browser_viewport_rows(800., 240., 444.), 14);
+        assert_eq!(transfer_browser_viewport_rows(800., 240., 84.), 2);
     }
 }

@@ -546,6 +546,7 @@ impl NyaTermApp {
             transfer_browser_status: "List a remote directory to browse files.".to_string(),
             transfer_browser_search: String::new(),
             transfer_browser_list_offset: 0,
+            transfer_browser_viewport_height: 0.,
             transfer_browser_search_expanded: false,
             transfer_browser_history: VecDeque::new(),
             transfer_browser_history_index: 0,

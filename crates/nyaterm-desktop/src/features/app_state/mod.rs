@@ -315,6 +315,7 @@ pub struct NyaTermApp {
     pub(in crate::features) transfer_browser_status: String,
     pub(in crate::features) transfer_browser_search: String,
     pub(in crate::features) transfer_browser_list_offset: usize,
+    pub(in crate::features) transfer_browser_viewport_height: f32,
     pub(in crate::features) transfer_browser_search_expanded: bool,
     pub(in crate::features) transfer_browser_history: VecDeque<String>,
     pub(in crate::features) transfer_browser_history_index: usize,

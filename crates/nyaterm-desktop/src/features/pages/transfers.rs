@@ -1,7 +1,8 @@
 use gpui::{
-    AnyElement, App, ClickEvent, ClipboardItem, Context, Entity, FontWeight, Hsla, IntoElement,
-    KeyDownEvent, MouseButton, MouseDownEvent, MouseMoveEvent, MouseUpEvent, ScrollDelta,
-    ScrollWheelEvent, SharedString, Timer, Window, div, prelude::*, px, rgb, svg,
+    AnyElement, App, Bounds, ClickEvent, ClipboardItem, Context, Element, Entity, FontWeight,
+    GlobalElementId, Hsla, InspectorElementId, IntoElement, KeyDownEvent, LayoutId, MouseButton,
+    MouseDownEvent, MouseMoveEvent, MouseUpEvent, Pixels, ScrollDelta, ScrollWheelEvent,
+    SharedString, Timer, Window, div, prelude::*, px, rgb, svg,
 };
 use nyaterm_transport::{
     SftpAttributeUpdate, SftpDuplicatePolicy, SftpFileEntry, SftpFileType, SftpService,
