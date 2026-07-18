@@ -212,13 +212,35 @@ impl NyaTermApp {
         self.save_interaction_settings(cx);
     }
 
-    pub(in crate::features) fn set_interaction_word_separators(
+    pub(in crate::features) fn handle_interaction_word_separators_key_down(
         &mut self,
-        value: &'static str,
+        event: &KeyDownEvent,
         cx: &mut Context<Self>,
     ) {
-        self.settings.interaction_word_separators = value.to_string();
-        self.save_interaction_settings(cx);
+        self.mark_user_activity();
+        let keystroke = &event.keystroke;
+        if keystroke.modifiers.platform || keystroke.modifiers.alt || keystroke.modifiers.control {
+            return;
+        }
+
+        match keystroke.key.as_str() {
+            "backspace" => {
+                self.settings.interaction_word_separators.pop();
+                cx.notify();
+            }
+            "enter" => self.save_interaction_settings(cx),
+            "escape" => cx.notify(),
+            _ => {
+                if let Some(input) = keystroke
+                    .key_char
+                    .as_deref()
+                    .filter(|input| !input.is_empty())
+                {
+                    self.settings.interaction_word_separators.push_str(input);
+                    cx.notify();
+                }
+            }
+        }
     }
 
     pub(in crate::features) fn save_interaction_settings(&mut self, cx: &mut Context<Self>) {

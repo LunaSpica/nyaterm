@@ -199,6 +199,7 @@ pub struct NyaTermApp {
     pub(in crate::features) settings_master_password_enabled: bool,
     pub(in crate::features) settings_master_password_draft: String,
     pub(in crate::features) settings_master_password_focus: FocusHandle,
+    pub(in crate::features) interaction_word_separators_focus: FocusHandle,
     pub(in crate::features) keybinding_recording_id: Option<String>,
     pub(in crate::features) keybinding_pending_keys: Option<String>,
     pub(in crate::features) keybinding_search_draft: String,

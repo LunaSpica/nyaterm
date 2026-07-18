@@ -191,7 +191,7 @@ pub(in crate::features) use runtime_jobs::{
 pub(in crate::features) use settings_window::SettingsWindow;
 pub(in crate::features) use tab_mouse::{
     ChromeTooltip, SessionTabDragPayload, SessionTabDragPreview, SessionTabTooltip,
-    TAB_MOUSE_ACTIONS, TabMouseActionTarget, tab_mouse_action_label,
+    TAB_MOUSE_ACTIONS, TabMouseActionTarget,
 };
 pub(in crate::features) use transfer_external_sync_window::TransferExternalSyncWindow;
 pub(in crate::features) use transfer_widgets::{

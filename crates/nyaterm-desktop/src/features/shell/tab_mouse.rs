@@ -442,17 +442,3 @@ fn normalize_tab_mouse_action(action: &str) -> &'static str {
         .find(|item| *item == action)
         .unwrap_or("none")
 }
-
-pub(in crate::features) fn tab_mouse_action_label(action: &str) -> &'static str {
-    match action {
-        "rename_tab" => "Rename Tab",
-        "copy_tab_name" => "Copy Tab Name",
-        "copy_server_ip" => "Copy Server IP",
-        "duplicate_session" => "Duplicate Session",
-        "multiplex_ssh" => "Multiplex SSH",
-        "reconnect_session" => "Reconnect Session",
-        "disconnect_session" => "Disconnect Session",
-        "close_tab" => "Close Tab",
-        _ => "None",
-    }
-}

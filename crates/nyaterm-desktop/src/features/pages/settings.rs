@@ -18,7 +18,7 @@ use crate::widgets::{small_button, status_pill};
 use super::super::{
     ChromeTooltip, NyaTermApp, TAB_MOUSE_ACTIONS, TabMouseActionTarget, ai_active_profile_api_key,
     cloud_secret_display, cloud_sync_history_row, compact_id, configured_cloud_sync_provider,
-    none_if_blank, tab_mouse_action_label, transfer_input, truncate_preview,
+    none_if_blank, transfer_input, truncate_preview,
 };
 
 mod ai;

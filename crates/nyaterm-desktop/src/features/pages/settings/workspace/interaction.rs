@@ -6,9 +6,8 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
         let palette = self.theme_palette();
-        // Tauri InteractionTab: clipboard/mouse, command input, keyboard, tab mouse, encoding.
         let encoding = self.settings.interaction_default_encoding.clone();
-        let word_sep = self.settings.interaction_word_separators.clone();
+        let word_separators = truncate_preview(&self.settings.interaction_word_separators, 40);
         let double_action = self.settings.interaction_tab_double_click_action.clone();
         let middle_action = self.settings.interaction_tab_middle_click_action.clone();
         let right_action = self.settings.interaction_tab_right_click_action.clone();
@@ -23,18 +22,16 @@ impl NyaTermApp {
             .gap_3()
             .child(settings_form_section(
                 palette,
-                Some("Clipboard and mouse"),
-                Some("Selection copy and right-click paste behavior."),
+                Some(self.tr("settings.interactionClipboardMouse")),
+                Some(self.tr("settings.interactionClipboardMouseDesc")),
                 div()
                     .flex()
                     .flex_col()
                     .gap_3()
                     .child(settings_form_row(
                         palette,
-                        "Copy on select",
-                        Some(SharedString::from(
-                            "Copy selected terminal text to the clipboard automatically.",
-                        )),
+                        self.tr("settings.copyOnSelect"),
+                        Some(SharedString::from(self.tr("settings.copyOnSelectDesc"))),
                         settings_switch(
                             palette,
                             "interaction-copy-select",
@@ -46,10 +43,8 @@ impl NyaTermApp {
                     ))
                     .child(settings_form_row(
                         palette,
-                        "Right-click paste",
-                        Some(SharedString::from(
-                            "Paste from clipboard on right-click instead of opening a menu.",
-                        )),
+                        self.tr("settings.rightClickPaste"),
+                        Some(SharedString::from(self.tr("settings.rightClickPasteDesc"))),
                         settings_switch(
                             palette,
                             "interaction-right-paste",
@@ -62,17 +57,17 @@ impl NyaTermApp {
             ))
             .child(settings_form_section(
                 palette,
-                Some("Command input"),
-                Some("Suggestions, word separators, and duplicate-session command delay."),
+                Some(self.tr("settings.interactionCommandInput")),
+                Some(self.tr("settings.interactionCommandInputDesc")),
                 div()
                     .flex()
                     .flex_col()
                     .gap_3()
                     .child(settings_form_row(
                         palette,
-                        "Command suggestions",
+                        self.tr("settings.commandSuggestions"),
                         Some(SharedString::from(
-                            "Offer history-based suggestions while typing commands.",
+                            self.tr("settings.commandSuggestionsDesc"),
                         )),
                         settings_switch(
                             palette,
@@ -84,138 +79,104 @@ impl NyaTermApp {
                         ),
                     ))
                     .when(suggestions_enabled, |this| {
-                        this.child(
-                            div()
-                                .pl_3()
-                                .ml_1()
-                                .border_l_1()
-                                .border_color(rgb(palette.border))
-                                .flex()
-                                .flex_col()
-                                .gap_3()
-                                .child(settings_form_row(
-                                    palette,
-                                    "Min characters",
-                                    Some(SharedString::from(
-                                        "Start offering suggestions after this many typed characters.",
-                                    )),
-                                    div()
-                                        .flex()
-                                        .items_center()
-                                        .gap_1()
-                                        .child(
-                                            div()
-                                                .min_w(px(28.))
-                                                .font_family(crate::features::gpui_code_font_family())
-                                                .text_size(px(11.))
-                                                .text_color(rgb(palette.text))
-                                                .child(min_chars.to_string()),
-                                        )
-                                        .child(small_button(
-                                            palette,
-                                            "interaction-suggest-min-minus",
-                                            "−",
-                                            cx.listener(|this, _, _, cx| {
-                                                this.adjust_command_suggestion_min_chars(-1, cx);
-                                            }),
-                                        ))
-                                        .child(small_button(
-                                            palette,
-                                            "interaction-suggest-min-plus",
-                                            "+",
-                                            cx.listener(|this, _, _, cx| {
-                                                this.adjust_command_suggestion_min_chars(1, cx);
-                                            }),
-                                        )),
-                                ))
-                                .child(settings_form_row(
-                                    palette,
-                                    "Max characters",
-                                    Some(SharedString::from(
-                                        "Ignore suggestion matching once the line exceeds this length.",
-                                    )),
-                                    div()
-                                        .flex()
-                                        .items_center()
-                                        .gap_1()
-                                        .child(
-                                            div()
-                                                .min_w(px(28.))
-                                                .font_family(crate::features::gpui_code_font_family())
-                                                .text_size(px(11.))
-                                                .text_color(rgb(palette.text))
-                                                .child(max_chars.to_string()),
-                                        )
-                                        .child(small_button(
-                                            palette,
-                                            "interaction-suggest-max-minus",
-                                            "−",
-                                            cx.listener(|this, _, _, cx| {
-                                                this.adjust_command_suggestion_max_chars(-1, cx);
-                                            }),
-                                        ))
-                                        .child(small_button(
-                                            palette,
-                                            "interaction-suggest-max-plus",
-                                            "+",
-                                            cx.listener(|this, _, _, cx| {
-                                                this.adjust_command_suggestion_max_chars(1, cx);
-                                            }),
-                                        )),
-                                )),
-                        )
+                        this.child(settings_form_row(
+                            palette,
+                            self.tr("settings.commandSuggestionsMinChars"),
+                            Some(SharedString::from(
+                                self.tr("settings.commandSuggestionsMinCharsDesc"),
+                            )),
+                            interaction_number_stepper(
+                                palette,
+                                "interaction-suggest-min-minus",
+                                "interaction-suggest-min-plus",
+                                min_chars,
+                                cx.listener(|this, _, _, cx| {
+                                    this.adjust_command_suggestion_min_chars(-1, cx);
+                                }),
+                                cx.listener(|this, _, _, cx| {
+                                    this.adjust_command_suggestion_min_chars(1, cx);
+                                }),
+                            ),
+                        ))
+                        .child(settings_form_row(
+                            palette,
+                            self.tr("settings.commandSuggestionsMaxChars"),
+                            Some(SharedString::from(
+                                self.tr("settings.commandSuggestionsMaxCharsDesc"),
+                            )),
+                            interaction_number_stepper(
+                                palette,
+                                "interaction-suggest-max-minus",
+                                "interaction-suggest-max-plus",
+                                max_chars,
+                                cx.listener(|this, _, _, cx| {
+                                    this.adjust_command_suggestion_max_chars(-1, cx);
+                                }),
+                                cx.listener(|this, _, _, cx| {
+                                    this.adjust_command_suggestion_max_chars(1, cx);
+                                }),
+                            ),
+                        ))
                     })
+                    .child(
+                        div()
+                            .flex()
+                            .flex_col()
+                            .gap_2()
+                            .child(settings_field_meta(
+                                palette,
+                                self.tr("settings.wordSeparators"),
+                                self.tr("settings.wordSeparatorsDesc"),
+                            ))
+                            .child(
+                                transfer_input(
+                                    "interaction-word-separators",
+                                    self.tr("settings.wordSeparators"),
+                                    if word_separators.is_empty() {
+                                        " ".to_string()
+                                    } else {
+                                        word_separators
+                                    },
+                                    true,
+                                    palette,
+                                )
+                                .w_full()
+                                .max_w(px(640.))
+                                .track_focus(&self.interaction_word_separators_focus)
+                                .on_click(cx.listener(|this, _, window, cx| {
+                                    window.focus(&this.interaction_word_separators_focus);
+                                    cx.notify();
+                                }))
+                                .on_key_down(cx.listener(
+                                    |this, event: &KeyDownEvent, _, cx| {
+                                        cx.stop_propagation();
+                                        this.handle_interaction_word_separators_key_down(event, cx);
+                                    },
+                                )),
+                            ),
+                    )
                     .child(settings_form_row(
                         palette,
-                        "Word separators",
+                        self.tr("settings.duplicateSessionCommandDelay"),
                         Some(SharedString::from(
-                            "Characters that split double-click word selection.",
+                            self.tr("settings.duplicateSessionCommandDelayDesc"),
                         )),
                         div()
                             .flex()
                             .items_center()
                             .gap_1()
-                            .child(
-                                div()
-                                    .font_family(crate::features::gpui_code_font_family())
-                                    .text_size(px(10.))
-                                    .text_color(rgb(palette.text_muted))
-                                    .child(truncate_preview(&word_sep, 28)),
-                            )
-                            .child(settings_choice_chip(
+                            .child(small_button(
                                 palette,
-                                "interaction-word-sep-shell",
-                                "Shell",
-                                word_sep.contains('/') && word_sep.contains('|'),
+                                "interaction-dup-delay-minus",
+                                "-",
                                 cx.listener(|this, _, _, cx| {
-                                    this.set_interaction_word_separators(
-                                        " `\"'()[]{}<>|&;/",
-                                        cx,
-                                    );
+                                    this.adjust_duplicate_session_command_delay(-100, cx);
                                 }),
                             ))
-                            .child(settings_choice_chip(
-                                palette,
-                                "interaction-word-sep-basic",
-                                "Basic",
-                                word_sep == " \t\r\n",
-                                cx.listener(|this, _, _, cx| {
-                                    this.set_interaction_word_separators(" \t\r\n", cx);
-                                }),
-                            )),
-                    ))
-                    .child(settings_form_row(
-                        palette,
-                        "Duplicate session delay",
-                        Some(SharedString::from(
-                            "Delay before replaying the startup command on a duplicated tab.",
-                        )),
-                        div()
-                            .flex()
-                            .items_center()
-                            .gap_1()
                             .child(
                                 div()
+                                    .min_w(px(64.))
+                                    .text_center()
                                     .font_family(crate::features::gpui_code_font_family())
                                     .text_size(px(11.))
                                     .text_color(rgb(palette.text))
@@ -223,36 +184,17 @@ impl NyaTermApp {
                             )
                             .child(small_button(
                                 palette,
-                                "interaction-dup-delay-minus",
-                                "−100",
-                                cx.listener(|this, _, _, cx| {
-                                    this.adjust_duplicate_session_command_delay(-100, cx);
-                                }),
-                            ))
-                            .child(small_button(
-                                palette,
                                 "interaction-dup-delay-plus",
-                                "+100",
+                                "+",
                                 cx.listener(|this, _, _, cx| {
                                     this.adjust_duplicate_session_command_delay(100, cx);
                                 }),
                             )),
-                    )),
-            ))
-            .child(settings_form_section(
-                palette,
-                Some("Keyboard"),
-                Some("Terminal meta key and macOS IME compatibility."),
-                div()
-                    .flex()
-                    .flex_col()
-                    .gap_3()
+                    ))
                     .child(settings_form_row(
                         palette,
-                        "Alt as Meta",
-                        Some(SharedString::from(
-                            "Treat Alt as Meta for terminal key bindings.",
-                        )),
+                        self.tr("settings.altAsMeta"),
+                        Some(SharedString::from(self.tr("settings.altAsMetaDesc"))),
                         settings_switch(
                             palette,
                             "interaction-alt-meta",
@@ -264,9 +206,9 @@ impl NyaTermApp {
                     ))
                     .child(settings_form_row(
                         palette,
-                        "Mac IME compatibility",
+                        self.tr("settings.macImeCompatibility"),
                         Some(SharedString::from(
-                            "Improve input method editor handling on macOS.",
+                            self.tr("settings.macImeCompatibilityDesc"),
                         )),
                         settings_switch(
                             palette,
@@ -280,31 +222,34 @@ impl NyaTermApp {
             ))
             .child(settings_form_section(
                 palette,
-                Some("Tab mouse actions"),
-                Some("What happens when clicking session tabs (Tauri Interaction selects)."),
+                Some(self.tr("settings.tabMouseActions")),
+                Some(self.tr("settings.tabMouseActionsDesc")),
                 div()
                     .flex()
                     .flex_col()
                     .gap_3()
-                    .child(self.tab_mouse_action_settings_row(
+                    .child(self.tab_mouse_action_settings_field(
                         palette,
-                        "Double-click",
+                        self.tr("settings.tabDoubleClickAction"),
+                        self.tr("settings.tabDoubleClickActionDesc"),
                         "interaction-tab-double",
                         TabMouseActionTarget::Double,
                         &double_action,
                         cx,
                     ))
-                    .child(self.tab_mouse_action_settings_row(
+                    .child(self.tab_mouse_action_settings_field(
                         palette,
-                        "Middle-click",
+                        self.tr("settings.tabMiddleClickAction"),
+                        self.tr("settings.tabMiddleClickActionDesc"),
                         "interaction-tab-middle",
                         TabMouseActionTarget::Middle,
                         &middle_action,
                         cx,
                     ))
-                    .child(self.tab_mouse_action_settings_row(
+                    .child(self.tab_mouse_action_settings_field(
                         palette,
-                        "Right-click",
+                        self.tr("settings.tabRightClickAction"),
+                        self.tr("settings.tabRightClickActionDesc"),
                         "interaction-tab-right",
                         TabMouseActionTarget::Right,
                         &right_action,
@@ -313,70 +258,64 @@ impl NyaTermApp {
             ))
             .child(settings_form_section(
                 palette,
-                Some("Encoding"),
-                Some("Fallback character encoding for session I/O."),
-                settings_form_row(
-                    palette,
-                    "Default encoding",
-                    Some(SharedString::from(
-                        "Used when a session does not specify an encoding.",
-                    )),
-                    div()
-                        .flex()
-                        .gap_1()
-                        .child(settings_choice_chip(
-                            palette,
-                            "interaction-encoding-utf8",
-                            "UTF-8",
-                            encoding == "UTF-8",
-                            cx.listener(|this, _, _, cx| {
-                                this.set_interaction_encoding("UTF-8", cx);
-                            }),
-                        ))
-                        .child(settings_choice_chip(
-                            palette,
-                            "interaction-encoding-gbk",
-                            "GBK",
-                            encoding == "GBK",
-                            cx.listener(|this, _, _, cx| {
-                                this.set_interaction_encoding("GBK", cx);
-                            }),
-                        )),
-                ),
+                Some(self.tr("settings.interactionEncoding")),
+                Some(self.tr("settings.interactionEncodingDesc")),
+                div()
+                    .flex()
+                    .flex_col()
+                    .gap_2()
+                    .child(settings_field_meta(
+                        palette,
+                        self.tr("settings.defaultEncoding"),
+                        self.tr("settings.defaultEncodingDesc"),
+                    ))
+                    .child(
+                        div()
+                            .flex()
+                            .gap_1()
+                            .child(settings_choice_chip(
+                                palette,
+                                "interaction-encoding-utf8",
+                                "UTF-8",
+                                encoding == "UTF-8",
+                                cx.listener(|this, _, _, cx| {
+                                    this.set_interaction_encoding("UTF-8", cx);
+                                }),
+                            ))
+                            .child(settings_choice_chip(
+                                palette,
+                                "interaction-encoding-gbk",
+                                "GBK",
+                                encoding == "GBK",
+                                cx.listener(|this, _, _, cx| {
+                                    this.set_interaction_encoding("GBK", cx);
+                                }),
+                            )),
+                    ),
             ))
     }
 
-    pub(in crate::features) fn tab_mouse_action_settings_row(
+    fn tab_mouse_action_settings_field(
         &mut self,
         palette: ThemePalette,
         label: &'static str,
+        desc: &'static str,
         id_prefix: &'static str,
         target: TabMouseActionTarget,
         current: &str,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
         let chips = TAB_MOUSE_ACTIONS.iter().fold(
-            div().flex().flex_wrap().gap_1().max_w(px(420.)),
+            div().flex().flex_wrap().gap_1().max_w(px(640.)),
             |row, action| {
                 let action_id = (*action).to_string();
                 let selected = current == *action;
                 let chip_id = format!("{id_prefix}-{action}");
-                let short_static: &'static str = match *action {
-                    "none" => "None",
-                    "rename_tab" => "Rename",
-                    "copy_tab_name" => "Copy name",
-                    "copy_server_ip" => "Copy IP",
-                    "duplicate_session" => "Duplicate",
-                    "multiplex_ssh" => "Mux SSH",
-                    "reconnect_session" => "Reconnect",
-                    "disconnect_session" => "Disconnect",
-                    "close_tab" => "Close",
-                    _ => "None",
-                };
+                let action_label = self.tr(tab_mouse_action_i18n_key(action));
                 row.child(settings_choice_chip(
                     palette,
                     chip_id,
-                    short_static,
+                    action_label,
                     selected,
                     cx.listener(move |this, _, _, cx| {
                         this.set_tab_mouse_action(target, &action_id, cx);
@@ -384,11 +323,74 @@ impl NyaTermApp {
                 ))
             },
         );
-        settings_form_row(
-            palette,
-            label,
-            Some(SharedString::from(tab_mouse_action_label(current))),
-            chips,
+
+        div()
+            .flex()
+            .flex_col()
+            .gap_2()
+            .child(settings_field_meta(palette, label, desc))
+            .child(chips)
+    }
+}
+
+fn interaction_number_stepper(
+    palette: ThemePalette,
+    minus_id: &'static str,
+    plus_id: &'static str,
+    value: u32,
+    on_minus: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
+    on_plus: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
+) -> impl IntoElement {
+    div()
+        .flex()
+        .items_center()
+        .gap_1()
+        .child(small_button(palette, minus_id, "-", on_minus))
+        .child(
+            div()
+                .min_w(px(42.))
+                .text_center()
+                .font_family(crate::features::gpui_code_font_family())
+                .text_size(px(11.))
+                .text_color(rgb(palette.text))
+                .child(value.to_string()),
         )
+        .child(small_button(palette, plus_id, "+", on_plus))
+}
+
+fn settings_field_meta(
+    palette: ThemePalette,
+    label: &'static str,
+    desc: &'static str,
+) -> impl IntoElement {
+    div()
+        .min_w_0()
+        .child(
+            div()
+                .text_size(px(13.))
+                .font_weight(FontWeight(500.))
+                .text_color(rgb(palette.text))
+                .child(label),
+        )
+        .child(
+            div()
+                .mt_1()
+                .text_size(px(11.))
+                .text_color(rgb(palette.text_dimmed))
+                .child(desc),
+        )
+}
+
+fn tab_mouse_action_i18n_key(action: &str) -> &'static str {
+    match action {
+        "rename_tab" => "tabCtx.rename",
+        "copy_tab_name" => "tabCtx.copyName",
+        "copy_server_ip" => "tabCtx.copyIp",
+        "duplicate_session" => "tabCtx.duplicate",
+        "multiplex_ssh" => "tabCtx.multiplexSsh",
+        "reconnect_session" => "tabCtx.reconnect",
+        "disconnect_session" => "tabCtx.disconnect",
+        "close_tab" => "tabCtx.close",
+        _ => "settings.tabMouseActionNone",
     }
 }

@@ -432,6 +432,7 @@ impl NyaTermApp {
             settings_master_password_enabled,
             settings_master_password_draft: String::new(),
             settings_master_password_focus: cx.focus_handle(),
+            interaction_word_separators_focus: cx.focus_handle(),
             keybinding_recording_id: None,
             keybinding_pending_keys: None,
             keybinding_search_draft: String::new(),
