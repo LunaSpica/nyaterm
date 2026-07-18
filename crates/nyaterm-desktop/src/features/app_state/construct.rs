@@ -18,6 +18,7 @@ impl NyaTermApp {
         let (transfer_tx, transfer_rx) = mpsc::channel();
         let (ai_discovery_tx, ai_discovery_rx) = mpsc::channel();
         let (ai_chat_tx, ai_chat_rx) = mpsc::channel();
+        let (github_gist_auth_tx, github_gist_auth_rx) = mpsc::channel();
         let (
             connections,
             connection_groups,
@@ -591,6 +592,11 @@ impl NyaTermApp {
             cloud_sync_focus: cx.focus_handle(),
             cloud_sync_focused_field: CloudSyncInputField::RemoteRoot,
             cloud_sync_provider_menu_open: false,
+            github_gist_auth: GithubGistAuthState::default(),
+            github_gist_auth_tx,
+            github_gist_auth_rx,
+            github_gist_auth_job_id: 0,
+            github_gist_auth_cancel: None,
             ai_settings,
             ai_model_draft,
             ai_base_url_draft,

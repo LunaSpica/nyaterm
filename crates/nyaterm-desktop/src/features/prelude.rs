@@ -56,7 +56,7 @@ pub(super) use crate::http::ai::{
 };
 pub(super) use crate::http::cloud_sync::{
     NativeAliyunDriveRemote, NativeGoogleDriveRemote, NativeOneDriveRemote, NativeS3Remote,
-    NativeSnippetHttpClient, NativeWebdavRemote,
+    NativeSnippetHttpClient, NativeWebdavRemote, run_github_gist_device_flow,
 };
 pub(super) use std::collections::{HashMap, HashSet, VecDeque};
 pub(super) use std::path::PathBuf;
@@ -82,17 +82,18 @@ pub(super) use crate::models::{
     CredentialAutofillMatchPipeline, CredentialAutofillMatchRequest,
     CredentialAutofillMatchRequestKey, CredentialSuggestionState, DiagnosticsPathPromptKind,
     DiagnosticsPathPromptResult, DockerConfirmAction, DockerConfirmState, DockerTab,
-    EffectiveTerminalPaintPolicy, KeywordHighlightEditorField, KeywordHighlightPathPromptKind,
-    KeywordHighlightPathPromptResult, MainMode, MultiLinePasteDraft, NavItem,
-    NetworkDeleteConfirmState, NetworkGroupDeleteConfirmState, NetworkGroupEditorState,
-    NetworkMovePickerState, NetworkProxyEditorField, NetworkProxyEditorState, NetworkTab,
-    NetworkTunnelEditorField, NetworkTunnelEditorState, PanelResizeSide, PanelResizeState,
-    PanelSide, PanelStackResizeState, PendingCredentialAutofill, QuickCommandCategoryDeleteState,
-    QuickCommandCategoryMenuState, QuickCommandCategoryRenameState, QuickCommandDeleteState,
-    QuickCommandDetailsState, QuickCommandEditorField, QuickCommandEditorState,
-    QuickCommandImportPathPromptKind, QuickCommandImportPathPromptResult, QuickCommandRowMenuState,
-    QuickCommandSortMode, QuickCommandVariableDef, QuickCommandVariablePromptState,
-    QuickCommandViewMode, QuickSwitchItem, RecordingHistorySearchEvent, RecordingHistorySearchKey,
+    EffectiveTerminalPaintPolicy, GithubGistAuthEvent, GithubGistAuthJobEvent, GithubGistAuthState,
+    KeywordHighlightEditorField, KeywordHighlightPathPromptKind, KeywordHighlightPathPromptResult,
+    MainMode, MultiLinePasteDraft, NavItem, NetworkDeleteConfirmState,
+    NetworkGroupDeleteConfirmState, NetworkGroupEditorState, NetworkMovePickerState,
+    NetworkProxyEditorField, NetworkProxyEditorState, NetworkTab, NetworkTunnelEditorField,
+    NetworkTunnelEditorState, PanelResizeSide, PanelResizeState, PanelSide, PanelStackResizeState,
+    PendingCredentialAutofill, QuickCommandCategoryDeleteState, QuickCommandCategoryMenuState,
+    QuickCommandCategoryRenameState, QuickCommandDeleteState, QuickCommandDetailsState,
+    QuickCommandEditorField, QuickCommandEditorState, QuickCommandImportPathPromptKind,
+    QuickCommandImportPathPromptResult, QuickCommandRowMenuState, QuickCommandSortMode,
+    QuickCommandVariableDef, QuickCommandVariablePromptState, QuickCommandViewMode,
+    QuickSwitchItem, RecordingHistorySearchEvent, RecordingHistorySearchKey,
     RecordingPathPromptKind, RecordingPathPromptResult, RecordingWriteEvent,
     RecordingWritePipeline, RemoteProcessSignalConfirmState, RemoteProcessSortDirection,
     RemoteProcessSortKey, RightFocus, SearchEngineEditorField, SecurityAuthTab,

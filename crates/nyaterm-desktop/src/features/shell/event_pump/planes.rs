@@ -96,7 +96,9 @@ impl NyaTermApp {
         );
         drain_stage!(
             maintenance,
-            self.drain_translate_events() | self.drain_update_events()
+            self.drain_translate_events()
+                | self.drain_update_events()
+                | self.drain_github_gist_auth_events(cx)
         );
 
         dirty

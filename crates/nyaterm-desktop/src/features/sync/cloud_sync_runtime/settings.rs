@@ -9,6 +9,9 @@ impl NyaTermApp {
         if !self.cloud_sync_form_enabled() {
             return;
         }
+        if provider != "github_gist" && self.github_gist_auth.pending {
+            self.cancel_github_gist_auth(cx);
+        }
         self.cloud_sync_settings.provider = provider.to_string();
         self.cloud_sync_provider_menu_open = false;
         self.cloud_sync_status = format!("provider set to {provider}; save to persist");
@@ -96,6 +99,11 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         if !self.cloud_sync_form_enabled() {
+            return;
+        }
+        if self.github_gist_auth.pending
+            && self.cloud_sync_focused_field == CloudSyncInputField::GithubGistId
+        {
             return;
         }
         self.mark_user_activity();
@@ -205,7 +213,6 @@ impl NyaTermApp {
             CloudSyncInputField::GiteeGistId => &mut self.cloud_sync_settings.gitee_snippet.gist_id,
             CloudSyncInputField::GiteeToken => &mut self.cloud_sync_secret_draft.gitee_token,
             CloudSyncInputField::GithubGistId => &mut self.cloud_sync_settings.github_gist.gist_id,
-            CloudSyncInputField::GithubToken => &mut self.cloud_sync_secret_draft.github_token,
         }
     }
 

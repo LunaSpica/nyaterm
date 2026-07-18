@@ -30,6 +30,10 @@ use helpers::*;
 mod snippet;
 pub use snippet::*;
 
+#[path = "cloud_sync/github_gist_auth.rs"]
+mod github_gist_auth;
+pub(crate) use github_gist_auth::*;
+
 #[path = "cloud_sync/webdav.rs"]
 mod webdav;
 pub use webdav::*;

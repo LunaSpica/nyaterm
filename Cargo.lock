@@ -4205,6 +4205,7 @@ dependencies = [
  "nyaterm-transport",
  "nyaterm-ui",
  "regex",
+ "serde",
  "serde_json",
  "sha2 0.11.0",
  "tracing",

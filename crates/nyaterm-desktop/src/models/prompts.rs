@@ -1,6 +1,39 @@
 use nyaterm_core::{ConfigBackupInfo, DiagnosticsExportInfo};
 use std::path::PathBuf;
 
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub(crate) struct GithubGistAuthState {
+    pub(crate) pending: bool,
+    pub(crate) user_code: Option<String>,
+    pub(crate) verification_uri: Option<String>,
+    pub(crate) login: Option<String>,
+    pub(crate) message: Option<String>,
+}
+
+#[derive(Debug)]
+pub(crate) enum GithubGistAuthEvent {
+    Started {
+        user_code: String,
+        verification_uri: String,
+    },
+    Polling {
+        slow_down: bool,
+    },
+    Succeeded {
+        access_token: String,
+        gist_id: String,
+        login: String,
+    },
+    Failed(String),
+    Cancelled,
+}
+
+#[derive(Debug)]
+pub(crate) struct GithubGistAuthJobEvent {
+    pub(crate) job_id: u64,
+    pub(crate) event: GithubGistAuthEvent,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum CloudSyncInputField {
     RemoteRoot,
@@ -36,7 +69,6 @@ pub(crate) enum CloudSyncInputField {
     GiteeGistId,
     GiteeToken,
     GithubGistId,
-    GithubToken,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

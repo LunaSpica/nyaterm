@@ -338,10 +338,6 @@ impl NyaTermApp {
             &self.cloud_sync_secret_draft.gitee_token,
             &self.cloud_sync_settings.gitee_snippet.access_token,
         );
-        let github_token_value = cloud_secret_display(
-            &self.cloud_sync_secret_draft.github_token,
-            &self.cloud_sync_settings.github_gist.access_token,
-        );
         let provider_fields = match active_cloud_provider.as_str() {
             "webdav" => self.cloud_sync_webdav_provider_fields(webdav_password_value, cx),
             "s3" => self.cloud_sync_s3_provider_fields(
@@ -371,7 +367,7 @@ impl NyaTermApp {
                 cx,
             ),
             "gitee_snippet" => self.cloud_sync_gitee_provider_fields(gitee_token_value, cx),
-            "github_gist" => self.cloud_sync_github_provider_fields(github_token_value, cx),
+            "github_gist" => self.cloud_sync_github_provider_fields(cx),
             _ => div().into_any_element(),
         };
 

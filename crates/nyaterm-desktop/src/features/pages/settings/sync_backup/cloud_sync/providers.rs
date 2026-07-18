@@ -330,27 +330,165 @@ impl NyaTermApp {
 
     pub(super) fn cloud_sync_github_provider_fields(
         &mut self,
-        token: String,
         cx: &mut Context<Self>,
     ) -> AnyElement {
+        let palette = self.theme_palette();
+        let pending = self.github_gist_auth.pending;
+        let form_enabled = self.cloud_sync_form_enabled();
+        let connected = !self.cloud_sync_secret_draft.github_token.is_empty()
+            || self
+                .cloud_sync_settings
+                .github_gist
+                .access_token
+                .as_deref()
+                .is_some_and(|token| !token.trim().is_empty());
+        let auth_label = if connected {
+            self.tr("settings.githubGistReconnect")
+        } else {
+            self.tr("settings.githubGistConnect")
+        };
+        let gist_id = self.cloud_sync_settings.github_gist.gist_id.clone();
+        let user_code = self.github_gist_auth.user_code.clone();
+        let verification_uri = self.github_gist_auth.verification_uri.clone();
+        let login = self.github_gist_auth.login.clone();
+        let message = self.github_gist_auth.message.clone();
+
         div()
-            .grid()
-            .grid_cols(2)
-            .gap_2()
-            .child(self.cloud_sync_input(
-                "cloud-github-gist",
-                self.tr("settings.githubGistId"),
-                self.cloud_sync_settings.github_gist.gist_id.clone(),
-                CloudSyncInputField::GithubGistId,
-                cx,
+            .flex()
+            .flex_col()
+            .gap_3()
+            .child(
+                div()
+                    .opacity(if pending { 0.55 } else { 1.0 })
+                    .child(self.cloud_sync_input(
+                        "cloud-github-gist",
+                        self.tr("settings.githubGistId"),
+                        gist_id.clone(),
+                        CloudSyncInputField::GithubGistId,
+                        cx,
+                    )),
+            )
+            .child(settings_form_row(
+                palette,
+                self.tr("settings.githubGistAuth"),
+                Some(SharedString::from(self.tr("settings.githubGistAuthDesc"))),
+                div()
+                    .flex()
+                    .items_center()
+                    .gap_2()
+                    .child(cloud_sync_action_button(
+                        palette,
+                        "cloud-github-connect",
+                        auth_label,
+                        form_enabled && !pending,
+                        cx.listener(|this, _, _, cx| {
+                            this.start_github_gist_auth(cx);
+                        }),
+                    ))
+                    .when(pending, |this| {
+                        this.child(cloud_sync_action_button(
+                            palette,
+                            "cloud-github-cancel",
+                            self.tr("common.cancel"),
+                            true,
+                            cx.listener(|this, _, _, cx| {
+                                this.cancel_github_gist_auth(cx);
+                            }),
+                        ))
+                    }),
             ))
-            .child(self.cloud_sync_input(
-                "cloud-github-token",
-                self.tr("settings.githubGistAccessToken"),
-                token,
-                CloudSyncInputField::GithubToken,
-                cx,
-            ))
+            .when_some(user_code, |this, code| {
+                this.child(
+                    div()
+                        .rounded_md()
+                        .border_1()
+                        .border_color(rgb(palette.border))
+                        .bg(rgb(palette.input))
+                        .px_4()
+                        .py_3()
+                        .flex()
+                        .flex_col()
+                        .gap_2()
+                        .child(
+                            div()
+                                .text_xs()
+                                .text_color(rgb(palette.text_muted))
+                                .child(self.tr("settings.githubGistUserCode")),
+                        )
+                        .child(
+                            div()
+                                .flex()
+                                .flex_wrap()
+                                .items_center()
+                                .gap_2()
+                                .child(
+                                    div()
+                                        .font_family(crate::features::gpui_code_font_family())
+                                        .text_size(px(18.))
+                                        .font_weight(FontWeight(600.))
+                                        .text_color(rgb(palette.text))
+                                        .child(code),
+                                )
+                                .child(cloud_sync_action_button(
+                                    palette,
+                                    "cloud-github-copy-code",
+                                    self.tr("settings.copyGithubGistUserCode"),
+                                    true,
+                                    cx.listener(|this, _, _, cx| {
+                                        this.copy_github_gist_user_code(cx);
+                                    }),
+                                )),
+                        )
+                        .when_some(verification_uri.clone(), |this, uri| {
+                            this.child(
+                                div()
+                                    .id("cloud-github-verification-url")
+                                    .min_w_0()
+                                    .text_xs()
+                                    .text_color(rgb(palette.link))
+                                    .cursor_pointer()
+                                    .hover(|this| this.text_color(rgb(palette.primary_hover)))
+                                    .child(uri)
+                                    .on_click(cx.listener(|this, _, _, cx| {
+                                        this.open_github_gist_verification_url(cx);
+                                    })),
+                            )
+                        }),
+                )
+            })
+            .when(
+                login.is_some() || !gist_id.is_empty() || message.is_some(),
+                |this| {
+                    this.child(
+                        div()
+                            .min_w_0()
+                            .rounded_md()
+                            .border_1()
+                            .border_color(rgb(palette.border))
+                            .bg(rgb(palette.surface))
+                            .px_4()
+                            .py_3()
+                            .flex()
+                            .flex_col()
+                            .gap_1()
+                            .text_size(px(12.))
+                            .text_color(rgb(palette.text_muted))
+                            .when_some(login, |this, login| {
+                                this.child(
+                                    self.tr("settings.githubGistConnectedAs")
+                                        .replace("{{login}}", &login),
+                                )
+                            })
+                            .when(!gist_id.is_empty(), |this| {
+                                this.child(
+                                    self.tr("settings.githubGistCurrentId")
+                                        .replace("{{gistId}}", &truncate_preview(&gist_id, 10)),
+                                )
+                            })
+                            .when_some(message, |this, message| this.child(message)),
+                    )
+                },
+            )
             .into_any_element()
     }
 }
