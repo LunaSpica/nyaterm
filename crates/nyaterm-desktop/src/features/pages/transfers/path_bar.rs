@@ -20,12 +20,6 @@ impl NyaTermApp {
             .cloned()
             .take(5)
             .collect::<Vec<_>>();
-        let favorite_paths = self
-            .transfer_browser_favorites
-            .iter()
-            .cloned()
-            .take(8)
-            .collect::<Vec<_>>();
         let path_draft_value = if self.transfer_browser_path_draft.is_empty() {
             "Type remote path".to_string()
         } else {
@@ -50,30 +44,19 @@ impl NyaTermApp {
                     .flex()
                     .items_center()
                     .gap_1()
-                    .child(
-                        div()
-                            .flex_shrink_0()
-                            .text_size(px(10.))
-                            .font_weight(FontWeight(600.))
-                            .text_color(rgb(palette.text_dimmed))
-                            .child("PATH"),
-                    )
                     .when(self.transfer_browser_path_editing, |this| {
                         this.child(
                             div()
                                 .id(SharedString::from("transfer-browser-path-input"))
-                                .h(px(22.))
+                                .h_full()
                                 .flex_1()
                                 .min_w_0()
-                                .rounded_sm()
-                                .border_1()
-                                .border_color(rgb(0x256d3f))
-                                .bg(rgb(palette.input))
-                                .px_2()
+                                .px_0()
+                                .py_0()
                                 .flex()
                                 .items_center()
                                 .font_family(crate::features::gpui_code_font_family())
-                                .text_xs()
+                                .text_size(px(10.))
                                 .text_color(if self.transfer_browser_path_draft.is_empty() {
                                     rgb(palette.text_muted)
                                 } else {
@@ -96,60 +79,47 @@ impl NyaTermApp {
                         )
                     })
                     .when(!self.transfer_browser_path_editing, |this| {
-                        this.child(transfer_browser_path_breadcrumbs(
-                            palette,
-                            current_browser_path.clone(),
-                            self.transfer_browser_path.clone(),
-                            cx,
-                        ))
-                        .child(
+                        this.child(
                             div()
                                 .id(SharedString::from("transfer-browser-path-display"))
-                                .max_w(px(280.))
+                                .min_w_0()
+                                .flex_1()
                                 .rounded_sm()
-                                .px_2()
-                                .py_1()
+                                .px_0()
+                                .py_0()
                                 .font_family(crate::features::gpui_code_font_family())
                                 .text_size(px(10.))
                                 .text_color(rgb(palette.text_muted))
+                                .overflow_hidden()
                                 .cursor_pointer()
-                                .hover(|this| {
-                                    this.bg(rgb(palette.hover)).text_color(rgb(palette.text))
-                                })
+                                .hover(|this| this.text_color(rgb(palette.text)))
                                 .on_click(cx.listener(|this, _, window, cx| {
                                     this.begin_transfer_browser_path_edit(window, cx);
                                 }))
-                                .child(truncate_preview(&display_browser_path, 44)),
+                                .child(truncate_preview(&display_browser_path, 120)),
                         )
                     })
                     .child(
                         div()
                             .id(SharedString::from("transfer-browser-path-favorite"))
+                            .ml_1()
                             .size(px(22.))
                             .flex_none()
                             .flex()
                             .items_center()
                             .justify_center()
                             .rounded_sm()
-                            .border_1()
-                            .border_color(if is_current_favorite {
-                                rgb(0x2f7d4f)
-                            } else {
-                                rgb(palette.border)
-                            })
-                            .bg(if is_current_favorite {
-                                rgb(0x123024)
-                            } else {
-                                rgb(palette.input)
-                            })
                             .text_sm()
                             .text_color(if is_current_favorite {
-                                rgb(0x86efac)
+                                rgb(palette.accent)
                             } else {
                                 rgb(palette.text_muted)
                             })
                             .cursor_pointer()
-                            .hover(|this| this.bg(rgb(palette.hover)).text_color(rgb(0xd1fae5)))
+                            .hover(|this| {
+                                this.bg(rgb(palette.surface_elevated))
+                                    .text_color(rgb(palette.text))
+                            })
                             .on_mouse_down(
                                 MouseButton::Left,
                                 cx.listener(|this, event: &MouseDownEvent, _window, cx| {
@@ -167,49 +137,16 @@ impl NyaTermApp {
                                         "icons/fe/star-outline.svg"
                                     }),
                             ),
-                    )
-                    .child(
-                        div()
-                            .ml_auto()
-                            .flex()
-                            .items_center()
-                            .gap_1()
-                            .child(small_button(
-                                palette,
-                                "transfer-browser-copy-current-path",
-                                "Copy",
-                                cx.listener(|this, _, _, cx| {
-                                    this.copy_current_transfer_browser_path(cx);
-                                }),
-                            ))
-                            .child(small_button(
-                                palette,
-                                "transfer-browser-send-current-path",
-                                "Send",
-                                cx.listener(|this, _, _, cx| {
-                                    this.send_current_transfer_browser_path_to_terminal(cx);
-                                }),
-                            ))
-                            .child(small_button(
-                                palette,
-                                "transfer-browser-current-properties",
-                                "Props",
-                                cx.listener(|this, _, window, cx| {
-                                    this.open_current_transfer_browser_properties(window, cx);
-                                }),
-                            )),
                     ),
             )
             .when(
-                self.transfer_browser_path_editing
-                    && (!history_paths.is_empty() || !favorite_paths.is_empty()),
+                self.transfer_browser_path_editing && !history_paths.is_empty(),
                 |this| {
-                    this.child(transfer_browser_path_quick_lists(
+                    this.child(transfer_browser_path_history_list(
                         palette,
                         current_browser_path,
                         self.transfer_browser_home_dir.clone(),
                         history_paths,
-                        favorite_paths,
                         cx,
                     ))
                 },
@@ -329,46 +266,6 @@ impl NyaTermApp {
     }
 }
 
-fn transfer_browser_path_quick_lists(
-    palette: crate::theme::ThemePalette,
-    current_browser_path: String,
-    home_dir: String,
-    history_paths: Vec<String>,
-    favorite_paths: Vec<String>,
-    cx: &mut Context<NyaTermApp>,
-) -> impl IntoElement {
-    div()
-        .ml(px(40.))
-        .flex()
-        .flex_col()
-        .gap_2()
-        .rounded_sm()
-        .border_1()
-        .border_color(rgb(palette.border))
-        .bg(rgb(palette.input))
-        .p_2()
-        .when(!history_paths.is_empty(), |this| {
-            this.child(transfer_browser_path_history_list(
-                palette,
-                current_browser_path.clone(),
-                home_dir.clone(),
-                history_paths,
-                cx,
-            ))
-        })
-        .when(!favorite_paths.is_empty(), |this| {
-            this.child(transfer_browser_path_quick_list(
-                palette,
-                "Favorites",
-                current_browser_path,
-                home_dir,
-                favorite_paths,
-                true,
-                cx,
-            ))
-        })
-}
-
 fn transfer_browser_path_history_list(
     palette: crate::theme::ThemePalette,
     current_browser_path: String,
@@ -376,13 +273,19 @@ fn transfer_browser_path_history_list(
     paths: Vec<String>,
     cx: &mut Context<NyaTermApp>,
 ) -> impl IntoElement {
-    let mut list = div().flex().flex_col().gap_1().child(
-        div()
-            .text_size(px(10.))
-            .font_weight(FontWeight(800.))
-            .text_color(rgb(palette.text_muted))
-            .child("History"),
-    );
+    let mut list = div()
+        .id(SharedString::from("transfer-browser-path-history-list"))
+        .mt(px(1.))
+        .max_h(px(120.))
+        .overflow_scroll()
+        .scrollbar_width(px(6.))
+        .rounded_b_md()
+        .border_1()
+        .border_color(rgb(palette.border))
+        .bg(rgb(palette.surface))
+        .shadow_lg()
+        .flex()
+        .flex_col();
 
     for path in paths {
         let is_current = path == current_browser_path;
@@ -395,18 +298,6 @@ fn transfer_browser_path_history_list(
                 )))
                 .h(px(24.))
                 .w_full()
-                .rounded_sm()
-                .border_1()
-                .border_color(if is_current {
-                    rgb(0x256d3f)
-                } else {
-                    rgb(palette.border)
-                })
-                .bg(if is_current {
-                    rgb(palette.hover)
-                } else {
-                    rgb(palette.input)
-                })
                 .px_2()
                 .flex()
                 .items_center()
@@ -428,95 +319,6 @@ fn transfer_browser_path_history_list(
     }
 
     list
-}
-
-fn transfer_browser_path_quick_list(
-    palette: crate::theme::ThemePalette,
-    label: &'static str,
-    current_browser_path: String,
-    home_dir: String,
-    paths: Vec<String>,
-    allow_remove: bool,
-    cx: &mut Context<NyaTermApp>,
-) -> impl IntoElement {
-    let mut row = div().flex().items_center().gap_1().min_w_0().child(
-        div()
-            .w(px(58.))
-            .flex_none()
-            .text_size(px(10.))
-            .font_weight(FontWeight(800.))
-            .text_color(rgb(palette.text_muted))
-            .child(label),
-    );
-
-    for path in paths {
-        let is_current = path == current_browser_path;
-        let display_path = display_transfer_browser_home_path(&path, &home_dir);
-        let open_path = path.clone();
-        let remove_path = path.clone();
-        row = row.child(
-            div()
-                .id(SharedString::from(format!(
-                    "transfer-browser-path-quick-{label}-{path}"
-                )))
-                .h(px(24.))
-                .max_w(px(if is_current { 220. } else { 148. }))
-                .rounded_sm()
-                .border_1()
-                .border_color(if is_current {
-                    rgb(0x256d3f)
-                } else {
-                    rgb(palette.border)
-                })
-                .bg(if is_current {
-                    rgb(palette.hover)
-                } else {
-                    rgb(palette.input)
-                })
-                .px_1()
-                .flex()
-                .items_center()
-                .gap_1()
-                .font_family(crate::features::gpui_code_font_family())
-                .text_size(px(10.))
-                .text_color(rgb(palette.text))
-                .cursor_pointer()
-                .hover(|this| this.bg(rgb(palette.hover)))
-                .on_click(cx.listener(move |this, _, window, cx| {
-                    this.transfer_browser_path_editing = false;
-                    this.open_transfer_browser_directory(open_path.clone(), window, cx);
-                }))
-                .child(div().min_w_0().flex_1().px_1().child(truncate_preview(
-                    &display_path,
-                    if is_current { 38 } else { 22 },
-                )))
-                .when(allow_remove, |this| {
-                    this.child(
-                        div()
-                            .id(SharedString::from(format!(
-                                "transfer-browser-path-remove-favorite-{remove_path}"
-                            )))
-                            .size(px(16.))
-                            .flex_none()
-                            .flex()
-                            .items_center()
-                            .justify_center()
-                            .rounded_sm()
-                            .text_color(rgb(0x86efac))
-                            .hover(|this| {
-                                this.bg(rgb(palette.border)).text_color(rgb(palette.danger))
-                            })
-                            .on_click(cx.listener(move |this, _: &ClickEvent, _window, cx| {
-                                cx.stop_propagation();
-                                this.remove_transfer_browser_favorite_path(remove_path.clone(), cx);
-                            }))
-                            .child("x"),
-                    )
-                }),
-        );
-    }
-
-    row
 }
 
 fn display_transfer_browser_home_path(path: &str, home_dir: &str) -> String {
@@ -548,119 +350,4 @@ fn expand_transfer_browser_home_path(path: &str, home_dir: &str) -> String {
         return normalized_transfer_browser_path(&remote_child_path(&home_dir, suffix));
     }
     normalized_transfer_browser_path(trimmed)
-}
-
-fn transfer_browser_path_breadcrumbs(
-    palette: crate::theme::ThemePalette,
-    current_browser_path: String,
-    raw_browser_path: String,
-    cx: &mut Context<NyaTermApp>,
-) -> gpui::AnyElement {
-    let mut row = div()
-        .min_w_0()
-        .flex_1()
-        .flex()
-        .items_center()
-        .gap_1()
-        .overflow_hidden();
-    let breadcrumbs = transfer_browser_breadcrumbs(&current_browser_path);
-    if breadcrumbs.is_empty() {
-        return row
-            .child(
-                div()
-                    .font_family(crate::features::gpui_code_font_family())
-                    .text_xs()
-                    .text_color(rgb(palette.text_muted))
-                    .child(truncate_preview(&raw_browser_path, 72)),
-            )
-            .into_any_element();
-    }
-
-    let last_index = breadcrumbs.len().saturating_sub(1);
-    for (index, (label, path)) in breadcrumbs.into_iter().enumerate() {
-        if index > 0 {
-            row = row.child(
-                div()
-                    .flex_shrink_0()
-                    .font_family(crate::features::gpui_code_font_family())
-                    .text_xs()
-                    .text_color(rgb(0x475569))
-                    .child("/"),
-            );
-        }
-        let is_current = index == last_index;
-        let button_path = path.clone();
-        row = row.child(
-            div()
-                .id(SharedString::from(format!(
-                    "transfer-browser-breadcrumb-{index}"
-                )))
-                .h(px(24.))
-                .max_w(px(if is_current { 240. } else { 150. }))
-                .rounded_sm()
-                .border_1()
-                .border_color(if is_current {
-                    rgb(0x2f7d4f)
-                } else {
-                    rgb(palette.border)
-                })
-                .bg(if is_current {
-                    rgb(0x123024)
-                } else {
-                    rgb(palette.input)
-                })
-                .px_2()
-                .flex()
-                .items_center()
-                .font_family(crate::features::gpui_code_font_family())
-                .text_xs()
-                .text_color(if is_current {
-                    rgb(0xd1fae5)
-                } else {
-                    rgb(palette.text)
-                })
-                .cursor_pointer()
-                .hover(|this| this.bg(rgb(palette.hover)))
-                .on_click(cx.listener(move |this, _, window, cx| {
-                    this.open_transfer_browser_directory(button_path.clone(), window, cx);
-                }))
-                .child(truncate_preview(&label, if is_current { 40 } else { 24 })),
-        );
-    }
-
-    row.into_any_element()
-}
-
-fn transfer_browser_breadcrumbs(path: &str) -> Vec<(String, String)> {
-    let path = normalized_transfer_browser_path(path);
-    if path.is_empty() {
-        return Vec::new();
-    }
-    if path == "/" {
-        return vec![("/".to_string(), "/".to_string())];
-    }
-
-    if path.starts_with('/') {
-        let mut output = vec![("/".to_string(), "/".to_string())];
-        let mut current = String::new();
-        for segment in path.split('/').filter(|segment| !segment.is_empty()) {
-            current.push('/');
-            current.push_str(segment);
-            output.push((segment.to_string(), current.clone()));
-        }
-        return output;
-    }
-
-    let mut output = Vec::new();
-    let mut current = String::new();
-    for segment in path.split('/').filter(|segment| !segment.is_empty()) {
-        if current.is_empty() {
-            current.push_str(segment);
-        } else {
-            current.push('/');
-            current.push_str(segment);
-        }
-        output.push((segment.to_string(), current.clone()));
-    }
-    output
 }

@@ -246,6 +246,21 @@ impl NyaTermApp {
         self.terminal_session_surface_bounds.remove(session_id);
         self.session_command_history.remove(session_id);
         self.transfer_browser_session_cache.remove(session_id);
+        self.transfer_external_sync_prompts.remove(session_id);
+        if self
+            .transfer_properties
+            .as_ref()
+            .is_some_and(|state| state.session_id.as_deref() == Some(session_id))
+        {
+            self.transfer_properties = None;
+        }
+        if self
+            .transfer_editor
+            .as_ref()
+            .is_some_and(|state| state.session_id.as_deref() == Some(session_id))
+        {
+            self.transfer_editor = None;
+        }
         self.purge_session_from_sync_groups(session_id);
         self.reconcile_terminal_windows();
         if self.startup_restore_complete {
@@ -280,10 +295,5 @@ impl NyaTermApp {
                     .into_iter()
                     .find(|candidate| candidate.as_str() != session_id)
             })
-    }
-
-    pub(in crate::features) fn active_session_name(&self) -> Option<String> {
-        let session_id = self.active_session_id.as_deref()?;
-        self.session_display_name(session_id)
     }
 }

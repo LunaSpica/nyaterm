@@ -16,6 +16,49 @@ impl SessionOutputDrainStep {
     }
 }
 
+fn terminal_output_has_error_keyword(output: &str) -> bool {
+    let lower = output.to_ascii_lowercase();
+    [
+        "permission denied",
+        "no space left on device",
+        "connection refused",
+        "segmentation fault",
+        "out of memory",
+        "cannot allocate memory",
+        "command not found",
+        "module not found",
+        "port already in use",
+    ]
+    .iter()
+    .any(|keyword| lower.contains(keyword))
+        || ascii_word_present(&lower, "error")
+        || ascii_word_present(&lower, "failed")
+}
+
+fn ascii_word_present(text: &str, word: &str) -> bool {
+    text.match_indices(word).any(|(index, _)| {
+        let before = index
+            .checked_sub(1)
+            .and_then(|before| text.as_bytes().get(before))
+            .copied();
+        let after = text.as_bytes().get(index + word.len()).copied();
+        !before.is_some_and(|value| value.is_ascii_alphanumeric() || value == b'_')
+            && !after.is_some_and(|value| value.is_ascii_alphanumeric() || value == b'_')
+    })
+}
+
+fn terminal_error_notice_output(output: &str) -> String {
+    const LIMIT: usize = 4_000;
+    let char_count = output.chars().count();
+    if char_count <= LIMIT {
+        return output.to_string();
+    }
+    output
+        .chars()
+        .skip(char_count.saturating_sub(LIMIT))
+        .collect()
+}
+
 impl NyaTermApp {
     pub(in crate::features) fn drain_session_events(&mut self, cx: &mut Context<Self>) -> bool {
         let drain_started_at = Instant::now();
@@ -411,6 +454,7 @@ impl NyaTermApp {
             drain_timings.ai_capture += stage_duration;
             chunk_timings.ai_capture += stage_duration;
         } else {
+            self.maybe_detect_ai_terminal_error(&session_id, &data, cx);
             pending_frame_outputs.push((session_id.clone(), data));
         }
         // Routing only changes when sideband detectors activate/deactivate.
@@ -427,6 +471,47 @@ impl NyaTermApp {
             &chunk_timings,
         );
         SessionOutputDrainStep::Accepted { chunk_duration }
+    }
+
+    fn maybe_detect_ai_terminal_error(
+        &mut self,
+        session_id: &str,
+        data: &[u8],
+        cx: &mut Context<Self>,
+    ) {
+        if data.is_empty() {
+            return;
+        }
+        let watched = self.active_session_id.as_deref() == Some(session_id)
+            || self
+                .ai_target_session_ids
+                .iter()
+                .any(|target_id| target_id == session_id);
+        if !watched {
+            return;
+        }
+
+        let output = String::from_utf8_lossy(data);
+        if !terminal_output_has_error_keyword(&output) {
+            return;
+        }
+
+        let now = Instant::now();
+        if self
+            .ai_error_notice_at
+            .get(session_id)
+            .is_some_and(|last| now.duration_since(*last) < Duration::from_secs(30))
+        {
+            return;
+        }
+
+        self.ai_error_notice_at.insert(session_id.to_string(), now);
+        self.ai_detected_error = Some(AiDetectedErrorState {
+            session_id: session_id.to_string(),
+            output: terminal_error_notice_output(&output),
+        });
+        self.ai_status = "terminal error detected".to_string();
+        cx.notify();
     }
 
     pub(super) fn maybe_log_slow_session_output_chunk(

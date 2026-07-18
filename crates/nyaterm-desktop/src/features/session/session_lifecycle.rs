@@ -200,7 +200,7 @@ impl NyaTermApp {
 
         self.active_session_busy_actions
             .insert(session_id.clone(), "disconnect".to_string());
-        self.active_session_menu_id = None;
+        self.active_session_menu = None;
         // Backend may already be gone (race with Exited); still mark disconnected.
         let _ = self.session_manager.close(&session_id);
         self.recording_write_pipeline
@@ -291,7 +291,7 @@ impl NyaTermApp {
         }
         self.active_session_busy_actions
             .insert(session_id.clone(), "reconnect".to_string());
-        self.active_session_menu_id = None;
+        self.active_session_menu = None;
         let old_id = session_id;
         let source_index = self
             .session_order

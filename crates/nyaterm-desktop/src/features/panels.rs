@@ -1,11 +1,17 @@
 use super::*;
 
+#[path = "panels/about_overlay.rs"]
+mod about_overlay;
+#[path = "panels/active_session_menu_overlay.rs"]
+mod active_session_menu_overlay;
 #[path = "panels/helpers.rs"]
 mod helpers;
 #[path = "panels/lock_screen_overlay.rs"]
 mod lock_screen_overlay;
 #[path = "panels/multi_line_paste_overlay.rs"]
 mod multi_line_paste_overlay;
+#[path = "panels/quick_command_category_menu_overlay.rs"]
+mod quick_command_category_menu_overlay;
 #[path = "panels/quick_command_category_overlays.rs"]
 mod quick_command_category_overlays;
 #[path = "panels/quick_command_delete_overlay.rs"]
@@ -16,6 +22,8 @@ mod quick_command_details_overlay;
 mod quick_command_editor_overlay;
 #[path = "panels/quick_command_import_overlay.rs"]
 mod quick_command_import_overlay;
+#[path = "panels/quick_command_row_menu_overlay.rs"]
+mod quick_command_row_menu_overlay;
 #[path = "panels/quick_command_variable_overlay.rs"]
 mod quick_command_variable_overlay;
 #[path = "panels/quick_commands_panel.rs"]

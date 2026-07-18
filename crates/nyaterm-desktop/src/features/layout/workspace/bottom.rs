@@ -9,7 +9,7 @@ impl NyaTermApp {
             BottomPanelMode::QuickCommands => {
                 let palette = self.theme_palette();
                 div()
-                    .h(px(220.))
+                    .h(px(self.quick_cmd_height.clamp(36., 520.)))
                     .flex_none()
                     .border_t_1()
                     .border_color(rgb(palette.border))

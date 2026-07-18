@@ -21,6 +21,42 @@ impl NyaTermApp {
         cx.notify();
     }
 
+    pub(in crate::features) fn start_new_ai_chat(&mut self, cx: &mut Context<Self>) {
+        self.ai_prompt_draft.clear();
+        self.ai_target_session_ids.clear();
+        self.ai_message_menu = None;
+        self.ai_quoted_text = None;
+        self.ai_detected_error = None;
+        self.ai_mention_open = false;
+        self.ai_mention_query.clear();
+        self.ai_mention_index = 0;
+        self.ai_response_preview = if self.ai_settings.default_mode == AiMode::Agent {
+            "Agent mode ready".to_string()
+        } else {
+            "Ask mode ready".to_string()
+        };
+        self.ai_command_cards.clear();
+        self.ai_agent_task_prompt = None;
+        self.ai_agent_step_index = 0;
+        self.ai_agent_loop = None;
+        self.ai_agent_capture = AgentOutputCaptureProcessor::new();
+        self.ai_agent_steps.clear();
+        self.ai_agent_thought_expanded.clear();
+        self.ai_agent_output_expanded.clear();
+        self.ai_chat_messages.clear();
+        self.ai_streaming_assistant_id = None;
+        self.ai_prepared_request = None;
+        self.ai_chat_session_id = format!("ai-session-{}", uuid());
+        self.ai_history_open = false;
+        self.ai_history_query.clear();
+        self.ai_execution_menu_open = false;
+        self.ai_model_menu_open = false;
+        self.ai_model_query.clear();
+        self.ai_model_index = 0;
+        self.ai_status = "new AI chat".to_string();
+        cx.notify();
+    }
+
     pub(in crate::features) fn load_ai_session_messages(
         &mut self,
         session_id: String,
@@ -40,6 +76,8 @@ impl NyaTermApp {
                 self.ai_chat_messages = messages;
                 self.ai_streaming_assistant_id = None;
                 self.ai_history_open = false;
+                self.ai_message_menu = None;
+                self.ai_quoted_text = None;
                 self.ai_command_cards.clear();
                 if let Some(last) = self
                     .ai_chat_messages
@@ -81,6 +119,8 @@ impl NyaTermApp {
                     self.ai_chat_messages.clear();
                     self.ai_command_cards.clear();
                     self.ai_streaming_assistant_id = None;
+                    self.ai_message_menu = None;
+                    self.ai_quoted_text = None;
                     self.ai_chat_session_id = format!("ai-session-{}", uuid());
                     self.ai_response_preview = "Ask mode ready".to_string();
                 }
@@ -110,6 +150,9 @@ impl NyaTermApp {
                 self.ai_chat_messages.clear();
                 self.ai_command_cards.clear();
                 self.ai_streaming_assistant_id = None;
+                self.ai_message_menu = None;
+                self.ai_quoted_text = None;
+                self.ai_detected_error = None;
                 self.ai_chat_session_id = format!("ai-session-{}", uuid());
                 self.ai_response_preview = if self.ai_settings.default_mode == AiMode::Agent {
                     "Agent mode ready".to_string()

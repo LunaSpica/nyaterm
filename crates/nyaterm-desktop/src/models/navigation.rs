@@ -1,3 +1,4 @@
+use gpui::Pixels;
 use std::hash::Hash;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -381,11 +382,14 @@ impl ActivityBarLayoutState {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 pub(crate) struct ActivityBarContextMenuState {
     pub(crate) entry_id: String,
     pub(crate) zone: ActivityBarZone,
     pub(crate) index: usize,
+    pub(crate) x: Pixels,
+    pub(crate) y: Pixels,
+    pub(crate) move_submenu_open: bool,
 }
 
 /// Top menubar dropdown (Tauri Header File/View/Terminal/Help).
@@ -395,6 +399,14 @@ pub(crate) enum TitleMenu {
     View,
     Terminal,
     Help,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum TitleMenuSubmenu {
+    Theme,
+    Language,
+    SmartSplit,
+    SyncInput,
 }
 
 impl TitleMenu {

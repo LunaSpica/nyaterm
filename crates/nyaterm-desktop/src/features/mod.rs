@@ -185,7 +185,7 @@ pub(in crate::features) use tab_mouse::{
 pub(in crate::features) use transfer_widgets::{
     compact_transfer_job_row, duplicate_decision_label, duplicate_policy_label, entry_kind_label,
     format_file_size, format_transfer_progress, transfer_input, transfer_job_title,
-    transfer_progress_bar, transfer_status_label,
+    transfer_status_label,
 };
 pub(in crate::features) use view_widgets::*;
 

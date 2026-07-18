@@ -7,6 +7,48 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) -> gpui::Div {
         let mut body = security_auth_body_base();
+        let actions_enabled = self.security_otp_editor.is_none();
+        let has_entries = !self.connection_otp_entries.is_empty();
+        body = body.child(
+            div()
+                .flex_none()
+                .h(px(28.))
+                .flex()
+                .items_center()
+                .justify_between()
+                .gap_2()
+                .child(
+                    div()
+                        .text_xs()
+                        .font_weight(FontWeight(600.))
+                        .text_color(rgb(palette.text))
+                        .child("OTP Accounts"),
+                )
+                .child(
+                    div()
+                        .flex()
+                        .items_center()
+                        .gap_1()
+                        .child(security_toolbar_action_button(
+                            palette,
+                            "security-otp-refresh-visible",
+                            "Refresh",
+                            actions_enabled && has_entries,
+                            cx.listener(|this, _, window, cx| {
+                                this.refresh_visible_security_otp_codes(window, cx);
+                            }),
+                        ))
+                        .child(security_toolbar_action_button(
+                            palette,
+                            "security-add-otp",
+                            "Add",
+                            actions_enabled,
+                            cx.listener(|this, _, window, cx| {
+                                this.open_security_otp_editor(None, window, cx);
+                            }),
+                        )),
+                ),
+        );
         if let Some(editor) = self.security_otp_editor.clone() {
             body = body.child(self.security_otp_editor_view(editor, cx));
         } else if self.connection_otp_entries.is_empty() {

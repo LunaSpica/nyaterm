@@ -397,5 +397,6 @@ impl NyaTermApp {
                         )
                     }),
             ))
+            .child(self.keyword_highlights_settings_section(cx))
     }
 }

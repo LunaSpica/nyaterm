@@ -337,7 +337,13 @@ impl NyaTermApp {
                                 "Auto",
                                 self.ai_settings.agent_command_execution_mode
                                     == AgentCommandExecutionMode::Auto,
-                                cx.listener(|this, _, _, cx| {
+                                cx.listener(|this, _, window, cx| {
+                                    if this.ai_settings.agent_command_execution_mode
+                                        != AgentCommandExecutionMode::Auto
+                                    {
+                                        this.open_ai_auto_execution_confirm(window, cx);
+                                        return;
+                                    }
                                     this.set_ai_command_mode(AgentCommandExecutionMode::Auto, cx);
                                 }),
                             )),

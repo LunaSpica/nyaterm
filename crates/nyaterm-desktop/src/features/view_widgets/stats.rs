@@ -1,68 +1,24 @@
 use super::*;
 
-pub(in crate::features) fn stats_resource_row(
-    palette: ThemePalette,
-    label: &str,
-    detail: &str,
-    ratio: f64,
-) -> impl IntoElement {
-    div()
-        .rounded_md()
-        .border_1()
-        .border_color(rgb(palette.border))
-        .bg(rgb(palette.input))
-        .p_3()
-        .child(
-            div()
-                .flex()
-                .items_center()
-                .justify_between()
-                .gap_3()
-                .child(
-                    div()
-                        .min_w_0()
-                        .text_sm()
-                        .font_weight(FontWeight(700.))
-                        .text_color(rgb(palette.text))
-                        .child(truncate_preview(label, 36)),
-                )
-                .child(
-                    div()
-                        .text_xs()
-                        .text_color(rgb(palette.text_muted))
-                        .child(format!("{:.0}%", ratio.clamp(0., 1.) * 100.)),
-                ),
-        )
-        .child(
-            div()
-                .mt_1()
-                .text_xs()
-                .text_color(rgb(palette.text_muted))
-                .child(truncate_preview(detail, 96)),
-        )
-        .child(stats_progress_bar(palette, ratio))
-}
-
 pub(in crate::features) fn stats_progress_bar(
     palette: ThemePalette,
     ratio: f64,
 ) -> impl IntoElement {
-    let ratio = ratio.clamp(0., 1.);
+    let ratio = ratio.clamp(0., 1.) as f32;
     div()
-        .mt_3()
-        .h(px(6.))
+        .h(px(5.))
         .w_full()
         .overflow_hidden()
         .rounded_sm()
         .bg(rgb(palette.border))
         .child(
             div()
-                .h(px(6.))
-                .w(px(220. * ratio as f32))
+                .h(px(5.))
+                .w(gpui::relative(ratio))
                 .rounded_sm()
-                .bg(if ratio >= 0.9 {
+                .bg(if ratio >= 0.9_f32 {
                     rgb(0xfb7185)
-                } else if ratio >= 0.75 {
+                } else if ratio >= 0.7_f32 {
                     rgb(palette.warning)
                 } else {
                     rgb(0x38bdf8)

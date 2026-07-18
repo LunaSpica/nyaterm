@@ -320,6 +320,17 @@ pub(in crate::features) fn tab_action_button(
     detail: &'static str,
     on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
 ) -> impl IntoElement {
+    tab_action_button_enabled(palette, id, label, detail, true, on_click)
+}
+
+pub(in crate::features) fn tab_action_button_enabled(
+    palette: ThemePalette,
+    id: impl Into<String>,
+    label: &'static str,
+    detail: &'static str,
+    enabled: bool,
+    on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
+) -> impl IntoElement {
     div()
         .id(SharedString::from(id.into()))
         .min_h(px(46.))
@@ -333,13 +344,20 @@ pub(in crate::features) fn tab_action_button(
         .flex_col()
         .justify_center()
         .gap_1()
-        .cursor_pointer()
-        .hover(|this| this.bg(rgb(palette.hover)).border_color(rgb(0x3b82f6)))
+        .opacity(if enabled { 1.0 } else { 0.45 })
+        .when(enabled, |this| {
+            this.cursor_pointer()
+                .hover(|this| this.bg(rgb(palette.hover)).border_color(rgb(0x3b82f6)))
+        })
         .child(
             div()
                 .text_xs()
                 .font_weight(FontWeight(800.))
-                .text_color(rgb(palette.text))
+                .text_color(if enabled {
+                    rgb(palette.text)
+                } else {
+                    rgb(palette.text_dimmed)
+                })
                 .child(label),
         )
         .child(
@@ -348,7 +366,7 @@ pub(in crate::features) fn tab_action_button(
                 .text_color(rgb(palette.text_muted))
                 .child(detail),
         )
-        .on_click(on_click)
+        .when(enabled, |this| this.on_click(on_click))
 }
 
 pub(in crate::features) fn split_divider(

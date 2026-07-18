@@ -67,6 +67,7 @@ impl NyaTermApp {
         let id = self.next_transfer_id("sftp-ai-file");
         self.transfer_jobs.push(TransferJobState {
             id: id.clone(),
+            session_id: self.active_session_id.clone(),
             kind: TransferJobKind::AiFileAction {
                 remote_path: remote_path.clone(),
                 action_id: action_id.clone(),
@@ -140,6 +141,23 @@ impl NyaTermApp {
         self.open_transfer_external(entry, window, cx);
     }
 
+    pub(in crate::features) fn show_transfer_open_internal_menu_entry(
+        &self,
+        entry: &SftpFileEntry,
+    ) -> bool {
+        entry.file_type != SftpFileType::Directory
+            && self.settings.transfer_editor_type == "external"
+            && !is_known_binary_file(&entry.name)
+    }
+
+    pub(in crate::features) fn show_transfer_open_external_menu_entry(
+        &self,
+        entry: &SftpFileEntry,
+    ) -> bool {
+        entry.file_type != SftpFileType::Directory
+            && self.settings.transfer_editor_type == "internal"
+    }
+
     pub(in crate::features) fn open_transfer_default(
         &mut self,
         entry: SftpFileEntry,
@@ -188,6 +206,7 @@ impl NyaTermApp {
         self.transfer_selected_remote_path = Some(entry.path.clone());
         self.transfer_remote_path = entry.path.clone();
         self.transfer_editor = Some(TransferEditorState {
+            session_id: self.active_session_id.clone(),
             remote_path: entry.path.clone(),
             name: entry.name.clone(),
             content: String::new(),
@@ -269,6 +288,7 @@ impl NyaTermApp {
         let control = SftpTransferControl::new();
         self.transfer_jobs.push(TransferJobState {
             id: id.clone(),
+            session_id: self.active_session_id.clone(),
             kind: TransferJobKind::OpenExternal {
                 remote_path: remote_path.clone(),
                 local_path: local_path.clone(),

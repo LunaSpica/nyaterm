@@ -1,4 +1,5 @@
 use super::*;
+use gpui::AnyElement;
 
 pub(in crate::features) fn logo_mark(palette: ThemePalette) -> impl IntoElement {
     div()
@@ -35,66 +36,6 @@ pub(in crate::features) fn menu_bar_button(
         .on_click(on_click)
 }
 
-pub(in crate::features) fn status_bar_label(
-    palette: ThemePalette,
-    label: &'static str,
-    value: impl Into<String>,
-    value_color: impl Into<gpui::Hsla>,
-) -> impl IntoElement {
-    let value = value.into();
-    let value_color = value_color.into();
-    div()
-        .h(px(18.))
-        .flex()
-        .items_center()
-        .gap_1()
-        .px_1()
-        .rounded_sm()
-        .text_size(px(10.))
-        .text_color(rgb(palette.text_muted))
-        .child(label)
-        .child(
-            div()
-                .font_weight(FontWeight(700.))
-                .text_color(value_color)
-                .child(value),
-        )
-}
-
-pub(in crate::features) fn status_bar_button(
-    palette: ThemePalette,
-    id: impl Into<String>,
-    label: &'static str,
-    value: impl Into<String>,
-    value_color: impl Into<gpui::Hsla>,
-    on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
-) -> impl IntoElement {
-    let value = value.into();
-    let value_color = value_color.into();
-    let hover_bg = palette.hover;
-    let hover_text = palette.text;
-    div()
-        .id(SharedString::from(id.into()))
-        .h(px(18.))
-        .flex()
-        .items_center()
-        .gap_1()
-        .px_1()
-        .rounded_sm()
-        .text_size(px(10.))
-        .text_color(rgb(palette.text_muted))
-        .cursor_pointer()
-        .hover(move |this| this.bg(rgb(hover_bg)).text_color(rgb(hover_text)))
-        .child(label)
-        .child(
-            div()
-                .font_weight(FontWeight(700.))
-                .text_color(value_color)
-                .child(value),
-        )
-        .on_click(on_click)
-}
-
 pub(in crate::features) fn window_control_button(
     palette: ThemePalette,
     id: &'static str,
@@ -124,10 +65,11 @@ pub(in crate::features) fn window_control_button(
         .on_click(on_click)
 }
 
-pub(in crate::features) fn panel_header(
+pub(in crate::features) fn panel_header_with_actions(
     title: impl Into<SharedString>,
     meta: impl Into<SharedString>,
     palette: ThemePalette,
+    actions: Option<AnyElement>,
 ) -> impl IntoElement {
     // Tauri PanelHeader: min-h-9, uppercase tracked title + dimmed meta/actions.
     let title = title.into();
@@ -170,6 +112,16 @@ pub(in crate::features) fn panel_header(
                     )
                 }),
         )
+        .when_some(actions, |this, actions| {
+            this.child(
+                div()
+                    .flex_none()
+                    .flex()
+                    .items_center()
+                    .gap_1()
+                    .child(actions),
+            )
+        })
 }
 
 /// Dimmed full-area modal shell (Tauri Dialog backdrop + centered card).

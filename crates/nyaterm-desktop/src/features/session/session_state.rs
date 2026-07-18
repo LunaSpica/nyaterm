@@ -234,6 +234,11 @@ impl NyaTermApp {
         }
 
         self.active_session_id = Some(session_id.to_string());
+        if switching_sessions {
+            self.transfer_selected_job_id = None;
+            self.transfer_job_menu = None;
+            self.transfer_job_delete = None;
+        }
         self.session_tab_scroll_into_view_pending = true;
         // Keep workspace_split mirrored to the active tab's per-tab pane root.
         self.sync_workspace_split_from_active_tab();

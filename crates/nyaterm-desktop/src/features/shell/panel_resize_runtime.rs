@@ -5,8 +5,18 @@ const LEFT_PANEL_MIN: f32 = 160.;
 const LEFT_PANEL_MAX: f32 = 720.;
 const RIGHT_PANEL_MIN: f32 = 200.;
 const RIGHT_PANEL_MAX: f32 = 720.;
+const QUICK_CMD_HEIGHT_MIN: f32 = 36.;
+const SERIAL_SEND_HEIGHT_MIN: f32 = 60.;
+const BOTTOM_PANEL_HEIGHT_MAX: f32 = 520.;
 
 impl NyaTermApp {
+    pub(in crate::features) fn set_bottom_panel_mode(&mut self, mode: BottomPanelMode) {
+        self.bottom_panel = mode;
+        self.settings.ui_quick_cmd_visible = mode == BottomPanelMode::QuickCommands;
+        self.settings.ui_serial_send_visible = mode == BottomPanelMode::CommandSend;
+        self.persist_ui_layout();
+    }
+
     pub(in crate::features) fn start_panel_resize(
         &mut self,
         side: PanelResizeSide,
@@ -79,6 +89,8 @@ impl NyaTermApp {
         self.left_panel_width = self.settings.ui_left_panel_width as f32;
         self.right_panel_width = self.settings.ui_right_panel_width as f32;
         self.transfer_panel_height = self.settings.ui_transfer_height as f32;
+        self.quick_cmd_height = self.settings.ui_quick_cmd_height as f32;
+        self.serial_send_height = self.settings.ui_serial_send_height as f32;
         self.active_left_panel = self
             .settings
             .ui_active_left_panel
@@ -110,6 +122,14 @@ impl NyaTermApp {
             self.right_panel_width.round().clamp(200., 720.) as u32;
         self.settings.ui_transfer_height =
             self.transfer_panel_height.round().clamp(60., 600.) as u32;
+        self.settings.ui_quick_cmd_height =
+            self.quick_cmd_height
+                .round()
+                .clamp(QUICK_CMD_HEIGHT_MIN, BOTTOM_PANEL_HEIGHT_MAX) as u32;
+        self.settings.ui_serial_send_height =
+            self.serial_send_height
+                .round()
+                .clamp(SERIAL_SEND_HEIGHT_MIN, BOTTOM_PANEL_HEIGHT_MAX) as u32;
         self.settings.ui_active_left_panel = self
             .active_left_panel
             .map(|item| item.persistence_id().to_string());
@@ -118,6 +138,8 @@ impl NyaTermApp {
             .map(|item| item.persistence_id().to_string());
         self.settings.ui_left_panel_collapsed = self.left_sidebar_collapsed;
         self.settings.ui_right_panel_collapsed = self.right_inspector_collapsed;
+        self.settings.ui_saved_connections_sort_mode =
+            self.connection_sort_mode.persistence_id().to_string();
         self.sync_activity_layout_to_settings();
         self.sync_panel_stack_to_settings();
         if let Ok(store) = ConnectionStore::open_with_portable_key_path(
@@ -237,6 +259,90 @@ impl NyaTermApp {
                 MouseButton::Left,
                 cx.listener(|this, event: &MouseDownEvent, _, cx| {
                     this.start_transfer_height_resize(event, cx);
+                }),
+            )
+    }
+}
+
+impl NyaTermApp {
+    pub(in crate::features) fn start_bottom_panel_resize(
+        &mut self,
+        event: &MouseDownEvent,
+        cx: &mut Context<Self>,
+    ) {
+        let mode = self.bottom_panel;
+        let start_height = match mode {
+            BottomPanelMode::QuickCommands => self.quick_cmd_height,
+            BottomPanelMode::CommandSend => self.serial_send_height,
+            BottomPanelMode::Hidden => return,
+        };
+        self.bottom_panel_resize = Some(BottomPanelResizeState {
+            mode,
+            start_y: event.position.y,
+            start_height: px(start_height),
+        });
+        self.terminal_status = "resizing bottom panel".to_string();
+        cx.notify();
+    }
+
+    pub(in crate::features) fn update_bottom_panel_resize(
+        &mut self,
+        event: &MouseMoveEvent,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(state) = self.bottom_panel_resize else {
+            return;
+        };
+        let delta = f32::from(event.position.y - state.start_y);
+        let next = (f32::from(state.start_height) - delta).clamp(
+            match state.mode {
+                BottomPanelMode::QuickCommands => QUICK_CMD_HEIGHT_MIN,
+                BottomPanelMode::CommandSend => SERIAL_SEND_HEIGHT_MIN,
+                BottomPanelMode::Hidden => return,
+            },
+            BOTTOM_PANEL_HEIGHT_MAX,
+        );
+        match state.mode {
+            BottomPanelMode::QuickCommands => self.quick_cmd_height = next,
+            BottomPanelMode::CommandSend => self.serial_send_height = next,
+            BottomPanelMode::Hidden => return,
+        }
+        self.terminal_status = format!("bottom panel: {:.0}px", next.round());
+        cx.notify();
+    }
+
+    pub(in crate::features) fn finish_bottom_panel_resize(
+        &mut self,
+        _event: &MouseUpEvent,
+        cx: &mut Context<Self>,
+    ) {
+        if self.bottom_panel_resize.take().is_some() {
+            self.persist_ui_layout();
+            self.terminal_status = "bottom panel size saved".to_string();
+            cx.notify();
+        }
+    }
+
+    pub(in crate::features) fn bottom_panel_resize_handle(
+        &self,
+        cx: &mut Context<Self>,
+    ) -> impl IntoElement {
+        let palette = self.theme_palette();
+        div()
+            .id("bottom-panel-resize")
+            .h(px(3.))
+            .w_full()
+            .flex_none()
+            .bg(rgb(palette.border))
+            .cursor_row_resize()
+            .hover(|this| this.bg(rgb(0x58a6ff)))
+            .when(self.bottom_panel == BottomPanelMode::Hidden, |this| {
+                this.h_0()
+            })
+            .on_mouse_down(
+                MouseButton::Left,
+                cx.listener(|this, event: &MouseDownEvent, _, cx| {
+                    this.start_bottom_panel_resize(event, cx);
                 }),
             )
     }

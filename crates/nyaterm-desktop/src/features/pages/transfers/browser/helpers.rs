@@ -113,6 +113,37 @@ pub(super) fn compact_transfer_toolbar_button(
         .on_click(on_click)
 }
 
+pub(super) fn compact_transfer_toolbar_button_enabled(
+    palette: crate::theme::ThemePalette,
+    id: impl Into<String>,
+    icon_path: &'static str,
+    enabled: bool,
+    on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
+) -> impl IntoElement {
+    div()
+        .id(SharedString::from(id.into()))
+        .size(px(28.))
+        .flex()
+        .items_center()
+        .justify_center()
+        .rounded_md()
+        .text_color(if enabled {
+            rgb(palette.text_muted)
+        } else {
+            rgb(palette.text_dimmed)
+        })
+        .opacity(if enabled { 1.0 } else { 0.45 })
+        .child(svg().size(px(16.)).flex_none().path(icon_path))
+        .when(enabled, |this| {
+            this.cursor_pointer()
+                .hover(|this| {
+                    this.bg(rgb(palette.surface_elevated))
+                        .text_color(rgb(palette.text))
+                })
+                .on_click(on_click)
+        })
+}
+
 pub(super) fn compact_transfer_toolbar_button_active(
     palette: crate::theme::ThemePalette,
     id: impl Into<String>,

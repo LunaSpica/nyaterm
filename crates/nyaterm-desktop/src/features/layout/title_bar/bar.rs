@@ -3,9 +3,12 @@ use super::*;
 impl NyaTermApp {
     pub(in crate::features) fn title_bar(&mut self, cx: &mut Context<Self>) -> impl IntoElement {
         let palette = self.theme_palette();
-        // Compact chrome closer to Tauri title/menu strip density.
+        let compact_layout = !cfg!(target_os = "macos");
+        let narrow_left = compact_layout && self.last_viewport_size.0 < 1024.;
+        let narrow_right = compact_layout && self.last_viewport_size.0 < 768.;
+        // Match Tauri Header: h-10.
         div()
-            .h(px(36.))
+            .h(px(40.))
             .flex()
             .items_center()
             .justify_between()
@@ -33,15 +36,29 @@ impl NyaTermApp {
                             .items_center()
                             .gap_2()
                             .mr_2()
-                            .child(logo_mark(palette))
-                            .child(
-                                div()
-                                    .text_sm()
-                                    .font_weight(FontWeight(800.))
-                                    .text_color(rgb(palette.text))
-                                    .child("NyaTerm"),
-                            ),
+                            .child(logo_mark(palette)),
                     )
+                    .when(narrow_left, |this| {
+                        this.child(
+                            div()
+                                .id("title-mobile-left")
+                                .size(px(28.))
+                                .flex()
+                                .items_center()
+                                .justify_center()
+                                .rounded_sm()
+                                .text_size(px(16.))
+                                .text_color(rgb(palette.text_muted))
+                                .cursor_pointer()
+                                .hover(|this| {
+                                    this.bg(rgb(palette.hover)).text_color(rgb(palette.text))
+                                })
+                                .child("☰")
+                                .on_click(cx.listener(|this, _, _, cx| {
+                                    this.toggle_mobile_left_drawer(cx);
+                                })),
+                        )
+                    })
                     .child(self.title_menu_trigger(TitleMenu::File, cx))
                     .child(self.title_menu_trigger(TitleMenu::View, cx))
                     .child(self.title_menu_trigger(TitleMenu::Terminal, cx))
@@ -76,6 +93,27 @@ impl NyaTermApp {
                     .h_full()
                     .flex()
                     .items_center()
+                    .when(narrow_right, |this| {
+                        this.child(
+                            div()
+                                .id("title-mobile-right")
+                                .size(px(28.))
+                                .flex()
+                                .items_center()
+                                .justify_center()
+                                .rounded_sm()
+                                .text_size(px(15.))
+                                .text_color(rgb(palette.text_muted))
+                                .cursor_pointer()
+                                .hover(|this| {
+                                    this.bg(rgb(palette.hover)).text_color(rgb(palette.text))
+                                })
+                                .child("◧")
+                                .on_click(cx.listener(|this, _, _, cx| {
+                                    this.toggle_mobile_right_drawer(cx);
+                                })),
+                        )
+                    })
                     .child(
                         div()
                             .w(px(10.))
@@ -227,6 +265,7 @@ impl NyaTermApp {
         } else {
             Some(menu)
         };
+        self.title_menu_submenu = None;
         if self.title_menu_open.is_some() {
             self.open_tabs_menu_open = false;
             self.new_session_menu_open = false;
@@ -235,7 +274,19 @@ impl NyaTermApp {
     }
 
     pub(in crate::features) fn close_title_menu(&mut self, cx: &mut Context<Self>) {
+        self.title_menu_submenu = None;
         if self.title_menu_open.take().is_some() {
+            cx.notify();
+        }
+    }
+
+    pub(in crate::features) fn open_title_submenu(
+        &mut self,
+        submenu: TitleMenuSubmenu,
+        cx: &mut Context<Self>,
+    ) {
+        if self.title_menu_submenu != Some(submenu) {
+            self.title_menu_submenu = Some(submenu);
             cx.notify();
         }
     }

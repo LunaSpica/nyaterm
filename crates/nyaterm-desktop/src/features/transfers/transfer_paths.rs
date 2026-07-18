@@ -240,6 +240,7 @@ impl NyaTermApp {
             cx.notify();
             return;
         };
+        let session_id = self.active_session_id.clone();
 
         let duplicate_policy = self.transfer_duplicate_policy;
         let duplicate_resolver = (duplicate_policy == SftpDuplicatePolicy::Ask)
@@ -270,6 +271,7 @@ impl NyaTermApp {
             let _ = this.update(cx, |this, cx| {
                 this.apply_transfer_download_start_prompt_result(
                     remote_paths,
+                    session_id,
                     config,
                     duplicate_policy,
                     duplicate_resolver,
@@ -302,6 +304,16 @@ impl NyaTermApp {
             cx.notify();
             return;
         }
+        let Some(config) = self.active_ssh_config.clone() else {
+            self.terminal_status = "start an SSH session first".to_string();
+            cx.notify();
+            return;
+        };
+        let session_id = self.active_session_id.clone();
+        let duplicate_policy = self.transfer_duplicate_policy;
+        let duplicate_resolver = (duplicate_policy == SftpDuplicatePolicy::Ask)
+            .then(|| self.duplicate_prompts.clone() as Arc<dyn SftpDuplicateResolver>);
+        let transfer_options = self.sftp_transfer_options();
 
         let options = match kind {
             TransferPathPromptKind::UploadFile => PathPromptOptions {
@@ -343,6 +355,11 @@ impl NyaTermApp {
                 this.apply_transfer_browser_upload_path_prompt_result(
                     kind,
                     remote_path,
+                    session_id,
+                    config,
+                    duplicate_policy,
+                    duplicate_resolver,
+                    transfer_options,
                     result,
                     cx,
                 );
@@ -400,6 +417,7 @@ impl NyaTermApp {
     fn apply_transfer_download_start_prompt_result(
         &mut self,
         remote_paths: Vec<String>,
+        session_id: Option<String>,
         config: SshSessionConfig,
         duplicate_policy: SftpDuplicatePolicy,
         duplicate_resolver: Option<Arc<dyn SftpDuplicateResolver>>,
@@ -421,6 +439,7 @@ impl NyaTermApp {
                     let local_path =
                         directory.join(download_file_name_from_remote_path(&remote_path));
                     self.enqueue_sftp_download_job_for_target(
+                        session_id.clone(),
                         config.clone(),
                         remote_path,
                         local_path,
@@ -453,6 +472,11 @@ impl NyaTermApp {
         &mut self,
         kind: TransferPathPromptKind,
         remote_path: String,
+        session_id: Option<String>,
+        config: SshSessionConfig,
+        duplicate_policy: SftpDuplicatePolicy,
+        duplicate_resolver: Option<Arc<dyn SftpDuplicateResolver>>,
+        transfer_options: SftpTransferOptions,
         result: TransferPathPromptResult,
         cx: &mut Context<Self>,
     ) {
@@ -492,7 +516,16 @@ impl NyaTermApp {
                     };
                     let upload_name = transfer_upload_local_name(&path, fallback);
                     let target_path = transfer_upload_remote_child_path(&remote_path, &upload_name);
-                    self.start_sftp_upload_job_for_target(path, target_path, cx);
+                    self.enqueue_sftp_upload_job_for_target(
+                        session_id.clone(),
+                        config.clone(),
+                        path,
+                        target_path,
+                        duplicate_policy,
+                        duplicate_resolver.clone(),
+                        transfer_options.clone(),
+                        cx,
+                    );
                 }
             }
             TransferPathPromptResult::Cancelled => {

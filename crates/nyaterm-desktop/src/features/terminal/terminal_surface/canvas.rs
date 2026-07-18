@@ -820,6 +820,7 @@ impl NyaTermApp {
                                         }
                                         if this.settings.interaction_right_click_paste {
                                             this.paste_from_clipboard(window, cx);
+                                            this.clear_terminal_selection(cx);
                                         } else {
                                             this.open_terminal_context_menu(event, cx);
                                         }

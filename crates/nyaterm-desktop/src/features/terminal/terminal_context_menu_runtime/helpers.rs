@@ -47,6 +47,39 @@ pub(super) fn terminal_ctx_item(
     row
 }
 
+pub(super) fn terminal_ctx_submenu_item(
+    palette: crate::theme::ThemePalette,
+    id: impl Into<String>,
+    label: impl Into<String>,
+    active: bool,
+    on_hover: impl Fn(&bool, &mut Window, &mut App) + 'static,
+    on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
+) -> impl IntoElement {
+    div()
+        .id(SharedString::from(id.into()))
+        .h(px(28.))
+        .px_3()
+        .flex()
+        .items_center()
+        .justify_between()
+        .gap_3()
+        .text_size(px(12.))
+        .text_color(rgb(palette.text))
+        .cursor_pointer()
+        .when(active, |this| this.bg(rgb(palette.hover)))
+        .hover(|this| this.bg(rgb(palette.hover)))
+        .on_hover(on_hover)
+        .on_click(on_click)
+        .child(div().child(label.into()))
+        .child(
+            svg()
+                .size(px(12.))
+                .flex_none()
+                .path("icons/fe/forward.svg")
+                .text_color(rgb(palette.text_dimmed)),
+        )
+}
+
 pub(super) fn terminal_ctx_separator(palette: crate::theme::ThemePalette) -> impl IntoElement {
     div().h(px(1.)).my_1().mx_2().bg(rgb(palette.border))
 }

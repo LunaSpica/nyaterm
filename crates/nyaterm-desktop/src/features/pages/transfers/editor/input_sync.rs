@@ -165,22 +165,33 @@ impl NyaTermApp {
 
     pub(in crate::features) fn upload_external_editor_sync(
         &mut self,
+        session_id: Option<String>,
         job_id: String,
         remote_path: String,
         local_path: PathBuf,
         cx: &mut Context<Self>,
     ) {
-        self.spawn_external_editor_sync_upload(job_id, remote_path, local_path);
+        self.spawn_external_editor_sync_upload(session_id, job_id, remote_path, local_path);
         cx.notify();
     }
 
     pub(in crate::features) fn spawn_external_editor_sync_upload(
         &mut self,
+        session_id: Option<String>,
         job_id: String,
         remote_path: String,
         local_path: PathBuf,
     ) {
-        let Some(config) = self.active_ssh_config.clone() else {
+        let config = session_id
+            .as_deref()
+            .and_then(|session_id| self.session_metadata.get(session_id))
+            .and_then(|metadata| metadata.ssh_config.clone())
+            .or_else(|| {
+                (session_id.as_deref() == self.active_session_id.as_deref())
+                    .then(|| self.active_ssh_config.clone())
+                    .flatten()
+            });
+        let Some(config) = config else {
             self.terminal_status = "start an SSH session before syncing external edits".to_string();
             return;
         };
@@ -203,7 +214,11 @@ impl NyaTermApp {
         always: bool,
         cx: &mut Context<Self>,
     ) {
-        let Some(prompt) = self.transfer_external_sync_prompt.take() else {
+        let Some(session_id) = self.active_session_id.clone() else {
+            cx.notify();
+            return;
+        };
+        let Some(prompt) = self.transfer_external_sync_prompts.remove(&session_id) else {
             cx.notify();
             return;
         };
@@ -211,14 +226,22 @@ impl NyaTermApp {
         if always {
             self.transfer_external_always_uploads.insert(watch_key);
         }
-        self.upload_external_editor_sync(prompt.job_id, prompt.remote_path, prompt.local_path, cx);
+        self.upload_external_editor_sync(
+            prompt.session_id,
+            prompt.job_id,
+            prompt.remote_path,
+            prompt.local_path,
+            cx,
+        );
     }
 
     pub(in crate::features) fn ignore_pending_external_editor_sync(
         &mut self,
         cx: &mut Context<Self>,
     ) {
-        self.transfer_external_sync_prompt = None;
+        if let Some(session_id) = self.active_session_id.as_deref() {
+            self.transfer_external_sync_prompts.remove(session_id);
+        }
         self.terminal_status = "external edit sync skipped".to_string();
         cx.notify();
     }

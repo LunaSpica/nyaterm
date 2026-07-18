@@ -79,56 +79,6 @@ pub(super) fn session_action_svg_button(
         })
 }
 
-pub(super) fn active_session_menu_item(
-    palette: crate::theme::ThemePalette,
-    id: impl Into<String>,
-    label: impl Into<String>,
-    icon_path: &'static str,
-    enabled: bool,
-    busy: bool,
-    destructive: bool,
-    on_click: impl Fn(&gpui::ClickEvent, &mut gpui::Window, &mut gpui::App) + 'static,
-) -> impl IntoElement {
-    let label = label.into();
-    let text_color = if !enabled {
-        palette.text_dimmed
-    } else if destructive {
-        palette.danger
-    } else {
-        palette.text
-    };
-    div()
-        .id(SharedString::from(id.into()))
-        .px_3()
-        .h(px(30.))
-        .flex()
-        .items_center()
-        .gap_2()
-        .when(enabled, |this| {
-            this.cursor_pointer()
-                .hover(|this| this.bg(rgb(palette.surface_elevated)))
-        })
-        .when(!enabled, |this| this.opacity(0.5))
-        .child(
-            svg()
-                .size(px(14.))
-                .flex_none()
-                .path(icon_path)
-                .text_color(rgb(text_color)),
-        )
-        .child(
-            div()
-                .text_size(px(12.))
-                .text_color(rgb(text_color))
-                .child(if busy { format!("{label}") } else { label }),
-        )
-        .on_click(move |event, window, cx| {
-            if enabled {
-                on_click(event, window, cx);
-            }
-        })
-}
-
 pub(super) fn format_otp_code_display(code: &str) -> String {
     let trimmed = code.trim();
     if trimmed.is_empty() || trimmed == "------" {

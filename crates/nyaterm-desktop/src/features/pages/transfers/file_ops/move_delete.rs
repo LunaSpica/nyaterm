@@ -126,6 +126,7 @@ impl NyaTermApp {
         let id = self.next_transfer_id("sftp-move");
         self.transfer_jobs.push(TransferJobState {
             id: id.clone(),
+            session_id: self.active_session_id.clone(),
             kind: TransferJobKind::Move {
                 old_path: old_path.clone(),
                 new_path: new_path.clone(),
@@ -254,6 +255,7 @@ impl NyaTermApp {
         let id = self.next_transfer_id("sftp-delete");
         self.transfer_jobs.push(TransferJobState {
             id: id.clone(),
+            session_id: self.active_session_id.clone(),
             kind: TransferJobKind::Delete {
                 remote_path: remote_path.clone(),
                 parent_path: parent_path.clone(),

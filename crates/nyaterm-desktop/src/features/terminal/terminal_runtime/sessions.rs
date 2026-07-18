@@ -299,6 +299,7 @@ impl NyaTermApp {
     }
 
     pub(in crate::features) fn clear_terminal(&mut self, cx: &mut Context<Self>) {
+        self.clear_terminal_selection(cx);
         if let Some(session_id) = self.active_session_id.as_deref()
             && let Some(view) = self.terminal_views.get_mut(session_id)
         {

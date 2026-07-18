@@ -37,6 +37,7 @@ impl NyaTermApp {
 
         workspace
             .child(self.workspace_terminal_area(cx))
+            .child(self.bottom_panel_resize_handle(cx))
             .child(self.bottom_panel_view(cx))
     }
 

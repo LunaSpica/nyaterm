@@ -1,6 +1,6 @@
 use gpui::Pixels;
 
-use super::PanelSide;
+use super::{BottomPanelMode, PanelSide};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum PanelResizeSide {
@@ -17,6 +17,13 @@ pub(crate) struct PanelResizeState {
 
 #[derive(Debug, Clone, Copy)]
 pub(crate) struct TransferHeightResizeState {
+    pub(crate) start_y: Pixels,
+    pub(crate) start_height: Pixels,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct BottomPanelResizeState {
+    pub(crate) mode: BottomPanelMode,
     pub(crate) start_y: Pixels,
     pub(crate) start_height: Pixels,
 }

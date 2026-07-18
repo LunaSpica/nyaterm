@@ -1266,6 +1266,7 @@ impl NyaTermApp {
             });
         self.transfer_jobs.push(TransferJobState {
             id,
+            session_id: Some(session_id.to_string()),
             kind: TransferJobKind::TrzszDownload {
                 session_id: session_id.to_string(),
                 file_name: update.file_name,
@@ -1348,6 +1349,7 @@ impl NyaTermApp {
             });
         self.transfer_jobs.push(TransferJobState {
             id,
+            session_id: Some(session_id.to_string()),
             kind: TransferJobKind::TrzszUpload {
                 session_id: session_id.to_string(),
                 file_name: update.file_name,

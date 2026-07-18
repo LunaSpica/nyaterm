@@ -6,7 +6,7 @@ impl NyaTermApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        self.quick_command_menu_id = None;
+        self.quick_command_menu = None;
         self.quick_command_editor = Some(QuickCommandEditorState::blank());
         self.terminal_status = "quick command editor opened".to_string();
         window.focus(&self.quick_command_editor_focus);
@@ -19,7 +19,7 @@ impl NyaTermApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        self.quick_command_menu_id = None;
+        self.quick_command_menu = None;
         let Some(command) = self
             .quick_commands
             .iter()
@@ -45,10 +45,12 @@ impl NyaTermApp {
     pub(in crate::features) fn open_quick_command_details(
         &mut self,
         command_id: String,
+        x: gpui::Pixels,
+        y: gpui::Pixels,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        self.quick_command_menu_id = None;
+        self.quick_command_menu = None;
         let Some(command) = self
             .quick_commands
             .iter()
@@ -61,8 +63,9 @@ impl NyaTermApp {
         };
         self.quick_command_details = Some(QuickCommandDetailsState {
             category: quick_command_category_label(&self.quick_command_categories, &command),
-            risk: risk_label(command.risk_level.as_ref()).to_string(),
             command,
+            x,
+            y,
         });
         self.terminal_status = "quick command details opened".to_string();
         window.focus(&self.quick_command_details_focus);
@@ -75,36 +78,12 @@ impl NyaTermApp {
         cx.notify();
     }
 
-    pub(in crate::features) fn copy_quick_command_details(&mut self, cx: &mut Context<Self>) {
-        let Some(details) = self.quick_command_details.as_ref() else {
-            return;
-        };
-        let command = &details.command;
-        let text = format!(
-            "Label: {}\nCategory: {}\nMode: {}\nRisk: {}\nUse count: {}\nCommand:\n{}\n\nDescription:\n{}",
-            command.label,
-            details.category,
-            if command.execution_mode.as_deref() == Some("append") {
-                "append"
-            } else {
-                "execute"
-            },
-            details.risk,
-            command.use_count.unwrap_or_default(),
-            command.command,
-            command.description.as_deref().unwrap_or_default()
-        );
-        cx.write_to_clipboard(ClipboardItem::new_string(text));
-        self.terminal_status = "quick command details copied".to_string();
-        cx.notify();
-    }
-
     pub(in crate::features) fn open_delete_quick_command_confirm(
         &mut self,
         command_id: String,
         cx: &mut Context<Self>,
     ) {
-        self.quick_command_menu_id = None;
+        self.quick_command_menu = None;
         let Some(command) = self
             .quick_commands
             .iter()

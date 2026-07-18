@@ -13,9 +13,7 @@ impl NyaTermApp {
             .absolute()
             .top(px(30.))
             .left_0()
-            .w(px(260.))
-            .max_h(px(480.))
-            .overflow_y_scroll()
+            .w(px(220.))
             .rounded_md()
             .border_1()
             .border_color(rgb(palette.border))
@@ -33,19 +31,11 @@ impl NyaTermApp {
                         "title-file-new-session",
                         "New Session",
                         Some(shortcut("tab.newSession", "Ctrl+Shift+N")),
-                        cx.listener(|this, _, window, cx| {
+                        cx.listener(|this, _, _, cx| {
                             this.close_title_menu(cx);
-                            this.start_local_session(window, cx);
-                        }),
-                    ))
-                    .child(title_menu_item(
-                        palette,
-                        "title-file-temp-ssh",
-                        "Temporary SSH Link",
-                        Some(shortcut("tab.temporarySshLink", "Ctrl+Alt+N")),
-                        cx.listener(|this, _, window, cx| {
-                            this.close_title_menu(cx);
-                            this.open_temporary_ssh_link_dialog(window, cx);
+                            this.open_tabs_menu_open = false;
+                            this.new_session_menu_open = true;
+                            cx.notify();
                         }),
                     ))
                     .child(title_menu_separator(palette))
@@ -72,339 +62,17 @@ impl NyaTermApp {
             }
             TitleMenu::View => {
                 items = items
-                    .child(
-                        div()
-                            .px_3()
-                            .py_1()
-                            .text_size(px(10.))
-                            .font_weight(FontWeight(700.))
-                            .text_color(rgb(palette.text_dimmed))
-                            .child("Theme"),
-                    )
-                    .child(title_menu_item(
-                        palette,
-                        "title-view-theme-github-dark",
-                        {
-                            let current = self.settings.theme.as_str();
-                            let selected = current == "github-dark"
-                                || (current == "catppuccin" && "github-dark" == "catppuccin-mocha");
-                            let label = crate::theme::appearance_theme_label("github-dark");
-                            if selected {
-                                format!("✓ {label}")
-                            } else {
-                                label.to_string()
-                            }
-                        },
-                        None,
-                        cx.listener(|this, _, _, cx| {
-                            this.close_title_menu(cx);
-                            this.update_appearance_theme("github-dark", cx);
-                        }),
+                    .child(self.title_menu_submenu_trigger(
+                        TitleMenuSubmenu::Theme,
+                        "title-view-theme",
+                        "Theme",
+                        cx,
                     ))
-                    .child(title_menu_item(
-                        palette,
-                        "title-view-theme-dracula",
-                        {
-                            let current = self.settings.theme.as_str();
-                            let selected = current == "dracula"
-                                || (current == "catppuccin" && "dracula" == "catppuccin-mocha");
-                            let label = crate::theme::appearance_theme_label("dracula");
-                            if selected {
-                                format!("✓ {label}")
-                            } else {
-                                label.to_string()
-                            }
-                        },
-                        None,
-                        cx.listener(|this, _, _, cx| {
-                            this.close_title_menu(cx);
-                            this.update_appearance_theme("dracula", cx);
-                        }),
-                    ))
-                    .child(title_menu_item(
-                        palette,
-                        "title-view-theme-nord",
-                        {
-                            let current = self.settings.theme.as_str();
-                            let selected = current == "nord"
-                                || (current == "catppuccin" && "nord" == "catppuccin-mocha");
-                            let label = crate::theme::appearance_theme_label("nord");
-                            if selected {
-                                format!("✓ {label}")
-                            } else {
-                                label.to_string()
-                            }
-                        },
-                        None,
-                        cx.listener(|this, _, _, cx| {
-                            this.close_title_menu(cx);
-                            this.update_appearance_theme("nord", cx);
-                        }),
-                    ))
-                    .child(title_menu_item(
-                        palette,
-                        "title-view-theme-monokai-pro",
-                        {
-                            let current = self.settings.theme.as_str();
-                            let selected = current == "monokai-pro"
-                                || (current == "catppuccin" && "monokai-pro" == "catppuccin-mocha");
-                            let label = crate::theme::appearance_theme_label("monokai-pro");
-                            if selected {
-                                format!("✓ {label}")
-                            } else {
-                                label.to_string()
-                            }
-                        },
-                        None,
-                        cx.listener(|this, _, _, cx| {
-                            this.close_title_menu(cx);
-                            this.update_appearance_theme("monokai-pro", cx);
-                        }),
-                    ))
-                    .child(title_menu_item(
-                        palette,
-                        "title-view-theme-solarized-light",
-                        {
-                            let current = self.settings.theme.as_str();
-                            let selected = current == "solarized-light"
-                                || (current == "catppuccin"
-                                    && "solarized-light" == "catppuccin-mocha");
-                            let label = crate::theme::appearance_theme_label("solarized-light");
-                            if selected {
-                                format!("✓ {label}")
-                            } else {
-                                label.to_string()
-                            }
-                        },
-                        None,
-                        cx.listener(|this, _, _, cx| {
-                            this.close_title_menu(cx);
-                            this.update_appearance_theme("solarized-light", cx);
-                        }),
-                    ))
-                    .child(title_menu_item(
-                        palette,
-                        "title-view-theme-catppuccin-mocha",
-                        {
-                            let current = self.settings.theme.as_str();
-                            let selected = current == "catppuccin-mocha"
-                                || (current == "catppuccin"
-                                    && "catppuccin-mocha" == "catppuccin-mocha");
-                            let label = crate::theme::appearance_theme_label("catppuccin-mocha");
-                            if selected {
-                                format!("✓ {label}")
-                            } else {
-                                label.to_string()
-                            }
-                        },
-                        None,
-                        cx.listener(|this, _, _, cx| {
-                            this.close_title_menu(cx);
-                            this.update_appearance_theme("catppuccin-mocha", cx);
-                        }),
-                    ))
-                    .child(title_menu_item(
-                        palette,
-                        "title-view-theme-tokyo-night",
-                        {
-                            let current = self.settings.theme.as_str();
-                            let selected = current == "tokyo-night"
-                                || (current == "catppuccin" && "tokyo-night" == "catppuccin-mocha");
-                            let label = crate::theme::appearance_theme_label("tokyo-night");
-                            if selected {
-                                format!("✓ {label}")
-                            } else {
-                                label.to_string()
-                            }
-                        },
-                        None,
-                        cx.listener(|this, _, _, cx| {
-                            this.close_title_menu(cx);
-                            this.update_appearance_theme("tokyo-night", cx);
-                        }),
-                    ))
-                    .child(title_menu_item(
-                        palette,
-                        "title-view-theme-one-dark-pro",
-                        {
-                            let current = self.settings.theme.as_str();
-                            let selected = current == "one-dark-pro"
-                                || (current == "catppuccin"
-                                    && "one-dark-pro" == "catppuccin-mocha");
-                            let label = crate::theme::appearance_theme_label("one-dark-pro");
-                            if selected {
-                                format!("✓ {label}")
-                            } else {
-                                label.to_string()
-                            }
-                        },
-                        None,
-                        cx.listener(|this, _, _, cx| {
-                            this.close_title_menu(cx);
-                            this.update_appearance_theme("one-dark-pro", cx);
-                        }),
-                    ))
-                    .child(title_menu_item(
-                        palette,
-                        "title-view-theme-rose-pine",
-                        {
-                            let current = self.settings.theme.as_str();
-                            let selected = current == "rose-pine"
-                                || (current == "catppuccin" && "rose-pine" == "catppuccin-mocha");
-                            let label = crate::theme::appearance_theme_label("rose-pine");
-                            if selected {
-                                format!("✓ {label}")
-                            } else {
-                                label.to_string()
-                            }
-                        },
-                        None,
-                        cx.listener(|this, _, _, cx| {
-                            this.close_title_menu(cx);
-                            this.update_appearance_theme("rose-pine", cx);
-                        }),
-                    ))
-                    .child(title_menu_item(
-                        palette,
-                        "title-view-theme-gruvbox-dark",
-                        {
-                            let current = self.settings.theme.as_str();
-                            let selected = current == "gruvbox-dark"
-                                || (current == "catppuccin"
-                                    && "gruvbox-dark" == "catppuccin-mocha");
-                            let label = crate::theme::appearance_theme_label("gruvbox-dark");
-                            if selected {
-                                format!("✓ {label}")
-                            } else {
-                                label.to_string()
-                            }
-                        },
-                        None,
-                        cx.listener(|this, _, _, cx| {
-                            this.close_title_menu(cx);
-                            this.update_appearance_theme("gruvbox-dark", cx);
-                        }),
-                    ))
-                    .child(title_menu_item(
-                        palette,
-                        "title-view-theme-github-light",
-                        {
-                            let current = self.settings.theme.as_str();
-                            let selected = current == "github-light"
-                                || (current == "catppuccin"
-                                    && "github-light" == "catppuccin-mocha");
-                            let label = crate::theme::appearance_theme_label("github-light");
-                            if selected {
-                                format!("✓ {label}")
-                            } else {
-                                label.to_string()
-                            }
-                        },
-                        None,
-                        cx.listener(|this, _, _, cx| {
-                            this.close_title_menu(cx);
-                            this.update_appearance_theme("github-light", cx);
-                        }),
-                    ))
-                    .child(title_menu_item(
-                        palette,
-                        "title-view-theme-catppuccin-latte",
-                        {
-                            let current = self.settings.theme.as_str();
-                            let selected = current == "catppuccin-latte"
-                                || (current == "catppuccin"
-                                    && "catppuccin-latte" == "catppuccin-mocha");
-                            let label = crate::theme::appearance_theme_label("catppuccin-latte");
-                            if selected {
-                                format!("✓ {label}")
-                            } else {
-                                label.to_string()
-                            }
-                        },
-                        None,
-                        cx.listener(|this, _, _, cx| {
-                            this.close_title_menu(cx);
-                            this.update_appearance_theme("catppuccin-latte", cx);
-                        }),
-                    ))
-                    .child(title_menu_item(
-                        palette,
-                        "title-view-theme-one-light",
-                        {
-                            let current = self.settings.theme.as_str();
-                            let selected = current == "one-light"
-                                || (current == "catppuccin" && "one-light" == "catppuccin-mocha");
-                            let label = crate::theme::appearance_theme_label("one-light");
-                            if selected {
-                                format!("✓ {label}")
-                            } else {
-                                label.to_string()
-                            }
-                        },
-                        None,
-                        cx.listener(|this, _, _, cx| {
-                            this.close_title_menu(cx);
-                            this.update_appearance_theme("one-light", cx);
-                        }),
-                    ))
-                    .child(title_menu_item(
-                        palette,
-                        "title-view-theme-nya-high-contrast",
-                        {
-                            let current = self.settings.theme.as_str();
-                            let selected = current == "nya-high-contrast"
-                                || (current == "catppuccin"
-                                    && "nya-high-contrast" == "catppuccin-mocha");
-                            let label = crate::theme::appearance_theme_label("nya-high-contrast");
-                            if selected {
-                                format!("✓ {label}")
-                            } else {
-                                label.to_string()
-                            }
-                        },
-                        None,
-                        cx.listener(|this, _, _, cx| {
-                            this.close_title_menu(cx);
-                            this.update_appearance_theme("nya-high-contrast", cx);
-                        }),
-                    ))
-                    .child(title_menu_separator(palette))
-                    .child(
-                        div()
-                            .px_3()
-                            .py_1()
-                            .text_size(px(10.))
-                            .font_weight(FontWeight(700.))
-                            .text_color(rgb(palette.text_dimmed))
-                            .child("Language"),
-                    )
-                    .child(title_menu_item(
-                        palette,
-                        "title-view-lang-en",
-                        if matches!(self.settings.language.as_str(), "en" | "en-US") {
-                            "✓ English"
-                        } else {
-                            "English"
-                        },
-                        None,
-                        cx.listener(|this, _, _, cx| {
-                            this.close_title_menu(cx);
-                            this.update_ui_language("en", cx);
-                        }),
-                    ))
-                    .child(title_menu_item(
-                        palette,
-                        "title-view-lang-zh",
-                        if matches!(self.settings.language.as_str(), "zh-CN" | "zh") {
-                            "✓ 中文"
-                        } else {
-                            "中文"
-                        },
-                        None,
-                        cx.listener(|this, _, _, cx| {
-                            this.close_title_menu(cx);
-                            this.update_ui_language("zh-CN", cx);
-                        }),
+                    .child(self.title_menu_submenu_trigger(
+                        TitleMenuSubmenu::Language,
+                        "title-view-language",
+                        "Language",
+                        cx,
                     ))
                     .child(title_menu_separator(palette))
                     .child(title_menu_item(
@@ -436,127 +104,13 @@ impl NyaTermApp {
                             this.close_title_menu(cx);
                             this.reset_terminal_font_size(cx);
                         }),
-                    ))
-                    .child(title_menu_separator(palette))
-                    .child(title_menu_item(
-                        palette,
-                        "title-view-toggle-left",
-                        "Toggle Left Sidebar",
-                        Some(shortcut("view.toggleLeftSidebar", "Ctrl+Shift+E")),
-                        cx.listener(|this, _, _, cx| {
-                            this.close_title_menu(cx);
-                            this.toggle_left_sidebar(cx);
-                        }),
-                    ))
-                    .child(title_menu_item(
-                        palette,
-                        "title-view-toggle-right",
-                        "Toggle Right Sidebar",
-                        Some(shortcut("view.toggleRightSidebar", "Ctrl+Shift+B")),
-                        cx.listener(|this, _, _, cx| {
-                            this.close_title_menu(cx);
-                            this.toggle_right_inspector(cx);
-                        }),
-                    ))
-                    .child(title_menu_separator(palette))
-                    .child(title_menu_item(
-                        palette,
-                        "title-view-smart-split",
-                        "Smart Split",
-                        None,
-                        cx.listener(|this, _, _, cx| {
-                            this.close_title_menu(cx);
-                            this.apply_smart_split(SmartSplitMode::Auto, cx);
-                        }),
-                    ))
-                    .child(title_menu_item(
-                        palette,
-                        "title-view-tile-h",
-                        "Tile Horizontally",
-                        None,
-                        cx.listener(|this, _, _, cx| {
-                            this.close_title_menu(cx);
-                            this.apply_smart_split(SmartSplitMode::Horizontal, cx);
-                        }),
-                    ))
-                    .child(title_menu_item(
-                        palette,
-                        "title-view-tile-v",
-                        "Tile Vertically",
-                        None,
-                        cx.listener(|this, _, _, cx| {
-                            this.close_title_menu(cx);
-                            this.apply_smart_split(SmartSplitMode::Vertical, cx);
-                        }),
-                    ))
-                    .child(title_menu_item(
-                        palette,
-                        "title-view-merge-windows",
-                        "Merge Windows",
-                        None,
-                        cx.listener(|this, _, _, cx| {
-                            this.close_title_menu(cx);
-                            this.close_terminal_window_layout(cx);
-                        }),
-                    ))
-                    .child(title_menu_separator(palette))
-                    .child(title_menu_item(
-                        palette,
-                        "title-view-settings",
-                        "Settings",
-                        Some(shortcut("view.openSettings", "Ctrl+,")),
-                        cx.listener(|this, _, _, cx| {
-                            this.close_title_menu(cx);
-                            this.open_page(NavItem::Settings, cx);
-                        }),
                     ));
             }
             TitleMenu::Terminal => {
                 items = items
                     .child(title_menu_item(
                         palette,
-                        "title-term-copy",
-                        "Copy",
-                        Some(shortcut("terminal.copy", "Ctrl+Shift+C")),
-                        cx.listener(|this, _, _, cx| {
-                            this.close_title_menu(cx);
-                            this.copy_terminal_selection_or_visible(cx);
-                        }),
-                    ))
-                    .child(title_menu_item(
-                        palette,
-                        "title-term-paste",
-                        "Paste",
-                        Some(shortcut("terminal.paste", "Ctrl+Shift+V")),
-                        cx.listener(|this, _, window, cx| {
-                            this.close_title_menu(cx);
-                            this.paste_from_clipboard(window, cx);
-                        }),
-                    ))
-                    .child(title_menu_item(
-                        palette,
-                        "title-term-select-all",
-                        "Select All",
-                        Some(shortcut("terminal.selectAll", "Ctrl+Shift+A")),
-                        cx.listener(|this, _, _, cx| {
-                            this.close_title_menu(cx);
-                            this.select_all_terminal_visible(cx);
-                        }),
-                    ))
-                    .child(title_menu_item(
-                        palette,
-                        "title-term-find",
-                        "Find",
-                        Some(shortcut("terminal.find", "Ctrl+Shift+F")),
-                        cx.listener(|this, _, window, cx| {
-                            this.close_title_menu(cx);
-                            this.open_terminal_search(window, cx);
-                        }),
-                    ))
-                    .child(title_menu_separator(palette))
-                    .child(title_menu_item(
-                        palette,
-                        "title-term-quick-switch",
+                        "title-term-command-palette",
                         "Command Palette",
                         Some(shortcut("tab.quickSwitch", "Ctrl+Shift+S")),
                         cx.listener(|this, _, window, cx| {
@@ -565,55 +119,20 @@ impl NyaTermApp {
                         }),
                     ))
                     .child(title_menu_separator(palette))
-                    .child(title_menu_item(
-                        palette,
-                        "title-term-split-h",
-                        "Split Horizontal",
-                        None,
-                        cx.listener(|this, _, window, cx| {
-                            this.close_title_menu(cx);
-                            this.split_workspace_with_duplicate(
-                                WorkspaceSplitDirection::Horizontal,
-                                window,
-                                cx,
-                            );
-                        }),
-                    ))
-                    .child(title_menu_item(
-                        palette,
-                        "title-term-split-v",
-                        "Split Vertical",
-                        None,
-                        cx.listener(|this, _, window, cx| {
-                            this.close_title_menu(cx);
-                            this.split_workspace_with_duplicate(
-                                WorkspaceSplitDirection::Vertical,
-                                window,
-                                cx,
-                            );
-                        }),
-                    ))
-                    .child(title_menu_item(
-                        palette,
-                        "title-term-unsplit",
-                        "Unsplit",
-                        None,
-                        cx.listener(|this, _, _, cx| {
-                            this.close_title_menu(cx);
-                            this.unsplit_workspace(cx);
-                        }),
+                    .child(self.title_menu_submenu_trigger(
+                        TitleMenuSubmenu::SmartSplit,
+                        "title-term-smart-split",
+                        "Smart Split",
+                        cx,
                     ))
                     .child(title_menu_separator(palette))
-                    .child(title_menu_item(
-                        palette,
-                        "title-term-sync-groups",
-                        "Manage Sync Groups",
-                        Some(shortcut("terminal.manageSyncGroups", "Ctrl+Shift+G")),
-                        cx.listener(|this, _, window, cx| {
-                            this.close_title_menu(cx);
-                            this.open_sync_groups(window, cx);
-                        }),
+                    .child(self.title_menu_submenu_trigger(
+                        TitleMenuSubmenu::SyncInput,
+                        "title-term-sync-input",
+                        "Sync Input",
+                        cx,
                     ))
+                    .child(title_menu_separator(palette))
                     .child(title_menu_item(
                         palette,
                         "title-term-broadcast",
@@ -631,37 +150,6 @@ impl NyaTermApp {
                     .child(title_menu_separator(palette))
                     .child(title_menu_item(
                         palette,
-                        "title-term-smart-split",
-                        "Smart Split",
-                        None,
-                        cx.listener(|this, _, _, cx| {
-                            this.close_title_menu(cx);
-                            this.apply_smart_split(SmartSplitMode::Auto, cx);
-                        }),
-                    ))
-                    .child(title_menu_item(
-                        palette,
-                        "title-term-tile-h",
-                        "Tile Horizontally",
-                        None,
-                        cx.listener(|this, _, _, cx| {
-                            this.close_title_menu(cx);
-                            this.apply_smart_split(SmartSplitMode::Horizontal, cx);
-                        }),
-                    ))
-                    .child(title_menu_item(
-                        palette,
-                        "title-term-tile-v",
-                        "Tile Vertically",
-                        None,
-                        cx.listener(|this, _, _, cx| {
-                            this.close_title_menu(cx);
-                            this.apply_smart_split(SmartSplitMode::Vertical, cx);
-                        }),
-                    ))
-                    .child(title_menu_separator(palette))
-                    .child(title_menu_item(
-                        palette,
                         "title-term-clear",
                         "Clear Terminal",
                         Some(shortcut("terminal.clear", "Ctrl+L")),
@@ -669,11 +157,27 @@ impl NyaTermApp {
                             this.close_title_menu(cx);
                             this.clear_terminal(cx);
                         }),
+                    ))
+                    .child(title_menu_item(
+                        palette,
+                        "title-term-reset-size",
+                        "Reset Terminal Size",
+                        None,
+                        cx.listener(|this, _, _, cx| {
+                            this.close_title_menu(cx);
+                            let changed = this.resize_all_known_terminal_surfaces();
+                            this.terminal_status = if changed {
+                                "terminal sizes reset".to_string()
+                            } else {
+                                "terminal sizes already current".to_string()
+                            };
+                            cx.notify();
+                        }),
                     ));
             }
             TitleMenu::Help => {
                 let update_label = if self.update_pending {
-                    "Checking Updates…"
+                    "Checking Updates..."
                 } else if self.update_info.as_ref().is_some_and(|info| info.available) {
                     "Update Available"
                 } else {
@@ -687,9 +191,7 @@ impl NyaTermApp {
                         None,
                         cx.listener(|this, _, _, cx| {
                             this.close_title_menu(cx);
-                            this.terminal_status =
-                                "docs: https://github.com/nyaterm/nyaterm".to_string();
-                            cx.notify();
+                            this.open_documentation(cx);
                         }),
                     ))
                     .child(title_menu_item(
@@ -704,12 +206,12 @@ impl NyaTermApp {
                     ))
                     .child(title_menu_item(
                         palette,
-                        "title-help-migration",
-                        "Migration Status",
+                        "title-help-logs",
+                        "View Logs",
                         None,
                         cx.listener(|this, _, _, cx| {
                             this.close_title_menu(cx);
-                            this.open_page(NavItem::Migration, cx);
+                            this.reveal_log_dir(cx);
                         }),
                     ))
                     .child(title_menu_separator(palette))
@@ -720,14 +222,186 @@ impl NyaTermApp {
                         None,
                         cx.listener(|this, _, _, cx| {
                             this.close_title_menu(cx);
-                            this.terminal_status =
-                                format!("NyaTerm native {}", env!("CARGO_PKG_VERSION"));
-                            cx.notify();
+                            this.open_about(cx);
                         }),
                     ));
             }
         }
 
-        items
+        items.when_some(self.title_menu_submenu, |this, submenu| {
+            this.child(self.title_menu_submenu(submenu, cx))
+        })
+    }
+
+    fn title_menu_submenu_trigger(
+        &self,
+        submenu: TitleMenuSubmenu,
+        id: &'static str,
+        label: &'static str,
+        cx: &mut Context<Self>,
+    ) -> impl IntoElement {
+        let palette = self.theme_palette();
+        let open = self.title_menu_submenu == Some(submenu);
+        title_menu_submenu_trigger(
+            palette,
+            id,
+            label,
+            open,
+            cx.listener(move |this, hovered: &bool, _, cx| {
+                if *hovered {
+                    this.open_title_submenu(submenu, cx);
+                }
+            }),
+            cx.listener(move |this, _, _, cx| {
+                if this.title_menu_submenu == Some(submenu) {
+                    this.title_menu_submenu = None;
+                } else {
+                    this.title_menu_submenu = Some(submenu);
+                }
+                cx.notify();
+            }),
+        )
+    }
+
+    fn title_menu_submenu(
+        &self,
+        submenu: TitleMenuSubmenu,
+        cx: &mut Context<Self>,
+    ) -> impl IntoElement {
+        let palette = self.theme_palette();
+        let top = match submenu {
+            TitleMenuSubmenu::Theme => 4.,
+            TitleMenuSubmenu::Language => 34.,
+            TitleMenuSubmenu::SmartSplit => 44.,
+            TitleMenuSubmenu::SyncInput => 84.,
+        };
+        let mut menu = div()
+            .id(SharedString::from(format!("title-submenu-{submenu:?}")))
+            .absolute()
+            .top(px(top))
+            .left(px(224.))
+            .w(px(220.))
+            .rounded_md()
+            .border_1()
+            .border_color(rgb(palette.border))
+            .bg(rgb(palette.surface))
+            .shadow_lg()
+            .py_1()
+            .flex()
+            .flex_col();
+
+        match submenu {
+            TitleMenuSubmenu::Theme => {
+                const THEMES: [&str; 14] = [
+                    "github-dark",
+                    "dracula",
+                    "nord",
+                    "monokai-pro",
+                    "solarized-light",
+                    "catppuccin-mocha",
+                    "tokyo-night",
+                    "one-dark-pro",
+                    "rose-pine",
+                    "gruvbox-dark",
+                    "github-light",
+                    "catppuccin-latte",
+                    "one-light",
+                    "nya-high-contrast",
+                ];
+                for theme in THEMES {
+                    let current = self.settings.theme.as_str();
+                    let selected = current == theme
+                        || (current == "catppuccin" && theme == "catppuccin-mocha");
+                    let label = crate::theme::appearance_theme_label(theme);
+                    let label = if selected {
+                        format!("✓ {label}")
+                    } else {
+                        label.to_string()
+                    };
+                    menu = menu.child(title_menu_item(
+                        palette,
+                        format!("title-theme-{theme}"),
+                        label,
+                        None,
+                        cx.listener(move |this, _, _, cx| {
+                            this.close_title_menu(cx);
+                            this.update_appearance_theme(theme, cx);
+                        }),
+                    ));
+                }
+            }
+            TitleMenuSubmenu::Language => {
+                let english = matches!(self.settings.language.as_str(), "en" | "en-US");
+                let chinese = matches!(self.settings.language.as_str(), "zh" | "zh-CN");
+                menu = menu
+                    .child(title_menu_item(
+                        palette,
+                        "title-language-en",
+                        if english { "✓ English" } else { "English" },
+                        None,
+                        cx.listener(|this, _, _, cx| {
+                            this.close_title_menu(cx);
+                            this.update_ui_language("en", cx);
+                        }),
+                    ))
+                    .child(title_menu_item(
+                        palette,
+                        "title-language-zh",
+                        if chinese { "✓ 中文" } else { "中文" },
+                        None,
+                        cx.listener(|this, _, _, cx| {
+                            this.close_title_menu(cx);
+                            this.update_ui_language("zh-CN", cx);
+                        }),
+                    ));
+            }
+            TitleMenuSubmenu::SmartSplit => {
+                menu = menu
+                    .child(title_menu_item(
+                        palette,
+                        "title-smart-split-auto",
+                        "Auto",
+                        None,
+                        cx.listener(|this, _, _, cx| {
+                            this.close_title_menu(cx);
+                            this.apply_smart_split(SmartSplitMode::Auto, cx);
+                        }),
+                    ))
+                    .child(title_menu_item(
+                        palette,
+                        "title-smart-split-horizontal",
+                        "Horizontal",
+                        None,
+                        cx.listener(|this, _, _, cx| {
+                            this.close_title_menu(cx);
+                            this.apply_smart_split(SmartSplitMode::Horizontal, cx);
+                        }),
+                    ))
+                    .child(title_menu_item(
+                        palette,
+                        "title-smart-split-vertical",
+                        "Vertical",
+                        None,
+                        cx.listener(|this, _, _, cx| {
+                            this.close_title_menu(cx);
+                            this.apply_smart_split(SmartSplitMode::Vertical, cx);
+                        }),
+                    ));
+            }
+            TitleMenuSubmenu::SyncInput => {
+                menu = menu.child(title_menu_item(
+                    palette,
+                    "title-sync-manage-groups",
+                    "Manage Groups",
+                    Some(self.display_shortcut_for("terminal.manageSyncGroups", "Ctrl+Shift+G")),
+                    cx.listener(|this, _, window, cx| {
+                        this.close_title_menu(cx);
+                        this.open_sync_groups(window, cx);
+                    }),
+                ));
+            }
+        }
+
+        menu
     }
 }

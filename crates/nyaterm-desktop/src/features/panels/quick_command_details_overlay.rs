@@ -27,22 +27,37 @@ impl NyaTermApp {
                         updated_at: None,
                     },
                     category: "Unsorted".to_string(),
-                    risk: "unknown".to_string(),
+                    x: px(24.),
+                    y: px(24.),
                 });
+        let anchor_x = details.x;
+        let anchor_y = details.y;
         let command = details.command;
-        let command_id = command.id.clone();
-        let edit_command_id = command.id.clone();
-        let execution_mode = if command.execution_mode.as_deref() == Some("append") {
-            "append only"
-        } else {
-            "execute immediately"
-        };
+        let category = details.category.trim().to_string();
+        let show_category = !category.is_empty()
+            && category != "Unsorted"
+            && category != "Uncategorized"
+            && category != "uncategorized";
         let description = command
             .description
             .as_deref()
             .map(str::trim)
-            .filter(|description| !description.is_empty())
-            .unwrap_or("No description.");
+            .filter(|description| !description.is_empty());
+        let command_text = if command.command.trim().is_empty() {
+            "Empty command".to_string()
+        } else {
+            command.command.clone()
+        };
+        let estimated_h = if description.is_some() { 224. } else { 182. };
+        let (viewport_w, viewport_h) = self.last_viewport_size;
+        let (popover_x, popover_y) = quick_command_details_popover_position(
+            f32::from(anchor_x) - 304.,
+            f32::from(anchor_y) - estimated_h - 6.,
+            320.,
+            estimated_h,
+            viewport_w,
+            viewport_h,
+        );
 
         div()
             .id(SharedString::from("quick-command-details-overlay"))
@@ -51,14 +66,8 @@ impl NyaTermApp {
             .bottom_0()
             .left_0()
             .right_0()
-            .bg(rgb(0x030508))
-            .flex()
-            .items_center()
-            .justify_center()
-            .track_focus(&self.quick_command_details_focus)
-            .on_click(cx.listener(|this, _, window, cx| {
-                window.focus(&this.quick_command_details_focus);
-                cx.notify();
+            .on_click(cx.listener(|this, _, _, cx| {
+                this.close_quick_command_details(cx);
             }))
             .on_key_down(cx.listener(|this, event: &KeyDownEvent, _, cx| {
                 cx.stop_propagation();
@@ -68,171 +77,114 @@ impl NyaTermApp {
             }))
             .child(
                 div()
-                    .id(SharedString::from("quick-command-details-dialog"))
-                    .w(px(560.))
-                    .rounded_md()
+                    .id(SharedString::from("quick-command-details-popover"))
+                    .absolute()
+                    .left(px(popover_x))
+                    .top(px(popover_y))
+                    .w(px(320.))
+                    .overflow_hidden()
+                    .rounded_lg()
                     .border_1()
                     .border_color(rgb(palette.border))
-                    .bg(rgb(0x0b0f16))
+                    .bg(rgb(palette.surface))
                     .shadow_lg()
-                    .p_4()
+                    .track_focus(&self.quick_command_details_focus)
+                    .on_click(cx.listener(|this, _, window, cx| {
+                        window.focus(&this.quick_command_details_focus);
+                        cx.stop_propagation();
+                        cx.notify();
+                    }))
+                    .flex()
+                    .flex_col()
                     .child(
                         div()
+                            .border_b_1()
+                            .border_color(rgb(palette.border))
+                            .bg(rgb(palette.section_header))
+                            .p_3()
                             .flex()
-                            .items_start()
-                            .justify_between()
-                            .gap_3()
+                            .items_center()
+                            .gap_2()
+                            .child(quick_command_icon_mark(
+                                palette,
+                                command.icon_tag.as_deref(),
+                                command.color_tag.as_deref(),
+                            ))
                             .child(
                                 div()
                                     .min_w_0()
-                                    .flex()
-                                    .items_start()
-                                    .gap_3()
-                                    .child(quick_command_icon_mark(
-                                        palette,
-                                        command.icon_tag.as_deref(),
-                                        command.color_tag.as_deref(),
-                                    ))
-                                    .child(
-                                        div()
-                                            .min_w_0()
-                                            .child(
-                                                div()
-                                                    .text_sm()
-                                                    .font_weight(FontWeight(800.))
-                                                    .text_color(rgb(palette.text))
-                                                    .child(truncate_preview(&command.label, 64)),
-                                            )
-                                            .child(
-                                                div()
-                                                    .mt_1()
-                                                    .text_xs()
-                                                    .text_color(rgb(palette.text_muted))
-                                                    .child(format!(
-                                                        "{} / used {} / {}",
-                                                        details.category,
-                                                        command.use_count.unwrap_or_default(),
-                                                        details.risk
-                                                    )),
-                                            ),
-                                    ),
-                            )
-                            .child(status_pill(
-                                execution_mode,
-                                if command.execution_mode.as_deref() == Some("append") {
-                                    rgb(0xfacc15)
-                                } else {
-                                    rgb(palette.success)
-                                },
-                                if command.execution_mode.as_deref() == Some("append") {
-                                    rgb(0x32280f)
-                                } else {
-                                    rgb(palette.hover)
-                                },
-                            )),
-                    )
-                    .child(
-                        div()
-                            .mt_4()
-                            .rounded_sm()
-                            .border_1()
-                            .border_color(rgb(palette.border))
-                            .bg(rgb(palette.input))
-                            .p_3()
-                            .child(
-                                div()
-                                    .text_size(px(10.))
-                                    .text_color(rgb(palette.text_muted))
-                                    .child("Command"),
-                            )
-                            .child(
-                                div()
-                                    .mt_2()
-                                    .max_h(px(180.))
+                                    .flex_1()
+                                    .text_sm()
+                                    .font_weight(FontWeight(700.))
+                                    .text_color(rgb(palette.text))
                                     .overflow_hidden()
-                                    .font_family(crate::features::gpui_code_font_family())
-                                    .text_xs()
-                                    .line_height(px(18.))
-                                    .text_color(rgb(0xdbe4f0))
-                                    .child(if command.command.trim().is_empty() {
-                                        "Empty command".to_string()
-                                    } else {
-                                        command.command.clone()
-                                    }),
-                            ),
-                    )
-                    .child(
-                        div()
-                            .mt_3()
-                            .rounded_sm()
-                            .border_1()
-                            .border_color(rgb(palette.border))
-                            .bg(rgb(palette.input))
-                            .p_3()
-                            .child(
-                                div()
-                                    .text_size(px(10.))
-                                    .text_color(rgb(palette.text_muted))
-                                    .child("Description"),
+                                    .child(truncate_preview(&command.label, 48)),
                             )
-                            .child(
-                                div()
-                                    .mt_2()
-                                    .text_xs()
-                                    .line_height(px(18.))
-                                    .text_color(rgb(palette.text_muted))
-                                    .child(description.to_string()),
-                            ),
+                            .when(show_category, |this| {
+                                this.child(
+                                    div()
+                                        .max_w(px(112.))
+                                        .rounded_full()
+                                        .border_1()
+                                        .border_color(rgb(palette.accent))
+                                        .bg(rgb(palette.hover))
+                                        .px_2()
+                                        .py(px(1.))
+                                        .text_size(px(10.))
+                                        .font_weight(FontWeight(600.))
+                                        .text_color(rgb(palette.accent))
+                                        .overflow_hidden()
+                                        .child(truncate_preview(&category, 16)),
+                                )
+                            }),
                     )
                     .child(
                         div()
-                            .mt_4()
                             .flex()
-                            .items_center()
-                            .justify_between()
-                            .gap_2()
+                            .flex_col()
+                            .gap_3()
+                            .p_3()
+                            .when_some(description, |this, description| {
+                                this.child(
+                                    div()
+                                        .text_xs()
+                                        .line_height(px(18.))
+                                        .text_color(rgb(palette.text_muted))
+                                        .child(description.to_string()),
+                                )
+                            })
                             .child(
                                 div()
-                                    .text_size(px(10.))
-                                    .text_color(rgb(palette.text_muted))
-                                    .child(format!("ID {}", truncate_preview(&command_id, 42))),
-                            )
-                            .child(
-                                div()
-                                    .flex()
-                                    .items_center()
-                                    .gap_2()
-                                    .child(small_button(
-                                        palette,
-                                        "quick-command-details-edit",
-                                        "Edit",
-                                        cx.listener(move |this, _, window, cx| {
-                                            this.close_quick_command_details(cx);
-                                            this.open_edit_quick_command_editor(
-                                                edit_command_id.clone(),
-                                                window,
-                                                cx,
-                                            );
-                                        }),
-                                    ))
-                                    .child(small_button(
-                                        palette,
-                                        "quick-command-details-copy",
-                                        "Copy",
-                                        cx.listener(|this, _, _, cx| {
-                                            this.copy_quick_command_details(cx);
-                                        }),
-                                    ))
-                                    .child(small_button(
-                                        palette,
-                                        "quick-command-details-close",
-                                        "Close",
-                                        cx.listener(|this, _, _, cx| {
-                                            this.close_quick_command_details(cx);
-                                        }),
-                                    )),
+                                    .id(SharedString::from("quick-command-details-command-scroll"))
+                                    .max_h(px(120.))
+                                    .overflow_scroll()
+                                    .scrollbar_width(px(6.))
+                                    .rounded_md()
+                                    .border_1()
+                                    .border_color(rgb(palette.border))
+                                    .bg(rgb(palette.bg))
+                                    .p_2()
+                                    .font_family(crate::features::gpui_code_font_family())
+                                    .text_size(px(11.))
+                                    .line_height(px(17.))
+                                    .text_color(rgb(palette.text))
+                                    .child(command_text),
                             ),
                     ),
             )
     }
+}
+
+fn quick_command_details_popover_position(
+    x: f32,
+    y: f32,
+    popover_w: f32,
+    popover_h: f32,
+    viewport_w: f32,
+    viewport_h: f32,
+) -> (f32, f32) {
+    let margin = 8.0;
+    let max_x = (viewport_w - popover_w - margin).max(margin);
+    let max_y = (viewport_h - popover_h - margin).max(margin);
+    (x.clamp(margin, max_x), y.clamp(margin, max_y))
 }

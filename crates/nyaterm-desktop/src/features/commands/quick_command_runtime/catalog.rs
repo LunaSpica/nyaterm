@@ -1,6 +1,13 @@
 use super::*;
 
 impl NyaTermApp {
+    pub(in crate::features) fn close_quick_command_toolbar_popovers(&mut self) {
+        self.quick_command_sort_menu_open = false;
+        self.quick_command_view_menu_open = false;
+        self.quick_command_ai_popover_open = false;
+        self.quick_command_category_menu = None;
+    }
+
     pub(in crate::features) fn refresh_quick_commands(&mut self) {
         match ConnectionStore::open_with_portable_key_path(
             self.runtime.config_dir(),
@@ -24,7 +31,8 @@ impl NyaTermApp {
         mode: QuickCommandViewMode,
         cx: &mut Context<Self>,
     ) {
-        self.quick_command_menu_id = None;
+        self.quick_command_menu = None;
+        self.close_quick_command_toolbar_popovers();
         self.quick_command_view_mode = mode;
         self.settings.ui_quick_cmd_view_mode = quick_command_view_mode_setting(mode).to_string();
         self.save_quick_command_ui_settings(cx);
@@ -35,7 +43,8 @@ impl NyaTermApp {
         mode: QuickCommandSortMode,
         cx: &mut Context<Self>,
     ) {
-        self.quick_command_menu_id = None;
+        self.quick_command_menu = None;
+        self.close_quick_command_toolbar_popovers();
         self.quick_command_sort_mode = mode;
         self.settings.ui_quick_cmd_sort_mode = quick_command_sort_mode_setting(mode).to_string();
         self.save_quick_command_ui_settings(cx);
@@ -96,6 +105,81 @@ impl NyaTermApp {
                     cx.notify();
                 }
             }
+        }
+    }
+
+    pub(in crate::features) fn toggle_quick_command_ai_popover(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let next = !self.quick_command_ai_popover_open;
+        self.close_quick_command_toolbar_popovers();
+        self.quick_command_menu = None;
+        self.quick_command_ai_popover_open = next;
+        if next {
+            window.focus(&self.quick_command_ai_focus);
+        }
+        cx.notify();
+    }
+
+    pub(in crate::features) fn submit_quick_command_ai_prompt(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let prompt = self.quick_command_ai_prompt_draft.trim().to_string();
+        if prompt.is_empty() {
+            self.terminal_status = "describe a command to generate".to_string();
+            cx.notify();
+            return;
+        }
+
+        self.quick_command_ai_prompt_draft.clear();
+        self.close_quick_command_toolbar_popovers();
+        self.ai_prompt_draft = format!("Generate a shell command for: {prompt}");
+        self.ai_response_preview = "Quick command generation ready".to_string();
+        self.ai_status = "quick command AI assist".to_string();
+        self.ensure_panel_open(NavItem::AiAssistant);
+        window.focus(&self.ai_chat_focus);
+        cx.notify();
+    }
+
+    pub(in crate::features) fn handle_quick_command_ai_prompt_key_down(
+        &mut self,
+        event: &KeyDownEvent,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.mark_user_activity();
+        let keystroke = &event.keystroke;
+        if keystroke.modifiers.alt || keystroke.modifiers.control {
+            return;
+        }
+
+        match keystroke.key.as_str() {
+            "enter" => {
+                self.submit_quick_command_ai_prompt(window, cx);
+            }
+            "backspace" if !keystroke.modifiers.platform => {
+                self.quick_command_ai_prompt_draft.pop();
+                cx.notify();
+            }
+            "escape" => {
+                self.quick_command_ai_popover_open = false;
+                cx.notify();
+            }
+            _ if !keystroke.modifiers.platform => {
+                if let Some(input) = keystroke
+                    .key_char
+                    .as_deref()
+                    .filter(|input| !input.is_empty())
+                {
+                    self.quick_command_ai_prompt_draft.push_str(input);
+                    cx.notify();
+                }
+            }
+            _ => {}
         }
     }
 }

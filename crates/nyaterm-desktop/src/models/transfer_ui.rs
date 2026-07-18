@@ -80,6 +80,13 @@ pub(crate) struct TransferJobDeleteState {
     pub(crate) title: String,
 }
 
+#[derive(Debug, Clone, PartialEq)]
+pub(crate) struct TransferJobMenuState {
+    pub(crate) job_id: String,
+    pub(crate) x: Pixels,
+    pub(crate) y: Pixels,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct TransferNewFolderState {
     pub(crate) parent_path: String,
@@ -118,6 +125,7 @@ pub(crate) enum TransferPropertiesField {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct TransferPropertiesState {
+    pub(crate) session_id: Option<String>,
     pub(crate) entry: SftpFileEntry,
     pub(crate) properties: Option<SftpFileProperties>,
     pub(crate) mode_value: String,
@@ -131,6 +139,7 @@ pub(crate) struct TransferPropertiesState {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct TransferEditorState {
+    pub(crate) session_id: Option<String>,
     pub(crate) remote_path: String,
     pub(crate) name: String,
     pub(crate) content: String,
@@ -151,6 +160,7 @@ pub(crate) struct TransferEditorState {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct TransferExternalSyncPromptState {
+    pub(crate) session_id: Option<String>,
     pub(crate) job_id: String,
     pub(crate) remote_path: String,
     pub(crate) local_path: PathBuf,

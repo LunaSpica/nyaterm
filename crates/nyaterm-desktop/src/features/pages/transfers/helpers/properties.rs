@@ -141,12 +141,14 @@ pub(in crate::features::pages::transfers) fn property_input_row(
 
 pub(in crate::features::pages::transfers) fn transfer_properties_state_from_entry(
     entry: SftpFileEntry,
+    session_id: Option<String>,
 ) -> TransferPropertiesState {
     let mode_value = entry
         .permissions
         .map(format_permissions_octal)
         .unwrap_or_else(|| "0644".to_string());
     TransferPropertiesState {
+        session_id,
         owner_value: String::new(),
         group_value: String::new(),
         entry,

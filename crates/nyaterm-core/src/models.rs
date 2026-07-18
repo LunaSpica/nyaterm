@@ -927,6 +927,8 @@ pub struct AppSettingsSummary {
     pub ui_quick_cmd_view_mode: String,
     #[serde(default = "default_quick_cmd_sort_mode")]
     pub ui_quick_cmd_sort_mode: String,
+    #[serde(default = "default_saved_connections_sort_mode")]
+    pub ui_saved_connections_sort_mode: String,
     #[serde(default)]
     pub ui_file_explorer_auto_sync_cwd_connection_ids: Vec<String>,
     #[serde(default)]
@@ -937,6 +939,16 @@ pub struct AppSettingsSummary {
     pub ui_right_panel_width: u32,
     #[serde(default = "default_transfer_height")]
     pub ui_transfer_height: u32,
+    #[serde(default = "default_quick_cmd_height")]
+    pub ui_quick_cmd_height: u32,
+    /// Whether the Tauri-compatible Quick Commands bottom panel is visible.
+    #[serde(default = "default_true")]
+    pub ui_quick_cmd_visible: bool,
+    #[serde(default = "default_serial_send_height")]
+    pub ui_serial_send_height: u32,
+    /// Whether the Tauri-compatible Command Send bottom panel is visible.
+    #[serde(default)]
+    pub ui_serial_send_visible: bool,
     #[serde(default)]
     pub ui_active_left_panel: Option<String>,
     #[serde(default)]
@@ -1099,11 +1111,16 @@ impl Default for AppSettingsSummary {
             ui_docker_manager_interval: 10,
             ui_quick_cmd_view_mode: default_quick_cmd_view_mode(),
             ui_quick_cmd_sort_mode: default_quick_cmd_sort_mode(),
+            ui_saved_connections_sort_mode: default_saved_connections_sort_mode(),
             ui_file_explorer_auto_sync_cwd_connection_ids: Vec::new(),
             ui_file_explorer_favorite_dirs_by_connection_id: HashMap::new(),
             ui_left_panel_width: 256,
             ui_right_panel_width: 288,
             ui_transfer_height: 180,
+            ui_quick_cmd_height: 180,
+            ui_quick_cmd_visible: true,
+            ui_serial_send_height: 180,
+            ui_serial_send_visible: false,
             ui_active_left_panel: Some("fileExplorer".to_string()),
             ui_active_right_panel: Some("savedConnections".to_string()),
             ui_left_panel_collapsed: false,
@@ -1207,12 +1224,24 @@ fn default_transfer_height() -> u32 {
     180
 }
 
+fn default_quick_cmd_height() -> u32 {
+    180
+}
+
+fn default_serial_send_height() -> u32 {
+    180
+}
+
 fn default_quick_cmd_view_mode() -> String {
     "tile".to_string()
 }
 
 fn default_quick_cmd_sort_mode() -> String {
     "created".to_string()
+}
+
+fn default_saved_connections_sort_mode() -> String {
+    "default".to_string()
 }
 
 fn default_background_image_fit() -> String {

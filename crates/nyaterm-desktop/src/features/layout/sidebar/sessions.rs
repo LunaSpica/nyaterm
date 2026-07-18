@@ -76,26 +76,51 @@ impl NyaTermApp {
                     .items_center()
                     .gap_2()
                     .child(
-                        div().flex_1().min_w_0().child(
-                            transfer_input(
-                                "active-sessions-search-input",
-                                "Search sessions",
-                                self.active_sessions_search_draft.clone(),
-                                true,
-                                self.theme_palette(),
-                            )
+                        div()
+                            .id(SharedString::from("active-sessions-search-input"))
                             .h(px(28.))
+                            .flex_1()
+                            .min_w_0()
+                            .rounded_md()
+                            .bg(rgb(palette.hover))
+                            .px_2()
+                            .flex()
+                            .items_center()
+                            .gap_2()
+                            .cursor_text()
                             .track_focus(&self.active_sessions_search_focus)
                             .on_click(cx.listener(|this, _, window, cx| {
                                 window.focus(&this.active_sessions_search_focus);
                                 cx.notify();
                             }))
-                            .on_key_down(cx.listener(
-                                |this, event: &KeyDownEvent, _, cx| {
-                                    this.handle_active_sessions_search_key_down(event, cx);
-                                },
-                            )),
-                        ),
+                            .on_key_down(cx.listener(|this, event: &KeyDownEvent, _, cx| {
+                                cx.stop_propagation();
+                                this.handle_active_sessions_search_key_down(event, cx);
+                            }))
+                            .child(
+                                svg()
+                                    .size(px(14.))
+                                    .flex_none()
+                                    .path("icons/fe/search.svg")
+                                    .text_color(rgb(palette.text_dimmed)),
+                            )
+                            .child(
+                                div()
+                                    .min_w_0()
+                                    .flex_1()
+                                    .overflow_hidden()
+                                    .text_size(px(12.))
+                                    .text_color(if self.active_sessions_search_draft.is_empty() {
+                                        rgb(palette.text_dimmed)
+                                    } else {
+                                        rgb(palette.text)
+                                    })
+                                    .child(if self.active_sessions_search_draft.is_empty() {
+                                        "Search sessions".to_string()
+                                    } else {
+                                        self.active_sessions_search_draft.clone()
+                                    }),
+                            ),
                     )
                     .child(
                         div()
@@ -375,8 +400,6 @@ impl NyaTermApp {
         let palette = self.theme_palette();
         let session_id = session.id.clone();
         let rename_session_id = session.id.clone();
-        let reconnect_session_id = session.id.clone();
-        let close_session_id = session.id.clone();
         let menu_session_id = session.id.clone();
         let custom_color = self.session_tab_colors.get(&session.id).copied();
         let is_active = self.active_session_id.as_deref() == Some(session.id.as_str());
@@ -387,9 +410,6 @@ impl NyaTermApp {
             .is_some_and(|view| view.has_unread);
         let busy_action = self.active_session_busy_actions.get(&session.id).cloned();
         let is_busy = busy_action.is_some();
-        let menu_open = self.active_session_menu_id.as_deref() == Some(session.id.as_str());
-        let can_reconnect = !is_busy && !self.has_pending_session_start();
-        let can_disconnect = !is_busy && !is_disconnected;
         let accent = if let Some(custom_color) = custom_color {
             rgb(custom_color)
         } else if is_disconnected {
@@ -418,16 +438,6 @@ impl NyaTermApp {
         let full_id = session.id.clone();
         let id_preview = truncate_preview(&full_id, 42);
         let title = truncate_preview(&display_name, 32);
-        let reconnect_label = if busy_action.as_deref() == Some("reconnect") {
-            "Reconnecting…"
-        } else {
-            "Reconnect"
-        };
-        let disconnect_label = if busy_action.as_deref() == Some("disconnect") {
-            "Disconnecting…"
-        } else {
-            "Disconnect"
-        };
 
         div()
             .id(SharedString::from(format!(
@@ -510,124 +520,44 @@ impl NyaTermApp {
                                     {
                                         return;
                                     }
-                                    this.active_session_menu_id = None;
+                                    this.active_session_menu = None;
                                     this.open_rename_session(rename_session_id.clone(), window, cx);
                                 }),
                             ))
-                            .child(
-                                div()
-                                    .relative()
-                                    .child(session_action_svg_button(
-                                        palette,
-                                        format!("active-session-more-{menu_session_id}"),
-                                        "icons/session/more.svg",
-                                        !is_busy,
-                                        cx.listener(move |this, _, _, cx| {
-                                            cx.stop_propagation();
-                                            if this
-                                                .active_session_busy_actions
-                                                .contains_key(&menu_session_id)
-                                            {
-                                                return;
-                                            }
-                                            if this.active_session_menu_id.as_deref()
-                                                == Some(menu_session_id.as_str())
-                                            {
-                                                this.active_session_menu_id = None;
-                                            } else {
-                                                this.active_session_menu_id =
-                                                    Some(menu_session_id.clone());
-                                            }
-                                            cx.notify();
-                                        }),
-                                    ))
-                                    .when(menu_open, |this| {
-                                        this.child(
-                                            div()
-                                                .id(SharedString::from(format!(
-                                                    "active-session-menu-{session_id}"
-                                                )))
-                                                .absolute()
-                                                .top(px(30.))
-                                                .right(px(0.))
-                                                .w(px(148.))
-                                                .rounded_md()
-                                                .border_1()
-                                                .border_color(rgb(palette.border))
-                                                .bg(rgb(palette.surface))
-                                                .shadow_lg()
-                                                .py_1()
-                                                .on_mouse_down(MouseButton::Left, |_, _, cx| {
-                                                    cx.stop_propagation();
-                                                })
-                                                .child(active_session_menu_item(
-                                                    palette,
-                                                    format!(
-                                                        "active-session-reconnect-{reconnect_session_id}"
-                                                    ),
-                                                    reconnect_label,
-                                                    "icons/session/reconnect.svg",
-                                                    can_reconnect,
-                                                    busy_action.as_deref() == Some("reconnect"),
-                                                    false,
-                                                    cx.listener(move |this, _, window, cx| {
-                                                        cx.stop_propagation();
-                                                        this.active_session_menu_id = None;
-                                                        if this
-                                                            .active_session_busy_actions
-                                                            .contains_key(&reconnect_session_id)
-                                                            || this.has_pending_session_start()
-                                                        {
-                                                            cx.notify();
-                                                            return;
-                                                        }
-                                                        this.select_session(
-                                                            reconnect_session_id.clone(),
-                                                            cx,
-                                                        );
-                                                        this.reconnect_session(
-                                                            reconnect_session_id.clone(),
-                                                            window,
-                                                            cx,
-                                                        );
-                                                    }),
-                                                ))
-                                                .child(active_session_menu_item(
-                                                    palette,
-                                                    format!(
-                                                        "active-session-disconnect-{close_session_id}"
-                                                    ),
-                                                    disconnect_label,
-                                                    "icons/session/disconnect.svg",
-                                                    can_disconnect,
-                                                    busy_action.as_deref() == Some("disconnect"),
-                                                    true,
-                                                    cx.listener(move |this, _, _, cx| {
-                                                        cx.stop_propagation();
-                                                        this.active_session_menu_id = None;
-                                                        if this
-                                                            .active_session_busy_actions
-                                                            .contains_key(&close_session_id)
-                                                            || this.is_session_disconnected(
-                                                                &close_session_id,
-                                                            )
-                                                        {
-                                                            cx.notify();
-                                                            return;
-                                                        }
-                                                        this.disconnect_session(
-                                                            close_session_id.clone(),
-                                                            cx,
-                                                        );
-                                                    }),
-                                                )),
-                                        )
-                                    }),
-                            ),
+                            .child(session_action_svg_button(
+                                palette,
+                                format!("active-session-more-{menu_session_id}"),
+                                "icons/session/more.svg",
+                                !is_busy,
+                                cx.listener(move |this, event: &ClickEvent, _, cx| {
+                                    cx.stop_propagation();
+                                    if this
+                                        .active_session_busy_actions
+                                        .contains_key(&menu_session_id)
+                                    {
+                                        return;
+                                    }
+                                    let point = event.position();
+                                    if this
+                                        .active_session_menu
+                                        .as_ref()
+                                        .is_some_and(|menu| menu.session_id == menu_session_id)
+                                    {
+                                        this.active_session_menu = None;
+                                    } else {
+                                        this.active_session_menu = Some(ActiveSessionMenuState {
+                                            session_id: menu_session_id.clone(),
+                                            x: point.x,
+                                            y: point.y,
+                                        });
+                                    }
+                                    cx.notify();
+                                }),
+                            )),
                     ),
             )
             .on_click(cx.listener(move |this, _, _, cx| {
-                this.active_session_menu_id = None;
+                this.active_session_menu = None;
                 this.select_session(session_id.clone(), cx);
             }))
     }

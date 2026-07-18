@@ -133,7 +133,7 @@ impl NyaTermApp {
         .and_then(|store| {
             store
                 .append_ai_audit(AppendAiAuditRequest {
-                    connection_id: self.active_session_id.clone(),
+                    connection_id: self.ai_effective_target_session_id(),
                     action: if execute {
                         "ai.command_card_run".to_string()
                     } else {
@@ -162,7 +162,7 @@ impl NyaTermApp {
         &mut self,
         command: &str,
     ) -> Result<Option<String>, String> {
-        let Some(terminal_session_id) = self.active_session_id.clone() else {
+        let Some(terminal_session_id) = self.ai_effective_target_session_id() else {
             return Ok(None);
         };
         let task_prompt = self
@@ -236,7 +236,7 @@ impl NyaTermApp {
         command: &str,
         cx: &mut Context<Self>,
     ) -> Result<(), String> {
-        let Some(terminal_session_id) = self.active_session_id.clone() else {
+        let Some(terminal_session_id) = self.ai_effective_target_session_id() else {
             return Err(
                 "Start a terminal session before using AI Agent background execution".to_string(),
             );
@@ -248,9 +248,18 @@ impl NyaTermApp {
         let (target, target_label) = match session.kind {
             SessionKind::Ssh => {
                 let config = self
-                    .active_ssh_config
-                    .clone()
-                    .ok_or_else(|| "Active SSH session is missing its exec config".to_string())?;
+                    .session_metadata
+                    .get(&terminal_session_id)
+                    .and_then(|metadata| match &metadata.launch_config {
+                        SessionLaunchConfig::Ssh(config) => Some(config.clone()),
+                        _ => None,
+                    })
+                    .or_else(|| {
+                        (self.active_session_id.as_deref() == Some(terminal_session_id.as_str()))
+                            .then(|| self.active_ssh_config.clone())
+                            .flatten()
+                    })
+                    .ok_or_else(|| "Target SSH session is missing its exec config".to_string())?;
                 (AiAgentBackgroundTarget::Ssh(config), "SSH")
             }
             SessionKind::LocalPty => (
@@ -352,26 +361,32 @@ impl NyaTermApp {
         if self.ai_chat_pending {
             return false;
         }
-        let Some(state) = self.ai_agent_loop.as_mut() else {
+        let Some(state) = self.ai_agent_loop.as_ref() else {
             return false;
         };
         if state.background_job_id.is_some() {
             return false;
         }
-        if self.active_session_id.as_deref() != Some(state.terminal_session_id.as_str()) {
+        let terminal_session_id = state.terminal_session_id.clone();
+        if self.session_info(&terminal_session_id).is_none()
+            || self.is_session_disconnected(&terminal_session_id)
+        {
             let step_index = state.step_index;
             self.ai_agent_loop = None;
-            self.ai_status =
-                "AI Agent loop stopped because the terminal session changed".to_string();
+            self.ai_status = "AI Agent loop stopped because the target session closed".to_string();
             self.upsert_ai_agent_step(
                 step_index,
                 AiAgentStepStatus::Failed,
                 "Stopped",
-                "Terminal session changed",
+                "Target session closed",
             );
             let _ = cx;
             return true;
         }
+
+        let Some(state) = self.ai_agent_loop.as_mut() else {
+            return false;
+        };
 
         let now = Instant::now();
         let current_len = self

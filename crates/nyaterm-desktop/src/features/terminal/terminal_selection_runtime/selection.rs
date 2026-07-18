@@ -11,23 +11,16 @@ impl NyaTermApp {
         }
     }
 
-    pub(in crate::features) fn select_all_terminal_visible(&mut self, cx: &mut Context<Self>) {
-        let (rows, cols) = self.active_terminal_grid_size();
-        if rows == 0 || cols == 0 {
+    pub(in crate::features) fn select_all_terminal(&mut self, cx: &mut Context<Self>) {
+        let (_, cols) = self.active_terminal_grid_size();
+        if cols == 0 {
             self.terminal_selection = None;
             self.notify_active_terminal_surface(cx);
             return;
         }
-        let (display_offset, viewport_anchor_row) =
-            self.terminal_selection_viewport_state(self.active_session_id.as_deref());
-        self.terminal_selection = Some(TerminalSelection::from_range(
-            TerminalCellPos::new(0, 0),
-            TerminalCellPos::new(rows.saturating_sub(1), cols.saturating_sub(1)),
-            display_offset,
-            viewport_anchor_row,
-        ));
+        self.terminal_selection = Some(TerminalSelection::all_buffer(cols));
         self.terminal_selection_dragging = false;
-        self.terminal_status = "selected all visible terminal text".to_string();
+        self.terminal_status = "selected all terminal text".to_string();
         self.notify_active_terminal_surface(cx);
         cx.notify();
     }
@@ -36,6 +29,15 @@ impl NyaTermApp {
         let selection = self.terminal_selection.as_ref()?;
         if selection.is_empty() {
             return None;
+        }
+        if selection.all_buffer {
+            let lines = self
+                .active_session_id
+                .as_deref()
+                .and_then(|session_id| self.terminal_views.get(session_id))
+                .map(|view| view.screen.all_lines())
+                .unwrap_or_else(|| self.terminal_screen.all_lines());
+            return terminal_all_lines_text(lines);
         }
         let offset = selection.display_offset;
         let snapshot =
@@ -59,11 +61,7 @@ impl NyaTermApp {
             parts.push(slice.trim_end().to_string());
         }
         let text = parts.join("\n");
-        if text.trim().is_empty() {
-            None
-        } else {
-            Some(text)
-        }
+        if text.is_empty() { None } else { Some(text) }
     }
 
     pub(in crate::features) fn copy_terminal_selection(&mut self, cx: &mut Context<Self>) -> bool {
@@ -390,6 +388,16 @@ fn terminal_text_cell_is_word(cell: &TerminalTextCell, separators: &str) -> bool
         .is_some_and(|ch| !separators.contains(ch))
 }
 
+fn terminal_all_lines_text(lines: Vec<String>) -> Option<String> {
+    let text = lines
+        .into_iter()
+        .map(|line| line.trim_end().to_string())
+        .collect::<Vec<_>>()
+        .join("\n");
+    let text = text.trim_end_matches('\n').to_string();
+    if text.is_empty() { None } else { Some(text) }
+}
+
 fn terminal_selection_drag_flush_sessions(pending_sessions: &mut HashSet<String>) -> Vec<String> {
     let mut sessions = pending_sessions.drain().collect::<Vec<_>>();
     sessions.sort();
@@ -490,5 +498,18 @@ mod tests {
         assert_eq!(cells[0].byte_end, "a\u{fe0f}".len());
         assert_eq!(terminal_text_cell_slice(&cells, 0, 1), "a\u{fe0f}");
         assert_eq!(terminal_text_cell_slice(&cells, 1, 2), "x");
+    }
+
+    #[test]
+    fn terminal_all_lines_text_preserves_internal_blank_lines() {
+        assert_eq!(
+            terminal_all_lines_text(vec![
+                "first  ".to_string(),
+                String::new(),
+                "last".to_string(),
+                String::new(),
+            ]),
+            Some("first\n\nlast".to_string())
+        );
     }
 }

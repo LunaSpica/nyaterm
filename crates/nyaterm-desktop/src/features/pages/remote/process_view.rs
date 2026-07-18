@@ -7,7 +7,6 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
         let palette = self.theme_palette();
-        let can_list = self.active_ssh_config.is_some() && !self.process_pending;
         let normalized_query = self.process_search_draft.trim().to_ascii_lowercase();
         let mut filtered_processes = self
             .processes
@@ -230,6 +229,7 @@ impl NyaTermApp {
             .flex()
             .flex_col()
             .size_full()
+            .relative()
             .overflow_hidden()
             .bg(rgb(palette.surface))
             .child(
@@ -266,16 +266,6 @@ impl NyaTermApp {
                             )),
                         ),
                     )
-                    .child(div().when(!can_list, |this| this.opacity(0.45)).child(
-                        compact_remote_svg_button(
-                            palette,
-                            "process-refresh",
-                            "icons/fe/refresh.svg",
-                            cx.listener(|this, _, window, cx| {
-                                this.refresh_processes(window, cx);
-                            }),
-                        ),
-                    ))
                     .child(
                         div()
                             .flex()
@@ -298,9 +288,6 @@ impl NyaTermApp {
                             ),
                     ),
             )
-            .when_some(self.process_signal_confirm.clone(), |this, confirm| {
-                this.child(process_signal_confirm_panel(palette, confirm, cx))
-            })
             .child(
                 // Column header follows Tauri mode: hide Mem (narrow) / User (non-wide); compact label strip.
                 div()
@@ -439,5 +426,8 @@ impl NyaTermApp {
                     }))
                     .child(rows),
             )
+            .when_some(self.process_signal_confirm.clone(), |this, confirm| {
+                this.child(process_signal_confirm_panel(palette, confirm, cx))
+            })
     }
 }

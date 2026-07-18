@@ -33,6 +33,7 @@ impl NyaTermApp {
             .then(|| self.duplicate_prompts.clone() as Arc<dyn SftpDuplicateResolver>);
         let transfer_options = self.sftp_transfer_options();
         self.enqueue_sftp_download_job_for_target(
+            self.active_session_id.clone(),
             config,
             remote_path,
             local_path,
@@ -45,6 +46,7 @@ impl NyaTermApp {
 
     pub(in crate::features) fn enqueue_sftp_download_job_for_target(
         &mut self,
+        session_id: Option<String>,
         config: SshSessionConfig,
         remote_path: String,
         local_path: PathBuf,
@@ -57,6 +59,7 @@ impl NyaTermApp {
         let control = SftpTransferControl::new();
         self.transfer_jobs.push(TransferJobState {
             id: id.clone(),
+            session_id,
             kind: TransferJobKind::Download {
                 remote_path: remote_path.clone(),
                 local_path: local_path.clone(),
@@ -121,10 +124,35 @@ impl NyaTermApp {
         let duplicate_resolver = (duplicate_policy == SftpDuplicatePolicy::Ask)
             .then(|| self.duplicate_prompts.clone() as Arc<dyn SftpDuplicateResolver>);
         let transfer_options = self.sftp_transfer_options();
+        let session_id = self.active_session_id.clone();
+        self.enqueue_sftp_upload_job_for_target(
+            session_id,
+            config,
+            local_path,
+            remote_path,
+            duplicate_policy,
+            duplicate_resolver,
+            transfer_options,
+            cx,
+        );
+    }
+
+    pub(in crate::features) fn enqueue_sftp_upload_job_for_target(
+        &mut self,
+        session_id: Option<String>,
+        config: SshSessionConfig,
+        local_path: PathBuf,
+        remote_path: String,
+        duplicate_policy: SftpDuplicatePolicy,
+        duplicate_resolver: Option<Arc<dyn SftpDuplicateResolver>>,
+        transfer_options: SftpTransferOptions,
+        cx: &mut Context<Self>,
+    ) {
         let id = self.next_transfer_id("sftp-upload");
         let control = SftpTransferControl::new();
         self.transfer_jobs.push(TransferJobState {
             id: id.clone(),
+            session_id,
             kind: TransferJobKind::Upload {
                 local_path: local_path.clone(),
                 remote_path: remote_path.clone(),
@@ -433,9 +461,11 @@ impl NyaTermApp {
     }
 
     pub(in crate::features) fn pause_all_transfer_jobs(&mut self, cx: &mut Context<Self>) {
+        let active_session_id = self.active_session_id.clone();
         let mut changed = 0;
         for job in &mut self.transfer_jobs {
-            if job.status == TransferJobStatus::Running
+            if job.is_visible_for_session(active_session_id.as_deref())
+                && job.status == TransferJobStatus::Running
                 && let Some(control) = job.control.as_ref()
             {
                 control.pause();
@@ -453,9 +483,11 @@ impl NyaTermApp {
     }
 
     pub(in crate::features) fn resume_all_transfer_jobs(&mut self, cx: &mut Context<Self>) {
+        let active_session_id = self.active_session_id.clone();
         let mut changed = 0;
         for job in &mut self.transfer_jobs {
-            if job.status == TransferJobStatus::Paused
+            if job.is_visible_for_session(active_session_id.as_deref())
+                && job.status == TransferJobStatus::Paused
                 && let Some(control) = job.control.as_ref()
             {
                 control.resume();
@@ -473,12 +505,15 @@ impl NyaTermApp {
     }
 
     pub(in crate::features) fn cancel_all_transfer_jobs(&mut self, cx: &mut Context<Self>) {
+        let active_session_id = self.active_session_id.clone();
         let mut changed = 0;
         for job in &mut self.transfer_jobs {
-            if matches!(
-                job.status,
-                TransferJobStatus::Running | TransferJobStatus::Paused
-            ) && let Some(control) = job.control.as_ref()
+            if job.is_visible_for_session(active_session_id.as_deref())
+                && matches!(
+                    job.status,
+                    TransferJobStatus::Running | TransferJobStatus::Paused
+                )
+                && let Some(control) = job.control.as_ref()
             {
                 control.cancel();
                 job.status = TransferJobStatus::Cancelling;
@@ -495,9 +530,12 @@ impl NyaTermApp {
     }
 
     pub(in crate::features) fn clear_completed_transfer_jobs(&mut self, cx: &mut Context<Self>) {
+        let active_session_id = self.active_session_id.clone();
         let before = self.transfer_jobs.len();
-        self.transfer_jobs
-            .retain(|job| job.status != TransferJobStatus::Completed);
+        self.transfer_jobs.retain(|job| {
+            !job.is_visible_for_session(active_session_id.as_deref())
+                || job.status != TransferJobStatus::Completed
+        });
         let removed = before.saturating_sub(self.transfer_jobs.len());
         self.terminal_status = if removed == 0 {
             "no completed transfer jobs to clear".to_string()
@@ -508,14 +546,16 @@ impl NyaTermApp {
     }
 
     pub(in crate::features) fn clear_stopped_transfer_jobs(&mut self, cx: &mut Context<Self>) {
+        let active_session_id = self.active_session_id.clone();
         let before = self.transfer_jobs.len();
         self.transfer_jobs.retain(|job| {
-            matches!(
-                job.status,
-                TransferJobStatus::Running
-                    | TransferJobStatus::Paused
-                    | TransferJobStatus::Cancelling
-            )
+            !job.is_visible_for_session(active_session_id.as_deref())
+                || matches!(
+                    job.status,
+                    TransferJobStatus::Running
+                        | TransferJobStatus::Paused
+                        | TransferJobStatus::Cancelling
+                )
         });
         let removed = before.saturating_sub(self.transfer_jobs.len());
         self.terminal_status = if removed == 0 {

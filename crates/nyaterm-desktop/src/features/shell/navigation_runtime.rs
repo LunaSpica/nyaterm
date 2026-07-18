@@ -7,6 +7,13 @@ impl NyaTermApp {
 
     pub(in crate::features) fn open_page(&mut self, item: NavItem, cx: &mut Context<Self>) {
         if item == NavItem::Settings || item.opens_settings() {
+            if self.main_mode != MainMode::Page {
+                self.settings_previous_left_collapsed = Some(self.left_sidebar_collapsed);
+                self.settings_previous_right_collapsed = Some(self.right_inspector_collapsed);
+            }
+            if let Some(group) = self.settings_active_tab.expandable_group_id() {
+                self.settings_expanded_groups.insert(group.to_string());
+            }
             self.main_mode = MainMode::Page;
             self.selected_nav = NavItem::Settings;
             self.left_sidebar_collapsed = true;
@@ -99,16 +106,14 @@ impl NyaTermApp {
 
     pub(in crate::features) fn close_settings(&mut self, cx: &mut Context<Self>) {
         self.main_mode = MainMode::Workspace;
-        if self.active_left_panel.is_none() {
-            self.left_sidebar_collapsed = true;
-        } else {
-            self.left_sidebar_collapsed = false;
-        }
-        if self.active_right_panel.is_none() {
-            self.right_inspector_collapsed = true;
-        } else {
-            self.right_inspector_collapsed = false;
-        }
+        self.left_sidebar_collapsed = self
+            .settings_previous_left_collapsed
+            .take()
+            .unwrap_or_else(|| self.active_left_panel.is_none());
+        self.right_inspector_collapsed = self
+            .settings_previous_right_collapsed
+            .take()
+            .unwrap_or_else(|| self.active_right_panel.is_none());
         self.terminal_status = "workspace restored".to_string();
         self.persist_ui_layout();
         cx.notify();
@@ -141,6 +146,32 @@ impl NyaTermApp {
             self.terminal_status = "right sidebar collapsed".to_string();
         }
         self.persist_ui_layout();
+        cx.notify();
+    }
+
+    pub(in crate::features) fn toggle_mobile_left_drawer(&mut self, cx: &mut Context<Self>) {
+        if self.mobile_left_open {
+            self.mobile_left_open = false;
+        } else {
+            if self.active_left_panel.is_none() {
+                self.active_left_panel = Some(NavItem::Transfers);
+            }
+            self.left_sidebar_collapsed = false;
+            self.mobile_left_open = true;
+        }
+        cx.notify();
+    }
+
+    pub(in crate::features) fn toggle_mobile_right_drawer(&mut self, cx: &mut Context<Self>) {
+        if self.mobile_right_open {
+            self.mobile_right_open = false;
+        } else {
+            if self.active_right_panel.is_none() {
+                self.active_right_panel = Some(NavItem::Connections);
+            }
+            self.right_inspector_collapsed = false;
+            self.mobile_right_open = true;
+        }
         cx.notify();
     }
 

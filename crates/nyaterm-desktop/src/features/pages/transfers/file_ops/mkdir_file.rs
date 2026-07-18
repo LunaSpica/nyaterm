@@ -115,6 +115,7 @@ impl NyaTermApp {
         let id = self.next_transfer_id("sftp-mkdir");
         self.transfer_jobs.push(TransferJobState {
             id: id.clone(),
+            session_id: self.active_session_id.clone(),
             kind: TransferJobKind::Mkdir {
                 remote_path: remote_path.clone(),
                 parent_path: parent_path.clone(),
@@ -258,6 +259,7 @@ impl NyaTermApp {
         let id = self.next_transfer_id("sftp-create-file");
         self.transfer_jobs.push(TransferJobState {
             id: id.clone(),
+            session_id: self.active_session_id.clone(),
             kind: TransferJobKind::CreateFile {
                 remote_path: remote_path.clone(),
                 parent_path: parent_path.clone(),

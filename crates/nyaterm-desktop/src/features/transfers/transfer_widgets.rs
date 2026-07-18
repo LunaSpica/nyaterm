@@ -186,46 +186,6 @@ pub(in crate::features) fn transfer_status_label(status: TransferJobStatus) -> &
     }
 }
 
-pub(in crate::features) fn transfer_progress_bar(
-    palette: ThemePalette,
-    progress: &SftpTransferProgress,
-) -> gpui::AnyElement {
-    let percent = progress
-        .total_bytes
-        .filter(|total| *total > 0)
-        .map(|total| progress.bytes_transferred as f32 / total as f32)
-        .unwrap_or(0.)
-        .clamp(0., 1.);
-
-    div()
-        .mt_3()
-        .flex()
-        .flex_col()
-        .gap_1()
-        .child(
-            div()
-                .h(px(6.))
-                .w_full()
-                .overflow_hidden()
-                .rounded_sm()
-                .bg(rgb(palette.border))
-                .child(
-                    div()
-                        .h(px(6.))
-                        .w(px(260. * percent))
-                        .rounded_sm()
-                        .bg(rgb(0x38bdf8)),
-                ),
-        )
-        .child(
-            div()
-                .text_xs()
-                .text_color(rgb(palette.text_muted))
-                .child(format_transfer_progress(progress)),
-        )
-        .into_any_element()
-}
-
 pub(in crate::features) fn format_transfer_progress(progress: &SftpTransferProgress) -> String {
     let transferred = format_file_size(Some(progress.bytes_transferred));
     match progress.total_bytes.filter(|total| *total > 0) {

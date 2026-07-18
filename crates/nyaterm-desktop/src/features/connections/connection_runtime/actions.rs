@@ -131,6 +131,9 @@ impl NyaTermApp {
 
     pub(in crate::features) fn cycle_connection_sort_mode(&mut self, cx: &mut Context<Self>) {
         self.connection_sort_mode = self.connection_sort_mode.next();
+        self.settings.ui_saved_connections_sort_mode =
+            self.connection_sort_mode.persistence_id().to_string();
+        self.persist_ui_layout();
         self.connection_list_offset = 0;
         self.terminal_status = format!(
             "connections sorted by {}",

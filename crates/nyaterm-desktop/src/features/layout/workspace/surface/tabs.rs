@@ -566,171 +566,39 @@ impl NyaTermApp {
             );
         }
 
-        session_actions = session_actions
-            .child(
-                div()
-                    .relative()
-                    .h_full()
-                    .child(
-                        div()
-                            .id("workspace-new-session-menu")
-                            .h_full()
-                            .w(px(36.))
-                            .flex()
-                            .items_center()
-                            .justify_center()
-                            .border_r_1()
-                            .border_color(rgb(palette.border))
-                            .bg(if new_session_menu {
-                                rgb(palette.hover)
-                            } else {
-                                rgb(palette.surface)
-                            })
-                            .text_size(px(16.))
-                            .font_weight(FontWeight(700.))
-                            .text_color(rgb(palette.text_muted))
-                            .cursor_pointer()
-                            .hover(|this| this.bg(rgb(palette.hover)).text_color(rgb(palette.text)))
-                            .child("+")
-                            .on_click(cx.listener(|this, _, _, cx| {
-                                this.toggle_new_session_menu(cx);
-                            })),
-                    )
-                    .when(new_session_menu, |this| {
-                        this.child(self.render_new_session_menu(cx))
-                    }),
-            )
-            .child(
-                div()
-                    .h_full()
-                    .flex()
-                    .items_center()
-                    .gap_1()
-                    .px_2()
-                    .child(small_button(
-                        palette,
-                        "workspace-quick-switch",
-                        "Switch",
-                        cx.listener(|this, _, window, cx| {
-                            this.close_open_tabs_menu(cx);
-                            this.close_new_session_menu(cx);
-                            this.open_quick_switch(window, cx);
-                        }),
-                    )),
-            );
-        if self.active_session_id.is_some() {
-            session_actions = session_actions
-                .child(small_button(
-                    palette,
-                    "workspace-split-horizontal",
-                    "H",
-                    cx.listener(|this, _, window, cx| {
-                        this.split_workspace_with_duplicate(
-                            WorkspaceSplitDirection::Horizontal,
-                            window,
-                            cx,
-                        );
-                    }),
-                ))
-                .child(small_button(
-                    palette,
-                    "workspace-split-vertical",
-                    "V",
-                    cx.listener(|this, _, window, cx| {
-                        this.split_workspace_with_duplicate(
-                            WorkspaceSplitDirection::Vertical,
-                            window,
-                            cx,
-                        );
-                    }),
-                ))
-                .child(small_button(
-                    palette,
-                    "workspace-window-right",
-                    "W|",
-                    cx.listener(|this, _, _, cx| {
-                        this.split_active_tab_to_new_window_leaf(
-                            WorkspaceSplitDirection::Vertical,
-                            SplitEdge::After,
-                            cx,
-                        );
-                    }),
-                ))
-                .child(small_button(
-                    palette,
-                    "workspace-window-below",
-                    "W—",
-                    cx.listener(|this, _, _, cx| {
-                        this.split_active_tab_to_new_window_leaf(
-                            WorkspaceSplitDirection::Horizontal,
-                            SplitEdge::After,
-                            cx,
-                        );
-                    }),
-                ))
-                .child(small_button(
-                    palette,
-                    "workspace-smart-split",
-                    "Tile",
-                    cx.listener(|this, _, _, cx| {
-                        this.apply_smart_split(SmartSplitMode::Auto, cx);
-                    }),
-                ));
-        }
-        if self.terminal_windows_is_multi_leaf() {
-            session_actions = session_actions.child(small_button(
-                palette,
-                "workspace-window-merge",
-                "Merge",
-                cx.listener(|this, _, _, cx| {
-                    this.close_terminal_window_layout(cx);
+        session_actions = session_actions.child(
+            div()
+                .relative()
+                .h_full()
+                .child(
+                    div()
+                        .id("workspace-new-session-menu")
+                        .h_full()
+                        .w(px(36.))
+                        .flex()
+                        .items_center()
+                        .justify_center()
+                        .border_r_1()
+                        .border_color(rgb(palette.border))
+                        .bg(if new_session_menu {
+                            rgb(palette.hover)
+                        } else {
+                            rgb(palette.surface)
+                        })
+                        .text_size(px(16.))
+                        .font_weight(FontWeight(700.))
+                        .text_color(rgb(palette.text_muted))
+                        .cursor_pointer()
+                        .hover(|this| this.bg(rgb(palette.hover)).text_color(rgb(palette.text)))
+                        .child("+")
+                        .on_click(cx.listener(|this, _, _, cx| {
+                            this.toggle_new_session_menu(cx);
+                        })),
+                )
+                .when(new_session_menu, |this| {
+                    this.child(self.render_new_session_menu(cx))
                 }),
-            ));
-        }
-        if self
-            .active_session_id
-            .as_deref()
-            .map(|id| self.tab_root_for_session(id))
-            .and_then(|root| self.session_pane_roots.get(&root))
-            .is_some_and(|root| root.is_split())
-            || self.workspace_split.is_some()
-        {
-            session_actions = session_actions
-                .child(small_button(
-                    palette,
-                    "workspace-split-ratio-dec",
-                    "−",
-                    cx.listener(|this, _, _, cx| {
-                        this.adjust_workspace_split_ratio(-5, cx);
-                    }),
-                ))
-                .child(small_button(
-                    palette,
-                    "workspace-split-ratio-inc",
-                    "+",
-                    cx.listener(|this, _, _, cx| {
-                        this.adjust_workspace_split_ratio(5, cx);
-                    }),
-                ))
-                .child(small_button(
-                    palette,
-                    "workspace-unsplit",
-                    "Unsplit",
-                    cx.listener(|this, _, _, cx| {
-                        this.unsplit_workspace(cx);
-                    }),
-                ));
-        }
-        if session_count > 0 {
-            session_actions = session_actions.child(small_button(
-                palette,
-                "workspace-close-all-sessions",
-                "All",
-                cx.listener(|this, _, window, cx| {
-                    this.open_close_all_sessions_confirm(window, cx);
-                }),
-            ));
-        }
+        );
 
         div()
             .h(px(36.)) // Tauri TabBar: h-9

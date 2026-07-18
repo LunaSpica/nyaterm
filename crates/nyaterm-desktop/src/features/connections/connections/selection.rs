@@ -123,34 +123,48 @@ impl NyaTermApp {
                     .name
                     .to_ascii_lowercase()
                     .cmp(&left.name.to_ascii_lowercase()),
-                crate::models::ConnectionSortMode::Recent => right
-                    .last_used_at_ms
-                    .unwrap_or(0)
-                    .cmp(&left.last_used_at_ms.unwrap_or(0))
-                    .then_with(|| {
-                        left.name
-                            .to_ascii_lowercase()
-                            .cmp(&right.name.to_ascii_lowercase())
-                    }),
+            });
+        }
+
+        let group_ids = self
+            .connection_groups
+            .iter()
+            .map(|group| group.id.clone())
+            .collect::<std::collections::HashSet<_>>();
+        let mut children_by_parent: std::collections::HashMap<
+            Option<String>,
+            Vec<nyaterm_core::Group>,
+        > = std::collections::HashMap::new();
+        for group in &self.connection_groups {
+            let parent_id = group
+                .parent_id
+                .clone()
+                .filter(|parent_id| group_ids.contains(parent_id));
+            let mut group = group.clone();
+            group.parent_id = parent_id.clone();
+            children_by_parent.entry(parent_id).or_default().push(group);
+        }
+        for groups in children_by_parent.values_mut() {
+            groups.sort_by(|left, right| {
+                left.sort_order.cmp(&right.sort_order).then_with(|| {
+                    left.name
+                        .to_ascii_lowercase()
+                        .cmp(&right.name.to_ascii_lowercase())
+                })
             });
         }
 
         let mut ids = Vec::new();
-        let mut ordered_groups = self.connection_groups.clone();
-        ordered_groups.sort_by(|left, right| {
-            left.sort_order.cmp(&right.sort_order).then_with(|| {
-                left.name
-                    .to_ascii_lowercase()
-                    .cmp(&right.name.to_ascii_lowercase())
-            })
-        });
+        let mut visited = std::collections::HashSet::new();
         // Groups first, ungrouped last (matches connection_sections / Tauri).
-        for group in ordered_groups {
-            if let Some(list) = by_group.remove(&Some(group.id)) {
-                for connection in list {
-                    ids.push(connection.id.clone());
-                }
-            }
+        for group in children_by_parent.get(&None).cloned().unwrap_or_default() {
+            append_visible_connection_ids(
+                group,
+                &children_by_parent,
+                &mut by_group,
+                &mut ids,
+                &mut visited,
+            );
         }
         if let Some(root) = by_group.remove(&None) {
             for connection in root {
@@ -241,5 +255,29 @@ impl NyaTermApp {
         self.store_status.message = "saved connections copied".to_string();
         self.store_status.ready = true;
         Ok(connections.len())
+    }
+}
+
+fn append_visible_connection_ids<'a>(
+    group: nyaterm_core::Group,
+    children_by_parent: &std::collections::HashMap<Option<String>, Vec<nyaterm_core::Group>>,
+    by_group: &mut std::collections::HashMap<Option<String>, Vec<&'a SavedConnection>>,
+    ids: &mut Vec<String>,
+    visited: &mut std::collections::HashSet<String>,
+) {
+    if !visited.insert(group.id.clone()) {
+        return;
+    }
+    for child in children_by_parent
+        .get(&Some(group.id.clone()))
+        .cloned()
+        .unwrap_or_default()
+    {
+        append_visible_connection_ids(child, children_by_parent, by_group, ids, visited);
+    }
+    if let Some(list) = by_group.remove(&Some(group.id)) {
+        for connection in list {
+            ids.push(connection.id.clone());
+        }
     }
 }

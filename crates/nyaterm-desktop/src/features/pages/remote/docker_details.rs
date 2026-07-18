@@ -6,30 +6,72 @@ pub(in crate::features::pages::remote) fn docker_details_panel(
     details: Option<DockerContainerDetails>,
     container: Option<DockerContainer>,
     cx: &mut Context<NyaTermApp>,
-) -> impl IntoElement {
+) -> gpui::AnyElement {
     let Some(details) = details else {
-        return div()
-            .rounded_md()
-            .border_1()
-            .border_color(rgb(palette.border))
-            .bg(rgb(palette.bg))
-            .p_2()
+        let details_id = container_id
+            .as_deref()
+            .map(compact_id)
+            .unwrap_or_else(|| "unknown".to_string());
+        let card = div()
+            .p_4()
             .flex()
             .flex_col()
-            .gap_1()
+            .gap_3()
             .child(
                 div()
-                    .text_xs()
-                    .font_weight(FontWeight(700.))
-                    .text_color(rgb(palette.text))
-                    .child("Container Details"),
+                    .flex()
+                    .items_center()
+                    .justify_between()
+                    .gap_3()
+                    .child(
+                        div()
+                            .min_w_0()
+                            .text_sm()
+                            .font_weight(FontWeight(700.))
+                            .text_color(rgb(palette.text))
+                            .child("Container Details"),
+                    )
+                    .when_some(container_id.clone(), |this, _| {
+                        this.child(small_button(
+                            palette,
+                            "docker-details-loading-close",
+                            "Close",
+                            cx.listener(|this, _, _, cx| {
+                                this.close_docker_details(cx);
+                            }),
+                        ))
+                    }),
             )
             .child(
                 div()
-                    .text_size(px(11.))
-                    .text_color(rgb(palette.text_dimmed))
-                    .child("Select Details on a container to load inspect data, stats, mounts, and networks."),
+                    .rounded_sm()
+                    .border_1()
+                    .border_color(rgb(palette.border))
+                    .bg(rgb(palette.section_header))
+                    .p_3()
+                    .flex()
+                    .items_center()
+                    .justify_between()
+                    .gap_3()
+                    .child(
+                        div()
+                            .text_size(px(11.))
+                            .text_color(rgb(palette.text_dimmed))
+                            .child("Loading inspect data, stats, mounts, and networks..."),
+                    )
+                    .child(
+                        div()
+                            .rounded_sm()
+                            .px_2()
+                            .py_1()
+                            .text_xs()
+                            .text_color(rgb(0x93c5fd))
+                            .bg(rgb(0x17233a))
+                            .child(details_id),
+                    ),
             );
+
+        return modal_dialog_shell(palette, "docker-details-modal", 680., card).into_any_element();
     };
 
     let mut mounts = div().flex().flex_col().gap_1();
@@ -159,11 +201,9 @@ pub(in crate::features::pages::remote) fn docker_details_panel(
             .child(details_id),
     );
 
-    div()
-        .rounded_md()
-        .border_1()
-        .border_color(rgb(palette.border))
-        .bg(rgb(palette.bg))
+    let card = div()
+        .max_h(px(640.))
+        .overflow_hidden()
         .p_4()
         .flex()
         .flex_col()
@@ -450,7 +490,9 @@ pub(in crate::features::pages::remote) fn docker_details_panel(
                     cx,
                 ))
                 .child(mounts),
-        )
+        );
+
+    modal_dialog_shell(palette, "docker-details-modal", 680., card).into_any_element()
 }
 
 fn docker_detail_line(

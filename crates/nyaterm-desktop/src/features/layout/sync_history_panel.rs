@@ -100,18 +100,18 @@ impl NyaTermApp {
             .child(
                 div()
                     .flex_none()
-                    .h(px(36.))
-                    .px_2()
+                    .px_3()
+                    .py(px(10.))
                     .border_b_1()
                     .border_color(rgb(palette.border))
-                    .bg(rgb(palette.section_header))
+                    .bg(rgb(palette.surface))
                     .flex()
-                    .items_center()
+                    .flex_col()
+                    .gap_1()
                     .child(
                         div()
                             .flex()
                             .min_w_0()
-                            .flex_1()
                             .items_center()
                             .gap_2()
                             .child(
@@ -125,7 +125,7 @@ impl NyaTermApp {
                                 div()
                                     .text_size(px(11.))
                                     .text_color(rgb(palette.text_muted))
-                                    .child("State"),
+                                    .child("Current state"),
                             )
                             .child(
                                 div()
@@ -168,11 +168,11 @@ impl NyaTermApp {
                         |this| {
                             this.child(
                                 div()
-                                    .mt_1()
                                     .pl_4()
-                                    .text_size(px(11.))
+                                    .text_size(px(12.))
+                                    .line_height(px(18.))
                                     .text_color(rgb(palette.text_muted))
-                                    .child(truncate_preview(&status_message, 120)),
+                                    .child(truncate_preview(&status_message, 140)),
                             )
                         },
                     ),
@@ -275,68 +275,6 @@ impl NyaTermApp {
                         ),
                 )
             })
-            .child(
-                div()
-                    .flex_none()
-                    .px_3()
-                    .py_1()
-                    .border_b_1()
-                    .border_color(rgb(palette.surface_elevated))
-                    .flex()
-                    .items_center()
-                    .justify_between()
-                    .gap_2()
-                    .child(
-                        div()
-                            .text_size(px(10.))
-                            .font_weight(FontWeight(700.))
-                            .text_color(rgb(palette.text_dimmed))
-                            .child("HISTORY"),
-                    )
-                    .child(
-                        div()
-                            .flex()
-                            .items_center()
-                            .gap_1()
-                            .child(small_button(
-                                palette,
-                                "sync-panel-push",
-                                "Push",
-                                cx.listener(|this, _, _, cx| {
-                                    if configured_cloud_sync_provider(&this.cloud_sync_settings)
-                                        != "local_directory"
-                                    {
-                                        this.prompt_provider_cloud_sync_push(cx);
-                                    } else {
-                                        this.prompt_local_cloud_sync_push(cx);
-                                    }
-                                }),
-                            ))
-                            .child(small_button(
-                                palette,
-                                "sync-panel-pull",
-                                "Pull",
-                                cx.listener(|this, _, _, cx| {
-                                    if configured_cloud_sync_provider(&this.cloud_sync_settings)
-                                        != "local_directory"
-                                    {
-                                        this.prompt_provider_cloud_sync_pull(cx);
-                                    } else {
-                                        this.prompt_local_cloud_sync_pull(cx);
-                                    }
-                                }),
-                            ))
-                            .child(small_button(
-                                palette,
-                                "sync-panel-settings",
-                                "Settings",
-                                cx.listener(|this, _, _, cx| {
-                                    this.settings_active_tab = SettingsTab::SyncBackup;
-                                    this.open_page(NavItem::Settings, cx);
-                                }),
-                            )),
-                    ),
-            )
             .child(
                 div()
                     .id(SharedString::from("sync-backup-history-list"))

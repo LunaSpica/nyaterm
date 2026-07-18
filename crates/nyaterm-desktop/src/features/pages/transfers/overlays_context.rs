@@ -18,10 +18,17 @@ impl NyaTermApp {
                     x: px(24.),
                     y: px(24.),
                 });
-        let selected_file_ai_actions = self
-            .selected_transfer_entry()
+        let selected_entry = self.selected_transfer_entry();
+        let show_open_internal = selected_entry
+            .as_ref()
+            .is_some_and(|entry| self.show_transfer_open_internal_menu_entry(entry));
+        let show_open_external = selected_entry
+            .as_ref()
+            .is_some_and(|entry| self.show_transfer_open_external_menu_entry(entry));
+        let selected_file_ai_actions = selected_entry
+            .as_ref()
             .filter(|entry| entry.file_type != SftpFileType::Directory)
-            .map(|entry| self.enabled_transfer_file_ai_actions_for_entry(&entry))
+            .map(|entry| self.enabled_transfer_file_ai_actions_for_entry(entry))
             .unwrap_or_default();
         let has_ai_actions = !selected_file_ai_actions.is_empty();
 
@@ -287,7 +294,7 @@ impl NyaTermApp {
                                         this.open_selected_transfer_default(window, cx);
                                     }),
                                 ))
-                                .when(!state.is_directory, |this| {
+                                .when(show_open_internal, |this| {
                                     this.child(context_menu_button(
                                         palette,
                                         "transfer-context-open-internal",
@@ -297,17 +304,17 @@ impl NyaTermApp {
                                             this.open_selected_transfer_editor(window, cx);
                                         }),
                                     ))
-                                    .child(
-                                        context_menu_button(
-                                            palette,
-                                            "transfer-context-open-external",
-                                            "Open External",
-                                            cx.listener(|this, _, window, cx| {
-                                                this.close_transfer_browser_context_menu(cx);
-                                                this.open_selected_transfer_external(window, cx);
-                                            }),
-                                        ),
-                                    )
+                                })
+                                .when(show_open_external, |this| {
+                                    this.child(context_menu_button(
+                                        palette,
+                                        "transfer-context-open-external",
+                                        "Open External",
+                                        cx.listener(|this, _, window, cx| {
+                                            this.close_transfer_browser_context_menu(cx);
+                                            this.open_selected_transfer_external(window, cx);
+                                        }),
+                                    ))
                                 })
                                 .child(context_menu_button(
                                     palette,

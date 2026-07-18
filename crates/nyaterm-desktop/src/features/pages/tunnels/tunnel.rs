@@ -10,6 +10,3 @@ pub(in crate::features::pages::tunnels) use row::*;
 #[path = "tunnel/editor.rs"]
 mod editor;
 pub(in crate::features::pages::tunnels) use editor::*;
-#[path = "tunnel/filters.rs"]
-mod filters;
-pub(in crate::features::pages::tunnels) use filters::*;

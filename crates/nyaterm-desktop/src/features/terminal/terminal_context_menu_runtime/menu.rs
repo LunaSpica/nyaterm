@@ -15,6 +15,7 @@ impl NyaTermApp {
             x: event.position.x,
             y: event.position.y,
             selected_text,
+            submenu: None,
         });
         self.terminal_status = "terminal context menu opened".to_string();
         cx.notify();
@@ -36,7 +37,7 @@ impl NyaTermApp {
             return div().into_any_element();
         };
         let selected = menu.selected_text.clone();
-        let has_selection = !selected.trim().is_empty();
+        let has_selection = !selected.is_empty();
         let shortcut = |id: &str, fallback: &str| self.display_shortcut_for(id, fallback);
         let copy_sc = shortcut("terminal.copy", "Ctrl+Shift+C");
         let paste_sc = shortcut("terminal.paste", "Ctrl+Shift+V");
@@ -46,8 +47,6 @@ impl NyaTermApp {
         let select_all_sc = shortcut("terminal.selectAll", "Ctrl+Shift+A");
         let selected_for_find = selected.clone();
         let selected_for_paste = selected.clone();
-        let selected_for_translate = selected.clone();
-        let selected_for_ai = selected.clone();
         let search_engines: Vec<(String, String, Option<String>)> = self
             .settings
             .search_custom_engines
@@ -214,125 +213,64 @@ impl NyaTermApp {
                         this.open_terminal_search(window, cx);
                     }),
                 ))
-                .children(search_engines.into_iter().map(|(name, template, icon)| {
-                    let query = selected.clone();
-                    let icon_prefix = search_engine_menu_icon_prefix(icon.as_deref());
-                    terminal_ctx_item(
-                        palette,
-                        format!("term-ctx-search-{name}"),
-                        format!("{icon_prefix}Search Online · {name}"),
-                        None,
-                        cx.listener(move |this, _, _, cx| {
-                            this.close_terminal_context_menu(cx);
-                            let url = search_engine_url(&template, &query);
-                            match open_external_url(&url) {
-                                Ok(()) => {
-                                    this.terminal_status = format!("opened online search: {name}");
-                                }
-                                Err(error) => {
-                                    this.terminal_status = format!("online search failed: {error}");
-                                }
-                            }
-                            cx.notify();
-                        }),
-                    )
-                }))
-                .children(terminal_ai_actions.into_iter().map(|(id, name, prompt)| {
-                    let query = selected.clone();
-                    terminal_ctx_item(
-                        palette,
-                        format!("term-ctx-ai-action-{id}"),
-                        format!("AI · {name}"),
-                        None,
-                        cx.listener(move |this, _, window, cx| {
-                            this.close_terminal_context_menu(cx);
-                            this.ensure_panel_open(NavItem::AiAssistant);
-                            let body = if query.chars().count() > 2_800 {
-                                let clipped: String = query.chars().take(2_800).collect();
-                                format!("{clipped}…")
-                            } else {
-                                query.clone()
-                            };
-                            this.ai_prompt_draft = format!(
-                                "{prompt}
-
-{body}"
-                            );
-                            this.ai_status = format!("AI action loaded: {name}");
-                            window.focus(&this.ai_chat_focus);
-                            cx.notify();
-                        }),
-                    )
-                }))
-                .children({
-                    let selected = selected_for_translate.clone();
-                    if translation_providers.is_empty() {
-                        vec![
-                            terminal_ctx_item(
-                                palette,
-                                "term-ctx-translate",
-                                "Translate Selection",
-                                None,
-                                cx.listener(move |this, _, window, cx| {
-                                    this.close_terminal_context_menu(cx);
-                                    this.open_translation_dialog(
-                                        selected.clone(),
-                                        this.translate_provider.clone(),
-                                        "Default".to_string(),
-                                        window,
-                                        cx,
-                                    );
-                                }),
-                            )
-                            .into_any_element(),
-                        ]
-                    } else {
-                        translation_providers
-                            .into_iter()
-                            .map(|(id, label)| {
-                                let selected = selected.clone();
-                                terminal_ctx_item(
-                                    palette,
-                                    format!("term-ctx-translate-{id}"),
-                                    format!("Translate · {label}"),
-                                    None,
-                                    cx.listener(move |this, _, window, cx| {
-                                        this.close_terminal_context_menu(cx);
-                                        this.open_translation_dialog(
-                                            selected.clone(),
-                                            id.clone(),
-                                            label.clone(),
-                                            window,
-                                            cx,
-                                        );
-                                    }),
-                                )
-                                .into_any_element()
-                            })
-                            .collect::<Vec<_>>()
-                    }
-                })
-                .child(terminal_ctx_item(
+                .child(terminal_ctx_submenu_item(
                     palette,
-                    "term-ctx-ai",
-                    "Ask AI about Selection",
-                    None,
-                    cx.listener(move |this, _, window, cx| {
-                        this.close_terminal_context_menu(cx);
-                        this.ensure_panel_open(NavItem::AiAssistant);
-                        let body = if selected_for_ai.chars().count() > 2_800 {
-                            let clipped: String = selected_for_ai.chars().take(2_800).collect();
-                            format!("{clipped}…")
-                        } else {
-                            selected_for_ai.clone()
-                        };
-                        this.ai_prompt_draft =
-                            format!("Explain this terminal selection:\n\n{body}");
-                        this.ai_status = "selection loaded into AI prompt".to_string();
-                        window.focus(&this.ai_chat_focus);
-                        cx.notify();
+                    "term-ctx-search-online",
+                    "Search Online",
+                    menu.submenu == Some(TerminalContextSubmenu::SearchOnline),
+                    cx.listener(|this, hovered: &bool, _, cx| {
+                        if *hovered {
+                            this.open_terminal_context_submenu(
+                                TerminalContextSubmenu::SearchOnline,
+                                cx,
+                            );
+                        }
+                    }),
+                    cx.listener(|this, _, _, cx| {
+                        this.open_terminal_context_submenu(
+                            TerminalContextSubmenu::SearchOnline,
+                            cx,
+                        );
                     }),
                 ))
+                .when(!terminal_ai_actions.is_empty(), |this| {
+                    this.child(terminal_ctx_submenu_item(
+                        palette,
+                        "term-ctx-ai",
+                        "AI",
+                        menu.submenu == Some(TerminalContextSubmenu::Ai),
+                        cx.listener(|this, hovered: &bool, _, cx| {
+                            if *hovered {
+                                this.open_terminal_context_submenu(TerminalContextSubmenu::Ai, cx);
+                            }
+                        }),
+                        cx.listener(|this, _, _, cx| {
+                            this.open_terminal_context_submenu(TerminalContextSubmenu::Ai, cx);
+                        }),
+                    ))
+                })
+                .when(!translation_providers.is_empty(), |this| {
+                    this.child(terminal_ctx_submenu_item(
+                        palette,
+                        "term-ctx-translate",
+                        "Translate",
+                        menu.submenu == Some(TerminalContextSubmenu::Translate),
+                        cx.listener(|this, hovered: &bool, _, cx| {
+                            if *hovered {
+                                this.open_terminal_context_submenu(
+                                    TerminalContextSubmenu::Translate,
+                                    cx,
+                                );
+                            }
+                        }),
+                        cx.listener(|this, _, _, cx| {
+                            this.open_terminal_context_submenu(
+                                TerminalContextSubmenu::Translate,
+                                cx,
+                            );
+                        }),
+                    ))
+                })
                 .child(terminal_ctx_separator(palette))
                 .child(terminal_ctx_item(
                     palette,
@@ -408,7 +346,7 @@ impl NyaTermApp {
                 Some(select_all_sc),
                 cx.listener(|this, _, _, cx| {
                     this.close_terminal_context_menu(cx);
-                    this.select_all_terminal_visible(cx);
+                    this.select_all_terminal(cx);
                 }),
             ))
             .child(terminal_ctx_item(
@@ -421,6 +359,114 @@ impl NyaTermApp {
                     this.open_terminal_actions(window, cx);
                 }),
             ));
+
+        let submenu = menu.submenu.map(|submenu| {
+            let submenu_w = 210.;
+            let gap = 4.;
+            let submenu_x = if menu_x + 248. + gap + submenu_w <= viewport_w - 8. {
+                menu_x + 248. + gap
+            } else {
+                (menu_x - submenu_w - gap).max(8.)
+            };
+            let mut panel = div()
+                .id(SharedString::from("terminal-context-submenu"))
+                .absolute()
+                .top(px(menu_y))
+                .left(px(submenu_x))
+                .w(px(submenu_w))
+                .max_h(px(420.))
+                .overflow_y_scroll()
+                .rounded_md()
+                .border_1()
+                .border_color(rgb(palette.border))
+                .bg(rgb(palette.surface))
+                .shadow_lg()
+                .py_1()
+                .flex()
+                .flex_col()
+                .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
+                .on_click(|_, _, cx| cx.stop_propagation());
+
+            match submenu {
+                TerminalContextSubmenu::SearchOnline => {
+                    panel =
+                        panel.children(search_engines.into_iter().map(|(name, template, icon)| {
+                            let query = selected.clone();
+                            let icon_prefix = search_engine_menu_icon_prefix(icon.as_deref());
+                            terminal_ctx_item(
+                                palette,
+                                format!("term-ctx-search-{name}"),
+                                format!("{icon_prefix}{name}"),
+                                None,
+                                cx.listener(move |this, _, _, cx| {
+                                    this.close_terminal_context_menu(cx);
+                                    let url = search_engine_url(&template, &query);
+                                    match open_external_url(&url) {
+                                        Ok(()) => {
+                                            this.terminal_status =
+                                                format!("opened online search: {name}");
+                                        }
+                                        Err(error) => {
+                                            this.terminal_status =
+                                                format!("online search failed: {error}");
+                                        }
+                                    }
+                                    cx.notify();
+                                }),
+                            )
+                        }));
+                }
+                TerminalContextSubmenu::Ai => {
+                    panel = panel.children(terminal_ai_actions.into_iter().map(
+                        |(id, name, prompt)| {
+                            let query = selected.clone();
+                            terminal_ctx_item(
+                                palette,
+                                format!("term-ctx-ai-action-{id}"),
+                                name.clone(),
+                                None,
+                                cx.listener(move |this, _, window, cx| {
+                                    this.close_terminal_context_menu(cx);
+                                    this.ensure_panel_open(NavItem::AiAssistant);
+                                    let body = if query.chars().count() > 2_800 {
+                                        let clipped: String = query.chars().take(2_800).collect();
+                                        format!("{clipped}…")
+                                    } else {
+                                        query.clone()
+                                    };
+                                    this.ai_prompt_draft = format!("{prompt}\n\n{body}");
+                                    this.ai_status = format!("AI action loaded: {name}");
+                                    window.focus(&this.ai_chat_focus);
+                                    cx.notify();
+                                }),
+                            )
+                        },
+                    ));
+                }
+                TerminalContextSubmenu::Translate => {
+                    panel = panel.children(translation_providers.into_iter().map(|(id, label)| {
+                        let selected = selected.clone();
+                        terminal_ctx_item(
+                            palette,
+                            format!("term-ctx-translate-{id}"),
+                            label.clone(),
+                            None,
+                            cx.listener(move |this, _, window, cx| {
+                                this.close_terminal_context_menu(cx);
+                                this.open_translation_dialog(
+                                    selected.clone(),
+                                    id.clone(),
+                                    label.clone(),
+                                    window,
+                                    cx,
+                                );
+                            }),
+                        )
+                    }));
+                }
+            }
+            panel
+        });
 
         div()
             .id(SharedString::from("terminal-context-menu-overlay"))
@@ -442,6 +488,21 @@ impl NyaTermApp {
                 }),
             )
             .child(items)
+            .when_some(submenu, |this, submenu| this.child(submenu))
             .into_any_element()
+    }
+
+    fn open_terminal_context_submenu(
+        &mut self,
+        submenu: TerminalContextSubmenu,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(menu) = self.terminal_context_menu.as_mut() else {
+            return;
+        };
+        if menu.submenu != Some(submenu) {
+            menu.submenu = Some(submenu);
+            cx.notify();
+        }
     }
 }

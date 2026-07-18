@@ -103,7 +103,7 @@ impl NyaTermApp {
                             .gap_3()
                             .child(empty_workspace_action(
                                 palette,
-                                "Temporary Link",
+                                "Temporary SSH Link",
                                 temporary_ssh,
                                 cx.listener(|this, _, window, cx| {
                                     this.ensure_panel_open(NavItem::Connections);
@@ -126,7 +126,7 @@ impl NyaTermApp {
                                 "Show All Commands",
                                 show_commands,
                                 cx.listener(|this, _, window, cx| {
-                                    this.bottom_panel = BottomPanelMode::QuickCommands;
+                                    this.set_bottom_panel_mode(BottomPanelMode::QuickCommands);
                                     window.focus(&this.command_search_focus);
                                     this.terminal_status = "quick commands opened".to_string();
                                     cx.notify();

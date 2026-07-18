@@ -124,7 +124,7 @@ impl NyaTermApp {
                                 "Select All",
                                 "visible grid",
                                 cx.listener(|this, _, _, cx| {
-                                    this.select_all_terminal_visible(cx);
+                                    this.select_all_terminal(cx);
                                 }),
                             ))
                             .child(tab_action_button(
@@ -278,7 +278,7 @@ impl NyaTermApp {
                                 "bottom sender",
                                 cx.listener(|this, _, window, cx| {
                                     this.terminal_actions_open = false;
-                                    this.bottom_panel = BottomPanelMode::CommandSend;
+                                    this.set_bottom_panel_mode(BottomPanelMode::CommandSend);
                                     window.focus(&this.send_command_focus);
                                     cx.notify();
                                 }),
@@ -310,7 +310,7 @@ impl NyaTermApp {
                                 "quick commands",
                                 cx.listener(|this, _, _, cx| {
                                     this.terminal_actions_open = false;
-                                    this.bottom_panel = BottomPanelMode::QuickCommands;
+                                    this.set_bottom_panel_mode(BottomPanelMode::QuickCommands);
                                     cx.notify();
                                 }),
                             ))

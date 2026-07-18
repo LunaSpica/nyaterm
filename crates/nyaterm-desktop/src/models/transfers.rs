@@ -111,6 +111,7 @@ pub(crate) enum TransferJobStatus {
 #[derive(Debug, Clone)]
 pub(crate) struct TransferJobState {
     pub(crate) id: String,
+    pub(crate) session_id: Option<String>,
     pub(crate) kind: TransferJobKind,
     pub(crate) status: TransferJobStatus,
     pub(crate) detail: String,
@@ -118,6 +119,74 @@ pub(crate) struct TransferJobState {
     pub(crate) summary: Option<SftpTransferSummary>,
     pub(crate) progress: Option<SftpTransferProgress>,
     pub(crate) control: Option<SftpTransferControl>,
+}
+
+impl TransferJobState {
+    pub(crate) fn is_user_transfer(&self) -> bool {
+        matches!(
+            &self.kind,
+            TransferJobKind::Download { .. }
+                | TransferJobKind::Upload { .. }
+                | TransferJobKind::ZmodemUpload { .. }
+                | TransferJobKind::ZmodemDownload { .. }
+                | TransferJobKind::TrzszDownload { .. }
+                | TransferJobKind::TrzszUpload { .. }
+        )
+    }
+
+    pub(crate) fn is_visible_for_session(&self, session_id: Option<&str>) -> bool {
+        self.is_user_transfer()
+            && session_id.is_none_or(|session_id| self.session_id.as_deref() == Some(session_id))
+    }
+}
+
+#[cfg(test)]
+mod transfer_job_state_tests {
+    use super::*;
+
+    fn job(kind: TransferJobKind, session_id: Option<&str>) -> TransferJobState {
+        TransferJobState {
+            id: "job-1".to_string(),
+            session_id: session_id.map(ToString::to_string),
+            kind,
+            status: TransferJobStatus::Completed,
+            detail: String::new(),
+            entries: Vec::new(),
+            summary: None,
+            progress: None,
+            control: None,
+        }
+    }
+
+    #[test]
+    fn user_transfers_are_scoped_to_the_active_session() {
+        let download = job(
+            TransferJobKind::Download {
+                remote_path: "/remote/file".to_string(),
+                local_path: PathBuf::from("/local/file"),
+            },
+            Some("session-a"),
+        );
+
+        assert!(download.is_visible_for_session(None));
+        assert!(download.is_visible_for_session(Some("session-a")));
+        assert!(!download.is_visible_for_session(Some("session-b")));
+    }
+
+    #[test]
+    fn internal_jobs_do_not_appear_in_the_transfer_queue() {
+        let list = job(
+            TransferJobKind::ListDir {
+                remote_path: "/remote".to_string(),
+                select_after: None,
+            },
+            Some("session-a"),
+        );
+
+        assert!(!list.is_user_transfer());
+        assert!(!list.is_visible_for_session(None));
+        assert!(!list.is_visible_for_session(Some("session-a")));
+    }
 }
 
 #[derive(Debug)]

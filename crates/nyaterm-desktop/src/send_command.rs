@@ -31,6 +31,12 @@ pub(crate) enum SendCommandLineEnding {
     Crlf,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum SendCommandControlFocus {
+    Count,
+    Interval,
+}
+
 impl SendCommandLineEnding {
     fn as_str(self) -> &'static str {
         match self {

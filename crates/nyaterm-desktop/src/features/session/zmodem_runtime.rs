@@ -196,6 +196,7 @@ impl NyaTermApp {
         let id = self.next_transfer_id("zmodem-probe");
         self.transfer_jobs.push(TransferJobState {
             id: id.clone(),
+            session_id: Some(session_id.clone()),
             kind: TransferJobKind::ZmodemConflictProbe {
                 session_id: session_id.clone(),
                 remote_dir: remote_dir.clone(),
@@ -667,6 +668,7 @@ impl NyaTermApp {
             });
         self.transfer_jobs.push(TransferJobState {
             id,
+            session_id: Some(session_id.to_string()),
             kind,
             status,
             detail,

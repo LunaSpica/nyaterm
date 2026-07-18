@@ -1,6 +1,6 @@
 use super::*;
 
-const CONNECTION_HOVER_INTENT_DELAY: Duration = Duration::from_millis(700);
+const CONNECTION_HOVER_INTENT_DELAY: Duration = Duration::from_millis(350);
 
 impl NyaTermApp {
     pub(in crate::features) fn dismiss_connection_hover(&mut self, cx: &mut Context<Self>) {
@@ -71,23 +71,23 @@ impl NyaTermApp {
         let group_id_for_edit = section.group_id.clone();
         let group_id_for_delete = section.group_id.clone();
         let group_label = section.label.clone();
-        let count = section.connections.len();
+        let count = section.total_count;
         let mut body = div().flex().flex_col();
 
         if expanded && !header_only {
-            if section.connections.is_empty() && !section.is_root {
+            if section.connections.is_empty() && !section.is_root && !section.has_child_groups {
                 body = body.child(
                     div()
                         .px_2()
                         .py_1()
-                        .pl(px(28.))
+                        .pl(px(connection_tree_indent_px(section.depth + 1)))
                         .text_size(px(11.))
                         .text_color(rgb(palette.text_dimmed))
                         .child("Empty group"),
                 );
             } else {
                 for connection in section.connections {
-                    body = body.child(self.saved_connection_row(connection, !section.is_root, cx));
+                    body = body.child(self.saved_connection_row(connection, section.depth + 1, cx));
                 }
             }
         }
@@ -113,6 +113,7 @@ impl NyaTermApp {
                     .justify_between()
                     .gap_2()
                     .px_2()
+                    .pl(px(8. + section.depth as f32 * 16.))
                     .cursor_pointer()
                     .bg({
                         let drop_inside =
@@ -344,7 +345,7 @@ impl NyaTermApp {
     pub(in crate::features) fn saved_connection_row(
         &mut self,
         connection: SavedConnection,
-        indented: bool,
+        depth: usize,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
         let selected = self.selected_connection_ids.contains(&connection.id);
@@ -359,6 +360,7 @@ impl NyaTermApp {
         let kind = connection.kind_label();
         let icon_def = resolve_connection_icon(connection.icon.as_deref(), kind);
         let show_actions = hovered || selected;
+        let details_tooltip = self.connection_details_tooltip(connection.clone());
         let _endpoint = connection.endpoint();
         let _last_used = format_last_used_ms(connection.last_used_at_ms);
         let drop_target = self.connection_drop_target.as_ref().filter(|target| {
@@ -383,7 +385,7 @@ impl NyaTermApp {
             .items_center()
             .gap_2()
             .px_2()
-            .pl(if indented { px(24.) } else { px(8.) })
+            .pl(px(connection_tree_indent_px(depth)))
             .bg(if selected {
                 rgb(palette.hover)
             } else if show_inside {
@@ -569,6 +571,7 @@ impl NyaTermApp {
                         }),
                     )),
             )
+            .when(hovered, |this| this.child(details_tooltip))
             .when(show_before, |this| {
                 this.child(
                     div()
@@ -595,15 +598,14 @@ impl NyaTermApp {
             })
     }
 
-    pub(in crate::features) fn connection_details_panel(
+    pub(in crate::features) fn connection_details_tooltip(
         &self,
         connection: SavedConnection,
-        _cx: &mut Context<Self>,
     ) -> impl IntoElement {
         let palette = self.theme_palette();
         let rows = connection_detail_rows(&connection, &self.connections, &self.proxies);
         let mut grid = div().grid().gap_1();
-        for (label, value) in rows {
+        for (label, value) in rows.into_iter().take(6) {
             grid = grid.child(
                 div()
                     .flex()
@@ -611,9 +613,9 @@ impl NyaTermApp {
                     .gap_2()
                     .child(
                         div()
-                            .w(px(64.))
+                            .w(px(66.))
                             .flex_none()
-                            .text_size(px(11.))
+                            .text_size(px(10.))
                             .text_color(rgb(palette.text_dimmed))
                             .child(label),
                     )
@@ -621,23 +623,22 @@ impl NyaTermApp {
                         div()
                             .min_w_0()
                             .flex_1()
-                            .text_size(px(11.))
+                            .text_size(px(10.))
                             .text_color(rgb(palette.text))
-                            .child(value),
+                            .child(truncate_preview(&value, 52)),
                     ),
             );
         }
+
         div()
-            .id(SharedString::from(format!(
-                "connection-details-panel-{}",
-                connection.id
-            )))
-            .flex_none()
-            .max_h(px(156.))
-            .overflow_hidden()
-            .border_t_1()
+            .absolute()
+            .top(px(30.))
+            .left(px(28.))
+            .w(px(260.))
+            .rounded_md()
+            .border_1()
             .border_color(rgb(palette.border))
-            .bg(rgb(palette.section_header))
+            .bg(rgb(palette.surface_elevated))
             .px_3()
             .py_2()
             .child(
@@ -653,7 +654,7 @@ impl NyaTermApp {
                             .text_size(px(11.))
                             .font_weight(FontWeight(700.))
                             .text_color(rgb(palette.text))
-                            .child(truncate_preview(&connection.name, 32)),
+                            .child(truncate_preview(&connection.name, 34)),
                     )
                     .child(
                         div()

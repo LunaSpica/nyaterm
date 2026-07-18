@@ -16,10 +16,9 @@ impl NyaTermApp {
             cx.notify();
             return;
         };
-        let session_name = self.session_display_name(&session_id).unwrap_or_else(|| {
-            self.active_session_name()
-                .unwrap_or_else(|| "session".to_string())
-        });
+        let session_name = self
+            .session_display_name(&session_id)
+            .unwrap_or_else(|| "session".to_string());
         self.prompt_recording_path_for_session(kind, session_id, session_name, cx);
     }
 

@@ -18,11 +18,6 @@ impl NyaTermApp {
             .sum::<usize>();
         let selected_connections = self.selected_connections();
         let selected_count = selected_connections.len();
-        let detail_connection = if selected_count == 1 {
-            selected_connections.first().cloned()
-        } else {
-            None
-        };
 
         // Flatten expanded tree for virtual window (group header 28px, connection 34px).
         let flat_rows = flatten_connection_rows(&sections, &self.expanded_connection_groups);
@@ -144,23 +139,20 @@ impl NyaTermApp {
                     ConnectionListRow::GroupHeader(section) => {
                         rows = rows.child(self.connection_section(section, true, cx));
                     }
-                    ConnectionListRow::EmptyGroup => {
+                    ConnectionListRow::EmptyGroup { depth } => {
                         rows = rows.child(
                             div()
                                 .px_2()
                                 .py_1()
-                                .pl(px(28.))
+                                .pl(px(connection_tree_indent_px(depth)))
                                 .h(px(28.))
                                 .text_size(px(11.))
                                 .text_color(rgb(palette.text_dimmed))
                                 .child("Empty group"),
                         );
                     }
-                    ConnectionListRow::Connection {
-                        connection,
-                        indented,
-                    } => {
-                        rows = rows.child(self.saved_connection_row(connection, indented, cx));
+                    ConnectionListRow::Connection { connection, depth } => {
+                        rows = rows.child(self.saved_connection_row(connection, depth, cx));
                     }
                 }
             }
@@ -184,9 +176,6 @@ impl NyaTermApp {
                 this.child(self.connections_selection_strip(selected_count, cx))
             })
             .child(list)
-            .when_some(detail_connection, |this, connection| {
-                this.child(self.connection_details_panel(connection, cx))
-            })
             .when_some(self.connection_editor.clone(), |this, editor| {
                 this.child(self.connection_editor_panel(editor, cx))
             })
@@ -223,7 +212,6 @@ impl NyaTermApp {
             ConnectionSortMode::Default => "↕",
             ConnectionSortMode::NameAsc => "A↑",
             ConnectionSortMode::NameDesc => "A↓",
-            ConnectionSortMode::Recent => "⏱",
         };
         let more_open = self.connections_more_menu_open;
 

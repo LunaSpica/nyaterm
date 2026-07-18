@@ -126,41 +126,31 @@ pub(in crate::features::pages::remote) fn docker_confirm_panel(
     confirm: DockerConfirmState,
     cx: &mut Context<NyaTermApp>,
 ) -> impl IntoElement {
-    div()
-        .rounded_md()
-        .border_1()
-        .border_color(rgb(0xfb7185))
-        .bg(rgb(0x2a121a))
-        .p_3()
+    let card = div()
+        .p_4()
         .flex()
-        .items_center()
-        .justify_between()
+        .flex_col()
         .gap_3()
         .child(
             div()
-                .min_w_0()
-                .flex()
-                .flex_col()
-                .gap_1()
-                .child(
-                    div()
-                        .text_sm()
-                        .font_weight(FontWeight(800.))
-                        .text_color(rgb(0xfda4af))
-                        .child(confirm.title),
-                )
-                .child(
-                    div()
-                        .font_family(crate::features::gpui_code_font_family())
-                        .text_xs()
-                        .text_color(rgb(0xfecdd3))
-                        .child(confirm.detail),
-                ),
+                .text_size(px(15.))
+                .font_weight(FontWeight(800.))
+                .text_color(rgb(0xfda4af))
+                .child(confirm.title),
         )
         .child(
             div()
+                .font_family(crate::features::gpui_code_font_family())
+                .text_xs()
+                .line_height(px(17.))
+                .text_color(rgb(0xfecdd3))
+                .child(confirm.detail),
+        )
+        .child(
+            div()
+                .pt_2()
                 .flex()
-                .items_center()
+                .justify_end()
                 .gap_2()
                 .child(small_button(
                     palette,
@@ -178,7 +168,8 @@ pub(in crate::features::pages::remote) fn docker_confirm_panel(
                         this.confirm_docker_action(window, cx);
                     }),
                 )),
-        )
+        );
+    modal_dialog_shell(palette, "docker-confirm-modal", 420., card)
 }
 
 pub(in crate::features::pages::remote) fn docker_container_confirm_button(

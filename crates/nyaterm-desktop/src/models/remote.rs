@@ -155,4 +155,15 @@ impl SettingsTab {
             Self::SyncBackup => "Sync Backup",
         }
     }
+
+    pub(crate) fn expandable_group_id(self) -> Option<&'static str> {
+        match self {
+            Self::General | Self::Appearance | Self::Interaction | Self::Keybindings => {
+                Some("workspace")
+            }
+            Self::TerminalGeneral | Self::Search | Self::Translation => Some("terminal_session"),
+            Self::AiGeneral | Self::AiModels | Self::AiRules => Some("ai_group"),
+            Self::Transfer | Self::Security | Self::SyncBackup => None,
+        }
+    }
 }

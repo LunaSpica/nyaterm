@@ -4244,6 +4244,7 @@ pub(crate) struct TerminalSelection {
     pub(crate) head: TerminalCellPos,
     pub(crate) display_offset: usize,
     pub(crate) viewport_anchor_row: usize,
+    pub(crate) all_buffer: bool,
 }
 
 impl TerminalSelection {
@@ -4261,6 +4262,7 @@ impl TerminalSelection {
             head: anchor,
             display_offset,
             viewport_anchor_row,
+            all_buffer: false,
         }
     }
 
@@ -4275,6 +4277,17 @@ impl TerminalSelection {
             head,
             display_offset,
             viewport_anchor_row,
+            all_buffer: false,
+        }
+    }
+
+    pub(crate) fn all_buffer(cols: usize) -> Self {
+        Self {
+            anchor: TerminalCellPos::new(0, 0),
+            head: TerminalCellPos::new(0, cols.saturating_sub(1)),
+            display_offset: 0,
+            viewport_anchor_row: 0,
+            all_buffer: true,
         }
     }
 
@@ -4289,12 +4302,15 @@ impl TerminalSelection {
     }
 
     pub(crate) fn is_empty(&self) -> bool {
-        self.anchor == self.head
+        !self.all_buffer && self.anchor == self.head
     }
 
     /// Column range [start, end) for a painted line, if any cells are selected.
     /// Endpoints are inclusive cell positions; returned range is half-open for slicing.
     pub(crate) fn cols_for_row(&self, row: usize) -> Option<(usize, usize)> {
+        if self.all_buffer {
+            return Some((0, usize::MAX));
+        }
         if self.is_empty() {
             return None;
         }
@@ -4312,5 +4328,19 @@ impl TerminalSelection {
             return Some((0, end.col.saturating_add(1)));
         }
         Some((0, usize::MAX))
+    }
+}
+
+#[cfg(test)]
+mod terminal_selection_tests {
+    use super::*;
+
+    #[test]
+    fn all_buffer_selection_covers_every_viewport_row() {
+        let selection = TerminalSelection::all_buffer(80);
+
+        assert!(!selection.is_empty());
+        assert_eq!(selection.cols_for_row(0), Some((0, usize::MAX)));
+        assert_eq!(selection.cols_for_row(10_000), Some((0, usize::MAX)));
     }
 }

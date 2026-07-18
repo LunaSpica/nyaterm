@@ -10,7 +10,7 @@ use super::super::{
     DockerConfirmAction, DockerConfirmState, DockerTab, NyaTermApp,
     RemoteProcessSignalConfirmState, RemoteProcessSortDirection, RemoteProcessSortKey, compact_id,
     docker_compose_project_key, docker_state_color, docker_state_label, docker_state_rank,
-    format_file_size, format_rate, format_uptime, metric, stats_progress_bar, stats_resource_row,
+    format_file_size, format_rate, format_uptime, metric, modal_dialog_shell, stats_progress_bar,
     transfer_input,
 };
 use nyaterm_core::truncate_preview;

@@ -48,7 +48,7 @@ impl NyaTermApp {
             return true;
         }
         if shortcut_matches(event, "terminal.selectAll", &keybindings) {
-            self.select_all_terminal_visible(cx);
+            self.select_all_terminal(cx);
             return true;
         }
         if shortcut_matches(event, "tab.newSession", &keybindings) {
@@ -127,7 +127,7 @@ impl NyaTermApp {
             return true;
         }
         if shortcut_matches(event, "view.showAllCommands", &keybindings) {
-            self.bottom_panel = BottomPanelMode::QuickCommands;
+            self.set_bottom_panel_mode(BottomPanelMode::QuickCommands);
             self.terminal_status = "quick commands opened".to_string();
             cx.notify();
             return true;

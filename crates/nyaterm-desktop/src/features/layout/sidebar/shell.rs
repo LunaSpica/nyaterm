@@ -2,7 +2,10 @@ use super::*;
 
 impl NyaTermApp {
     pub(in crate::features) fn sidebar(&mut self, cx: &mut Context<Self>) -> impl IntoElement {
-        let width = self.left_panel_width.clamp(160., 720.);
+        let mut width = self.left_panel_width.clamp(160., 720.);
+        if !cfg!(target_os = "macos") && self.last_viewport_size.0 < 1024. {
+            width = width.min((self.last_viewport_size.0 - 80.).max(120.));
+        }
         let palette = self.theme_palette();
         div()
             .w(px(width))

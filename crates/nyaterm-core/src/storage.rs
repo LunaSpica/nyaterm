@@ -1338,6 +1338,11 @@ impl ConnectionStore {
                 &["ui", "quick_cmd_sort_mode"],
                 "created",
             )),
+            ui_saved_connections_sort_mode: normalize_saved_connections_sort_mode(&json_string(
+                &value,
+                &["ui", "saved_connections_sort_mode"],
+                "default",
+            )),
             ui_file_explorer_auto_sync_cwd_connection_ids: json_string_vec(
                 &value,
                 &["ui", "file_explorer_auto_sync_cwd_connection_ids"],
@@ -1351,45 +1356,46 @@ impl ConnectionStore {
             ui_left_panel_width: json_u32(&value, &["ui", "left_width"], 256).clamp(160, 720),
             ui_right_panel_width: json_u32(&value, &["ui", "right_width"], 288).clamp(200, 720),
             ui_transfer_height: json_u32(&value, &["ui", "transfer_height"], 180).clamp(60, 600),
+            ui_quick_cmd_height: json_u32(&value, &["ui", "quick_cmd_height"], 180).clamp(36, 520),
+            ui_quick_cmd_visible: json_bool(&value, &["ui", "show_quick_cmd_bar"], true),
+            ui_serial_send_height: json_u32(&value, &["ui", "serial_send_height"], 180)
+                .clamp(60, 520),
+            ui_serial_send_visible: json_bool(&value, &["ui", "show_serial_send_panel"], false),
             ui_active_left_panel: json_optional_string(&value, &["ui", "active_left_panel"]),
             ui_active_right_panel: json_optional_string(&value, &["ui", "active_right_panel"]),
             ui_left_panel_collapsed: json_bool(&value, &["ui", "left_panel_collapsed"], false),
             ui_right_panel_collapsed: json_bool(&value, &["ui", "right_panel_collapsed"], false),
             ui_activity_bar_left_top: {
-                let values =
-                    json_string_vec(&value, &["ui", "activity_bar_layout", "left_top"], 32);
-                if values.is_empty() {
-                    default_activity_left_top()
-                } else {
-                    values
-                }
+                json_string_vec_with_default(
+                    &value,
+                    &["ui", "activity_bar_layout", "left_top"],
+                    32,
+                    default_activity_left_top,
+                )
             },
             ui_activity_bar_left_bottom: {
-                let values =
-                    json_string_vec(&value, &["ui", "activity_bar_layout", "left_bottom"], 32);
-                if values.is_empty() {
-                    default_activity_left_bottom()
-                } else {
-                    values
-                }
+                json_string_vec_with_default(
+                    &value,
+                    &["ui", "activity_bar_layout", "left_bottom"],
+                    32,
+                    default_activity_left_bottom,
+                )
             },
             ui_activity_bar_right_top: {
-                let values =
-                    json_string_vec(&value, &["ui", "activity_bar_layout", "right_top"], 32);
-                if values.is_empty() {
-                    default_activity_right_top()
-                } else {
-                    values
-                }
+                json_string_vec_with_default(
+                    &value,
+                    &["ui", "activity_bar_layout", "right_top"],
+                    32,
+                    default_activity_right_top,
+                )
             },
             ui_activity_bar_right_bottom: {
-                let values =
-                    json_string_vec(&value, &["ui", "activity_bar_layout", "right_bottom"], 32);
-                if values.is_empty() {
-                    default_activity_right_bottom()
-                } else {
-                    values
-                }
+                json_string_vec_with_default(
+                    &value,
+                    &["ui", "activity_bar_layout", "right_bottom"],
+                    32,
+                    default_activity_right_bottom,
+                )
             },
             ui_activity_bar_show_labels: json_bool(
                 &value,
@@ -1741,6 +1747,26 @@ impl ConnectionStore {
             &["ui", "transfer_height"],
             serde_json::Value::from(settings.ui_transfer_height.clamp(60, 600)),
         );
+        set_nested_json_value(
+            &mut value,
+            &["ui", "quick_cmd_height"],
+            serde_json::Value::from(settings.ui_quick_cmd_height.clamp(36, 520)),
+        );
+        set_nested_json_value(
+            &mut value,
+            &["ui", "show_quick_cmd_bar"],
+            serde_json::Value::Bool(settings.ui_quick_cmd_visible),
+        );
+        set_nested_json_value(
+            &mut value,
+            &["ui", "serial_send_height"],
+            serde_json::Value::from(settings.ui_serial_send_height.clamp(60, 520)),
+        );
+        set_nested_json_value(
+            &mut value,
+            &["ui", "show_serial_send_panel"],
+            serde_json::Value::Bool(settings.ui_serial_send_visible),
+        );
         match &settings.ui_active_left_panel {
             Some(panel) if !panel.trim().is_empty() => {
                 set_nested_json_string(&mut value, &["ui", "active_left_panel"], panel.clone())
@@ -1821,6 +1847,11 @@ impl ConnectionStore {
             &mut value,
             &["ui", "panel_stack_sizes"],
             u32_map_json_value(&settings.ui_panel_stack_sizes),
+        );
+        set_nested_json_string(
+            &mut value,
+            &["ui", "saved_connections_sort_mode"],
+            normalize_saved_connections_sort_mode(&settings.ui_saved_connections_sort_mode),
         );
         self.save_settings_value(&value)?;
         self.load_app_settings_summary()
@@ -4488,6 +4519,19 @@ fn json_string_vec(value: &serde_json::Value, path: &[&str], limit: usize) -> Ve
         .unwrap_or_default()
 }
 
+fn json_string_vec_with_default(
+    value: &serde_json::Value,
+    path: &[&str],
+    limit: usize,
+    default: fn() -> Vec<String>,
+) -> Vec<String> {
+    if json_path(value, path).is_some() {
+        json_string_vec(value, path, limit)
+    } else {
+        default()
+    }
+}
+
 fn json_string_vec_map(
     value: &serde_json::Value,
     path: &[&str],
@@ -4878,6 +4922,13 @@ fn normalize_quick_cmd_sort_mode(value: &str) -> String {
     match value.trim() {
         "created" | "name" | "useCount" => value.trim().to_string(),
         _ => "created".to_string(),
+    }
+}
+
+fn normalize_saved_connections_sort_mode(value: &str) -> String {
+    match value.trim() {
+        "name-asc" | "name-desc" => value.trim().to_string(),
+        _ => "default".to_string(),
     }
 }
 
@@ -6001,6 +6052,65 @@ mod tests {
         assert_eq!(
             raw["diagnostics"]["retention_days"],
             serde_json::Value::from(14)
+        );
+
+        std::fs::remove_dir_all(dir).ok();
+    }
+
+    #[test]
+    fn save_ui_layout_bottom_panel_state_roundtrip_and_clamp() {
+        let dir = unique_temp_dir("settings-bottom-panel-heights");
+        let store = ConnectionStore::open(&dir).expect("store");
+        let mut summary = store.load_app_settings_summary().expect("load");
+        summary.ui_quick_cmd_height = 312;
+        summary.ui_quick_cmd_visible = false;
+        summary.ui_serial_send_height = 284;
+        summary.ui_serial_send_visible = true;
+
+        let saved = store.save_ui_layout_settings(&summary).expect("save");
+        assert_eq!(saved.ui_quick_cmd_height, 312);
+        assert!(!saved.ui_quick_cmd_visible);
+        assert_eq!(saved.ui_serial_send_height, 284);
+        assert!(saved.ui_serial_send_visible);
+        let raw = store.load_settings_value().expect("raw");
+        assert_eq!(raw["ui"]["quick_cmd_height"], serde_json::json!(312));
+        assert_eq!(raw["ui"]["show_quick_cmd_bar"], serde_json::json!(false));
+        assert_eq!(raw["ui"]["serial_send_height"], serde_json::json!(284));
+        assert_eq!(raw["ui"]["show_serial_send_panel"], serde_json::json!(true));
+
+        summary.ui_quick_cmd_height = 0;
+        summary.ui_serial_send_height = 999;
+        let clamped = store
+            .save_ui_layout_settings(&summary)
+            .expect("save clamped");
+        assert_eq!(clamped.ui_quick_cmd_height, 36);
+        assert_eq!(clamped.ui_serial_send_height, 520);
+
+        std::fs::remove_dir_all(dir).ok();
+    }
+
+    #[test]
+    fn save_ui_layout_preserves_explicit_empty_activity_zone() {
+        let dir = unique_temp_dir("settings-empty-activity-zone");
+        let store = ConnectionStore::open(&dir).expect("store");
+        let mut summary = store.load_app_settings_summary().expect("load");
+        let moved = std::mem::take(&mut summary.ui_activity_bar_left_top);
+        summary.ui_activity_bar_right_top.extend(moved);
+        summary.ui_saved_connections_sort_mode = "name-desc".to_string();
+
+        let saved = store.save_ui_layout_settings(&summary).expect("save");
+        assert!(saved.ui_activity_bar_left_top.is_empty());
+        assert_eq!(saved.ui_saved_connections_sort_mode, "name-desc");
+        assert!(
+            saved
+                .ui_activity_bar_right_top
+                .iter()
+                .any(|id| id == "fileExplorer")
+        );
+        let raw = store.load_settings_value().expect("raw");
+        assert_eq!(
+            raw["ui"]["activity_bar_layout"]["left_top"],
+            serde_json::json!([])
         );
 
         std::fs::remove_dir_all(dir).ok();

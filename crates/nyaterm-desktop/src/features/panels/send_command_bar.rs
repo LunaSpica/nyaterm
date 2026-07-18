@@ -4,8 +4,6 @@ use super::*;
 mod controls;
 #[path = "send_command_bar/editor.rs"]
 mod editor;
-#[path = "send_command_bar/footer.rs"]
-mod footer;
 #[path = "send_command_bar/header.rs"]
 mod header;
 #[path = "send_command_bar/state.rs"]
@@ -21,32 +19,28 @@ impl NyaTermApp {
         let header = self.send_command_bar_header(&state, cx);
         let controls = self.send_command_bar_controls(&state, cx);
         let editor = self.send_command_bar_editor(&state, cx);
-        let progress = self.send_command_bar_progress(&state);
-        let footer = self.send_command_bar_footer(&state, cx);
 
-        // Tauri SendCommandPanel: title row + labeled control groups + editor + action footer.
+        // Tauri SendCommandPanel: title row + labeled control groups + editor with floating action.
         div()
-            .h(px(240.))
+            .h(px(self.serial_send_height.clamp(60., 520.)))
             .flex_none()
             .flex()
             .flex_col()
             .border_t_1()
             .border_color(rgb(palette.border))
             .bg(rgb(palette.surface))
-            .child(header)
             .child(
                 div()
                     .flex_1()
                     .min_h_0()
                     .px_2()
-                    .py_1()
+                    .py(px(6.))
                     .flex()
                     .flex_col()
-                    .gap_1()
+                    .gap_2()
+                    .child(header)
                     .child(controls)
-                    .child(editor)
-                    .when(state.is_sending, |this| this.child(progress))
-                    .child(footer),
+                    .child(editor),
             )
     }
 }

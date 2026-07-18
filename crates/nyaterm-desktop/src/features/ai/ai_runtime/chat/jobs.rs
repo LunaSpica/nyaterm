@@ -75,15 +75,30 @@ impl NyaTermApp {
             cx.notify();
             return;
         }
+        let request_prompt = self
+            .ai_quoted_text
+            .as_ref()
+            .map(|quoted| quoted.trim())
+            .filter(|quoted| !quoted.is_empty())
+            .map(|quoted| format!("> {quoted}\n\n{prompt}"))
+            .unwrap_or_else(|| prompt.clone());
         if !self.ai_settings.enabled {
             self.ai_response_preview = "AI assistant is disabled".to_string();
             cx.notify();
             return;
         }
+        let Some(model_id) = self.ai_selected_model_id() else {
+            self.ai_response_preview = "Enable an AI model before sending".to_string();
+            self.ai_status = self.ai_response_preview.clone();
+            cx.notify();
+            return;
+        };
 
         let settings = self.ai_settings.clone();
         let mode = settings.default_mode.clone();
-        if mode == AiMode::Agent && self.active_session_id.is_none() {
+        let target_session_ids = self.ai_effective_target_session_ids();
+        let target_session_id = target_session_ids.first().cloned();
+        if mode == AiMode::Agent && target_session_id.is_none() {
             self.ai_response_preview =
                 "Start a terminal session before running Agent mode".to_string();
             self.ai_status = self.ai_response_preview.clone();
@@ -98,7 +113,7 @@ impl NyaTermApp {
         let context = prepared_request
             .as_ref()
             .map(|request| request.context.clone())
-            .unwrap_or_else(|| self.ai_terminal_context());
+            .unwrap_or_else(|| self.ai_terminal_context_for_sessions(&target_session_ids));
         let source_label = prepared_request
             .as_ref()
             .map(|request| request.source_label.clone());
@@ -106,13 +121,13 @@ impl NyaTermApp {
         let request = AiChatRequest {
             stream_id: None,
             session_id: Some(session_id.clone()),
-            connection_id: self.active_session_id.clone(),
-            terminal_session_id: self.active_session_id.clone(),
+            connection_id: target_session_id.clone(),
+            terminal_session_id: target_session_id.clone(),
             mode: mode.clone(),
-            model_id: settings.default_model_id.clone(),
+            model_id: Some(model_id),
             model_name: None,
             action,
-            user_input: prompt.clone(),
+            user_input: request_prompt.clone(),
             context,
             options: Default::default(),
         };
@@ -154,7 +169,7 @@ impl NyaTermApp {
             id: format!("user-{}", uuid()),
             session_id: self.ai_chat_session_id.clone(),
             role: AiMessageRole::User,
-            content: prompt.clone(),
+            content: request_prompt.clone(),
             created_at: now.clone(),
             reasoning_content: None,
             command_cards: Vec::new(),
@@ -168,6 +183,12 @@ impl NyaTermApp {
             reasoning_content: None,
             command_cards: Vec::new(),
         });
+        self.ai_prompt_draft.clear();
+        self.ai_quoted_text = None;
+        self.ai_message_menu = None;
+        self.ai_mention_open = false;
+        self.ai_mention_query.clear();
+        self.ai_mention_index = 0;
         self.ai_streaming_assistant_id = Some(assistant_id);
         self.ai_status = if mode == AiMode::Agent {
             "AI Agent step started".to_string()
@@ -200,9 +221,353 @@ impl NyaTermApp {
         self.ai_terminal_context_for_session(self.active_session_id.as_deref())
     }
 
+    pub(in crate::features) fn ai_selected_model_id(&self) -> Option<String> {
+        self.ai_settings
+            .models
+            .iter()
+            .find(|model| {
+                model.enabled
+                    && self.ai_settings.default_model_id.as_deref() == Some(model.id.as_str())
+            })
+            .or_else(|| self.ai_settings.models.iter().find(|model| model.enabled))
+            .map(|model| model.id.clone())
+    }
+
+    pub(in crate::features) fn ai_enabled_models(&self) -> Vec<nyaterm_core::AiModelConfigItem> {
+        self.ai_settings
+            .models
+            .iter()
+            .filter(|model| model.enabled)
+            .cloned()
+            .collect()
+    }
+
+    pub(in crate::features) fn ai_model_provider_label(
+        &self,
+        model: &nyaterm_core::AiModelConfigItem,
+    ) -> String {
+        model
+            .credential_id
+            .as_ref()
+            .and_then(|credential_id| {
+                self.ai_settings
+                    .provider_credentials
+                    .iter()
+                    .find(|credential| &credential.id == credential_id)
+                    .map(|credential| credential.name.clone())
+            })
+            .or_else(|| model.provider_kind.as_ref().map(|kind| format!("{kind:?}")))
+            .unwrap_or_else(|| "model".to_string())
+    }
+
+    pub(in crate::features) fn ai_filtered_model_choices(
+        &self,
+    ) -> Vec<(nyaterm_core::AiModelConfigItem, String)> {
+        let query = self.ai_model_query.trim().to_ascii_lowercase();
+        self.ai_enabled_models()
+            .into_iter()
+            .filter_map(|model| {
+                let provider_label = self.ai_model_provider_label(&model);
+                let search_value =
+                    format!("{} {} {}", model.name, provider_label, model.id).to_ascii_lowercase();
+                (query.is_empty() || search_value.contains(&query))
+                    .then_some((model, provider_label))
+            })
+            .collect()
+    }
+
+    pub(in crate::features) fn ai_selected_model_index(&self) -> usize {
+        let Some(selected_model_id) = self.ai_selected_model_id() else {
+            return 0;
+        };
+        self.ai_filtered_model_choices()
+            .iter()
+            .position(|(model, _)| model.id == selected_model_id)
+            .unwrap_or(0)
+    }
+
+    pub(in crate::features) fn select_ai_model_choice(&mut self, cx: &mut Context<Self>) {
+        let choices = self.ai_filtered_model_choices();
+        let Some((model, _)) = choices.get(self.ai_model_index).cloned() else {
+            cx.notify();
+            return;
+        };
+        self.ai_model_menu_open = false;
+        self.ai_model_query.clear();
+        self.ai_model_index = 0;
+        self.set_ai_default_model(model.id.clone(), cx);
+        self.ai_status = format!("AI model selected: {}", model.name);
+    }
+
+    pub(in crate::features) fn handle_ai_model_search_key_down(
+        &mut self,
+        event: &KeyDownEvent,
+        cx: &mut Context<Self>,
+    ) {
+        self.mark_user_activity();
+        let keystroke = &event.keystroke;
+        if keystroke.modifiers.platform || keystroke.modifiers.alt || keystroke.modifiers.control {
+            return;
+        }
+
+        let choice_count = self.ai_filtered_model_choices().len();
+        match keystroke.key.as_str() {
+            "escape" => {
+                if self.ai_model_query.is_empty() {
+                    self.ai_model_menu_open = false;
+                } else {
+                    self.ai_model_query.clear();
+                    self.ai_model_index = self.ai_selected_model_index();
+                }
+                cx.notify();
+            }
+            "backspace" => {
+                self.ai_model_query.pop();
+                self.ai_model_index = 0;
+                cx.notify();
+            }
+            "up" => {
+                if choice_count > 0 {
+                    self.ai_model_index = (self.ai_model_index + choice_count - 1) % choice_count;
+                }
+                cx.notify();
+            }
+            "down" => {
+                if choice_count > 0 {
+                    self.ai_model_index = (self.ai_model_index + 1) % choice_count;
+                }
+                cx.notify();
+            }
+            "enter" => {
+                if choice_count > 0 {
+                    self.select_ai_model_choice(cx);
+                } else {
+                    cx.notify();
+                }
+            }
+            _ => {
+                if let Some(input) = keystroke
+                    .key_char
+                    .as_deref()
+                    .filter(|input| !input.is_empty())
+                {
+                    self.ai_model_query.push_str(input);
+                    self.ai_model_index = 0;
+                    cx.notify();
+                }
+            }
+        }
+    }
+
+    pub(in crate::features) fn ai_effective_target_session_id(&self) -> Option<String> {
+        self.ai_effective_target_session_ids().into_iter().next()
+    }
+
+    pub(in crate::features) fn ai_effective_target_session_ids(&self) -> Vec<String> {
+        let mut session_ids = Vec::new();
+        for session_id in &self.ai_target_session_ids {
+            if !session_ids.iter().any(|id| id == session_id)
+                && self.session_info(session_id).is_some()
+                && !self.is_session_disconnected(session_id)
+            {
+                session_ids.push(session_id.clone());
+            }
+        }
+        if session_ids.is_empty()
+            && let Some(active_session_id) = self.active_session_id.as_ref()
+            && self.session_info(active_session_id).is_some()
+            && !self.is_session_disconnected(active_session_id)
+        {
+            session_ids.push(active_session_id.clone());
+        }
+        session_ids
+    }
+
+    pub(in crate::features) fn ai_terminal_context_for_sessions(
+        &self,
+        session_ids: &[String],
+    ) -> AiContext {
+        if session_ids.len() <= 1 {
+            return self.ai_terminal_context_for_session(session_ids.first().map(String::as_str));
+        }
+
+        let per_session_line_limit =
+            (self.ai_settings.context_line_limit as usize / session_ids.len()).max(1);
+        let mut contexts = Vec::with_capacity(session_ids.len());
+        for session_id in session_ids {
+            contexts.push((
+                self.session_display_name(session_id)
+                    .unwrap_or_else(|| compact_id(session_id)),
+                self.ai_terminal_context_for_session_with_line_limit(
+                    Some(session_id),
+                    per_session_line_limit,
+                ),
+            ));
+        }
+
+        AiContext {
+            connection_name: Some(
+                contexts
+                    .iter()
+                    .map(|(_, context)| context.connection_name.as_deref().unwrap_or("-"))
+                    .collect::<Vec<_>>()
+                    .join(", "),
+            ),
+            host: Some(
+                contexts
+                    .iter()
+                    .map(|(_, context)| context.host.as_deref().unwrap_or("-"))
+                    .collect::<Vec<_>>()
+                    .join(", "),
+            ),
+            port: contexts.first().and_then(|(_, context)| context.port),
+            username: Some(
+                contexts
+                    .iter()
+                    .map(|(_, context)| context.username.as_deref().unwrap_or("-"))
+                    .collect::<Vec<_>>()
+                    .join(", "),
+            ),
+            cwd: Some(
+                contexts
+                    .iter()
+                    .map(|(_, context)| context.cwd.as_deref().unwrap_or("-"))
+                    .collect::<Vec<_>>()
+                    .join(", "),
+            ),
+            os: contexts.first().and_then(|(_, context)| context.os.clone()),
+            arch: contexts
+                .first()
+                .and_then(|(_, context)| context.arch.clone()),
+            recent_output: contexts
+                .iter()
+                .filter_map(|(label, context)| {
+                    (!context.recent_output.trim().is_empty())
+                        .then(|| format!("[{label}]\n{}", context.recent_output))
+                })
+                .collect::<Vec<_>>()
+                .join("\n---\n"),
+            selected_text: contexts
+                .iter()
+                .map(|(_, context)| context.selected_text.trim())
+                .filter(|value| !value.is_empty())
+                .collect::<Vec<_>>()
+                .join("\n"),
+            input_buffer: contexts
+                .iter()
+                .map(|(_, context)| context.input_buffer.trim())
+                .filter(|value| !value.is_empty())
+                .collect::<Vec<_>>()
+                .join("\n"),
+        }
+    }
+
+    pub(in crate::features) fn ai_mention_candidates(&self) -> Vec<SessionInfo> {
+        let query = self.ai_mention_query.trim().to_ascii_lowercase();
+        self.ordered_sessions()
+            .into_iter()
+            .filter(|session| !self.is_session_disconnected(&session.id))
+            .filter(|session| {
+                if query.is_empty() {
+                    return true;
+                }
+                let display_name = self.session_display_name_by_info(session);
+                display_name.to_ascii_lowercase().contains(&query)
+                    || session.id.to_ascii_lowercase().contains(&query)
+                    || session_kind_label(session.kind)
+                        .to_ascii_lowercase()
+                        .contains(&query)
+            })
+            .collect()
+    }
+
+    pub(in crate::features) fn remove_ai_target_session(
+        &mut self,
+        session_id: String,
+        cx: &mut Context<Self>,
+    ) {
+        self.ai_target_session_ids
+            .retain(|target_id| target_id != &session_id);
+        if self.ai_target_session_ids.is_empty() {
+            self.ai_status = "AI target sessions cleared".to_string();
+        } else {
+            self.ai_status = "AI target session removed".to_string();
+        }
+        cx.notify();
+    }
+
+    fn sync_ai_mention_from_prompt(&mut self) {
+        let Some(at_index) = self.ai_prompt_draft.rfind('@') else {
+            self.ai_mention_open = false;
+            self.ai_mention_query.clear();
+            self.ai_mention_index = 0;
+            return;
+        };
+        let query = &self.ai_prompt_draft[at_index + 1..];
+        if query.chars().any(char::is_whitespace) {
+            self.ai_mention_open = false;
+            self.ai_mention_query.clear();
+            self.ai_mention_index = 0;
+            return;
+        }
+        if self.ai_mention_query != query {
+            self.ai_mention_query = query.to_string();
+            self.ai_mention_index = 0;
+        }
+        self.ai_mention_open = true;
+    }
+
+    pub(in crate::features) fn select_ai_mention_candidate(&mut self, cx: &mut Context<Self>) {
+        let candidates = self.ai_mention_candidates();
+        let Some(session) = candidates.get(self.ai_mention_index).cloned() else {
+            self.ai_mention_open = false;
+            self.ai_mention_query.clear();
+            self.ai_mention_index = 0;
+            cx.notify();
+            return;
+        };
+
+        if self
+            .ai_target_session_ids
+            .iter()
+            .any(|session_id| session_id == &session.id)
+        {
+            self.ai_target_session_ids
+                .retain(|session_id| session_id != &session.id);
+        } else {
+            self.ai_target_session_ids.push(session.id.clone());
+        }
+
+        if let Some(at_index) = self.ai_prompt_draft.rfind('@') {
+            let suffix = &self.ai_prompt_draft[at_index + 1..];
+            if !suffix.chars().any(char::is_whitespace) {
+                self.ai_prompt_draft.truncate(at_index);
+            }
+        }
+        self.ai_mention_open = false;
+        self.ai_mention_query.clear();
+        self.ai_mention_index = 0;
+        self.ai_status = format!(
+            "AI target session selected: {}",
+            self.session_display_name_by_info(&session)
+        );
+        cx.notify();
+    }
+
     pub(in crate::features) fn ai_terminal_context_for_session(
         &self,
         session_id: Option<&str>,
+    ) -> AiContext {
+        self.ai_terminal_context_for_session_with_line_limit(
+            session_id,
+            self.ai_settings.context_line_limit as usize,
+        )
+    }
+
+    pub(in crate::features) fn ai_terminal_context_for_session_with_line_limit(
+        &self,
+        session_id: Option<&str>,
+        line_limit: usize,
     ) -> AiContext {
         let metadata = session_id.and_then(|session_id| self.session_metadata.get(session_id));
         let ssh = match metadata.map(|metadata| &metadata.launch_config) {
@@ -224,6 +589,12 @@ impl NyaTermApp {
         let recent_output = session_id
             .map(|session_id| self.terminal_buffer_text_for_session(session_id))
             .unwrap_or_else(|| self.active_terminal_buffer_text());
+        let selected_text =
+            if session_id.is_none() || session_id == self.active_session_id.as_deref() {
+                self.selected_terminal_text().unwrap_or_default()
+            } else {
+                String::new()
+            };
         AiContext {
             connection_name: ssh
                 .map(|config| config.name.clone())
@@ -234,8 +605,8 @@ impl NyaTermApp {
             cwd: cwd.map(|path| path.display().to_string()),
             os: None,
             arch: Some(std::env::consts::ARCH.to_string()),
-            recent_output: recent_terminal_output(&recent_output, 80),
-            selected_text: String::new(),
+            recent_output: recent_terminal_output(&recent_output, line_limit.max(1)),
+            selected_text,
             input_buffer: String::new(),
         }
     }
@@ -246,18 +617,65 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         self.mark_user_activity();
+        if self.ai_chat_pending || self.ai_agent_loop.is_some() || !self.ai_settings.enabled {
+            self.ai_mention_open = false;
+            self.ai_mention_query.clear();
+            cx.notify();
+            return;
+        }
         let keystroke = &event.keystroke;
         if keystroke.modifiers.platform || keystroke.modifiers.alt || keystroke.modifiers.control {
             return;
         }
 
+        if self.ai_mention_open {
+            let candidate_count = self.ai_mention_candidates().len();
+            match keystroke.key.as_str() {
+                "escape" => {
+                    self.ai_mention_open = false;
+                    self.ai_mention_query.clear();
+                    self.ai_mention_index = 0;
+                    cx.notify();
+                    return;
+                }
+                "up" => {
+                    if candidate_count > 0 {
+                        self.ai_mention_index =
+                            (self.ai_mention_index + candidate_count - 1) % candidate_count;
+                    }
+                    cx.notify();
+                    return;
+                }
+                "down" => {
+                    if candidate_count > 0 {
+                        self.ai_mention_index = (self.ai_mention_index + 1) % candidate_count;
+                    }
+                    cx.notify();
+                    return;
+                }
+                "enter" => {
+                    self.select_ai_mention_candidate(cx);
+                    return;
+                }
+                _ => {}
+            }
+        }
+
         match keystroke.key.as_str() {
+            "enter" if keystroke.modifiers.shift => {
+                self.ai_prompt_draft.push('\n');
+                self.sync_ai_mention_from_prompt();
+                cx.notify();
+            }
             "enter" => self.start_ai_ask(cx),
             "backspace" => {
                 self.ai_prompt_draft.pop();
+                self.sync_ai_mention_from_prompt();
                 cx.notify();
             }
             "escape" => {
+                self.ai_mention_open = false;
+                self.ai_mention_query.clear();
                 self.ai_response_preview = "AI prompt blurred".to_string();
                 cx.notify();
             }
@@ -268,6 +686,7 @@ impl NyaTermApp {
                     .filter(|input| !input.is_empty())
                 {
                     self.ai_prompt_draft.push_str(input);
+                    self.sync_ai_mention_from_prompt();
                     cx.notify();
                 }
             }

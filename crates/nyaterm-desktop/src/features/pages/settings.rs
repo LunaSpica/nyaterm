@@ -149,7 +149,11 @@ impl NyaTermApp {
 
     fn settings_sidebar(&mut self, cx: &mut Context<Self>) -> impl IntoElement {
         let palette = self.theme_palette();
-        div()
+        let workspace_expanded = self.settings_expanded_groups.contains("workspace");
+        let terminal_expanded = self.settings_expanded_groups.contains("terminal_session");
+        let ai_expanded = self.settings_expanded_groups.contains("ai_group");
+
+        let mut sidebar = div()
             .id(SharedString::from("settings-sidebar-scroll"))
             .w(px(220.))
             .flex_none()
@@ -159,71 +163,131 @@ impl NyaTermApp {
             .bg(rgb(palette.surface))
             .px_2()
             .py_2()
-            .overflow_scroll()
-            .child(settings_category_header(
-                palette,
+            .overflow_scroll();
+
+        sidebar = sidebar
+            .child(self.settings_group_header(
+                "workspace",
                 "Workspace",
-                "WS",
-                rgb(palette.accent),
-            ))
-            .child(self.settings_tab_button(SettingsTab::General, "settings-tab-general", cx))
-            .child(self.settings_tab_button(SettingsTab::Appearance, "settings-tab-appearance", cx))
-            .child(self.settings_tab_button(
-                SettingsTab::Interaction,
-                "settings-tab-interaction",
+                workspace_expanded,
+                palette.accent,
                 cx,
             ))
-            .child(self.settings_tab_button(
-                SettingsTab::Keybindings,
-                "settings-tab-keybindings",
-                cx,
-            ))
-            .child(settings_category_header(
-                palette,
+            .when(workspace_expanded, |this| {
+                this.child(self.settings_tab_button(
+                    SettingsTab::General,
+                    "settings-tab-general",
+                    cx,
+                ))
+                .child(self.settings_tab_button(
+                    SettingsTab::Appearance,
+                    "settings-tab-appearance",
+                    cx,
+                ))
+                .child(self.settings_tab_button(
+                    SettingsTab::Interaction,
+                    "settings-tab-interaction",
+                    cx,
+                ))
+                .child(self.settings_tab_button(
+                    SettingsTab::Keybindings,
+                    "settings-tab-keybindings",
+                    cx,
+                ))
+            })
+            .child(self.settings_group_header(
+                "terminal_session",
                 "Terminal Session",
-                "TM",
-                rgb(palette.success),
-            ))
-            .child(self.settings_tab_button(
-                SettingsTab::TerminalGeneral,
-                "settings-tab-terminal-general",
+                terminal_expanded,
+                palette.success,
                 cx,
             ))
-            .child(self.settings_tab_button(SettingsTab::Search, "settings-tab-search", cx))
-            .child(self.settings_tab_button(
-                SettingsTab::Translation,
-                "settings-tab-translation",
-                cx,
-            ))
-            .child(settings_category_header(palette, "AI", "AI", rgb(0xbc8cff)))
-            .child(self.settings_tab_button(SettingsTab::AiGeneral, "settings-tab-ai-general", cx))
-            .child(self.settings_tab_button(SettingsTab::AiModels, "settings-tab-ai-models", cx))
-            .child(self.settings_tab_button(SettingsTab::AiRules, "settings-tab-ai-rules", cx))
-            .child(settings_category_header(
-                palette,
-                "Transfer",
-                "TF",
-                rgb(palette.accent),
-            ))
+            .when(terminal_expanded, |this| {
+                this.child(self.settings_tab_button(
+                    SettingsTab::TerminalGeneral,
+                    "settings-tab-terminal-general",
+                    cx,
+                ))
+                .child(self.settings_tab_button(SettingsTab::Search, "settings-tab-search", cx))
+                .child(self.settings_tab_button(
+                    SettingsTab::Translation,
+                    "settings-tab-translation",
+                    cx,
+                ))
+            })
+            .child(self.settings_group_header("ai_group", "AI", ai_expanded, 0xbc8cff, cx))
+            .when(ai_expanded, |this| {
+                this.child(self.settings_tab_button(
+                    SettingsTab::AiGeneral,
+                    "settings-tab-ai-general",
+                    cx,
+                ))
+                .child(self.settings_tab_button(
+                    SettingsTab::AiModels,
+                    "settings-tab-ai-models",
+                    cx,
+                ))
+                .child(self.settings_tab_button(
+                    SettingsTab::AiRules,
+                    "settings-tab-ai-rules",
+                    cx,
+                ))
+            })
             .child(self.settings_tab_button(SettingsTab::Transfer, "settings-tab-transfer", cx))
-            .child(settings_category_header(
-                palette,
-                "Security",
-                "SC",
-                rgb(palette.warning),
-            ))
             .child(self.settings_tab_button(SettingsTab::Security, "settings-tab-security", cx))
-            .child(settings_category_header(
-                palette,
-                "Sync Backup",
-                "BK",
-                rgb(palette.success),
-            ))
             .child(self.settings_tab_button(
                 SettingsTab::SyncBackup,
                 "settings-tab-sync-backup",
                 cx,
-            ))
+            ));
+
+        sidebar
+    }
+
+    fn settings_group_header(
+        &self,
+        group: &'static str,
+        title: &'static str,
+        expanded: bool,
+        accent: u32,
+        cx: &mut Context<Self>,
+    ) -> impl IntoElement {
+        let palette = self.theme_palette();
+        div()
+            .id(SharedString::from(format!("settings-group-{group}")))
+            .mt_2()
+            .mb_1()
+            .h(px(26.))
+            .px_2()
+            .flex()
+            .items_center()
+            .justify_between()
+            .rounded_sm()
+            .cursor_pointer()
+            .hover(|this| this.bg(rgb(palette.hover)))
+            .child(
+                div()
+                    .flex()
+                    .items_center()
+                    .gap_2()
+                    .text_size(px(10.))
+                    .font_weight(FontWeight(700.))
+                    .text_color(rgb(palette.text_dimmed))
+                    .child(div().size(px(6.)).rounded_full().bg(rgb(accent)))
+                    .child(title),
+            )
+            .child(
+                div()
+                    .text_size(px(12.))
+                    .text_color(rgb(palette.text_dimmed))
+                    .child(if expanded { "▾" } else { "▸" }),
+            )
+            .on_click(cx.listener(move |this, _, _, cx| {
+                if !this.settings_expanded_groups.insert(group.to_string()) {
+                    this.settings_expanded_groups.remove(group);
+                }
+                cx.notify();
+            }))
     }
 
     fn settings_tab_button(
@@ -588,23 +652,4 @@ pub(super) fn settings_choice_chip(
         .hover(move |this| this.bg(rgb(hover_bg)).text_color(rgb(hover_text)))
         .child(label)
         .on_click(on_click)
-}
-
-fn settings_category_header(
-    palette: ThemePalette,
-    title: &'static str,
-    _badge: &'static str,
-    _accent: impl Into<gpui::Hsla>,
-) -> impl IntoElement {
-    div()
-        .mt_2()
-        .mb_1()
-        .px_2()
-        .py_1()
-        .flex()
-        .items_center()
-        .text_size(px(10.))
-        .font_weight(FontWeight(700.))
-        .text_color(rgb(palette.text_dimmed))
-        .child(title.to_uppercase())
 }

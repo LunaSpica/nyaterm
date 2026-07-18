@@ -59,6 +59,7 @@ impl NyaTermApp {
                 this.update_transfer_browser_column_resize(event, cx);
                 this.update_panel_resize(event, cx);
                 this.update_transfer_height_resize(event, cx);
+                this.update_bottom_panel_resize(event, cx);
                 this.update_panel_stack_resize(event, cx);
                 this.update_workspace_split_resize(event, cx);
                 if this.maybe_send_terminal_any_motion_report(event, cx) {
@@ -74,6 +75,7 @@ impl NyaTermApp {
                     this.finish_transfer_browser_column_resize(event, cx);
                     this.finish_panel_resize(event, cx);
                     this.finish_transfer_height_resize(event, cx);
+                    this.finish_bottom_panel_resize(event, cx);
                     this.finish_panel_stack_resize(event, cx);
                     this.finish_workspace_split_resize(event, cx);
                     this.finish_terminal_selection(event, cx);
@@ -142,8 +144,7 @@ impl NyaTermApp {
                     .size_full()
                     .opacity(content_opacity)
                     .child(self.title_bar(cx))
-                    .child(self.workspace_surface(palette, cx))
-                    .child(self.status_bar(cx)),
+                    .child(self.workspace_surface(palette, cx)),
             )
     }
 
@@ -157,24 +158,138 @@ impl NyaTermApp {
                 .child(self.settings_view(cx))
                 .into_any_element()
         } else {
-            div()
+            let compact_layout = !cfg!(target_os = "macos");
+            let left_overlay_mode = compact_layout && self.last_viewport_size.0 < 1024.;
+            let right_overlay_mode = compact_layout && self.last_viewport_size.0 < 768.;
+            let left_drawer_open =
+                left_overlay_mode && self.mobile_left_open && self.left_side_open();
+            let right_drawer_open =
+                right_overlay_mode && self.mobile_right_open && self.right_side_open();
+            let mut surface = div()
                 .flex()
                 .flex_1()
                 .min_h_0()
+                .relative()
+                .overflow_hidden()
                 .bg(rgb(palette.bg))
                 .child(self.activity_bar(ActivitySide::Left, cx))
-                .when(self.left_side_open(), |this| {
+                .when(self.left_side_open() && !left_overlay_mode, |this| {
                     this.child(self.sidebar(cx))
                         .child(self.panel_resize_handle(PanelResizeSide::Left, cx))
                 })
                 .child(self.main_surface(cx))
-                .when(self.right_side_open(), |this| {
+                .when(self.right_side_open() && !right_overlay_mode, |this| {
                     this.child(self.panel_resize_handle(PanelResizeSide::Right, cx))
                         .child(self.right_panel(cx))
                 })
-                .child(self.activity_bar(ActivitySide::Right, cx))
-                .into_any_element()
+                .child(self.activity_bar(ActivitySide::Right, cx));
+
+            if self.terminal_windows_is_multi_leaf() && self.new_session_menu_open {
+                surface = surface.child(self.render_new_session_menu(cx));
+            }
+
+            if left_drawer_open || right_drawer_open {
+                surface = surface.child(
+                    div()
+                        .id("mobile-panel-backdrop")
+                        .absolute()
+                        .inset_0()
+                        .bg(rgba(0x00000080))
+                        .on_click(cx.listener(|this, _, _, cx| {
+                            this.mobile_left_open = false;
+                            this.mobile_right_open = false;
+                            cx.notify();
+                        })),
+                );
+            }
+
+            if left_drawer_open {
+                surface = surface.child(
+                    div()
+                        .id("mobile-left-drawer")
+                        .absolute()
+                        .top_0()
+                        .bottom_0()
+                        .left(px(40.))
+                        .flex()
+                        .shadow_lg()
+                        .on_click(|_, _, cx| cx.stop_propagation())
+                        .child(
+                            div()
+                                .h_full()
+                                .flex()
+                                .flex_col()
+                                .child(self.mobile_drawer_header("mobile-left-close", true, cx))
+                                .child(div().flex_1().min_h_0().flex().child(self.sidebar(cx))),
+                        ),
+                );
+            }
+
+            if right_drawer_open {
+                surface = surface.child(
+                    div()
+                        .id("mobile-right-drawer")
+                        .absolute()
+                        .top_0()
+                        .bottom_0()
+                        .right(px(40.))
+                        .flex()
+                        .shadow_lg()
+                        .on_click(|_, _, cx| cx.stop_propagation())
+                        .child(
+                            div()
+                                .h_full()
+                                .flex()
+                                .flex_col()
+                                .child(self.mobile_drawer_header("mobile-right-close", false, cx))
+                                .child(div().flex_1().min_h_0().flex().child(self.right_panel(cx))),
+                        ),
+                );
+            }
+
+            surface.into_any_element()
         }
+    }
+
+    fn mobile_drawer_header(
+        &self,
+        id: &'static str,
+        left: bool,
+        cx: &mut Context<Self>,
+    ) -> impl IntoElement {
+        let palette = self.theme_palette();
+        div()
+            .h(px(40.))
+            .flex_none()
+            .flex()
+            .items_center()
+            .justify_end()
+            .px_2()
+            .border_b_1()
+            .border_color(rgb(palette.border))
+            .bg(rgb(palette.surface))
+            .child(
+                div()
+                    .id(id)
+                    .size(px(26.))
+                    .flex()
+                    .items_center()
+                    .justify_center()
+                    .rounded_sm()
+                    .text_sm()
+                    .text_color(rgb(palette.text_muted))
+                    .cursor_pointer()
+                    .hover(|this| this.bg(rgb(palette.hover)).text_color(rgb(palette.text)))
+                    .child("×")
+                    .on_click(cx.listener(move |this, _, _, cx| {
+                        if left {
+                            this.mobile_left_open = false;
+                        } else {
+                            this.mobile_right_open = false;
+                        }
+                        cx.notify();
+                    })),
+            )
     }
 
     fn overlay_host(&mut self, content: Stateful<Div>, cx: &mut Context<Self>) -> Stateful<Div> {
@@ -200,6 +315,18 @@ impl NyaTermApp {
                 close_all_sessions_confirm_open: self.close_all_sessions_confirm_open,
                 locked: self.is_locked,
             });
+        let transfer_properties_open = self
+            .transfer_properties
+            .as_ref()
+            .is_some_and(|state| state.session_id.as_deref() == self.active_session_id.as_deref());
+        let transfer_editor_open = self
+            .transfer_editor
+            .as_ref()
+            .is_some_and(|state| state.session_id.as_deref() == self.active_session_id.as_deref());
+        let transfer_external_sync_open = self
+            .active_session_id
+            .as_ref()
+            .is_some_and(|session_id| self.transfer_external_sync_prompts.contains_key(session_id));
 
         content
             .when(
@@ -233,6 +360,9 @@ impl NyaTermApp {
             .when(self.transfer_job_delete.is_some(), |this| {
                 this.child(self.transfer_job_delete_overlay(cx))
             })
+            .when(self.transfer_job_menu.is_some(), |this| {
+                this.child(self.transfer_job_menu_overlay(cx))
+            })
             .when(self.transfer_new_folder.is_some(), |this| {
                 this.child(self.transfer_new_folder_overlay(cx))
             })
@@ -242,16 +372,16 @@ impl NyaTermApp {
             .when(self.transfer_new_symlink.is_some(), |this| {
                 this.child(self.transfer_new_symlink_overlay(cx))
             })
-            .when(self.transfer_properties.is_some(), |this| {
+            .when(transfer_properties_open, |this| {
                 this.child(self.transfer_properties_overlay(cx))
             })
-            .when(self.transfer_editor.is_some(), |this| {
+            .when(transfer_editor_open, |this| {
                 this.child(self.transfer_editor_overlay(cx))
             })
             .when(self.transfer_unknown_file.is_some(), |this| {
                 this.child(self.transfer_unknown_file_overlay(cx))
             })
-            .when(self.transfer_external_sync_prompt.is_some(), |this| {
+            .when(transfer_external_sync_open, |this| {
                 this.child(self.transfer_external_sync_prompt_overlay(cx))
             })
             .when(self.transfer_browser_context_menu.is_some(), |this| {
@@ -303,6 +433,15 @@ impl NyaTermApp {
             .when(self.quick_command_details.is_some(), |this| {
                 this.child(self.quick_command_details_overlay(cx))
             })
+            .when(self.quick_command_menu.is_some(), |this| {
+                this.child(self.quick_command_row_menu_overlay(cx))
+            })
+            .when(self.quick_command_category_menu.is_some(), |this| {
+                this.child(self.quick_command_category_menu_overlay(cx))
+            })
+            .when(self.active_session_menu.is_some(), |this| {
+                this.child(self.active_session_menu_overlay(cx))
+            })
             .when(self.quick_command_category_delete.is_some(), |this| {
                 this.child(self.quick_command_category_delete_overlay(cx))
             })
@@ -327,6 +466,7 @@ impl NyaTermApp {
             .when(overlay.locked, |this| {
                 this.child(self.lock_screen_overlay(cx))
             })
+            .when(self.about_open, |this| this.child(self.about_overlay(cx)))
     }
 
     fn ssh_auth_prompt_overlay(&mut self, cx: &mut Context<Self>) -> impl IntoElement {

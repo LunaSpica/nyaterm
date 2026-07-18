@@ -74,7 +74,7 @@ impl TransferPathPart {
 }
 
 pub(in crate::features::pages::transfers) const TRANSFER_BROWSER_ACTIONS_WIDTH: gpui::Pixels =
-    px(360.);
+    px(44.);
 const TRANSFER_BROWSER_COLUMN_GAP_TOTAL: gpui::Pixels = px(48.);
 
 pub(in crate::features::pages::transfers) fn transfer_browser_table_width(

@@ -203,49 +203,39 @@ pub(in crate::features::pages::remote) fn process_signal_confirm_panel(
     confirm: RemoteProcessSignalConfirmState,
     cx: &mut Context<NyaTermApp>,
 ) -> impl IntoElement {
-    div()
-        .rounded_md()
-        .border_1()
-        .border_color(rgb(0xfb7185))
-        .bg(rgb(0x2a121a))
-        .p_3()
+    let card = div()
+        .p_4()
         .flex()
-        .items_center()
-        .justify_between()
+        .flex_col()
         .gap_3()
         .child(
             div()
-                .min_w_0()
-                .flex()
-                .flex_col()
-                .gap_1()
-                .child(
-                    div()
-                        .text_sm()
-                        .font_weight(FontWeight(800.))
-                        .text_color(rgb(palette.danger))
-                        .child(format!(
-                            "Confirm {} for PID {}",
-                            confirm.signal, confirm.pid
-                        )),
-                )
-                .child(
-                    div()
-                        .font_family(crate::features::gpui_code_font_family())
-                        .text_xs()
-                        .text_color(rgb(0xfecdd3))
-                        .child(format!(
-                            "kill -{} -- {} · {}",
-                            confirm.signal,
-                            confirm.pid,
-                            truncate_preview(&confirm.command, 96)
-                        )),
-                ),
+                .text_size(px(15.))
+                .font_weight(FontWeight(800.))
+                .text_color(rgb(palette.danger))
+                .child(format!(
+                    "Confirm {} for PID {}",
+                    confirm.signal, confirm.pid
+                )),
         )
         .child(
             div()
+                .font_family(crate::features::gpui_code_font_family())
+                .text_xs()
+                .line_height(px(17.))
+                .text_color(rgb(0xfecdd3))
+                .child(format!(
+                    "kill -{} -- {} · {}",
+                    confirm.signal,
+                    confirm.pid,
+                    truncate_preview(&confirm.command, 96)
+                )),
+        )
+        .child(
+            div()
+                .pt_2()
                 .flex()
-                .items_center()
+                .justify_end()
                 .gap_2()
                 .child(small_button(
                     palette,
@@ -263,5 +253,6 @@ pub(in crate::features::pages::remote) fn process_signal_confirm_panel(
                         this.confirm_process_signal(window, cx);
                     }),
                 )),
-        )
+        );
+    modal_dialog_shell(palette, "process-signal-confirm-modal", 420., card)
 }

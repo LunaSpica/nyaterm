@@ -10,11 +10,13 @@ impl NyaTermApp {
             return div().into_any_element();
         };
         let entry_id = menu.entry_id.clone();
-        let move_up_id = entry_id.clone();
-        let move_down_id = entry_id.clone();
-        let entry_label = ActivityBarEntry::from_persistence_id(&menu.entry_id)
-            .map(|entry| entry.label())
-            .unwrap_or("Item");
+        let show_labels = self.activity_bar_layout.show_labels;
+        let (viewport_w, viewport_h) = self.last_viewport_size;
+        let menu_w = 180.;
+        let submenu_w = 164.;
+        let margin = 8.;
+        let menu_x = f32::from(menu.x).clamp(margin, (viewport_w - menu_w - margin).max(margin));
+        let menu_y = f32::from(menu.y).clamp(margin, (viewport_h - 70. - margin).max(margin));
 
         let mut zone_buttons = div().flex().flex_col().gap_1();
         for zone in ActivityBarZone::all() {
@@ -28,111 +30,133 @@ impl NyaTermApp {
                         zone.persistence_key()
                     )))
                     .h(px(28.))
-                    .px_2()
+                    .px_3()
                     .flex()
                     .items_center()
-                    .rounded_sm()
-                    .cursor_pointer()
                     .text_xs()
-                    .text_color(if selected {
-                        rgb(palette.accent)
-                    } else {
-                        rgb(palette.text)
+                    .text_color(rgb(palette.text))
+                    .when(selected, |this| this.opacity(0.45))
+                    .when(!selected, |this| {
+                        this.cursor_pointer()
+                            .hover(|this| this.bg(rgb(palette.hover)))
                     })
-                    .bg(if selected {
-                        rgb(palette.hover)
-                    } else {
-                        rgb(palette.bg)
-                    })
-                    .hover(|this| this.bg(rgb(palette.surface_elevated)))
                     .child(zone.label())
-                    .on_click(cx.listener(move |this, _, _, cx| {
-                        this.move_activity_entry(id.clone(), target, None, cx);
-                    })),
+                    .when(!selected, |this| {
+                        this.on_click(cx.listener(move |this, _, _, cx| {
+                            this.move_activity_entry(id.clone(), target, None, cx);
+                        }))
+                    }),
             );
         }
+
+        let submenu_x = if menu_x + menu_w + 4. + submenu_w <= viewport_w - margin {
+            menu_x + menu_w + 4.
+        } else {
+            (menu_x - submenu_w - 4.).max(margin)
+        };
+        let submenu_y = menu_y.clamp(margin, (viewport_h - 128. - margin).max(margin));
+
+        let parent_menu = div()
+            .id(SharedString::from("activity-context-menu"))
+            .absolute()
+            .top(px(menu_y))
+            .left(px(menu_x))
+            .w(px(menu_w))
+            .rounded_md()
+            .border_1()
+            .border_color(rgb(palette.border))
+            .bg(rgb(palette.surface))
+            .shadow_lg()
+            .py_1()
+            .flex()
+            .flex_col()
+            .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
+            .on_click(|_, _, cx| cx.stop_propagation())
+            .child(
+                div()
+                    .id(SharedString::from("activity-move-to"))
+                    .h(px(28.))
+                    .px_3()
+                    .flex()
+                    .items_center()
+                    .justify_between()
+                    .text_xs()
+                    .text_color(rgb(palette.text))
+                    .cursor_pointer()
+                    .when(menu.move_submenu_open, |this| this.bg(rgb(palette.hover)))
+                    .hover(|this| this.bg(rgb(palette.hover)))
+                    .on_hover(cx.listener(|this, hovered: &bool, _, cx| {
+                        if *hovered {
+                            this.open_activity_bar_move_submenu(cx);
+                        }
+                    }))
+                    .on_click(cx.listener(|this, _, _, cx| {
+                        this.open_activity_bar_move_submenu(cx);
+                    }))
+                    .child("Move To")
+                    .child(
+                        svg()
+                            .size(px(12.))
+                            .path("icons/fe/forward.svg")
+                            .text_color(rgb(palette.text_dimmed)),
+                    ),
+            )
+            .child(div().h(px(1.)).my_1().mx_2().bg(rgb(palette.border)))
+            .child(
+                div()
+                    .id(SharedString::from("activity-toggle-labels"))
+                    .h(px(28.))
+                    .px_3()
+                    .flex()
+                    .items_center()
+                    .gap_2()
+                    .text_xs()
+                    .text_color(rgb(palette.text))
+                    .cursor_pointer()
+                    .hover(|this| this.bg(rgb(palette.hover)))
+                    .on_click(cx.listener(|this, _, _, cx| {
+                        this.toggle_activity_bar_labels(cx);
+                        this.close_activity_bar_context_menu(cx);
+                    }))
+                    .child(
+                        div()
+                            .w(px(14.))
+                            .flex_none()
+                            .text_color(rgb(palette.accent))
+                            .child(if show_labels { "✓" } else { "" }),
+                    )
+                    .child("Show Labels"),
+            );
 
         div()
             .id(SharedString::from("activity-context-backdrop"))
             .absolute()
             .inset_0()
-            .flex()
-            .items_start()
-            .justify_center()
-            .pt(px(72.))
-            .bg(rgba(0x0d111788))
             .on_click(cx.listener(|this, _, _, cx| {
                 this.close_activity_bar_context_menu(cx);
             }))
-            .child(
-                div()
-                    .id(SharedString::from("activity-context-menu"))
-                    .w(px(240.))
-                    .rounded_md()
-                    .border_1()
-                    .border_color(rgb(palette.border))
-                    .bg(rgb(palette.surface))
-                    .p_3()
-                    .flex()
-                    .flex_col()
-                    .gap_2()
-                    .on_mouse_down(MouseButton::Left, |_, _, _| {})
-                    .child(
-                        div()
-                            .text_xs()
-                            .font_weight(FontWeight(800.))
-                            .text_color(rgb(palette.text))
-                            .child(format!("Activity · {entry_label}")),
-                    )
-                    .child(
-                        div()
-                            .flex()
-                            .gap_2()
-                            .child(small_button(
-                                palette,
-                                "activity-move-up",
-                                "Up",
-                                cx.listener(move |this, _, _, cx| {
-                                    this.reorder_activity_entry(move_up_id.clone(), -1, cx);
-                                }),
-                            ))
-                            .child(small_button(
-                                palette,
-                                "activity-move-down",
-                                "Down",
-                                cx.listener(move |this, _, _, cx| {
-                                    this.reorder_activity_entry(move_down_id.clone(), 1, cx);
-                                }),
-                            ))
-                            .child(small_button(
-                                palette,
-                                "activity-toggle-labels",
-                                if self.activity_bar_layout.show_labels {
-                                    "Hide Labels"
-                                } else {
-                                    "Show Labels"
-                                },
-                                cx.listener(|this, _, _, cx| {
-                                    this.toggle_activity_bar_labels(cx);
-                                }),
-                            )),
-                    )
-                    .child(
-                        div()
-                            .text_size(px(10.))
-                            .text_color(rgb(palette.text_muted))
-                            .child("Move to zone"),
-                    )
-                    .child(zone_buttons)
-                    .child(small_button(
-                        palette,
-                        "activity-menu-close",
-                        "Close",
-                        cx.listener(|this, _, _, cx| {
-                            this.close_activity_bar_context_menu(cx);
-                        }),
-                    )),
-            )
+            .child(parent_menu)
+            .when(menu.move_submenu_open, |this| {
+                this.child(
+                    div()
+                        .id(SharedString::from("activity-move-submenu"))
+                        .absolute()
+                        .top(px(submenu_y))
+                        .left(px(submenu_x))
+                        .w(px(submenu_w))
+                        .rounded_md()
+                        .border_1()
+                        .border_color(rgb(palette.border))
+                        .bg(rgb(palette.surface))
+                        .shadow_lg()
+                        .py_1()
+                        .flex()
+                        .flex_col()
+                        .child(zone_buttons)
+                        .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
+                        .on_click(|_, _, cx| cx.stop_propagation()),
+                )
+            })
             .into_any_element()
     }
 
@@ -187,7 +211,7 @@ impl NyaTermApp {
         bottom = bottom.child(self.activity_zone_end_drop_target(bottom_zone, bottom_len, cx));
 
         div()
-            .w(if show_labels { px(52.) } else { px(40.) })
+            .w(px(40.))
             .flex_none()
             .flex()
             .flex_col()
@@ -270,6 +294,7 @@ impl NyaTermApp {
             .relative()
             .when(show_labels, |this| {
                 this.w_full()
+                    .min_h(px(48.))
                     .px_1()
                     .py_1()
                     .flex()
@@ -374,8 +399,14 @@ impl NyaTermApp {
             }))
             .on_mouse_down(
                 MouseButton::Right,
-                cx.listener(move |this, _, _, cx| {
-                    this.open_activity_bar_context_menu(context_entry_id.clone(), zone, index, cx);
+                cx.listener(move |this, event: &MouseDownEvent, _, cx| {
+                    this.open_activity_bar_context_menu(
+                        context_entry_id.clone(),
+                        zone,
+                        index,
+                        event,
+                        cx,
+                    );
                 }),
             )
     }
@@ -431,11 +462,12 @@ impl NyaTermApp {
                 move |_, cx| cx.new(|_| ChromeTooltip::new(title.clone())).into()
             })
             .on_click(cx.listener(move |this, _, _, cx| {
-                this.bottom_panel = if this.bottom_panel == mode {
+                let next_mode = if this.bottom_panel == mode {
                     BottomPanelMode::Hidden
                 } else {
                     mode
                 };
+                this.set_bottom_panel_mode(next_mode);
                 cx.notify();
             }))
     }

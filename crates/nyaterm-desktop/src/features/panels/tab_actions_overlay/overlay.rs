@@ -1,6 +1,25 @@
 use super::*;
 
 impl NyaTermApp {
+    pub(super) fn tab_action_can_spawn_session(&self, session_id: &str) -> bool {
+        self.session_metadata
+            .get(session_id)
+            .is_some_and(|metadata| {
+                matches!(metadata.launch_config, SessionLaunchConfig::Local(_))
+                    || metadata
+                        .source_connection_id
+                        .as_deref()
+                        .is_some_and(|id| !id.trim().is_empty())
+            })
+    }
+
+    pub(super) fn tab_action_can_show_session_info(&self, session_id: &str) -> bool {
+        self.session_metadata
+            .get(session_id)
+            .and_then(|metadata| metadata.source_connection_id.as_deref())
+            .is_some_and(|id| !id.trim().is_empty())
+    }
+
     pub(in crate::features) fn tab_actions_overlay(
         &mut self,
         cx: &mut Context<Self>,
@@ -23,7 +42,15 @@ impl NyaTermApp {
         let display_name = self.session_display_name_by_info(&session);
         let active_color = self.session_tab_colors.get(&session_id).copied();
         let can_copy_ssh = self.session_ssh_address(&session_id).is_some();
-        let can_multiplex = session.kind == SessionKind::Ssh;
+        let busy_action = self.active_session_busy_actions.get(&session_id).cloned();
+        let is_busy = busy_action.is_some();
+        let is_disconnected = self.is_session_disconnected(&session_id);
+        let can_spawn_session = self.tab_action_can_spawn_session(&session_id);
+        let can_session_info = self.tab_action_can_show_session_info(&session_id);
+        let can_multiplex = session.kind == SessionKind::Ssh && !is_busy && !is_disconnected;
+        let can_reconnect = can_spawn_session && !is_busy && !self.has_pending_session_start();
+        let can_disconnect = !is_busy && !is_disconnected;
+        let can_use_ai = !is_busy && !is_disconnected;
         let can_close_inactive = sessions.len() > 1;
         let can_close_right = sessions
             .iter()
@@ -61,7 +88,12 @@ impl NyaTermApp {
                 &display_name,
                 active_color,
                 can_copy_ssh,
+                can_spawn_session,
                 can_multiplex,
+                can_reconnect,
+                can_disconnect,
+                can_use_ai,
+                can_session_info,
                 can_close_inactive,
                 can_close_right,
                 can_unsplit,
@@ -80,7 +112,12 @@ impl NyaTermApp {
             &display_name,
             active_color,
             can_copy_ssh,
+            can_spawn_session,
             can_multiplex,
+            can_reconnect,
+            can_disconnect,
+            can_use_ai,
+            can_session_info,
             can_close_inactive,
             can_close_right,
             can_unsplit,

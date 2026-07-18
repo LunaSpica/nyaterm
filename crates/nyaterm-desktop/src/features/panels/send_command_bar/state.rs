@@ -3,11 +3,8 @@ use super::*;
 pub(super) struct SendCommandBarViewState {
     pub(super) palette: crate::theme::ThemePalette,
     pub(super) group_targets: Vec<(String, String, usize)>,
-    pub(super) target_scope_label: String,
     pub(super) target_kind: &'static str,
-    pub(super) target_available: bool,
     pub(super) is_serial_text_line: bool,
-    pub(super) validation_text: String,
     pub(super) validation_error: bool,
     pub(super) preview: String,
     pub(super) input_hint: &'static str,
@@ -23,46 +20,7 @@ impl NyaTermApp {
     pub(super) fn send_command_bar_view_state(&self) -> SendCommandBarViewState {
         let palette = self.theme_palette();
         let active_kind = self.active_session_kind();
-        let active_target = self
-            .active_session_name()
-            .or_else(|| {
-                self.active_session_id
-                    .as_ref()
-                    .map(|session_id| format!("Session {}", short_id(session_id)))
-            })
-            .unwrap_or_else(|| "No active session".to_string());
-        let target_available = self.active_session_id.is_some();
         let group_targets = self.send_command_group_target_options();
-        let target_scope_label = match &self.send_command_target {
-            SendCommandTarget::Current => active_target.clone(),
-            SendCommandTarget::AllCompatible => {
-                let n = self.send_command_target_session_ids().len();
-                if n == 0 {
-                    "No compatible sessions".to_string()
-                } else {
-                    format!("All compatible ({n})")
-                }
-            }
-            SendCommandTarget::Group(group_id) => {
-                let n = self.send_command_target_session_ids().len();
-                let name = group_targets
-                    .iter()
-                    .find(|(id, _, _)| id == group_id)
-                    .map(|(_, name, _)| name.clone())
-                    .or_else(|| {
-                        self.sync_groups
-                            .iter()
-                            .find(|group| &group.id == group_id)
-                            .map(|group| group.name.clone())
-                    })
-                    .unwrap_or_else(|| "Group".to_string());
-                if n == 0 {
-                    format!("Group: {name} (empty)")
-                } else {
-                    format!("Group: {name} ({n})")
-                }
-            }
-        };
         let target_kind = match active_kind {
             Some(SessionKind::Serial) => "Serial Data",
             Some(SessionKind::RawTcp) => "Raw TCP",
@@ -75,25 +33,12 @@ impl NyaTermApp {
             && self.send_command_mode == SendCommandMode::Line;
         let unit_result =
             self.build_send_command_units(&self.send_command_draft.clone(), active_kind);
-        let (validation_text, validation_error, unit_count, byte_count) = match &unit_result {
+        let (validation_error, unit_count, byte_count) = match &unit_result {
             Ok(units) => {
                 let bytes = units.iter().map(Vec::len).sum::<usize>();
-                (
-                    format!(
-                        "{} unit(s) · {} byte(s) · count {} · interval {:.2}s",
-                        units.len(),
-                        bytes,
-                        self.send_command_count
-                            .map(|n| n.to_string())
-                            .unwrap_or_else(|| "∞".to_string()),
-                        self.send_command_interval_seconds
-                    ),
-                    false,
-                    units.len(),
-                    bytes,
-                )
+                (false, units.len(), bytes)
             }
-            Err(error) => (error.clone(), true, 0usize, 0usize),
+            Err(_) => (true, 0usize, 0usize),
         };
         let preview = if self.send_command_data_type == SendCommandDataType::Hex {
             send_command_hex_preview(&self.send_command_draft)
@@ -148,17 +93,14 @@ impl NyaTermApp {
                 )
             }
         } else {
-            validation_text.clone()
+            String::new()
         };
 
         SendCommandBarViewState {
             palette,
             group_targets,
-            target_scope_label,
             target_kind,
-            target_available,
             is_serial_text_line,
-            validation_text,
             validation_error,
             preview,
             input_hint,

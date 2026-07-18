@@ -106,11 +106,19 @@ impl NyaTermApp {
             }
             *self.activity_bar_layout.zone_mut(zone) = next;
         }
-        // Ensure defaults exist if zones empty for critical items.
+        // Keep intentionally empty zones empty. Tauri only restores missing entries;
+        // it does not repopulate a zone after the user moves its last item away.
         let defaults = ActivityBarLayoutState::default();
         for zone in ActivityBarZone::all() {
-            if self.activity_bar_layout.zone(zone).is_empty() {
-                *self.activity_bar_layout.zone_mut(zone) = defaults.zone(zone).to_vec();
+            let missing = defaults
+                .zone(zone)
+                .iter()
+                .filter(|id| !seen.contains(*id))
+                .cloned()
+                .collect::<Vec<_>>();
+            if !missing.is_empty() {
+                self.activity_bar_layout.zone_mut(zone).extend(missing);
+                seen.extend(defaults.zone(zone).iter().cloned());
             }
         }
     }
@@ -131,6 +139,7 @@ impl NyaTermApp {
         entry_id: String,
         zone: ActivityBarZone,
         index: usize,
+        event: &MouseDownEvent,
         cx: &mut Context<Self>,
     ) {
         self.title_menu_open = None;
@@ -138,8 +147,21 @@ impl NyaTermApp {
             entry_id,
             zone,
             index,
+            x: event.position.x,
+            y: event.position.y,
+            move_submenu_open: false,
         });
         cx.notify();
+    }
+
+    pub(in crate::features) fn open_activity_bar_move_submenu(&mut self, cx: &mut Context<Self>) {
+        let Some(menu) = self.activity_bar_context_menu.as_mut() else {
+            return;
+        };
+        if !menu.move_submenu_open {
+            menu.move_submenu_open = true;
+            cx.notify();
+        }
     }
 
     pub(in crate::features) fn close_activity_bar_context_menu(&mut self, cx: &mut Context<Self>) {
@@ -244,34 +266,6 @@ impl NyaTermApp {
         }
     }
 
-    pub(in crate::features) fn reorder_activity_entry(
-        &mut self,
-        entry_id: String,
-        delta: isize,
-        cx: &mut Context<Self>,
-    ) {
-        let Some((zone, index)) = self.activity_bar_layout.find_entry(&entry_id) else {
-            return;
-        };
-        let len = self.activity_bar_layout.zone(zone).len();
-        if len == 0 {
-            return;
-        }
-        let next = if delta < 0 {
-            index.saturating_sub(1)
-        } else {
-            (index + 1).min(len.saturating_sub(1))
-        };
-        if next == index {
-            return;
-        }
-        self.activity_bar_layout.zone_mut(zone).swap(index, next);
-        self.activity_bar_context_menu = None;
-        self.terminal_status = format!("reordered {entry_id}");
-        self.persist_ui_layout();
-        cx.notify();
-    }
-
     pub(in crate::features) fn activate_activity_entry(
         &mut self,
         entry: ActivityBarEntry,
@@ -280,24 +274,46 @@ impl NyaTermApp {
     ) {
         match entry {
             ActivityBarEntry::Panel(NavItem::Settings) => self.open_page(NavItem::Settings, cx),
-            ActivityBarEntry::Panel(item) => self.open_panel(item, cx),
+            ActivityBarEntry::Panel(item) => {
+                self.open_panel(item, cx);
+                if !cfg!(target_os = "macos")
+                    && item.is_left_panel()
+                    && self.last_viewport_size.0 < 1024.
+                {
+                    self.mobile_left_open = true;
+                } else if !cfg!(target_os = "macos")
+                    && item.is_right_panel()
+                    && self.last_viewport_size.0 < 768.
+                {
+                    self.mobile_right_open = true;
+                }
+                cx.notify();
+            }
             ActivityBarEntry::QuickCommands => {
-                self.bottom_panel = if self.bottom_panel == BottomPanelMode::QuickCommands {
+                let mode = if self.bottom_panel == BottomPanelMode::QuickCommands {
                     BottomPanelMode::Hidden
                 } else {
                     BottomPanelMode::QuickCommands
                 };
+                self.set_bottom_panel_mode(mode);
                 cx.notify();
             }
             ActivityBarEntry::CommandSend => {
-                self.bottom_panel = if self.bottom_panel == BottomPanelMode::CommandSend {
+                let mode = if self.bottom_panel == BottomPanelMode::CommandSend {
                     BottomPanelMode::Hidden
                 } else {
                     BottomPanelMode::CommandSend
                 };
+                self.set_bottom_panel_mode(mode);
                 cx.notify();
             }
-            ActivityBarEntry::Recording => self.open_panel(NavItem::Recording, cx),
+            ActivityBarEntry::Recording => {
+                self.open_panel(NavItem::Recording, cx);
+                if !cfg!(target_os = "macos") && self.last_viewport_size.0 < 768. {
+                    self.mobile_right_open = true;
+                }
+                cx.notify();
+            }
             ActivityBarEntry::Lock => self.lock_app(window, cx),
         }
     }

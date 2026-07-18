@@ -1,3 +1,4 @@
+use gpui::Pixels;
 use nyaterm_core::{AiAction, AiContext, QuickCommand};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -61,7 +62,44 @@ pub(crate) struct QuickCommandDeleteState {
 pub(crate) struct QuickCommandDetailsState {
     pub(crate) command: QuickCommand,
     pub(crate) category: String,
-    pub(crate) risk: String,
+    pub(crate) x: Pixels,
+    pub(crate) y: Pixels,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub(crate) struct QuickCommandRowMenuState {
+    pub(crate) command_id: String,
+    pub(crate) x: Pixels,
+    pub(crate) y: Pixels,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub(crate) struct QuickCommandCategoryMenuState {
+    pub(crate) category_id: String,
+    pub(crate) x: Pixels,
+    pub(crate) y: Pixels,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub(crate) struct ActiveSessionMenuState {
+    pub(crate) session_id: String,
+    pub(crate) x: Pixels,
+    pub(crate) y: Pixels,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub(crate) struct AiMessageMenuState {
+    pub(crate) message_id: String,
+    pub(crate) role_label: String,
+    pub(crate) text: String,
+    pub(crate) x: Pixels,
+    pub(crate) y: Pixels,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct AiDetectedErrorState {
+    pub(crate) session_id: String,
+    pub(crate) output: String,
 }
 
 #[derive(Debug, Clone)]

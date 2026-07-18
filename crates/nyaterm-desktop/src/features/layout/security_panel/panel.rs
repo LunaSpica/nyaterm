@@ -15,15 +15,6 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
         let active_tab = self.security_auth_tab;
-        let key_count = self.connection_ssh_keys.len();
-        let password_count = self.connection_saved_passwords.len();
-        let credential_count = self.connection_saved_credentials.len();
-        let otp_count = self.connection_otp_entries.len();
-        let master = if self.settings.has_master_password {
-            "configured"
-        } else {
-            "not set"
-        };
         let palette = self.theme_palette();
 
         let mut body = match active_tab {
@@ -91,7 +82,6 @@ impl NyaTermApp {
                     .bg(rgb(palette.section_header))
                     .flex()
                     .flex_col()
-                    .gap_2()
                     // Tauri SecurityAuthPanel: full-width 4-col segment tabs under PanelHeader.
                     .child(
                         div()
@@ -107,81 +97,16 @@ impl NyaTermApp {
                             .child(self.security_tab_chip(SecurityAuthTab::Passwords, cx))
                             .child(self.security_tab_chip(SecurityAuthTab::Otp, cx))
                             .child(self.security_tab_chip(SecurityAuthTab::Credentials, cx)),
-                    )
-                    .child(
-                        div()
-                            .flex()
-                            .items_center()
-                            .justify_between()
-                            .gap_2()
-                            .child(
-                                div()
-                                    .text_size(px(10.))
-                                    .text_color(rgb(palette.text_dimmed))
-                                    .child(self.security_status.clone()),
-                            )
-                            .child(
-                                div()
-                                    .flex()
-                                    .items_center()
-                                    .gap_1()
-                                    .child(
-                                        div()
-                                            .text_size(px(10.))
-                                            .text_color(rgb(palette.text_dimmed))
-                                            .child(format!(
-                                                "MP {master} · K{key_count}/P{password_count}/C{credential_count}/O{otp_count}"
-                                            )),
-                                    )
-                                    .when(
-                                        self.security_auth_tab == SecurityAuthTab::Otp
-                                            && !self.connection_otp_entries.is_empty(),
-                                        |this| {
-                                            this.child(small_button(
-                                                palette,
-                                                "security-otp-refresh-all",
-                                                "Refresh",
-                                                cx.listener(|this, _, window, cx| {
-                                                    this.refresh_visible_security_otp_codes(
-                                                        window, cx,
-                                                    );
-                                                }),
-                                            ))
-                                        },
-                                    )
-                                    .child(small_button(palette,
-                                        "security-add-item",
-                                        "Add",
-                                        cx.listener(|this, _, window, cx| {
-                                            match this.security_auth_tab {
-                                                SecurityAuthTab::Keys => {
-                                                    this.open_security_key_editor(
-                                                        None, window, cx,
-                                                    );
-                                                }
-                                                SecurityAuthTab::Passwords => {
-                                                    this.open_security_password_editor(
-                                                        None, window, cx,
-                                                    );
-                                                }
-                                                SecurityAuthTab::Credentials => {
-                                                    this.open_security_credential_editor(
-                                                        None, window, cx,
-                                                    );
-                                                }
-                                                SecurityAuthTab::Otp => {
-                                                    this.open_security_otp_editor(
-                                                        None, window, cx,
-                                                    );
-                                                }
-                                            }
-                                        }),
-                                    )),
-                            ),
                     ),
             )
             .child(body)
-            .child(self.security_secret_footer(cx))
+            .when(
+                matches!(
+                    active_tab,
+                    SecurityAuthTab::Passwords | SecurityAuthTab::Credentials
+                ),
+                |this| this.child(self.security_secret_footer(cx)),
+            )
             .when(self.security_unlock_prompt_open, |this| {
                 this.child(self.security_unlock_prompt(cx))
             })
@@ -197,4 +122,67 @@ fn security_auth_body_base() -> gpui::Div {
         .flex_col()
         .gap_1()
         .p_2()
+}
+
+fn security_tab_toolbar(
+    palette: ThemePalette,
+    title: &'static str,
+    add_id: impl Into<String>,
+    add_label: &'static str,
+    enabled: bool,
+    on_add: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
+) -> gpui::Div {
+    div()
+        .flex_none()
+        .h(px(28.))
+        .flex()
+        .items_center()
+        .justify_between()
+        .gap_2()
+        .child(
+            div()
+                .text_xs()
+                .font_weight(FontWeight(600.))
+                .text_color(rgb(palette.text))
+                .child(title),
+        )
+        .child(security_toolbar_action_button(
+            palette, add_id, add_label, enabled, on_add,
+        ))
+}
+
+fn security_toolbar_action_button(
+    palette: ThemePalette,
+    id: impl Into<String>,
+    label: &'static str,
+    enabled: bool,
+    on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
+) -> impl IntoElement {
+    div()
+        .id(SharedString::from(id.into()))
+        .h(px(26.))
+        .px_2()
+        .rounded_md()
+        .flex()
+        .items_center()
+        .text_size(px(11.))
+        .font_weight(FontWeight(600.))
+        .text_color(rgb(if enabled {
+            palette.accent
+        } else {
+            palette.text_dimmed
+        }))
+        .when(enabled, |this| {
+            this.cursor_pointer().hover(|this| {
+                this.bg(rgb(palette.surface_elevated))
+                    .text_color(rgb(palette.text))
+            })
+        })
+        .when(!enabled, |this| this.opacity(0.45))
+        .child(label)
+        .on_click(move |event, window, cx| {
+            if enabled {
+                on_click(event, window, cx);
+            }
+        })
 }

@@ -404,20 +404,14 @@ impl NyaTermApp {
     ) -> impl IntoElement {
         use gpui::relative;
 
-        if let Some(overlay) = self.side_overlay_panel(side) {
-            return self.single_side_panel(side, overlay, cx);
-        }
-
         let open_ids = self.side_open_panel_ids(side);
-        if open_ids.is_empty() {
+        let mut stack = if open_ids.is_empty() {
             let fallback = match side {
                 PanelSide::Left => NavItem::Transfers,
                 PanelSide::Right => NavItem::Connections,
             };
-            return self.single_side_panel(side, fallback, cx);
-        }
-
-        if open_ids.len() == 1 || !self.panel_multi_open {
+            self.single_side_panel(side, fallback, cx)
+        } else if open_ids.len() == 1 || !self.panel_multi_open {
             let panel = open_ids
                 .first()
                 .and_then(|id| NavItem::from_persistence_id(id))
@@ -425,42 +419,67 @@ impl NyaTermApp {
                     PanelSide::Left => NavItem::Transfers,
                     PanelSide::Right => NavItem::Connections,
                 });
-            return self.single_side_panel(side, panel, cx);
+            self.single_side_panel(side, panel, cx)
+        } else {
+            let weights: Vec<f32> = open_ids
+                .iter()
+                .map(|id| self.panel_stack_weight(id))
+                .collect();
+            let total: f32 = weights.iter().sum::<f32>().max(0.001);
+            let count = open_ids.len();
+            let mut stack = div().size_full().flex().flex_col().min_h_0();
+            for (index, panel_id) in open_ids.iter().enumerate() {
+                let panel = NavItem::from_persistence_id(panel_id).unwrap_or(NavItem::Transfers);
+                let basis = weights[index] / total;
+                let meta = self.side_panel_meta(side, panel);
+                let actions = self.side_panel_header_actions(panel, cx);
+                let palette = self.theme_palette();
+                let body = match side {
+                    PanelSide::Left => self.left_panel_body(panel, cx),
+                    PanelSide::Right => self.right_panel_body(panel, cx),
+                };
+                stack = stack.child(
+                    div()
+                        .flex_none()
+                        .flex_basis(relative(basis))
+                        .min_h(px(96.))
+                        .flex()
+                        .flex_col()
+                        .overflow_hidden()
+                        .child(panel_header_with_actions(
+                            panel.panel_title(),
+                            meta,
+                            palette,
+                            actions,
+                        ))
+                        .child(div().flex_1().min_h_0().overflow_hidden().child(body)),
+                );
+                if index + 1 < count {
+                    let above = panel_id.clone();
+                    let below = open_ids[index + 1].clone();
+                    stack = stack.child(self.panel_stack_resize_handle(side, above, below, cx));
+                }
+            }
+            stack
+        };
+
+        if let Some(overlay) = self.side_overlay_panel(side) {
+            stack = stack.opacity(0.);
+            return div()
+                .relative()
+                .size_full()
+                .overflow_hidden()
+                .child(stack)
+                .child(
+                    self.single_side_panel(side, overlay, cx)
+                        .absolute()
+                        .top_0()
+                        .left_0()
+                        .right_0()
+                        .bottom_0(),
+                );
         }
 
-        let weights: Vec<f32> = open_ids
-            .iter()
-            .map(|id| self.panel_stack_weight(id))
-            .collect();
-        let total: f32 = weights.iter().sum::<f32>().max(0.001);
-        let count = open_ids.len();
-        let mut stack = div().size_full().flex().flex_col().min_h_0();
-        for (index, panel_id) in open_ids.iter().enumerate() {
-            let panel = NavItem::from_persistence_id(panel_id).unwrap_or(NavItem::Transfers);
-            let basis = weights[index] / total;
-            let meta = self.side_panel_meta(side, panel);
-            let palette = self.theme_palette();
-            let body = match side {
-                PanelSide::Left => self.left_panel_body(panel, cx),
-                PanelSide::Right => self.right_panel_body(panel, cx),
-            };
-            stack = stack.child(
-                div()
-                    .flex_none()
-                    .flex_basis(relative(basis))
-                    .min_h(px(96.))
-                    .flex()
-                    .flex_col()
-                    .overflow_hidden()
-                    .child(panel_header(panel.panel_title(), meta, palette))
-                    .child(div().flex_1().min_h_0().overflow_hidden().child(body)),
-            );
-            if index + 1 < count {
-                let above = panel_id.clone();
-                let below = open_ids[index + 1].clone();
-                stack = stack.child(self.panel_stack_resize_handle(side, above, below, cx));
-            }
-        }
         stack
     }
 
@@ -471,6 +490,7 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) -> gpui::Div {
         let meta = self.side_panel_meta(side, panel);
+        let actions = self.side_panel_header_actions(panel, cx);
         let palette = self.theme_palette();
         let body = match side {
             PanelSide::Left => self.left_panel_body(panel, cx),
@@ -480,21 +500,19 @@ impl NyaTermApp {
             .size_full()
             .flex()
             .flex_col()
-            .child(panel_header(panel.panel_title(), meta, palette))
+            .child(panel_header_with_actions(
+                panel.panel_title(),
+                meta,
+                palette,
+                actions,
+            ))
             .child(div().flex_1().min_h_0().overflow_hidden().child(body))
     }
 
     /// Tauri PanelHeader meta/actions: Connections shows total count; AI shows model name.
     fn side_panel_meta(&self, _side: PanelSide, panel: NavItem) -> SharedString {
         match panel {
-            NavItem::Connections => {
-                let count = self.connections.len();
-                if count == 0 {
-                    SharedString::from("")
-                } else {
-                    SharedString::from(count.to_string())
-                }
-            }
+            NavItem::Connections => SharedString::from(""),
             NavItem::AiAssistant => {
                 let label = if !self.ai_model_draft.trim().is_empty() {
                     truncate_preview(self.ai_model_draft.trim(), 28)
@@ -548,16 +566,19 @@ impl NyaTermApp {
                 }
             }
             NavItem::Docker => {
-                let count = self
+                let Some(overview) = self
                     .docker_overview
                     .as_ref()
-                    .map(|o| o.containers.len())
-                    .unwrap_or(0);
-                if count == 0 {
-                    SharedString::from("")
+                    .filter(|overview| overview.available)
+                else {
+                    return SharedString::from("");
+                };
+                let version = if overview.version.trim().is_empty() {
+                    "-"
                 } else {
-                    SharedString::from(count.to_string())
-                }
+                    overview.version.trim()
+                };
+                SharedString::from(format!("Engine {}", truncate_preview(version, 24)))
             }
             // Tauri SecurityAuthPanel header actions show active-tab count.
             NavItem::SecurityAuth => {
@@ -591,6 +612,156 @@ impl NyaTermApp {
                 }
             }
             _ => SharedString::from(""),
+        }
+    }
+
+    fn side_panel_header_actions(
+        &mut self,
+        panel: NavItem,
+        cx: &mut Context<Self>,
+    ) -> Option<AnyElement> {
+        match panel {
+            NavItem::Connections if !self.connections.is_empty() => Some(
+                div()
+                    .text_size(px(11.))
+                    .text_color(rgb(self.theme_palette().text_dimmed))
+                    .child(self.connections.len().to_string())
+                    .into_any_element(),
+            ),
+            NavItem::AiAssistant => {
+                let palette = self.theme_palette();
+                let ai_running = self.ai_chat_pending || self.ai_agent_loop.is_some();
+                Some(
+                    div()
+                        .flex()
+                        .items_center()
+                        .gap_1()
+                        .child(header_svg_icon_button(
+                            palette,
+                            "ai-header-execution-mode-toggle",
+                            match self.ai_settings.agent_command_execution_mode {
+                                AgentCommandExecutionMode::Auto => "icons/ai/exec-auto.svg",
+                                AgentCommandExecutionMode::Smart => "icons/ai/exec-smart.svg",
+                                AgentCommandExecutionMode::ConfirmEach => {
+                                    "icons/ai/exec-confirm.svg"
+                                }
+                            },
+                            !ai_running,
+                            cx.listener(|this, _, _, cx| {
+                                this.ai_history_open = false;
+                                this.ai_history_query.clear();
+                                this.ai_execution_menu_open = !this.ai_execution_menu_open;
+                                cx.notify();
+                            }),
+                        ))
+                        .child(header_svg_icon_button(
+                            palette,
+                            "ai-header-history-toggle",
+                            "icons/ai/history.svg",
+                            true,
+                            cx.listener(|this, _, window, cx| {
+                                this.ai_execution_menu_open = false;
+                                this.ai_history_open = !this.ai_history_open;
+                                if this.ai_history_open {
+                                    this.refresh_ai_session_list(cx);
+                                    window.focus(&this.ai_history_search_focus);
+                                } else {
+                                    this.ai_history_query.clear();
+                                }
+                                cx.notify();
+                            }),
+                        ))
+                        .child(header_svg_icon_button(
+                            palette,
+                            "ai-header-open-settings",
+                            "icons/ai/settings.svg",
+                            true,
+                            cx.listener(|this, _, _, cx| {
+                                this.ai_history_open = false;
+                                this.ai_execution_menu_open = false;
+                                this.settings_active_tab = SettingsTab::AiGeneral;
+                                this.open_page(NavItem::Settings, cx);
+                            }),
+                        ))
+                        .child(header_svg_icon_button(
+                            palette,
+                            "ai-header-new-chat",
+                            "icons/ai/new.svg",
+                            !ai_running,
+                            cx.listener(|this, _, _, cx| {
+                                this.start_new_ai_chat(cx);
+                            }),
+                        ))
+                        .into_any_element(),
+                )
+            }
+            NavItem::Stats => {
+                let palette = self.theme_palette();
+                let can_refresh = self.active_ssh_config.is_some() && !self.stats_pending;
+                Some(
+                    header_svg_icon_button(
+                        palette,
+                        "stats-header-refresh",
+                        "icons/fe/refresh.svg",
+                        can_refresh,
+                        cx.listener(|this, _, window, cx| {
+                            this.refresh_stats(window, cx);
+                        }),
+                    )
+                    .into_any_element(),
+                )
+            }
+            NavItem::Processes => {
+                let palette = self.theme_palette();
+                let can_refresh = self.active_ssh_config.is_some() && !self.process_pending;
+                Some(
+                    header_svg_icon_button(
+                        palette,
+                        "process-header-refresh",
+                        "icons/fe/refresh.svg",
+                        can_refresh,
+                        cx.listener(|this, _, window, cx| {
+                            this.refresh_processes(window, cx);
+                        }),
+                    )
+                    .into_any_element(),
+                )
+            }
+            NavItem::Docker => {
+                let palette = self.theme_palette();
+                let can_refresh = self.active_ssh_config.is_some() && !self.docker_pending;
+                let can_prune = can_refresh
+                    && self
+                        .docker_overview
+                        .as_ref()
+                        .is_some_and(|overview| overview.available);
+                Some(
+                    div()
+                        .flex()
+                        .items_center()
+                        .gap_1()
+                        .child(header_svg_icon_button(
+                            palette,
+                            "docker-header-refresh",
+                            "icons/fe/refresh.svg",
+                            can_refresh,
+                            cx.listener(|this, _, window, cx| {
+                                this.refresh_docker(window, cx);
+                            }),
+                        ))
+                        .child(header_svg_icon_button(
+                            palette,
+                            "docker-header-prune",
+                            "icons/fe/delete.svg",
+                            can_prune,
+                            cx.listener(|this, _, _, cx| {
+                                this.prune_docker_system(cx);
+                            }),
+                        ))
+                        .into_any_element(),
+                )
+            }
+            _ => None,
         }
     }
 
@@ -637,4 +808,38 @@ impl NyaTermApp {
                 }),
             )
     }
+}
+
+fn header_svg_icon_button(
+    palette: ThemePalette,
+    id: impl Into<String>,
+    icon_path: &'static str,
+    enabled: bool,
+    on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
+) -> impl IntoElement {
+    div()
+        .id(SharedString::from(id.into()))
+        .size(px(28.))
+        .flex()
+        .items_center()
+        .justify_center()
+        .rounded_md()
+        .text_color(rgb(if enabled {
+            palette.text_muted
+        } else {
+            palette.text_dimmed
+        }))
+        .when(enabled, |this| {
+            this.cursor_pointer().hover(|this| {
+                this.bg(rgb(palette.surface_elevated))
+                    .text_color(rgb(palette.text))
+            })
+        })
+        .when(!enabled, |this| this.opacity(0.45))
+        .child(svg().size(px(16.)).flex_none().path(icon_path))
+        .on_click(move |event, window, cx| {
+            if enabled {
+                on_click(event, window, cx);
+            }
+        })
 }

@@ -743,6 +743,14 @@ pub(crate) struct TerminalContextMenuState {
     pub(crate) y: Pixels,
     /// Snapshot of selected text when the menu opened (Tauri caches selection).
     pub(crate) selected_text: String,
+    pub(crate) submenu: Option<TerminalContextSubmenu>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum TerminalContextSubmenu {
+    SearchOnline,
+    Ai,
+    Translate,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -765,7 +773,6 @@ pub(crate) enum ConnectionSortMode {
     Default,
     NameAsc,
     NameDesc,
-    Recent,
 }
 
 impl ConnectionSortMode {
@@ -774,7 +781,22 @@ impl ConnectionSortMode {
             Self::Default => "Default",
             Self::NameAsc => "Name A-Z",
             Self::NameDesc => "Name Z-A",
-            Self::Recent => "Recent",
+        }
+    }
+
+    pub(crate) fn from_setting(value: &str) -> Self {
+        match value.trim() {
+            "name-asc" => Self::NameAsc,
+            "name-desc" => Self::NameDesc,
+            _ => Self::Default,
+        }
+    }
+
+    pub(crate) fn persistence_id(self) -> &'static str {
+        match self {
+            Self::Default => "default",
+            Self::NameAsc => "name-asc",
+            Self::NameDesc => "name-desc",
         }
     }
 
@@ -782,8 +804,7 @@ impl ConnectionSortMode {
         match self {
             Self::Default => Self::NameAsc,
             Self::NameAsc => Self::NameDesc,
-            Self::NameDesc => Self::Recent,
-            Self::Recent => Self::Default,
+            Self::NameDesc => Self::Default,
         }
     }
 }

@@ -9,7 +9,12 @@ impl NyaTermApp {
         display_name: &str,
         active_color: Option<u32>,
         can_copy_ssh: bool,
+        can_spawn_session: bool,
         can_multiplex: bool,
+        can_reconnect: bool,
+        can_disconnect: bool,
+        can_use_ai: bool,
+        can_session_info: bool,
         can_close_inactive: bool,
         can_close_right: bool,
         can_unsplit: bool,
@@ -91,8 +96,8 @@ impl NyaTermApp {
         let window_leaf_right_session_id = session_id.clone();
         let window_leaf_below_session_id = session_id.clone();
         let reconnect_session_id = session_id.clone();
+        let disconnect_session_id = session_id.clone();
         let info_session_id = session_id.clone();
-        let close_session_id = session_id.clone();
         let inactive_anchor = session_id.clone();
         let right_anchor = session_id.clone();
         let explain_session_id = session_id.clone();
@@ -212,23 +217,37 @@ impl NyaTermApp {
                         ))
                     })
                     .child(tab_menu_separator(palette))
-                    .child(tab_menu_item(
+                    .child(tab_menu_item_enabled(
                         palette,
                         "tab-ctx-duplicate",
                         "Duplicate",
+                        can_spawn_session,
                         cx.listener(move |this, _, window, cx| {
                             this.select_session(duplicate_session_id.clone(), cx);
                             this.close_tab_actions(cx);
+                            if !this.tab_action_can_spawn_session(&duplicate_session_id) {
+                                this.terminal_status =
+                                    "active session cannot be duplicated".to_string();
+                                cx.notify();
+                                return;
+                            }
                             this.duplicate_active_session(window, cx);
                         }),
                     ))
-                    .child(tab_menu_item(
+                    .child(tab_menu_item_enabled(
                         palette,
                         "tab-ctx-duplicate-run",
                         "Duplicate with Command",
+                        can_spawn_session,
                         cx.listener(move |this, _, window, cx| {
                             this.select_session(startup_session_id.clone(), cx);
                             this.close_tab_actions(cx);
+                            if !this.tab_action_can_spawn_session(&startup_session_id) {
+                                this.terminal_status =
+                                    "active session cannot be duplicated".to_string();
+                                cx.notify();
+                                return;
+                            }
                             this.open_startup_command_dialog(window, cx);
                         }),
                     ))
@@ -240,6 +259,16 @@ impl NyaTermApp {
                         cx.listener(move |this, _, window, cx| {
                             this.select_session(multiplex_session_id.clone(), cx);
                             this.close_tab_actions(cx);
+                            if this
+                                .active_session_busy_actions
+                                .contains_key(&multiplex_session_id)
+                                || this.is_session_disconnected(&multiplex_session_id)
+                            {
+                                this.terminal_status =
+                                    "SSH multiplex is unavailable for this session".to_string();
+                                cx.notify();
+                                return;
+                            }
                             this.multiplex_active_ssh_session(window, cx);
                         }),
                     ))
@@ -251,6 +280,16 @@ impl NyaTermApp {
                         cx.listener(move |this, _, window, cx| {
                             this.select_session(multiplex_startup_session_id.clone(), cx);
                             this.close_tab_actions(cx);
+                            if this
+                                .active_session_busy_actions
+                                .contains_key(&multiplex_startup_session_id)
+                                || this.is_session_disconnected(&multiplex_startup_session_id)
+                            {
+                                this.terminal_status =
+                                    "SSH multiplex is unavailable for this session".to_string();
+                                cx.notify();
+                                return;
+                            }
                             this.open_startup_command_dialog_for(
                                 StartupCommandAction::Multiplex,
                                 window,
@@ -258,33 +297,62 @@ impl NyaTermApp {
                             );
                         }),
                     ))
-                    .child(tab_menu_item(
+                    .child(tab_menu_item_enabled(
                         palette,
                         "tab-ctx-reconnect",
                         "Reconnect",
+                        can_reconnect,
                         cx.listener(move |this, _, window, cx| {
                             this.select_session(reconnect_session_id.clone(), cx);
                             this.close_tab_actions(cx);
+                            if this
+                                .active_session_busy_actions
+                                .contains_key(&reconnect_session_id)
+                                || this.has_pending_session_start()
+                            {
+                                cx.notify();
+                                return;
+                            }
                             this.reconnect_active_session(window, cx);
                         }),
                     ))
-                    .child(tab_menu_item(
+                    .child(tab_menu_item_enabled(
                         palette,
                         "tab-ctx-disconnect",
                         "Disconnect",
+                        can_disconnect,
                         cx.listener(move |this, _, _, cx| {
                             this.close_tab_actions(cx);
-                            this.disconnect_session(close_session_id.clone(), cx);
+                            if this
+                                .active_session_busy_actions
+                                .contains_key(&disconnect_session_id)
+                                || this.is_session_disconnected(&disconnect_session_id)
+                            {
+                                cx.notify();
+                                return;
+                            }
+                            this.disconnect_session(disconnect_session_id.clone(), cx);
                         }),
                     ))
                     .child(tab_menu_separator(palette))
-                    .child(tab_menu_item(
+                    .child(tab_menu_item_enabled(
                         palette,
                         "tab-ctx-ai-explain",
                         "AI · Explain Recent",
+                        can_use_ai,
                         cx.listener(move |this, _, window, cx| {
                             this.select_session(explain_session_id.clone(), cx);
                             this.close_tab_actions(cx);
+                            if this
+                                .active_session_busy_actions
+                                .contains_key(&explain_session_id)
+                                || this.is_session_disconnected(&explain_session_id)
+                            {
+                                this.ai_status =
+                                    "terminal session unavailable for AI".to_string();
+                                cx.notify();
+                                return;
+                            }
                             if visible_for_ai.trim().is_empty() {
                                 this.ai_status = "terminal visible screen is empty".to_string();
                             } else {
@@ -299,13 +367,24 @@ impl NyaTermApp {
                             cx.notify();
                         }),
                     ))
-                    .child(tab_menu_item(
+                    .child(tab_menu_item_enabled(
                         palette,
                         "tab-ctx-ai-analyze",
                         "AI · Analyze Errors",
+                        can_use_ai,
                         cx.listener(move |this, _, window, cx| {
                             this.select_session(analyze_session_id.clone(), cx);
                             this.close_tab_actions(cx);
+                            if this
+                                .active_session_busy_actions
+                                .contains_key(&analyze_session_id)
+                                || this.is_session_disconnected(&analyze_session_id)
+                            {
+                                this.ai_status =
+                                    "terminal session unavailable for AI".to_string();
+                                cx.notify();
+                                return;
+                            }
                             if buffer_for_ai.trim().is_empty() {
                                 this.ai_status = "terminal buffer is empty".to_string();
                             } else {
@@ -321,13 +400,20 @@ impl NyaTermApp {
                         }),
                     ))
                     .child(tab_menu_separator(palette))
-                    .child(tab_menu_item(
+                    .child(tab_menu_item_enabled(
                         palette,
                         "tab-ctx-split-h",
                         "Split Horizontal",
+                        can_spawn_session,
                         cx.listener(move |this, _, window, cx| {
                             this.select_session(split_horizontal_session_id.clone(), cx);
                             this.close_tab_actions(cx);
+                            if !this.tab_action_can_spawn_session(&split_horizontal_session_id) {
+                                this.terminal_status =
+                                    "active session cannot be duplicated for split".to_string();
+                                cx.notify();
+                                return;
+                            }
                             this.split_workspace_with_duplicate(
                                 WorkspaceSplitDirection::Horizontal,
                                 window,
@@ -335,13 +421,20 @@ impl NyaTermApp {
                             );
                         }),
                     ))
-                    .child(tab_menu_item(
+                    .child(tab_menu_item_enabled(
                         palette,
                         "tab-ctx-split-v",
                         "Split Vertical",
+                        can_spawn_session,
                         cx.listener(move |this, _, window, cx| {
                             this.select_session(split_vertical_session_id.clone(), cx);
                             this.close_tab_actions(cx);
+                            if !this.tab_action_can_spawn_session(&split_vertical_session_id) {
+                                this.terminal_status =
+                                    "active session cannot be duplicated for split".to_string();
+                                cx.notify();
+                                return;
+                            }
                             this.split_workspace_with_duplicate(
                                 WorkspaceSplitDirection::Vertical,
                                 window,
@@ -465,13 +558,20 @@ impl NyaTermApp {
                             this.close_sessions_to_right(right_anchor.clone(), cx);
                         }),
                     ))
-                    .child(tab_menu_item(
+                    .child(tab_menu_item_enabled(
                         palette,
                         "tab-ctx-info",
                         "Session Info",
+                        can_session_info,
                         cx.listener(move |this, _, window, cx| {
                             this.select_session(info_session_id.clone(), cx);
                             this.close_tab_actions(cx);
+                            if !this.tab_action_can_show_session_info(&info_session_id) {
+                                this.terminal_status =
+                                    "active session has no saved connection info".to_string();
+                                cx.notify();
+                                return;
+                            }
                             this.open_active_session_info(window, cx);
                         }),
                     )),

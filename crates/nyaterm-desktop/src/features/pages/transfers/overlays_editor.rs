@@ -9,14 +9,17 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
         let palette = self.theme_palette();
-        let prompt =
-            self.transfer_external_sync_prompt
-                .clone()
-                .unwrap_or(TransferExternalSyncPromptState {
-                    job_id: String::new(),
-                    remote_path: String::new(),
-                    local_path: PathBuf::new(),
-                });
+        let prompt = self
+            .active_session_id
+            .as_ref()
+            .and_then(|session_id| self.transfer_external_sync_prompts.get(session_id))
+            .cloned()
+            .unwrap_or(TransferExternalSyncPromptState {
+                session_id: None,
+                job_id: String::new(),
+                remote_path: String::new(),
+                local_path: PathBuf::new(),
+            });
 
         div()
             .id(SharedString::from("transfer-external-sync-overlay"))
@@ -125,6 +128,7 @@ impl NyaTermApp {
     ) -> impl IntoElement {
         let palette = self.theme_palette();
         let state = self.transfer_editor.clone().unwrap_or(TransferEditorState {
+            session_id: None,
             remote_path: String::new(),
             name: String::new(),
             content: String::new(),

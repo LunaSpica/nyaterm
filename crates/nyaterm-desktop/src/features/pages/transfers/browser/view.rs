@@ -143,7 +143,6 @@ impl NyaTermApp {
                 .iter()
                 .cloned()
             {
-                let ai_actions = self.enabled_transfer_file_ai_actions_for_entry(&entry);
                 rows = rows.child(transfer_browser_entry_row(
                     palette,
                     entry,
@@ -152,7 +151,6 @@ impl NyaTermApp {
                     column_widths,
                     self.transfer_rename.clone(),
                     self.transfer_rename_focus.clone(),
-                    ai_actions,
                     cx,
                 ));
             }
@@ -202,30 +200,24 @@ impl NyaTermApp {
                         ))
                         .child(transfer_toolbar_divider(palette))
                         .child(compact_transfer_upload_menu_button(palette, cx))
-                        .child(
-                            div()
-                                .when(selected_count == 0, |this| this.opacity(0.45))
-                                .child(compact_transfer_toolbar_button(
-                                    palette,
-                                    "transfer-browser-download-selected",
-                                    "icons/fe/download.svg",
-                                    cx.listener(|this, _, window, cx| {
-                                        this.start_selected_sftp_download_jobs(window, cx);
-                                    }),
-                                )),
-                        )
-                        .child(
-                            div()
-                                .when(selected_count == 0, |this| this.opacity(0.45))
-                                .child(compact_transfer_toolbar_button(
-                                    palette,
-                                    "transfer-browser-delete-selected",
-                                    "icons/fe/delete.svg",
-                                    cx.listener(|this, _, window, cx| {
-                                        this.open_selected_transfer_delete_dialog(window, cx);
-                                    }),
-                                )),
-                        )
+                        .child(compact_transfer_toolbar_button_enabled(
+                            palette,
+                            "transfer-browser-download-selected",
+                            "icons/fe/download.svg",
+                            selected_count > 0,
+                            cx.listener(|this, _, window, cx| {
+                                this.start_selected_sftp_download_jobs(window, cx);
+                            }),
+                        ))
+                        .child(compact_transfer_toolbar_button_enabled(
+                            palette,
+                            "transfer-browser-delete-selected",
+                            "icons/fe/delete.svg",
+                            selected_count > 0,
+                            cx.listener(|this, _, window, cx| {
+                                this.open_selected_transfer_delete_dialog(window, cx);
+                            }),
+                        ))
                         .child(transfer_toolbar_divider(palette))
                         .child(compact_transfer_toolbar_button(
                             palette,
@@ -469,7 +461,7 @@ impl NyaTermApp {
                                             .text_size(px(10.))
                                             .font_weight(FontWeight(800.))
                                             .text_color(rgb(palette.text_muted))
-                                            .child("ACTIONS"),
+                                            .child(""),
                                     ),
                             )
                             .child(rows),
@@ -533,30 +525,7 @@ impl NyaTermApp {
                                 cx.listener(|this, _, _, cx| {
                                     this.send_current_transfer_browser_path_to_terminal(cx);
                                 }),
-                            ))
-                            .when(self.transfer_selected_remote_path.is_some(), |this| {
-                                this.child(compact_transfer_footer_button(
-                                    palette,
-                                    "transfer-footer-copy-path",
-                                    "icons/fe/paste.svg",
-                                    cx.listener(|this, _, _, cx| {
-                                        this.copy_selected_transfer_path(
-                                            TransferPathPart::Full,
-                                            cx,
-                                        );
-                                    }),
-                                ))
-                                .child(
-                                    compact_transfer_footer_button(
-                                        palette,
-                                        "transfer-footer-props",
-                                        "icons/fe/search.svg",
-                                        cx.listener(|this, _, window, cx| {
-                                            this.open_selected_transfer_properties(window, cx);
-                                        }),
-                                    ),
-                                )
-                            }),
+                            )),
                     ),
             )
     }

@@ -149,6 +149,16 @@ pub(in crate::features::panels) fn quick_command_icon_mark(
     }
 }
 
+pub(in crate::features::panels) fn quick_command_pin_mark(
+    palette: crate::theme::ThemePalette,
+) -> impl IntoElement {
+    svg()
+        .size(px(12.))
+        .flex_none()
+        .text_color(rgb(palette.warning))
+        .path("icons/pin.svg")
+}
+
 pub(in crate::features::panels) fn quick_command_color(
     palette: crate::theme::ThemePalette,
     color_tag: Option<&str>,
@@ -353,18 +363,6 @@ pub(in crate::features::panels) fn send_command_hex_preview(draft: &str) -> Stri
 
 pub(in crate::features::panels) fn send_command_hex_byte_count(draft: &str) -> Option<usize> {
     parse_send_command_hex(draft).ok().map(|bytes| bytes.len())
-}
-
-/// Format hex draft like Tauri: uppercase pairs spaced, double-space every 4 bytes.
-pub(in crate::features::panels) fn send_command_hex_guide_count(draft: &str) -> usize {
-    let normalized = draft.replace("\r\n", "\n").replace("\r", "\n");
-    normalized
-        .split('\n')
-        .map(|line| {
-            let hex_chars = line.chars().filter(|ch| ch.is_ascii_hexdigit()).count();
-            (hex_chars / 2) / 4
-        })
-        .sum()
 }
 
 /// Per-line character offsets for 4-byte group boundaries (Tauri `buildHexGuideRows`).

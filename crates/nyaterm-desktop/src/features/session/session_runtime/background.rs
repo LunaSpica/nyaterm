@@ -377,6 +377,32 @@ impl NyaTermApp {
                     let source_connection_id = pending
                         .as_ref()
                         .and_then(|pending| pending.source_connection_id.clone());
+                    if let Some(connection_id) = source_connection_id.as_deref() {
+                        match ConnectionStore::open_with_portable_key_path(
+                            self.runtime.config_dir(),
+                            self.runtime.portable_key_path().map(ToOwned::to_owned),
+                        )
+                        .and_then(|store| {
+                            store.mark_connection_used(connection_id)?;
+                            store.get_connection(connection_id)
+                        }) {
+                            Ok(Some(updated)) => {
+                                if let Some(connection) = self
+                                    .connections
+                                    .iter_mut()
+                                    .find(|connection| connection.id == connection_id)
+                                {
+                                    *connection = updated;
+                                }
+                            }
+                            Ok(None) => {}
+                            Err(error) => tracing::warn!(
+                                connection_id,
+                                error = %error,
+                                "failed to record recently used connection"
+                            ),
+                        }
+                    }
                     let ai_execution_profile = pending
                         .as_ref()
                         .map(|pending| pending.ai_execution_profile)

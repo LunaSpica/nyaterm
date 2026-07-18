@@ -61,33 +61,31 @@ pub(in crate::features::pages::transfers) fn queue_metric(
 pub(in crate::features::pages::transfers) fn queue_action_button(
     palette: crate::theme::ThemePalette,
     id: impl Into<String>,
-    label: &'static str,
+    icon_path: &'static str,
     enabled: bool,
     on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
 ) -> impl IntoElement {
     div()
         .id(SharedString::from(id.into()))
-        .h(px(22.))
-        .min_w(px(22.))
-        .px_1()
+        .size(px(28.))
         .flex()
         .items_center()
         .justify_center()
-        .rounded_sm()
-        .text_size(px(10.))
+        .rounded_md()
         .text_color(if enabled {
             rgb(palette.text_muted)
         } else {
-            rgb(palette.border)
+            rgb(palette.text_dimmed)
         })
-        .cursor_pointer()
-        .hover(|this| {
-            this.bg(rgb(palette.surface_elevated))
-                .text_color(rgb(palette.text))
+        .when(enabled, |this| {
+            this.cursor_pointer().hover(|this| {
+                this.bg(rgb(palette.surface_elevated))
+                    .text_color(rgb(palette.text))
+            })
         })
-        .opacity(if enabled { 1. } else { 0.4 })
+        .when(!enabled, |this| this.opacity(0.45))
         .when(enabled, |this| this.on_click(on_click))
-        .child(label)
+        .child(svg().size(px(16.)).flex_none().path(icon_path))
 }
 
 pub(in crate::features::pages::transfers) fn duplicate_policy_short_label(
@@ -133,15 +131,21 @@ pub(in crate::features::pages::transfers) fn transfer_direction_label(
 pub(in crate::features::pages::transfers) fn transfer_job_has_local_target(
     job: &TransferJobState,
 ) -> bool {
-    job.summary.is_some()
-        || job.progress.is_some()
-        || matches!(
-            job.kind,
-            TransferJobKind::Download { .. }
-                | TransferJobKind::OpenExternal { .. }
-                | TransferJobKind::TrzszDownload { .. }
-                | TransferJobKind::TrzszUpload { .. }
-        )
+    let download_like = matches!(
+        job.kind,
+        TransferJobKind::Download { .. }
+            | TransferJobKind::OpenExternal { .. }
+            | TransferJobKind::ZmodemDownload { .. }
+            | TransferJobKind::TrzszDownload { .. }
+    );
+
+    download_like
+        && (job.summary.is_some()
+            || job.progress.is_some()
+            || matches!(
+                job.kind,
+                TransferJobKind::Download { .. } | TransferJobKind::OpenExternal { .. }
+            ))
 }
 
 pub(in crate::features::pages::transfers) fn transfer_job_can_retry(

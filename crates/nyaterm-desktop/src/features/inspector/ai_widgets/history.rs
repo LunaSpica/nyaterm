@@ -1,6 +1,289 @@
 use super::*;
 
 impl NyaTermApp {
+    pub(in crate::features) fn open_ai_clear_history_confirm(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if self.ai_sessions.is_empty() {
+            return;
+        }
+        self.ai_clear_history_confirm_open = true;
+        self.ai_message_menu = None;
+        self.ai_model_menu_open = false;
+        self.ai_execution_menu_open = false;
+        window.focus(&self.ai_clear_history_confirm_focus);
+        cx.notify();
+    }
+
+    pub(in crate::features) fn cancel_ai_clear_history_confirm(&mut self, cx: &mut Context<Self>) {
+        self.ai_clear_history_confirm_open = false;
+        cx.notify();
+    }
+
+    pub(in crate::features) fn confirm_ai_clear_history(&mut self, cx: &mut Context<Self>) {
+        if !self.ai_clear_history_confirm_open {
+            return;
+        }
+        self.ai_clear_history_confirm_open = false;
+        self.ai_history_open = false;
+        self.clear_all_ai_history(cx);
+    }
+
+    pub(in crate::features) fn open_ai_auto_execution_confirm(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.ai_auto_execution_confirm_open = true;
+        self.ai_execution_menu_open = false;
+        self.ai_history_open = false;
+        self.ai_message_menu = None;
+        self.ai_model_menu_open = false;
+        window.focus(&self.ai_auto_execution_confirm_focus);
+        cx.notify();
+    }
+
+    pub(in crate::features) fn cancel_ai_auto_execution_confirm(&mut self, cx: &mut Context<Self>) {
+        self.ai_auto_execution_confirm_open = false;
+        cx.notify();
+    }
+
+    pub(in crate::features) fn confirm_ai_auto_execution(&mut self, cx: &mut Context<Self>) {
+        if !self.ai_auto_execution_confirm_open {
+            return;
+        }
+        self.ai_auto_execution_confirm_open = false;
+        self.set_ai_command_mode(AgentCommandExecutionMode::Auto, cx);
+        self.ai_status = "Agent execution mode: auto".to_string();
+        cx.notify();
+    }
+
+    pub(in crate::features) fn ai_auto_execution_confirm_overlay(
+        &mut self,
+        cx: &mut Context<Self>,
+    ) -> impl IntoElement {
+        let palette = self.theme_palette();
+
+        div()
+            .id(SharedString::from("ai-auto-execution-confirm-overlay"))
+            .absolute()
+            .top_0()
+            .bottom_0()
+            .left_0()
+            .right_0()
+            .bg(rgba(0x030508d8))
+            .flex()
+            .items_center()
+            .justify_center()
+            .p_3()
+            .track_focus(&self.ai_auto_execution_confirm_focus)
+            .on_click(cx.listener(|this, _, window, cx| {
+                window.focus(&this.ai_auto_execution_confirm_focus);
+                cx.notify();
+            }))
+            .on_key_down(cx.listener(|this, event: &KeyDownEvent, _, cx| {
+                cx.stop_propagation();
+                match event.keystroke.key.as_str() {
+                    "escape" => this.cancel_ai_auto_execution_confirm(cx),
+                    "enter" => this.confirm_ai_auto_execution(cx),
+                    _ => {}
+                }
+            }))
+            .child(
+                div()
+                    .id(SharedString::from("ai-auto-execution-confirm-dialog"))
+                    .w(px(400.))
+                    .max_w_full()
+                    .rounded_md()
+                    .border_1()
+                    .border_color(rgb(0x3f1f27))
+                    .bg(rgb(palette.bg))
+                    .shadow_lg()
+                    .p_4()
+                    .flex()
+                    .flex_col()
+                    .gap_3()
+                    .on_click(|_, _, cx| cx.stop_propagation())
+                    .child(
+                        div()
+                            .flex()
+                            .flex_col()
+                            .gap_1()
+                            .child(
+                                div()
+                                    .text_size(px(15.))
+                                    .font_weight(FontWeight(800.))
+                                    .text_color(rgb(0xfca5a5))
+                                    .child("Enable Auto Execution?"),
+                            )
+                            .child(
+                                div()
+                                    .text_size(px(12.))
+                                    .line_height(px(17.))
+                                    .text_color(rgb(palette.text_muted))
+                                    .child(
+                                        "Agent commands may run without confirmation. Only enable this when you trust the current task and terminal context.",
+                                    ),
+                            ),
+                    )
+                    .child(
+                        div()
+                            .flex()
+                            .items_center()
+                            .justify_end()
+                            .gap_2()
+                            .child(small_button(
+                                palette,
+                                "ai-auto-execution-cancel",
+                                "Cancel",
+                                cx.listener(|this, _, _, cx| {
+                                    this.cancel_ai_auto_execution_confirm(cx);
+                                }),
+                            ))
+                            .child(
+                                div()
+                                    .id(SharedString::from("ai-auto-execution-confirm"))
+                                    .h(px(28.))
+                                    .px_3()
+                                    .flex()
+                                    .items_center()
+                                    .justify_center()
+                                    .rounded_sm()
+                                    .bg(rgb(0x7f1d1d))
+                                    .text_xs()
+                                    .font_weight(FontWeight(800.))
+                                    .text_color(rgb(0xfee2e2))
+                                    .cursor_pointer()
+                                    .hover(|this| this.bg(rgb(0x991b1b)))
+                                    .child("Enable Auto Execution")
+                                    .on_click(cx.listener(|this, _, _, cx| {
+                                        this.confirm_ai_auto_execution(cx);
+                                    })),
+                            ),
+                    ),
+            )
+    }
+
+    pub(in crate::features) fn ai_clear_history_confirm_overlay(
+        &mut self,
+        cx: &mut Context<Self>,
+    ) -> impl IntoElement {
+        let palette = self.theme_palette();
+        let session_count = self.ai_sessions.len();
+
+        div()
+            .id(SharedString::from("ai-clear-history-confirm-overlay"))
+            .absolute()
+            .top_0()
+            .bottom_0()
+            .left_0()
+            .right_0()
+            .bg(rgba(0x030508d8))
+            .flex()
+            .items_center()
+            .justify_center()
+            .p_3()
+            .track_focus(&self.ai_clear_history_confirm_focus)
+            .on_click(cx.listener(|this, _, window, cx| {
+                window.focus(&this.ai_clear_history_confirm_focus);
+                cx.notify();
+            }))
+            .on_key_down(cx.listener(|this, event: &KeyDownEvent, _, cx| {
+                cx.stop_propagation();
+                match event.keystroke.key.as_str() {
+                    "escape" => this.cancel_ai_clear_history_confirm(cx),
+                    "enter" => this.confirm_ai_clear_history(cx),
+                    _ => {}
+                }
+            }))
+            .child(
+                div()
+                    .id(SharedString::from("ai-clear-history-confirm-dialog"))
+                    .w(px(380.))
+                    .max_w_full()
+                    .rounded_md()
+                    .border_1()
+                    .border_color(rgb(0x3f1f27))
+                    .bg(rgb(palette.bg))
+                    .shadow_lg()
+                    .p_4()
+                    .flex()
+                    .flex_col()
+                    .gap_3()
+                    .on_click(|_, _, cx| cx.stop_propagation())
+                    .child(
+                        div()
+                            .flex()
+                            .flex_col()
+                            .gap_1()
+                            .child(
+                                div()
+                                    .text_size(px(15.))
+                                    .font_weight(FontWeight(800.))
+                                    .text_color(rgb(0xfca5a5))
+                                    .child("Clear AI History"),
+                            )
+                            .child(
+                                div()
+                                    .text_size(px(12.))
+                                    .text_color(rgb(palette.text_muted))
+                                    .child(format!(
+                                        "This will delete {session_count} chat session(s)."
+                                    )),
+                            ),
+                    )
+                    .child(
+                        div()
+                            .rounded_md()
+                            .border_1()
+                            .border_color(rgb(palette.border))
+                            .bg(rgb(palette.surface))
+                            .px_3()
+                            .py_2()
+                            .text_size(px(11.))
+                            .text_color(rgb(palette.text_dimmed))
+                            .child("This action cannot be undone."),
+                    )
+                    .child(
+                        div()
+                            .flex()
+                            .items_center()
+                            .justify_end()
+                            .gap_2()
+                            .child(small_button(
+                                palette,
+                                "ai-clear-history-cancel",
+                                "Cancel",
+                                cx.listener(|this, _, _, cx| {
+                                    this.cancel_ai_clear_history_confirm(cx);
+                                }),
+                            ))
+                            .child(
+                                div()
+                                    .id(SharedString::from("ai-clear-history-confirm"))
+                                    .h(px(28.))
+                                    .px_3()
+                                    .flex()
+                                    .items_center()
+                                    .justify_center()
+                                    .rounded_sm()
+                                    .bg(rgb(0x7f1d1d))
+                                    .text_xs()
+                                    .font_weight(FontWeight(800.))
+                                    .text_color(rgb(0xfee2e2))
+                                    .cursor_pointer()
+                                    .hover(|this| this.bg(rgb(0x991b1b)))
+                                    .child("Clear All")
+                                    .on_click(cx.listener(|this, _, _, cx| {
+                                        this.confirm_ai_clear_history(cx);
+                                    })),
+                            ),
+                    ),
+            )
+    }
+
     pub(in crate::features) fn ai_execution_mode_menu(
         &mut self,
         cx: &mut Context<Self>,
@@ -10,8 +293,8 @@ impl NyaTermApp {
         div()
             .id(SharedString::from("ai-execution-mode-menu"))
             .absolute()
-            .top(px(36.))
-            .right(px(72.))
+            .top(px(4.))
+            .right(px(8.))
             .w(px(260.))
             .rounded_md()
             .border_1()
@@ -55,6 +338,83 @@ impl NyaTermApp {
                 current == AgentCommandExecutionMode::Auto,
                 cx,
             ))
+            .child(tab_menu_separator(palette))
+            .child(
+                div()
+                    .px_3()
+                    .py_1()
+                    .text_size(px(11.))
+                    .font_weight(FontWeight(700.))
+                    .text_color(rgb(palette.text))
+                    .child("Execution method"),
+            )
+            .child(self.ai_background_execution_item(cx))
+    }
+
+    pub(in crate::features) fn ai_background_execution_item(
+        &self,
+        cx: &mut Context<Self>,
+    ) -> impl IntoElement {
+        let palette = self.theme_palette();
+        let enabled = self.ai_settings.agent_background_execution_enabled;
+        div()
+            .id(SharedString::from("ai-exec-background"))
+            .px_3()
+            .py_2()
+            .flex()
+            .items_start()
+            .gap_2()
+            .cursor_pointer()
+            .hover(|this| this.bg(rgb(palette.surface_elevated)))
+            .on_click(cx.listener(|this, _, _, cx| {
+                this.toggle_ai_background_execution(cx);
+                cx.notify();
+            }))
+            .child(
+                div()
+                    .mt(px(1.))
+                    .size(px(14.))
+                    .rounded_sm()
+                    .border_1()
+                    .border_color(if enabled {
+                        rgb(palette.accent)
+                    } else {
+                        rgb(palette.border)
+                    })
+                    .bg(if enabled {
+                        rgb(palette.accent)
+                    } else {
+                        rgb(palette.input)
+                    })
+                    .flex()
+                    .items_center()
+                    .justify_center()
+                    .text_size(px(10.))
+                    .font_weight(FontWeight(800.))
+                    .text_color(rgb(palette.bg))
+                    .child(if enabled { "✓" } else { "" }),
+            )
+            .child(
+                div()
+                    .min_w_0()
+                    .flex_1()
+                    .flex()
+                    .flex_col()
+                    .gap_0()
+                    .child(
+                        div()
+                            .text_size(px(12.))
+                            .font_weight(FontWeight(600.))
+                            .text_color(rgb(palette.text))
+                            .child("Background Agent Execution"),
+                    )
+                    .child(
+                        div()
+                            .text_size(px(10.))
+                            .text_color(rgb(palette.text_muted))
+                            .child("Run agent commands in the background when possible"),
+                    ),
+            )
     }
 
     pub(in crate::features) fn ai_execution_mode_item(
@@ -76,9 +436,15 @@ impl NyaTermApp {
             .gap_2()
             .cursor_pointer()
             .hover(|this| this.bg(rgb(palette.surface_elevated)))
-            .on_click(cx.listener(move |this, _, _, cx| {
+            .on_click(cx.listener(move |this, _, window, cx| {
+                if mode == AgentCommandExecutionMode::Auto
+                    && this.ai_settings.agent_command_execution_mode
+                        != AgentCommandExecutionMode::Auto
+                {
+                    this.open_ai_auto_execution_confirm(window, cx);
+                    return;
+                }
                 this.set_ai_command_mode(mode.clone(), cx);
-                this.save_ai_settings(cx);
                 this.ai_execution_menu_open = false;
                 this.ai_status = format!(
                     "Agent execution mode: {}",
@@ -144,6 +510,8 @@ impl NyaTermApp {
             .collect();
         let total_count = self.ai_sessions.len();
         let filtered_count = filtered.len();
+        let history_actions_disabled =
+            total_count == 0 || self.ai_chat_pending || self.ai_agent_loop.is_some();
         let grouped = group_ai_sessions_by_date(&filtered);
         let search_display = if self.ai_history_query.is_empty() {
             "Search history...".to_string()
@@ -231,7 +599,7 @@ impl NyaTermApp {
         div()
             .id(SharedString::from("ai-history-popover"))
             .absolute()
-            .top(px(36.))
+            .top(px(4.))
             .left(px(8.))
             .right(px(8.))
             .max_h(px(352.))
@@ -341,21 +709,25 @@ impl NyaTermApp {
                             .flex()
                             .items_center()
                             .text_size(px(11.))
-                            .text_color(if total_count == 0 {
+                            .text_color(if history_actions_disabled {
                                 rgb(palette.border)
                             } else {
                                 rgb(palette.text_muted)
                             })
-                            .cursor_pointer()
-                            .hover(|this| {
-                                this.bg(rgb(palette.surface_elevated))
-                                    .text_color(rgb(palette.text))
+                            .when(!history_actions_disabled, |this| {
+                                this.cursor_pointer().hover(|this| {
+                                    this.bg(rgb(palette.surface_elevated))
+                                        .text_color(rgb(palette.text))
+                                })
                             })
-                            .on_click(cx.listener(move |this, _, _, cx| {
-                                if this.ai_sessions.is_empty() {
+                            .on_click(cx.listener(move |this, _, window, cx| {
+                                if this.ai_sessions.is_empty()
+                                    || this.ai_chat_pending
+                                    || this.ai_agent_loop.is_some()
+                                {
                                     return;
                                 }
-                                this.clear_all_ai_history(cx);
+                                this.open_ai_clear_history_confirm(window, cx);
                             }))
                             .child("Clear All"),
                     ),

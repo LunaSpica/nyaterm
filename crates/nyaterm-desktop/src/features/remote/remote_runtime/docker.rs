@@ -119,44 +119,6 @@ impl NyaTermApp {
         cx.notify();
     }
 
-    pub(in crate::features) fn load_docker_logs(
-        &mut self,
-        container_id: String,
-        _window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        let Some(config) = self.active_ssh_config.clone() else {
-            self.docker_status = "start an SSH session before reading Docker logs".to_string();
-            self.terminal_status = self.docker_status.clone();
-            cx.notify();
-            return;
-        };
-        if self.docker_pending {
-            self.docker_status = "Docker operation already running".to_string();
-            cx.notify();
-            return;
-        }
-
-        self.docker_pending = true;
-        self.docker_status = format!("loading logs for {}", compact_id(&container_id));
-        let tx = self.docker_tx.clone();
-        std::thread::spawn(move || {
-            let result = DockerService::new(config)
-                .container_logs(&container_id, 200)
-                .map(|output| DockerJobOutput::Logs {
-                    container_id,
-                    text: if output.stderr.trim().is_empty() {
-                        output.stdout
-                    } else {
-                        format!("{}\n{}", output.stdout, output.stderr)
-                    },
-                })
-                .map_err(|error| error.to_string());
-            let _ = tx.send(DockerJobResult { result });
-        });
-        cx.notify();
-    }
-
     pub(in crate::features) fn send_docker_container_logs_to_terminal(
         &mut self,
         container_id: String,
@@ -529,12 +491,6 @@ impl NyaTermApp {
                     self.terminal_status = self.docker_status.clone();
                     self.docker_details = Some(details);
                     self.docker_details_container_id = Some(container_id);
-                }
-                Ok(DockerJobOutput::Logs { container_id, text }) => {
-                    self.docker_status = format!("loaded logs for {}", compact_id(&container_id));
-                    self.terminal_status = self.docker_status.clone();
-                    self.docker_logs_container_id = Some(container_id);
-                    self.docker_logs = truncate_preview(&text, 4000);
                 }
                 Ok(DockerJobOutput::ComposeServices {
                     key,

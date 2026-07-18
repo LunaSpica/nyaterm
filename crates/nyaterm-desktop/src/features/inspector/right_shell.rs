@@ -2,7 +2,10 @@ use super::*;
 
 impl NyaTermApp {
     pub(in crate::features) fn right_panel(&mut self, cx: &mut Context<Self>) -> impl IntoElement {
-        let width = self.right_panel_width.clamp(200., 720.);
+        let mut width = self.right_panel_width.clamp(200., 720.);
+        if !cfg!(target_os = "macos") && self.last_viewport_size.0 < 768. {
+            width = width.min((self.last_viewport_size.0 - 80.).max(120.));
+        }
         let palette = self.theme_palette();
         div()
             .w(px(width))

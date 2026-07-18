@@ -131,7 +131,6 @@ impl NyaTermApp {
                 ),
             ))
             .child(self.online_search_engines_settings_section(cx))
-            .child(self.keyword_highlights_settings_section(cx))
     }
 
     pub(in crate::features) fn online_search_engines_settings_section(

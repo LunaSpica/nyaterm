@@ -23,7 +23,5 @@ use title_menu_helpers::*;
 
 #[path = "layout/activity_bar.rs"]
 mod activity_bar;
-#[path = "layout/status_bar.rs"]
-mod status_bar;
 #[path = "layout/title_bar.rs"]
 mod title_bar;

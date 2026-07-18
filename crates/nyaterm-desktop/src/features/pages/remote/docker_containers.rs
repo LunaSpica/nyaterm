@@ -328,9 +328,9 @@ fn docker_container_action_menu(
             format!("docker-menu-logs-{short}"),
             "Logs",
             false,
-            cx.listener(move |this, _, window, cx| {
+            cx.listener(move |this, _, _, cx| {
                 this.docker_container_menu_id = None;
-                this.load_docker_logs(logs_id.clone(), window, cx);
+                this.send_docker_container_logs_to_terminal(logs_id.clone(), cx);
             }),
         ))
         .child(docker_menu_item(

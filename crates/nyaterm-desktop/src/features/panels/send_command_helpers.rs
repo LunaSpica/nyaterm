@@ -7,10 +7,11 @@ pub(super) fn send_command_control_group(
 ) -> impl IntoElement {
     // Tauri labeled control: h-8 bordered group with muted label prefix.
     div()
-        .h(px(30.))
+        .relative()
+        .h(px(32.))
+        .min_w(px(136.))
         .flex()
         .items_center()
-        .overflow_hidden()
         .rounded_md()
         .border_1()
         .border_color(rgb(palette.border))
@@ -36,45 +37,85 @@ pub(super) fn send_command_control_group(
         )
 }
 
-pub(super) fn send_command_chip(
+pub(super) fn send_command_select_trigger(
     palette: crate::theme::ThemePalette,
     id: impl Into<String>,
-    label: &'static str,
-    active: bool,
+    value: impl Into<SharedString>,
+    open: bool,
+    disabled: bool,
     on_click: impl Fn(&gpui::ClickEvent, &mut gpui::Window, &mut gpui::App) + 'static,
-) -> impl IntoElement {
+) -> gpui::Stateful<gpui::Div> {
     div()
         .id(SharedString::from(id.into()))
-        .h(px(28.))
+        .relative()
+        .h_full()
+        .min_w(px(78.))
+        .flex_1()
         .px_2()
         .flex()
         .items_center()
+        .justify_between()
+        .gap_2()
         .text_size(px(11.))
-        .font_weight(if active {
-            FontWeight(600.)
+        .font_weight(FontWeight(500.))
+        .text_color(if disabled {
+            rgb(palette.text_dimmed)
         } else {
-            FontWeight(500.)
+            rgb(palette.text)
         })
-        .text_color(if active {
-            rgb(palette.accent)
-        } else {
-            rgb(palette.text_muted)
+        .opacity(if disabled { 0.58 } else { 1.0 })
+        .when(!disabled, |this| this.cursor_pointer())
+        .when(!disabled, |this| {
+            this.hover(|this| {
+                this.bg(rgb(palette.surface_elevated))
+                    .text_color(rgb(palette.text))
+            })
         })
-        .bg(if active {
-            rgb(palette.hover)
-        } else {
-            rgb(0x00000000)
-        })
-        .cursor_pointer()
-        .hover(|this| {
-            this.bg(rgb(palette.surface_elevated))
-                .text_color(rgb(palette.text))
-        })
-        .child(label)
-        .on_click(on_click)
+        .child(
+            div()
+                .min_w_0()
+                .flex_1()
+                .overflow_hidden()
+                .child(value.into()),
+        )
+        .child(
+            div()
+                .flex_none()
+                .text_size(px(10.))
+                .text_color(if open {
+                    rgb(palette.accent)
+                } else {
+                    rgb(palette.text_dimmed)
+                })
+                .child("v"),
+        )
+        .when(!disabled, |this| this.on_click(on_click))
 }
 
-pub(super) fn send_command_target_chip(
+pub(super) fn send_command_select_menu(
+    palette: crate::theme::ThemePalette,
+    id: impl Into<String>,
+) -> gpui::Stateful<gpui::Div> {
+    div()
+        .id(SharedString::from(id.into()))
+        .absolute()
+        .top(px(34.))
+        .right_0()
+        .min_w(px(156.))
+        .max_h(px(180.))
+        .overflow_scroll()
+        .scrollbar_width(px(6.))
+        .rounded_md()
+        .border_1()
+        .border_color(rgb(palette.border))
+        .bg(rgb(palette.surface))
+        .shadow_lg()
+        .py_1()
+        .flex()
+        .flex_col()
+}
+
+pub(super) fn send_command_select_menu_item(
     palette: crate::theme::ThemePalette,
     id: impl Into<String>,
     label: impl Into<SharedString>,
@@ -84,9 +125,11 @@ pub(super) fn send_command_target_chip(
     div()
         .id(SharedString::from(id.into()))
         .h(px(28.))
-        .px_2()
+        .px_3()
         .flex()
         .items_center()
+        .justify_between()
+        .gap_2()
         .text_size(px(11.))
         .font_weight(if active {
             FontWeight(600.)
@@ -108,7 +151,13 @@ pub(super) fn send_command_target_chip(
             this.bg(rgb(palette.surface_elevated))
                 .text_color(rgb(palette.text))
         })
-        .child(label.into())
+        .child(
+            div()
+                .min_w_0()
+                .flex_1()
+                .overflow_hidden()
+                .child(label.into()),
+        )
         .on_click(on_click)
 }
 
@@ -116,6 +165,7 @@ pub(super) fn send_command_stepper_button(
     palette: crate::theme::ThemePalette,
     id: impl Into<String>,
     label: &'static str,
+    disabled: bool,
     on_click: impl Fn(&gpui::ClickEvent, &mut gpui::Window, &mut gpui::App) + 'static,
 ) -> impl IntoElement {
     div()
@@ -125,12 +175,19 @@ pub(super) fn send_command_stepper_button(
         .items_center()
         .justify_center()
         .text_size(px(12.))
-        .text_color(rgb(palette.text_muted))
-        .cursor_pointer()
-        .hover(|this| {
-            this.bg(rgb(palette.surface_elevated))
-                .text_color(rgb(palette.text))
+        .text_color(rgb(if disabled {
+            palette.text_dimmed
+        } else {
+            palette.text_muted
+        }))
+        .opacity(if disabled { 0.55 } else { 1.0 })
+        .when(!disabled, |this| this.cursor_pointer())
+        .when(!disabled, |this| {
+            this.hover(|this| {
+                this.bg(rgb(palette.surface_elevated))
+                    .text_color(rgb(palette.text))
+            })
         })
         .child(label)
-        .on_click(on_click)
+        .when(!disabled, |this| this.on_click(on_click))
 }

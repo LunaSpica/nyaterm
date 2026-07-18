@@ -169,10 +169,6 @@ pub(in crate::features) enum DockerJobOutput {
         container_id: String,
         details: DockerContainerDetails,
     },
-    Logs {
-        container_id: String,
-        text: String,
-    },
     ComposeServices {
         key: String,
         project_name: String,

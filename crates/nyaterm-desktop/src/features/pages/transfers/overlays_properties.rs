@@ -10,6 +10,7 @@ impl NyaTermApp {
             .transfer_properties
             .clone()
             .unwrap_or_else(|| TransferPropertiesState {
+                session_id: None,
                 entry: SftpFileEntry {
                     name: String::new(),
                     path: String::new(),

@@ -18,17 +18,17 @@ use crate::models::{
     TransferBrowserPendingRenameState, TransferBrowserSessionCacheState, TransferBrowserSortColumn,
     TransferBrowserSortDirection, TransferBrowserUploadMenuState, TransferDeleteState,
     TransferEditorField, TransferEditorState, TransferInputField, TransferJobEvent,
-    TransferJobKind, TransferJobOutput, TransferJobResult, TransferJobState, TransferJobStatus,
-    TransferMoveState, TransferNewFileState, TransferNewFolderState, TransferNewSymlinkState,
-    TransferPathPromptKind, TransferPropertiesField, TransferPropertiesState, TransferRenameState,
-    TransferSymlinkField, TransferUnknownFileState,
+    TransferJobKind, TransferJobMenuState, TransferJobOutput, TransferJobResult, TransferJobState,
+    TransferJobStatus, TransferMoveState, TransferNewFileState, TransferNewFolderState,
+    TransferNewSymlinkState, TransferPathPromptKind, TransferPropertiesField,
+    TransferPropertiesState, TransferRenameState, TransferSymlinkField, TransferUnknownFileState,
 };
 use crate::widgets::{small_button, status_pill};
 use nyaterm_core::{AiCustomActionConfig, ConnectionStore};
 
 use super::super::{
-    NyaTermApp, entry_kind_label, format_file_size, transfer_entry_icon, transfer_job_title,
-    transfer_progress_bar, transfer_status_label, truncate_preview,
+    NyaTermApp, entry_kind_label, format_file_size, panel_header_with_actions, transfer_entry_icon,
+    transfer_job_title, transfer_status_label, truncate_preview,
 };
 
 #[path = "transfers/browser.rs"]
@@ -86,7 +86,11 @@ impl NyaTermApp {
         &mut self,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
-        let can_transfer = self.active_ssh_config.is_some();
+        let can_transfer = self.active_ssh_config.is_some()
+            && self
+                .active_session_id
+                .as_deref()
+                .is_some_and(|session_id| !self.is_session_disconnected(session_id));
         let transfer_height = self.transfer_panel_height.clamp(60., 600.);
         let duplicate_prompt = self.active_duplicate_prompt.clone();
 

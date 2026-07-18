@@ -11,16 +11,34 @@ impl NyaTermApp {
         let input_hint = state.input_hint;
         let validation_error = state.validation_error;
         let preview = state.preview.clone();
+        let is_sending = state.is_sending;
+        let progress_label = state.progress_label.clone();
+        let progress_ratio = state.progress_ratio;
+        let target_available = !self.send_command_target_session_ids().is_empty();
+        let has_payload = if self.send_command_data_type == SendCommandDataType::Hex {
+            send_command_hex_byte_count(&self.send_command_draft).is_some_and(|count| count > 0)
+        } else {
+            !self.send_command_draft.is_empty()
+        };
+        let send_disabled = !is_sending && (validation_error || !has_payload || !target_available);
         div()
+            .relative()
             .flex_1()
             .min_h(px(72.))
             .flex()
-            .gap_1()
+            .gap(px(6.))
+            .pr(px(40.))
+            .pb(px(40.))
             .child(
                 div()
                     .relative()
                     .flex_1()
+                    .min_w_0()
                     .min_h(px(72.))
+                    .when(
+                        self.send_command_data_type == SendCommandDataType::Hex,
+                        |this| this.flex_none().flex_basis(gpui::relative(1.0 / 1.85)),
+                    )
                     .when(
                         self.send_command_data_type == SendCommandDataType::Hex,
                         |this| {
@@ -102,7 +120,7 @@ impl NyaTermApp {
                                                 rgb(palette.text_dimmed)
                                             })
                                             .child(if validation_error {
-                                                "Invalid hex"
+                                                "Invalid hex input. Use hex characters (0-9, A-F) separated by spaces."
                                             } else {
                                                 ""
                                             }),
@@ -180,11 +198,11 @@ impl NyaTermApp {
                 self.send_command_data_type == SendCommandDataType::Hex,
                 |this| {
                     let byte_count = send_command_hex_byte_count(&self.send_command_draft);
-                    let guide_count = send_command_hex_guide_count(&self.send_command_draft);
                     this.child(
                         div()
-                            .w(px(180.))
                             .flex_none()
+                            .flex_basis(gpui::relative(0.85 / 1.85))
+                            .min_w(px(140.))
                             .min_h(px(72.))
                             .rounded_md()
                             .border_1()
@@ -208,27 +226,23 @@ impl NyaTermApp {
                                             .text_color(rgb(palette.text_dimmed))
                                             .child("Preview"),
                                     )
-                                    .child(
-                                        div()
-                                            .text_size(px(10.))
-                                            .text_color(rgb(palette.text_dimmed))
-                                            .child(match byte_count {
-                                                Some(n) => format!("{n} B"),
-                                                None => "invalid".to_string(),
-                                            }),
-                                    ),
-                            )
-                            .when(guide_count > 0, |this| {
-                                this.child(
-                                    div()
-                                        .text_size(px(10.))
-                                        .text_color(rgb(0x388bfd))
-                                        .child(format!("guides ×{guide_count} (4-byte)")),
-                                )
-                            })
+                                            .child(
+                                                div()
+                                                    .text_size(px(10.))
+                                                    .text_color(rgb(palette.text_dimmed))
+                                                    .child(match byte_count {
+                                                        Some(n) => format!("{n} bytes"),
+                                                        None => "0 bytes".to_string(),
+                                                    }),
+                                            ),
+                                    )
                             .child(
                                 div()
+                                    .id(SharedString::from("bottom-command-hex-preview-scroll"))
+                                    .min_h_0()
                                     .flex_1()
+                                    .overflow_scroll()
+                                    .scrollbar_width(px(6.))
                                     .font_family(crate::features::gpui_code_font_family())
                                     .text_size(px(11.))
                                     .line_height(px(15.))
@@ -246,6 +260,126 @@ impl NyaTermApp {
                     )
                 },
             )
+            .when(is_sending, |this| {
+                this.child(send_command_progress_popover(
+                    palette,
+                    progress_label,
+                    progress_ratio,
+                ))
+            })
+            .child(send_command_floating_action_button(
+                palette,
+                is_sending,
+                send_disabled,
+                cx.listener(|this, _, _, cx| {
+                    if this.send_command_sending {
+                        this.stop_send_command(cx);
+                    } else {
+                        this.send_bottom_command(false, cx);
+                    }
+                }),
+            ))
             .into_any_element()
     }
+}
+
+fn send_command_progress_popover(
+    palette: crate::theme::ThemePalette,
+    progress_label: String,
+    progress_ratio: f32,
+) -> impl IntoElement {
+    div()
+        .absolute()
+        .top(px(8.))
+        .left(px(8.))
+        .right(px(44.))
+        .rounded_md()
+        .border_1()
+        .border_color(rgb(0x1f6feb))
+        .bg(rgb(palette.bg))
+        .px_2()
+        .py_1()
+        .shadow_lg()
+        .child(
+            div()
+                .mb_1()
+                .flex()
+                .items_center()
+                .justify_between()
+                .gap_2()
+                .child(
+                    div()
+                        .min_w_0()
+                        .flex_1()
+                        .overflow_hidden()
+                        .text_size(px(10.))
+                        .font_weight(FontWeight(600.))
+                        .text_color(rgb(palette.text))
+                        .child(progress_label),
+                )
+                .child(
+                    div()
+                        .flex_none()
+                        .text_size(px(10.))
+                        .text_color(rgb(palette.text_dimmed))
+                        .child(format!("{:.0}%", progress_ratio * 100.0)),
+                ),
+        )
+        .child(
+            div()
+                .h(px(6.))
+                .w_full()
+                .rounded_full()
+                .bg(rgb(palette.surface_elevated))
+                .overflow_hidden()
+                .child(
+                    div()
+                        .h_full()
+                        .w(px((280.0 * progress_ratio).max(2.0)))
+                        .rounded_full()
+                        .bg(rgb(0x1f6feb)),
+                ),
+        )
+}
+
+fn send_command_floating_action_button(
+    palette: crate::theme::ThemePalette,
+    is_sending: bool,
+    disabled: bool,
+    on_click: impl Fn(&gpui::ClickEvent, &mut gpui::Window, &mut gpui::App) + 'static,
+) -> impl IntoElement {
+    div()
+        .id(SharedString::from("bottom-command-floating-send"))
+        .absolute()
+        .right(px(8.))
+        .bottom(px(8.))
+        .size(px(28.))
+        .rounded_md()
+        .flex()
+        .items_center()
+        .justify_center()
+        .shadow_lg()
+        .bg(if is_sending {
+            rgb(palette.danger)
+        } else {
+            rgb(palette.accent)
+        })
+        .text_color(rgb(0xffffff))
+        .opacity(if disabled { 0.45 } else { 1.0 })
+        .child(svg().size(px(14.)).flex_none().path(if is_sending {
+            "icons/session/stop.svg"
+        } else {
+            "icons/send.svg"
+        }))
+        .when(!disabled, |this| {
+            this.cursor_pointer()
+                .hover(move |this| {
+                    this.bg(rgb(if is_sending {
+                        palette.danger
+                    } else {
+                        palette.success
+                    }))
+                })
+                .on_click(on_click)
+        })
 }

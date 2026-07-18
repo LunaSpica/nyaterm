@@ -4,390 +4,550 @@ use gpui::SharedString;
 impl NyaTermApp {
     pub(in crate::features) fn stats_view(&mut self, cx: &mut Context<Self>) -> impl IntoElement {
         let palette = self.theme_palette();
-        let can_refresh = self.active_ssh_config.is_some() && !self.stats_pending;
-        let stats = self.remote_stats.clone().unwrap_or_default();
+        let Some(stats) = self.remote_stats.clone() else {
+            let message = if self.active_ssh_config.is_none() {
+                "Start an SSH session to inspect remote stats."
+            } else if self.stats_pending {
+                "Loading remote system stats..."
+            } else {
+                "No stats snapshot loaded."
+            };
+            return div()
+                .size_full()
+                .bg(rgb(palette.surface))
+                .child(empty_panel(message, palette));
+        };
+
         let memory_total = stats.memory.used.saturating_add(stats.memory.available);
         let memory_percent = if memory_total > 0 {
             stats.memory.used as f64 / memory_total as f64 * 100.
         } else {
             0.
         };
-        let disk_summary = stats
-            .disks
-            .iter()
-            .max_by_key(|disk| disk.use_percent)
-            .map(|disk| format!("{} {}%", disk.mount, disk.use_percent))
-            .unwrap_or_else(|| "n/a".to_string());
-        let net_summary = stats
-            .networks
-            .iter()
-            .map(|net| net.rx_bytes_per_sec + net.tx_bytes_per_sec)
-            .fold(0.0, f64::max);
-        let total_rx_rate = stats
-            .networks
-            .iter()
-            .map(|network| network.rx_bytes_per_sec)
-            .sum::<f64>();
-        let total_tx_rate = stats
-            .networks
-            .iter()
-            .map(|network| network.tx_bytes_per_sec)
-            .sum::<f64>();
-        let busiest_disk = stats.disks.iter().max_by_key(|disk| disk.use_percent);
-        let busiest_network = stats.networks.iter().max_by(|left, right| {
-            (left.rx_bytes_per_sec + left.tx_bytes_per_sec)
-                .partial_cmp(&(right.rx_bytes_per_sec + right.tx_bytes_per_sec))
-                .unwrap_or(std::cmp::Ordering::Equal)
-        });
 
-        let mut networks = div().flex().flex_col().gap_2();
-        if self.remote_stats.is_none() {
-            networks = networks.child(empty_panel(
-                if self.active_ssh_config.is_some() {
-                    "No stats snapshot loaded."
-                } else {
-                    "Start an SSH session to inspect remote stats."
-                },
-                self.theme_palette(),
-            ));
-        } else if stats.networks.is_empty() {
-            networks = networks.child(empty_panel(
-                "No active physical network interfaces found.",
-                self.theme_palette(),
-            ));
+        let mut network_rows = div().flex().flex_col();
+        if stats.networks.is_empty() {
+            network_rows = network_rows.child(resource_empty_value(palette));
         } else {
             for network in &stats.networks {
-                networks = networks.child(stats_resource_row(
+                network_rows = network_rows.child(resource_network_row(
                     palette,
                     &network.nic,
-                    &format!(
-                        "{} · rx {} · tx {}",
-                        network.state,
-                        format_rate(network.rx_bytes_per_sec),
-                        format_rate(network.tx_bytes_per_sec)
-                    ),
-                    (network.rx_bytes_per_sec + network.tx_bytes_per_sec) / net_summary.max(1.0),
+                    network.tx_bytes_per_sec,
+                    network.rx_bytes_per_sec,
                 ));
             }
         }
 
-        let mut disks = div().flex().flex_col().gap_2();
-        if self.remote_stats.is_some() && stats.disks.is_empty() {
-            disks = disks.child(empty_panel(
-                "No mounted block devices found.",
-                self.theme_palette(),
-            ));
+        let mut disk_rows = div().flex().flex_col();
+        if stats.disks.is_empty() {
+            disk_rows = disk_rows.child(resource_empty_value(palette));
         } else {
             for disk in &stats.disks {
-                disks = disks.child(stats_resource_row(
+                disk_rows = disk_rows.child(resource_disk_row(
                     palette,
                     &disk.mount,
-                    &format!(
-                        "{} · {} free of {}",
-                        disk.device,
-                        format_file_size(Some(disk.available)),
-                        format_file_size(Some(disk.total))
-                    ),
-                    disk.use_percent as f64 / 100.,
+                    disk.total,
+                    disk.available,
+                    disk.use_percent,
                 ));
             }
         }
 
-        // Tauri ResourceMonitor: compact toolbar + scrollable gauges/lists.
-        let host_label = if stats.system.hostname.trim().is_empty() {
-            "remote".to_string()
-        } else {
-            truncate_preview(&stats.system.hostname, 24)
-        };
         div()
-            .flex()
-            .flex_col()
             .size_full()
             .overflow_hidden()
-            .bg(rgb(self.theme_palette().surface))
-            .child(
-                div()
-                    .h(px(36.))
-                    .flex_none()
-                    .px_2()
-                    .border_b_1()
-                    .border_color(rgb(self.theme_palette().border))
-                    .bg(rgb(self.theme_palette().section_header))
-                    .flex()
-                    .items_center()
-                    .gap_2()
-                    .child(
-                        div()
-                            .min_w_0()
-                            .flex_1()
-                            .text_size(px(11.))
-                            .text_color(rgb(palette.text_muted))
-                            .overflow_hidden()
-                            .child(format!(
-                                "{host_label} · CPU {:.0}% · MEM {:.0}% · {}",
-                                stats.cpu.usage, memory_percent, disk_summary
-                            )),
-                    )
-                    .child(div().when(!can_refresh, |this| this.opacity(0.45)).child(
-                        compact_remote_svg_button(
-                            palette,
-                            "stats-refresh",
-                            "icons/fe/refresh.svg",
-                            cx.listener(|this, _, window, cx| {
-                                this.refresh_stats(window, cx);
-                            }),
-                        ),
-                    )),
-            )
+            .bg(rgb(palette.surface))
             .child(
                 div()
                     .id(SharedString::from("stats-scroll"))
-                    .flex_1()
-                    .min_h_0()
+                    .size_full()
                     .overflow_scroll()
                     .scrollbar_width(px(6.))
                     .p_2()
                     .flex()
                     .flex_col()
                     .gap_2()
-                    .child(
+                    .child(resource_section_card(
+                        palette,
+                        "System",
                         div()
                             .grid()
-                            .grid_cols(4)
-                            .gap_2()
-                            .child(resource_gauge_card(
+                            .grid_cols(2)
+                            .gap_x_3()
+                            .gap_y_1()
+                            .child(resource_info_cell(
                                 palette,
-                                "CPU",
-                                format!("{:.0}%", stats.cpu.usage.clamp(0., 100.)),
-                                truncate_preview(&stats.cpu.model, 54),
-                                stats.cpu.usage / 100.,
+                                "Hostname",
+                                if stats.system.hostname.trim().is_empty() {
+                                    "remote".to_string()
+                                } else {
+                                    stats.system.hostname.clone()
+                                },
                             ))
-                            .child(resource_gauge_card(
+                            .child(resource_info_cell(
                                 palette,
-                                "Memory",
-                                format!("{memory_percent:.0}%"),
-                                format!(
-                                    "{} used / {} total",
-                                    format_file_size(Some(stats.memory.used)),
-                                    format_file_size(Some(memory_total))
-                                ),
-                                memory_percent / 100.,
+                                "Arch",
+                                stats.system.arch.clone(),
                             ))
-                            .child(resource_summary_card(
+                            .child(resource_info_cell(palette, "OS", stats.system.os.clone()))
+                            .child(resource_info_cell(
                                 palette,
-                                "Load",
-                                format!("{:.2}", stats.load.load1),
-                                format!(
-                                    "5m {:.2} · 15m {:.2} · {} core(s)",
-                                    stats.load.load5, stats.load.load15, stats.cpu.cores
-                                ),
-                                load_ratio(stats.load.load1, stats.cpu.cores),
-                            ))
-                            .child(resource_summary_card(
-                                palette,
-                                "Network",
-                                format!(
-                                    "{} / {}",
-                                    format_rate(total_rx_rate),
-                                    format_rate(total_tx_rate)
-                                ),
-                                busiest_network
-                                    .map(|network| {
-                                        format!(
-                                            "{} busiest · {}",
-                                            network.nic,
-                                            format_rate(
-                                                network.rx_bytes_per_sec + network.tx_bytes_per_sec
-                                            )
-                                        )
-                                    })
-                                    .unwrap_or_else(|| "No active interfaces".to_string()),
-                                (total_rx_rate + total_tx_rate) / net_summary.max(1.0),
+                                "Uptime",
+                                format_uptime(stats.system.uptime_sec),
                             )),
-                    )
-                    .child(
+                    ))
+                    .child(resource_section_card(
+                        palette,
+                        "CPU",
                         div()
-                            .grid()
-                            .grid_cols(3)
+                            .flex()
+                            .flex_col()
                             .gap_2()
                             .child(
                                 div()
-                                    .rounded_md()
-                                    .border_1()
-                                    .border_color(rgb(palette.border))
-                                    .bg(rgb(palette.bg))
-                                    .p_2()
+                                    .flex()
+                                    .items_center()
+                                    .gap_3()
+                                    .child(resource_ring_gauge(
+                                        palette,
+                                        stats.cpu.usage,
+                                        format!("{:.0}%", stats.cpu.usage.clamp(0., 100.)),
+                                    ))
                                     .child(
                                         div()
-                                            .text_xs()
-                                            .font_weight(FontWeight(700.))
-                                            .text_color(rgb(palette.text_muted))
-                                            .child("System"),
-                                    )
-                                    .child(dense_capability_line(
+                                            .min_w_0()
+                                            .flex_1()
+                                            .flex()
+                                            .flex_col()
+                                            .gap_1()
+                                            .child(
+                                                div()
+                                                    .flex()
+                                                    .items_baseline()
+                                                    .justify_between()
+                                                    .gap_2()
+                                                    .child(
+                                                        div()
+                                                            .text_size(px(11.))
+                                                            .text_color(rgb(palette.text_muted))
+                                                            .child("Average usage"),
+                                                    )
+                                                    .child(
+                                                        div()
+                                                            .font_family(
+                                                                crate::features::gpui_code_font_family(),
+                                                            )
+                                                            .text_size(px(13.))
+                                                            .font_weight(FontWeight(700.))
+                                                            .text_color(usage_color(
+                                                                palette,
+                                                                stats.cpu.usage / 100.,
+                                                            ))
+                                                            .child(format!("{:.1}%", stats.cpu.usage)),
+                                                    ),
+                                            )
+                                            .child(resource_progress_bar(
+                                                palette,
+                                                stats.cpu.usage / 100.,
+                                            ))
+                                            .child(
+                                                div()
+                                                    .text_right()
+                                                    .font_family(
+                                                        crate::features::gpui_code_font_family(),
+                                                    )
+                                                    .text_size(px(10.))
+                                                    .text_color(rgb(palette.text_dimmed))
+                                                    .child(format!("{}C", stats.cpu.cores)),
+                                            ),
+                                    ),
+                            )
+                            .child(
+                                div()
+                                    .grid()
+                                    .grid_cols(3)
+                                    .gap_1()
+                                    .child(resource_load_badge(palette, "Load1", stats.load.load1))
+                                    .child(resource_load_badge(palette, "Load5", stats.load.load5))
+                                    .child(resource_load_badge(
                                         palette,
-                                        "OS",
-                                        truncate_preview(&stats.system.os, 52),
-                                    ))
-                                    .child(dense_capability_line(
-                                        palette,
-                                        "Arch",
-                                        stats.system.arch.clone(),
-                                    ))
-                                    .child(dense_capability_line(
-                                        palette,
-                                        "Uptime",
-                                        format_uptime(stats.system.uptime_sec),
-                                    ))
-                                    .child(dense_capability_line(
-                                        palette,
-                                        "CPU Model",
-                                        truncate_preview(&stats.cpu.model, 52),
-                                    ))
-                                    .child(dense_capability_line(
-                                        palette,
-                                        "Cores",
-                                        stats.cpu.cores.to_string(),
+                                        "Load15",
+                                        stats.load.load15,
                                     )),
                             )
+                            .when(!stats.cpu.per_core.is_empty(), |this| {
+                                this.child(cpu_core_summary(
+                                    palette,
+                                    &stats.cpu.per_core,
+                                    self.stats_cpu_expanded,
+                                    cx,
+                                ))
+                            }),
+                    ))
+                    .child(resource_section_card(
+                        palette,
+                        "Memory",
+                        div()
+                            .flex()
+                            .flex_col()
+                            .gap_2()
                             .child(
                                 div()
-                                    .rounded_md()
-                                    .border_1()
-                                    .border_color(rgb(palette.border))
-                                    .bg(rgb(palette.bg))
-                                    .p_2()
+                                    .flex()
+                                    .items_center()
+                                    .gap_3()
+                                    .child(resource_ring_gauge(
+                                        palette,
+                                        memory_percent,
+                                        format!("{memory_percent:.0}%"),
+                                    ))
                                     .child(
-                                        div().text_sm().font_weight(FontWeight(700.)).child("Load"),
-                                    )
-                                    .child(dense_capability_line(
-                                        palette,
-                                        "1 min",
-                                        format!("{:.2}", stats.load.load1),
-                                    ))
-                                    .child(dense_capability_line(
-                                        palette,
-                                        "5 min",
-                                        format!("{:.2}", stats.load.load5),
-                                    ))
-                                    .child(dense_capability_line(
-                                        palette,
-                                        "15 min",
-                                        format!("{:.2}", stats.load.load15),
-                                    ))
-                                    .when(!stats.cpu.per_core.is_empty(), |this| {
-                                        this.child(cpu_core_summary(
-                                            palette,
-                                            &stats.cpu.per_core,
-                                            self.stats_cpu_expanded,
-                                            cx,
-                                        ))
-                                    }),
+                                        div()
+                                            .min_w_0()
+                                            .flex_1()
+                                            .flex()
+                                            .flex_col()
+                                            .gap_1()
+                                            .child(
+                                                div()
+                                                    .flex()
+                                                    .items_baseline()
+                                                    .justify_between()
+                                                    .gap_2()
+                                                    .child(
+                                                        div()
+                                                            .text_size(px(11.))
+                                                            .text_color(rgb(palette.text_muted))
+                                                            .child("RAM"),
+                                                    )
+                                                    .child(
+                                                        div()
+                                                            .font_family(
+                                                                crate::features::gpui_code_font_family(),
+                                                            )
+                                                            .text_size(px(13.))
+                                                            .font_weight(FontWeight(700.))
+                                                            .text_color(usage_color(
+                                                                palette,
+                                                                memory_percent / 100.,
+                                                            ))
+                                                            .child(format!("{memory_percent:.0}%")),
+                                                    ),
+                                            )
+                                            .child(resource_progress_bar(
+                                                palette,
+                                                memory_percent / 100.,
+                                            ))
+                                            .child(
+                                                div()
+                                                    .font_family(
+                                                        crate::features::gpui_code_font_family(),
+                                                    )
+                                                    .text_size(px(10.))
+                                                    .text_color(rgb(palette.text_muted))
+                                                    .child(format!(
+                                                        "{} / {}",
+                                                        format_file_size(Some(stats.memory.used)),
+                                                        format_file_size(Some(memory_total))
+                                                    )),
+                                            ),
+                                    ),
                             )
                             .child(
                                 div()
-                                    .rounded_md()
-                                    .border_1()
-                                    .border_color(rgb(palette.border))
-                                    .bg(rgb(palette.bg))
-                                    .p_2()
-                                    .child(
-                                        div()
-                                            .text_sm()
-                                            .font_weight(FontWeight(700.))
-                                            .child("Memory"),
-                                    )
-                                    .child(dense_capability_line(
-                                        palette,
-                                        "Used",
-                                        format_file_size(Some(stats.memory.used)),
-                                    ))
-                                    .child(dense_capability_line(
+                                    .flex()
+                                    .flex_wrap()
+                                    .gap_x_3()
+                                    .gap_y_1()
+                                    .child(resource_metric_chip(
                                         palette,
                                         "Available",
                                         format_file_size(Some(stats.memory.available)),
                                     ))
-                                    .child(dense_capability_line(
+                                    .child(resource_metric_chip(
                                         palette,
                                         "Cached",
                                         format_file_size(Some(stats.memory.cached)),
-                                    ))
-                                    .child(dense_capability_line(
-                                        palette,
-                                        "Total",
-                                        format_file_size(Some(memory_total)),
-                                    ))
-                                    .child(stats_progress_bar(palette, memory_percent / 100.)),
+                                    )),
                             ),
-                    )
-                    .child(
-                        div()
-                            .grid()
-                            .grid_cols(2)
-                            .gap_3()
-                            .child(
-                                div()
-                                    .rounded_md()
-                                    .border_1()
-                                    .border_color(rgb(palette.border))
-                                    .bg(rgb(palette.bg))
-                                    .p_2()
-                                    .child(
-                                        div()
-                                            .text_xs()
-                                            .font_weight(FontWeight(700.))
-                                            .text_color(rgb(palette.text_muted))
-                                            .child("Network"),
-                                    )
-                                    .child(networks),
-                            )
-                            .child(
-                                div()
-                                    .rounded_md()
-                                    .border_1()
-                                    .border_color(rgb(palette.border))
-                                    .bg(rgb(palette.bg))
-                                    .p_2()
-                                    .child(
-                                        div()
-                                            .text_sm()
-                                            .font_weight(FontWeight(700.))
-                                            .child("Disks"),
-                                    )
-                                    .when(busiest_disk.is_some(), |this| {
-                                        let disk = busiest_disk.cloned().expect("checked is_some");
-                                        this.child(
-                                            div()
-                                                .mt_2()
-                                                .rounded_sm()
-                                                .border_1()
-                                                .border_color(usage_color(
-                                                    palette,
-                                                    disk.use_percent as f64 / 100.,
-                                                ))
-                                                .bg(rgb(palette.input))
-                                                .p_2()
-                                                .child(
-                                                    div()
-                                                        .text_xs()
-                                                        .font_weight(FontWeight(700.))
-                                                        .text_color(rgb(palette.text))
-                                                        .child(format!(
-                                                            "Busiest mount: {} ({}%)",
-                                                            disk.mount, disk.use_percent
-                                                        )),
-                                                )
-                                                .child(stats_progress_bar(
-                                                    palette,
-                                                    disk.use_percent as f64 / 100.,
-                                                )),
-                                        )
-                                    })
-                                    .child(disks),
-                            ),
-                    ),
+                    ))
+                    .child(resource_section_card(palette, "Network", network_rows))
+                    .child(resource_section_card(palette, "Disk", disk_rows)),
             )
     }
+}
+
+fn resource_section_card(
+    palette: crate::theme::ThemePalette,
+    title: &'static str,
+    child: impl IntoElement,
+) -> gpui::Div {
+    div()
+        .rounded_md()
+        .border_1()
+        .border_color(rgb(palette.border))
+        .bg(rgb(palette.bg))
+        .px_3()
+        .py_2()
+        .flex()
+        .flex_col()
+        .gap_2()
+        .child(
+            div()
+                .flex()
+                .items_center()
+                .gap_2()
+                .child(
+                    div()
+                        .size(px(6.))
+                        .rounded_full()
+                        .bg(rgb(palette.text_muted)),
+                )
+                .child(
+                    div()
+                        .text_size(px(11.))
+                        .font_weight(FontWeight(700.))
+                        .text_color(rgb(palette.text))
+                        .child(title),
+                ),
+        )
+        .child(child)
+}
+
+fn resource_info_cell(
+    palette: crate::theme::ThemePalette,
+    label: &'static str,
+    value: impl Into<String>,
+) -> gpui::Div {
+    div()
+        .min_w_0()
+        .child(
+            div()
+                .text_size(px(10.))
+                .text_color(rgb(palette.text_dimmed))
+                .child(label),
+        )
+        .child(
+            div()
+                .font_family(crate::features::gpui_code_font_family())
+                .text_size(px(12.))
+                .font_weight(FontWeight(600.))
+                .text_color(rgb(palette.text))
+                .overflow_hidden()
+                .child(truncate_preview(&value.into(), 42)),
+        )
+}
+
+fn resource_ring_gauge(
+    palette: crate::theme::ThemePalette,
+    percent: f64,
+    label: String,
+) -> gpui::Div {
+    let ratio = (percent / 100.).clamp(0., 1.);
+    div()
+        .size(px(56.))
+        .rounded_full()
+        .border_1()
+        .border_color(usage_color(palette, ratio))
+        .bg(rgb(palette.surface))
+        .flex_none()
+        .flex()
+        .items_center()
+        .justify_center()
+        .child(
+            div()
+                .font_family(crate::features::gpui_code_font_family())
+                .text_size(px(12.))
+                .font_weight(FontWeight(700.))
+                .text_color(usage_color(palette, ratio))
+                .child(label),
+        )
+}
+
+fn resource_load_badge(
+    palette: crate::theme::ThemePalette,
+    label: &'static str,
+    value: f64,
+) -> gpui::Div {
+    div()
+        .min_w_0()
+        .rounded_md()
+        .border_1()
+        .border_color(rgb(palette.border))
+        .bg(rgb(palette.input))
+        .px_2()
+        .py_1()
+        .text_center()
+        .child(
+            div()
+                .font_family(crate::features::gpui_code_font_family())
+                .text_size(px(12.))
+                .font_weight(FontWeight(700.))
+                .text_color(rgb(palette.text))
+                .overflow_hidden()
+                .child(format!("{value:.2}")),
+        )
+        .child(
+            div()
+                .mt(px(2.))
+                .text_size(px(9.))
+                .text_color(rgb(palette.text_dimmed))
+                .overflow_hidden()
+                .child(label),
+        )
+}
+
+fn resource_metric_chip(
+    palette: crate::theme::ThemePalette,
+    label: &'static str,
+    value: String,
+) -> gpui::Div {
+    div()
+        .flex()
+        .items_center()
+        .gap_1()
+        .child(
+            div()
+                .text_size(px(10.))
+                .text_color(rgb(palette.text_dimmed))
+                .child(label),
+        )
+        .child(
+            div()
+                .font_family(crate::features::gpui_code_font_family())
+                .text_size(px(11.))
+                .text_color(rgb(palette.text_muted))
+                .child(value),
+        )
+}
+
+fn resource_network_row(
+    palette: crate::theme::ThemePalette,
+    nic: &str,
+    tx: f64,
+    rx: f64,
+) -> gpui::Div {
+    div()
+        .py_2()
+        .border_b_1()
+        .border_color(rgb(palette.border))
+        .flex()
+        .items_center()
+        .gap_2()
+        .child(
+            div()
+                .min_w_0()
+                .flex_1()
+                .font_family(crate::features::gpui_code_font_family())
+                .text_size(px(12.))
+                .font_weight(FontWeight(600.))
+                .text_color(rgb(palette.text))
+                .overflow_hidden()
+                .child(truncate_preview(nic, 34)),
+        )
+        .child(
+            div()
+                .flex()
+                .items_center()
+                .justify_end()
+                .gap_2()
+                .flex_wrap()
+                .child(rate_value(palette, "↑", tx, rgb(0x22c55e).into()))
+                .child(rate_value(palette, "↓", rx, rgb(0x3b82f6).into())),
+        )
+}
+
+fn resource_disk_row(
+    palette: crate::theme::ThemePalette,
+    mount: &str,
+    total: u64,
+    available: u64,
+    use_percent: u32,
+) -> gpui::Div {
+    let ratio = use_percent as f64 / 100.;
+    div()
+        .py_2()
+        .border_b_1()
+        .border_color(rgb(palette.border))
+        .flex()
+        .flex_col()
+        .gap_1()
+        .child(
+            div()
+                .flex()
+                .items_baseline()
+                .justify_between()
+                .gap_2()
+                .child(
+                    div()
+                        .min_w_0()
+                        .flex_1()
+                        .font_family(crate::features::gpui_code_font_family())
+                        .text_size(px(12.))
+                        .font_weight(FontWeight(600.))
+                        .text_color(rgb(palette.text))
+                        .overflow_hidden()
+                        .child(truncate_preview(mount, 42)),
+                )
+                .child(
+                    div()
+                        .font_family(crate::features::gpui_code_font_family())
+                        .text_size(px(12.))
+                        .font_weight(FontWeight(700.))
+                        .text_color(usage_color(palette, ratio))
+                        .child(format!("{use_percent}%")),
+                ),
+        )
+        .child(resource_progress_bar(palette, ratio))
+        .child(
+            div()
+                .flex()
+                .flex_wrap()
+                .gap_x_2()
+                .gap_y_1()
+                .child(
+                    div()
+                        .font_family(crate::features::gpui_code_font_family())
+                        .text_size(px(10.))
+                        .text_color(rgb(palette.text_dimmed))
+                        .child(format_file_size(Some(total))),
+                )
+                .child(resource_metric_chip(
+                    palette,
+                    "Available",
+                    format_file_size(Some(available)),
+                )),
+        )
+}
+
+fn rate_value(
+    palette: crate::theme::ThemePalette,
+    arrow: &'static str,
+    value: f64,
+    color: gpui::Hsla,
+) -> gpui::Div {
+    div()
+        .flex()
+        .items_center()
+        .gap_1()
+        .font_family(crate::features::gpui_code_font_family())
+        .text_size(px(11.))
+        .text_color(rgb(palette.text_muted))
+        .child(div().text_color(color).child(arrow))
+        .child(format_rate(value))
+}
+
+fn resource_empty_value(palette: crate::theme::ThemePalette) -> gpui::Div {
+    div()
+        .py_2()
+        .text_size(px(12.))
+        .text_color(rgb(palette.text_dimmed))
+        .child("-")
+}
+
+fn resource_progress_bar(palette: crate::theme::ThemePalette, ratio: f64) -> impl IntoElement {
+    stats_progress_bar(palette, ratio)
 }
 
 fn cpu_core_summary(
@@ -401,38 +561,32 @@ fn cpu_core_summary(
     } else {
         per_core.len().min(8)
     };
-    let preview = per_core
-        .iter()
-        .take(visible_count)
-        .map(|usage| format!("{usage:.0}%"))
-        .collect::<Vec<_>>()
-        .join(" ");
     let overflow = per_core.len().saturating_sub(visible_count);
     let summary = if overflow > 0 {
-        format!("{preview} +{overflow}")
+        format!("{} CPU +{overflow}", per_core.len())
     } else {
-        preview
+        format!("{} CPU", per_core.len())
     };
 
-    let mut rows = div().mt_2().flex().flex_col().gap_2().child(
+    let mut rows = div().flex().flex_col().gap_1().child(
         div()
+            .id(SharedString::from("stats-cpu-cores-toggle"))
             .flex()
             .items_center()
-            .justify_between()
-            .gap_2()
-            .child(dense_capability_line(palette, "Per Core", summary))
-            .child(small_button(
-                palette,
-                "stats-cpu-cores-toggle",
-                if expanded { "Hide" } else { "Show" },
-                cx.listener(|this, _, _, cx| {
-                    this.toggle_stats_cpu_expanded(cx);
-                }),
-            )),
+            .gap_1()
+            .text_size(px(11.))
+            .text_color(rgb(palette.text_muted))
+            .cursor_pointer()
+            .hover(|this| this.bg(rgb(palette.input)))
+            .on_click(cx.listener(|this, _, _, cx| {
+                this.toggle_stats_cpu_expanded(cx);
+            }))
+            .child(svg().size(px(13.)).path("icons/chevron-down.svg"))
+            .child(summary),
     );
 
     if expanded {
-        let mut core_rows = div().grid().grid_cols(2).gap_2();
+        let mut core_rows = div().flex().flex_col().gap_1().pt_1();
         for (index, usage) in per_core.iter().copied().enumerate() {
             core_rows = core_rows.child(cpu_core_row(palette, index + 1, usage));
         }
@@ -445,34 +599,33 @@ fn cpu_core_summary(
 fn cpu_core_row(palette: crate::theme::ThemePalette, index: usize, usage: f64) -> gpui::Div {
     let ratio = (usage / 100.).clamp(0., 1.);
     div()
-        .rounded_sm()
-        .border_1()
-        .border_color(rgb(palette.border))
-        .bg(rgb(palette.input))
-        .p_2()
+        .h(px(22.))
         .flex()
-        .flex_col()
+        .items_center()
         .gap_1()
         .child(
             div()
-                .flex()
-                .items_center()
-                .justify_between()
-                .gap_2()
-                .child(
-                    div()
-                        .font_family(crate::features::gpui_code_font_family())
-                        .text_xs()
-                        .text_color(rgb(palette.text))
-                        .child(format!("CPU {index}")),
-                )
-                .child(
-                    div()
-                        .font_family(crate::features::gpui_code_font_family())
-                        .text_xs()
-                        .text_color(usage_color(palette, ratio))
-                        .child(format!("{usage:.1}%")),
-                ),
+                .w(px(24.))
+                .text_right()
+                .font_family(crate::features::gpui_code_font_family())
+                .text_size(px(10.))
+                .text_color(rgb(palette.text_muted))
+                .child(index.to_string()),
         )
-        .child(stats_progress_bar(palette, ratio))
+        .child(
+            div()
+                .size(px(6.))
+                .rounded_full()
+                .bg(usage_color(palette, ratio)),
+        )
+        .child(div().flex_1().child(resource_progress_bar(palette, ratio)))
+        .child(
+            div()
+                .w(px(44.))
+                .text_right()
+                .font_family(crate::features::gpui_code_font_family())
+                .text_size(px(10.))
+                .text_color(rgb(palette.text_muted))
+                .child(format!("{usage:.1}%")),
+        )
 }

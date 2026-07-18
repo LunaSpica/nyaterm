@@ -7,6 +7,16 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) -> gpui::Div {
         let mut body = security_auth_body_base();
+        body = body.child(security_tab_toolbar(
+            palette,
+            "Credentials",
+            "security-add-credential",
+            "Add",
+            self.security_credential_editor.is_none(),
+            cx.listener(|this, _, window, cx| {
+                this.open_security_credential_editor(None, window, cx);
+            }),
+        ));
         if let Some(editor) = self.security_credential_editor.clone() {
             body = body.child(self.security_credential_editor_view(editor, cx));
         } else if self.connection_saved_credentials.is_empty() {

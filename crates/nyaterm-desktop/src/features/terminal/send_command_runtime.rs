@@ -1,6 +1,211 @@
 use super::*;
 
 impl NyaTermApp {
+    fn send_command_count_label(&self) -> String {
+        self.send_command_count
+            .map(|n| n.to_string())
+            .unwrap_or_else(|| "∞".to_string())
+    }
+
+    fn sync_send_command_count_input(&mut self) {
+        self.send_command_count_input = self.send_command_count_label();
+    }
+
+    fn sync_send_command_interval_input(&mut self) {
+        self.send_command_interval_input = format!("{:.2}", self.send_command_interval_seconds);
+    }
+
+    pub(in crate::features) fn close_send_command_menus(&mut self) {
+        self.send_command_data_menu_open = false;
+        self.send_command_mode_menu_open = false;
+        self.send_command_target_menu_open = false;
+        self.send_command_line_ending_menu_open = false;
+    }
+
+    pub(in crate::features) fn focus_send_command_control(
+        &mut self,
+        control: SendCommandControlFocus,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if self.send_command_sending {
+            return;
+        }
+        self.close_send_command_menus();
+        self.send_command_control_focus = Some(control);
+        match control {
+            SendCommandControlFocus::Count => self.sync_send_command_count_input(),
+            SendCommandControlFocus::Interval => self.sync_send_command_interval_input(),
+        }
+        window.focus(&self.send_command_controls_focus);
+        cx.notify();
+    }
+
+    pub(in crate::features) fn blur_send_command_control(&mut self, cx: &mut Context<Self>) {
+        match self.send_command_control_focus {
+            Some(SendCommandControlFocus::Count) => {
+                self.apply_send_command_count_input(false);
+                self.sync_send_command_count_input();
+            }
+            Some(SendCommandControlFocus::Interval) => {
+                self.apply_send_command_interval_input(false);
+                self.sync_send_command_interval_input();
+            }
+            None => {}
+        }
+        self.send_command_control_focus = None;
+        cx.notify();
+    }
+
+    pub(in crate::features) fn handle_send_command_control_key_down(
+        &mut self,
+        event: &KeyDownEvent,
+        cx: &mut Context<Self>,
+    ) {
+        self.mark_user_activity();
+        let Some(control) = self.send_command_control_focus else {
+            return;
+        };
+        let keystroke = &event.keystroke;
+        if keystroke.modifiers.alt || keystroke.modifiers.function {
+            return;
+        }
+
+        match keystroke.key.as_str() {
+            "enter" | "tab" => {
+                self.blur_send_command_control(cx);
+            }
+            "escape" => {
+                self.send_command_control_focus = None;
+                self.sync_send_command_count_input();
+                self.sync_send_command_interval_input();
+                cx.notify();
+            }
+            "backspace" if !keystroke.modifiers.platform && !keystroke.modifiers.control => {
+                match control {
+                    SendCommandControlFocus::Count => {
+                        self.send_command_count_input.pop();
+                        self.apply_send_command_count_input(true);
+                    }
+                    SendCommandControlFocus::Interval => {
+                        self.send_command_interval_input.pop();
+                        self.apply_send_command_interval_input(true);
+                    }
+                }
+                cx.notify();
+            }
+            _ if !keystroke.modifiers.platform && !keystroke.modifiers.control => {
+                let Some(input) = keystroke
+                    .key_char
+                    .as_deref()
+                    .filter(|input| !input.is_empty())
+                else {
+                    return;
+                };
+                match control {
+                    SendCommandControlFocus::Count => {
+                        let filtered: String = input
+                            .chars()
+                            .filter(|ch| {
+                                ch.is_ascii_digit()
+                                    || matches!(ch, 'i' | 'n' | 'f' | 'I' | 'N' | 'F' | '∞')
+                            })
+                            .collect();
+                        if filtered.is_empty() {
+                            return;
+                        }
+                        self.send_command_count_input.push_str(&filtered);
+                        self.apply_send_command_count_input(true);
+                    }
+                    SendCommandControlFocus::Interval => {
+                        let filtered: String = input
+                            .chars()
+                            .filter(|ch| ch.is_ascii_digit() || *ch == '.')
+                            .collect();
+                        if filtered.is_empty() {
+                            return;
+                        }
+                        self.send_command_interval_input.push_str(&filtered);
+                        self.apply_send_command_interval_input(true);
+                    }
+                }
+                cx.notify();
+            }
+            _ => {}
+        }
+    }
+
+    fn apply_send_command_count_input(&mut self, live: bool) {
+        let trimmed = self.send_command_count_input.trim();
+        if trimmed == "∞" || trimmed.eq_ignore_ascii_case("inf") {
+            self.send_command_count = None;
+            return;
+        }
+        if let Ok(value) = trimmed.parse::<u32>() {
+            self.send_command_count = Some(value.clamp(1, 9999));
+        } else if !live {
+            self.send_command_count = Some(1);
+        }
+    }
+
+    fn apply_send_command_interval_input(&mut self, live: bool) {
+        let trimmed = self.send_command_interval_input.trim();
+        if let Ok(value) = trimmed.parse::<f64>() {
+            if value.is_finite() && value >= 0.0 {
+                self.send_command_interval_seconds = value.clamp(0.0, 60.0);
+            }
+        } else if !live {
+            self.apply_send_command_default_interval();
+        }
+    }
+
+    pub(in crate::features) fn toggle_send_command_data_menu(&mut self, cx: &mut Context<Self>) {
+        if self.send_command_sending {
+            return;
+        }
+        self.send_command_control_focus = None;
+        let next = !self.send_command_data_menu_open;
+        self.close_send_command_menus();
+        self.send_command_data_menu_open = next;
+        cx.notify();
+    }
+
+    pub(in crate::features) fn toggle_send_command_mode_menu(&mut self, cx: &mut Context<Self>) {
+        if self.send_command_sending {
+            return;
+        }
+        self.send_command_control_focus = None;
+        let next = !self.send_command_mode_menu_open;
+        self.close_send_command_menus();
+        self.send_command_mode_menu_open = next;
+        cx.notify();
+    }
+
+    pub(in crate::features) fn toggle_send_command_target_menu(&mut self, cx: &mut Context<Self>) {
+        if self.send_command_sending {
+            return;
+        }
+        self.send_command_control_focus = None;
+        let next = !self.send_command_target_menu_open;
+        self.close_send_command_menus();
+        self.send_command_target_menu_open = next;
+        cx.notify();
+    }
+
+    pub(in crate::features) fn toggle_send_command_line_ending_menu(
+        &mut self,
+        cx: &mut Context<Self>,
+    ) {
+        if self.send_command_sending {
+            return;
+        }
+        self.send_command_control_focus = None;
+        let next = !self.send_command_line_ending_menu_open;
+        self.close_send_command_menus();
+        self.send_command_line_ending_menu_open = next;
+        cx.notify();
+    }
+
     pub(in crate::features) fn handle_send_command_key_down(
         &mut self,
         event: &KeyDownEvent,
@@ -382,6 +587,7 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         self.send_command_target = target;
+        self.close_send_command_menus();
         let label = match &self.send_command_target {
             SendCommandTarget::Current => "Current".to_string(),
             SendCommandTarget::AllCompatible => "All compatible".to_string(),
@@ -423,6 +629,9 @@ impl NyaTermApp {
         delta: i32,
         cx: &mut Context<Self>,
     ) {
+        if self.send_command_sending {
+            return;
+        }
         // Tauri: decrement from 1 -> ∞ (None); increment from ∞ -> 1.
         self.send_command_count = match (self.send_command_count, delta) {
             (None, d) if d < 0 => None,
@@ -430,16 +639,7 @@ impl NyaTermApp {
             (Some(1), d) if d < 0 => None,
             (Some(n), d) => Some((n as i32 + d).clamp(1, 9999) as u32),
         };
-        cx.notify();
-    }
-
-    pub(in crate::features) fn adjust_send_command_interval(
-        &mut self,
-        delta: f64,
-        cx: &mut Context<Self>,
-    ) {
-        self.send_command_interval_seconds =
-            (self.send_command_interval_seconds + delta).clamp(0.0, 60.0);
+        self.sync_send_command_count_input();
         cx.notify();
     }
 
@@ -452,6 +652,7 @@ impl NyaTermApp {
                 (SendCommandDataType::Text, SendCommandMode::Line) => 1.0,
                 (SendCommandDataType::Text, _) => 0.02,
             };
+        self.sync_send_command_interval_input();
     }
 
     pub(in crate::features) fn set_send_command_data_type(
@@ -460,6 +661,7 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         self.send_command_data_type = data_type;
+        self.close_send_command_menus();
         match data_type {
             SendCommandDataType::Hex => {
                 if matches!(
@@ -497,7 +699,18 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         self.send_command_mode = mode;
+        self.close_send_command_menus();
         self.apply_send_command_default_interval();
+        cx.notify();
+    }
+
+    pub(in crate::features) fn set_send_command_line_ending(
+        &mut self,
+        line_ending: SendCommandLineEnding,
+        cx: &mut Context<Self>,
+    ) {
+        self.send_command_line_ending = line_ending;
+        self.close_send_command_menus();
         cx.notify();
     }
 

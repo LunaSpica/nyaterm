@@ -201,11 +201,11 @@ impl NyaTermApp {
         execute: bool,
         cx: &mut Context<Self>,
     ) {
-        if self.active_session_id.is_none() {
+        let Some(target_session_id) = self.ai_effective_target_session_id() else {
             self.ai_status = "Start a terminal session before using an AI command".to_string();
             cx.notify();
             return;
-        }
+        };
         let mut command = card.command.trim().to_string();
         if command.is_empty() {
             self.ai_status = "AI command card has no command".to_string();
@@ -267,7 +267,7 @@ impl NyaTermApp {
 
         self.record_ai_command_card_audit(&card, execute, true);
 
-        self.send_terminal_input(input_bytes, cx);
+        self.send_terminal_input_to_session(target_session_id, input_bytes, cx);
         self.ai_status = if should_continue_agent {
             if let Some(state) = self.ai_agent_loop.as_ref().cloned() {
                 self.upsert_ai_agent_step(

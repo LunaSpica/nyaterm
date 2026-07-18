@@ -27,8 +27,8 @@ use common::{
     network_delete_confirm_panel, network_group_delete_confirm_panel, network_group_editor_panel,
     network_tab_button,
 };
-use proxy::{network_proxy_editor_panel, proxy_matches, proxy_section, proxy_sections};
-use tunnel::{network_tunnel_editor_panel, tunnel_matches, tunnel_section, tunnel_sections};
+use proxy::{network_proxy_editor_panel, proxy_section, proxy_sections};
+use tunnel::{network_tunnel_editor_panel, tunnel_section, tunnel_sections};
 
 impl NyaTermApp {
     pub(in crate::features) fn tunnels_view(&mut self, cx: &mut Context<Self>) -> impl IntoElement {
@@ -40,22 +40,8 @@ impl NyaTermApp {
             .into_iter()
             .map(|info| (info.id.clone(), info))
             .collect::<HashMap<_, _>>();
-        let query = self.tunnel_search_draft.trim().to_ascii_lowercase();
-        let filtered_tunnels = self
-            .tunnels
-            .iter()
-            .filter(|tunnel| tunnel_matches(tunnel, &query))
-            .cloned()
-            .collect::<Vec<_>>();
-        let sections = tunnel_sections(palette, &filtered_tunnels, &self.tunnel_groups);
-        let proxy_query = self.proxy_search_draft.trim().to_ascii_lowercase();
-        let filtered_proxies = self
-            .proxies
-            .iter()
-            .filter(|proxy| proxy_matches(proxy, &proxy_query))
-            .cloned()
-            .collect::<Vec<_>>();
-        let proxy_sections = proxy_sections(&filtered_proxies, &self.proxy_groups);
+        let sections = tunnel_sections(palette, &self.tunnels, &self.tunnel_groups);
+        let proxy_sections = proxy_sections(&self.proxies, &self.proxy_groups);
         let missing_connections = self
             .tunnels
             .iter()
@@ -74,11 +60,6 @@ impl NyaTermApp {
                 "No saved tunnels were found in the native runtime directory yet.",
                 self.theme_palette(),
             ));
-        } else if filtered_tunnels.is_empty() {
-            tunnel_list = tunnel_list.child(empty_panel(
-                "No tunnels match the current search.",
-                self.theme_palette(),
-            ));
         } else {
             for section in sections {
                 tunnel_list =
@@ -90,11 +71,6 @@ impl NyaTermApp {
         if self.proxies.is_empty() {
             proxy_list = proxy_list.child(empty_panel(
                 "No saved proxies were found in the native runtime directory yet.",
-                self.theme_palette(),
-            ));
-        } else if filtered_proxies.is_empty() {
-            proxy_list = proxy_list.child(empty_panel(
-                "No proxies match the current search.",
                 self.theme_palette(),
             ));
         } else {
@@ -138,63 +114,6 @@ impl NyaTermApp {
                     )
                 },
             )
-            .when_some(self.network_delete_confirm.clone(), |this, confirm| {
-                this.child(
-                    div()
-                        .px_2()
-                        .pt_2()
-                        .child(network_delete_confirm_panel(palette, confirm, cx)),
-                )
-            })
-            .when_some(self.network_group_editor.clone(), |this, editor| {
-                this.child(
-                    div()
-                        .px_2()
-                        .pt_2()
-                        .child(network_group_editor_panel(
-                            palette,
-                            editor,
-                            &self.network_group_editor_focus,
-                            cx,
-                        )),
-                )
-            })
-            .when_some(self.network_group_delete_confirm.clone(), |this, confirm| {
-                this.child(
-                    div()
-                        .px_2()
-                        .pt_2()
-                        .child(network_group_delete_confirm_panel(palette, confirm, cx)),
-                )
-            })
-            .when_some(self.network_tunnel_editor.clone(), |this, editor| {
-                this.child(
-                    div()
-                        .px_2()
-                        .pt_2()
-                        .child(network_tunnel_editor_panel(
-                            palette,
-                            editor,
-                            self,
-                            &self.network_tunnel_editor_focus,
-                            cx,
-                        )),
-                )
-            })
-            .when_some(self.network_proxy_editor.clone(), |this, editor| {
-                this.child(
-                    div()
-                        .px_2()
-                        .pt_2()
-                        .child(network_proxy_editor_panel(
-                            palette,
-                            editor,
-                            self,
-                            &self.network_proxy_editor_focus,
-                            cx,
-                        )),
-                )
-            })
             .child(
                 div()
                     .flex_1()
@@ -294,71 +213,6 @@ impl NyaTermApp {
                                                         );
                                                     }),
                                                 ))
-                                            }),
-                                    ),
-                            )
-                            // Optional compact search (native convenience; denser than old strip)
-                            .child(
-                                div()
-                                    .h(px(28.))
-                                    .flex()
-                                    .items_center()
-                                    .gap_2()
-                                    .child(
-                                        transfer_input(
-                                            if self.network_tab == NetworkTab::Tunnels {
-                                                "tunnel-search-input"
-                                            } else {
-                                                "proxy-search-input"
-                                            },
-                                            "Search",
-                                            if self.network_tab == NetworkTab::Tunnels {
-                                                self.tunnel_search_draft.clone()
-                                            } else {
-                                                self.proxy_search_draft.clone()
-                                            },
-                                            true,
-                    self.theme_palette(),
-                )
-                                        .flex_1()
-                                        .track_focus(if self.network_tab == NetworkTab::Tunnels {
-                                            &self.tunnel_search_focus
-                                        } else {
-                                            &self.proxy_search_focus
-                                        })
-                                        .on_click(cx.listener(|this, _, window, cx| {
-                                            if this.network_tab == NetworkTab::Tunnels {
-                                                window.focus(&this.tunnel_search_focus);
-                                            } else {
-                                                window.focus(&this.proxy_search_focus);
-                                            }
-                                            cx.notify();
-                                        }))
-                                        .on_key_down(cx.listener(|this, event: &KeyDownEvent, _, cx| {
-                                            cx.stop_propagation();
-                                            if this.network_tab == NetworkTab::Tunnels {
-                                                this.handle_tunnel_search_key_down(event, cx);
-                                            } else {
-                                                this.handle_proxy_search_key_down(event, cx);
-                                            }
-                                        })),
-                                    )
-                                    .child(
-                                        div()
-                                            .font_family(crate::features::gpui_code_font_family())
-                                            .text_size(px(10.))
-                                            .text_color(rgb(self.theme_palette().text_dimmed))
-                                            .child(match self.network_tab {
-                                                NetworkTab::Tunnels => format!(
-                                                    "{}/{}",
-                                                    filtered_tunnels.len(),
-                                                    self.tunnels.len()
-                                                ),
-                                                NetworkTab::Proxies => format!(
-                                                    "{}/{}",
-                                                    filtered_proxies.len(),
-                                                    self.proxies.len()
-                                                ),
                                             }),
                                     ),
                             )

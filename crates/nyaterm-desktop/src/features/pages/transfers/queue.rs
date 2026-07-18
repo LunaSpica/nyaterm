@@ -3,26 +3,31 @@ use super::*;
 impl NyaTermApp {
     pub(super) fn transfer_queue_view(&mut self, cx: &mut Context<Self>) -> impl IntoElement {
         let palette = self.theme_palette();
+        let active_session_id = self.active_session_id.as_deref();
+        let visible_jobs = self
+            .transfer_jobs
+            .iter()
+            .filter(|job| job.is_visible_for_session(active_session_id))
+            .cloned()
+            .collect::<Vec<_>>();
 
-        let has_running = self
-            .transfer_jobs
+        let has_running = visible_jobs
             .iter()
-            .any(|job| job.status == TransferJobStatus::Running);
-        let has_paused = self
-            .transfer_jobs
+            .any(|job| job.status == TransferJobStatus::Running && job.control.is_some());
+        let has_paused = visible_jobs
             .iter()
-            .any(|job| job.status == TransferJobStatus::Paused);
-        let has_active = self.transfer_jobs.iter().any(|job| {
-            matches!(
-                job.status,
-                TransferJobStatus::Running | TransferJobStatus::Paused
-            )
+            .any(|job| job.status == TransferJobStatus::Paused && job.control.is_some());
+        let has_active = visible_jobs.iter().any(|job| {
+            job.control.is_some()
+                && matches!(
+                    job.status,
+                    TransferJobStatus::Running | TransferJobStatus::Paused
+                )
         });
-        let has_completed = self
-            .transfer_jobs
+        let has_completed = visible_jobs
             .iter()
             .any(|job| job.status == TransferJobStatus::Completed);
-        let has_stopped = self.transfer_jobs.iter().any(|job| {
+        let has_stopped = visible_jobs.iter().any(|job| {
             !matches!(
                 job.status,
                 TransferJobStatus::Running
@@ -37,7 +42,19 @@ impl NyaTermApp {
         };
 
         let mut list = div().flex().flex_col();
-        if self.transfer_jobs.is_empty() {
+        if self.active_session_id.is_none() {
+            list = list.child(
+                div()
+                    .flex()
+                    .items_center()
+                    .justify_center()
+                    .px_3()
+                    .py_6()
+                    .text_size(px(11.))
+                    .text_color(rgb(palette.text_dimmed))
+                    .child("Connect to a session"),
+            );
+        } else if visible_jobs.is_empty() {
             list = list.child(
                 div()
                     .flex()
@@ -50,7 +67,8 @@ impl NyaTermApp {
                     .child("No transfers"),
             );
         } else {
-            for job in ordered_transfer_jobs(&self.transfer_jobs) {
+            list = list.gap(px(2.)).p_1();
+            for job in ordered_transfer_jobs(&visible_jobs) {
                 list = list.child(transfer_job_row(
                     palette,
                     job,
@@ -75,70 +93,63 @@ impl NyaTermApp {
             .on_key_down(cx.listener(|this, event: &KeyDownEvent, _, cx| {
                 this.handle_transfer_queue_key_down(event, cx);
             }))
-            .child(
-                div()
-                    .h(px(32.))
-                    .px_2()
-                    .border_b_1()
-                    .border_color(rgb(palette.border))
-                    .bg(rgb(palette.section_header))
-                    .flex()
-                    .items_center()
-                    .gap_1()
-                    .child(
-                        div()
-                            .text_size(px(10.))
-                            .font_weight(FontWeight(800.))
-                            .text_color(rgb(palette.text_muted))
-                            .child("FILE TRANSFER"),
-                    )
-                    .child(div().flex_1())
-                    .child(queue_action_button(
-                        palette,
-                        "transfer-pause-all",
-                        "❚❚",
-                        has_running,
-                        cx.listener(|this, _, _, cx| {
-                            this.pause_all_transfer_jobs(cx);
-                        }),
-                    ))
-                    .child(queue_action_button(
-                        palette,
-                        "transfer-resume-all",
-                        "▶",
-                        has_paused,
-                        cx.listener(|this, _, _, cx| {
-                            this.resume_all_transfer_jobs(cx);
-                        }),
-                    ))
-                    .child(queue_action_button(
-                        palette,
-                        "transfer-cancel-all",
-                        "■",
-                        has_active,
-                        cx.listener(|this, _, _, cx| {
-                            this.cancel_all_transfer_jobs(cx);
-                        }),
-                    ))
-                    .child(queue_action_button(
-                        palette,
-                        "transfer-clear-completed",
-                        "✓",
-                        has_completed,
-                        cx.listener(|this, _, _, cx| {
-                            this.clear_completed_transfer_jobs(cx);
-                        }),
-                    ))
-                    .child(queue_action_button(
-                        palette,
-                        "transfer-clear-stopped",
-                        "CLR",
-                        has_stopped,
-                        cx.listener(|this, _, _, cx| {
-                            this.clear_stopped_transfer_jobs(cx);
-                        }),
-                    )),
-            )
+            .child(panel_header_with_actions(
+                "File Transfer",
+                "",
+                palette,
+                Some(
+                    div()
+                        .flex()
+                        .items_center()
+                        .gap_1()
+                        .child(queue_action_button(
+                            palette,
+                            "transfer-pause-all",
+                            "icons/transfer/pause.svg",
+                            has_running,
+                            cx.listener(|this, _, _, cx| {
+                                this.pause_all_transfer_jobs(cx);
+                            }),
+                        ))
+                        .child(queue_action_button(
+                            palette,
+                            "transfer-resume-all",
+                            "icons/transfer/play.svg",
+                            has_paused,
+                            cx.listener(|this, _, _, cx| {
+                                this.resume_all_transfer_jobs(cx);
+                            }),
+                        ))
+                        .child(queue_action_button(
+                            palette,
+                            "transfer-cancel-all",
+                            "icons/transfer/stop.svg",
+                            has_active,
+                            cx.listener(|this, _, _, cx| {
+                                this.cancel_all_transfer_jobs(cx);
+                            }),
+                        ))
+                        .child(queue_action_button(
+                            palette,
+                            "transfer-clear-completed",
+                            "icons/transfer/playlist-remove.svg",
+                            has_completed,
+                            cx.listener(|this, _, _, cx| {
+                                this.clear_completed_transfer_jobs(cx);
+                            }),
+                        ))
+                        .child(queue_action_button(
+                            palette,
+                            "transfer-clear-stopped",
+                            "icons/transfer/clear-all.svg",
+                            has_stopped,
+                            cx.listener(|this, _, _, cx| {
+                                this.clear_stopped_transfer_jobs(cx);
+                            }),
+                        ))
+                        .into_any_element(),
+                ),
+            ))
             .child(
                 div()
                     .id(SharedString::from("transfer-queue-scroll"))
@@ -150,27 +161,21 @@ impl NyaTermApp {
             )
             .child(
                 div()
-                    .h(px(24.))
+                    .h(px(26.))
                     .px_2()
                     .border_t_1()
                     .border_color(rgb(palette.border))
-                    .bg(rgb(palette.section_header))
+                    .bg(rgb(palette.surface))
                     .flex()
                     .items_center()
-                    .gap_2()
-                    .child(
-                        div()
-                            .text_size(px(10.))
-                            .text_color(rgb(palette.text_dimmed))
-                            .child("↓"),
-                    )
+                    .gap_1()
                     .child(
                         div()
                             .id(SharedString::from("transfer-download-path-footer"))
                             .min_w_0()
                             .flex_1()
                             .font_family(crate::features::gpui_code_font_family())
-                            .text_size(px(10.))
+                            .text_size(px(11.))
                             .text_color(rgb(palette.text_muted))
                             .cursor_pointer()
                             .hover(|this| this.text_color(rgb(palette.text)))

@@ -36,7 +36,10 @@ impl NyaTermApp {
             cx.notify();
             return;
         };
-        self.transfer_properties = Some(transfer_properties_state_from_entry(entry.clone()));
+        self.transfer_properties = Some(transfer_properties_state_from_entry(
+            entry.clone(),
+            self.active_session_id.clone(),
+        ));
         self.terminal_status = "remote properties opened".to_string();
         window.focus(&self.transfer_properties_focus);
         self.start_sftp_properties_load_job(entry.path, window, cx);
@@ -51,7 +54,10 @@ impl NyaTermApp {
     ) {
         self.transfer_selected_remote_path = Some(entry.path.clone());
         self.transfer_remote_path = entry.path.clone();
-        self.transfer_properties = Some(transfer_properties_state_from_entry(entry.clone()));
+        self.transfer_properties = Some(transfer_properties_state_from_entry(
+            entry.clone(),
+            self.active_session_id.clone(),
+        ));
         self.terminal_status = "remote properties opened".to_string();
         window.focus(&self.transfer_properties_focus);
         self.start_sftp_properties_load_job(entry.path, window, cx);
@@ -144,6 +150,7 @@ impl NyaTermApp {
         let id = self.next_transfer_id("sftp-properties");
         self.transfer_jobs.push(TransferJobState {
             id: id.clone(),
+            session_id: self.active_session_id.clone(),
             kind: TransferJobKind::LoadProperties {
                 remote_path: remote_path.clone(),
             },
@@ -253,6 +260,7 @@ impl NyaTermApp {
         let id = self.next_transfer_id("sftp-update-properties");
         self.transfer_jobs.push(TransferJobState {
             id: id.clone(),
+            session_id: self.active_session_id.clone(),
             kind: TransferJobKind::UpdateProperties {
                 remote_path: remote_path.clone(),
                 parent_path: parent_path.clone(),

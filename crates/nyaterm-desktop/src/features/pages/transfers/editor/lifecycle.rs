@@ -78,6 +78,7 @@ impl NyaTermApp {
         let id = self.next_transfer_id("sftp-open-text");
         self.transfer_jobs.push(TransferJobState {
             id: id.clone(),
+            session_id: self.active_session_id.clone(),
             kind: TransferJobKind::LoadEditor {
                 remote_path: remote_path.clone(),
             },
@@ -172,6 +173,7 @@ impl NyaTermApp {
         let id = self.next_transfer_id("sftp-save-text");
         self.transfer_jobs.push(TransferJobState {
             id: id.clone(),
+            session_id: self.active_session_id.clone(),
             kind: TransferJobKind::SaveEditor {
                 remote_path: remote_path.clone(),
             },

@@ -5,7 +5,6 @@ impl NyaTermApp {
         &mut self,
         filtered_commands: Vec<QuickCommand>,
         total_commands: usize,
-        can_send_to_all: bool,
         palette: crate::theme::ThemePalette,
         cx: &mut Context<Self>,
     ) -> gpui::Div {
@@ -23,18 +22,30 @@ impl NyaTermApp {
         if filtered_commands.is_empty() {
             rows = rows.child(
                 div()
-                    .rounded_sm()
+                    .mt_8()
+                    .mx_auto()
+                    .w_full()
+                    .max_w(px(384.))
+                    .rounded_md()
                     .border_1()
                     .border_color(rgb(palette.border))
-                    .bg(rgb(palette.input))
-                    .p_2()
+                    .p_4()
                     .flex()
                     .flex_col()
-                    .items_start()
+                    .items_center()
+                    .justify_center()
                     .gap_2()
                     .text_xs()
                     .text_color(rgb(palette.text_muted))
                     .line_height(px(18.))
+                    .opacity(0.72)
+                    .child(
+                        svg()
+                            .size(px(24.))
+                            .flex_none()
+                            .text_color(rgb(palette.text_muted))
+                            .path("icons/conn/terminal.svg"),
+                    )
                     .child(if total_commands == 0 {
                         "No quick commands saved yet."
                     } else {
@@ -57,150 +68,84 @@ impl NyaTermApp {
                 let run_command_id = command.id.clone();
                 let compact_click_command_id = command.id.clone();
                 let list_header_command_id = command.id.clone();
-                let edit_command_id = command.id.clone();
-                let delete_command_id = command.id.clone();
                 let detail_command_id = command.id.clone();
-                let all_command_id = command.id.clone();
                 let execution_mode = if command.execution_mode.as_deref() == Some("append") {
                     "append"
                 } else {
                     "execute"
                 };
-                let menu_open = self.quick_command_menu_id.as_deref() == Some(command.id.as_str());
-                let menu_command_id = command.id.clone();
+                let menu_open = self
+                    .quick_command_menu
+                    .as_ref()
+                    .is_some_and(|menu| menu.command_id == command.id);
                 let command_item = match self.quick_command_view_mode {
                     QuickCommandViewMode::Tile => div()
                         .id(SharedString::from(format!(
                             "quick-command-tile-{command_id}"
                         )))
                         .relative()
-                        .min_w(px(132.))
                         .max_w(px(220.))
-                        .h(px(34.))
-                        .rounded_sm()
+                        .h(px(26.))
+                        .rounded_md()
                         .border_1()
                         .border_color(rgb(palette.border))
                         .bg(rgb(palette.input))
                         .px_2()
                         .flex()
                         .items_center()
-                        .gap_2()
+                        .gap_1()
+                        .cursor_pointer()
                         .hover(|this| this.bg(rgb(0x151d2a)))
+                        .on_mouse_down(
+                            MouseButton::Right,
+                            cx.listener({
+                                let menu_command_id = command_id.clone();
+                                move |this, event: &gpui::MouseDownEvent, _, cx| {
+                                    cx.stop_propagation();
+                                    this.quick_command_menu = Some(QuickCommandRowMenuState {
+                                        command_id: menu_command_id.clone(),
+                                        x: event.position.x,
+                                        y: event.position.y,
+                                    });
+                                    cx.notify();
+                                }
+                            }),
+                        )
+                        .on_click(cx.listener(move |this, _, _, cx| {
+                            this.quick_command_menu = None;
+                            this.run_quick_command_by_id(run_command_id.clone(), cx);
+                        }))
+                        .child(quick_command_icon_mark(
+                            palette,
+                            command.icon_tag.as_deref(),
+                            command.color_tag.as_deref(),
+                        ))
+                        .when(command.pinned.unwrap_or_default(), |this| {
+                            this.child(quick_command_pin_mark(palette))
+                        })
                         .child(
                             div()
-                                .id(SharedString::from(format!(
-                                    "quick-command-tile-run-{command_id}"
-                                )))
                                 .min_w_0()
-                                .flex_1()
-                                .flex()
-                                .items_center()
-                                .gap_2()
-                                .cursor_pointer()
-                                .on_click(cx.listener(move |this, _, _, cx| {
-                                    this.quick_command_menu_id = None;
-                                    this.run_quick_command_by_id(run_command_id.clone(), cx);
-                                }))
-                                .child(quick_command_icon_mark(
-                                    palette,
-                                    command.icon_tag.as_deref(),
-                                    command.color_tag.as_deref(),
-                                ))
-                                .child(
-                                    div()
-                                        .min_w_0()
-                                        .flex_1()
-                                        .flex()
-                                        .items_center()
-                                        .gap_1()
-                                        .child(
-                                            div()
-                                                .min_w_0()
-                                                .text_xs()
-                                                .font_weight(FontWeight(800.))
-                                                .text_color(rgb(palette.text))
-                                                .overflow_hidden()
-                                                .child(truncate_preview(&command.label, 28)),
-                                        )
-                                        .when(command.pinned.unwrap_or_default(), |this| {
-                                            this.child(
-                                                div()
-                                                    .text_size(px(9.))
-                                                    .text_color(rgb(palette.warning))
-                                                    .child("PIN"),
-                                            )
-                                        }),
-                                ),
+                                .text_size(px(11.))
+                                .font_weight(FontWeight(600.))
+                                .text_color(rgb(palette.text))
+                                .overflow_hidden()
+                                .child(truncate_preview(&command.label, 28)),
                         )
-                        .child(status_pill(
-                            if execution_mode == "append" {
-                                "append"
-                            } else {
-                                "exec"
-                            },
-                            if execution_mode == "append" {
-                                rgb(palette.warning)
-                            } else {
-                                rgb(palette.success)
-                            },
-                            if execution_mode == "append" {
-                                rgb(0x32280f)
-                            } else {
-                                rgb(palette.hover)
-                            },
-                        ))
-                        .child(icon_button(
-                            format!("quick-command-tile-detail-{command_id}"),
-                            "ⓘ",
-                            self.theme_palette(),
-                            cx.listener(move |this, _, window, cx| {
-                                this.quick_command_menu_id = None;
-                                this.open_quick_command_details(
-                                    detail_command_id.clone(),
-                                    window,
-                                    cx,
-                                );
-                            }),
-                        ))
-                        .child(quick_command_more_menu(
-                            palette,
-                            &command_id,
-                            menu_open,
-                            can_send_to_all,
-                            cx.listener(move |this, _, _, cx| {
-                                cx.stop_propagation();
-                                if this.quick_command_menu_id.as_deref()
-                                    == Some(menu_command_id.as_str())
-                                {
-                                    this.quick_command_menu_id = None;
-                                } else {
-                                    this.quick_command_menu_id = Some(menu_command_id.clone());
-                                }
-                                cx.notify();
-                            }),
-                            cx.listener(move |this, _, window, cx| {
-                                cx.stop_propagation();
-                                this.quick_command_menu_id = None;
-                                this.open_edit_quick_command_editor(
-                                    edit_command_id.clone(),
-                                    window,
-                                    cx,
-                                );
-                            }),
-                            cx.listener(move |this, _, _, cx| {
-                                cx.stop_propagation();
-                                this.quick_command_menu_id = None;
-                                this.send_quick_command_to_all_by_id(all_command_id.clone(), cx);
-                            }),
-                            cx.listener(move |this, _, _, cx| {
-                                cx.stop_propagation();
-                                this.quick_command_menu_id = None;
-                                this.open_delete_quick_command_confirm(
-                                    delete_command_id.clone(),
-                                    cx,
-                                );
-                            }),
-                        ))
+                        .tooltip({
+                            let label = command.label.clone();
+                            let command_text = command.command.clone();
+                            move |_, cx| {
+                                cx.new(|_| {
+                                    ChromeTooltip::new(format!(
+                                        "{}\n{}",
+                                        label,
+                                        truncate_preview(&command_text, 120)
+                                    ))
+                                })
+                                .into()
+                            }
+                        })
                         .into_any_element(),
                     QuickCommandViewMode::Compact => {
                         // Tauri compact: send + details + more (edit / send-all / delete).
@@ -210,54 +155,41 @@ impl NyaTermApp {
                             false,
                             execution_mode,
                             menu_open,
-                            can_send_to_all,
                             cx.listener(move |this, _, _, cx| {
-                                this.quick_command_menu_id = None;
+                                this.quick_command_menu = None;
                                 this.run_quick_command_by_id(run_command_id.clone(), cx);
                             }),
-                            cx.listener(move |this, _, window, cx| {
-                                this.quick_command_menu_id = None;
+                            cx.listener(move |this, event: &ClickEvent, window, cx| {
+                                this.quick_command_menu = None;
+                                let position = event.position();
                                 this.open_quick_command_details(
                                     detail_command_id.clone(),
+                                    position.x,
+                                    position.y,
                                     window,
                                     cx,
                                 );
                             }),
                             cx.listener({
                                 let menu_command_id = command_id.clone();
-                                move |this, _, _, cx| {
+                                move |this, event: &ClickEvent, _, cx| {
                                     cx.stop_propagation();
-                                    if this.quick_command_menu_id.as_deref()
-                                        == Some(menu_command_id.as_str())
+                                    if this
+                                        .quick_command_menu
+                                        .as_ref()
+                                        .is_some_and(|menu| menu.command_id == menu_command_id)
                                     {
-                                        this.quick_command_menu_id = None;
+                                        this.quick_command_menu = None;
                                     } else {
-                                        this.quick_command_menu_id = Some(menu_command_id.clone());
+                                        let position = event.position();
+                                        this.quick_command_menu = Some(QuickCommandRowMenuState {
+                                            command_id: menu_command_id.clone(),
+                                            x: position.x,
+                                            y: position.y,
+                                        });
                                     }
                                     cx.notify();
                                 }
-                            }),
-                            cx.listener(move |this, _, window, cx| {
-                                cx.stop_propagation();
-                                this.quick_command_menu_id = None;
-                                this.open_edit_quick_command_editor(
-                                    edit_command_id.clone(),
-                                    window,
-                                    cx,
-                                );
-                            }),
-                            cx.listener(move |this, _, _, cx| {
-                                cx.stop_propagation();
-                                this.quick_command_menu_id = None;
-                                this.send_quick_command_to_all_by_id(all_command_id.clone(), cx);
-                            }),
-                            cx.listener(move |this, _, _, cx| {
-                                cx.stop_propagation();
-                                this.quick_command_menu_id = None;
-                                this.open_delete_quick_command_confirm(
-                                    delete_command_id.clone(),
-                                    cx,
-                                );
                             }),
                         );
 
@@ -274,6 +206,21 @@ impl NyaTermApp {
                             .items_center()
                             .gap_1()
                             .hover(|this| this.bg(rgb(0x151d2a)))
+                            .on_mouse_down(
+                                MouseButton::Right,
+                                cx.listener({
+                                    let menu_command_id = command_id.clone();
+                                    move |this, event: &gpui::MouseDownEvent, _, cx| {
+                                        cx.stop_propagation();
+                                        this.quick_command_menu = Some(QuickCommandRowMenuState {
+                                            command_id: menu_command_id.clone(),
+                                            x: event.position.x,
+                                            y: event.position.y,
+                                        });
+                                        cx.notify();
+                                    }
+                                }),
+                            )
                             .child(
                                 div()
                                     .id(SharedString::from(format!(
@@ -287,7 +234,7 @@ impl NyaTermApp {
                                     .gap_1()
                                     .cursor_pointer()
                                     .on_click(cx.listener(move |this, _, _, cx| {
-                                        this.quick_command_menu_id = None;
+                                        this.quick_command_menu = None;
                                         this.run_quick_command_by_id(
                                             compact_click_command_id.clone(),
                                             cx,
@@ -299,12 +246,7 @@ impl NyaTermApp {
                                         command.color_tag.as_deref(),
                                     ))
                                     .when(command.pinned.unwrap_or_default(), |this| {
-                                        this.child(
-                                            div()
-                                                .text_size(px(9.))
-                                                .text_color(rgb(palette.warning))
-                                                .child("📌"),
-                                        )
+                                        this.child(quick_command_pin_mark(palette))
                                     })
                                     .child(
                                         div()
@@ -338,54 +280,41 @@ impl NyaTermApp {
                             true,
                             execution_mode,
                             menu_open,
-                            can_send_to_all,
                             cx.listener(move |this, _, _, cx| {
-                                this.quick_command_menu_id = None;
+                                this.quick_command_menu = None;
                                 this.run_quick_command_by_id(run_command_id.clone(), cx);
                             }),
-                            cx.listener(move |this, _, window, cx| {
-                                this.quick_command_menu_id = None;
+                            cx.listener(move |this, event: &ClickEvent, window, cx| {
+                                this.quick_command_menu = None;
+                                let position = event.position();
                                 this.open_quick_command_details(
                                     detail_command_id.clone(),
+                                    position.x,
+                                    position.y,
                                     window,
                                     cx,
                                 );
                             }),
                             cx.listener({
                                 let menu_command_id = command_id.clone();
-                                move |this, _, _, cx| {
+                                move |this, event: &ClickEvent, _, cx| {
                                     cx.stop_propagation();
-                                    if this.quick_command_menu_id.as_deref()
-                                        == Some(menu_command_id.as_str())
+                                    if this
+                                        .quick_command_menu
+                                        .as_ref()
+                                        .is_some_and(|menu| menu.command_id == menu_command_id)
                                     {
-                                        this.quick_command_menu_id = None;
+                                        this.quick_command_menu = None;
                                     } else {
-                                        this.quick_command_menu_id = Some(menu_command_id.clone());
+                                        let position = event.position();
+                                        this.quick_command_menu = Some(QuickCommandRowMenuState {
+                                            command_id: menu_command_id.clone(),
+                                            x: position.x,
+                                            y: position.y,
+                                        });
                                     }
                                     cx.notify();
                                 }
-                            }),
-                            cx.listener(move |this, _, window, cx| {
-                                cx.stop_propagation();
-                                this.quick_command_menu_id = None;
-                                this.open_edit_quick_command_editor(
-                                    edit_command_id.clone(),
-                                    window,
-                                    cx,
-                                );
-                            }),
-                            cx.listener(move |this, _, _, cx| {
-                                cx.stop_propagation();
-                                this.quick_command_menu_id = None;
-                                this.send_quick_command_to_all_by_id(all_command_id.clone(), cx);
-                            }),
-                            cx.listener(move |this, _, _, cx| {
-                                cx.stop_propagation();
-                                this.quick_command_menu_id = None;
-                                this.open_delete_quick_command_confirm(
-                                    delete_command_id.clone(),
-                                    cx,
-                                );
                             }),
                         );
 
@@ -406,6 +335,21 @@ impl NyaTermApp {
                             .items_center()
                             .gap_2()
                             .hover(|this| this.bg(rgb(0x151d2a)))
+                            .on_mouse_down(
+                                MouseButton::Right,
+                                cx.listener({
+                                    let menu_command_id = command_id.clone();
+                                    move |this, event: &gpui::MouseDownEvent, _, cx| {
+                                        cx.stop_propagation();
+                                        this.quick_command_menu = Some(QuickCommandRowMenuState {
+                                            command_id: menu_command_id.clone(),
+                                            x: event.position.x,
+                                            y: event.position.y,
+                                        });
+                                        cx.notify();
+                                    }
+                                }),
+                            )
                             .child(
                                 div()
                                     .id(SharedString::from(format!(
@@ -418,7 +362,7 @@ impl NyaTermApp {
                                     .gap_2()
                                     .cursor_pointer()
                                     .on_click(cx.listener(move |this, _, _, cx| {
-                                        this.quick_command_menu_id = None;
+                                        this.quick_command_menu = None;
                                         this.run_quick_command_by_id(
                                             list_header_command_id.clone(),
                                             cx,
@@ -457,14 +401,9 @@ impl NyaTermApp {
                                                     .when(
                                                         command.pinned.unwrap_or_default(),
                                                         |this| {
-                                                            this.child(
-                                                                div()
-                                                                    .text_size(px(9.))
-                                                                    .text_color(
-                                                                        rgb(palette.warning),
-                                                                    )
-                                                                    .child("📌"),
-                                                            )
+                                                            this.child(quick_command_pin_mark(
+                                                                palette,
+                                                            ))
                                                         },
                                                     ),
                                             )

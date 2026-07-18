@@ -128,7 +128,7 @@ impl NyaTermApp {
             return None;
         }
         let selection = self.terminal_selection.as_ref()?;
-        if selection.is_empty() {
+        if selection.is_empty() || selection.all_buffer {
             return None;
         }
         // Only single-row selections can map to a single-line tracked input.
