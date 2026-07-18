@@ -289,37 +289,6 @@ pub(super) fn connection_tree_indent_px(depth: usize) -> f32 {
     }
 }
 
-pub(super) fn kind_chip(
-    palette: crate::theme::ThemePalette,
-    label: &'static str,
-    selected: bool,
-    on_click: impl Fn(&gpui::ClickEvent, &mut gpui::Window, &mut gpui::App) + 'static,
-) -> impl IntoElement {
-    div()
-        .id(SharedString::from(format!("connection-kind-{label}")))
-        .h(px(24.))
-        .px_2()
-        .flex()
-        .items_center()
-        .rounded_sm()
-        .text_xs()
-        .font_weight(FontWeight(700.))
-        .cursor_pointer()
-        .text_color(if selected {
-            rgb(palette.on_primary)
-        } else {
-            rgb(palette.text_muted)
-        })
-        .bg(if selected {
-            rgb(palette.primary)
-        } else {
-            rgb(palette.surface_elevated)
-        })
-        .hover(|this| this.bg(rgb(palette.border)))
-        .child(label)
-        .on_click(on_click)
-}
-
 pub(super) fn connection_kind_tab(
     palette: crate::theme::ThemePalette,
     label: impl Into<SharedString>,

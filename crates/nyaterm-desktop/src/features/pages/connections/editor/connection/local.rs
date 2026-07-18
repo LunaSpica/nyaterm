@@ -3,15 +3,17 @@ use super::*;
 pub(super) fn connection_editor_local_section(
     palette: crate::theme::ThemePalette,
     editor: &ConnectionEditorState,
+    shell_label: &'static str,
+    shell_options: Vec<ConnectionEditorChoice>,
+    open_menu: Option<ConnectionEditorMenu>,
     language: &str,
     cx: &mut Context<NyaTermApp>,
 ) -> gpui::Div {
     let tr = |key: &'static str| crate::i18n::text(language, key);
-    let shell_path = editor.shell_path.clone();
     div()
         .flex()
         .flex_col()
-        .gap_2()
+        .gap_3()
         .child(
             div()
                 .flex()
@@ -26,104 +28,57 @@ pub(super) fn connection_editor_local_section(
                 .child(
                     div()
                         .flex()
-                        .flex_wrap()
-                        .gap_1()
-                        .child(kind_chip(
+                        .items_center()
+                        .gap_2()
+                        .child(
+                            div()
+                                .w(px(144.))
+                                .flex_none()
+                                .child(connection_editor_select(
+                                    palette,
+                                    "connection-editor-shell-preset",
+                                    "",
+                                    shell_label,
+                                    ConnectionEditorMenu::Shell,
+                                    open_menu == Some(ConnectionEditorMenu::Shell),
+                                    shell_options,
+                                    cx,
+                                )),
+                        )
+                        .child(div().min_w_0().flex_1().child(editor_field(
                             palette,
-                            tr("dialog.shellBash"),
-                            shell_path == "bash"
-                                || shell_path.ends_with("/bash")
-                                || shell_path.ends_with("\\bash"),
-                            cx.listener(|this, _, _, cx| {
-                                this.set_connection_editor_shell_path("bash", cx);
+                            "connection-editor-shell",
+                            "",
+                            editor.shell_path.clone(),
+                            editor.focused_field == ConnectionEditorField::ShellPath,
+                            cx.listener(|this, _, window, cx| {
+                                this.focus_connection_editor_field(
+                                    ConnectionEditorField::ShellPath,
+                                    window,
+                                    cx,
+                                );
                             }),
-                        ))
-                        .child(kind_chip(
-                            palette,
-                            "Zsh",
-                            shell_path == "zsh"
-                                || shell_path.ends_with("/zsh")
-                                || shell_path.ends_with("\\zsh"),
-                            cx.listener(|this, _, _, cx| {
-                                this.set_connection_editor_shell_path("zsh", cx);
-                            }),
-                        ))
-                        .child(kind_chip(
-                            palette,
-                            "Fish",
-                            shell_path == "fish"
-                                || shell_path.ends_with("/fish")
-                                || shell_path.ends_with("\\fish"),
-                            cx.listener(|this, _, _, cx| {
-                                this.set_connection_editor_shell_path("fish", cx);
-                            }),
-                        ))
-                        .child(kind_chip(
-                            palette,
-                            "sh",
-                            shell_path == "sh"
-                                || shell_path.ends_with("/sh")
-                                || shell_path.ends_with("\\sh"),
-                            cx.listener(|this, _, _, cx| {
-                                this.set_connection_editor_shell_path("sh", cx);
-                            }),
-                        ))
-                        .child(kind_chip(
-                            palette,
-                            tr("dialog.shellPowerShell"),
-                            shell_path == "powershell.exe"
-                                || shell_path.ends_with("powershell.exe")
-                                || shell_path.ends_with("pwsh")
-                                || shell_path.ends_with("pwsh.exe"),
-                            cx.listener(|this, _, _, cx| {
-                                this.set_connection_editor_shell_path("powershell.exe", cx);
-                            }),
-                        ))
-                        .child(kind_chip(
-                            palette,
-                            tr("dialog.shellCmd"),
-                            shell_path == "cmd.exe" || shell_path.ends_with("cmd.exe"),
-                            cx.listener(|this, _, _, cx| {
-                                this.set_connection_editor_shell_path("cmd.exe", cx);
-                            }),
-                        ))
-                        .child(kind_chip(
-                            palette,
-                            tr("dialog.shellWsl"),
-                            shell_path == "wsl.exe" || shell_path.ends_with("wsl.exe"),
-                            cx.listener(|this, _, _, cx| {
-                                this.set_connection_editor_shell_path("wsl.exe", cx);
-                            }),
-                        )),
+                        )))
+                        .child(
+                            div()
+                                .id("connection-editor-shell-browse")
+                                .size(px(30.))
+                                .flex_none()
+                                .flex()
+                                .items_center()
+                                .justify_center()
+                                .rounded_sm()
+                                .border_1()
+                                .border_color(rgb(palette.border))
+                                .bg(rgb(palette.input))
+                                .cursor_pointer()
+                                .hover(|this| this.bg(rgb(palette.hover)))
+                                .child(svg().size(px(14.)).path("icons/conn/folder.svg"))
+                                .on_click(cx.listener(|this, _, _, cx| {
+                                    this.prompt_connection_editor_shell_path(cx);
+                                })),
+                        ),
                 ),
-        )
-        .child(
-            div()
-                .flex()
-                .items_end()
-                .gap_2()
-                .child(div().min_w_0().flex_1().child(editor_field(
-                    palette,
-                    "connection-editor-shell",
-                    tr("dialog.shellPath"),
-                    editor.shell_path.clone(),
-                    editor.focused_field == ConnectionEditorField::ShellPath,
-                    cx.listener(|this, _, window, cx| {
-                        this.focus_connection_editor_field(
-                            ConnectionEditorField::ShellPath,
-                            window,
-                            cx,
-                        );
-                    }),
-                )))
-                .child(small_button(
-                    palette,
-                    "connection-editor-shell-browse",
-                    tr("settings.browse"),
-                    cx.listener(|this, _, _, cx| {
-                        this.prompt_connection_editor_shell_path(cx);
-                    }),
-                )),
         )
         .child(editor_field(
             palette,

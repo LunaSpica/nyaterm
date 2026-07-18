@@ -174,6 +174,9 @@ impl NyaTermApp {
             ConnectionEditorMenu::TelnetEnterMode => {
                 editor.telnet_enter_mode = value.unwrap_or_else(|| "cr".to_string())
             }
+            ConnectionEditorMenu::Shell => {
+                editor.shell_path = value.unwrap_or_else(|| "powershell.exe".to_string())
+            }
             ConnectionEditorMenu::SerialPort => editor.serial_port = value.unwrap_or_default(),
             ConnectionEditorMenu::BaudRate => {
                 editor.baud_rate = value.unwrap_or_else(|| "115200".to_string())
@@ -302,19 +305,6 @@ impl NyaTermApp {
             };
             editor.error = None;
             self.terminal_status = format!("connection type set to {}", kind.label());
-        }
-        cx.notify();
-    }
-
-    pub(in crate::features) fn set_connection_editor_shell_path(
-        &mut self,
-        shell_path: &str,
-        cx: &mut Context<Self>,
-    ) {
-        if let Some(editor) = self.connection_editor.as_mut() {
-            editor.shell_path = shell_path.to_string();
-            editor.error = None;
-            self.terminal_status = format!("shell path: {shell_path}");
         }
         cx.notify();
     }

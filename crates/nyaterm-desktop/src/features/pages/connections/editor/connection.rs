@@ -311,6 +311,28 @@ impl NyaTermApp {
                 selected: editor.stop_bits == value,
             })
             .collect::<Vec<_>>();
+        let shell_label = match editor.shell_path.as_str() {
+            "powershell.exe" => self.tr("dialog.shellPowerShell"),
+            "cmd.exe" => self.tr("dialog.shellCmd"),
+            "bash" => self.tr("dialog.shellBash"),
+            "wsl.exe" => self.tr("dialog.shellWsl"),
+            "wt.exe" => self.tr("dialog.shellWindowsTerminal"),
+            _ => self.tr("dialog.shellCustom"),
+        };
+        let shell_options = [
+            ("powershell.exe", self.tr("dialog.shellPowerShell")),
+            ("cmd.exe", self.tr("dialog.shellCmd")),
+            ("bash", self.tr("dialog.shellBash")),
+            ("wsl.exe", self.tr("dialog.shellWsl")),
+            ("wt.exe", self.tr("dialog.shellWindowsTerminal")),
+        ]
+        .into_iter()
+        .map(|(value, label)| ConnectionEditorChoice {
+            value: Some(value.to_string()),
+            label: label.to_string(),
+            selected: editor.shell_path == value,
+        })
+        .collect::<Vec<_>>();
         let password_display = if editor.password.is_empty() {
             if editor.existing_password.is_some() {
                 self.tr("dialog.passwordAlreadySet").to_string()
@@ -556,7 +578,13 @@ impl NyaTermApp {
                     })
                     .when(editor.kind == ConnectionKindTab::Local, |this| {
                         this.child(connection_editor_local_section(
-                            palette, &editor, &language, cx,
+                            palette,
+                            &editor,
+                            shell_label,
+                            shell_options,
+                            self.connection_editor_menu,
+                            &language,
+                            cx,
                         ))
                     })
                     .when(editor.kind == ConnectionKindTab::Telnet, |this| {

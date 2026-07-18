@@ -57,6 +57,7 @@ pub(crate) enum ConnectionEditorMenu {
     ProxyJump,
     Backspace,
     TelnetEnterMode,
+    Shell,
     SerialPort,
     BaudRate,
     DataBits,
