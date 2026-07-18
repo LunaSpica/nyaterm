@@ -269,6 +269,7 @@ impl NyaTermApp {
             connection_list_offset: 0,
             connection_groups,
             connection_editor: None,
+            connection_editor_window: None,
             connection_editor_focus: cx.focus_handle(),
             connection_group_editor: None,
             connection_group_editor_focus: cx.focus_handle(),

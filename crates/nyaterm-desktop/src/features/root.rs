@@ -496,6 +496,19 @@ impl NyaTermApp {
                 this.child(self.sync_groups_overlay(cx))
             })
             .when(
+                self.connection_editor.is_some() && self.connection_editor_window.is_none(),
+                |this| {
+                    this.child(
+                        self.connection_editor_panel(
+                            self.connection_editor
+                                .clone()
+                                .expect("connection editor state checked above"),
+                            cx,
+                        ),
+                    )
+                },
+            )
+            .when(
                 self.quick_command_editor.is_some() && self.quick_command_window.is_none(),
                 |this| this.child(self.quick_command_editor_overlay(cx)),
             )
@@ -545,14 +558,18 @@ impl NyaTermApp {
     }
 
     fn modal_child_window_open(&self) -> bool {
-        self.settings_window.is_some() || self.quick_command_window.is_some()
+        self.settings_window.is_some()
+            || self.quick_command_window.is_some()
+            || self.connection_editor_window.is_some()
     }
 
     fn activate_modal_child_window(&mut self, cx: &mut Context<Self>) -> bool {
         if self.settings_window.is_some() {
             self.activate_settings_window(cx)
-        } else {
+        } else if self.quick_command_window.is_some() {
             self.activate_quick_command_window(cx)
+        } else {
+            self.activate_connection_editor_window(cx)
         }
     }
 

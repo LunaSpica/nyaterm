@@ -121,8 +121,8 @@ impl NyaTermApp {
                         palette,
                         "command-center-new-session",
                         "New",
-                        cx.listener(|this, _, _, cx| {
-                            this.select(NavItem::Connections, cx);
+                        cx.listener(|this, _, window, cx| {
+                            this.open_connection_editor(None, None, false, window, cx);
                         }),
                     ))
                     .child(small_button(

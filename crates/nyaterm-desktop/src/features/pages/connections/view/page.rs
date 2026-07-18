@@ -176,9 +176,6 @@ impl NyaTermApp {
                 this.child(self.connections_selection_strip(selected_count, cx))
             })
             .child(list)
-            .when_some(self.connection_editor.clone(), |this, editor| {
-                this.child(self.connection_editor_panel(editor, cx))
-            })
             .when_some(self.connection_group_editor.clone(), |this, editor| {
                 this.child(self.connection_group_editor_panel(editor, cx))
             })

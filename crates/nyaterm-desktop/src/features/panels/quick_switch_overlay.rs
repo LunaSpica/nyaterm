@@ -208,11 +208,11 @@ impl NyaTermApp {
                                         palette,
                                         "quick-switch-new-ssh",
                                         "New SSH",
-                                        cx.listener(|this, _, _, cx| {
+                                        cx.listener(|this, _, window, cx| {
                                             this.quick_switch_open = false;
-                                            this.open_page(NavItem::Connections, cx);
-                                            this.terminal_status =
-                                                "new SSH session page opened".to_string();
+                                            this.open_connection_editor(
+                                                None, None, true, window, cx,
+                                            );
                                         }),
                                     ))
                                     .child(small_button(

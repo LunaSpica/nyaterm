@@ -3,8 +3,21 @@ use super::*;
 pub(super) fn connection_editor_serial_section(
     palette: crate::theme::ThemePalette,
     editor: &ConnectionEditorState,
+    language: &str,
     cx: &mut Context<NyaTermApp>,
 ) -> gpui::Div {
+    let tr = |key: &'static str| crate::i18n::text(language, key);
+    let parity_value = match editor.parity.as_str() {
+        "even" => tr("dialog.parityEven"),
+        "odd" => tr("dialog.parityOdd"),
+        "mark" => tr("dialog.parityMark"),
+        "space" => tr("dialog.paritySpace"),
+        _ => tr("dialog.parityNone"),
+    };
+    let backspace_value = match editor.backspace_mode.as_str() {
+        "ctrl-h" | "bs" | "ctrl_h" => tr("dialog.backspaceCtrlH"),
+        _ => tr("dialog.backspaceDel"),
+    };
     div()
         .flex()
         .flex_col()
@@ -20,9 +33,10 @@ pub(super) fn connection_editor_serial_section(
                         .text_xs()
                         .text_color(rgb(palette.text_muted))
                         .child(format!(
-                            "Port · {}",
+                            "{} · {}",
+                            tr("dialog.serialPort"),
                             if editor.serial_port.is_empty() {
-                                "Select port"
+                                tr("dialog.selectSerialPort")
                             } else {
                                 &editor.serial_port
                             }
@@ -31,7 +45,7 @@ pub(super) fn connection_editor_serial_section(
                 .child(small_button(
                     palette,
                     "connection-editor-serial-port",
-                    "Cycle",
+                    tr("common.more"),
                     cx.listener(|this, _, _, cx| {
                         this.cycle_connection_editor_serial_port(cx);
                     }),
@@ -46,7 +60,7 @@ pub(super) fn connection_editor_serial_section(
                 .child(editor_field(
                     palette,
                     "connection-editor-baud",
-                    "Baud",
+                    tr("dialog.baudRate"),
                     editor.baud_rate.clone(),
                     editor.focused_field == ConnectionEditorField::BaudRate,
                     cx.listener(|this, _, window, cx| {
@@ -60,7 +74,7 @@ pub(super) fn connection_editor_serial_section(
                 .child(small_button(
                     palette,
                     "connection-editor-baud-preset",
-                    "Preset",
+                    tr("common.more"),
                     cx.listener(|this, _, _, cx| {
                         this.cycle_connection_editor_baud_preset(cx);
                     }),
@@ -76,12 +90,12 @@ pub(super) fn connection_editor_serial_section(
                     div()
                         .text_xs()
                         .text_color(rgb(palette.text_muted))
-                        .child(format!("Data bits · {}", editor.data_bits)),
+                        .child(format!("{} · {}", tr("dialog.dataBits"), editor.data_bits)),
                 )
                 .child(small_button(
                     palette,
                     "connection-editor-data-bits",
-                    "Cycle",
+                    tr("common.more"),
                     cx.listener(|this, _, _, cx| {
                         this.cycle_connection_editor_data_bits(cx);
                     }),
@@ -97,12 +111,12 @@ pub(super) fn connection_editor_serial_section(
                     div()
                         .text_xs()
                         .text_color(rgb(palette.text_muted))
-                        .child(format!("Parity · {}", editor.parity.to_ascii_uppercase())),
+                        .child(format!("{} · {parity_value}", tr("dialog.parity"))),
                 )
                 .child(small_button(
                     palette,
                     "connection-editor-parity",
-                    "Cycle",
+                    tr("common.more"),
                     cx.listener(|this, _, _, cx| {
                         this.cycle_connection_editor_parity(cx);
                     }),
@@ -118,12 +132,12 @@ pub(super) fn connection_editor_serial_section(
                     div()
                         .text_xs()
                         .text_color(rgb(palette.text_muted))
-                        .child(format!("Stop bits · {}", editor.stop_bits)),
+                        .child(format!("{} · {}", tr("dialog.stopBits"), editor.stop_bits)),
                 )
                 .child(small_button(
                     palette,
                     "connection-editor-stop-bits",
-                    "Cycle",
+                    tr("common.more"),
                     cx.listener(|this, _, _, cx| {
                         this.cycle_connection_editor_stop_bits(cx);
                     }),
@@ -140,17 +154,14 @@ pub(super) fn connection_editor_serial_section(
                         .text_xs()
                         .text_color(rgb(palette.text_muted))
                         .child(format!(
-                            "Backspace · {}",
-                            match editor.backspace_mode.as_str() {
-                                "ctrl-h" | "bs" | "ctrl_h" => "Ctrl+H (BS)",
-                                _ => "DEL (0x7F)",
-                            }
+                            "{} · {backspace_value}",
+                            tr("dialog.backspaceMode")
                         )),
                 )
                 .child(small_button(
                     palette,
                     "connection-editor-serial-backspace",
-                    "Cycle",
+                    tr("common.more"),
                     cx.listener(|this, _, _, cx| {
                         this.cycle_connection_editor_backspace(cx);
                     }),

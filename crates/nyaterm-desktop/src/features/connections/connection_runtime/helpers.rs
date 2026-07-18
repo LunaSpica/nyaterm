@@ -422,5 +422,4 @@ pub(in crate::features) enum ConnectionEditorToggle {
     RawTcp,
     LocalEcho,
     PostLogin,
-    ConnectAfterSave,
 }

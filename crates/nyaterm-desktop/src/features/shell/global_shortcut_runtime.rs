@@ -52,9 +52,7 @@ impl NyaTermApp {
             return true;
         }
         if shortcut_matches(event, "tab.newSession", &keybindings) {
-            self.open_page(NavItem::Connections, cx);
-            self.terminal_status = "new session page opened".to_string();
-            cx.notify();
+            self.open_connection_editor(None, None, false, window, cx);
             return true;
         }
         if shortcut_matches(event, "tab.temporarySshLink", &keybindings) {

@@ -22,6 +22,7 @@ mod cloud_sync_runtime;
 mod command_runtime;
 #[path = "settings/config_runtime.rs"]
 mod config_runtime;
+mod connection_editor_window;
 #[path = "connections/connection_runtime.rs"]
 mod connection_runtime;
 #[path = "connections/connections.rs"]
@@ -161,6 +162,7 @@ pub(in crate::features) use auth_runtime::{
     SftpDuplicatePromptBroker, SftpDuplicatePromptState,
 };
 pub(in crate::features) use cloud_sync_provider::{pull_provider_snapshot, push_provider_snapshot};
+pub(in crate::features) use connection_editor_window::ConnectionEditorWindow;
 pub(in crate::features) use connection_runtime::ConnectionEditorToggle;
 pub(in crate::features) use connections::{
     ConnectionDragKind, ConnectionDragPayload, ConnectionDragPreview, ConnectionDropPosition,

@@ -18,13 +18,40 @@ impl NyaTermApp {
         &mut self,
         editor: ConnectionEditorState,
         cx: &mut Context<Self>,
-    ) -> impl IntoElement {
+    ) -> AnyElement {
+        self.connection_editor_surface(editor, false, cx)
+    }
+
+    pub(in crate::features) fn connection_editor_window_view(
+        &mut self,
+        editor: ConnectionEditorState,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
+        self.connection_editor_surface(editor, true, cx)
+    }
+
+    fn connection_editor_surface(
+        &mut self,
+        editor: ConnectionEditorState,
+        native_window: bool,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
         let palette = self.theme_palette();
+        let language = self.settings.language.clone();
         let title = if editor.id.is_some() {
-            "Edit Connection"
+            self.tr("dialog.editConnection")
         } else {
-            "New Connection"
+            self.tr("dialog.newConnection")
         };
+        let local_label = self.tr("dialog.localTerminal");
+        let serial_label = self.tr("dialog.serial");
+        let name_label = self.tr("dialog.connectionName");
+        let description_label = self.tr("dialog.description");
+        let group_title = self.tr("dialog.group");
+        let more_label = self.tr("common.more");
+        let cancel_label = self.tr("common.cancel");
+        let save_label = self.tr("common.save");
+        let none_label = self.tr("dialog.none");
         let group_label = editor
             .group_id
             .as_deref()
@@ -34,7 +61,7 @@ impl NyaTermApp {
                     .find(|group| group.id == id)
                     .map(|group| group.name.clone())
             })
-            .unwrap_or_else(|| "Ungrouped".to_string());
+            .unwrap_or_else(|| self.tr("network.ungrouped").to_string());
         let key_label = editor
             .key_id
             .as_deref()
@@ -44,7 +71,7 @@ impl NyaTermApp {
                     .find(|key| key.id == id)
                     .map(|key| key.name.clone())
             })
-            .unwrap_or_else(|| "No key".to_string());
+            .unwrap_or_else(|| none_label.to_string());
         let otp_label = editor
             .otp_id
             .as_deref()
@@ -62,7 +89,7 @@ impl NyaTermApp {
                         }
                     })
             })
-            .unwrap_or_else(|| "No OTP".to_string());
+            .unwrap_or_else(|| self.tr("dialog.noOtp").to_string());
         let proxy_label = editor
             .proxy_id
             .as_deref()
@@ -94,7 +121,7 @@ impl NyaTermApp {
                         }
                     })
             })
-            .unwrap_or_else(|| "No Proxy".to_string());
+            .unwrap_or_else(|| self.tr("dialog.noProxy").to_string());
         let jump_label = editor
             .proxy_jump_id
             .as_deref()
@@ -104,7 +131,7 @@ impl NyaTermApp {
                     .find(|connection| connection.id == id)
                     .map(|connection| connection.name.clone())
             })
-            .unwrap_or_else(|| "No Jump Host".to_string());
+            .unwrap_or_else(|| self.tr("dialog.noProxyJump").to_string());
         let password_display = if editor.password.is_empty() {
             if editor.existing_password.is_some() {
                 "•••••••• (saved)".to_string()
@@ -115,18 +142,15 @@ impl NyaTermApp {
             "•".repeat(editor.password.chars().count().min(24))
         };
 
-        let save_label = if editor.connect_after_save {
-            "Save+Open"
-        } else {
-            "Save"
-        };
         let card = div()
             .id(SharedString::from("connection-editor-panel"))
+            .w_full()
+            .when(native_window, |this| this.size_full())
+            .when(!native_window, |this| this.max_h(px(640.)))
             .p_4()
             .flex()
             .flex_col()
             .gap_3()
-            .max_h(px(640.))
             .overflow_hidden()
             .track_focus(&self.connection_editor_focus)
             .on_click(cx.listener(|this, _, window, cx| {
@@ -139,22 +163,10 @@ impl NyaTermApp {
             }))
             .child(
                 div()
-                    .flex()
-                    .flex_col()
-                    .gap_1()
-                    .child(
-                        div()
-                            .text_size(px(15.))
-                            .font_weight(FontWeight(700.))
-                            .text_color(rgb(palette.text))
-                            .child(title),
-                    )
-                    .child(
-                        div()
-                            .text_size(px(12.))
-                            .text_color(rgb(palette.text_muted))
-                            .child("Create or edit a saved session profile."),
-                    ),
+                    .text_size(px(15.))
+                    .font_weight(FontWeight(700.))
+                    .text_color(rgb(palette.text))
+                    .child(title),
             )
             .child(
                 div()
@@ -171,7 +183,7 @@ impl NyaTermApp {
                     ))
                     .child(kind_chip(
                         palette,
-                        "Local",
+                        local_label,
                         editor.kind == ConnectionKindTab::Local,
                         cx.listener(|this, _, _, cx| {
                             this.set_connection_editor_kind(ConnectionKindTab::Local, cx);
@@ -187,7 +199,7 @@ impl NyaTermApp {
                     ))
                     .child(kind_chip(
                         palette,
-                        "Serial",
+                        serial_label,
                         editor.kind == ConnectionKindTab::Serial,
                         cx.listener(|this, _, _, cx| {
                             this.set_connection_editor_kind(ConnectionKindTab::Serial, cx);
@@ -196,13 +208,18 @@ impl NyaTermApp {
             )
             .child(
                 div()
+                    .id("connection-editor-scroll")
+                    .flex_1()
+                    .min_h_0()
+                    .overflow_y_scroll()
+                    .pr_1()
                     .flex()
                     .flex_col()
                     .gap_2()
                     .child(editor_field(
                         palette,
                         "connection-editor-name",
-                        "Name",
+                        name_label,
                         editor.name.clone(),
                         editor.focused_field == ConnectionEditorField::Name,
                         cx.listener(|this, _, window, cx| {
@@ -216,7 +233,7 @@ impl NyaTermApp {
                     .child(editor_field(
                         palette,
                         "connection-editor-description",
-                        "Description",
+                        description_label,
                         editor.description.clone(),
                         editor.focused_field == ConnectionEditorField::Description,
                         cx.listener(|this, _, window, cx| {
@@ -237,12 +254,12 @@ impl NyaTermApp {
                                 div()
                                     .text_xs()
                                     .text_color(rgb(palette.text_muted))
-                                    .child(format!("Group · {group_label}")),
+                                    .child(format!("{group_title} · {group_label}")),
                             )
                             .child(small_button(
                                 palette,
                                 "connection-editor-group",
-                                "Cycle",
+                                more_label,
                                 cx.listener(|this, _, _, cx| {
                                     this.cycle_connection_editor_group(cx);
                                 }),
@@ -257,27 +274,34 @@ impl NyaTermApp {
                             otp_label.clone(),
                             proxy_label.clone(),
                             jump_label.clone(),
+                            &language,
                             cx,
                         ))
                     })
                     .when(editor.kind == ConnectionKindTab::Local, |this| {
-                        this.child(connection_editor_local_section(palette, &editor, cx))
+                        this.child(connection_editor_local_section(
+                            palette, &editor, &language, cx,
+                        ))
                     })
                     .when(editor.kind == ConnectionKindTab::Telnet, |this| {
-                        this.child(connection_editor_telnet_section(palette, &editor, cx))
+                        this.child(connection_editor_telnet_section(
+                            palette, &editor, &language, cx,
+                        ))
                     })
                     .when(editor.kind == ConnectionKindTab::Serial, |this| {
-                        this.child(connection_editor_serial_section(palette, &editor, cx))
+                        this.child(connection_editor_serial_section(
+                            palette, &editor, &language, cx,
+                        ))
+                    })
+                    .when_some(editor.error.clone(), |this, error| {
+                        this.child(
+                            div()
+                                .text_size(px(12.))
+                                .text_color(rgb(palette.danger))
+                                .child(error),
+                        )
                     }),
             )
-            .when_some(editor.error.clone(), |this, error| {
-                this.child(
-                    div()
-                        .text_size(px(12.))
-                        .text_color(rgb(palette.danger))
-                        .child(error),
-                )
-            })
             .child(
                 div()
                     .mt_1()
@@ -291,7 +315,7 @@ impl NyaTermApp {
                     .child(small_button(
                         palette,
                         "connection-editor-close",
-                        "Cancel",
+                        cancel_label,
                         cx.listener(|this, _, _, cx| {
                             this.close_connection_editor(cx);
                         }),
@@ -305,6 +329,15 @@ impl NyaTermApp {
                         }),
                     )),
             );
-        modal_dialog_shell(palette, "connection-editor-modal", 560., card)
+        if native_window {
+            div()
+                .size_full()
+                .overflow_hidden()
+                .bg(rgb(palette.bg))
+                .child(card)
+                .into_any_element()
+        } else {
+            modal_dialog_shell(palette, "connection-editor-modal", 560., card).into_any_element()
+        }
     }
 }

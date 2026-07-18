@@ -136,6 +136,12 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
         let palette = self.theme_palette();
+        let new_session_label = self.tr("terminal.newSession");
+        let all_sessions_label = self.tr("terminal.allSessions");
+        let shell_sessions_label = self.tr("terminal.shellSessions");
+        let no_shell_sessions_label = self.tr("terminal.noShellSessions");
+        let recent_sessions_label = self.tr("terminal.recentSessions");
+        let no_recent_sessions_label = self.tr("terminal.noRecentSessions");
         // Tauri TabBar new-session: shell sessions + recent by last_used.
         let mut shell: Vec<_> = self
             .connections
@@ -188,7 +194,7 @@ impl NyaTermApp {
             .flex_col()
             .child(
                 div()
-                    .id("new-session-local")
+                    .id("new-session-new")
                     .h(px(32.))
                     .px_3()
                     .flex()
@@ -198,46 +204,19 @@ impl NyaTermApp {
                     .hover(|this| this.bg(rgb(palette.hover)))
                     .on_click(cx.listener(|this, _, window, cx| {
                         this.close_new_session_menu(cx);
-                        this.start_local_session(window, cx);
+                        this.open_connection_editor(None, None, false, window, cx);
                     }))
                     .child(
                         svg()
                             .size(px(12.))
-                            .path("icons/conn/terminal.svg")
-                            .text_color(rgb(palette.success)),
-                    )
-                    .child(
-                        div()
-                            .text_size(px(12.))
-                            .text_color(rgb(palette.text))
-                            .child("New Local Session"),
-                    ),
-            )
-            .child(
-                div()
-                    .id("new-session-temp-ssh")
-                    .h(px(32.))
-                    .px_3()
-                    .flex()
-                    .items_center()
-                    .gap_2()
-                    .cursor_pointer()
-                    .hover(|this| this.bg(rgb(palette.hover)))
-                    .on_click(cx.listener(|this, _, window, cx| {
-                        this.close_new_session_menu(cx);
-                        this.open_temporary_ssh_link_dialog(window, cx);
-                    }))
-                    .child(
-                        svg()
-                            .size(px(12.))
-                            .path("icons/conn/server.svg")
+                            .path("icons/conn/add.svg")
                             .text_color(rgb(palette.accent)),
                     )
                     .child(
                         div()
                             .text_size(px(12.))
                             .text_color(rgb(palette.text))
-                            .child("Temporary SSH Link"),
+                            .child(new_session_label),
                     ),
             )
             .child(
@@ -265,7 +244,7 @@ impl NyaTermApp {
                         div()
                             .text_size(px(12.))
                             .text_color(rgb(palette.text))
-                            .child("All Connections…"),
+                            .child(all_sessions_label),
                     ),
             );
 
@@ -278,7 +257,7 @@ impl NyaTermApp {
                     .text_size(px(10.))
                     .font_weight(FontWeight(700.))
                     .text_color(rgb(palette.text_dimmed))
-                    .child("Shell Sessions"),
+                    .child(shell_sessions_label),
             );
         if shell.is_empty() {
             menu = menu.child(
@@ -287,7 +266,7 @@ impl NyaTermApp {
                     .py_1()
                     .text_size(px(11.))
                     .text_color(rgb(palette.text_dimmed))
-                    .child("No shell sessions"),
+                    .child(no_shell_sessions_label),
             );
         } else {
             for connection in shell {
@@ -304,7 +283,7 @@ impl NyaTermApp {
                     .text_size(px(10.))
                     .font_weight(FontWeight(700.))
                     .text_color(rgb(palette.text_dimmed))
-                    .child("Recent Sessions"),
+                    .child(recent_sessions_label),
             );
         if recent.is_empty() {
             menu = menu.child(
@@ -313,7 +292,7 @@ impl NyaTermApp {
                     .py_1()
                     .text_size(px(11.))
                     .text_color(rgb(palette.text_dimmed))
-                    .child("No recent sessions"),
+                    .child(no_recent_sessions_label),
             );
         } else {
             for connection in recent {

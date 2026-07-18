@@ -3,8 +3,14 @@ use super::*;
 pub(super) fn connection_editor_telnet_section(
     palette: crate::theme::ThemePalette,
     editor: &ConnectionEditorState,
+    language: &str,
     cx: &mut Context<NyaTermApp>,
 ) -> gpui::Div {
+    let tr = |key: &'static str| crate::i18n::text(language, key);
+    let backspace_value = match editor.backspace_mode.as_str() {
+        "ctrl-h" | "bs" | "ctrl_h" => tr("dialog.backspaceCtrlH"),
+        _ => tr("dialog.backspaceDel"),
+    };
     div()
         .flex()
         .flex_col()
@@ -17,7 +23,7 @@ pub(super) fn connection_editor_telnet_section(
                 .child(editor_field(
                     palette,
                     "connection-editor-telnet-host",
-                    "Host",
+                    tr("dialog.host"),
                     editor.host.clone(),
                     editor.focused_field == ConnectionEditorField::Host,
                     cx.listener(|this, _, window, cx| {
@@ -27,7 +33,7 @@ pub(super) fn connection_editor_telnet_section(
                 .child(editor_field(
                     palette,
                     "connection-editor-telnet-port",
-                    "Port",
+                    tr("dialog.port"),
                     editor.port.clone(),
                     editor.focused_field == ConnectionEditorField::Port,
                     cx.listener(|this, _, window, cx| {
@@ -46,17 +52,14 @@ pub(super) fn connection_editor_telnet_section(
                         .text_xs()
                         .text_color(rgb(palette.text_muted))
                         .child(format!(
-                            "Backspace · {}",
-                            match editor.backspace_mode.as_str() {
-                                "ctrl-h" | "bs" | "ctrl_h" => "Ctrl+H (BS)",
-                                _ => "DEL (0x7F)",
-                            }
+                            "{} · {backspace_value}",
+                            tr("dialog.backspaceMode")
                         )),
                 )
                 .child(small_button(
                     palette,
                     "connection-editor-telnet-backspace",
-                    "Cycle",
+                    tr("common.more"),
                     cx.listener(|this, _, _, cx| {
                         this.cycle_connection_editor_backspace(cx);
                     }),
@@ -69,7 +72,7 @@ pub(super) fn connection_editor_telnet_section(
                 .gap_1()
                 .child(toggle_chip(
                     palette,
-                    "Raw TCP",
+                    tr("dialog.telnetRawTcpCli"),
                     editor.raw_tcp_cli,
                     cx.listener(|this, _, _, cx| {
                         this.toggle_connection_editor_flag(ConnectionEditorToggle::RawTcp, cx);
@@ -77,21 +80,10 @@ pub(super) fn connection_editor_telnet_section(
                 ))
                 .child(toggle_chip(
                     palette,
-                    "Local Echo",
+                    tr("dialog.telnetLocalEcho"),
                     editor.local_echo,
                     cx.listener(|this, _, _, cx| {
                         this.toggle_connection_editor_flag(ConnectionEditorToggle::LocalEcho, cx);
-                    }),
-                ))
-                .child(toggle_chip(
-                    palette,
-                    "Open After Save",
-                    editor.connect_after_save,
-                    cx.listener(|this, _, _, cx| {
-                        this.toggle_connection_editor_flag(
-                            ConnectionEditorToggle::ConnectAfterSave,
-                            cx,
-                        );
                     }),
                 )),
         )

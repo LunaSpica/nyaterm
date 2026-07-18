@@ -67,12 +67,15 @@ impl NyaTermApp {
 
         self.connection_editor = Some(editor);
         self.terminal_status = "connection editor opened".to_string();
-        window.focus(&self.connection_editor_focus);
+        if !self.open_connection_editor_window(cx) {
+            window.focus(&self.connection_editor_focus);
+        }
         cx.notify();
     }
 
     pub(in crate::features) fn close_connection_editor(&mut self, cx: &mut Context<Self>) {
         self.connection_editor = None;
+        self.connection_editor_window = None;
         self.terminal_status = "connection editor closed".to_string();
         cx.notify();
     }
@@ -417,9 +420,6 @@ impl NyaTermApp {
                 ConnectionEditorToggle::PostLogin => {
                     editor.post_login_enabled = !editor.post_login_enabled
                 }
-                ConnectionEditorToggle::ConnectAfterSave => {
-                    editor.connect_after_save = !editor.connect_after_save
-                }
             }
             editor.error = None;
         }
@@ -518,6 +518,7 @@ impl NyaTermApp {
             Ok(saved) => {
                 let connect_after_save = editor.connect_after_save;
                 self.connection_editor = None;
+                self.connection_editor_window = None;
                 self.selected_connection_ids.clear();
                 self.selected_connection_ids.insert(saved.id.clone());
                 if let Some(group_id) = saved.group_id.clone() {

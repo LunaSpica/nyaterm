@@ -32,11 +32,11 @@ impl NyaTermApp {
                         "title-file-new-session",
                         tr("menu.newSession"),
                         Some(shortcut("tab.newSession", "Ctrl+Shift+N")),
-                        cx.listener(|this, _, _, cx| {
+                        cx.listener(|this, _, window, cx| {
                             this.close_title_menu(cx);
                             this.open_tabs_menu_open = false;
-                            this.new_session_menu_open = true;
-                            cx.notify();
+                            this.new_session_menu_open = false;
+                            this.open_connection_editor(None, None, false, window, cx);
                         }),
                     ))
                     .child(title_menu_separator(palette))
