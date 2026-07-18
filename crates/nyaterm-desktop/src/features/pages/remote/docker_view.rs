@@ -119,6 +119,22 @@ impl NyaTermApp {
             .relative()
             .overflow_hidden()
             .bg(rgb(palette.surface))
+            .when(
+                self.docker_overview
+                    .as_ref()
+                    .is_some_and(|snapshot| snapshot.available),
+                |this| {
+                    this.child(docker_overview_strip(
+                        palette,
+                        &overview,
+                        [
+                            self.tr("dockerManager.running").to_string(),
+                            self.tr("dockerManager.stopped").to_string(),
+                            self.tr("dockerManager.images").to_string(),
+                        ],
+                    ))
+                },
+            )
             .child(
                 div()
                     .h(px(36.))
@@ -154,7 +170,22 @@ impl NyaTermApp {
                         ),
                     ),
             )
-            .child(docker_tab_bar(palette, active_tab, &overview, cx))
+            .child(docker_tab_bar(
+                palette,
+                active_tab,
+                &overview,
+                [
+                    self.tr("dockerManager.containers").to_string(),
+                    self.tr("dockerManager.images").to_string(),
+                    self.tr("dockerManager.volumes").to_string(),
+                    self.tr("dockerManager.networks").to_string(),
+                    self.tr("dockerManager.compose").to_string(),
+                ],
+                self.tr("common.more").to_string(),
+                self.right_panel_width,
+                self.docker_tab_menu_open,
+                cx,
+            ))
             .child(
                 div()
                     .flex_1()

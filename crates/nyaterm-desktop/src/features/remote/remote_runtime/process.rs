@@ -6,6 +6,7 @@ impl NyaTermApp {
     pub(in crate::features) fn set_docker_tab(&mut self, tab: DockerTab, cx: &mut Context<Self>) {
         self.docker_container_menu_id = None;
         self.docker_compose_menu_id = None;
+        self.docker_tab_menu_open = false;
         if tab == DockerTab::Compose
             && self
                 .docker_overview
@@ -20,6 +21,11 @@ impl NyaTermApp {
         self.docker_list_offset = 0;
         self.docker_resource_list_offset = 0;
         self.docker_status = format!("Docker tab: {}", tab.label());
+        cx.notify();
+    }
+
+    pub(in crate::features) fn toggle_docker_tab_menu(&mut self, cx: &mut Context<Self>) {
+        self.docker_tab_menu_open = !self.docker_tab_menu_open;
         cx.notify();
     }
 

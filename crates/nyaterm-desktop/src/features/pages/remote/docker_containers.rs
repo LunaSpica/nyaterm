@@ -93,24 +93,6 @@ pub(in crate::features::pages::remote) fn docker_containers_panel(
     if pad_bottom > 0. {
         rows = rows.child(div().h(px(pad_bottom)).w_full().flex_none());
     }
-    if total > DOCKER_VIEWPORT_ROWS {
-        rows = rows.child(
-            div()
-                .mt_1()
-                .px_2()
-                .py_1()
-                .rounded_md()
-                .border_1()
-                .border_color(rgb(palette.surface_elevated))
-                .bg(rgb(palette.bg))
-                .text_size(px(10.))
-                .text_color(rgb(palette.text_dimmed))
-                .child(format!(
-                    "Rows {window_start}-{window_end}/{total} · scroll or refine search"
-                )),
-        );
-    }
-
     div()
         .id(SharedString::from("docker-containers-scroll"))
         .size_full()

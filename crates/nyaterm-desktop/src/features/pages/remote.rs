@@ -1,6 +1,6 @@
 use gpui::{
-    App, ClickEvent, Context, FontWeight, IntoElement, KeyDownEvent, ScrollDelta, ScrollWheelEvent,
-    Window, div, prelude::*, px, rgb, svg,
+    App, ClickEvent, Context, FontWeight, IntoElement, KeyDownEvent, MouseButton, ScrollDelta,
+    ScrollWheelEvent, Window, div, prelude::*, px, rgb, svg,
 };
 
 use crate::widgets::{empty_panel, icon_button, small_button, status_pill};

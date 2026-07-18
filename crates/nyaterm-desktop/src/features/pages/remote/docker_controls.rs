@@ -1,13 +1,146 @@
 use super::*;
 
+pub(in crate::features::pages::remote) fn docker_overview_strip(
+    palette: crate::theme::ThemePalette,
+    overview: &nyaterm_transport::RemoteDockerOverview,
+    labels: [String; 3],
+) -> impl IntoElement {
+    let [running_label, stopped_label, images_label] = labels;
+    let running = overview
+        .containers
+        .iter()
+        .filter(|container| container.state.eq_ignore_ascii_case("running"))
+        .count();
+    let stopped = overview.containers.len().saturating_sub(running);
+
+    div()
+        .h(px(32.))
+        .flex_none()
+        .mx_2()
+        .mt_2()
+        .mb_2()
+        .rounded_md()
+        .border_1()
+        .border_color(rgb(palette.border))
+        .bg(rgb(palette.section_header))
+        .px_2()
+        .flex()
+        .items_center()
+        .justify_between()
+        .gap_1()
+        .child(docker_overview_stat(
+            palette,
+            running_label,
+            running,
+            Some(0x86efac),
+        ))
+        .child(docker_overview_stat(
+            palette,
+            stopped_label,
+            stopped,
+            Some(0xcbd5e1),
+        ))
+        .child(docker_overview_stat(
+            palette,
+            images_label,
+            overview.images.len(),
+            None,
+        ))
+}
+
+fn docker_overview_stat(
+    palette: crate::theme::ThemePalette,
+    label: String,
+    value: usize,
+    accent: Option<u32>,
+) -> impl IntoElement {
+    div()
+        .min_w_0()
+        .flex()
+        .items_center()
+        .gap_1()
+        .text_size(px(10.))
+        .text_color(
+            accent
+                .map(|color| rgb(color))
+                .unwrap_or_else(|| rgb(palette.text_muted)),
+        )
+        .child(
+            div()
+                .flex_none()
+                .text_color(rgb(palette.text_muted))
+                .child(label),
+        )
+        .child(
+            div()
+                .flex_none()
+                .font_family(crate::features::gpui_code_font_family())
+                .text_size(px(11.))
+                .font_weight(FontWeight(600.))
+                .child(value.to_string()),
+        )
+}
+
 pub(in crate::features::pages::remote) fn docker_tab_bar(
     palette: crate::theme::ThemePalette,
     active_tab: DockerTab,
     overview: &nyaterm_transport::RemoteDockerOverview,
+    labels: [String; 5],
+    more_label: String,
+    panel_width: f32,
+    menu_open: bool,
     cx: &mut Context<NyaTermApp>,
 ) -> impl IntoElement {
-    // Dense tab strip similar to Tauri Docker manager tabs.
-    div()
+    let [
+        containers_label,
+        images_label,
+        volumes_label,
+        networks_label,
+        compose_label,
+    ] = labels;
+    let mut tabs = vec![
+        (
+            DockerTab::Containers,
+            format!("{} {}", containers_label, overview.containers.len()),
+        ),
+        (
+            DockerTab::Images,
+            format!("{} {}", images_label, overview.images.len()),
+        ),
+        (
+            DockerTab::Volumes,
+            format!("{} {}", volumes_label, overview.volumes.len()),
+        ),
+        (
+            DockerTab::Networks,
+            format!("{} {}", networks_label, overview.networks.len()),
+        ),
+    ];
+    if overview.compose_available {
+        tabs.push((
+            DockerTab::Compose,
+            format!("{} {}", compose_label, overview.compose_projects.len()),
+        ));
+    }
+    // Tauri switches overflowed tabs into a More menu. These thresholds keep
+    // the GPUI tab strip stable while preserving access to every tab.
+    let visible_count = if panel_width > 0. && panel_width < 300. {
+        1
+    } else if panel_width > 0. && panel_width < 390. {
+        2
+    } else if panel_width > 0. && panel_width < 500. {
+        3
+    } else if panel_width > 0. && panel_width < 620. {
+        4
+    } else {
+        tabs.len()
+    };
+    let visible_count = visible_count.min(tabs.len());
+    let hidden_tabs = &tabs[visible_count..];
+    let more_active = hidden_tabs.iter().any(|(tab, _)| *tab == active_tab);
+    let mut bar = div()
+        .id("docker-tab-bar")
+        .relative()
         .h(px(32.))
         .flex_none()
         .px_2()
@@ -16,84 +149,85 @@ pub(in crate::features::pages::remote) fn docker_tab_bar(
         .bg(rgb(palette.section_header))
         .flex()
         .items_center()
-        .gap_1()
-        .overflow_hidden()
-        .child(docker_tab_button(
+        .gap_1();
+    for (index, (tab, label)) in tabs.iter().take(visible_count).enumerate() {
+        let tab = *tab;
+        let label = label.clone();
+        let compose_disabled = tab == DockerTab::Compose && !overview.compose_available;
+        let tab_button = docker_tab_button(
             palette,
-            "docker-tab-containers",
-            format!(
-                "{} {}",
-                DockerTab::Containers.label(),
-                overview.containers.len()
-            ),
-            active_tab == DockerTab::Containers,
-            cx.listener(|this, _, _, cx| {
-                this.set_docker_tab(DockerTab::Containers, cx);
+            format!("docker-tab-{index}"),
+            label,
+            active_tab == tab,
+            cx.listener(move |this, _, _, cx| {
+                this.set_docker_tab(tab, cx);
             }),
-        ))
-        .child(docker_tab_button(
-            palette,
-            "docker-tab-images",
-            format!("{} {}", DockerTab::Images.label(), overview.images.len()),
-            active_tab == DockerTab::Images,
-            cx.listener(|this, _, _, cx| {
-                this.set_docker_tab(DockerTab::Images, cx);
-            }),
-        ))
-        .child(docker_tab_button(
-            palette,
-            "docker-tab-volumes",
-            format!("{} {}", DockerTab::Volumes.label(), overview.volumes.len()),
-            active_tab == DockerTab::Volumes,
-            cx.listener(|this, _, _, cx| {
-                this.set_docker_tab(DockerTab::Volumes, cx);
-            }),
-        ))
-        .child(docker_tab_button(
-            palette,
-            "docker-tab-networks",
-            format!(
-                "{} {}",
-                DockerTab::Networks.label(),
-                overview.networks.len()
-            ),
-            active_tab == DockerTab::Networks,
-            cx.listener(|this, _, _, cx| {
-                this.set_docker_tab(DockerTab::Networks, cx);
-            }),
-        ))
-        .child(
+        );
+        bar = bar.child(
             div()
-                .when(!overview.compose_available, |this| this.opacity(0.45))
+                .when(compose_disabled, |this| this.opacity(0.45))
+                .child(tab_button),
+        );
+    }
+    if !hidden_tabs.is_empty() {
+        bar = bar.child(
+            div()
+                .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
                 .child(docker_tab_button(
                     palette,
-                    "docker-tab-compose",
-                    if overview.compose_available {
-                        format!(
-                            "{} {}",
-                            DockerTab::Compose.label(),
-                            overview.compose_projects.len()
-                        )
-                    } else {
-                        format!("{} off", DockerTab::Compose.label())
-                    },
-                    active_tab == DockerTab::Compose,
+                    "docker-tab-more",
+                    more_label,
+                    menu_open || more_active,
                     cx.listener(|this, _, _, cx| {
-                        this.set_docker_tab(DockerTab::Compose, cx);
+                        this.toggle_docker_tab_menu(cx);
                     }),
                 )),
-        )
+        );
+        if menu_open {
+            let mut menu = div()
+                .id("docker-tab-more-menu")
+                .absolute()
+                .top(px(30.))
+                .right(px(4.))
+                .w(px(160.))
+                .rounded_md()
+                .border_1()
+                .border_color(rgb(palette.border))
+                .bg(rgb(palette.surface_elevated))
+                .shadow_lg()
+                .py_1()
+                .flex()
+                .flex_col()
+                .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation());
+            for (index, (tab, label)) in hidden_tabs.iter().enumerate() {
+                let tab = *tab;
+                let compose_disabled = tab == DockerTab::Compose && !overview.compose_available;
+                menu = menu.child(docker_tab_menu_item(
+                    palette,
+                    format!("docker-tab-more-{index}"),
+                    label.clone(),
+                    active_tab == tab,
+                    compose_disabled,
+                    cx.listener(move |this, _, _, cx| {
+                        this.set_docker_tab(tab, cx);
+                    }),
+                ));
+            }
+            bar = bar.child(menu);
+        }
+    }
+    bar
 }
 
 fn docker_tab_button(
     palette: crate::theme::ThemePalette,
-    id: &'static str,
+    id: impl Into<String>,
     label: String,
     active: bool,
     on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
 ) -> impl IntoElement {
     div()
-        .id(gpui::SharedString::from(id))
+        .id(gpui::SharedString::from(id.into()))
         .h(px(24.))
         .px_2()
         .flex()
@@ -119,6 +253,39 @@ fn docker_tab_button(
         .hover(|this| this.bg(rgb(palette.hover)).text_color(rgb(palette.text)))
         .child(label)
         .on_click(on_click)
+}
+
+fn docker_tab_menu_item(
+    palette: crate::theme::ThemePalette,
+    id: String,
+    label: String,
+    active: bool,
+    disabled: bool,
+    on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
+) -> impl IntoElement {
+    div()
+        .id(gpui::SharedString::from(id))
+        .h(px(28.))
+        .px_3()
+        .flex()
+        .items_center()
+        .text_size(px(11.))
+        .text_color(if disabled {
+            rgb(palette.text_dimmed)
+        } else {
+            rgb(palette.text)
+        })
+        .bg(if active {
+            rgb(palette.hover)
+        } else {
+            rgb(palette.surface_elevated)
+        })
+        .when(!disabled, |this| {
+            this.cursor_pointer()
+                .hover(|this| this.bg(rgb(palette.hover)))
+        })
+        .child(label)
+        .when(!disabled, |this| this.on_click(on_click))
 }
 
 pub(in crate::features::pages::remote) fn docker_confirm_panel(

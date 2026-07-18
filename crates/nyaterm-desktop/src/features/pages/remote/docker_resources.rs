@@ -59,15 +59,6 @@ pub(in crate::features::pages::remote) fn docker_images_panel(
     if pad_bottom > 0. {
         rows = rows.child(div().h(px(pad_bottom)).w_full().flex_none());
     }
-    if total > DOCKER_RESOURCE_VIEWPORT_ROWS {
-        rows = rows.child(docker_resource_range_footer(
-            palette,
-            window_start,
-            window_end,
-            total,
-        ));
-    }
-
     docker_resource_panel(palette, "Images", total, rows, scroll_offset, cx)
 }
 
@@ -119,15 +110,6 @@ pub(in crate::features::pages::remote) fn docker_volumes_panel(
     if pad_bottom > 0. {
         rows = rows.child(div().h(px(pad_bottom)).w_full().flex_none());
     }
-    if total > DOCKER_RESOURCE_VIEWPORT_ROWS {
-        rows = rows.child(docker_resource_range_footer(
-            palette,
-            window_start,
-            window_end,
-            total,
-        ));
-    }
-
     docker_resource_panel(palette, "Volumes", total, rows, scroll_offset, cx)
 }
 
@@ -184,15 +166,6 @@ pub(in crate::features::pages::remote) fn docker_networks_panel(
     if pad_bottom > 0. {
         rows = rows.child(div().h(px(pad_bottom)).w_full().flex_none());
     }
-    if total > DOCKER_RESOURCE_VIEWPORT_ROWS {
-        rows = rows.child(docker_resource_range_footer(
-            palette,
-            window_start,
-            window_end,
-            total,
-        ));
-    }
-
     docker_resource_panel(palette, "Networks", total, rows, scroll_offset, cx)
 }
 
@@ -205,26 +178,6 @@ fn docker_resource_window(total: usize, list_offset: usize) -> (usize, usize, f3
     let pad_top = (window_start as f32) * DOCKER_RESOURCE_ROW_PX;
     let pad_bottom = ((total.saturating_sub(window_end)) as f32) * DOCKER_RESOURCE_ROW_PX;
     (window_start, window_end, pad_top, pad_bottom, scroll_row)
-}
-
-fn docker_resource_range_footer(
-    palette: crate::theme::ThemePalette,
-    start: usize,
-    end: usize,
-    total: usize,
-) -> impl IntoElement {
-    div()
-        .px_2()
-        .py_1()
-        .rounded_md()
-        .border_1()
-        .border_color(rgb(palette.surface_elevated))
-        .bg(rgb(palette.bg))
-        .text_size(px(10.))
-        .text_color(rgb(palette.text_dimmed))
-        .child(format!(
-            "Rows {start}-{end}/{total} · scroll or refine search"
-        ))
 }
 
 fn docker_resource_empty(
@@ -246,7 +199,7 @@ fn docker_resource_empty(
 }
 
 pub(in crate::features::pages::remote) fn docker_resource_panel(
-    palette: crate::theme::ThemePalette,
+    _palette: crate::theme::ThemePalette,
     title: &'static str,
     count: usize,
     rows: impl IntoElement,
@@ -286,23 +239,6 @@ pub(in crate::features::pages::remote) fn docker_resource_panel(
         }))
         .child(
             div()
-                .h(px(22.))
-                .flex_none()
-                .px_2()
-                .pt_1()
-                .flex()
-                .items_center()
-                .justify_between()
-                .child(
-                    div()
-                        .text_size(px(10.))
-                        .font_weight(FontWeight(700.))
-                        .text_color(rgb(palette.text_dimmed))
-                        .child(format!("{title} · {count}")),
-                ),
-        )
-        .child(
-            div()
                 .flex_1()
                 .min_h_0()
                 .px_2()
@@ -315,9 +251,9 @@ pub(in crate::features::pages::remote) fn docker_resource_panel(
 }
 
 pub(in crate::features::pages::remote) fn docker_resource_static_panel(
-    palette: crate::theme::ThemePalette,
+    _palette: crate::theme::ThemePalette,
     title: &'static str,
-    count: usize,
+    _count: usize,
     rows: impl IntoElement,
 ) -> impl IntoElement {
     div()
@@ -332,21 +268,6 @@ pub(in crate::features::pages::remote) fn docker_resource_static_panel(
         .flex()
         .flex_col()
         .gap_1()
-        .child(
-            div()
-                .h(px(22.))
-                .flex_none()
-                .px_1()
-                .flex()
-                .items_center()
-                .child(
-                    div()
-                        .text_size(px(10.))
-                        .font_weight(FontWeight(700.))
-                        .text_color(rgb(palette.text_dimmed))
-                        .child(format!("{title} · {count}")),
-                ),
-        )
         .child(rows)
 }
 

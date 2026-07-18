@@ -63,7 +63,8 @@ impl NyaTermApp {
                         || this.open_tabs_menu_open
                         || this.new_session_menu_open
                         || this.new_session_all_sessions_open
-                        || !this.new_session_group_menu_path.is_empty();
+                        || !this.new_session_group_menu_path.is_empty()
+                        || this.docker_tab_menu_open;
                     if changed {
                         this.title_menu_open = None;
                         this.title_menu_submenu = None;
@@ -71,6 +72,7 @@ impl NyaTermApp {
                         this.new_session_menu_open = false;
                         this.new_session_all_sessions_open = false;
                         this.new_session_group_menu_path.clear();
+                        this.docker_tab_menu_open = false;
                         cx.notify();
                     }
                 }),

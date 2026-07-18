@@ -288,6 +288,7 @@ pub struct NyaTermApp {
     pub(in crate::features) docker_container_menu_id: Option<String>,
     pub(in crate::features) docker_compose_menu_id: Option<String>,
     pub(in crate::features) docker_tab: DockerTab,
+    pub(in crate::features) docker_tab_menu_open: bool,
     pub(in crate::features) docker_search_draft: String,
     pub(in crate::features) docker_search_focus: FocusHandle,
     pub(in crate::features) docker_compose_expanded: HashSet<String>,
