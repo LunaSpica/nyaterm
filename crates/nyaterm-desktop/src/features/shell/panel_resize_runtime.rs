@@ -91,25 +91,37 @@ impl NyaTermApp {
         self.transfer_panel_height = self.settings.ui_transfer_height as f32;
         self.quick_cmd_height = self.settings.ui_quick_cmd_height as f32;
         self.serial_send_height = self.settings.ui_serial_send_height as f32;
+        self.apply_activity_layout_from_settings();
         self.active_left_panel = self
             .settings
             .ui_active_left_panel
             .as_deref()
             .and_then(NavItem::from_persistence_id)
-            .filter(|item| item.is_left_panel())
-            .or(self.active_left_panel)
-            .or(Some(NavItem::Transfers));
+            .filter(|item| self.panel_side_for_item(*item) == Some(PanelSide::Left))
+            .or_else(|| {
+                self.active_left_panel
+                    .filter(|item| self.panel_side_for_item(*item) == Some(PanelSide::Left))
+            })
+            .or_else(|| {
+                self.activity_bar_layout
+                    .first_panel_on_side(PanelSide::Left)
+            });
         self.active_right_panel = self
             .settings
             .ui_active_right_panel
             .as_deref()
             .and_then(NavItem::from_persistence_id)
-            .filter(|item| item.is_right_panel())
-            .or(self.active_right_panel)
-            .or(Some(NavItem::Connections));
+            .filter(|item| self.panel_side_for_item(*item) == Some(PanelSide::Right))
+            .or_else(|| {
+                self.active_right_panel
+                    .filter(|item| self.panel_side_for_item(*item) == Some(PanelSide::Right))
+            })
+            .or_else(|| {
+                self.activity_bar_layout
+                    .first_panel_on_side(PanelSide::Right)
+            });
         self.left_sidebar_collapsed = self.settings.ui_left_panel_collapsed;
         self.right_inspector_collapsed = self.settings.ui_right_panel_collapsed;
-        self.apply_activity_layout_from_settings();
         self.apply_panel_stack_from_settings();
         if !self.settings.has_master_password {
             self.security_secrets_unlocked = true;

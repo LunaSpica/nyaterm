@@ -23,14 +23,57 @@ impl NyaTermApp {
         panel: NavItem,
         cx: &mut Context<Self>,
     ) -> gpui::AnyElement {
+        self.panel_body(panel, cx)
+    }
+
+    pub(in crate::features) fn panel_body(
+        &mut self,
+        panel: NavItem,
+        cx: &mut Context<Self>,
+    ) -> gpui::AnyElement {
+        let palette = self.theme_palette();
         match panel {
             NavItem::Transfers => self.transfers_view(cx).into_any_element(),
             NavItem::Tunnels => self.tunnels_view(cx).into_any_element(),
             NavItem::SecurityAuth => self.security_auth_panel(cx).into_any_element(),
             NavItem::SyncBackupHistory => self.sync_backup_history_panel(cx).into_any_element(),
             NavItem::Migration => self.migration_view().into_any_element(),
+            NavItem::Connections => self.connections_view(cx).into_any_element(),
+            NavItem::AiAssistant => self.ai_assistant_panel(cx).into_any_element(),
             NavItem::ActiveSessions => self.active_sessions_panel(cx).into_any_element(),
-            _ => self.left_workspace_summary(cx).into_any_element(),
+            NavItem::CommandHistory => self.command_history_panel(cx).into_any_element(),
+            NavItem::Stats if self.settings.ui_show_remote_stats => {
+                self.stats_view(cx).into_any_element()
+            }
+            NavItem::Stats => crate::features::inspector::disabled_inspector_panel(
+                palette,
+                "Remote Stats Disabled",
+                "Enable Remote Stats in Settings > Terminal Session > General.",
+            )
+            .into_any_element(),
+            NavItem::Processes if self.settings.ui_show_process_manager => {
+                self.processes_view(cx).into_any_element()
+            }
+            NavItem::Processes => crate::features::inspector::disabled_inspector_panel(
+                palette,
+                "Process Manager Disabled",
+                "Enable Process Manager in Settings > Terminal Session > General.",
+            )
+            .into_any_element(),
+            NavItem::Docker if self.settings.ui_show_docker_manager => {
+                self.docker_view(cx).into_any_element()
+            }
+            NavItem::Docker => crate::features::inspector::disabled_inspector_panel(
+                palette,
+                "Docker Manager Disabled",
+                "Enable Docker Manager in Settings > Terminal Session > General.",
+            )
+            .into_any_element(),
+            NavItem::Translation => self.translation_view(cx).into_any_element(),
+            NavItem::Recording => self.recording_panel(cx).into_any_element(),
+            NavItem::Workspace | NavItem::Settings => {
+                self.left_workspace_summary(cx).into_any_element()
+            }
         }
     }
 

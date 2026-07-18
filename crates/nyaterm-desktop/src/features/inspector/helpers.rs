@@ -1,6 +1,6 @@
 use super::*;
 
-pub(super) fn disabled_inspector_panel(
+pub(in crate::features) fn disabled_inspector_panel(
     palette: crate::theme::ThemePalette,
     title: &'static str,
     detail: &'static str,

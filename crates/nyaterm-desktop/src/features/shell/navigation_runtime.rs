@@ -46,7 +46,7 @@ impl NyaTermApp {
             return;
         }
 
-        if self.panel_multi_open && (item.is_left_panel() || item.is_right_panel()) {
+        if self.panel_multi_open && self.panel_side_for_item(item).is_some() {
             self.open_or_toggle_panel(item, cx);
             return;
         }
@@ -59,33 +59,38 @@ impl NyaTermApp {
             RightFocus::Default
         };
 
-        if item.is_left_panel() {
-            let already_open = self.active_left_panel == Some(item) && !self.left_sidebar_collapsed;
-            if already_open {
-                self.left_sidebar_collapsed = true;
-                self.active_left_panel = None;
-                self.terminal_status = format!("{} closed", item.label());
-            } else {
-                self.active_left_panel = Some(item);
+        match self.panel_side_for_item(item) {
+            Some(PanelSide::Left) => {
+                let already_open =
+                    self.active_left_panel == Some(item) && !self.left_sidebar_collapsed;
+                if already_open {
+                    self.left_sidebar_collapsed = true;
+                    self.active_left_panel = None;
+                    self.terminal_status = format!("{} closed", item.label());
+                } else {
+                    self.active_left_panel = Some(item);
+                    self.left_sidebar_collapsed = false;
+                    self.terminal_status = format!("{} opened", item.label());
+                }
+            }
+            Some(PanelSide::Right) => {
+                let already_open =
+                    self.active_right_panel == Some(item) && !self.right_inspector_collapsed;
+                if already_open {
+                    self.right_inspector_collapsed = true;
+                    self.active_right_panel = None;
+                    self.right_focus = RightFocus::Default;
+                    self.terminal_status = format!("{} closed", item.label());
+                } else {
+                    self.active_right_panel = Some(item);
+                    self.right_inspector_collapsed = false;
+                    self.terminal_status = format!("{} opened", item.label());
+                }
+            }
+            None => {
                 self.left_sidebar_collapsed = false;
-                self.terminal_status = format!("{} opened", item.label());
-            }
-        } else if item.is_right_panel() {
-            let already_open =
-                self.active_right_panel == Some(item) && !self.right_inspector_collapsed;
-            if already_open {
-                self.right_inspector_collapsed = true;
-                self.active_right_panel = None;
-                self.right_focus = RightFocus::Default;
-                self.terminal_status = format!("{} closed", item.label());
-            } else {
-                self.active_right_panel = Some(item);
                 self.right_inspector_collapsed = false;
-                self.terminal_status = format!("{} opened", item.label());
             }
-        } else {
-            self.left_sidebar_collapsed = false;
-            self.right_inspector_collapsed = false;
         }
 
         self.persist_ui_layout();
@@ -93,23 +98,27 @@ impl NyaTermApp {
     }
 
     pub(in crate::features) fn ensure_panel_open(&mut self, item: NavItem) {
-        if self.panel_multi_open && (item.is_left_panel() || item.is_right_panel()) {
+        if self.panel_multi_open && self.panel_side_for_item(item).is_some() {
             self.ensure_panel_in_stack(item);
             return;
         }
         self.main_mode = MainMode::Workspace;
         self.selected_nav = item;
-        if item.is_left_panel() {
-            self.active_left_panel = Some(item);
-            self.left_sidebar_collapsed = false;
-        } else if item.is_right_panel() {
-            self.active_right_panel = Some(item);
-            self.right_inspector_collapsed = false;
-            self.right_focus = if item == NavItem::Recording {
-                RightFocus::Recording
-            } else {
-                RightFocus::Default
-            };
+        match self.panel_side_for_item(item) {
+            Some(PanelSide::Left) => {
+                self.active_left_panel = Some(item);
+                self.left_sidebar_collapsed = false;
+            }
+            Some(PanelSide::Right) => {
+                self.active_right_panel = Some(item);
+                self.right_inspector_collapsed = false;
+                self.right_focus = if item == NavItem::Recording {
+                    RightFocus::Recording
+                } else {
+                    RightFocus::Default
+                };
+            }
+            None => {}
         }
     }
 
@@ -120,7 +129,9 @@ impl NyaTermApp {
     pub(in crate::features) fn toggle_left_sidebar(&mut self, cx: &mut Context<Self>) {
         if self.left_sidebar_collapsed {
             if self.active_left_panel.is_none() {
-                self.active_left_panel = Some(NavItem::Transfers);
+                self.active_left_panel = self
+                    .activity_bar_layout
+                    .first_panel_on_side(PanelSide::Left);
             }
             self.left_sidebar_collapsed = false;
             self.terminal_status = "left sidebar expanded".to_string();
@@ -135,7 +146,9 @@ impl NyaTermApp {
     pub(in crate::features) fn toggle_right_inspector(&mut self, cx: &mut Context<Self>) {
         if self.right_inspector_collapsed {
             if self.active_right_panel.is_none() {
-                self.active_right_panel = Some(NavItem::Connections);
+                self.active_right_panel = self
+                    .activity_bar_layout
+                    .first_panel_on_side(PanelSide::Right);
             }
             self.right_inspector_collapsed = false;
             self.terminal_status = "right sidebar expanded".to_string();
@@ -152,7 +165,9 @@ impl NyaTermApp {
             self.mobile_left_open = false;
         } else {
             if self.active_left_panel.is_none() {
-                self.active_left_panel = Some(NavItem::Transfers);
+                self.active_left_panel = self
+                    .activity_bar_layout
+                    .first_panel_on_side(PanelSide::Left);
             }
             self.left_sidebar_collapsed = false;
             self.mobile_left_open = true;
@@ -165,7 +180,9 @@ impl NyaTermApp {
             self.mobile_right_open = false;
         } else {
             if self.active_right_panel.is_none() {
-                self.active_right_panel = Some(NavItem::Connections);
+                self.active_right_panel = self
+                    .activity_bar_layout
+                    .first_panel_on_side(PanelSide::Right);
             }
             self.right_inspector_collapsed = false;
             self.mobile_right_open = true;

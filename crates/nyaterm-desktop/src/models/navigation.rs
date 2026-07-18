@@ -419,6 +419,24 @@ impl ActivityBarLayoutState {
         }
         None
     }
+
+    pub(crate) fn side_for_entry(&self, entry_id: &str) -> Option<PanelSide> {
+        self.find_entry(entry_id).map(|(zone, _)| match zone {
+            ActivityBarZone::LeftTop | ActivityBarZone::LeftBottom => PanelSide::Left,
+            ActivityBarZone::RightTop | ActivityBarZone::RightBottom => PanelSide::Right,
+        })
+    }
+
+    pub(crate) fn first_panel_on_side(&self, side: PanelSide) -> Option<NavItem> {
+        let zones = match side {
+            PanelSide::Left => [ActivityBarZone::LeftTop, ActivityBarZone::LeftBottom],
+            PanelSide::Right => [ActivityBarZone::RightTop, ActivityBarZone::RightBottom],
+        };
+        zones
+            .into_iter()
+            .flat_map(|zone| self.zone(zone))
+            .find_map(|id| NavItem::from_persistence_id(id).filter(|item| !item.opens_settings()))
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -476,4 +494,28 @@ impl TitleMenu {
 pub(crate) enum PanelSide {
     Left,
     Right,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn activity_bar_entry_side_follows_current_layout() {
+        let mut layout = ActivityBarLayoutState::default();
+        assert_eq!(layout.side_for_entry("fileExplorer"), Some(PanelSide::Left));
+
+        layout.left_top.retain(|id| id != "fileExplorer");
+        layout.right_bottom.push("fileExplorer".to_string());
+
+        assert_eq!(
+            layout.side_for_entry("fileExplorer"),
+            Some(PanelSide::Right)
+        );
+        assert_eq!(
+            layout.first_panel_on_side(PanelSide::Right),
+            Some(NavItem::Connections)
+        );
+        assert_eq!(layout.side_for_entry("missing"), None);
+    }
 }

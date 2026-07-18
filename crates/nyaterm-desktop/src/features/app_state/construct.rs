@@ -197,21 +197,6 @@ impl NyaTermApp {
         let transfer_panel_height = settings.ui_transfer_height as f32;
         let quick_cmd_height = settings.ui_quick_cmd_height as f32;
         let serial_send_height = settings.ui_serial_send_height as f32;
-        let active_left_panel = settings
-            .ui_active_left_panel
-            .as_deref()
-            .and_then(NavItem::from_persistence_id)
-            .filter(|item| item.is_left_panel())
-            .or(Some(NavItem::Transfers));
-        let active_right_panel = settings
-            .ui_active_right_panel
-            .as_deref()
-            .and_then(NavItem::from_persistence_id)
-            .filter(|item| item.is_right_panel())
-            .or(Some(NavItem::Connections));
-        let left_sidebar_collapsed = settings.ui_left_panel_collapsed;
-        let right_inspector_collapsed = settings.ui_right_panel_collapsed;
-        let security_secrets_unlocked = !settings.has_master_password;
         let activity_bar_layout = ActivityBarLayoutState {
             left_top: settings.ui_activity_bar_left_top.clone(),
             left_bottom: settings.ui_activity_bar_left_bottom.clone(),
@@ -219,6 +204,25 @@ impl NyaTermApp {
             right_bottom: settings.ui_activity_bar_right_bottom.clone(),
             show_labels: settings.ui_activity_bar_show_labels,
         };
+        let active_left_panel = settings
+            .ui_active_left_panel
+            .as_deref()
+            .and_then(NavItem::from_persistence_id)
+            .filter(|item| {
+                activity_bar_layout.side_for_entry(item.persistence_id()) == Some(PanelSide::Left)
+            })
+            .or_else(|| activity_bar_layout.first_panel_on_side(PanelSide::Left));
+        let active_right_panel = settings
+            .ui_active_right_panel
+            .as_deref()
+            .and_then(NavItem::from_persistence_id)
+            .filter(|item| {
+                activity_bar_layout.side_for_entry(item.persistence_id()) == Some(PanelSide::Right)
+            })
+            .or_else(|| activity_bar_layout.first_panel_on_side(PanelSide::Right));
+        let left_sidebar_collapsed = settings.ui_left_panel_collapsed;
+        let right_inspector_collapsed = settings.ui_right_panel_collapsed;
+        let security_secrets_unlocked = !settings.has_master_password;
         let left_open_panels = settings.ui_left_open_panels.clone();
         let right_open_panels = settings.ui_right_open_panels.clone();
         let panel_stack_sizes = settings

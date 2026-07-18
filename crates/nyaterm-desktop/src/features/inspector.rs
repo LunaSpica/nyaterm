@@ -2,7 +2,7 @@ use super::*;
 
 #[path = "inspector/helpers.rs"]
 mod helpers;
-use helpers::*;
+pub(in crate::features) use helpers::*;
 
 #[path = "inspector/ai_ask.rs"]
 mod ai_ask;

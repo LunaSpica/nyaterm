@@ -275,17 +275,18 @@ impl NyaTermApp {
         match entry {
             ActivityBarEntry::Panel(NavItem::Settings) => self.open_page(NavItem::Settings, cx),
             ActivityBarEntry::Panel(item) => {
+                let side = self.panel_side_for_item(item);
                 self.open_panel(item, cx);
-                if !cfg!(target_os = "macos")
-                    && item.is_left_panel()
-                    && self.last_viewport_size.0 < 1024.
-                {
-                    self.mobile_left_open = true;
-                } else if !cfg!(target_os = "macos")
-                    && item.is_right_panel()
-                    && self.last_viewport_size.0 < 768.
-                {
-                    self.mobile_right_open = true;
+                if !cfg!(target_os = "macos") {
+                    match side {
+                        Some(PanelSide::Left) if self.last_viewport_size.0 < 1024. => {
+                            self.mobile_left_open = true;
+                        }
+                        Some(PanelSide::Right) if self.last_viewport_size.0 < 768. => {
+                            self.mobile_right_open = true;
+                        }
+                        _ => {}
+                    }
                 }
                 cx.notify();
             }
@@ -308,9 +309,18 @@ impl NyaTermApp {
                 cx.notify();
             }
             ActivityBarEntry::Recording => {
+                let side = self.panel_side_for_item(NavItem::Recording);
                 self.open_panel(NavItem::Recording, cx);
-                if !cfg!(target_os = "macos") && self.last_viewport_size.0 < 768. {
-                    self.mobile_right_open = true;
+                if !cfg!(target_os = "macos") {
+                    match side {
+                        Some(PanelSide::Left) if self.last_viewport_size.0 < 1024. => {
+                            self.mobile_left_open = true;
+                        }
+                        Some(PanelSide::Right) if self.last_viewport_size.0 < 768. => {
+                            self.mobile_right_open = true;
+                        }
+                        _ => {}
+                    }
                 }
                 cx.notify();
             }
@@ -323,38 +333,33 @@ impl NyaTermApp {
             ActivityBarEntry::Panel(NavItem::Settings) => {
                 self.settings_window.is_some() || self.main_mode == MainMode::Page
             }
-            ActivityBarEntry::Panel(item) if item.is_left_panel() => {
-                if self.panel_multi_open {
-                    let id = item.persistence_id();
-                    self.side_open_panel_ids(PanelSide::Left)
-                        .iter()
-                        .any(|open| open == id)
-                        || self.side_overlay_panel(PanelSide::Left) == Some(item)
-                        || self.active_left_panel == Some(item)
-                } else {
-                    self.current_left_panel() == Some(item)
-                }
-            }
-            ActivityBarEntry::Panel(item) if item.is_right_panel() => {
-                if self.panel_multi_open {
-                    let id = item.persistence_id();
-                    self.side_open_panel_ids(PanelSide::Right)
-                        .iter()
-                        .any(|open| open == id)
-                        || self.side_overlay_panel(PanelSide::Right) == Some(item)
-                        || self.active_right_panel == Some(item)
-                } else {
-                    self.current_right_panel() == Some(item)
-                }
-            }
-            ActivityBarEntry::Panel(_) => false,
+            ActivityBarEntry::Panel(item) => self.panel_entry_selected(item),
             ActivityBarEntry::QuickCommands => self.bottom_panel == BottomPanelMode::QuickCommands,
             ActivityBarEntry::CommandSend => self.bottom_panel == BottomPanelMode::CommandSend,
             ActivityBarEntry::Recording => {
-                self.current_right_panel() == Some(NavItem::Recording)
-                    || self.recording_active_count > 0
+                self.panel_entry_selected(NavItem::Recording) || self.recording_active_count > 0
             }
             ActivityBarEntry::Lock => self.is_locked,
+        }
+    }
+
+    fn panel_entry_selected(&self, item: NavItem) -> bool {
+        let Some(side) = self.panel_side_for_item(item) else {
+            return false;
+        };
+        if self.panel_multi_open {
+            let id = item.persistence_id();
+            self.side_open_panel_ids(side).iter().any(|open| open == id)
+                || self.side_overlay_panel(side) == Some(item)
+                || match side {
+                    PanelSide::Left => self.active_left_panel == Some(item),
+                    PanelSide::Right => self.active_right_panel == Some(item),
+                }
+        } else {
+            match side {
+                PanelSide::Left => self.current_left_panel() == Some(item),
+                PanelSide::Right => self.current_right_panel() == Some(item),
+            }
         }
     }
 }

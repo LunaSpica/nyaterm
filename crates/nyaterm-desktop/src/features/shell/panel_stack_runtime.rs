@@ -109,6 +109,13 @@ impl NyaTermApp {
             .unwrap_or(1.)
     }
 
+    pub(in crate::features) fn panel_side_for_item(&self, item: NavItem) -> Option<PanelSide> {
+        self.activity_bar_layout
+            .side_for_entry(item.persistence_id())
+            .or_else(|| item.is_left_panel().then_some(PanelSide::Left))
+            .or_else(|| item.is_right_panel().then_some(PanelSide::Right))
+    }
+
     pub(in crate::features) fn open_or_toggle_panel(
         &mut self,
         item: NavItem,
@@ -124,11 +131,7 @@ impl NyaTermApp {
         }
 
         let id = item.persistence_id().to_string();
-        let side = if item.is_left_panel() {
-            PanelSide::Left
-        } else if item.is_right_panel() {
-            PanelSide::Right
-        } else {
+        let Some(side) = self.panel_side_for_item(item) else {
             self.open_panel(item, cx);
             return;
         };
@@ -266,31 +269,35 @@ impl NyaTermApp {
             return;
         }
         let id = item.persistence_id().to_string();
-        if item.is_left_panel() {
-            self.left_sidebar_collapsed = false;
-            if Self::is_exclusive_panel_id(&id) {
-                self.active_left_panel = Some(item);
-            } else {
-                if !self.left_open_panels.iter().any(|value| value == &id) {
-                    self.left_open_panels.push(id);
+        match self.panel_side_for_item(item) {
+            Some(PanelSide::Left) => {
+                self.left_sidebar_collapsed = false;
+                if Self::is_exclusive_panel_id(&id) {
+                    self.active_left_panel = Some(item);
+                } else {
+                    if !self.left_open_panels.iter().any(|value| value == &id) {
+                        self.left_open_panels.push(id);
+                    }
+                    self.active_left_panel = Some(item);
                 }
-                self.active_left_panel = Some(item);
             }
-        } else if item.is_right_panel() {
-            self.right_inspector_collapsed = false;
-            self.right_focus = if item == NavItem::Recording {
-                RightFocus::Recording
-            } else {
-                RightFocus::Default
-            };
-            if Self::is_exclusive_panel_id(&id) {
-                self.active_right_panel = Some(item);
-            } else {
-                if !self.right_open_panels.iter().any(|value| value == &id) {
-                    self.right_open_panels.push(id);
+            Some(PanelSide::Right) => {
+                self.right_inspector_collapsed = false;
+                self.right_focus = if item == NavItem::Recording {
+                    RightFocus::Recording
+                } else {
+                    RightFocus::Default
+                };
+                if Self::is_exclusive_panel_id(&id) {
+                    self.active_right_panel = Some(item);
+                } else {
+                    if !self.right_open_panels.iter().any(|value| value == &id) {
+                        self.right_open_panels.push(id);
+                    }
+                    self.active_right_panel = Some(item);
                 }
-                self.active_right_panel = Some(item);
             }
+            None => {}
         }
     }
 
@@ -406,19 +413,17 @@ impl NyaTermApp {
 
         let open_ids = self.side_open_panel_ids(side);
         let mut stack = if open_ids.is_empty() {
-            let fallback = match side {
-                PanelSide::Left => NavItem::Transfers,
-                PanelSide::Right => NavItem::Connections,
-            };
+            let fallback = self
+                .activity_bar_layout
+                .first_panel_on_side(side)
+                .unwrap_or(NavItem::Workspace);
             self.single_side_panel(side, fallback, cx)
         } else if open_ids.len() == 1 || !self.panel_multi_open {
             let panel = open_ids
                 .first()
                 .and_then(|id| NavItem::from_persistence_id(id))
-                .unwrap_or(match side {
-                    PanelSide::Left => NavItem::Transfers,
-                    PanelSide::Right => NavItem::Connections,
-                });
+                .or_else(|| self.activity_bar_layout.first_panel_on_side(side))
+                .unwrap_or(NavItem::Workspace);
             self.single_side_panel(side, panel, cx)
         } else {
             let weights: Vec<f32> = open_ids
