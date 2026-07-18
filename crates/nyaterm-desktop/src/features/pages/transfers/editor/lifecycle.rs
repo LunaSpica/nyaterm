@@ -37,6 +37,7 @@ impl NyaTermApp {
         let Some(workspace) = self.transfer_editor.as_mut() else {
             return;
         };
+        self.transfer_editor_tabs_menu_open = false;
         if workspace.tabs.iter().any(|tab| tab.id == tab_id) && workspace.active_tab_id != tab_id {
             workspace.active_tab_id = tab_id.to_string();
             workspace.close_confirm = false;
@@ -54,6 +55,7 @@ impl NyaTermApp {
         let Some(workspace) = self.transfer_editor.as_mut() else {
             return;
         };
+        self.transfer_editor_tabs_menu_open = false;
         let Some(tab) = workspace.tabs.iter().find(|tab| tab.id == tab_id) else {
             return;
         };
@@ -93,6 +95,7 @@ impl NyaTermApp {
             return;
         }
         self.transfer_editor = None;
+        self.transfer_editor_tabs_menu_open = false;
         self.terminal_status = "remote editor closed".to_string();
         cx.notify();
     }

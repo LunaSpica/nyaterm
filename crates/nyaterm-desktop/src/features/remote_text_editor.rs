@@ -4,9 +4,9 @@ use gpui::{
     App, Bounds, ClipboardItem, Context, CursorStyle, Element, ElementId, ElementInputHandler,
     Entity, EntityInputHandler, FocusHandle, Focusable, GlobalElementId, HighlightStyle,
     InspectorElementId, IntoElement, KeyDownEvent, LayoutId, MouseButton, MouseDownEvent,
-    MouseMoveEvent, MouseUpEvent, PaintQuad, Pixels, Point, Render, ScrollHandle, SharedString,
-    StyledText, TextLayout, UTF16Selection, UnderlineStyle, Window, div, fill, prelude::*, px,
-    relative, rgb, rgba, size,
+    MouseMoveEvent, MouseUpEvent, PaintQuad, Pixels, Point, Render, ScrollHandle, ShapedLine,
+    SharedString, StyledText, TextLayout, TextRun, UTF16Selection, UnderlineStyle, Window, div,
+    fill, point, prelude::*, px, relative, rgb, rgba, size,
 };
 
 use super::{NyaTermApp, gpui_code_font_family};
@@ -179,6 +179,85 @@ impl RemoteTextEditor {
         };
         self.undo_stack.push(self.snapshot());
         self.restore_snapshot(snapshot, cx);
+    }
+
+    fn insert_newline(&mut self, cx: &mut Context<Self>) {
+        let range = self.selected_range();
+        let start = range.start;
+        let current_line_start = line_start(&self.content, start);
+        let indentation = self.content[current_line_start..start]
+            .chars()
+            .take_while(|ch| matches!(ch, ' ' | '\t'))
+            .collect::<String>();
+        let previous = self.content[..start]
+            .chars()
+            .rev()
+            .find(|ch| !ch.is_whitespace());
+        let next = self.content[range.end..]
+            .chars()
+            .find(|ch| !ch.is_whitespace());
+        let closes_block = matches!(
+            (previous, next),
+            (Some('('), Some(')')) | (Some('['), Some(']')) | (Some('{'), Some('}'))
+        );
+        let insertion = if closes_block {
+            format!("\n{indentation}    \n{indentation}")
+        } else {
+            format!("\n{indentation}")
+        };
+        self.replace_byte_range(range, &insertion, true, cx);
+        if closes_block {
+            self.anchor = start + 1 + indentation.len() + 4;
+            self.head = self.anchor;
+            self.scroll_cursor_pending = true;
+            cx.notify();
+        }
+    }
+
+    fn indent_selection(&mut self, outdent: bool, cx: &mut Context<Self>) {
+        let selection = self.selected_range();
+        if selection.is_empty() && !outdent {
+            self.replace_byte_range(selection, "    ", true, cx);
+            return;
+        }
+        let start = line_start(&self.content, selection.start);
+        let selection_end = if selection.end > selection.start
+            && selection.end == line_start(&self.content, selection.end)
+        {
+            previous_char_boundary(&self.content, selection.end)
+        } else {
+            selection.end
+        };
+        let end = line_end(&self.content, selection_end);
+        let source = &self.content[start..end];
+        let mut replacement = String::with_capacity(source.len() + 16);
+        let mut changed = 0usize;
+        for (index, line) in source.split('\n').enumerate() {
+            if index > 0 {
+                replacement.push('\n');
+            }
+            if outdent {
+                let remove = if line.starts_with('\t') {
+                    1
+                } else {
+                    line.chars().take_while(|ch| *ch == ' ').take(4).count()
+                };
+                changed += remove;
+                replacement.push_str(&line[remove..]);
+            } else {
+                replacement.push_str("    ");
+                replacement.push_str(line);
+                changed += 4;
+            }
+        }
+        if changed == 0 {
+            return;
+        }
+        self.replace_byte_range(start..end, &replacement, true, cx);
+        self.anchor = start;
+        self.head = start + replacement.len();
+        self.scroll_cursor_pending = true;
+        cx.notify();
     }
 
     fn sync_content_to_app(&self, cx: &mut Context<Self>) {
@@ -514,11 +593,11 @@ impl RemoteTextEditor {
                 true
             }
             "enter" if !self.read_only => {
-                self.replace_byte_range(self.selected_range(), "\n", true, cx);
+                self.insert_newline(cx);
                 true
             }
             "tab" if !self.read_only => {
-                self.replace_byte_range(self.selected_range(), "    ", true, cx);
+                self.indent_selection(extend, cx);
                 true
             }
             _ => false,
@@ -636,6 +715,24 @@ impl EntityInputHandler for RemoteTextEditor {
             .map(|range| self.range_from_utf16(range))
             .or_else(|| self.marked_range.clone())
             .unwrap_or_else(|| self.selected_range());
+        if self.marked_range.is_none() && range.is_empty() {
+            if is_close_bracket(new_text) && self.content[range.start..].starts_with(new_text) {
+                self.move_cursor(range.start + new_text.len(), false, cx);
+                return;
+            }
+            if should_auto_close(&self.content, range.start, new_text)
+                && let Some(close) = matching_close_bracket(new_text)
+            {
+                let start = range.start;
+                let pair = format!("{new_text}{close}");
+                self.replace_byte_range(range, &pair, true, cx);
+                self.anchor = start + new_text.len();
+                self.head = self.anchor;
+                self.scroll_cursor_pending = true;
+                cx.notify();
+                return;
+            }
+        }
         let record_undo = self.marked_range.is_none();
         self.replace_byte_range(range, new_text, record_undo, cx);
     }
@@ -732,6 +829,38 @@ impl Render for RemoteTextEditor {
             SharedString::from(self.content.clone())
         };
         let mut highlights = Vec::new();
+        if !self.search_query.is_empty() {
+            for (index, (start, matched)) in
+                self.content.match_indices(&self.search_query).enumerate()
+            {
+                if index == self.active_match {
+                    continue;
+                }
+                highlights.push((
+                    start..start + matched.len(),
+                    HighlightStyle {
+                        background_color: Some(rgba((palette.warning << 8) | 0x38).into()),
+                        ..Default::default()
+                    },
+                ));
+            }
+        }
+        if let Some((left, right)) = matching_bracket_ranges(&self.content, self.head) {
+            for range in [left, right] {
+                highlights.push((
+                    range,
+                    HighlightStyle {
+                        background_color: Some(rgba((palette.primary << 8) | 0x38).into()),
+                        underline: Some(UnderlineStyle {
+                            color: Some(rgb(palette.primary).into()),
+                            thickness: px(1.),
+                            wavy: false,
+                        }),
+                        ..Default::default()
+                    },
+                ));
+            }
+        }
         if !selection.is_empty() {
             highlights.push((
                 selection,
@@ -782,7 +911,21 @@ impl Render for RemoteTextEditor {
                 div()
                     .w_full()
                     .min_h(relative(1.))
-                    .p_3()
+                    .relative()
+                    .py_3()
+                    .pr_3()
+                    .pl(px(56.))
+                    .child(
+                        div()
+                            .absolute()
+                            .top_0()
+                            .bottom_0()
+                            .left_0()
+                            .w(px(46.))
+                            .border_r_1()
+                            .border_color(rgb(palette.border))
+                            .bg(rgb(palette.surface)),
+                    )
                     .child(RemoteTextElement {
                         editor: cx.entity(),
                         text,
@@ -796,6 +939,12 @@ struct RemoteTextElement {
     text: StyledText,
 }
 
+struct RemoteTextPrepaint {
+    cursor: Option<PaintQuad>,
+    active_line: Option<PaintQuad>,
+    line_numbers: Vec<(ShapedLine, Point<Pixels>)>,
+}
+
 impl IntoElement for RemoteTextElement {
     type Element = Self;
 
@@ -806,7 +955,7 @@ impl IntoElement for RemoteTextElement {
 
 impl Element for RemoteTextElement {
     type RequestLayoutState = ();
-    type PrepaintState = Option<PaintQuad>;
+    type PrepaintState = RemoteTextPrepaint;
 
     fn id(&self) -> Option<ElementId> {
         None
@@ -838,15 +987,72 @@ impl Element for RemoteTextElement {
         self.text
             .prepaint(id, inspector_id, bounds, state, window, cx);
         let editor = self.editor.read(cx);
-        if !editor.selected_range().is_empty() {
-            return None;
-        }
         let layout = self.text.layout();
-        let position = layout.position_for_index(editor.head.min(editor.content.len()))?;
-        Some(fill(
-            Bounds::new(position, size(px(1.5), layout.line_height())),
-            rgb(editor.app.read(cx).theme_palette().focus_ring),
-        ))
+        let palette = editor.app.read(cx).theme_palette();
+        let line_height = layout.line_height();
+        let cursor_position = layout.position_for_index(editor.head.min(editor.content.len()));
+        let cursor = (!editor.selected_range().is_empty())
+            .then_some(None)
+            .unwrap_or_else(|| {
+                cursor_position.map(|position| {
+                    fill(
+                        Bounds::new(position, size(px(1.5), line_height)),
+                        rgb(palette.focus_ring),
+                    )
+                })
+            });
+        let active_start = line_start(&editor.content, editor.head.min(editor.content.len()));
+        let active_number = editor.content[..active_start]
+            .bytes()
+            .filter(|byte| *byte == b'\n')
+            .count()
+            + 1;
+        let visual_rows = line_number_visual_rows(&editor.content, &layout.wrapped_text());
+        let active_y = visual_rows
+            .get(active_number.saturating_sub(1))
+            .map(|row| bounds.top() + line_height * *row as f32);
+        let active_line = active_y.map(|y| {
+            fill(
+                Bounds::new(
+                    point(bounds.left() - px(56.), y),
+                    size(bounds.size.width + px(56.), line_height),
+                ),
+                rgba((palette.hover << 8) | 0x4d),
+            )
+        });
+        let mut line_numbers = Vec::new();
+        let viewport = editor.scroll.bounds();
+        for (index, visual_row) in visual_rows.into_iter().enumerate() {
+            let y = bounds.top() + line_height * visual_row as f32;
+            if y + line_height < viewport.top() || y > viewport.bottom() {
+                continue;
+            }
+            let number = index + 1;
+            let label = SharedString::from(number.to_string());
+            let color = if number == active_number {
+                rgb(palette.text)
+            } else {
+                rgb(palette.text_dimmed)
+            };
+            let run = TextRun {
+                len: label.len(),
+                font: window.text_style().font(),
+                color: color.into(),
+                background_color: None,
+                underline: None,
+                strikethrough: None,
+            };
+            let shaped = window
+                .text_system()
+                .shape_line(label, px(11.), &[run], None);
+            let origin = point(bounds.left() - px(10.) - shaped.width, y);
+            line_numbers.push((shaped, origin));
+        }
+        RemoteTextPrepaint {
+            cursor,
+            active_line,
+            line_numbers,
+        }
     }
 
     fn paint(
@@ -855,7 +1061,7 @@ impl Element for RemoteTextElement {
         inspector_id: Option<&InspectorElementId>,
         bounds: Bounds<Pixels>,
         state: &mut Self::RequestLayoutState,
-        cursor: &mut Self::PrepaintState,
+        prepaint: &mut Self::PrepaintState,
         window: &mut Window,
         cx: &mut App,
     ) {
@@ -865,10 +1071,16 @@ impl Element for RemoteTextElement {
             ElementInputHandler::new(bounds, self.editor.clone()),
             cx,
         );
+        if let Some(active_line) = prepaint.active_line.take() {
+            window.paint_quad(active_line);
+        }
         self.text
             .paint(id, inspector_id, bounds, state, &mut (), window, cx);
+        for (line, origin) in prepaint.line_numbers.drain(..) {
+            let _ = line.paint(origin, self.text.layout().line_height(), window, cx);
+        }
         if focus_handle.is_focused(window)
-            && let Some(cursor) = cursor.take()
+            && let Some(cursor) = prepaint.cursor.take()
         {
             window.paint_quad(cursor);
         }
@@ -881,6 +1093,115 @@ impl Element for RemoteTextElement {
             }
         });
     }
+}
+
+fn matching_close_bracket(value: &str) -> Option<char> {
+    match value {
+        "(" => Some(')'),
+        "[" => Some(']'),
+        "{" => Some('}'),
+        "\"" => Some('"'),
+        "'" => Some('\''),
+        _ => None,
+    }
+}
+
+fn is_close_bracket(value: &str) -> bool {
+    matches!(value, ")" | "]" | "}" | "\"" | "'")
+}
+
+fn should_auto_close(content: &str, offset: usize, value: &str) -> bool {
+    if !matches!(value, "\"" | "'") {
+        return true;
+    }
+    let previous = content[..offset].chars().next_back();
+    let next = content[offset..].chars().next();
+    !previous.is_some_and(|ch| ch.is_alphanumeric() || ch == '_')
+        && next.is_none_or(|ch| ch.is_whitespace() || matches!(ch, ')' | ']' | '}' | ',' | ';'))
+}
+
+fn matching_bracket_ranges(content: &str, cursor: usize) -> Option<(Range<usize>, Range<usize>)> {
+    let cursor = nearest_char_boundary(content, cursor.min(content.len()));
+    let candidate = if cursor < content.len() {
+        let end = next_char_boundary(content, cursor);
+        bracket_kind(content[cursor..end].chars().next()?).map(|kind| (cursor, end, kind))
+    } else {
+        None
+    }
+    .or_else(|| {
+        if cursor == 0 {
+            return None;
+        }
+        let start = previous_char_boundary(content, cursor);
+        bracket_kind(content[start..cursor].chars().next()?).map(|kind| (start, cursor, kind))
+    })?;
+    let (start, end, (open, close, forward)) = candidate;
+
+    if forward {
+        let mut depth = 0usize;
+        for (offset, ch) in content[end..].char_indices() {
+            if ch == open {
+                depth += 1;
+            } else if ch == close {
+                if depth == 0 {
+                    let match_start = end + offset;
+                    return Some((start..end, match_start..match_start + ch.len_utf8()));
+                }
+                depth -= 1;
+            }
+        }
+    } else {
+        let mut depth = 0usize;
+        for (offset, ch) in content[..start].char_indices().rev() {
+            if ch == close {
+                depth += 1;
+            } else if ch == open {
+                if depth == 0 {
+                    return Some((offset..offset + ch.len_utf8(), start..end));
+                }
+                depth -= 1;
+            }
+        }
+    }
+    None
+}
+
+fn bracket_kind(ch: char) -> Option<(char, char, bool)> {
+    match ch {
+        '(' => Some(('(', ')', true)),
+        '[' => Some(('[', ']', true)),
+        '{' => Some(('{', '}', true)),
+        ')' => Some(('(', ')', false)),
+        ']' => Some(('[', ']', false)),
+        '}' => Some(('{', '}', false)),
+        _ => None,
+    }
+}
+
+fn line_number_visual_rows(content: &str, wrapped_text: &str) -> Vec<usize> {
+    let visual_lines = wrapped_text.split('\n').collect::<Vec<_>>();
+    let mut visual_index = 0usize;
+    let mut rows = Vec::with_capacity(content.bytes().filter(|byte| *byte == b'\n').count() + 1);
+
+    for logical_line in content.split('\n') {
+        rows.push(visual_index);
+        if logical_line.is_empty() {
+            visual_index = visual_index.saturating_add(1);
+            continue;
+        }
+        let mut consumed = 0usize;
+        while consumed < logical_line.len() && visual_index < visual_lines.len() {
+            consumed = consumed.saturating_add(visual_lines[visual_index].len());
+            visual_index += 1;
+            if visual_lines[visual_index - 1].is_empty() {
+                break;
+            }
+        }
+        if consumed < logical_line.len() {
+            visual_index = visual_index.saturating_add(1);
+        }
+    }
+    rows
 }
 
 fn nearest_char_boundary(content: &str, mut offset: usize) -> usize {
@@ -1080,5 +1401,32 @@ mod tests {
         assert_eq!(utf16_to_utf8(content, 1), 1);
         assert_eq!(utf16_to_utf8(content, 3), 5);
         assert_eq!(utf16_to_utf8(content, 4), content.len());
+    }
+
+    #[test]
+    fn editor_matches_nested_brackets_from_either_side() {
+        let content = "fn main() { call([1, 2]); }";
+        assert_eq!(matching_bracket_ranges(content, 10), Some((10..11, 27..28)));
+        assert_eq!(matching_bracket_ranges(content, 28), Some((10..11, 27..28)));
+        assert_eq!(matching_bracket_ranges(content, 18), Some((18..19, 23..24)));
+    }
+
+    #[test]
+    fn editor_bracket_pair_helpers_cover_supported_pairs() {
+        assert_eq!(matching_close_bracket("("), Some(')'));
+        assert_eq!(matching_close_bracket("\""), Some('"'));
+        assert!(is_close_bracket("}"));
+        assert!(!is_close_bracket("("));
+        assert!(should_auto_close("value = ", 8, "\""));
+        assert!(!should_auto_close("isn't", 3, "'"));
+    }
+
+    #[test]
+    fn editor_line_numbers_follow_soft_wrapped_rows() {
+        assert_eq!(
+            line_number_visual_rows("abcdef\nxy\n", "abc\ndef\nxy\n"),
+            vec![0, 2, 3]
+        );
+        assert_eq!(line_number_visual_rows("a\n\nb", "a\n\nb"), vec![0, 1, 2]);
     }
 }

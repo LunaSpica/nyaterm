@@ -339,15 +339,30 @@ impl NyaTermApp {
         };
         let active_tab_id = state.id.clone();
         let has_native_editor = native_editor.is_some();
-        let mut tab_strip = div()
-            .id("transfer-editor-tabs")
-            .h(px(40.))
-            .flex_none()
+        let tabs_menu_open = self.transfer_editor_tabs_menu_open && tabs.len() > 1;
+        let mut tab_list = div()
+            .id("transfer-editor-tab-list")
+            .h_full()
+            .flex_1()
+            .min_w_0()
             .flex()
-            .overflow_x_scroll()
-            .border_b_1()
+            .overflow_x_scroll();
+        let mut tabs_menu = div()
+            .id("transfer-editor-tabs-menu")
+            .absolute()
+            .top(px(40.))
+            .right_0()
+            .w(px(320.))
+            .max_h(px(360.))
+            .overflow_y_scroll()
+            .rounded_bl_md()
+            .border_1()
             .border_color(rgb(palette.border))
-            .bg(rgb(palette.surface));
+            .bg(rgb(palette.surface_elevated))
+            .shadow_lg()
+            .py_1()
+            .flex()
+            .flex_col();
         for (index, tab) in tabs.iter().enumerate() {
             let tab_id = tab.id.clone();
             let close_tab_id = tab.id.clone();
@@ -373,9 +388,11 @@ impl NyaTermApp {
             } else {
                 base_label.to_string()
             };
-            tab_strip = tab_strip.child(
+            let tab_group_name = SharedString::from(format!("transfer-editor-tab-group-{index}"));
+            tab_list = tab_list.child(
                 div()
                     .id(SharedString::from(format!("transfer-editor-tab-{index}")))
+                    .group(tab_group_name.clone())
                     .h_full()
                     .min_w(px(96.))
                     .max_w(px(240.))
@@ -443,6 +460,11 @@ impl NyaTermApp {
                             .rounded_sm()
                             .text_size(px(14.))
                             .text_color(rgb(palette.text_muted))
+                            .when(active, |this| this.opacity(0.7))
+                            .when(!active, |this| {
+                                this.opacity(0.)
+                                    .group_hover(tab_group_name, |style| style.opacity(0.7))
+                            })
                             .hover(|this| this.bg(rgb(palette.hover)).text_color(rgb(palette.text)))
                             .on_click(cx.listener(move |this, _, _, cx| {
                                 cx.stop_propagation();
@@ -451,7 +473,95 @@ impl NyaTermApp {
                             .child("×"),
                     ),
             );
+
+            let menu_tab_id = tab.id.clone();
+            tabs_menu = tabs_menu.child(
+                div()
+                    .id(SharedString::from(format!(
+                        "transfer-editor-tabs-menu-item-{index}"
+                    )))
+                    .px_3()
+                    .py_2()
+                    .flex()
+                    .items_start()
+                    .gap_2()
+                    .cursor_pointer()
+                    .bg(if active {
+                        rgb(palette.hover)
+                    } else {
+                        rgb(palette.surface_elevated)
+                    })
+                    .hover(|this| this.bg(rgb(palette.hover)))
+                    .on_click(cx.listener(move |this, _, _, cx| {
+                        this.activate_transfer_editor_tab(&menu_tab_id, cx);
+                    }))
+                    .child(div().mt(px(5.)).size(px(6.)).flex_none().rounded_full().bg(
+                        if tab.dirty {
+                            rgb(palette.link)
+                        } else {
+                            rgba(0x00000000)
+                        },
+                    ))
+                    .child(
+                        div()
+                            .min_w_0()
+                            .flex_1()
+                            .flex()
+                            .flex_col()
+                            .gap_1()
+                            .child(
+                                div()
+                                    .overflow_hidden()
+                                    .font_family(crate::features::gpui_code_font_family())
+                                    .text_xs()
+                                    .text_color(rgb(palette.text))
+                                    .child(truncate_preview(&label, 38)),
+                            )
+                            .child(
+                                div()
+                                    .overflow_hidden()
+                                    .font_family(crate::features::gpui_code_font_family())
+                                    .text_size(px(10.))
+                                    .text_color(rgb(palette.text_muted))
+                                    .child(truncate_preview(&tab.remote_path, 58)),
+                            ),
+                    ),
+            );
         }
+        let tab_strip = div()
+            .id("transfer-editor-tabs")
+            .h(px(40.))
+            .flex_none()
+            .flex()
+            .overflow_hidden()
+            .border_b_1()
+            .border_color(rgb(palette.border))
+            .bg(rgb(palette.surface))
+            .child(tab_list)
+            .when(tabs.len() > 1, |this| {
+                this.child(
+                    div()
+                        .id("transfer-editor-tabs-menu-trigger")
+                        .h_full()
+                        .w(px(36.))
+                        .flex_none()
+                        .border_l_1()
+                        .border_color(rgb(palette.border))
+                        .bg(rgb(palette.surface))
+                        .flex()
+                        .items_center()
+                        .justify_center()
+                        .cursor_pointer()
+                        .hover(|this| this.bg(rgb(palette.hover)))
+                        .on_click(cx.listener(|this, _, _, cx| {
+                            cx.stop_propagation();
+                            this.transfer_editor_tabs_menu_open =
+                                !this.transfer_editor_tabs_menu_open;
+                            cx.notify();
+                        }))
+                        .child(svg().size(px(15.)).path("icons/chevron-down.svg")),
+                )
+            });
 
         div()
             .id(SharedString::from("transfer-editor-overlay"))
@@ -470,6 +580,7 @@ impl NyaTermApp {
             .justify_center()
             .track_focus(&self.transfer_editor_focus)
             .on_click(cx.listener(|this, _, window, cx| {
+                this.transfer_editor_tabs_menu_open = false;
                 window.focus(&this.transfer_editor_focus);
                 cx.notify();
             }))
@@ -493,6 +604,7 @@ impl NyaTermApp {
                     })
                     .bg(rgb(palette.bg))
                     .overflow_hidden()
+                    .relative()
                     .flex()
                     .flex_col()
                     .child(tab_strip)
@@ -875,7 +987,8 @@ impl NyaTermApp {
                                         "{byte_count} {bytes_label} · {encoding_label} · {line_ending_label}"
                                     )),
                             ),
-                    ),
+                    )
+                    .when(tabs_menu_open, |this| this.child(tabs_menu)),
             )
     }
 }
