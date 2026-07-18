@@ -1,6 +1,6 @@
 use gpui::{
     AnyElement, App, ClickEvent, Context, FontWeight, IntoElement, KeyDownEvent, SharedString,
-    Window, div, prelude::*, px, rgb,
+    Window, div, prelude::*, px, rgb, svg,
 };
 use nyaterm_core::{AgentCommandExecutionMode, AiMode, AiModelSource, AiProviderKind, RiskLevel};
 use nyaterm_transport::SftpDuplicatePolicy;
@@ -16,7 +16,7 @@ use crate::theme::ThemePalette;
 use crate::widgets::{small_button, status_pill};
 
 use super::super::{
-    NyaTermApp, TAB_MOUSE_ACTIONS, TabMouseActionTarget, ai_active_profile_api_key,
+    ChromeTooltip, NyaTermApp, TAB_MOUSE_ACTIONS, TabMouseActionTarget, ai_active_profile_api_key,
     cloud_secret_display, cloud_sync_history_row, compact_id, configured_cloud_sync_provider,
     none_if_blank, tab_mouse_action_label, transfer_input, truncate_preview,
 };
@@ -53,6 +53,10 @@ impl NyaTermApp {
     ) -> impl IntoElement {
         // Tauri SettingsPage shell: compact header + narrow nav + scroll content.
         let palette = self.theme_palette();
+        let settings_title = self.tr("settings.title");
+        let active_group = self.tr(self.settings_active_tab.group_i18n_key());
+        let active_label = self.tr(self.settings_active_tab.i18n_key());
+        let back_label = self.tr("common.close");
         div()
             .flex()
             .flex_col()
@@ -79,7 +83,7 @@ impl NyaTermApp {
                                     .text_size(px(12.))
                                     .font_weight(FontWeight(700.))
                                     .text_color(rgb(palette.text))
-                                    .child("Settings"),
+                                    .child(settings_title),
                             )
                             .child(
                                 div()
@@ -91,7 +95,7 @@ impl NyaTermApp {
                                 div()
                                     .text_size(px(11.))
                                     .text_color(rgb(palette.text_muted))
-                                    .child(self.settings_active_tab.group_label()),
+                                    .child(active_group),
                             )
                             .child(
                                 div()
@@ -104,7 +108,7 @@ impl NyaTermApp {
                                     .text_size(px(11.))
                                     .font_weight(FontWeight(600.))
                                     .text_color(rgb(palette.text))
-                                    .child(self.settings_active_tab.label()),
+                                    .child(active_label),
                             ),
                     )
                     .child(
@@ -122,7 +126,7 @@ impl NyaTermApp {
                                 this.bg(rgb(palette.surface_elevated))
                                     .text_color(rgb(palette.text))
                             })
-                            .child("Back")
+                            .child(back_label)
                             .on_click(cx.listener(|this, _, _, cx| {
                                 this.close_settings(cx);
                             })),
@@ -155,13 +159,16 @@ impl NyaTermApp {
         let apply_disabled = !dirty || validation_error.is_some();
         let confirm_disabled = validation_error.is_some();
         let status = validation_error.clone().unwrap_or_else(|| {
-            if dirty {
-                "Unsaved changes"
+            self.tr(if dirty {
+                "fileEditor.unsavedDesc"
             } else {
-                "Settings are up to date"
-            }
+                "updater.noUpdate"
+            })
             .to_string()
         });
+        let cancel_label = self.tr("common.cancel");
+        let apply_label = self.tr("common.apply");
+        let confirm_label = self.tr("common.confirm");
 
         div()
             .h(px(48.))
@@ -204,7 +211,7 @@ impl NyaTermApp {
                             .text_color(rgb(palette.text))
                             .cursor_pointer()
                             .hover(move |this| this.bg(rgb(palette.hover)))
-                            .child("Cancel")
+                            .child(cancel_label)
                             .on_click(cx.listener(|this, _, _, cx| {
                                 this.cancel_settings(cx);
                             })),
@@ -232,7 +239,7 @@ impl NyaTermApp {
                                         this.apply_settings_draft(false, cx);
                                     }))
                             })
-                            .child("Apply"),
+                            .child(apply_label),
                     )
                     .child(
                         div()
@@ -260,20 +267,28 @@ impl NyaTermApp {
                                         this.confirm_settings_draft(cx);
                                     }))
                             })
-                            .child("Confirm"),
+                            .child(confirm_label),
                     ),
             )
     }
 
     fn settings_sidebar(&mut self, cx: &mut Context<Self>) -> impl IntoElement {
         let palette = self.theme_palette();
+        let compact = self.last_viewport_size.0 < 640.;
+        let sidebar_width = if compact {
+            56.
+        } else if self.last_viewport_size.0 < 1024. {
+            192.
+        } else {
+            224.
+        };
         let workspace_expanded = self.settings_expanded_groups.contains("workspace");
         let terminal_expanded = self.settings_expanded_groups.contains("terminal_session");
         let ai_expanded = self.settings_expanded_groups.contains("ai_group");
 
         let mut sidebar = div()
             .id(SharedString::from("settings-sidebar-scroll"))
-            .w(px(220.))
+            .w(px(sidebar_width))
             .flex_none()
             .h_full()
             .border_r_1()
@@ -286,76 +301,113 @@ impl NyaTermApp {
         sidebar = sidebar
             .child(self.settings_group_header(
                 "workspace",
-                "Workspace",
+                self.tr("settings.groupWorkspace"),
+                "icons/settings.svg",
                 workspace_expanded,
                 palette.accent,
+                compact,
                 cx,
             ))
             .when(workspace_expanded, |this| {
                 this.child(self.settings_tab_button(
                     SettingsTab::General,
                     "settings-tab-general",
+                    compact,
                     cx,
                 ))
                 .child(self.settings_tab_button(
                     SettingsTab::Appearance,
                     "settings-tab-appearance",
+                    compact,
                     cx,
                 ))
                 .child(self.settings_tab_button(
                     SettingsTab::Interaction,
                     "settings-tab-interaction",
+                    compact,
                     cx,
                 ))
                 .child(self.settings_tab_button(
                     SettingsTab::Keybindings,
                     "settings-tab-keybindings",
+                    compact,
                     cx,
                 ))
             })
             .child(self.settings_group_header(
                 "terminal_session",
-                "Terminal Session",
+                self.tr("settings.groupTerminalSession"),
+                "icons/conn/terminal.svg",
                 terminal_expanded,
                 palette.success,
+                compact,
                 cx,
             ))
             .when(terminal_expanded, |this| {
                 this.child(self.settings_tab_button(
                     SettingsTab::TerminalGeneral,
                     "settings-tab-terminal-general",
+                    compact,
                     cx,
                 ))
-                .child(self.settings_tab_button(SettingsTab::Search, "settings-tab-search", cx))
+                .child(self.settings_tab_button(
+                    SettingsTab::Search,
+                    "settings-tab-search",
+                    compact,
+                    cx,
+                ))
                 .child(self.settings_tab_button(
                     SettingsTab::Translation,
                     "settings-tab-translation",
+                    compact,
                     cx,
                 ))
             })
-            .child(self.settings_group_header("ai_group", "AI", ai_expanded, 0xbc8cff, cx))
+            .child(self.settings_group_header(
+                "ai_group",
+                self.tr("ai.title"),
+                "icons/ai.svg",
+                ai_expanded,
+                0xbc8cff,
+                compact,
+                cx,
+            ))
             .when(ai_expanded, |this| {
                 this.child(self.settings_tab_button(
                     SettingsTab::AiGeneral,
                     "settings-tab-ai-general",
+                    compact,
                     cx,
                 ))
                 .child(self.settings_tab_button(
                     SettingsTab::AiModels,
                     "settings-tab-ai-models",
+                    compact,
                     cx,
                 ))
                 .child(self.settings_tab_button(
                     SettingsTab::AiRules,
                     "settings-tab-ai-rules",
+                    compact,
                     cx,
                 ))
             })
-            .child(self.settings_tab_button(SettingsTab::Transfer, "settings-tab-transfer", cx))
-            .child(self.settings_tab_button(SettingsTab::Security, "settings-tab-security", cx))
+            .child(self.settings_tab_button(
+                SettingsTab::Transfer,
+                "settings-tab-transfer",
+                compact,
+                cx,
+            ))
+            .child(self.settings_tab_button(
+                SettingsTab::Security,
+                "settings-tab-security",
+                compact,
+                cx,
+            ))
             .child(self.settings_tab_button(
                 SettingsTab::SyncBackup,
                 "settings-tab-sync-backup",
+                compact,
                 cx,
             ));
 
@@ -366,8 +418,10 @@ impl NyaTermApp {
         &self,
         group: &'static str,
         title: &'static str,
+        icon_path: &'static str,
         expanded: bool,
         accent: u32,
+        compact: bool,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
         let palette = self.theme_palette();
@@ -376,10 +430,11 @@ impl NyaTermApp {
             .mt_2()
             .mb_1()
             .h(px(26.))
-            .px_2()
+            .when(!compact, |this| this.px_2())
             .flex()
             .items_center()
-            .justify_between()
+            .when(compact, |this| this.justify_center())
+            .when(!compact, |this| this.justify_between())
             .rounded_sm()
             .cursor_pointer()
             .hover(|this| this.bg(rgb(palette.hover)))
@@ -391,15 +446,20 @@ impl NyaTermApp {
                     .text_size(px(10.))
                     .font_weight(FontWeight(700.))
                     .text_color(rgb(palette.text_dimmed))
-                    .child(div().size(px(6.)).rounded_full().bg(rgb(accent)))
-                    .child(title),
+                    .child(svg().size(px(15.)).path(icon_path).text_color(rgb(accent)))
+                    .when(!compact, |this| this.child(title)),
             )
-            .child(
-                div()
-                    .text_size(px(12.))
-                    .text_color(rgb(palette.text_dimmed))
-                    .child(if expanded { "▾" } else { "▸" }),
-            )
+            .when(!compact, |this| {
+                this.child(
+                    div()
+                        .text_size(px(12.))
+                        .text_color(rgb(palette.text_dimmed))
+                        .child(if expanded { "▾" } else { "▸" }),
+                )
+            })
+            .when(compact, |this| {
+                this.tooltip(move |_, cx| cx.new(|_| ChromeTooltip::new(title)).into())
+            })
             .on_click(cx.listener(move |this, _, _, cx| {
                 if !this.settings_expanded_groups.insert(group.to_string()) {
                     this.settings_expanded_groups.remove(group);
@@ -412,19 +472,22 @@ impl NyaTermApp {
         &self,
         tab: SettingsTab,
         id: &'static str,
+        compact: bool,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
         let palette = self.theme_palette();
         let selected = self.settings_active_tab == tab;
+        let label = self.tr(tab.i18n_key());
 
         // Tauri settings nav item: soft primary fill, no permanent green border.
         div()
             .id(id)
             .mt_0()
             .h(px(30.))
-            .px_2()
+            .when(!compact, |this| this.px_2())
             .flex()
             .items_center()
+            .when(compact, |this| this.justify_center())
             .gap_2()
             .rounded_md()
             .border_1()
@@ -452,23 +515,22 @@ impl NyaTermApp {
             .cursor_pointer()
             .hover(move |this| this.bg(rgb(palette.hover)).text_color(rgb(palette.text)))
             .child(
-                div()
-                    .size(px(6.))
-                    .rounded_full()
+                svg()
+                    .size(px(15.))
                     .flex_none()
-                    .bg(if selected {
+                    .path(tab.icon_path())
+                    .text_color(if selected {
                         rgb(palette.accent)
                     } else {
-                        rgb(palette.border)
+                        rgb(palette.text_muted)
                     }),
             )
-            .child(
-                div()
-                    .min_w_0()
-                    .flex_1()
-                    .overflow_hidden()
-                    .child(tab.label()),
-            )
+            .when(!compact, |this| {
+                this.child(div().min_w_0().flex_1().overflow_hidden().child(label))
+            })
+            .when(compact, |this| {
+                this.tooltip(move |_, cx| cx.new(|_| ChromeTooltip::new(label)).into())
+            })
             .on_click(cx.listener(move |this, _, _, cx| {
                 this.settings_active_tab = tab;
                 cx.notify();
@@ -482,6 +544,8 @@ impl NyaTermApp {
     ) -> impl IntoElement {
         let palette = self.theme_palette();
         let active_tab = self.settings_active_tab;
+        let active_group = self.tr(active_tab.group_i18n_key());
+        let active_label = self.tr(active_tab.i18n_key());
         let content = self.settings_tab_content(active_tab, backup_snapshot_prompt, cx);
 
         // Tauri content pane: no heavy outer card; compact title strip + scroll body.
@@ -513,14 +577,14 @@ impl NyaTermApp {
                                     .text_size(px(10.))
                                     .font_weight(FontWeight(600.))
                                     .text_color(rgb(palette.text_dimmed))
-                                    .child(active_tab.group_label()),
+                                    .child(active_group),
                             )
                             .child(
                                 div()
                                     .text_size(px(16.))
                                     .font_weight(FontWeight(700.))
                                     .text_color(rgb(palette.text))
-                                    .child(active_tab.label()),
+                                    .child(active_label),
                             ),
                     ),
             )

@@ -1,6 +1,7 @@
 //! GPUI presentation crate for NyaTerm.
 
 mod action_links;
+mod i18n;
 mod send_command;
 mod shortcuts;
 mod temporary_ssh_link;

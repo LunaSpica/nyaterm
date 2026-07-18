@@ -17,6 +17,8 @@ impl NyaTermApp {
         let margin = 8.;
         let menu_x = f32::from(menu.x).clamp(margin, (viewport_w - menu_w - margin).max(margin));
         let menu_y = f32::from(menu.y).clamp(margin, (viewport_h - 70. - margin).max(margin));
+        let move_to_label = self.tr("activityBar.moveTo");
+        let show_labels_label = self.tr("activityBar.showLabel");
 
         let mut zone_buttons = div().flex().flex_col().gap_1();
         for zone in ActivityBarZone::all() {
@@ -40,7 +42,7 @@ impl NyaTermApp {
                         this.cursor_pointer()
                             .hover(|this| this.bg(rgb(palette.hover)))
                     })
-                    .child(zone.label())
+                    .child(self.tr(zone.i18n_key()))
                     .when(!selected, |this| {
                         this.on_click(cx.listener(move |this, _, _, cx| {
                             this.move_activity_entry(id.clone(), target, None, cx);
@@ -93,7 +95,7 @@ impl NyaTermApp {
                     .on_click(cx.listener(|this, _, _, cx| {
                         this.open_activity_bar_move_submenu(cx);
                     }))
-                    .child("Move To")
+                    .child(move_to_label)
                     .child(
                         svg()
                             .size(px(12.))
@@ -125,7 +127,7 @@ impl NyaTermApp {
                             .text_color(rgb(palette.accent))
                             .child(if show_labels { "✓" } else { "" }),
                     )
-                    .child("Show Labels"),
+                    .child(show_labels_label),
             );
 
         div()
@@ -257,7 +259,11 @@ impl NyaTermApp {
         let selected = self.activity_entry_selected(entry);
         let icon_path = entry.icon_path();
         let glyph = entry.glyph();
-        let tooltip = entry.label();
+        let tooltip = entry
+            .i18n_key()
+            .map(|key| self.tr(key))
+            .unwrap_or_else(|| entry.label())
+            .to_string();
         let short_label = entry.short_label();
         let palette = self.theme_palette();
         let active_color = match side {
@@ -357,7 +363,7 @@ impl NyaTermApp {
                     entry_id: entry_id.clone(),
                     zone,
                     index,
-                    label: tooltip.to_string(),
+                    label: tooltip.clone(),
                 },
                 |payload, position, _, cx| {
                     cx.new(|_| ActivityBarDragPreview::new(payload.clone(), position))
@@ -380,7 +386,7 @@ impl NyaTermApp {
                 })
             })
             .tooltip({
-                let title = tooltip.to_string();
+                let title = tooltip.clone();
                 let detail = if show_labels {
                     None
                 } else {

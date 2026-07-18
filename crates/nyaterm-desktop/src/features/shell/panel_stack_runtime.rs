@@ -432,6 +432,10 @@ impl NyaTermApp {
                 let panel = NavItem::from_persistence_id(panel_id).unwrap_or(NavItem::Transfers);
                 let basis = weights[index] / total;
                 let meta = self.side_panel_meta(side, panel);
+                let title = panel
+                    .i18n_key()
+                    .map(|key| self.tr(key))
+                    .unwrap_or_else(|| panel.panel_title());
                 let actions = self.side_panel_header_actions(panel, cx);
                 let palette = self.theme_palette();
                 let body = match side {
@@ -446,12 +450,7 @@ impl NyaTermApp {
                         .flex()
                         .flex_col()
                         .overflow_hidden()
-                        .child(panel_header_with_actions(
-                            panel.panel_title(),
-                            meta,
-                            palette,
-                            actions,
-                        ))
+                        .child(panel_header_with_actions(title, meta, palette, actions))
                         .child(div().flex_1().min_h_0().overflow_hidden().child(body)),
                 );
                 if index + 1 < count {
@@ -490,6 +489,10 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) -> gpui::Div {
         let meta = self.side_panel_meta(side, panel);
+        let title = panel
+            .i18n_key()
+            .map(|key| self.tr(key))
+            .unwrap_or_else(|| panel.panel_title());
         let actions = self.side_panel_header_actions(panel, cx);
         let palette = self.theme_palette();
         let body = match side {
@@ -500,12 +503,7 @@ impl NyaTermApp {
             .size_full()
             .flex()
             .flex_col()
-            .child(panel_header_with_actions(
-                panel.panel_title(),
-                meta,
-                palette,
-                actions,
-            ))
+            .child(panel_header_with_actions(title, meta, palette, actions))
             .child(div().flex_1().min_h_0().overflow_hidden().child(body))
     }
 

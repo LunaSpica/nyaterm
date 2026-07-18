@@ -17,11 +17,7 @@ impl NyaTermApp {
         };
         let diagnostics_level = self.settings.diagnostics_level.clone();
         let retention = self.settings.diagnostics_retention_days;
-        let log_dir = self.runtime.log_dir().display().to_string();
-        let diagnostics_prompt = match self.diagnostics_path_prompt {
-            Some(DiagnosticsPathPromptKind::Export) => "selecting export path",
-            None => "ready",
-        };
+        let days_unit = self.tr("common.days");
 
         div()
             .flex()
@@ -33,8 +29,8 @@ impl NyaTermApp {
                 None,
                 settings_form_row(
                     palette,
-                    "Language",
-                    Some(SharedString::from("UI language preference for labels and dialogs.")),
+                    self.tr("settings.language"),
+                    Some(SharedString::from(self.tr("settings.languageDesc"))),
                     div()
                         .flex()
                         .items_center()
@@ -67,18 +63,16 @@ impl NyaTermApp {
             ))
             .child(settings_form_section(
                 palette,
-                Some("Startup & window"),
-                Some("Restore sessions, tray minimize, and quit confirmation."),
+                None,
+                None,
                 div()
                     .flex()
                     .flex_col()
                     .gap_3()
                     .child(settings_form_row(
                         palette,
-                        "Restore sessions on startup",
-                        Some(SharedString::from(
-                            "Reopen the previous workspace tabs when NyaTerm starts.",
-                        )),
+                        self.tr("settings.startupRestore"),
+                        Some(SharedString::from(self.tr("settings.startupRestoreDesc"))),
                         settings_switch(
                             palette,
                             "general-startup-restore",
@@ -97,9 +91,9 @@ impl NyaTermApp {
                                 .border_color(rgb(palette.border))
                                 .child(settings_form_row(
                                     palette,
-                                    "Restore window layout",
+                                    self.tr("settings.startupRestoreWindowLayout"),
                                     Some(SharedString::from(
-                                        "Restore multi-leaf tab windows and global pane splits with the workspace.",
+                                        self.tr("settings.startupRestoreWindowLayoutDesc"),
                                     )),
                                     settings_switch(
                                         palette,
@@ -114,10 +108,8 @@ impl NyaTermApp {
                     })
                     .child(settings_form_row(
                         palette,
-                        "Minimize to tray",
-                        Some(SharedString::from(
-                            "Hide the main window to the system tray instead of the taskbar when minimized (platform-dependent).",
-                        )),
+                        self.tr("settings.minimizeToTray"),
+                        Some(SharedString::from(self.tr("settings.minimizeToTrayDesc"))),
                         settings_switch(
                             palette,
                             "general-minimize-to-tray",
@@ -129,10 +121,8 @@ impl NyaTermApp {
                     ))
                     .child(settings_form_row(
                         palette,
-                        "Confirm on close",
-                        Some(SharedString::from(
-                            "Ask before quitting when sessions are still open.",
-                        )),
+                        self.tr("settings.confirmOnClose"),
+                        Some(SharedString::from(self.tr("settings.confirmOnCloseDesc"))),
                         settings_switch(
                             palette,
                             "general-confirm-close",
@@ -145,18 +135,16 @@ impl NyaTermApp {
             ))
             .child(settings_form_section(
                 palette,
-                Some("Diagnostics"),
-                Some("Log level, retention, support bundle export, and log directory."),
+                Some(self.tr("settings.diagnostics")),
+                Some(self.tr("settings.diagnosticsDesc")),
                 div()
                     .flex()
                     .flex_col()
                     .gap_3()
                     .child(settings_form_row(
                         palette,
-                        "Log level",
-                        Some(SharedString::from(
-                            "Controls native diagnostics verbosity. Restart may be required for file tracing filter.",
-                        )),
+                        self.tr("settings.logLevel"),
+                        Some(SharedString::from(self.tr("settings.logLevelDesc"))),
                         div()
                             .flex()
                             .items_center()
@@ -164,7 +152,7 @@ impl NyaTermApp {
                             .child(settings_choice_chip(
                                 palette,
                                 "general-diag-warn",
-                                "Warn",
+                                self.tr("settings.logLevelWarn"),
                                 diagnostics_level == "warn",
                                 cx.listener(|this, _, _, cx| {
                                     this.set_diagnostics_level("warn", cx);
@@ -173,7 +161,7 @@ impl NyaTermApp {
                             .child(settings_choice_chip(
                                 palette,
                                 "general-diag-info",
-                                "Info",
+                                self.tr("settings.logLevelInfo"),
                                 diagnostics_level == "info",
                                 cx.listener(|this, _, _, cx| {
                                     this.set_diagnostics_level("info", cx);
@@ -182,7 +170,7 @@ impl NyaTermApp {
                             .child(settings_choice_chip(
                                 palette,
                                 "general-diag-debug",
-                                "Debug",
+                                self.tr("settings.logLevelDebug"),
                                 diagnostics_level == "debug",
                                 cx.listener(|this, _, _, cx| {
                                     this.set_diagnostics_level("debug", cx);
@@ -191,47 +179,33 @@ impl NyaTermApp {
                     ))
                     .child(settings_form_row(
                         palette,
-                        "Log retention",
-                        Some(SharedString::from(
-                            "How long retained diagnostics JSONL logs are kept on disk.",
-                        )),
-                        div()
-                            .flex()
-                            .items_center()
-                            .gap_1()
-                            .children(
-                                [3_u32, 7, 14, 30].into_iter().map(|days| {
-                                    let selected = retention == days;
-                                    let id = format!("general-diag-retention-{days}");
-                                    let label: &'static str = match days {
-                                        3 => "3d",
-                                        7 => "7d",
-                                        14 => "14d",
-                                        _ => "30d",
-                                    };
-                                    settings_choice_chip(
-                                        palette,
-                                        id,
-                                        label,
-                                        selected,
-                                        cx.listener(move |this, _, _, cx| {
-                                            this.set_diagnostics_retention_days(days, cx);
-                                        }),
-                                    )
-                                }),
-                            ),
+                        self.tr("settings.logRetention"),
+                        Some(SharedString::from(self.tr("settings.logRetentionDesc"))),
+                        div().flex().items_center().gap_1().children(
+                            [3_u32, 7, 14, 30].into_iter().map(|days| {
+                                let selected = retention == days;
+                                let id = format!("general-diag-retention-{days}");
+                                let label = format!("{days} {days_unit}");
+                                settings_choice_chip(
+                                    palette,
+                                    id,
+                                    label,
+                                    selected,
+                                    cx.listener(move |this, _, _, cx| {
+                                        this.set_diagnostics_retention_days(days, cx);
+                                    }),
+                                )
+                            }),
+                        ),
                     ))
                     .child(settings_form_row(
                         palette,
-                        "Open logs",
-                        Some(SharedString::from(format!(
-                            "Reveal the log directory ({})",
-                            truncate_preview(&log_dir, 48)
-                        ))),
+                        self.tr("settings.openLogs"),
+                        Some(SharedString::from(self.tr("settings.openLogsDesc"))),
                         small_button(
                             palette,
                             "general-open-logs",
-                            "Open logs",
+                            self.tr("settings.openLogs"),
                             cx.listener(|this, _, _, cx| {
                                 this.reveal_log_dir(cx);
                             }),
@@ -239,72 +213,18 @@ impl NyaTermApp {
                     ))
                     .child(settings_form_row(
                         palette,
-                        "Export diagnostics",
-                        Some(SharedString::from(format!(
-                            "Zip support bundle with logs and runtime snapshot ({diagnostics_prompt})."
-                        ))),
+                        self.tr("settings.exportDiagnostics"),
+                        Some(SharedString::from(
+                            self.tr("settings.exportDiagnosticsDesc"),
+                        )),
                         small_button(
                             palette,
                             "general-export-diagnostics",
-                            "Export",
+                            self.tr("settings.exportDiagnostics"),
                             cx.listener(|this, _, _, cx| {
                                 this.prompt_diagnostics_export(cx);
                             }),
                         ),
-                    )),
-            ))
-            .child(settings_form_section(
-                palette,
-                Some("Status"),
-                None,
-                div()
-                    .flex()
-                    .flex_col()
-                    .gap_2()
-                    .child(settings_form_row(
-                        palette,
-                        "Connection store",
-                        Some(SharedString::from("Native redb store readiness.")),
-                        div()
-                            .text_size(px(11.))
-                            .font_weight(FontWeight(600.))
-                            .text_color(if self.store_status.ready {
-                                rgb(palette.success)
-                            } else {
-                                rgb(palette.danger)
-                            })
-                            .child(if self.store_status.ready {
-                                "Ready"
-                            } else {
-                                "Offline"
-                            }),
-                    ))
-                    .child(settings_form_row(
-                        palette,
-                        "Theme / font",
-                        Some(SharedString::from("Current appearance snapshot.")),
-                        div()
-                            .text_size(px(11.))
-                            .text_color(rgb(palette.text_muted))
-                            .child(format!(
-                                "{} · {} {}",
-                                self.settings.theme,
-                                self.settings.terminal_font_family,
-                                self.settings.terminal_font_size
-                            )),
-                    ))
-                    .child(settings_form_row(
-                        palette,
-                        "Diagnostics",
-                        Some(SharedString::from("Active log level and retention.")),
-                        div()
-                            .text_size(px(11.))
-                            .text_color(rgb(palette.text_muted))
-                            .child(format!(
-                                "{} · {} days",
-                                self.settings.diagnostics_level,
-                                self.settings.diagnostics_retention_days
-                            )),
                     )),
             ))
     }

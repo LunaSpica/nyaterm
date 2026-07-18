@@ -22,6 +22,26 @@ pub(crate) enum NavItem {
 }
 
 impl NavItem {
+    pub(crate) fn i18n_key(self) -> Option<&'static str> {
+        Some(match self {
+            NavItem::Connections => "panel.savedConnections",
+            NavItem::Tunnels => "panel.network",
+            NavItem::Stats => "panel.resourceMonitor",
+            NavItem::Processes => "panel.processManager",
+            NavItem::Docker => "panel.dockerManager",
+            NavItem::Translation => "settings.translation",
+            NavItem::Transfers => "panel.fileExplorer",
+            NavItem::Settings => "settings.title",
+            NavItem::AiAssistant => "ai.title",
+            NavItem::ActiveSessions => "panel.activeSessions",
+            NavItem::CommandHistory => "panel.commandHistory",
+            NavItem::SecurityAuth => "securityAuth.title",
+            NavItem::SyncBackupHistory => "panel.syncBackupHistory",
+            NavItem::Recording => "recording.panelTitle",
+            NavItem::Workspace | NavItem::Migration => return None,
+        })
+    }
+
     pub(crate) fn label(self) -> &'static str {
         match self {
             NavItem::Workspace => "Workspace",
@@ -216,6 +236,15 @@ pub(crate) enum ActivityBarZone {
 }
 
 impl ActivityBarZone {
+    pub(crate) fn i18n_key(self) -> &'static str {
+        match self {
+            Self::LeftTop => "activityBar.leftTop",
+            Self::LeftBottom => "activityBar.leftBottom",
+            Self::RightTop => "activityBar.rightTop",
+            Self::RightBottom => "activityBar.rightBottom",
+        }
+    }
+
     pub(crate) fn persistence_key(self) -> &'static str {
         match self {
             Self::LeftTop => "left_top",
@@ -254,6 +283,16 @@ pub(crate) enum ActivityBarEntry {
 }
 
 impl ActivityBarEntry {
+    pub(crate) fn i18n_key(self) -> Option<&'static str> {
+        match self {
+            Self::Panel(item) => item.i18n_key(),
+            Self::QuickCommands => Some("panel.quickCommands"),
+            Self::CommandSend => Some("panel.serialSend"),
+            Self::Recording => Some("recording.panelTitle"),
+            Self::Lock => Some("statusBar.lock"),
+        }
+    }
+
     pub(crate) fn persistence_id(self) -> &'static str {
         match self {
             Self::Panel(item) => item.persistence_id(),
@@ -410,6 +449,15 @@ pub(crate) enum TitleMenuSubmenu {
 }
 
 impl TitleMenu {
+    pub(crate) fn i18n_key(self) -> &'static str {
+        match self {
+            Self::File => "menu.file",
+            Self::View => "menu.view",
+            Self::Terminal => "menu.terminal",
+            Self::Help => "menu.help",
+        }
+    }
+
     pub(crate) fn label(self) -> &'static str {
         match self {
             Self::File => "File",

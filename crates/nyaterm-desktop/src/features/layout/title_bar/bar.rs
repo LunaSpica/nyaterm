@@ -222,13 +222,14 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
         let open = self.title_menu_open == Some(menu);
-        let label = menu.label();
+        let id_label = menu.label();
+        let label = self.tr(menu.i18n_key());
         let palette = self.theme_palette();
         div()
             .relative()
             .child(
                 div()
-                    .id(SharedString::from(format!("title-menu-trigger-{label}")))
+                    .id(SharedString::from(format!("title-menu-trigger-{id_label}")))
                     .h(px(28.))
                     .px_2()
                     .flex()

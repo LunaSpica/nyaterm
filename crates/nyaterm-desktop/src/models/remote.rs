@@ -127,6 +127,38 @@ pub(crate) enum SettingsTab {
 }
 
 impl SettingsTab {
+    pub(crate) fn i18n_key(self) -> &'static str {
+        match self {
+            Self::General | Self::TerminalGeneral => "settings.general",
+            Self::Appearance => "settings.appearance",
+            Self::Interaction => "settings.interaction",
+            Self::Keybindings => "settings.keybindings",
+            Self::Search => "settings.search",
+            Self::Translation => "settings.translation",
+            Self::AiGeneral => "ai.general",
+            Self::AiModels => "ai.models",
+            Self::AiRules => "ai.rules",
+            Self::Transfer => "settings.transfer",
+            Self::Security => "settings.security",
+            Self::SyncBackup => "settings.syncBackup",
+        }
+    }
+
+    pub(crate) fn group_i18n_key(self) -> &'static str {
+        match self {
+            Self::General | Self::Appearance | Self::Interaction | Self::Keybindings => {
+                "settings.groupWorkspace"
+            }
+            Self::TerminalGeneral | Self::Search | Self::Translation => {
+                "settings.groupTerminalSession"
+            }
+            Self::AiGeneral | Self::AiModels | Self::AiRules => "ai.title",
+            Self::Transfer => "settings.groupTransfer",
+            Self::Security => "settings.groupSecurity",
+            Self::SyncBackup => "settings.groupSyncBackup",
+        }
+    }
+
     pub(crate) fn label(self) -> &'static str {
         match self {
             Self::General => "General",
@@ -145,14 +177,21 @@ impl SettingsTab {
         }
     }
 
-    pub(crate) fn group_label(self) -> &'static str {
+    pub(crate) fn icon_path(self) -> &'static str {
         match self {
-            Self::General | Self::Appearance | Self::Interaction | Self::Keybindings => "Workspace",
-            Self::TerminalGeneral | Self::Search | Self::Translation => "Terminal Session",
-            Self::AiGeneral | Self::AiModels | Self::AiRules => "AI",
-            Self::Transfer => "Transfer",
-            Self::Security => "Security",
-            Self::SyncBackup => "Sync Backup",
+            Self::General => "icons/settings.svg",
+            Self::Appearance => "icons/view-grid.svg",
+            Self::Interaction => "icons/send.svg",
+            Self::Keybindings => "icons/commands.svg",
+            Self::TerminalGeneral => "icons/conn/terminal.svg",
+            Self::Search => "icons/fe/search.svg",
+            Self::Translation => "icons/translation.svg",
+            Self::AiGeneral => "icons/ai/settings.svg",
+            Self::AiModels => "icons/ai.svg",
+            Self::AiRules => "icons/ai/exec-smart.svg",
+            Self::Transfer => "icons/files.svg",
+            Self::Security => "icons/auth.svg",
+            Self::SyncBackup => "icons/sync.svg",
         }
     }
 

@@ -11,7 +11,7 @@ use nyaterm_transport::{
 use std::path::PathBuf;
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use super::AiAgentStepStatus;
+use super::{AiAgentStepStatus, NyaTermApp};
 
 #[path = "formatting/labels.rs"]
 mod labels;
@@ -28,3 +28,9 @@ pub(in crate::features) use connection_icons::*;
 #[path = "formatting/markdown.rs"]
 mod markdown;
 pub(in crate::features) use markdown::*;
+
+impl NyaTermApp {
+    pub(in crate::features) fn tr(&self, key: &'static str) -> &'static str {
+        crate::i18n::text(&self.settings.language, key)
+    }
+}

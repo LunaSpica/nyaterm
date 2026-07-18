@@ -7,6 +7,7 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
         let shortcut = |id: &str, fallback: &str| self.display_shortcut_for(id, fallback);
+        let tr = |key: &'static str| self.tr(key);
         let palette = self.theme_palette();
         let mut items = div()
             .id(SharedString::from(format!("title-menu-{}", menu.label())))
@@ -29,7 +30,7 @@ impl NyaTermApp {
                     .child(title_menu_item(
                         palette,
                         "title-file-new-session",
-                        "New Session",
+                        tr("menu.newSession"),
                         Some(shortcut("tab.newSession", "Ctrl+Shift+N")),
                         cx.listener(|this, _, _, cx| {
                             this.close_title_menu(cx);
@@ -42,7 +43,7 @@ impl NyaTermApp {
                     .child(title_menu_item(
                         palette,
                         "title-file-import",
-                        "Import Config",
+                        tr("settings.importConfig"),
                         None,
                         cx.listener(|this, _, _, cx| {
                             this.close_title_menu(cx);
@@ -52,7 +53,7 @@ impl NyaTermApp {
                     .child(title_menu_item(
                         palette,
                         "title-file-export",
-                        "Export Config",
+                        tr("settings.exportConfig"),
                         None,
                         cx.listener(|this, _, _, cx| {
                             this.close_title_menu(cx);
@@ -65,20 +66,20 @@ impl NyaTermApp {
                     .child(self.title_menu_submenu_trigger(
                         TitleMenuSubmenu::Theme,
                         "title-view-theme",
-                        "Theme",
+                        tr("menu.theme"),
                         cx,
                     ))
                     .child(self.title_menu_submenu_trigger(
                         TitleMenuSubmenu::Language,
                         "title-view-language",
-                        "Language",
+                        tr("menu.language"),
                         cx,
                     ))
                     .child(title_menu_separator(palette))
                     .child(title_menu_item(
                         palette,
                         "title-view-zoom-in",
-                        "Zoom In",
+                        tr("menu.zoomIn"),
                         Some(shortcut("view.zoomIn", "Ctrl+=")),
                         cx.listener(|this, _, _, cx| {
                             this.close_title_menu(cx);
@@ -88,7 +89,7 @@ impl NyaTermApp {
                     .child(title_menu_item(
                         palette,
                         "title-view-zoom-out",
-                        "Zoom Out",
+                        tr("menu.zoomOut"),
                         Some(shortcut("view.zoomOut", "Ctrl+-")),
                         cx.listener(|this, _, _, cx| {
                             this.close_title_menu(cx);
@@ -98,7 +99,7 @@ impl NyaTermApp {
                     .child(title_menu_item(
                         palette,
                         "title-view-reset-zoom",
-                        "Reset Zoom",
+                        tr("menu.resetZoom"),
                         Some(shortcut("view.resetZoom", "Ctrl+0")),
                         cx.listener(|this, _, _, cx| {
                             this.close_title_menu(cx);
@@ -111,7 +112,7 @@ impl NyaTermApp {
                     .child(title_menu_item(
                         palette,
                         "title-term-command-palette",
-                        "Command Palette",
+                        tr("menu.commandPalette"),
                         Some(shortcut("tab.quickSwitch", "Ctrl+Shift+S")),
                         cx.listener(|this, _, window, cx| {
                             this.close_title_menu(cx);
@@ -122,14 +123,14 @@ impl NyaTermApp {
                     .child(self.title_menu_submenu_trigger(
                         TitleMenuSubmenu::SmartSplit,
                         "title-term-smart-split",
-                        "Smart Split",
+                        tr("menu.smartSplit"),
                         cx,
                     ))
                     .child(title_menu_separator(palette))
                     .child(self.title_menu_submenu_trigger(
                         TitleMenuSubmenu::SyncInput,
                         "title-term-sync-input",
-                        "Sync Input",
+                        tr("menu.syncInput"),
                         cx,
                     ))
                     .child(title_menu_separator(palette))
@@ -137,9 +138,9 @@ impl NyaTermApp {
                         palette,
                         "title-term-broadcast",
                         if self.broadcast_to_all {
-                            "Broadcast to All ✓"
+                            format!("{} ✓", tr("menu.broadcastToAll"))
                         } else {
-                            "Broadcast to All"
+                            tr("menu.broadcastToAll").to_string()
                         },
                         None,
                         cx.listener(|this, _, _, cx| {
@@ -151,7 +152,7 @@ impl NyaTermApp {
                     .child(title_menu_item(
                         palette,
                         "title-term-clear",
-                        "Clear Terminal",
+                        tr("menu.clearTerminal"),
                         Some(shortcut("terminal.clear", "Ctrl+L")),
                         cx.listener(|this, _, _, cx| {
                             this.close_title_menu(cx);
@@ -161,7 +162,7 @@ impl NyaTermApp {
                     .child(title_menu_item(
                         palette,
                         "title-term-reset-size",
-                        "Reset Terminal Size",
+                        tr("menu.resetTerminalSize"),
                         None,
                         cx.listener(|this, _, _, cx| {
                             this.close_title_menu(cx);
@@ -177,17 +178,17 @@ impl NyaTermApp {
             }
             TitleMenu::Help => {
                 let update_label = if self.update_pending {
-                    "Checking Updates..."
+                    tr("updater.checking")
                 } else if self.update_info.as_ref().is_some_and(|info| info.available) {
-                    "Update Available"
+                    tr("updater.newVersionAvailable")
                 } else {
-                    "Check for Updates"
+                    tr("menu.checkForUpdates")
                 };
                 items = items
                     .child(title_menu_item(
                         palette,
                         "title-help-docs",
-                        "Documentation",
+                        tr("menu.documentation"),
                         None,
                         cx.listener(|this, _, _, cx| {
                             this.close_title_menu(cx);
@@ -207,7 +208,7 @@ impl NyaTermApp {
                     .child(title_menu_item(
                         palette,
                         "title-help-logs",
-                        "View Logs",
+                        tr("menu.viewLogs"),
                         None,
                         cx.listener(|this, _, _, cx| {
                             this.close_title_menu(cx);
@@ -218,7 +219,7 @@ impl NyaTermApp {
                     .child(title_menu_item(
                         palette,
                         "title-help-about",
-                        "About NyaTerm",
+                        format!("{} NyaTerm", tr("menu.about")),
                         None,
                         cx.listener(|this, _, _, cx| {
                             this.close_title_menu(cx);
@@ -292,23 +293,7 @@ impl NyaTermApp {
 
         match submenu {
             TitleMenuSubmenu::Theme => {
-                const THEMES: [&str; 14] = [
-                    "github-dark",
-                    "dracula",
-                    "nord",
-                    "monokai-pro",
-                    "solarized-light",
-                    "catppuccin-mocha",
-                    "tokyo-night",
-                    "one-dark-pro",
-                    "rose-pine",
-                    "gruvbox-dark",
-                    "github-light",
-                    "catppuccin-latte",
-                    "one-light",
-                    "nya-high-contrast",
-                ];
-                for theme in THEMES {
+                for &theme in crate::theme::APPEARANCE_THEME_IDS {
                     let current = self.settings.theme.as_str();
                     let selected = current == theme
                         || (current == "catppuccin" && theme == "catppuccin-mocha");
@@ -360,7 +345,7 @@ impl NyaTermApp {
                     .child(title_menu_item(
                         palette,
                         "title-smart-split-auto",
-                        "Auto",
+                        self.tr("menu.autoTile"),
                         None,
                         cx.listener(|this, _, _, cx| {
                             this.close_title_menu(cx);
@@ -370,7 +355,7 @@ impl NyaTermApp {
                     .child(title_menu_item(
                         palette,
                         "title-smart-split-horizontal",
-                        "Horizontal",
+                        self.tr("menu.tileHorizontally"),
                         None,
                         cx.listener(|this, _, _, cx| {
                             this.close_title_menu(cx);
@@ -380,7 +365,7 @@ impl NyaTermApp {
                     .child(title_menu_item(
                         palette,
                         "title-smart-split-vertical",
-                        "Vertical",
+                        self.tr("menu.tileVertically"),
                         None,
                         cx.listener(|this, _, _, cx| {
                             this.close_title_menu(cx);
@@ -392,7 +377,7 @@ impl NyaTermApp {
                 menu = menu.child(title_menu_item(
                     palette,
                     "title-sync-manage-groups",
-                    "Manage Groups",
+                    self.tr("menu.manageGroups"),
                     Some(self.display_shortcut_for("terminal.manageSyncGroups", "Ctrl+Shift+G")),
                     cx.listener(|this, _, window, cx| {
                         this.close_title_menu(cx);
