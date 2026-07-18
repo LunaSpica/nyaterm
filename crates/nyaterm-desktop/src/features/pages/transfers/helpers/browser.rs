@@ -52,7 +52,7 @@ pub(in crate::features::pages::transfers) fn sort_header_cell(
         .text_size(px(10.))
         .font_weight(FontWeight(800.))
         .text_color(if is_active {
-            rgb(palette.accent)
+            rgb(palette.link)
         } else {
             rgb(palette.text_muted)
         })

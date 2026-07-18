@@ -186,7 +186,7 @@ impl NyaTermApp {
         let palette = self.theme_palette();
         let (badge_fg, badge_bg) = match shortcut.native_status {
             ShortcutNativeStatus::Supported => (rgb(palette.success), rgb(0x12261c)),
-            ShortcutNativeStatus::Partial => (rgb(palette.accent), rgb(palette.hover)),
+            ShortcutNativeStatus::Partial => (rgb(palette.link), rgb(palette.hover)),
             ShortcutNativeStatus::Pending => (rgb(palette.danger), rgb(0x2d1215)),
             ShortcutNativeStatus::Contextual => (rgb(palette.warning), rgb(0x2a2111)),
         };
@@ -298,7 +298,7 @@ impl NyaTermApp {
                             .text_color(if conflict.is_some() {
                                 rgb(palette.danger)
                             } else if is_recording {
-                                rgb(palette.accent)
+                                rgb(palette.link)
                             } else {
                                 rgb(palette.text)
                             })

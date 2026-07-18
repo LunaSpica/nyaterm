@@ -426,7 +426,7 @@ fn translation_provider_card(
     body: impl IntoElement,
 ) -> impl IntoElement {
     let (fg, bg) = if free {
-        (palette.accent, palette.hover)
+        (palette.link, palette.hover)
     } else if ok {
         (palette.success, 0x12261c)
     } else {

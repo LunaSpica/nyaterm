@@ -95,7 +95,7 @@ impl NyaTermApp {
                                     .border_1()
                                     .border_color(
                                         if editor.focused_field == SecurityKeyEditorField::KeyPath {
-                                            rgb(palette.accent)
+                                            rgb(palette.link)
                                         } else {
                                             rgb(palette.border)
                                         },
@@ -153,7 +153,7 @@ impl NyaTermApp {
                                     .border_color(
                                         if editor.focused_field == SecurityKeyEditorField::CertPath
                                         {
-                                            rgb(palette.accent)
+                                            rgb(palette.link)
                                         } else {
                                             rgb(palette.border)
                                         },

@@ -343,7 +343,7 @@ pub(in crate::features) fn connection_row(
                 .gap_2()
                 .child(status_pill(
                     connection.kind_label(),
-                    rgb(palette.accent),
+                    rgb(palette.link),
                     rgb(palette.hover),
                 ))
                 .child(action),
@@ -389,7 +389,7 @@ pub(in crate::features) fn compact_connection_row(
                 )
                 .child(status_pill(
                     connection.kind_label(),
-                    rgb(palette.accent),
+                    rgb(palette.link),
                     rgb(palette.hover),
                 )),
         )
@@ -483,7 +483,7 @@ pub(in crate::features) fn compact_tunnel_row(
                 .gap_2()
                 .child(status_pill(
                     tunnel_mode_label(tunnel),
-                    rgb(palette.accent),
+                    rgb(palette.link),
                     rgb(palette.hover),
                 ))
                 .child(if is_open {

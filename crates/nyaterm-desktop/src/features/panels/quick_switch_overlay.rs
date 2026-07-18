@@ -46,7 +46,7 @@ impl NyaTermApp {
                             status_pill("unread", rgb(palette.warning), rgb(palette.hover))
                                 .into_any_element()
                         } else {
-                            status_pill("open", rgb(palette.accent), rgb(palette.hover))
+                            status_pill("open", rgb(palette.link), rgb(palette.hover))
                                 .into_any_element()
                         }
                     }
@@ -165,7 +165,7 @@ impl NyaTermApp {
                                     .items_center()
                                     .justify_center()
                                     .text_xs()
-                                    .text_color(rgb(palette.accent))
+                                    .text_color(rgb(palette.link))
                                     .child("/"),
                             )
                             .child(

@@ -12,7 +12,7 @@ impl NyaTermApp {
         let border = match step.status {
             AiAgentStepStatus::Completed => rgb(palette.success),
             AiAgentStepStatus::Failed | AiAgentStepStatus::Cancelled => rgb(palette.danger),
-            AiAgentStepStatus::Running | AiAgentStepStatus::Tool => rgb(palette.accent),
+            AiAgentStepStatus::Running | AiAgentStepStatus::Tool => rgb(palette.link),
             AiAgentStepStatus::NeedsApproval => rgb(palette.warning),
             AiAgentStepStatus::Planning => rgb(palette.text_muted),
         };
@@ -224,7 +224,7 @@ impl NyaTermApp {
                         .border_t_1()
                         .border_color(rgb(palette.surface_elevated))
                         .text_size(px(10.))
-                        .text_color(rgb(palette.accent))
+                        .text_color(rgb(palette.link))
                         .child("Executing…"),
                 );
             }

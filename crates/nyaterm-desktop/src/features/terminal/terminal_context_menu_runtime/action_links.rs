@@ -125,7 +125,7 @@ impl NyaTermApp {
             "Ctrl"
         };
         let kind_color = match tip.kind_label.as_str() {
-            "IPv4" => palette.accent,
+            "IPv4" => palette.link,
             "Host:Port" => 0xa78bfa,
             "Archive" => palette.warning,
             "URL" => palette.success,

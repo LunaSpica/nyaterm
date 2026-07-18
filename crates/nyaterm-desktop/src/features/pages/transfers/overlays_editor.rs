@@ -24,8 +24,8 @@ fn external_sync_button(
             rgb(palette.text),
         ),
         ExternalSyncButtonStyle::Primary => (
-            rgb(palette.accent).into(),
-            rgb(palette.accent).into(),
+            rgb(palette.link).into(),
+            rgb(palette.link).into(),
             rgb(palette.bg),
         ),
     };
@@ -43,7 +43,7 @@ fn external_sync_button(
         .text_xs()
         .cursor_pointer()
         .hover(move |this| match style {
-            ExternalSyncButtonStyle::Primary => this.bg(rgba((palette.accent << 8) | 0xe8)),
+            ExternalSyncButtonStyle::Primary => this.bg(rgba((palette.link << 8) | 0xe8)),
             ExternalSyncButtonStyle::Ghost | ExternalSyncButtonStyle::Outline => {
                 this.bg(rgb(palette.hover)).text_color(rgb(palette.text))
             }
@@ -398,7 +398,7 @@ impl NyaTermApp {
                                 .left_0()
                                 .right_0()
                                 .h(px(1.))
-                                .bg(rgb(palette.accent)),
+                                .bg(rgb(palette.link)),
                         )
                     })
                     .when(tab.dirty, |this| {
@@ -407,7 +407,7 @@ impl NyaTermApp {
                                 .size(px(6.))
                                 .flex_none()
                                 .rounded_full()
-                                .bg(rgb(palette.accent)),
+                                .bg(rgb(palette.link)),
                         )
                     })
                     .child(
@@ -519,7 +519,7 @@ impl NyaTermApp {
                                             .child(truncate_preview(&state.remote_path, 96)),
                                     ),
                             )
-                            .child(status_pill(status, rgb(palette.accent), rgb(palette.hover))),
+                            .child(status_pill(status, rgb(palette.link), rgb(palette.hover))),
                     )
                     .when_some(state.error.clone(), |this, error| {
                         this.child(

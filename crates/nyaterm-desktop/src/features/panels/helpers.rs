@@ -166,9 +166,9 @@ pub(in crate::features::panels) fn quick_command_color(
     match color_tag.unwrap_or_default() {
         "red" => rgb(palette.danger),
         "green" => rgb(palette.success),
-        "blue" => rgb(palette.accent),
+        "blue" => rgb(palette.link),
         "yellow" => rgb(palette.warning),
-        "purple" => rgb(palette.accent),
+        "purple" => rgb(palette.link),
         _ => rgb(palette.text_muted),
     }
 }
@@ -203,10 +203,10 @@ fn quick_command_icon_def(
         "aws" => Some(("AWS", rgb(0xff9900))),
         "gcp" => Some(("GC", rgb(0x4285f4))),
         "terminal" => Some((">$", rgb(palette.success))),
-        "code" => Some(("</>", rgb(palette.accent))),
-        "server" => Some(("SR", rgb(palette.accent))),
+        "code" => Some(("</>", rgb(palette.link))),
+        "server" => Some(("SR", rgb(palette.link))),
         "folder" => Some(("FD", rgb(palette.warning))),
-        "sparkles" => Some(("AI", rgb(palette.accent))),
+        "sparkles" => Some(("AI", rgb(palette.link))),
         "bolt" => Some(("BT", rgb(palette.warning))),
         _ => None,
     }

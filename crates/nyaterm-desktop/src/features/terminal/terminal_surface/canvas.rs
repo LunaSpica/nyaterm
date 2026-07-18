@@ -436,7 +436,7 @@ impl NyaTermApp {
         let sync_is_paused = self.is_session_paused_in_active_sync_group(&session_id);
         let sync_group_color = active_sync_group
             .map(|group| group.color)
-            .unwrap_or(palette.accent);
+            .unwrap_or(palette.link);
         let sync_status_label = if sync_is_paused { "Paused" } else { "Syncing" };
         let output_session_id = session_id.clone();
         let terminal_font_size = self.settings.terminal_font_size as f32;
@@ -502,7 +502,7 @@ impl NyaTermApp {
                     .when(show_pane_chrome, |this| {
                         this.border_1()
                             .border_color(if is_active {
-                                rgb(palette.accent)
+                                rgb(palette.link)
                             } else {
                                 rgb(palette.border)
                             })
@@ -545,7 +545,7 @@ impl NyaTermApp {
                                                         .px_2()
                                                         .py_1()
                                                         .text_xs()
-                                                        .text_color(rgb(palette.accent))
+                                                        .text_color(rgb(palette.link))
                                                         .bg(rgb(palette.hover))
                                                         .child(truncate_preview(&label, 18)),
                                                 )
@@ -555,7 +555,7 @@ impl NyaTermApp {
                                                 if is_active {
                                                     rgb(palette.success)
                                                 } else {
-                                                    rgb(palette.accent)
+                                                    rgb(palette.link)
                                                 },
                                                 rgb(palette.hover),
                                             )),
@@ -945,7 +945,7 @@ impl NyaTermApp {
                                             .overflow_hidden()
                                             .whitespace_nowrap()
                                             .border_b_2()
-                                            .border_color(rgb(palette.accent))
+                                            .border_color(rgb(palette.link))
                                             .bg(rgba((palette.terminal_cursor << 8) | 0x33))
                                             .text_color(rgb(palette.terminal_fg))
                                             .font_family(terminal_font_family.clone())
@@ -961,7 +961,7 @@ impl NyaTermApp {
                                         .inset_2()
                                         .rounded_lg()
                                         .border_2()
-                                        .border_color(rgb(palette.accent))
+                                        .border_color(rgb(palette.link))
                                         .bg(rgba(0x3b82f624))
                                         .flex()
                                         .items_center()
@@ -971,7 +971,7 @@ impl NyaTermApp {
                                                 .max_w(px(320.))
                                                 .rounded_lg()
                                                 .border_1()
-                                                .border_color(rgb(palette.accent))
+                                                .border_color(rgb(palette.link))
                                                 .bg(rgb(palette.surface))
                                                 .px_6()
                                                 .py_4()
@@ -1206,7 +1206,7 @@ impl NyaTermApp {
                                                     if has_new_while_scrolled {
                                                         palette.warning
                                                     } else {
-                                                        palette.accent
+                                                        palette.link
                                                     },
                                                 ))
                                                 .child(if has_new_while_scrolled {

@@ -270,7 +270,7 @@ impl NyaTermApp {
                                             .size(px(16.))
                                             .flex_none()
                                             .path("icons/fe/search.svg")
-                                            .text_color(rgb(palette.accent)),
+                                            .text_color(rgb(palette.link)),
                                     )
                                     .child(
                                         div()

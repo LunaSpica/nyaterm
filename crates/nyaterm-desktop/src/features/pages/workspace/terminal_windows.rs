@@ -81,9 +81,8 @@ impl NyaTermApp {
                     let sync_group = self.active_sync_group_for_session(tab_id);
                     let sync_paused = self.is_session_paused_in_active_sync_group(tab_id);
                     let show_sync_indicator = self.broadcast_to_all || sync_group.is_some();
-                    let sync_indicator_color = sync_group
-                        .map(|group| group.color)
-                        .unwrap_or(palette.accent);
+                    let sync_indicator_color =
+                        sync_group.map(|group| group.color).unwrap_or(palette.link);
                     let accent = if let Some(custom_color) = custom_color {
                         rgb(custom_color)
                     } else if is_disconnected {
@@ -142,7 +141,7 @@ impl NyaTermApp {
                             .when(is_disconnected, |this| this.opacity(0.78))
                             .border_1()
                             .border_color(if is_active_tab {
-                                rgb(palette.accent)
+                                rgb(palette.link)
                             } else {
                                 rgb(palette.border)
                             })
@@ -371,7 +370,7 @@ impl NyaTermApp {
                     .rounded_sm()
                     .border_1()
                     .border_color(if focused_leaf {
-                        rgb(palette.accent)
+                        rgb(palette.link)
                     } else {
                         rgb(palette.border)
                     })
@@ -466,7 +465,7 @@ impl NyaTermApp {
             TabDockZone::Edge(TabDockEdge::Top) => "Split top",
             TabDockZone::Edge(TabDockEdge::Bottom) => "Split bottom",
         };
-        let accent = rgb(palette.accent);
+        let accent = rgb(palette.link);
         let mut zone_box = div()
             .absolute()
             .flex()
@@ -475,7 +474,7 @@ impl NyaTermApp {
             .rounded_md()
             .border_2()
             .border_color(accent)
-            .bg(rgba((palette.accent << 8) | 0x28));
+            .bg(rgba((palette.link << 8) | 0x28));
         zone_box = match zone {
             TabDockZone::Center => zone_box.inset_2(),
             TabDockZone::Edge(TabDockEdge::Left) => {

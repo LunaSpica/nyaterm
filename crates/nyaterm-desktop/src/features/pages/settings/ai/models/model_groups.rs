@@ -286,7 +286,7 @@ impl NyaTermApp {
                                                     .rounded_md()
                                                     .border_1()
                                                     .border_color(if draft_active {
-                                                        rgb(palette.accent)
+                                                        rgb(palette.link)
                                                     } else {
                                                         rgb(palette.border)
                                                     })

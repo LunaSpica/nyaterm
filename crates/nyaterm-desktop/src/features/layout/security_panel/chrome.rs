@@ -113,7 +113,7 @@ impl NyaTermApp {
                             .items_center()
                             .rounded_sm()
                             .border_1()
-                            .border_color(rgb(palette.accent))
+                            .border_color(rgb(palette.link))
                             .bg(rgb(palette.input))
                             .font_family(crate::features::gpui_code_font_family())
                             .text_xs()

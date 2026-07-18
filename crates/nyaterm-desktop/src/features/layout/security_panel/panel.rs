@@ -168,7 +168,7 @@ fn security_toolbar_action_button(
         .text_size(px(11.))
         .font_weight(FontWeight(600.))
         .text_color(rgb(if enabled {
-            palette.accent
+            palette.link
         } else {
             palette.text_dimmed
         }))

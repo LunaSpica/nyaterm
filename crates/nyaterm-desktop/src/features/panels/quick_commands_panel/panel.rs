@@ -463,7 +463,7 @@ fn quick_command_toolbar_icon_button(
         .justify_center()
         .rounded_md()
         .text_color(if active {
-            rgb(palette.accent)
+            rgb(palette.link)
         } else {
             rgb(palette.text_muted)
         })
@@ -511,7 +511,7 @@ fn quick_command_toolbar_menu_item(
         .gap_2()
         .text_size(px(12.))
         .text_color(if active {
-            rgb(palette.accent)
+            rgb(palette.link)
         } else {
             rgb(palette.text)
         })
@@ -528,7 +528,7 @@ fn quick_command_toolbar_menu_item(
                 div()
                     .text_size(px(10.))
                     .font_weight(FontWeight(700.))
-                    .text_color(rgb(palette.accent))
+                    .text_color(rgb(palette.link))
                     .child("ON"),
             )
         })

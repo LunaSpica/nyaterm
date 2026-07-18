@@ -249,7 +249,7 @@ impl NyaTermApp {
                             div()
                                 .rounded_md()
                                 .border_1()
-                                .border_color(rgb(palette.accent))
+                                .border_color(rgb(palette.link))
                                 .bg(rgb(palette.hover))
                                 .flex()
                                 .items_center()
@@ -260,13 +260,13 @@ impl NyaTermApp {
                                         .w(px(3.))
                                         .h(px(28.))
                                         .flex_none()
-                                        .bg(rgb(palette.accent)),
+                                        .bg(rgb(palette.link)),
                                 )
                                 .child(
                                     div()
                                         .flex_none()
                                         .text_size(px(11.))
-                                        .text_color(rgb(palette.accent))
+                                        .text_color(rgb(palette.link))
                                         .child("Quote"),
                                 )
                                 .child(
@@ -324,17 +324,17 @@ impl NyaTermApp {
                                     .gap_1()
                                     .rounded_full()
                                     .border_1()
-                                    .border_color(rgb(palette.accent))
+                                    .border_color(rgb(palette.link))
                                     .bg(rgb(palette.hover))
                                     .text_size(px(10.))
                                     .font_weight(FontWeight(600.))
-                                    .text_color(rgb(palette.accent))
+                                    .text_color(rgb(palette.link))
                                     .child(
                                         div()
                                             .size(px(6.))
                                             .rounded_full()
                                             .flex_none()
-                                            .bg(rgb(palette.accent)),
+                                            .bg(rgb(palette.link)),
                                     )
                                     .child(
                                         div()
@@ -425,7 +425,7 @@ impl NyaTermApp {
                                         }))
                                         .child(div().size(px(7.)).rounded_full().flex_none().bg(
                                             if selected {
-                                                rgb(palette.accent)
+                                                rgb(palette.link)
                                             } else {
                                                 rgb(palette.text_dimmed)
                                             },
@@ -553,7 +553,7 @@ impl NyaTermApp {
                                                     .overflow_hidden()
                                                     .cursor_pointer()
                                                     .hover(|this| {
-                                                        this.border_color(rgb(palette.accent))
+                                                        this.border_color(rgb(palette.link))
                                                             .text_color(rgb(palette.text))
                                                     })
                                                     .on_click(cx.listener(|this, _, window, cx| {
@@ -635,7 +635,7 @@ impl NyaTermApp {
                                                                 .rounded_sm()
                                                                 .cursor_pointer()
                                                                 .text_size(px(11.))
-                                                                .text_color(rgb(palette.accent))
+                                                                .text_color(rgb(palette.link))
                                                                 .hover(|this| {
                                                                     this.bg(rgb(palette.hover))
                                                                 })
@@ -768,7 +768,7 @@ impl NyaTermApp {
                                                                             .justify_center()
                                                                             .text_size(px(10.))
                                                                             .text_color(rgb(
-                                                                                palette.accent,
+                                                                                palette.link,
                                                                             ))
                                                                             .child(if is_selected {
                                                                                 "✓"

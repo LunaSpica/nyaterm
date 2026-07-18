@@ -403,7 +403,7 @@ impl NyaTermApp {
                                             .rounded_md()
                                             .border_1()
                                             .border_color(if name_active {
-                                                rgb(palette.accent)
+                                                rgb(palette.link)
                                             } else {
                                                 rgb(palette.border)
                                             })
@@ -439,7 +439,7 @@ impl NyaTermApp {
                                             .rounded_md()
                                             .border_1()
                                             .border_color(if prompt_active {
-                                                rgb(palette.accent)
+                                                rgb(palette.link)
                                             } else {
                                                 rgb(palette.border)
                                             })

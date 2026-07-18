@@ -307,7 +307,7 @@ impl NyaTermApp {
                         svg()
                             .size(px(12.))
                             .path("icons/conn/add.svg")
-                            .text_color(rgb(palette.accent)),
+                            .text_color(rgb(palette.link)),
                     )
                     .child(
                         div()

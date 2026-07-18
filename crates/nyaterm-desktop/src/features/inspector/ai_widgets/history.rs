@@ -377,12 +377,12 @@ impl NyaTermApp {
                     .rounded_sm()
                     .border_1()
                     .border_color(if enabled {
-                        rgb(palette.accent)
+                        rgb(palette.link)
                     } else {
                         rgb(palette.border)
                     })
                     .bg(if enabled {
-                        rgb(palette.accent)
+                        rgb(palette.link)
                     } else {
                         rgb(palette.input)
                     })
@@ -468,7 +468,7 @@ impl NyaTermApp {
                             .text_size(px(12.))
                             .font_weight(FontWeight(600.))
                             .text_color(if selected {
-                                rgb(palette.accent)
+                                rgb(palette.link)
                             } else {
                                 rgb(palette.text)
                             })
@@ -484,7 +484,7 @@ impl NyaTermApp {
             .child(
                 div()
                     .text_size(px(12.))
-                    .text_color(rgb(palette.accent))
+                    .text_color(rgb(palette.link))
                     .child(if selected { "✓" } else { "" }),
             )
     }

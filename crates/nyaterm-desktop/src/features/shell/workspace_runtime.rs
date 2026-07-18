@@ -439,7 +439,7 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
         let palette = self.theme_palette();
-        let accent = rgb(palette.accent);
+        let accent = rgb(palette.link);
         let id = SharedString::from(format!("workspace-split-resize-{split_id}"));
         match direction {
             WorkspaceSplitDirection::Horizontal => div()

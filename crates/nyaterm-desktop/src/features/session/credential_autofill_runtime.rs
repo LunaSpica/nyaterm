@@ -524,14 +524,20 @@ impl NyaTermApp {
             )
             .unwrap_or((24.0, 120.0));
 
-        let title = match state.kind {
-            CredentialPromptKind::Password => "PASSWORD",
-            CredentialPromptKind::Username => "USERNAME",
-        };
+        let title = self.tr(match state.kind {
+            CredentialPromptKind::Password => "credentialAutofill.passwordTitle",
+            CredentialPromptKind::Username => "credentialAutofill.usernameTitle",
+        });
         let kind_icon = match state.kind {
-            CredentialPromptKind::Password => "🔑",
-            CredentialPromptKind::Username => "👤",
+            CredentialPromptKind::Password => "icons/auth.svg",
+            CredentialPromptKind::Username => "icons/sessions.svg",
         };
+        let footer = format!(
+            "↑↓ {} · Enter {} · Esc {}",
+            self.tr("credentialAutofill.select"),
+            self.tr("credentialAutofill.fill"),
+            self.tr("credentialAutofill.dismiss")
+        );
 
         let mut list = div()
             .id(SharedString::from("credential-suggestions-list"))
@@ -546,14 +552,14 @@ impl NyaTermApp {
             list = list.child(
                 div()
                     .id(SharedString::from(format!("credential-suggestion-{index}")))
-                    .h(px(32.))
+                    .h(px(36.))
                     .px_3()
                     .flex()
                     .items_center()
                     .gap_2()
                     .border_l_2()
                     .border_color(rgb(if selected {
-                        palette.accent
+                        palette.primary
                     } else {
                         palette.surface
                     }))
@@ -579,16 +585,13 @@ impl NyaTermApp {
                             this.select_credential_suggestion(credential, cx);
                         }
                     }))
-                    .child(
-                        div()
-                            .text_size(px(12.))
-                            .text_color(rgb(if selected {
-                                palette.accent
-                            } else {
-                                palette.text_dimmed
-                            }))
-                            .child(kind_icon.to_string()),
-                    )
+                    .child(svg().size(px(14.)).flex_none().path(kind_icon).text_color(
+                        if selected {
+                            rgb(palette.accent)
+                        } else {
+                            rgb(palette.text_dimmed)
+                        },
+                    ))
                     .child(
                         div()
                             .min_w_0()
@@ -617,10 +620,10 @@ impl NyaTermApp {
             .left(px(x.max(8.0)))
             .top(px(y.max(8.0)))
             .w(px(menu_w))
-            .rounded_md()
+            .rounded_lg()
             .border_1()
             .border_color(rgb(palette.border))
-            .bg(rgb(palette.surface_elevated))
+            .bg(rgba((palette.surface << 8) | 0xf2))
             .shadow_lg()
             .overflow_hidden()
             .child(
@@ -634,10 +637,19 @@ impl NyaTermApp {
                     .gap_1()
                     .child(
                         div()
+                            .flex()
+                            .items_center()
+                            .gap_1()
                             .text_size(px(10.))
                             .font_weight(FontWeight(600.))
                             .text_color(rgb(palette.text_dimmed))
-                            .child(format!("{kind_icon} {title}")),
+                            .child(
+                                svg()
+                                    .size(px(12.))
+                                    .path(kind_icon)
+                                    .text_color(rgb(palette.text_dimmed)),
+                            )
+                            .child(title),
                     )
                     .child(
                         div()
@@ -656,7 +668,7 @@ impl NyaTermApp {
                     .border_color(rgb(palette.border))
                     .text_size(px(10.))
                     .text_color(rgb(palette.text_dimmed))
-                    .child("↑↓ select · Enter fill · Esc dismiss"),
+                    .child(footer),
             )
             .into_any_element()
     }

@@ -291,7 +291,7 @@ fn tunnel_move_picker(
     if current_group_id.is_none() {
         targets = targets.child(status_pill(
             "Ungrouped · current",
-            rgb(palette.accent),
+            rgb(palette.link),
             rgb(palette.hover),
         ));
     } else {

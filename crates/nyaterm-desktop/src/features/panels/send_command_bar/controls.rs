@@ -219,7 +219,7 @@ impl NyaTermApp {
                             .border_l_1()
                             .border_r_1()
                             .border_color(rgb(if count_focused {
-                                palette.accent
+                                palette.link
                             } else {
                                 palette.border
                             }))

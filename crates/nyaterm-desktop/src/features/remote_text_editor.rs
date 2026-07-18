@@ -845,7 +845,7 @@ impl Element for RemoteTextElement {
         let position = layout.position_for_index(editor.head.min(editor.content.len()))?;
         Some(fill(
             Bounds::new(position, size(px(1.5), layout.line_height())),
-            rgb(editor.app.read(cx).theme_palette().accent),
+            rgb(editor.app.read(cx).theme_palette().focus_ring),
         ))
     }
 

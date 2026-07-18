@@ -66,7 +66,7 @@ impl NyaTermApp {
                             if is_active {
                                 rgb(palette.success)
                             } else {
-                                rgb(palette.accent)
+                                rgb(palette.link)
                             },
                             if is_active {
                                 rgb(palette.hover)
@@ -322,7 +322,7 @@ impl NyaTermApp {
                         } else {
                             "matched"
                         },
-                        rgb(palette.accent),
+                        rgb(palette.link),
                         rgb(palette.hover),
                     )),
             )

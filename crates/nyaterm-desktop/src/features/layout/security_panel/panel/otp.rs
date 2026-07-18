@@ -155,7 +155,7 @@ impl NyaTermApp {
                                                 .text_color(rgb(if code_raw == "------" {
                                                     palette.text_muted
                                                 } else {
-                                                    palette.accent
+                                                    palette.link
                                                 }))
                                                 .child(code_display),
                                         )

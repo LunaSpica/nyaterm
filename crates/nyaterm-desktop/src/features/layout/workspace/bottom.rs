@@ -75,7 +75,7 @@ impl NyaTermApp {
                             )
                             .child(status_pill(
                                 "bottom panel",
-                                rgb(palette.accent),
+                                rgb(palette.link),
                                 rgb(palette.hover),
                             )),
                     )

@@ -83,7 +83,7 @@ pub(super) fn send_command_select_trigger(
                 .flex_none()
                 .text_size(px(10.))
                 .text_color(if open {
-                    rgb(palette.accent)
+                    rgb(palette.link)
                 } else {
                     rgb(palette.text_dimmed)
                 })
@@ -137,7 +137,7 @@ pub(super) fn send_command_select_menu_item(
             FontWeight(500.)
         })
         .text_color(if active {
-            rgb(palette.accent)
+            rgb(palette.link)
         } else {
             rgb(palette.text_muted)
         })

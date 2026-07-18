@@ -21,7 +21,7 @@ pub(super) fn command_suggestion_highlight_parts(
         }
         let chunk: String = chars[start..i].iter().collect();
         let color = if highlighted {
-            palette.accent
+            palette.link
         } else {
             palette.text
         };

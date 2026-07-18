@@ -12,7 +12,7 @@ pub(in crate::features) fn logo_mark(palette: ThemePalette) -> impl IntoElement 
             svg()
                 .size(px(18.))
                 .path("icons/logo.svg")
-                .text_color(rgb(palette.accent)),
+                .text_color(rgb(palette.link)),
         )
 }
 

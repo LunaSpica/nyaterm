@@ -63,7 +63,7 @@ pub(in crate::features::pages::tunnels) fn network_proxy_editor_panel(
                                 .child("Configure SOCKS, HTTP, or ProxyCommand routing for SSH connections."),
                         ),
                 )
-                .child(status_pill(protocol_label, rgb(palette.accent), rgb(palette.hover))),
+                .child(status_pill(protocol_label, rgb(palette.link), rgb(palette.hover))),
         )
         .child(
             div()

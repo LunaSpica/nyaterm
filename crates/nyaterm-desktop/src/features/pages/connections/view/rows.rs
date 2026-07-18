@@ -138,10 +138,7 @@ impl NyaTermApp {
                                 && target.position == ConnectionDropPosition::Inside
                                 && target.id.as_deref() == section.group_id.as_deref()
                         }),
-                        |this| {
-                            this.border_1()
-                                .border_color(rgb(self.theme_palette().accent))
-                        },
+                        |this| this.border_1().border_color(rgb(self.theme_palette().link)),
                     )
                     .on_hover({
                         let hover_group = section.group_id.clone();
@@ -397,7 +394,7 @@ impl NyaTermApp {
             })
             .hover(move |this| this.bg(rgb(palette.hover)))
             .when(show_inside, |this| {
-                this.border_1().border_color(rgb(palette.accent))
+                this.border_1().border_color(rgb(palette.link))
             })
             .cursor_pointer()
             .cursor_move()
@@ -521,7 +518,7 @@ impl NyaTermApp {
                     .text_size(px(12.))
                     .font_weight(FontWeight(500.))
                     .text_color(if selected {
-                        rgb(palette.accent)
+                        rgb(palette.link)
                     } else {
                         rgb(palette.text)
                     })
@@ -581,7 +578,7 @@ impl NyaTermApp {
                         .top_0()
                         .h(px(2.))
                         .rounded_full()
-                        .bg(rgb(palette.accent)),
+                        .bg(rgb(palette.link)),
                 )
             })
             .when(show_after, |this| {
@@ -593,7 +590,7 @@ impl NyaTermApp {
                         .bottom_0()
                         .h(px(2.))
                         .rounded_full()
-                        .bg(rgb(palette.accent)),
+                        .bg(rgb(palette.link)),
                 )
             })
     }

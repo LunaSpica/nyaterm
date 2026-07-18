@@ -207,11 +207,12 @@ pub(in crate::features) fn compact_docker_container_rows(
 /// Tauri EmptyWorkspaceState row: action label (primary) + shortcut key chips.
 pub(in crate::features) fn empty_workspace_action(
     palette: ThemePalette,
-    label: &'static str,
+    label: impl Into<SharedString>,
     shortcut: impl Into<String>,
     on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
 ) -> impl IntoElement {
     // Tauri EmptyWorkspaceState: primary label left, Kbd chips right with "+" separators.
+    let label = label.into();
     let shortcut = shortcut.into();
     let parts: Vec<String> = shortcut
         .split('+')
@@ -263,7 +264,7 @@ pub(in crate::features) fn empty_workspace_action(
                 .min_w(px(160.))
                 .text_sm()
                 .font_weight(FontWeight(500.))
-                .text_color(rgb(palette.accent))
+                .text_color(rgb(palette.primary))
                 .hover(|this| this.text_color(rgb(palette.text)))
                 .child(label),
         )

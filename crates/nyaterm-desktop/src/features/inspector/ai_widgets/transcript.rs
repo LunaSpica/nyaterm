@@ -198,7 +198,7 @@ impl NyaTermApp {
                     .justify_center()
                     .text_size(px(10.))
                     .font_weight(FontWeight(800.))
-                    .text_color(rgb(palette.accent))
+                    .text_color(rgb(palette.link))
                     .child(index),
             )
             .child(

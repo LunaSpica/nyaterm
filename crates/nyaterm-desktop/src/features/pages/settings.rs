@@ -269,7 +269,7 @@ impl NyaTermApp {
                             .bg(if confirm_disabled {
                                 rgb(palette.surface_elevated)
                             } else {
-                                rgb(palette.accent)
+                                rgb(palette.link)
                             })
                             .text_size(px(11.))
                             .font_weight(FontWeight(600.))
@@ -325,7 +325,7 @@ impl NyaTermApp {
                 self.tr("settings.groupWorkspace"),
                 "icons/settings.svg",
                 workspace_expanded,
-                palette.accent,
+                palette.link,
                 compact,
                 cx,
             ))
@@ -513,7 +513,7 @@ impl NyaTermApp {
             .rounded_md()
             .border_1()
             .border_color(if selected {
-                rgb(0x1f6feb)
+                rgb(palette.primary)
             } else {
                 rgb(0x00000000)
             })
@@ -541,7 +541,7 @@ impl NyaTermApp {
                     .flex_none()
                     .path(tab.icon_path())
                     .text_color(if selected {
-                        rgb(palette.accent)
+                        rgb(palette.primary)
                     } else {
                         rgb(palette.text_muted)
                     }),
@@ -753,16 +753,9 @@ pub(super) fn settings_switch(
     checked: bool,
     on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
 ) -> impl IntoElement {
-    let on_bg = palette.accent;
+    let on_bg = palette.primary;
     let off_bg = palette.border;
-    let on_hover = if palette.accent == 0x58a6ff {
-        0x388bfd
-    } else if palette.accent == 0x0969da {
-        0x218bff
-    } else {
-        // lighten-ish fallback for catppuccin accent
-        0xd4b8fa
-    };
+    let on_hover = palette.primary_hover;
     let off_hover = palette.hover;
     div()
         .id(SharedString::from(id.into()))
@@ -800,7 +793,7 @@ pub(super) fn settings_choice_chip(
     on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
 ) -> impl IntoElement {
     let label = label.into();
-    let selected_border = palette.accent;
+    let selected_border = palette.primary;
     let idle_border = palette.border;
     // Selected chip bg: light themes tint lightly; dark themes use hover/elevated surface.
     let selected_bg = {
@@ -818,7 +811,7 @@ pub(super) fn settings_choice_chip(
         }
     };
     let idle_bg = palette.input;
-    let selected_text = palette.accent;
+    let selected_text = palette.primary;
     let idle_text = palette.text_muted;
     let hover_bg = palette.surface_elevated;
     let hover_text = palette.text;

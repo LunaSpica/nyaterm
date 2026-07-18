@@ -54,7 +54,7 @@ impl NyaTermApp {
                         svg()
                             .size(px(72.))
                             .path("icons/logo.svg")
-                            .text_color(rgb(palette.accent)),
+                            .text_color(rgb(palette.link)),
                     )
                     .child(
                         div()

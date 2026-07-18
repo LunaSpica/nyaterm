@@ -32,7 +32,7 @@ pub(super) fn compact_transfer_footer_button_active(
     on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
 ) -> impl IntoElement {
     let color = if active {
-        rgb(palette.accent)
+        rgb(palette.link)
     } else {
         rgb(palette.text_muted)
     };
@@ -152,7 +152,7 @@ pub(super) fn compact_transfer_toolbar_button_active(
     on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
 ) -> impl IntoElement {
     let color = if active {
-        rgb(palette.accent)
+        rgb(palette.link)
     } else {
         rgb(palette.text_muted)
     };

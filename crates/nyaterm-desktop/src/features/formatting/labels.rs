@@ -101,7 +101,7 @@ pub(in crate::features) fn docker_state_color(palette: ThemePalette, state: &str
     match state.trim().to_ascii_lowercase().as_str() {
         "running" => rgb(palette.success).into(),
         "restarting" | "paused" => rgb(palette.warning).into(),
-        "created" => rgb(palette.accent).into(),
+        "created" => rgb(palette.link).into(),
         "exited" | "dead" => rgb(palette.danger).into(),
         _ => rgb(palette.text_muted).into(),
     }
@@ -251,7 +251,7 @@ pub(in crate::features) fn cloud_sync_status_dot_color(
     status: &str,
 ) -> gpui::Rgba {
     match status {
-        "running" => rgb(palette.accent),
+        "running" => rgb(palette.link),
         "success" => rgb(palette.success),
         "failed" => rgb(palette.danger),
         "conflict" => rgb(palette.warning),
@@ -265,7 +265,7 @@ pub(in crate::features) fn cloud_sync_status_text_color(
     status: &str,
 ) -> gpui::Rgba {
     match status {
-        "running" => rgb(palette.accent),
+        "running" => rgb(palette.link),
         "success" => rgb(palette.success),
         "failed" => rgb(palette.danger),
         "conflict" => rgb(palette.warning),
@@ -279,8 +279,8 @@ pub(in crate::features) fn cloud_sync_kind_text_color(
     kind: &str,
 ) -> gpui::Rgba {
     match kind {
-        "sync" => rgb(palette.accent),
-        "backup" => rgb(palette.accent),
+        "sync" => rgb(palette.link),
+        "backup" => rgb(palette.link),
         _ => rgb(palette.text_muted),
     }
 }

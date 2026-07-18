@@ -1285,7 +1285,7 @@ impl TerminalSurface {
                                 .min_h(px(18.))
                                 .rounded_full()
                                 .bg(rgb(if is_active {
-                                    palette.accent
+                                    palette.link
                                 } else {
                                     palette.text_muted
                                 }))
@@ -1347,7 +1347,7 @@ impl TerminalSurface {
                     .text_color(rgb(if has_new {
                         palette.warning
                     } else {
-                        palette.accent
+                        palette.link
                     }))
                     .child(if has_new { "↓ New" } else { "↓ Live" }),
             )

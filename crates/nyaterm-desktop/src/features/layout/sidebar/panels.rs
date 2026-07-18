@@ -52,7 +52,7 @@ impl NyaTermApp {
                             )
                             .child(status_pill(
                                 status_label(&self.terminal_status),
-                                rgb(palette.accent),
+                                rgb(palette.link),
                                 rgb(palette.hover),
                             )),
                     )

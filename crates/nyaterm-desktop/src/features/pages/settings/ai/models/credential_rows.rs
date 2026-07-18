@@ -59,7 +59,7 @@ impl NyaTermApp {
                         .rounded_md()
                         .border_1()
                         .border_color(rgb(if is_expanded {
-                            palette.accent
+                            palette.link
                         } else {
                             palette.border
                         }))

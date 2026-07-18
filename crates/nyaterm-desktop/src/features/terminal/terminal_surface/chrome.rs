@@ -104,7 +104,7 @@ impl NyaTermApp {
                                 .min_h(px(18.))
                                 .rounded_full()
                                 .bg(rgb(if is_active {
-                                    palette.accent
+                                    palette.link
                                 } else {
                                     palette.text_muted
                                 }))

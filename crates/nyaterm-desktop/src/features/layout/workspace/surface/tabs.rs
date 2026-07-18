@@ -183,13 +183,13 @@ impl NyaTermApp {
                 let show_sync_indicator = self.broadcast_to_all || sync_group.is_some();
                 let sync_indicator_color = sync_group
                     .map(|group| group.color)
-                    .unwrap_or(palette.accent);
+                    .unwrap_or(palette.primary);
                 let accent = if let Some(custom_color) = custom_color {
                     rgb(custom_color)
                 } else if is_disconnected {
                     rgb(palette.danger)
                 } else if is_active {
-                    rgb(palette.success)
+                    rgb(palette.primary)
                 } else if has_unread {
                     rgb(palette.warning)
                 } else {

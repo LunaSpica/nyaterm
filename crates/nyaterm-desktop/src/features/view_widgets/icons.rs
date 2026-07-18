@@ -91,7 +91,7 @@ pub(in crate::features) fn connection_type_icon(
 ) -> gpui::AnyElement {
     let size = px(size_px);
     let color = if selected {
-        rgb(palette.accent)
+        rgb(palette.link)
     } else {
         rgb(def.color)
     };

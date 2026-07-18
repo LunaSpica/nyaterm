@@ -223,7 +223,7 @@ pub(super) fn tunnel_status_style(
     } else if is_open {
         (rgb(palette.success).into(), rgb(palette.hover).into())
     } else if supported {
-        (rgb(palette.accent).into(), rgb(palette.hover).into())
+        (rgb(palette.link).into(), rgb(palette.hover).into())
     } else {
         (rgb(palette.warning).into(), rgb(palette.hover).into())
     }

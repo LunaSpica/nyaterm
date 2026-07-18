@@ -533,11 +533,7 @@ fn quick_command_category_choice(
         } else {
             rgb(palette.text)
         })
-        .hover(|style| {
-            style
-                .border_color(rgb(palette.accent))
-                .bg(rgb(palette.hover))
-        })
+        .hover(|style| style.border_color(rgb(palette.link)).bg(rgb(palette.hover)))
         .child(label)
         .on_click(on_click)
 }
@@ -565,7 +561,7 @@ fn quick_command_color_swatch(
         .bg(quick_command_color(palette, color_tag))
         .cursor_pointer()
         .on_click(on_click)
-        .hover(|style| style.border_color(rgb(palette.accent)))
+        .hover(|style| style.border_color(rgb(palette.link)))
 }
 
 fn quick_command_icon_option(
@@ -597,6 +593,6 @@ fn quick_command_icon_option(
         .items_center()
         .justify_center()
         .on_click(on_click)
-        .hover(|style| style.border_color(rgb(palette.accent)))
+        .hover(|style| style.border_color(rgb(palette.link)))
         .child(quick_command_icon_mark(palette, Some(icon_tag), color_tag))
 }

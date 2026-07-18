@@ -408,7 +408,7 @@ impl NyaTermApp {
             .items_center()
             .gap_1()
             .border_b_1()
-            .border_color(rgb(palette.accent))
+            .border_color(rgb(palette.link))
             .bg(rgb(0x0d2137))
             .child(
                 div()
@@ -416,7 +416,7 @@ impl NyaTermApp {
                     .flex_1()
                     .text_size(px(11.))
                     .font_weight(FontWeight(600.))
-                    .text_color(rgb(palette.accent))
+                    .text_color(rgb(palette.link))
                     .child(format!("{selected_count} selected")),
             )
             .child(

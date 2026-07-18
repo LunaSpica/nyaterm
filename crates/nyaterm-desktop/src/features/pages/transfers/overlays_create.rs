@@ -129,7 +129,7 @@ impl NyaTermApp {
                                     ))
                                     .child(status_pill(
                                         if state.mode == 0o700 { "0700" } else { "0755" },
-                                        rgb(palette.accent),
+                                        rgb(palette.link),
                                         rgb(palette.hover),
                                     )),
                             )
@@ -320,7 +320,7 @@ impl NyaTermApp {
                                     ))
                                     .child(status_pill(
                                         if state.mode == 0o600 { "0600" } else { "0644" },
-                                        rgb(palette.accent),
+                                        rgb(palette.link),
                                         rgb(palette.hover),
                                     )),
                             )

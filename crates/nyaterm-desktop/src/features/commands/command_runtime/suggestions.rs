@@ -409,6 +409,19 @@ impl NyaTermApp {
         }
         let menu_w = 380.0_f32;
         let menu_h = (state.items.len() as f32 * 28.0 + 44.0).min(320.0);
+        let title = self.tr("suggestions.title");
+        let match_label = self.tr(if state.items.len() == 1 {
+            "suggestions.match"
+        } else {
+            "suggestions.matches"
+        });
+        let footer = format!(
+            "↑↓ {} · Enter {} · Tab {} · Esc {}",
+            self.tr("suggestions.select"),
+            self.tr("suggestions.execute"),
+            self.tr("suggestions.fill"),
+            self.tr("suggestions.dismiss")
+        );
         let Some((x, y)) = self.suggestion_overlay_position_for_session(
             Some(&state.session_id),
             state.cursor_row,
@@ -427,10 +440,9 @@ impl NyaTermApp {
             .overflow_y_scroll();
         for (index, item) in state.items.iter().enumerate() {
             let selected = index == state.selected_index;
-            let source_label = match item.source.as_str() {
-                "history" => "H",
-                "quickCommand" => "Q",
-                other => other,
+            let source_icon = match item.source.as_str() {
+                "history" => "icons/history.svg",
+                _ => "icons/commands.svg",
             };
             let label = if item.display.trim().is_empty() {
                 item.command.clone()
@@ -448,7 +460,7 @@ impl NyaTermApp {
                 .gap_2()
                 .border_l_2()
                 .border_color(rgb(if selected {
-                    palette.accent
+                    palette.primary
                 } else {
                     palette.surface
                 }))
@@ -467,16 +479,15 @@ impl NyaTermApp {
                     this.apply_selected_command_suggestion(true, cx);
                 }))
                 .child(
-                    div()
-                        .w(px(16.))
+                    svg()
+                        .size(px(13.))
                         .flex_none()
-                        .text_size(px(10.))
-                        .text_color(rgb(if selected {
-                            palette.accent
+                        .path(source_icon)
+                        .text_color(if selected {
+                            rgb(palette.accent)
                         } else {
-                            palette.text_dimmed
-                        }))
-                        .child(source_label.to_string()),
+                            rgb(palette.text_dimmed)
+                        }),
                 )
                 .child(
                     div()
@@ -529,10 +540,10 @@ impl NyaTermApp {
             .left(px(x))
             .top(px(y))
             .w(px(menu_w))
-            .rounded_md()
+            .rounded_lg()
             .border_1()
             .border_color(rgb(palette.border))
-            .bg(rgb(palette.surface_elevated))
+            .bg(rgba((palette.surface << 8) | 0xf2))
             .shadow_lg()
             .overflow_hidden()
             .child(
@@ -546,16 +557,25 @@ impl NyaTermApp {
                     .justify_between()
                     .child(
                         div()
+                            .flex()
+                            .items_center()
+                            .gap_1()
                             .text_size(px(10.))
                             .font_weight(FontWeight(600.))
                             .text_color(rgb(palette.text_dimmed))
-                            .child("SUGGESTIONS"),
+                            .child(
+                                svg()
+                                    .size(px(12.))
+                                    .path("icons/commands.svg")
+                                    .text_color(rgb(palette.text_dimmed)),
+                            )
+                            .child(title),
                     )
                     .child(
                         div()
                             .text_size(px(10.))
                             .text_color(rgb(palette.text_dimmed))
-                            .child(format!("{}", state.items.len())),
+                            .child(format!("{} {match_label}", state.items.len())),
                     ),
             )
             .child(list)
@@ -567,7 +587,7 @@ impl NyaTermApp {
                     .border_color(rgb(palette.border))
                     .text_size(px(10.))
                     .text_color(rgb(palette.text_dimmed))
-                    .child("↑↓ select · Enter run · Tab fill · Esc dismiss"),
+                    .child(footer),
             )
             .into_any_element()
     }

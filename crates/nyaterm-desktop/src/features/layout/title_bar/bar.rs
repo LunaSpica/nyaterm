@@ -251,7 +251,7 @@ impl NyaTermApp {
                         rgb(palette.surface)
                     })
                     .cursor_pointer()
-                    .hover(move |this| this.bg(rgb(palette.hover)).text_color(rgb(palette.accent)))
+                    .hover(move |this| this.bg(rgb(palette.hover)).text_color(rgb(palette.primary)))
                     .child(label)
                     .on_click(cx.listener(move |this, _, _, cx| {
                         this.toggle_title_menu(menu, cx);

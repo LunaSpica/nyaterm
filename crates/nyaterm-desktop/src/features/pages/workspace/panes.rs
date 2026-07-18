@@ -39,7 +39,7 @@ impl NyaTermApp {
                         .rounded_sm()
                         .border_1()
                         .border_color(if is_active {
-                            rgb(palette.accent)
+                            rgb(palette.link)
                         } else {
                             rgb(palette.border)
                         })

@@ -71,7 +71,7 @@ pub(in crate::features::pages::tunnels) fn network_tunnel_editor_panel(
                 )
                 .child(status_pill(
                     mode_label,
-                    rgb(palette.accent),
+                    rgb(palette.link),
                     rgb(palette.hover),
                 )),
         )
@@ -323,7 +323,7 @@ pub(in crate::features::pages::tunnels) fn tunnel_editor_option(
         .rounded_md()
         .border_1()
         .border_color(if active {
-            rgb(palette.accent)
+            rgb(palette.link)
         } else {
             rgb(palette.border)
         })
@@ -344,7 +344,7 @@ pub(in crate::features::pages::tunnels) fn tunnel_editor_option(
                 .text_size(px(12.))
                 .font_weight(FontWeight(600.))
                 .text_color(if active {
-                    rgb(palette.accent)
+                    rgb(palette.link)
                 } else {
                     rgb(palette.text)
                 })

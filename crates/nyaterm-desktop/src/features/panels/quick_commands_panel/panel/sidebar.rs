@@ -45,14 +45,14 @@ impl NyaTermApp {
                     })
                     .text_xs()
                     .text_color(if selected {
-                        rgb(palette.accent)
+                        rgb(palette.link)
                     } else {
                         rgb(palette.text)
                     })
                     .cursor_pointer()
                     .hover(move |this| this.bg(rgb(palette.hover)))
                     .child(div().size(px(6.)).rounded_full().bg(if selected {
-                        rgb(palette.accent)
+                        rgb(palette.link)
                     } else {
                         rgb(palette.text_dimmed)
                     }))

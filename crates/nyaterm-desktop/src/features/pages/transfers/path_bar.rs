@@ -111,7 +111,7 @@ impl NyaTermApp {
                             .rounded_sm()
                             .text_sm()
                             .text_color(if is_current_favorite {
-                                rgb(palette.accent)
+                                rgb(palette.link)
                             } else {
                                 rgb(palette.text_muted)
                             })
@@ -304,7 +304,7 @@ fn transfer_browser_path_history_list(
                 .font_family(crate::features::gpui_code_font_family())
                 .text_size(px(10.))
                 .text_color(if is_current {
-                    rgb(palette.accent)
+                    rgb(palette.link)
                 } else {
                     rgb(palette.text)
                 })

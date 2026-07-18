@@ -158,7 +158,7 @@ pub fn mode_button(
             rgb(palette.input)
         })
         .text_color(if active {
-            rgb(palette.accent)
+            rgb(palette.primary)
         } else {
             rgb(palette.text_muted)
         })

@@ -10,6 +10,10 @@ impl NyaTermApp {
         let open_chat = self.display_shortcut_for("view.openChat", "Ctrl+Alt+I");
         let show_commands = self.display_shortcut_for("view.showAllCommands", "Ctrl+Shift+P");
         let switch_terminal = self.display_shortcut_for("tab.quickSwitch", "Ctrl+Shift+S");
+        let temporary_ssh_label = self.tr("temporarySsh.title");
+        let open_chat_label = self.tr("app.openChat");
+        let show_commands_label = self.tr("app.showAllCommands");
+        let switch_terminal_label = self.tr("app.switchTerminal");
 
         let palette = self.theme_palette();
         let failure_banner = if let (Some(name), Some(error)) = (
@@ -103,7 +107,7 @@ impl NyaTermApp {
                             .gap_3()
                             .child(empty_workspace_action(
                                 palette,
-                                "Temporary SSH Link",
+                                temporary_ssh_label,
                                 temporary_ssh,
                                 cx.listener(|this, _, window, cx| {
                                     this.ensure_panel_open(NavItem::Connections);
@@ -112,7 +116,7 @@ impl NyaTermApp {
                             ))
                             .child(empty_workspace_action(
                                 palette,
-                                "Open Chat",
+                                open_chat_label,
                                 open_chat,
                                 cx.listener(|this, _, window, cx| {
                                     this.ensure_panel_open(NavItem::AiAssistant);
@@ -123,7 +127,7 @@ impl NyaTermApp {
                             ))
                             .child(empty_workspace_action(
                                 palette,
-                                "Show All Commands",
+                                show_commands_label,
                                 show_commands,
                                 cx.listener(|this, _, window, cx| {
                                     this.set_bottom_panel_mode(BottomPanelMode::QuickCommands);
@@ -134,7 +138,7 @@ impl NyaTermApp {
                             ))
                             .child(empty_workspace_action(
                                 palette,
-                                "Switch Terminal",
+                                switch_terminal_label,
                                 switch_terminal,
                                 cx.listener(|this, _, window, cx| {
                                     this.open_quick_switch(window, cx);

@@ -87,7 +87,7 @@ pub(in crate::features) fn transfer_input(
         .rounded_sm()
         .border_1()
         .border_color(if active {
-            rgb(palette.accent)
+            rgb(palette.link)
         } else {
             rgb(palette.border)
         })

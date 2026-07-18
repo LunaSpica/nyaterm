@@ -78,7 +78,7 @@ impl NyaTermApp {
                     .font_family(crate::features::gpui_code_font_family())
                     .text_size(px(10.))
                     .text_color(if selected {
-                        rgb(palette.accent)
+                        rgb(palette.link)
                     } else {
                         rgb(palette.text_muted)
                     })

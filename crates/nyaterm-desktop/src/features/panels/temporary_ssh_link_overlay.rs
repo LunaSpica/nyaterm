@@ -89,7 +89,7 @@ impl NyaTermApp {
                                             .child(
                                                 div()
                                                     .text_size(px(14.))
-                                                    .text_color(rgb(palette.accent))
+                                                    .text_color(rgb(palette.link))
                                                     .child("⚡"),
                                             )
                                             .child(
@@ -134,7 +134,7 @@ impl NyaTermApp {
                                     .border_color(if error.is_some() {
                                         rgb(palette.danger)
                                     } else if can_submit {
-                                        rgb(palette.accent)
+                                        rgb(palette.link)
                                     } else {
                                         rgb(palette.border)
                                     })

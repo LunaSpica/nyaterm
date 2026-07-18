@@ -392,7 +392,7 @@ impl NyaTermApp {
                                                         .rounded_md()
                                                         .border_1()
                                                         .border_color(if name_active {
-                                                            rgb(palette.accent)
+                                                            rgb(palette.link)
                                                         } else {
                                                             rgb(palette.border)
                                                         })
@@ -442,7 +442,7 @@ impl NyaTermApp {
                                                                 .rounded_md()
                                                                 .border_1()
                                                                 .border_color(if patterns_active {
-                                                                    rgb(palette.accent)
+                                                                    rgb(palette.link)
                                                                 } else {
                                                                     rgb(palette.border)
                                                                 })
@@ -509,7 +509,7 @@ impl NyaTermApp {
                                                                         .border_1()
                                                                         .border_color(
                                                                             if dark_active {
-                                                                                rgb(palette.accent)
+                                                                                rgb(palette.link)
                                                                             } else {
                                                                                 rgb(palette.border)
                                                                             },
@@ -620,7 +620,7 @@ impl NyaTermApp {
                                                                         .border_1()
                                                                         .border_color(
                                                                             if light_active {
-                                                                                rgb(palette.accent)
+                                                                                rgb(palette.link)
                                                                             } else {
                                                                                 rgb(palette.border)
                                                                             },

@@ -124,7 +124,7 @@ impl NyaTermApp {
                         div()
                             .w(px(14.))
                             .flex_none()
-                            .text_color(rgb(palette.accent))
+                            .text_color(rgb(palette.link))
                             .child(if show_labels { "✓" } else { "" }),
                     )
                     .child(show_labels_label),
@@ -266,10 +266,7 @@ impl NyaTermApp {
             .to_string();
         let short_label = entry.short_label();
         let palette = self.theme_palette();
-        let active_color = match side {
-            ActivitySide::Left => rgb(palette.accent),
-            ActivitySide::Right => rgb(palette.success),
-        };
+        let active_color = rgb(palette.primary);
         let icon_color = if selected {
             active_color
         } else {

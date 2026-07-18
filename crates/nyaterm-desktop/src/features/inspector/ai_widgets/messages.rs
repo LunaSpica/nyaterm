@@ -222,7 +222,7 @@ impl NyaTermApp {
                             .text_size(px(10.))
                             .font_weight(FontWeight(700.))
                             .text_color(if streaming {
-                                rgb(palette.accent)
+                                rgb(palette.link)
                             } else {
                                 rgb(palette.text_muted)
                             })
@@ -249,7 +249,7 @@ impl NyaTermApp {
                     .px_2()
                     .py_2()
                     .text_size(px(11.))
-                    .text_color(rgb(palette.accent))
+                    .text_color(rgb(palette.link))
                     .child("Thinking…"),
             );
         }
@@ -279,7 +279,7 @@ impl NyaTermApp {
             bubble = bubble.child(
                 div()
                     .text_size(px(10.))
-                    .text_color(rgb(palette.accent))
+                    .text_color(rgb(palette.link))
                     .child("streaming…"),
             );
         }

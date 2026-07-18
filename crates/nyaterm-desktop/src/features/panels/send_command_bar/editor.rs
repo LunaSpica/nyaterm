@@ -362,7 +362,7 @@ fn send_command_floating_action_button(
         .bg(if is_sending {
             rgb(palette.danger)
         } else {
-            rgb(palette.accent)
+            rgb(palette.link)
         })
         .text_color(rgb(0xffffff))
         .opacity(if disabled { 0.45 } else { 1.0 })

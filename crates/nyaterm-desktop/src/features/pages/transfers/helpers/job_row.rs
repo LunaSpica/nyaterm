@@ -9,7 +9,7 @@ pub(in crate::features::pages::transfers) fn transfer_job_row(
 ) -> impl IntoElement {
     let status_color = match job.status {
         TransferJobStatus::Running => rgb(palette.warning),
-        TransferJobStatus::Paused => rgb(palette.accent),
+        TransferJobStatus::Paused => rgb(palette.link),
         TransferJobStatus::Cancelling => rgb(palette.warning),
         TransferJobStatus::Cancelled => rgb(palette.text_muted),
         TransferJobStatus::Completed => rgb(0x34d399),
@@ -65,7 +65,7 @@ pub(in crate::features::pages::transfers) fn transfer_job_row(
         })
         .border_1()
         .border_color(if job_selected {
-            rgb(palette.accent)
+            rgb(palette.link)
         } else {
             rgb(palette.surface)
         })
@@ -102,7 +102,7 @@ pub(in crate::features::pages::transfers) fn transfer_job_row(
                                 .flex()
                                 .items_center()
                                 .gap_1()
-                                .child(status_pill(direction, rgb(palette.accent), rgb(palette.bg)))
+                                .child(status_pill(direction, rgb(palette.link), rgb(palette.bg)))
                                 .child(
                                     div()
                                         .min_w_0()
@@ -144,7 +144,7 @@ pub(in crate::features::pages::transfers) fn transfer_job_row(
                             .h_full()
                             .w(px(220. * percent))
                             .rounded_full()
-                            .bg(rgb(palette.accent)),
+                            .bg(rgb(palette.link)),
                     ),
             )
         })

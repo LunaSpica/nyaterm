@@ -48,10 +48,10 @@ fn markdown_inline_text(palette: ThemePalette, raw: &str) -> gpui::AnyElement {
                 ..Default::default()
             },
             InlineMdStyle::Link => HighlightStyle {
-                color: Some(rgb(palette.accent).into()),
+                color: Some(rgb(palette.link).into()),
                 underline: Some(UnderlineStyle {
                     thickness: px(1.),
-                    color: Some(rgb(palette.accent).into()),
+                    color: Some(rgb(palette.link).into()),
                     wavy: false,
                 }),
                 ..Default::default()
