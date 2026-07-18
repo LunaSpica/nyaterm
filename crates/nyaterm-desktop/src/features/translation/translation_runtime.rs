@@ -163,9 +163,6 @@ impl NyaTermApp {
         match self.translate_focused_field {
             TranslateInputField::TargetLanguage => &mut self.translate_target_language,
             TranslateInputField::Text => &mut self.translate_input,
-            TranslateInputField::SettingsTargetLanguage => {
-                &mut self.translation_settings.target_language
-            }
             TranslateInputField::DeeplApiKey => &mut self.translation_secret_draft.deepl_api_key,
             TranslateInputField::BaiduAppId => &mut self.translation_settings.baidu_app_id,
             TranslateInputField::BaiduAppKey => &mut self.translation_secret_draft.baidu_app_key,

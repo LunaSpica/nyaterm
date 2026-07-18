@@ -37,8 +37,6 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
         let palette = self.theme_palette();
-        // Tauri TranslationTab density: provider chips + credential fields in sections.
-        let translation_target_value = self.translation_settings.target_language.clone();
         let deepl_key_value = cloud_secret_display(
             &self.translation_secret_draft.deepl_api_key,
             &none_if_blank(&self.translation_settings.deepl_api_key),
@@ -58,191 +56,116 @@ impl NyaTermApp {
             &self.translation_secret_draft.youdao_app_key,
             &none_if_blank(&self.translation_settings.youdao_app_key),
         );
-        let translation_secret_count = [
-            &self.translation_settings.deepl_api_key,
-            &self.translation_settings.baidu_app_key,
-            &self.translation_settings.ali_app_key,
-            &self.translation_settings.youdao_app_key,
-        ]
-        .iter()
-        .filter(|value| !value.trim().is_empty())
-        .count();
-        let runtime_label = if self.translate_pending {
-            "running"
-        } else {
-            "idle"
-        };
+
+        let deepl_configured = !self.translation_settings.deepl_api_key.trim().is_empty()
+            || !self.translation_secret_draft.deepl_api_key.is_empty();
+        let baidu_configured = !self.translation_settings.baidu_app_id.trim().is_empty()
+            && (!self.translation_settings.baidu_app_key.trim().is_empty()
+                || !self.translation_secret_draft.baidu_app_key.is_empty());
+        let ali_configured = !self.translation_settings.ali_app_id.trim().is_empty()
+            && (!self.translation_settings.ali_app_key.trim().is_empty()
+                || !self.translation_secret_draft.ali_app_key.is_empty());
+        let youdao_configured = !self.translation_settings.youdao_app_id.trim().is_empty()
+            && (!self.translation_settings.youdao_app_key.trim().is_empty()
+                || !self.translation_secret_draft.youdao_app_key.is_empty());
+
+        let target_language_label = self.tr("settings.targetLanguage");
+        let target_language_desc = self.tr("settings.targetLanguageDesc");
+        let providers_label = self.tr("settings.translationProviders");
+        let providers_desc = self.tr("settings.translationProvidersDesc");
+        let no_key_label = self.tr("settings.noKeyRequired");
+        let configured_label = self.tr("settings.configured");
+        let not_configured_label = self.tr("settings.notConfigured");
+        let api_key_label = self.tr("settings.apiKey");
+        let app_id_label = self.tr("settings.appId");
+        let app_key_label = self.tr("settings.appKey");
+        let remove_label = self.tr("common.remove");
 
         div()
             .flex()
             .flex_col()
             .gap_3()
-            .child(settings_form_section(palette,
-                Some("Provider"),
-                Some("Choose the online translation backend."),
+            .child(settings_form_section(
+                palette,
+                None,
+                None,
                 div()
                     .flex()
                     .flex_col()
                     .gap_3()
-                    .child(settings_form_row(palette,
-                        "Status",
-                        Some(SharedString::from(format!(
-                            "{} · {} secrets · {}",
-                            translation_provider_status(self.translate_provider.as_str()),
-                            translation_secret_count,
-                            runtime_label
-                        ))),
-                        div()
-                            .text_size(px(11.))
-                            .text_color(rgb(0x8b949e))
-                            .child(truncate_preview(&self.translate_status, 36)),
-                    ))
                     .child(
                         div()
-                            .flex()
-                            .flex_wrap()
-                            .gap_1()
-                            .child(settings_choice_chip(palette,
-                                "translation-provider-google-settings",
-                                "Google",
-                                self.translate_provider == "google",
-                                cx.listener(|this, _, _, cx| {
-                                    this.set_translate_provider("google", cx);
-                                }),
-                            ))
-                            .child(settings_choice_chip(palette,
-                                "translation-provider-microsoft-settings",
-                                "Microsoft",
-                                self.translate_provider == "microsoft",
-                                cx.listener(|this, _, _, cx| {
-                                    this.set_translate_provider("microsoft", cx);
-                                }),
-                            ))
-                            .child(settings_choice_chip(palette,
-                                "translation-provider-deepl-settings",
-                                "DeepL",
-                                self.translate_provider == "deepl",
-                                cx.listener(|this, _, _, cx| {
-                                    this.set_translate_provider("deepl", cx);
-                                }),
-                            ))
-                            .child(settings_choice_chip(palette,
-                                "translation-provider-baidu-settings",
-                                "Baidu",
-                                self.translate_provider == "baidu",
-                                cx.listener(|this, _, _, cx| {
-                                    this.set_translate_provider("baidu", cx);
-                                }),
-                            ))
-                            .child(settings_choice_chip(palette,
-                                "translation-provider-ali-settings",
-                                "Ali",
-                                self.translate_provider == "ali",
-                                cx.listener(|this, _, _, cx| {
-                                    this.set_translate_provider("ali", cx);
-                                }),
-                            ))
-                            .child(settings_choice_chip(palette,
-                                "translation-provider-youdao-settings",
-                                "Youdao",
-                                self.translate_provider == "youdao",
-                                cx.listener(|this, _, _, cx| {
-                                    this.set_translate_provider("youdao", cx);
-                                }),
-                            )),
+                            .min_w_0()
+                            .child(
+                                div()
+                                    .text_size(px(13.))
+                                    .font_weight(FontWeight(500.))
+                                    .text_color(rgb(palette.text))
+                                    .child(target_language_label),
+                            )
+                            .child(
+                                div()
+                                    .mt_1()
+                                    .text_size(px(11.))
+                                    .text_color(rgb(palette.text_dimmed))
+                                    .child(target_language_desc),
+                            ),
                     )
-                    .child(settings_form_row(
-                        palette,
-                        "Target language",
-                        Some(SharedString::from(
-                            "Default destination language for panel translations.",
-                        )),
-                        self.translation_input(
-                            "translation-target-language",
-                            "Target",
-                            translation_target_value.clone(),
-                            TranslateInputField::SettingsTargetLanguage,
-                            cx,
-                        ),
-                    ))
-                    .child(
-                        div()
-                            .flex()
-                            .flex_wrap()
-                            .gap_1()
-                            .children(translation_target_languages().iter().map(|(code, label)| {
-                                let code = *code;
-                                let label = *label;
-                                let selected = self
-                                    .translation_settings
-                                    .target_language
-                                    .eq_ignore_ascii_case(code)
-                                    || self.translate_target_language.eq_ignore_ascii_case(code);
-                                settings_choice_chip(
-                                    palette,
-                                    format!("translation-target-{code}"),
-                                    label,
-                                    selected,
-                                    cx.listener(move |this, _, _, cx| {
-                                        this.translation_settings.target_language =
-                                            code.to_string();
-                                        this.translate_target_language = code.to_string();
-                                        this.save_translation_settings(cx);
-                                    }),
-                                )
-                            })),
-                    )
-                    .child(settings_form_row(palette,
-                        "Actions",
-                        None,
-                        small_button(palette,
-                            "translation-settings-save",
-                            "Save",
-                            cx.listener(|this, _, _, cx| {
-                                this.save_translation_settings(cx);
-                            }),
-                        ),
+                    .child(div().flex().flex_wrap().gap_1().children(
+                        translation_target_languages().iter().map(|(code, label)| {
+                            let code = *code;
+                            let label = *label;
+                            let selected = self
+                                .translation_settings
+                                .target_language
+                                .eq_ignore_ascii_case(code);
+                            settings_choice_chip(
+                                palette,
+                                format!("translation-target-{code}"),
+                                label,
+                                selected,
+                                cx.listener(move |this, _, _, cx| {
+                                    this.translation_settings.target_language = code.to_string();
+                                    this.translate_target_language = code.to_string();
+                                    this.save_translation_settings(cx);
+                                }),
+                            )
+                        }),
                     )),
             ))
             .child(settings_form_section(
                 palette,
-                Some("Providers"),
-                Some("Free engines need no key; paid engines store secrets like the Tauri Translation tab."),
+                Some(providers_label),
+                Some(providers_desc),
                 div()
                     .flex()
                     .flex_col()
                     .gap_3()
                     .child(translation_provider_card(
                         palette,
-                        "Google",
-                        "No key required",
+                        self.tr("translation.google"),
+                        no_key_label,
                         true,
                         true,
-                        div()
-                            .text_size(px(11.))
-                            .text_color(rgb(palette.text_muted))
-                            .child("Built-in free backend for panel and terminal selection translation."),
+                        div(),
                     ))
                     .child(translation_provider_card(
                         palette,
-                        "Microsoft",
-                        "No key required",
+                        self.tr("translation.microsoft"),
+                        no_key_label,
                         true,
                         true,
-                        div()
-                            .text_size(px(11.))
-                            .text_color(rgb(palette.text_muted))
-                            .child("Built-in free backend (edge-style translator path)."),
+                        div(),
                     ))
                     .child(translation_provider_card(
                         palette,
-                        "DeepL",
-                        if self.translation_settings.deepl_api_key.trim().is_empty() {
-                            "Not configured"
+                        self.tr("translation.deepl"),
+                        if deepl_configured {
+                            configured_label
                         } else {
-                            "Configured"
+                            not_configured_label
                         },
-                        !self.translation_settings.deepl_api_key.trim().is_empty(),
+                        deepl_configured,
                         false,
                         div()
                             .flex()
@@ -250,7 +173,7 @@ impl NyaTermApp {
                             .gap_2()
                             .child(self.translation_input(
                                 "translation-deepl-api-key",
-                                "DeepL API key",
+                                api_key_label,
                                 deepl_key_value,
                                 TranslateInputField::DeeplApiKey,
                                 cx,
@@ -258,7 +181,7 @@ impl NyaTermApp {
                             .child(small_button(
                                 palette,
                                 "translation-clear-deepl",
-                                "Clear DeepL",
+                                remove_label,
                                 cx.listener(|this, _, _, cx| {
                                     this.clear_translation_secret("deepl", cx);
                                 }),
@@ -266,16 +189,13 @@ impl NyaTermApp {
                     ))
                     .child(translation_provider_card(
                         palette,
-                        "Baidu",
-                        if self.translation_settings.baidu_app_id.trim().is_empty()
-                            || self.translation_settings.baidu_app_key.trim().is_empty()
-                        {
-                            "Not configured"
+                        self.tr("translation.baidu"),
+                        if baidu_configured {
+                            configured_label
                         } else {
-                            "Configured"
+                            not_configured_label
                         },
-                        !(self.translation_settings.baidu_app_id.trim().is_empty()
-                            || self.translation_settings.baidu_app_key.trim().is_empty()),
+                        baidu_configured,
                         false,
                         div()
                             .flex()
@@ -288,14 +208,14 @@ impl NyaTermApp {
                                     .gap_2()
                                     .child(self.translation_input(
                                         "translation-baidu-app-id",
-                                        "Baidu App ID",
+                                        app_id_label,
                                         baidu_app_id_value,
                                         TranslateInputField::BaiduAppId,
                                         cx,
                                     ))
                                     .child(self.translation_input(
                                         "translation-baidu-app-key",
-                                        "Baidu App Key",
+                                        app_key_label,
                                         baidu_key_value,
                                         TranslateInputField::BaiduAppKey,
                                         cx,
@@ -304,7 +224,7 @@ impl NyaTermApp {
                             .child(small_button(
                                 palette,
                                 "translation-clear-baidu",
-                                "Clear Baidu",
+                                remove_label,
                                 cx.listener(|this, _, _, cx| {
                                     this.clear_translation_secret("baidu", cx);
                                 }),
@@ -312,16 +232,13 @@ impl NyaTermApp {
                     ))
                     .child(translation_provider_card(
                         palette,
-                        "Ali",
-                        if self.translation_settings.ali_app_id.trim().is_empty()
-                            || self.translation_settings.ali_app_key.trim().is_empty()
-                        {
-                            "Not configured"
+                        self.tr("translation.ali"),
+                        if ali_configured {
+                            configured_label
                         } else {
-                            "Configured"
+                            not_configured_label
                         },
-                        !(self.translation_settings.ali_app_id.trim().is_empty()
-                            || self.translation_settings.ali_app_key.trim().is_empty()),
+                        ali_configured,
                         false,
                         div()
                             .flex()
@@ -334,14 +251,14 @@ impl NyaTermApp {
                                     .gap_2()
                                     .child(self.translation_input(
                                         "translation-ali-app-id",
-                                        "Ali App ID",
+                                        app_id_label,
                                         ali_app_id_value,
                                         TranslateInputField::AliAppId,
                                         cx,
                                     ))
                                     .child(self.translation_input(
                                         "translation-ali-app-key",
-                                        "Ali App Key",
+                                        app_key_label,
                                         ali_key_value,
                                         TranslateInputField::AliAppKey,
                                         cx,
@@ -350,7 +267,7 @@ impl NyaTermApp {
                             .child(small_button(
                                 palette,
                                 "translation-clear-ali",
-                                "Clear Ali",
+                                remove_label,
                                 cx.listener(|this, _, _, cx| {
                                     this.clear_translation_secret("ali", cx);
                                 }),
@@ -358,16 +275,13 @@ impl NyaTermApp {
                     ))
                     .child(translation_provider_card(
                         palette,
-                        "Youdao",
-                        if self.translation_settings.youdao_app_id.trim().is_empty()
-                            || self.translation_settings.youdao_app_key.trim().is_empty()
-                        {
-                            "Not configured"
+                        self.tr("translation.youdao"),
+                        if youdao_configured {
+                            configured_label
                         } else {
-                            "Configured"
+                            not_configured_label
                         },
-                        !(self.translation_settings.youdao_app_id.trim().is_empty()
-                            || self.translation_settings.youdao_app_key.trim().is_empty()),
+                        youdao_configured,
                         false,
                         div()
                             .flex()
@@ -380,14 +294,14 @@ impl NyaTermApp {
                                     .gap_2()
                                     .child(self.translation_input(
                                         "translation-youdao-app-id",
-                                        "Youdao App ID",
+                                        app_id_label,
                                         youdao_app_id_value,
                                         TranslateInputField::YoudaoAppId,
                                         cx,
                                     ))
                                     .child(self.translation_input(
                                         "translation-youdao-app-key",
-                                        "Youdao App Key",
+                                        app_key_label,
                                         youdao_key_value,
                                         TranslateInputField::YoudaoAppKey,
                                         cx,
@@ -396,24 +310,13 @@ impl NyaTermApp {
                             .child(small_button(
                                 palette,
                                 "translation-clear-youdao",
-                                "Clear Youdao",
+                                remove_label,
                                 cx.listener(|this, _, _, cx| {
                                     this.clear_translation_secret("youdao", cx);
                                 }),
                             )),
                     )),
             ))
-    }
-}
-
-fn translation_provider_status(provider: &str) -> &'static str {
-    match provider {
-        "google" | "microsoft" => "no key",
-        "deepl" => "DeepL",
-        "baidu" => "Baidu",
-        "ali" => "Ali",
-        "youdao" => "Youdao",
-        _ => "unknown",
     }
 }
 
@@ -456,7 +359,7 @@ fn translation_provider_card(
                 )
                 .child(status_pill(status_label, rgb(fg), rgb(bg))),
         )
-        .child(body)
+        .when(!free, |this| this.child(body))
 }
 
 fn translation_target_languages() -> &'static [(&'static str, &'static str)] {

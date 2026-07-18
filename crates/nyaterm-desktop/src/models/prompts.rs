@@ -92,7 +92,6 @@ impl AiCredentialEditorField {
 pub(crate) enum TranslateInputField {
     TargetLanguage,
     Text,
-    SettingsTargetLanguage,
     DeeplApiKey,
     BaiduAppId,
     BaiduAppKey,
@@ -106,8 +105,7 @@ impl TranslateInputField {
     pub(crate) fn is_settings_field(self) -> bool {
         matches!(
             self,
-            Self::SettingsTargetLanguage
-                | Self::DeeplApiKey
+            Self::DeeplApiKey
                 | Self::BaiduAppId
                 | Self::BaiduAppKey
                 | Self::AliAppId
