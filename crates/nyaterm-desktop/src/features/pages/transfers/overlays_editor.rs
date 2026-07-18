@@ -126,6 +126,21 @@ impl NyaTermApp {
         &mut self,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
+        self.transfer_editor_surface(false, cx)
+    }
+
+    pub(in crate::features) fn transfer_editor_window_view(
+        &mut self,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
+        self.transfer_editor_surface(true, cx).into_any_element()
+    }
+
+    fn transfer_editor_surface(
+        &mut self,
+        standalone: bool,
+        cx: &mut Context<Self>,
+    ) -> impl IntoElement {
         let palette = self.theme_palette();
         let state = self.transfer_editor.clone().unwrap_or(TransferEditorState {
             session_id: None,
@@ -178,7 +193,11 @@ impl NyaTermApp {
             .bottom_0()
             .left_0()
             .right_0()
-            .bg(rgb(0x030508))
+            .bg(if standalone {
+                rgb(palette.bg)
+            } else {
+                rgb(0x030508)
+            })
             .flex()
             .items_center()
             .justify_center()
@@ -194,13 +213,16 @@ impl NyaTermApp {
             .child(
                 div()
                     .id(SharedString::from("transfer-editor-dialog"))
-                    .w(px(780.))
-                    .h(px(620.))
-                    .rounded_md()
-                    .border_1()
-                    .border_color(rgb(palette.border))
+                    .when(standalone, |this| this.size_full())
+                    .when(!standalone, |this| {
+                        this.w(px(780.))
+                            .h(px(620.))
+                            .rounded_md()
+                            .border_1()
+                            .border_color(rgb(palette.border))
+                            .shadow_lg()
+                    })
                     .bg(rgb(palette.bg))
-                    .shadow_lg()
                     .p_4()
                     .flex()
                     .flex_col()

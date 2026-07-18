@@ -57,6 +57,7 @@ mod quick_command_runtime;
 mod quick_switch_runtime;
 #[path = "session/recording_runtime.rs"]
 mod recording_runtime;
+mod remote_editor_window;
 #[path = "remote/remote_runtime.rs"]
 mod remote_runtime;
 mod root;
@@ -172,6 +173,7 @@ pub(in crate::features) use quick_command_runtime::{
     quick_command_sort_mode_from_setting, quick_command_view_mode_from_setting,
     sorted_quick_commands,
 };
+pub(in crate::features) use remote_editor_window::RemoteFileEditorWindow;
 pub(in crate::features) use runtime_jobs::{
     ActivitySide, AiAgentBackgroundTarget, AiAgentLoopState, AiAgentStepStatus, AiAgentStepView,
     AiChatJobOutput, AiChatJobResult, AiChatWorkerEvent, AiDiscoveryJobResult, DockerJobOutput,

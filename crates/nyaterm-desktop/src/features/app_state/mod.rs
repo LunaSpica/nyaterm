@@ -334,6 +334,7 @@ pub struct NyaTermApp {
     pub(in crate::features) transfer_new_symlink: Option<TransferNewSymlinkState>,
     pub(in crate::features) transfer_properties: Option<TransferPropertiesState>,
     pub(in crate::features) transfer_editor: Option<TransferEditorState>,
+    pub(in crate::features) remote_editor_window: Option<WindowHandle<RemoteFileEditorWindow>>,
     pub(in crate::features) transfer_unknown_file: Option<TransferUnknownFileState>,
     pub(in crate::features) transfer_external_sync_prompts:
         HashMap<String, TransferExternalSyncPromptState>,

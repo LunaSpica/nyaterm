@@ -555,6 +555,7 @@ impl NyaTermApp {
             transfer_new_symlink: None,
             transfer_properties: None,
             transfer_editor: None,
+            remote_editor_window: None,
             transfer_unknown_file: None,
             transfer_external_sync_prompts: HashMap::new(),
             transfer_external_always_uploads: HashSet::new(),

@@ -203,6 +203,25 @@ impl NyaTermApp {
             cx.notify();
             return;
         }
+        if let Some(editor) = self.transfer_editor.as_ref() {
+            let same_file =
+                editor.session_id == self.active_session_id && editor.remote_path == entry.path;
+            if same_file || editor.dirty || editor.loading || editor.saving {
+                let status = if same_file {
+                    format!("remote text file already open: {}", entry.path)
+                } else {
+                    "finish or close the current remote file before opening another".to_string()
+                };
+                self.open_remote_file_editor_window(cx);
+                if self.remote_editor_window.is_none() {
+                    window.focus(&self.transfer_editor_focus);
+                }
+                self.transfer_browser_status = status.clone();
+                self.terminal_status = status;
+                cx.notify();
+                return;
+            }
+        }
         self.transfer_selected_remote_path = Some(entry.path.clone());
         self.transfer_remote_path = entry.path.clone();
         self.transfer_editor = Some(TransferEditorState {
@@ -225,7 +244,10 @@ impl NyaTermApp {
             focused_field: TransferEditorField::Content,
         });
         self.terminal_status = format!("opening remote text file {}", entry.path);
-        window.focus(&self.transfer_editor_focus);
+        self.open_remote_file_editor_window(cx);
+        if self.remote_editor_window.is_none() {
+            window.focus(&self.transfer_editor_focus);
+        }
         self.start_sftp_editor_load_job(entry.path, window, cx);
         cx.notify();
     }
