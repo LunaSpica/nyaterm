@@ -83,6 +83,18 @@ impl NyaTermApp {
                             }),
                     ),
             );
+        } else if self.transfer_browser_loading {
+            rows = rows.child(
+                div()
+                    .flex()
+                    .items_center()
+                    .justify_center()
+                    .px_4()
+                    .py_8()
+                    .text_size(px(12.))
+                    .text_color(rgb(palette.text_dimmed))
+                    .child("Loading remote directory..."),
+            );
         } else if self.transfer_browser_entries.is_empty() {
             rows = rows.child(
                 div()
@@ -94,10 +106,17 @@ impl NyaTermApp {
                     .py_8()
                     .gap_1()
                     .child(
-                        div()
-                            .text_size(px(12.))
-                            .text_color(rgb(palette.text_muted))
-                            .child("No remote entries loaded"),
+                        if let Some(error) = self.transfer_browser_error.as_deref() {
+                            div()
+                                .text_size(px(12.))
+                                .text_color(rgb(palette.danger))
+                                .child(truncate_preview(error, 120))
+                        } else {
+                            div()
+                                .text_size(px(12.))
+                                .text_color(rgb(palette.text_muted))
+                                .child("No remote entries loaded")
+                        },
                     )
                     .child(
                         div()

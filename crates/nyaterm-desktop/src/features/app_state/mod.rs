@@ -309,6 +309,8 @@ pub struct NyaTermApp {
     pub(in crate::features) transfer_browser_path_draft: String,
     pub(in crate::features) transfer_browser_path_editing: bool,
     pub(in crate::features) transfer_browser_entries: Vec<SftpFileEntry>,
+    pub(in crate::features) transfer_browser_loading: bool,
+    pub(in crate::features) transfer_browser_error: Option<String>,
     pub(in crate::features) transfer_browser_status: String,
     pub(in crate::features) transfer_browser_search: String,
     pub(in crate::features) transfer_browser_list_offset: usize,

@@ -24,6 +24,8 @@ impl NyaTermApp {
         let remote_path = self.normalized_transfer_remote_path();
         self.transfer_browser_path = remote_path.clone();
         self.transfer_browser_status = format!("Listing {remote_path}...");
+        self.transfer_browser_loading = true;
+        self.transfer_browser_error = None;
         self.transfer_selected_remote_path = None;
         self.transfer_selected_remote_paths.clear();
         let id = self.next_transfer_id("sftp-list");
@@ -86,6 +88,8 @@ impl NyaTermApp {
             control: None,
         });
         self.transfer_browser_status = "Resolving remote cwd...".to_string();
+        self.transfer_browser_loading = true;
+        self.transfer_browser_error = None;
         self.terminal_status = "SFTP cwd sync started".to_string();
         let transfer_tx = self.transfer_tx.clone();
         std::thread::spawn(move || {

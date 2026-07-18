@@ -10,6 +10,8 @@ struct TransferBrowserEventSnapshot {
     home_dir: String,
     home_dir_pending: bool,
     entries: Vec<SftpFileEntry>,
+    loading: bool,
+    error: Option<String>,
     status: String,
     history: VecDeque<String>,
     history_index: usize,
@@ -26,6 +28,8 @@ impl NyaTermApp {
             home_dir: self.transfer_browser_home_dir.clone(),
             home_dir_pending: self.transfer_browser_home_dir_pending,
             entries: self.transfer_browser_entries.clone(),
+            loading: self.transfer_browser_loading,
+            error: self.transfer_browser_error.clone(),
             status: self.transfer_browser_status.clone(),
             history: self.transfer_browser_history.clone(),
             history_index: self.transfer_browser_history_index,
@@ -41,6 +45,8 @@ impl NyaTermApp {
         self.transfer_browser_home_dir = snapshot.home_dir;
         self.transfer_browser_home_dir_pending = snapshot.home_dir_pending;
         self.transfer_browser_entries = snapshot.entries;
+        self.transfer_browser_loading = snapshot.loading;
+        self.transfer_browser_error = snapshot.error;
         self.transfer_browser_status = snapshot.status;
         self.transfer_browser_history = snapshot.history;
         self.transfer_browser_history_index = snapshot.history_index;
@@ -56,6 +62,8 @@ impl NyaTermApp {
             self.transfer_browser_home_dir.clear();
             self.transfer_browser_home_dir_pending = false;
             self.transfer_browser_entries.clear();
+            self.transfer_browser_loading = false;
+            self.transfer_browser_error = None;
             self.transfer_browser_status.clear();
             self.transfer_browser_history.clear();
             self.transfer_browser_history_index = 0;
@@ -70,6 +78,8 @@ impl NyaTermApp {
         self.transfer_browser_home_dir = cache.home_dir;
         self.transfer_browser_home_dir_pending = false;
         self.transfer_browser_entries = cache.entries;
+        self.transfer_browser_loading = false;
+        self.transfer_browser_error = None;
         self.transfer_browser_status.clear();
         self.transfer_browser_history = cache.history;
         self.transfer_browser_history_index = cache.history_index;
@@ -169,6 +179,8 @@ impl NyaTermApp {
                     job.detail = format!("{} item(s)", entries.len());
                     self.transfer_browser_path = listed_path;
                     self.transfer_browser_entries = entries.clone();
+                    self.transfer_browser_loading = false;
+                    self.transfer_browser_error = None;
                     self.transfer_browser_status = job.detail.clone();
                     self.transfer_selected_remote_paths
                         .retain(|path| entries.iter().any(|entry| &entry.path == path));
@@ -192,6 +204,8 @@ impl NyaTermApp {
                     job.detail = format!("Home {home_dir}");
                     self.transfer_browser_home_dir = home_dir.clone();
                     self.transfer_browser_home_dir_pending = false;
+                    self.transfer_browser_loading = false;
+                    self.transfer_browser_error = None;
                     self.transfer_browser_status =
                         format!("remote home resolved: {}", truncate_preview(&home_dir, 72));
                     job.entries.clear();
@@ -209,6 +223,8 @@ impl NyaTermApp {
                     self.transfer_remote_path = remote_path.clone();
                     self.transfer_browser_path = remote_path;
                     self.transfer_browser_entries = entries.clone();
+                    self.transfer_browser_loading = false;
+                    self.transfer_browser_error = None;
                     self.transfer_browser_status =
                         format!("remote exec cwd · {} item(s)", entries.len());
                     self.transfer_selected_remote_path = None;
@@ -683,6 +699,12 @@ impl NyaTermApp {
                     }
                 }
                 TransferJobEvent::Finished(Err(error)) => {
+                    let browser_load_failed = matches!(
+                        &job.kind,
+                        TransferJobKind::ListDir { .. }
+                            | TransferJobKind::ResolveHome
+                            | TransferJobKind::SyncCwd
+                    );
                     let property_remote_path = match &job.kind {
                         TransferJobKind::LoadProperties { remote_path }
                         | TransferJobKind::UpdateProperties { remote_path, .. }
@@ -702,6 +724,13 @@ impl NyaTermApp {
                         job.status = TransferJobStatus::Failed;
                         job.detail = error.clone();
                         self.terminal_status = format!("SFTP transfer failed: {error}");
+                    }
+                    if browser_load_failed {
+                        self.transfer_browser_loading = false;
+                        self.transfer_browser_error = self
+                            .transfer_browser_entries
+                            .is_empty()
+                            .then_some(error.clone());
                     }
                     if let Some(remote_path) = property_remote_path.as_ref()
                         && let Some(state) = self.transfer_properties.as_mut()

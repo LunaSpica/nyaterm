@@ -58,6 +58,8 @@ impl NyaTermApp {
         self.transfer_browser_path_draft.clear();
         self.transfer_browser_path_editing = false;
         self.transfer_browser_entries = cache.entries;
+        self.transfer_browser_loading = false;
+        self.transfer_browser_error = None;
         self.transfer_browser_status = format!(
             "restored cached directory · {} item(s)",
             self.transfer_browser_entries.len()
@@ -85,6 +87,8 @@ impl NyaTermApp {
         self.transfer_browser_path_draft.clear();
         self.transfer_browser_path_editing = false;
         self.transfer_browser_entries.clear();
+        self.transfer_browser_loading = false;
+        self.transfer_browser_error = None;
         self.transfer_browser_status = if self.active_ssh_config.is_some() {
             "List a remote directory to browse files.".to_string()
         } else {
@@ -130,6 +134,8 @@ impl NyaTermApp {
             self.record_transfer_browser_visited_history(path);
         }
         self.transfer_browser_status = "Loading remote directory...".to_string();
+        self.transfer_browser_loading = true;
+        self.transfer_browser_error = None;
         self.start_sftp_list_job(window, cx);
     }
 
@@ -446,6 +452,8 @@ impl NyaTermApp {
         self.transfer_selected_remote_paths.clear();
         self.record_transfer_browser_history(parent);
         self.transfer_browser_status = "Loading parent directory...".to_string();
+        self.transfer_browser_loading = true;
+        self.transfer_browser_error = None;
         self.start_sftp_list_job_with_select_after(Some(current_path), window, cx);
     }
 

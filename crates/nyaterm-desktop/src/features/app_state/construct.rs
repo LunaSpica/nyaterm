@@ -540,6 +540,8 @@ impl NyaTermApp {
             transfer_browser_path_draft: String::new(),
             transfer_browser_path_editing: false,
             transfer_browser_entries: Vec::new(),
+            transfer_browser_loading: false,
+            transfer_browser_error: None,
             transfer_browser_status: "List a remote directory to browse files.".to_string(),
             transfer_browser_search: String::new(),
             transfer_browser_list_offset: 0,
