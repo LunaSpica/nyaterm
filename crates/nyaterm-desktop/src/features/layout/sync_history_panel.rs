@@ -43,12 +43,12 @@ impl NyaTermApp {
             "idle"
         };
         let state_label = match state {
-            "disabled" => "Disabled",
-            "conflict" => "Conflict",
-            "failed" => "Failed",
-            "running" => "Running",
-            "success" => "Success",
-            _ => "Idle",
+            "disabled" => self.tr("settings.syncState.disabled"),
+            "conflict" => self.tr("settings.syncState.conflict"),
+            "failed" => self.tr("settings.syncState.failed"),
+            "running" => self.tr("settings.syncState.running"),
+            "success" => self.tr("settings.syncState.success"),
+            _ => self.tr("settings.syncState.idle"),
         };
         let status_message = self.cloud_sync_status.clone();
         let history = self.cloud_sync_history.clone();
@@ -64,16 +64,54 @@ impl NyaTermApp {
                     .text_center()
                     .text_size(px(11.))
                     .text_color(rgb(palette.text_dimmed))
-                    .child("No sync history yet"),
+                    .child(self.tr("settings.historyNoEntries")),
             );
         } else {
             for entry in history {
                 let entry_id = entry.id.clone();
                 let is_open = expanded.contains(&entry_id);
                 let copy_message = entry.message.clone();
+                let kind_label = self.tr(match entry.kind.as_str() {
+                    "sync" => "settings.historyKindSync",
+                    "backup" => "settings.historyKindBackup",
+                    _ => "settings.historyKindSync",
+                });
+                let status_label = self.tr(match entry.status.as_str() {
+                    "success" => "settings.syncState.success",
+                    "failed" => "settings.syncState.failed",
+                    "conflict" => "settings.syncState.conflict",
+                    "running" => "settings.syncState.running",
+                    _ => "settings.syncState.idle",
+                });
+                let trigger_label = self
+                    .tr("settings.historyTrigger")
+                    .replace("{{value}}", &entry.trigger);
+                let provider = entry
+                    .provider
+                    .as_deref()
+                    .filter(|value| !value.trim().is_empty())
+                    .map(format_cloud_provider)
+                    .unwrap_or_else(|| "-".to_string());
+                let provider_label = self
+                    .tr("settings.historyProvider")
+                    .replace("{{value}}", &provider);
+                let duration =
+                    format_duration_ms(entry.duration_ms).unwrap_or_else(|| "-".to_string());
+                let duration_label = self
+                    .tr("settings.historyDuration")
+                    .replace("{{value}}", &duration);
                 rows = rows.child(cloud_sync_history_row(
                     palette,
                     entry,
+                    kind_label.to_string(),
+                    status_label.to_string(),
+                    trigger_label,
+                    provider_label,
+                    duration_label,
+                    self.tr("settings.historyRevision"),
+                    self.tr("settings.historyViewDetails"),
+                    self.tr("settings.historyHideDetails"),
+                    self.tr("settings.historyCopyMessage"),
                     is_open,
                     cx.listener(move |this, _, _, cx| {
                         this.toggle_cloud_sync_history_details(&entry_id, cx);
@@ -125,7 +163,7 @@ impl NyaTermApp {
                                 div()
                                     .text_size(px(11.))
                                     .text_color(rgb(palette.text_muted))
-                                    .child("Current state"),
+                                    .child(self.tr("settings.historyCurrentState")),
                             )
                             .child(
                                 div()
@@ -200,7 +238,7 @@ impl NyaTermApp {
                                         .text_size(px(12.))
                                         .font_weight(FontWeight(700.))
                                         .text_color(rgb(palette.warning))
-                                        .child("Sync conflict"),
+                                        .child(self.tr("settings.syncConflictTitle")),
                                 ),
                         )
                         .child(
@@ -224,7 +262,7 @@ impl NyaTermApp {
                                         div()
                                             .text_size(px(10.))
                                             .text_color(rgb(palette.text_muted))
-                                            .child("Provider"),
+                                            .child(self.tr("settings.providerLabel")),
                                     )
                                     .child(
                                         div()
@@ -245,7 +283,7 @@ impl NyaTermApp {
                                 .child(small_button(
                                     palette,
                                     "sync-panel-force-pull",
-                                    "Use remote",
+                                    self.tr("settings.downloadRemoteVersion"),
                                     cx.listener({
                                         let provider_action = conflict.provider_action;
                                         move |this, _, _, cx| {
@@ -256,7 +294,7 @@ impl NyaTermApp {
                                 .child(small_button(
                                     palette,
                                     "sync-panel-force-push",
-                                    "Use local",
+                                    self.tr("settings.uploadLocalVersion"),
                                     cx.listener({
                                         let provider_action = conflict.provider_action;
                                         move |this, _, _, cx| {
@@ -267,7 +305,7 @@ impl NyaTermApp {
                                 .child(small_button(
                                     palette,
                                     "sync-panel-conflict-dismiss",
-                                    "Dismiss",
+                                    self.tr("common.dismiss"),
                                     cx.listener(|this, _, _, cx| {
                                         this.dismiss_cloud_sync_conflict(cx);
                                     }),

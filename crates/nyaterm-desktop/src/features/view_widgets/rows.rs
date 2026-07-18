@@ -3,6 +3,15 @@ use super::*;
 pub(in crate::features) fn cloud_sync_history_row(
     palette: ThemePalette,
     entry: CloudSyncHistoryEntry,
+    kind_label: String,
+    status_label: String,
+    trigger_label: String,
+    provider_label: String,
+    duration_label: String,
+    revision_label: &'static str,
+    view_details_label: &'static str,
+    hide_details_label: &'static str,
+    copy_message_label: &'static str,
     expanded: bool,
     on_toggle: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
     on_copy: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
@@ -25,25 +34,6 @@ pub(in crate::features) fn cloud_sync_history_row(
     let status_color = cloud_sync_status_text_color(palette, &entry.status);
     let dot_color = cloud_sync_status_dot_color(palette, &entry.status);
     let timestamp = format_history_timestamp_ms(entry.timestamp_ms);
-    let provider = entry
-        .provider
-        .as_deref()
-        .filter(|value| !value.trim().is_empty())
-        .map(format_cloud_provider)
-        .unwrap_or_else(|| "—".to_string());
-    let duration = format_duration_ms(entry.duration_ms).unwrap_or_else(|| "—".to_string());
-    let kind_label = match entry.kind.as_str() {
-        "sync" => "Sync",
-        "backup" => "Backup",
-        other => other,
-    };
-    let status_label = match entry.status.as_str() {
-        "success" => "Success",
-        "failed" => "Failed",
-        "conflict" => "Conflict",
-        "running" => "Running",
-        other => other,
-    };
     let revision = entry
         .revision
         .as_deref()
@@ -87,13 +77,13 @@ pub(in crate::features) fn cloud_sync_history_row(
                                         .text_size(px(10.))
                                         .font_weight(FontWeight(700.))
                                         .text_color(kind_color)
-                                        .child(kind_label.to_string()),
+                                        .child(kind_label),
                                 )
                                 .child(
                                     div()
                                         .text_size(px(10.))
                                         .text_color(status_color)
-                                        .child(status_label.to_string()),
+                                        .child(status_label),
                                 )
                                 .child(
                                     div()
@@ -120,9 +110,9 @@ pub(in crate::features) fn cloud_sync_history_row(
                                 .gap_y_1()
                                 .text_size(px(10.))
                                 .text_color(rgb(palette.text_dimmed))
-                                .child(format!("Trigger {}", entry.trigger))
-                                .child(format!("Provider {provider}"))
-                                .child(format!("Duration {duration}")),
+                                .child(trigger_label)
+                                .child(provider_label)
+                                .child(duration_label),
                         )
                         .when(has_expandable, |this| {
                             this.child(
@@ -145,9 +135,9 @@ pub(in crate::features) fn cloud_sync_history_row(
                                             .cursor_pointer()
                                             .hover(|style| style.text_color(rgb(palette.text)))
                                             .child(if expanded {
-                                                "Hide details"
+                                                hide_details_label
                                             } else {
-                                                "View details"
+                                                view_details_label
                                             })
                                             .on_click(on_toggle),
                                     )
@@ -165,7 +155,7 @@ pub(in crate::features) fn cloud_sync_history_row(
                                                 .text_color(rgb(palette.text_muted))
                                                 .cursor_pointer()
                                                 .hover(|style| style.text_color(rgb(palette.text)))
-                                                .child("Copy message")
+                                                .child(copy_message_label)
                                                 .on_click(on_copy),
                                         )
                                     }),
@@ -206,7 +196,7 @@ pub(in crate::features) fn cloud_sync_history_row(
                                         div()
                                             .text_size(px(10.))
                                             .text_color(rgb(palette.text_dimmed))
-                                            .child("Revision"),
+                                            .child(revision_label),
                                     )
                                     .child(
                                         div()

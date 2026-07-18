@@ -10,15 +10,16 @@ impl NyaTermApp {
         let overwrite_id = prompt.id.clone();
         let skip_id = prompt.id.clone();
         let rename_id = prompt.id.clone();
-        let direction = match prompt.request.direction {
-            SftpTransferDirection::Download => "Download duplicate",
-            SftpTransferDirection::Upload => "Upload duplicate",
-        };
         let kind = if prompt.request.is_directory {
-            "directory"
+            self.tr("fileTransfer.duplicateKindFolder")
         } else {
-            "file"
+            self.tr("fileTransfer.duplicateKindFile")
         };
+        let target_name = download_file_name_from_remote_path(&prompt.request.target_path);
+        let description = self
+            .tr("fileTransfer.duplicateDescription")
+            .replace("{{kind}}", kind)
+            .replace("{{name}}", &target_name);
 
         div()
             .mt_4()
@@ -42,19 +43,20 @@ impl NyaTermApp {
                                 div()
                                     .text_sm()
                                     .font_weight(FontWeight(700.))
-                                    .child(direction),
+                                    .child(self.tr("fileTransfer.duplicateTitle")),
                             )
                             .child(
-                                div().text_xs().text_color(rgb(palette.text)).child(format!(
-                                    "Target {kind}: {}",
-                                    prompt.request.target_path
-                                )),
+                                div()
+                                    .text_xs()
+                                    .text_color(rgb(palette.text))
+                                    .child(description),
                             )
                             .child(
                                 div()
                                     .text_xs()
                                     .text_color(rgb(palette.text_muted))
-                                    .child(format!("Source: {}", prompt.request.source_path)),
+                                    .font_family(crate::features::gpui_code_font_family())
+                                    .child(prompt.request.target_path.clone()),
                             ),
                     )
                     .child(
@@ -65,7 +67,7 @@ impl NyaTermApp {
                             .child(small_button(
                                 palette,
                                 format!("duplicate-overwrite-{overwrite_id}"),
-                                "Overwrite",
+                                self.tr("fileTransfer.duplicateOverwrite"),
                                 cx.listener(move |this, _, _, cx| {
                                     this.resolve_duplicate_prompt(
                                         overwrite_id.clone(),
@@ -77,7 +79,7 @@ impl NyaTermApp {
                             .child(small_button(
                                 palette,
                                 format!("duplicate-skip-{skip_id}"),
-                                "Skip",
+                                self.tr("fileTransfer.duplicateSkip"),
                                 cx.listener(move |this, _, _, cx| {
                                     this.resolve_duplicate_prompt(
                                         skip_id.clone(),
@@ -89,7 +91,7 @@ impl NyaTermApp {
                             .child(small_button(
                                 palette,
                                 format!("duplicate-rename-{rename_id}"),
-                                "Rename",
+                                self.tr("common.rename"),
                                 cx.listener(move |this, _, _, cx| {
                                     this.resolve_duplicate_prompt(
                                         rename_id.clone(),
@@ -110,13 +112,10 @@ impl NyaTermApp {
         let palette = self.theme_palette();
         let accept_id = prompt.id.clone();
         let reject_id = prompt.id.clone();
-        let tone = match prompt.issue {
-            HostKeyPromptIssue::Unknown => "Unknown SSH host key",
-            HostKeyPromptIssue::Changed => "Changed SSH host key",
-        };
+        let tone = self.tr("settings.hostKeyVerifyTitle");
         let action = match prompt.issue {
-            HostKeyPromptIssue::Unknown => "Accept will add this key to known_hosts.",
-            HostKeyPromptIssue::Changed => "Accept will replace the stored key for this host.",
+            HostKeyPromptIssue::Unknown => self.tr("settings.hostKeyVerifyAcceptNew"),
+            HostKeyPromptIssue::Changed => self.tr("settings.hostKeyVerifyAcceptChanged"),
         };
 
         div()
@@ -145,16 +144,18 @@ impl NyaTermApp {
                             .flex_col()
                             .gap_1()
                             .child(div().text_sm().font_weight(FontWeight(700.)).child(tone))
-                            .child(
-                                div()
-                                    .text_xs()
-                                    .text_color(rgb(palette.text))
-                                    .child(prompt.host_key.host_identifier.clone()),
-                            )
+                            .child(div().text_xs().text_color(rgb(palette.text)).child(format!(
+                                "{}: {}",
+                                self.tr("settings.hostKeyVerifyHost"),
+                                prompt.host_key.host_identifier
+                            )))
                             .child(div().text_xs().text_color(rgb(palette.text_muted)).child(
                                 format!(
-                                    "{} {}",
-                                    prompt.host_key.key_type, prompt.host_key.fingerprint
+                                    "{}: {} · {}: {}",
+                                    self.tr("settings.hostKeyVerifyKeyType"),
+                                    prompt.host_key.key_type,
+                                    self.tr("settings.hostKeyVerifyFingerprint"),
+                                    prompt.host_key.fingerprint
                                 ),
                             ))
                             .child(
@@ -172,7 +173,7 @@ impl NyaTermApp {
                             .child(small_button(
                                 palette,
                                 format!("host-key-reject-{reject_id}"),
-                                "Reject",
+                                self.tr("settings.hostKeyVerifyReject"),
                                 cx.listener(move |this, _, _, cx| {
                                     this.resolve_host_key_prompt(
                                         reject_id.clone(),
@@ -184,7 +185,7 @@ impl NyaTermApp {
                             .child(small_button(
                                 palette,
                                 format!("host-key-accept-{accept_id}"),
-                                "Accept",
+                                self.tr("settings.hostKeyVerifyAccept"),
                                 cx.listener(move |this, _, _, cx| {
                                     this.resolve_host_key_prompt(
                                         accept_id.clone(),
@@ -204,18 +205,20 @@ impl NyaTermApp {
     ) -> impl IntoElement {
         let palette = self.theme_palette();
         let title = match prompt.prompt.kind {
-            SshCredentialPromptKind::Password => "SSH Password",
-            SshCredentialPromptKind::KeyPassphrase => "SSH Key Passphrase",
-            SshCredentialPromptKind::KeyboardInteractive => "SSH Verification",
+            SshCredentialPromptKind::Password => self.tr("runtimePrompt.sshPassword"),
+            SshCredentialPromptKind::KeyPassphrase => self.tr("runtimePrompt.sshKeyPassphrase"),
+            SshCredentialPromptKind::KeyboardInteractive => {
+                self.tr("runtimePrompt.sshVerification")
+            }
         };
         let reason = match prompt.prompt.reason {
-            SshCredentialPromptReason::MissingPassword => "Password is required.",
-            SshCredentialPromptReason::PasswordRejected => "Previous password was rejected.",
+            SshCredentialPromptReason::MissingPassword => self.tr("sshAuth.missingPassword"),
+            SshCredentialPromptReason::PasswordRejected => self.tr("sshAuth.passwordRejected"),
             SshCredentialPromptReason::KeyPassphraseRequired => {
-                "Passphrase is required to unlock the key."
+                self.tr("sshAuth.keyPassphraseRequired")
             }
             SshCredentialPromptReason::KeyboardInteractive => {
-                "Server requested keyboard-interactive verification."
+                self.tr("runtimePrompt.keyboardInteractive")
             }
         };
         let display_value = if prompt.value.is_empty() {
@@ -309,7 +312,7 @@ impl NyaTermApp {
                             .child(small_button(
                                 palette,
                                 format!("credential-cancel-{}", prompt.id),
-                                "Cancel",
+                                self.tr("common.cancel"),
                                 cx.listener(|this, _, _, cx| {
                                     this.cancel_credential_prompt(cx);
                                 }),
@@ -317,7 +320,7 @@ impl NyaTermApp {
                             .child(small_button(
                                 palette,
                                 format!("credential-submit-{}", prompt.id),
-                                "Submit",
+                                self.tr("sshAuth.submit"),
                                 cx.listener(|this, _, _, cx| {
                                     this.submit_credential_prompt(cx);
                                 }),
@@ -333,16 +336,37 @@ impl NyaTermApp {
     ) -> impl IntoElement {
         let palette = self.theme_palette();
         let title = match prompt.kind {
-            SnapshotPasswordPromptKind::Export => "Encrypted Snapshot Export",
-            SnapshotPasswordPromptKind::Import => "Encrypted Snapshot Import",
-            SnapshotPasswordPromptKind::CloudPush => "Cloud Sync Push",
-            SnapshotPasswordPromptKind::CloudPull => "Cloud Sync Pull",
-            SnapshotPasswordPromptKind::CloudForcePush => "Force Cloud Sync Push",
-            SnapshotPasswordPromptKind::CloudForcePull => "Force Cloud Sync Pull",
-            SnapshotPasswordPromptKind::CloudProviderPush => "Provider Sync Push",
-            SnapshotPasswordPromptKind::CloudProviderPull => "Provider Sync Pull",
-            SnapshotPasswordPromptKind::CloudProviderForcePush => "Force Provider Sync Push",
-            SnapshotPasswordPromptKind::CloudProviderForcePull => "Force Provider Sync Pull",
+            SnapshotPasswordPromptKind::Export => self.tr("runtimePrompt.snapshotExport"),
+            SnapshotPasswordPromptKind::Import => self.tr("runtimePrompt.snapshotImport"),
+            SnapshotPasswordPromptKind::CloudPush => self.tr("runtimePrompt.cloudPush"),
+            SnapshotPasswordPromptKind::CloudPull => self.tr("runtimePrompt.cloudPull"),
+            SnapshotPasswordPromptKind::CloudForcePush => self.tr("runtimePrompt.cloudForcePush"),
+            SnapshotPasswordPromptKind::CloudForcePull => self.tr("runtimePrompt.cloudForcePull"),
+            SnapshotPasswordPromptKind::CloudProviderPush => {
+                self.tr("runtimePrompt.cloudProviderPush")
+            }
+            SnapshotPasswordPromptKind::CloudProviderPull => {
+                self.tr("runtimePrompt.cloudProviderPull")
+            }
+            SnapshotPasswordPromptKind::CloudProviderForcePush => {
+                self.tr("runtimePrompt.cloudProviderForcePush")
+            }
+            SnapshotPasswordPromptKind::CloudProviderForcePull => {
+                self.tr("runtimePrompt.cloudProviderForcePull")
+            }
+        };
+        let description = match prompt.kind {
+            SnapshotPasswordPromptKind::CloudPush
+            | SnapshotPasswordPromptKind::CloudPull
+            | SnapshotPasswordPromptKind::CloudForcePush
+            | SnapshotPasswordPromptKind::CloudForcePull
+            | SnapshotPasswordPromptKind::CloudProviderPush
+            | SnapshotPasswordPromptKind::CloudProviderPull
+            | SnapshotPasswordPromptKind::CloudProviderForcePush
+            | SnapshotPasswordPromptKind::CloudProviderForcePull => {
+                self.tr("runtimePrompt.cloudSnapshotDescription")
+            }
+            _ => self.tr("runtimePrompt.localSnapshotDescription"),
         };
         let masked = if prompt.value.is_empty() {
             " ".to_string()
@@ -369,21 +393,12 @@ impl NyaTermApp {
                             .flex_col()
                             .gap_1()
                             .child(div().text_sm().font_weight(FontWeight(700.)).child(title))
-                            .child(div().text_xs().text_color(rgb(palette.text_muted)).child(
-                                match prompt.kind {
-                                    SnapshotPasswordPromptKind::CloudPush
-                                    | SnapshotPasswordPromptKind::CloudPull
-                                    | SnapshotPasswordPromptKind::CloudForcePush
-                                    | SnapshotPasswordPromptKind::CloudForcePull
-                                    | SnapshotPasswordPromptKind::CloudProviderPush
-                                    | SnapshotPasswordPromptKind::CloudProviderPull
-                                    | SnapshotPasswordPromptKind::CloudProviderForcePush
-                                    | SnapshotPasswordPromptKind::CloudProviderForcePull => {
-                                        "Password encrypts or decrypts this cloud snapshot."
-                                    }
-                                    _ => "Password is used only for this .nya operation.",
-                                },
-                            )),
+                            .child(
+                                div()
+                                    .text_xs()
+                                    .text_color(rgb(palette.text_muted))
+                                    .child(description),
+                            ),
                     )
                     .child(
                         div()
@@ -420,7 +435,7 @@ impl NyaTermApp {
                             .child(small_button(
                                 palette,
                                 "snapshot-password-cancel",
-                                "Cancel",
+                                self.tr("common.cancel"),
                                 cx.listener(|this, _, _, cx| {
                                     this.cancel_snapshot_password_prompt(cx);
                                 }),
@@ -428,7 +443,7 @@ impl NyaTermApp {
                             .child(small_button(
                                 palette,
                                 "snapshot-password-submit",
-                                "Submit",
+                                self.tr("runtimePrompt.submit"),
                                 cx.listener(|this, _, _, cx| {
                                     this.submit_snapshot_password_prompt(cx);
                                 }),
