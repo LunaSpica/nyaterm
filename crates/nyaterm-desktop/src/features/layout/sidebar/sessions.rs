@@ -7,7 +7,6 @@ impl NyaTermApp {
     ) -> impl IntoElement {
         let palette = self.theme_palette();
         let sessions = self.ordered_sessions();
-        let session_count = sessions.len();
         let query = self
             .active_sessions_search_draft
             .trim()
@@ -21,7 +20,7 @@ impl NyaTermApp {
                     .text_center()
                     .text_size(px(11.))
                     .text_color(rgb(palette.text_dimmed))
-                    .child("No active sessions"),
+                    .child(self.tr("panel.noActiveSessions")),
             );
         } else {
             for session in sessions {
@@ -47,16 +46,10 @@ impl NyaTermApp {
                         .text_center()
                         .text_size(px(11.))
                         .text_color(rgb(palette.text_dimmed))
-                        .child("No matching sessions"),
+                        .child(self.tr("activeSessions.noMatches")),
                 );
             }
         }
-
-        let count_label = if query.is_empty() {
-            session_count.to_string()
-        } else {
-            format!("{visible_count}/{session_count}")
-        };
 
         div()
             .size_full()
@@ -66,7 +59,7 @@ impl NyaTermApp {
             .bg(rgb(palette.surface))
             .child(
                 div()
-                    .h(px(36.))
+                    .h(px(40.))
                     .flex_none()
                     .px_2()
                     .border_b_1()
@@ -116,17 +109,11 @@ impl NyaTermApp {
                                         rgb(palette.text)
                                     })
                                     .child(if self.active_sessions_search_draft.is_empty() {
-                                        "Search sessions".to_string()
+                                        self.tr("activeSessions.searchPlaceholder").to_string()
                                     } else {
                                         self.active_sessions_search_draft.clone()
                                     }),
                             ),
-                    )
-                    .child(
-                        div()
-                            .text_size(px(11.))
-                            .text_color(rgb(palette.text_dimmed))
-                            .child(count_label),
                     ),
             )
             .child(
