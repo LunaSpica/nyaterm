@@ -11,9 +11,13 @@ impl NyaTermApp {
         let keystroke = &event.keystroke;
         let primary = keystroke.modifiers.platform || keystroke.modifiers.control;
         if primary && !keystroke.modifiers.alt && keystroke.key.as_str() == "f" {
-            if let Some(state) = self.transfer_editor.as_mut() {
+            if let Some(workspace) = self.transfer_editor.as_mut() {
+                workspace.close_confirm = false;
+                workspace.pending_close_tab_id = None;
+                workspace.close_after_save_all = false;
+            }
+            if let Some(state) = self.active_transfer_editor_tab_mut() {
                 state.focused_field = TransferEditorField::Search;
-                state.close_confirm = false;
                 state.error = None;
             }
             cx.notify();
@@ -23,22 +27,16 @@ impl NyaTermApp {
             self.save_transfer_editor(false, window, cx);
             return;
         }
-        if primary && !keystroke.modifiers.alt && keystroke.key.as_str() == "enter" {
-            self.save_transfer_editor(true, window, cx);
-            return;
-        }
         if keystroke.modifiers.alt || keystroke.modifiers.function || primary {
             return;
         }
         let focused_field = self
-            .transfer_editor
-            .as_ref()
+            .active_transfer_editor_tab()
             .map(|state| state.focused_field)
             .unwrap_or(TransferEditorField::Content);
         if keystroke.key.as_str() == "escape"
             && self
-                .transfer_editor
-                .as_ref()
+                .active_transfer_editor_tab()
                 .is_some_and(|state| state.reload_confirm)
         {
             self.cancel_transfer_editor_reload_confirm(cx);
@@ -48,22 +46,34 @@ impl NyaTermApp {
             && self
                 .transfer_editor
                 .as_ref()
-                .is_some_and(|state| state.close_confirm)
+                .is_some_and(|workspace| workspace.close_confirm)
         {
             self.cancel_transfer_editor_close_confirm(cx);
+            return;
+        }
+        if let Some(workspace) = self.transfer_editor.as_mut() {
+            workspace.close_confirm = false;
+            workspace.pending_close_tab_id = None;
+            workspace.close_after_save_all = false;
+        }
+        if focused_field == TransferEditorField::Content
+            && self
+                .active_transfer_editor_tab()
+                .is_some_and(|state| state.loading || state.saving)
+        {
             return;
         }
         if focused_field == TransferEditorField::Search {
             match keystroke.key.as_str() {
                 "escape" => {
-                    if let Some(state) = self.transfer_editor.as_mut() {
+                    if let Some(state) = self.active_transfer_editor_tab_mut() {
                         state.focused_field = TransferEditorField::Content;
                     }
                     cx.notify();
                 }
                 "enter" => self.advance_transfer_editor_search(1, cx),
                 "backspace" => {
-                    if let Some(state) = self.transfer_editor.as_mut() {
+                    if let Some(state) = self.active_transfer_editor_tab_mut() {
                         state.search_query.pop();
                         state.active_match = 0;
                     }
@@ -74,7 +84,7 @@ impl NyaTermApp {
                         .key_char
                         .as_deref()
                         .filter(|input| !input.is_empty())
-                        && let Some(state) = self.transfer_editor.as_mut()
+                        && let Some(state) = self.active_transfer_editor_tab_mut()
                     {
                         state.search_query.push_str(input);
                         state.active_match = 0;
@@ -85,13 +95,11 @@ impl NyaTermApp {
             return;
         }
         match keystroke.key.as_str() {
-            "escape" => self.close_transfer_editor(cx),
             "backspace" => {
-                if let Some(state) = self.transfer_editor.as_mut() {
+                if let Some(state) = self.active_transfer_editor_tab_mut() {
                     state.content.pop();
                     state.dirty = true;
                     state.conflict = false;
-                    state.close_confirm = false;
                     state.close_after_save = false;
                     state.reload_confirm = false;
                     state.error = None;
@@ -99,11 +107,10 @@ impl NyaTermApp {
                 cx.notify();
             }
             "enter" => {
-                if let Some(state) = self.transfer_editor.as_mut() {
+                if let Some(state) = self.active_transfer_editor_tab_mut() {
                     state.content.push('\n');
                     state.dirty = true;
                     state.conflict = false;
-                    state.close_confirm = false;
                     state.close_after_save = false;
                     state.reload_confirm = false;
                     state.error = None;
@@ -111,11 +118,10 @@ impl NyaTermApp {
                 cx.notify();
             }
             "tab" => {
-                if let Some(state) = self.transfer_editor.as_mut() {
+                if let Some(state) = self.active_transfer_editor_tab_mut() {
                     state.content.push_str("    ");
                     state.dirty = true;
                     state.conflict = false;
-                    state.close_confirm = false;
                     state.close_after_save = false;
                     state.reload_confirm = false;
                     state.error = None;
@@ -127,12 +133,11 @@ impl NyaTermApp {
                     .key_char
                     .as_deref()
                     .filter(|input| !input.is_empty())
-                    && let Some(state) = self.transfer_editor.as_mut()
+                    && let Some(state) = self.active_transfer_editor_tab_mut()
                 {
                     state.content.push_str(input);
                     state.dirty = true;
                     state.conflict = false;
-                    state.close_confirm = false;
                     state.close_after_save = false;
                     state.reload_confirm = false;
                     state.error = None;
@@ -147,7 +152,7 @@ impl NyaTermApp {
         delta: isize,
         cx: &mut Context<Self>,
     ) {
-        let Some(state) = self.transfer_editor.as_mut() else {
+        let Some(state) = self.active_transfer_editor_tab_mut() else {
             return;
         };
         let matches = editor_search_matches(&state.content, &state.search_query);

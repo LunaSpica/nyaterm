@@ -111,7 +111,7 @@ pub(super) use crate::models::{
     TransferBrowserDragSelectionState, TransferBrowserFavoritesMenuState,
     TransferBrowserPendingRenameState, TransferBrowserSessionCacheState, TransferBrowserSortColumn,
     TransferBrowserSortDirection, TransferBrowserUploadMenuState, TransferDeleteState,
-    TransferEditorState, TransferExternalSyncPromptState, TransferHeightResizeState,
+    TransferEditorWorkspaceState, TransferExternalSyncPromptState, TransferHeightResizeState,
     TransferInputField, TransferJobDeleteState, TransferJobEvent, TransferJobKind,
     TransferJobMenuState, TransferJobOutput, TransferJobResult, TransferJobState,
     TransferJobStatus, TransferMoveState, TransferNewFileState, TransferNewFolderState,

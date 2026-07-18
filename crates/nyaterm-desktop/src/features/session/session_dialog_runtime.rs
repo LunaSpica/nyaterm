@@ -257,12 +257,23 @@ impl NyaTermApp {
         {
             self.transfer_properties = None;
         }
-        if self
-            .transfer_editor
-            .as_ref()
-            .is_some_and(|state| state.session_id.as_deref() == Some(session_id))
-        {
-            self.transfer_editor = None;
+        if let Some(workspace) = self.transfer_editor.as_mut() {
+            let active_removed = workspace
+                .active_tab()
+                .is_some_and(|tab| tab.session_id.as_deref() == Some(session_id));
+            workspace
+                .tabs
+                .retain(|tab| tab.session_id.as_deref() != Some(session_id));
+            if active_removed {
+                workspace.active_tab_id = workspace
+                    .tabs
+                    .first()
+                    .map(|tab| tab.id.clone())
+                    .unwrap_or_default();
+            }
+            if workspace.tabs.is_empty() {
+                self.transfer_editor = None;
+            }
         }
         self.purge_session_from_sync_groups(session_id);
         self.reconcile_terminal_windows();

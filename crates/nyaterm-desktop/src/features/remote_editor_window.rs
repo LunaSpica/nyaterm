@@ -32,7 +32,10 @@ impl Render for RemoteFileEditorWindow {
         }
 
         let (palette, font_family, font_size, title) = self.app.read_with(cx, |app, _| {
-            let editor = app.transfer_editor.as_ref().expect("editor checked above");
+            let workspace = app.transfer_editor.as_ref().expect("editor checked above");
+            let editor = workspace
+                .active_tab()
+                .expect("open editor workspace has an active tab");
             let name = if editor.name.trim().is_empty() {
                 &editor.remote_path
             } else {
@@ -42,7 +45,15 @@ impl Render for RemoteFileEditorWindow {
                 app.theme_palette(),
                 app.gpui_ui_font_family(),
                 app.settings.ui_font_size.clamp(12, 24) as f32,
-                format!("{}{}", if editor.dirty { "* " } else { "" }, name),
+                format!(
+                    "{}{}",
+                    if workspace.tabs.iter().any(|tab| tab.dirty) {
+                        "* "
+                    } else {
+                        ""
+                    },
+                    name
+                ),
             )
         });
         window.set_window_title(&title);

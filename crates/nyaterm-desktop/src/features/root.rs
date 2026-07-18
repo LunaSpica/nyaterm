@@ -410,9 +410,7 @@ impl NyaTermApp {
             .as_ref()
             .is_some_and(|state| state.session_id.as_deref() == self.active_session_id.as_deref());
         let transfer_editor_open =
-            self.transfer_editor.as_ref().is_some_and(|state| {
-                state.session_id.as_deref() == self.active_session_id.as_deref()
-            }) && self.remote_editor_window.is_none();
+            self.transfer_editor.is_some() && self.remote_editor_window.is_none();
         let transfer_external_sync_open = self.active_external_editor_sync_prompt().is_some();
 
         content

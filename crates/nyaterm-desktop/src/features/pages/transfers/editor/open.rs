@@ -203,29 +203,30 @@ impl NyaTermApp {
             cx.notify();
             return;
         }
-        if let Some(editor) = self.transfer_editor.as_ref() {
-            let same_file =
-                editor.session_id == self.active_session_id && editor.remote_path == entry.path;
-            if same_file || editor.dirty || editor.loading || editor.saving {
-                let status = if same_file {
-                    format!("remote text file already open: {}", entry.path)
-                } else {
-                    "finish or close the current remote file before opening another".to_string()
-                };
-                self.open_remote_file_editor_window(cx);
-                if self.remote_editor_window.is_none() {
-                    window.focus(&self.transfer_editor_focus);
-                }
-                self.transfer_browser_status = status.clone();
-                self.terminal_status = status;
-                cx.notify();
-                return;
+        let session_id = self.active_session_id.clone();
+        let tab_id = TransferEditorState::tab_id(session_id.as_deref(), &entry.path);
+        if let Some(editor) = self.transfer_editor.as_mut()
+            && editor.tabs.iter().any(|tab| tab.id == tab_id)
+        {
+            editor.active_tab_id = tab_id;
+            editor.close_confirm = false;
+            editor.pending_close_tab_id = None;
+            editor.close_after_save_all = false;
+            let status = format!("remote text file already open: {}", entry.path);
+            self.open_remote_file_editor_window(cx);
+            if self.remote_editor_window.is_none() {
+                window.focus(&self.transfer_editor_focus);
             }
+            self.transfer_browser_status = status.clone();
+            self.terminal_status = status;
+            cx.notify();
+            return;
         }
         self.transfer_selected_remote_path = Some(entry.path.clone());
         self.transfer_remote_path = entry.path.clone();
-        self.transfer_editor = Some(TransferEditorState {
-            session_id: self.active_session_id.clone(),
+        let tab = TransferEditorState {
+            id: tab_id.clone(),
+            session_id: session_id.clone(),
             remote_path: entry.path.clone(),
             name: entry.name.clone(),
             content: String::new(),
@@ -237,18 +238,26 @@ impl NyaTermApp {
             saving: false,
             dirty: false,
             conflict: false,
-            close_confirm: false,
             close_after_save: false,
             reload_confirm: false,
             error: None,
             focused_field: TransferEditorField::Content,
-        });
+        };
+        if let Some(editor) = self.transfer_editor.as_mut() {
+            editor.tabs.push(tab);
+            editor.active_tab_id = tab_id;
+            editor.close_confirm = false;
+            editor.pending_close_tab_id = None;
+            editor.close_after_save_all = false;
+        } else {
+            self.transfer_editor = Some(TransferEditorWorkspaceState::new(tab));
+        }
         self.terminal_status = format!("opening remote text file {}", entry.path);
         self.open_remote_file_editor_window(cx);
         if self.remote_editor_window.is_none() {
             window.focus(&self.transfer_editor_focus);
         }
-        self.start_sftp_editor_load_job(entry.path, window, cx);
+        self.start_sftp_editor_load_job(session_id, entry.path, window, cx);
         cx.notify();
     }
 
@@ -299,18 +308,57 @@ impl NyaTermApp {
             cx.notify();
             return;
         };
+        let session_id = self.active_session_id.clone();
+        self.open_transfer_external_for_session(entry, session_id, config, cx);
+    }
 
+    pub(in crate::features) fn open_active_transfer_editor_external(
+        &mut self,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(tab) = self.active_transfer_editor_tab().cloned() else {
+            return;
+        };
+        let Some(config) = self.transfer_editor_ssh_config(tab.session_id.as_deref()) else {
+            let error = self.tr("fileEditor.sourceSessionUnavailable").to_string();
+            if let Some(tab) = self.active_transfer_editor_tab_mut() {
+                tab.error = Some(error.clone());
+            }
+            self.terminal_status = error;
+            cx.notify();
+            return;
+        };
+        let entry = SftpFileEntry {
+            name: tab.name,
+            path: tab.remote_path,
+            file_type: SftpFileType::File,
+            size: tab.base_size,
+            permissions: None,
+            owner: String::new(),
+            group: String::new(),
+            modified_at: tab.base_modified_at.and_then(|value| value.try_into().ok()),
+        };
+        self.open_transfer_external_for_session(entry, tab.session_id, config, cx);
+    }
+
+    fn open_transfer_external_for_session(
+        &mut self,
+        entry: SftpFileEntry,
+        session_id: Option<String>,
+        config: SshSessionConfig,
+        cx: &mut Context<Self>,
+    ) {
         self.transfer_selected_remote_path = Some(entry.path.clone());
         self.transfer_remote_path = entry.path.clone();
         let remote_path = entry.path.clone();
-        let local_path = self.transfer_external_open_path(&entry);
+        let local_path = self.transfer_external_open_path(&entry, session_id.as_deref());
         let default_editor = self.settings.transfer_default_editor.clone();
         let transfer_options = self.sftp_transfer_options();
         let id = self.next_transfer_id("sftp-open-external");
         let control = SftpTransferControl::new();
         self.transfer_jobs.push(TransferJobState {
             id: id.clone(),
-            session_id: self.active_session_id.clone(),
+            session_id,
             kind: TransferJobKind::OpenExternal {
                 remote_path: remote_path.clone(),
                 local_path: local_path.clone(),
@@ -365,10 +413,9 @@ impl NyaTermApp {
     pub(in crate::features) fn transfer_external_open_path(
         &self,
         entry: &SftpFileEntry,
+        session_id: Option<&str>,
     ) -> PathBuf {
-        let session_id = self
-            .active_session_id
-            .as_deref()
+        let session_id = session_id
             .map(sanitize_local_open_segment)
             .unwrap_or_else(|| "session".to_string());
         let timestamp_ms = SystemTime::now()
