@@ -7,7 +7,13 @@ impl NyaTermApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        if !self.require_security_secrets_unlocked(window, cx) {
+        if !self.require_security_secrets_unlocked(
+            window,
+            cx,
+            Some(SecurityUnlockAction::OpenCredentialEditor(
+                credential_id.clone(),
+            )),
+        ) {
             return;
         }
         let editor = if let Some(credential_id) = credential_id {
@@ -93,7 +99,13 @@ impl NyaTermApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        if !self.require_security_secrets_unlocked(window, cx) {
+        if !self.require_security_secrets_unlocked(
+            window,
+            cx,
+            Some(SecurityUnlockAction::ToggleCredentialEnabled(
+                credential_id.clone(),
+            )),
+        ) {
             return;
         }
         let Some(entry) = self
@@ -250,7 +262,13 @@ impl NyaTermApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        if !self.require_security_secrets_unlocked(window, cx) {
+        if !self.require_security_secrets_unlocked(
+            window,
+            cx,
+            Some(SecurityUnlockAction::DeleteCredential(
+                credential_id.clone(),
+            )),
+        ) {
             return;
         }
         let label = self
@@ -282,7 +300,13 @@ impl NyaTermApp {
             cx.notify();
             return;
         }
-        if !self.require_security_secrets_unlocked(window, cx) {
+        if !self.require_security_secrets_unlocked(
+            window,
+            cx,
+            Some(SecurityUnlockAction::RevealCredential(
+                credential_id.clone(),
+            )),
+        ) {
             return;
         }
         let store = match ConnectionStore::open_with_portable_key_path(

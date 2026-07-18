@@ -25,22 +25,29 @@ impl NyaTermApp {
                 self.theme_palette(),
             ));
         } else {
-            for key in self.connection_ssh_keys.clone() {
+            let entries = self.connection_ssh_keys.clone();
+            let entry_count = entries.len();
+            let mut rows = div()
+                .rounded_md()
+                .border_1()
+                .border_color(rgb(palette.border))
+                .overflow_hidden();
+            for (index, key) in entries.into_iter().enumerate() {
                 let key_id = key.id.clone();
                 let edit_id = key.id.clone();
                 let delete_id = key.id.clone();
-                body = body.child(
+                rows = rows.child(
                     // Tauri security-auth: dense single-row list items + trailing actions.
                     div()
                         .h(px(42.))
-                        .rounded_md()
-                        .border_1()
-                        .border_color(rgb(palette.border))
-                        .bg(rgb(palette.input))
-                        .px_2()
+                        .when(index + 1 < entry_count, |this| {
+                            this.border_b_1().border_color(rgb(palette.border))
+                        })
+                        .px_3()
                         .flex()
                         .items_center()
                         .gap_2()
+                        .hover(|this| this.bg(rgb(palette.hover)))
                         .child(
                             div().min_w_0().flex_1().flex().flex_col().child(
                                 div()
@@ -79,6 +86,7 @@ impl NyaTermApp {
                         ),
                 );
             }
+            body = body.child(rows);
         }
         body
     }

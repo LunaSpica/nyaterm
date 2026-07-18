@@ -7,7 +7,13 @@ impl NyaTermApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        if !self.require_security_secrets_unlocked(window, cx) {
+        if !self.require_security_secrets_unlocked(
+            window,
+            cx,
+            Some(SecurityUnlockAction::OpenPasswordEditor(
+                password_id.clone(),
+            )),
+        ) {
             return;
         }
         let editor = if let Some(password_id) = password_id {
@@ -186,7 +192,11 @@ impl NyaTermApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        if !self.require_security_secrets_unlocked(window, cx) {
+        if !self.require_security_secrets_unlocked(
+            window,
+            cx,
+            Some(SecurityUnlockAction::DeletePassword(password_id.clone())),
+        ) {
             return;
         }
         let label = self
@@ -216,7 +226,11 @@ impl NyaTermApp {
             cx.notify();
             return;
         }
-        if !self.require_security_secrets_unlocked(window, cx) {
+        if !self.require_security_secrets_unlocked(
+            window,
+            cx,
+            Some(SecurityUnlockAction::RevealPassword(password_id.clone())),
+        ) {
             return;
         }
         let store = match ConnectionStore::open_with_portable_key_path(
@@ -253,7 +267,11 @@ impl NyaTermApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        if !self.require_security_secrets_unlocked(window, cx) {
+        if !self.require_security_secrets_unlocked(
+            window,
+            cx,
+            Some(SecurityUnlockAction::CopyPassword(password_id.clone())),
+        ) {
             return;
         }
         if let Some(value) = self.security_revealed_passwords.get(&password_id).cloned() {

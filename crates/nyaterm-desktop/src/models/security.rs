@@ -6,6 +6,18 @@ pub(crate) enum SecurityAuthTab {
     Otp,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum SecurityUnlockAction {
+    OpenPasswordEditor(Option<String>),
+    RevealPassword(String),
+    CopyPassword(String),
+    DeletePassword(String),
+    OpenCredentialEditor(Option<String>),
+    ToggleCredentialEnabled(String),
+    RevealCredential(String),
+    DeleteCredential(String),
+}
+
 impl SecurityAuthTab {
     pub(crate) fn i18n_key(self) -> &'static str {
         match self {

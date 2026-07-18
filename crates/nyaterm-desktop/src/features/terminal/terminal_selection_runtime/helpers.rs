@@ -49,6 +49,14 @@ impl EntityInputHandler for NyaTermApp {
         _window: &mut Window,
         _cx: &mut Context<Self>,
     ) -> Option<String> {
+        if self.security_unlock_prompt_open && !self.security_unlock_marked_text.is_empty() {
+            let marked = &self.security_unlock_marked_text;
+            let len = marked.encode_utf16().count();
+            let start = range.start.min(len);
+            let end = range.end.min(len).max(start);
+            *adjusted_range = Some(start..end);
+            return Some(marked.clone());
+        }
         if self.terminal_ime_marked_text.is_empty() {
             return None;
         }
@@ -65,6 +73,13 @@ impl EntityInputHandler for NyaTermApp {
         _window: &mut Window,
         _cx: &mut Context<Self>,
     ) -> Option<UTF16Selection> {
+        if self.security_unlock_prompt_open {
+            let cursor = self.security_unlock_draft.encode_utf16().count();
+            return Some(UTF16Selection {
+                range: cursor..cursor,
+                reversed: false,
+            });
+        }
         None
     }
 
@@ -73,11 +88,19 @@ impl EntityInputHandler for NyaTermApp {
         _window: &mut Window,
         _cx: &mut Context<Self>,
     ) -> Option<Range<usize>> {
+        if self.security_unlock_prompt_open {
+            let len = self.security_unlock_marked_text.encode_utf16().count();
+            return (len > 0).then_some(0..len);
+        }
         let len = self.terminal_ime_marked_text.encode_utf16().count();
         (len > 0).then_some(0..len)
     }
 
     fn unmark_text(&mut self, _window: &mut Window, _cx: &mut Context<Self>) {
+        if self.security_unlock_prompt_open {
+            self.security_unlock_marked_text.clear();
+            return;
+        }
         self.terminal_ime_marked_text.clear();
     }
 
@@ -88,6 +111,13 @@ impl EntityInputHandler for NyaTermApp {
         _window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        if self.security_unlock_prompt_open {
+            self.security_unlock_marked_text.clear();
+            self.security_unlock_draft.push_str(text);
+            self.security_unlock_error = None;
+            cx.notify();
+            return;
+        }
         self.terminal_ime_marked_text.clear();
         if !text.is_empty() {
             if let Some(selected) = self.smart_cursor_selected_input_range() {
@@ -114,6 +144,11 @@ impl EntityInputHandler for NyaTermApp {
         _window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        if self.security_unlock_prompt_open {
+            self.security_unlock_marked_text = new_text.to_string();
+            cx.notify();
+            return;
+        }
         self.terminal_ime_marked_text = new_text.to_string();
         cx.notify();
     }
@@ -125,6 +160,18 @@ impl EntityInputHandler for NyaTermApp {
         _window: &mut Window,
         _cx: &mut Context<Self>,
     ) -> Option<Bounds<Pixels>> {
+        if self.security_unlock_prompt_open {
+            return Some(gpui::bounds(
+                Point {
+                    x: element_bounds.left(),
+                    y: element_bounds.bottom() - px(18.),
+                },
+                Size {
+                    width: px(1.),
+                    height: px(18.),
+                },
+            ));
+        }
         let (cell_w, cell_h) = self.terminal_cell_size();
         let pad = self.terminal_content_padding_px();
         let gutter = self.terminal_gutter_width_px();
@@ -160,6 +207,9 @@ impl EntityInputHandler for NyaTermApp {
         _window: &mut Window,
         _cx: &mut Context<Self>,
     ) -> Option<usize> {
+        if self.security_unlock_prompt_open {
+            return Some(self.security_unlock_draft.encode_utf16().count());
+        }
         Some(0)
     }
 }

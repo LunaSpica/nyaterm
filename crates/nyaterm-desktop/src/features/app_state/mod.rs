@@ -647,7 +647,9 @@ pub struct NyaTermApp {
     pub(in crate::features) security_unlock_prompt_open: bool,
     pub(in crate::features) security_master_required_prompt_open: bool,
     pub(in crate::features) security_unlock_draft: String,
+    pub(in crate::features) security_unlock_marked_text: String,
     pub(in crate::features) security_unlock_error: Option<String>,
+    pub(in crate::features) security_unlock_pending_action: Option<SecurityUnlockAction>,
     pub(in crate::features) security_unlock_focus: FocusHandle,
     /// Legacy/global active pane tree view: mirrors the active tab's per-tab root when split.
     pub(in crate::features) workspace_split: Option<WorkspaceSplitState>,

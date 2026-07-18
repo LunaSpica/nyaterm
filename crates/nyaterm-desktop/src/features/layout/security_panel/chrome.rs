@@ -57,11 +57,14 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
         let palette = self.theme_palette();
-        let draft = if self.security_unlock_draft.is_empty() {
+        let draft_length = self.security_unlock_draft.chars().count()
+            + self.security_unlock_marked_text.chars().count();
+        let draft = if draft_length == 0 {
             " ".to_string()
         } else {
-            "•".repeat(self.security_unlock_draft.chars().count().min(32))
+            "•".repeat(draft_length.min(32))
         };
+        let input_entity = cx.entity();
         div()
             .absolute()
             .inset_0()
@@ -81,8 +84,8 @@ impl NyaTermApp {
                     .flex_col()
                     .gap_2()
                     .track_focus(&self.security_unlock_focus)
-                    .on_key_down(cx.listener(|this, event: &KeyDownEvent, _, cx| {
-                        this.handle_security_unlock_key_down(event, cx);
+                    .on_key_down(cx.listener(|this, event: &KeyDownEvent, window, cx| {
+                        this.handle_security_unlock_key_down(event, window, cx);
                     }))
                     .child(
                         div()
@@ -100,6 +103,7 @@ impl NyaTermApp {
                     .child(
                         div()
                             .id(SharedString::from("security-unlock-input"))
+                            .relative()
                             .h(px(32.))
                             .px_2()
                             .flex()
@@ -111,7 +115,26 @@ impl NyaTermApp {
                             .font_family(crate::features::gpui_code_font_family())
                             .text_xs()
                             .text_color(rgb(palette.text))
-                            .child(draft),
+                            .child(draft)
+                            .child(
+                                gpui::canvas(
+                                    |_bounds, _window, _cx| {},
+                                    move |bounds, _state, window, cx| {
+                                        let focus =
+                                            input_entity.read(cx).security_unlock_focus.clone();
+                                        window.handle_input(
+                                            &focus,
+                                            gpui::ElementInputHandler::new(
+                                                bounds,
+                                                input_entity.clone(),
+                                            ),
+                                            cx,
+                                        );
+                                    },
+                                )
+                                .absolute()
+                                .inset_0(),
+                            ),
                     )
                     .when_some(self.security_unlock_error.clone(), |this, error| {
                         this.child(
@@ -131,15 +154,15 @@ impl NyaTermApp {
                                 "security-unlock-cancel",
                                 self.tr("common.cancel"),
                                 cx.listener(|this, _, _, cx| {
-                                    this.close_security_unlock_prompt(cx);
+                                    this.cancel_security_unlock_prompt(cx);
                                 }),
                             ))
                             .child(small_button(
                                 palette,
                                 "security-unlock-submit",
                                 self.tr("secretUnlock.unlock"),
-                                cx.listener(|this, _, _, cx| {
-                                    this.submit_security_unlock(cx);
+                                cx.listener(|this, _, window, cx| {
+                                    this.submit_security_unlock(window, cx);
                                 }),
                             )),
                     ),

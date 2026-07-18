@@ -25,7 +25,14 @@ impl NyaTermApp {
                 self.theme_palette(),
             ));
         } else {
-            for entry in self.connection_saved_credentials.clone() {
+            let entries = self.connection_saved_credentials.clone();
+            let entry_count = entries.len();
+            let mut rows = div()
+                .rounded_md()
+                .border_1()
+                .border_color(rgb(palette.border))
+                .overflow_hidden();
+            for (index, entry) in entries.into_iter().enumerate() {
                 let id = entry.id.clone();
                 let edit_id = entry.id.clone();
                 let delete_id = entry.id.clone();
@@ -37,18 +44,18 @@ impl NyaTermApp {
                     .get(&entry.id)
                     .cloned()
                     .unwrap_or_default();
-                body = body.child(
+                rows = rows.child(
                     div()
                         .min_h(px(48.))
-                        .rounded_md()
-                        .border_1()
-                        .border_color(rgb(palette.border))
-                        .bg(rgb(palette.input))
-                        .px_2()
-                        .py_1()
+                        .when(index + 1 < entry_count, |this| {
+                            this.border_b_1().border_color(rgb(palette.border))
+                        })
+                        .px_3()
+                        .py_2()
                         .flex()
                         .items_center()
                         .gap_2()
+                        .hover(|this| this.bg(rgb(palette.hover)))
                         .child(
                             div()
                                 .min_w_0()
@@ -167,6 +174,7 @@ impl NyaTermApp {
                         ),
                 );
             }
+            body = body.child(rows);
         }
         body
     }
