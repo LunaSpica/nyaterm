@@ -8,60 +8,53 @@ impl NyaTermApp {
         let palette = self.theme_palette();
         let is_dark = self.terminal_theme_is_dark();
         let rules = self.keyword_highlights.rules.clone();
-        let active = rules.iter().filter(|rule| rule.enabled).count();
+        let keyword_highlighting_enabled = self.keyword_highlights.enabled;
         let expanded = self.keyword_highlight_expanded_id.clone();
         let edit_id = self.keyword_highlight_edit_id.clone();
         let edit_field = self.keyword_highlight_edit_field;
-        let prompt = match self.keyword_highlight_path_prompt {
-            Some(KeywordHighlightPathPromptKind::Import) => "selecting import file",
-            None => "legacy JSON import",
-        };
         let builtin_ids = nyaterm_core::builtin_keyword_rule_ids();
+        let pattern_count_template = self.tr("settings.keywordHighlightPatternCount");
+        let untitled_rule_label = self.tr("settings.keywordHighlightNewRule");
 
         settings_form_section(
             palette,
-            Some("Keyword highlights"),
-            Some("Match terminal output keywords with colored highlights (Tauri TerminalTab)."),
+            None,
+            None,
             div()
                 .flex()
                 .flex_col()
-                .gap_3()
+                .gap_4()
                 .child(settings_form_row(
                     palette,
-                    "Enabled",
-                    Some(SharedString::from(format!(
-                        "{active}/{} custom rules · {prompt}",
-                        rules.len()
-                    ))),
+                    self.tr("settings.keywordHighlightingExperimental"),
+                    Some(SharedString::from(
+                        self.tr("settings.keywordHighlightingExperimentalDesc"),
+                    )),
                     settings_switch(
                         palette,
                         "settings-keyword-highlights-enabled",
-                        self.keyword_highlights.enabled,
+                        keyword_highlighting_enabled,
                         cx.listener(|this, _, _, cx| {
                             this.toggle_keyword_highlights(cx);
                         }),
                     ),
                 ))
-                .when(self.keyword_highlights.enabled, |this| {
-                    this.child(
+                .child(
                         div()
-                            .pl_3()
-                            .ml_1()
-                            .border_l_1()
-                            .border_color(rgb(palette.border))
                             .flex()
                             .flex_col()
-                            .gap_3()
+                            .gap_4()
                             .child(settings_form_row(
                                 palette,
-                                "Across wrapped lines",
+                                self.tr("settings.keywordHighlightWrappedLines"),
                                 Some(SharedString::from(
-                                    "Continue matches across soft-wrapped terminal lines.",
+                                    self.tr("settings.keywordHighlightWrappedLinesDesc"),
                                 )),
-                                settings_switch(
+                                settings_switch_with_enabled(
                                     palette,
                                     "settings-keyword-highlights-wrap",
                                     self.keyword_highlights.across_wrapped_lines,
+                                    keyword_highlighting_enabled,
                                     cx.listener(|this, _, _, cx| {
                                         this.toggle_keyword_highlights_wrapped(cx);
                                     }),
@@ -77,15 +70,17 @@ impl NyaTermApp {
                                             .text_size(px(12.))
                                             .font_weight(FontWeight(600.))
                                             .text_color(rgb(palette.text))
-                                            .child("Built-in rules"),
+                                            .child(self.tr(
+                                                "settings.keywordHighlightBuiltinRules",
+                                            )),
                                     )
                                     .child(
                                         div()
                                             .text_size(px(11.))
                                             .text_color(rgb(palette.text_muted))
-                                            .child(
-                                                "Toggle catalog rules used when no custom rule matches.",
-                                            ),
+                                            .child(self.tr(
+                                                "settings.keywordHighlightBuiltinNote",
+                                            )),
                                     )
                                     .child(
                                         div()
@@ -146,12 +141,13 @@ impl NyaTermApp {
                                                                     .child(label),
                                                             ),
                                                     )
-                                                    .child(settings_switch(
+                                                    .child(settings_switch_with_enabled(
                                                         palette,
                                                         format!(
                                                             "settings-keyword-builtin-{id}"
                                                         ),
                                                         enabled,
+                                                        keyword_highlighting_enabled,
                                                         cx.listener(move |this, _, _, cx| {
                                                             this.toggle_keyword_highlight_builtin(
                                                                 rid.clone(),
@@ -165,37 +161,58 @@ impl NyaTermApp {
                             .child(
                                 div()
                                     .flex()
-                                    .items_center()
-                                    .justify_between()
-                                    .gap_2()
-                                    .child(
-                                        div()
-                                            .text_size(px(12.))
-                                            .font_weight(FontWeight(600.))
-                                            .text_color(rgb(palette.text))
-                                            .child("Custom rules"),
-                                    )
+                                    .flex_col()
+                                    .gap_3()
+                                    .opacity(if keyword_highlighting_enabled {
+                                        1.0
+                                    } else {
+                                        0.5
+                                    })
                                     .child(
                                         div()
                                             .flex()
                                             .items_center()
-                                            .gap_1()
-                                            .child(small_button(
-                                                palette,
-                                                "settings-keyword-highlights-import",
-                                                "Import",
-                                                cx.listener(|this, _, _, cx| {
-                                                    this.prompt_keyword_highlight_import(cx);
-                                                }),
-                                            ))
-                                            .child(small_button(
-                                                palette,
-                                                "settings-keyword-highlights-add",
-                                                "Add",
-                                                cx.listener(|this, _, window, cx| {
-                                                    this.add_keyword_highlight_rule(window, cx);
-                                                }),
-                                            )),
+                                            .justify_between()
+                                            .gap_2()
+                                            .child(
+                                                div()
+                                                    .text_size(px(12.))
+                                                    .font_weight(FontWeight(600.))
+                                                    .text_color(rgb(palette.text))
+                                                    .child(self.tr(
+                                                        "settings.keywordHighlightRules",
+                                                    )),
+                                            )
+                                            .child(
+                                                div()
+                                                    .flex()
+                                                    .items_center()
+                                                    .gap_1()
+                                                    .child(keyword_highlight_action_button(
+                                                        palette,
+                                                        "settings-keyword-highlights-import",
+                                                        "icons/fe/upload.svg",
+                                                        self.tr(
+                                                            "settings.keywordHighlightImport",
+                                                        ),
+                                                        keyword_highlighting_enabled,
+                                                        cx.listener(|this, _, _, cx| {
+                                                            this.prompt_keyword_highlight_import(cx);
+                                                        }),
+                                                    ))
+                                                    .child(keyword_highlight_action_button(
+                                                        palette,
+                                                        "settings-keyword-highlights-add",
+                                                        "icons/conn/add.svg",
+                                                        self.tr("common.add"),
+                                                        keyword_highlighting_enabled,
+                                                        cx.listener(|this, _, window, cx| {
+                                                            this.add_keyword_highlight_rule(
+                                                                window, cx,
+                                                            );
+                                                        }),
+                                                    )),
+                                            ),
                                     ),
                             )
                             .when(rules.is_empty(), |this| {
@@ -214,9 +231,9 @@ impl NyaTermApp {
                                             div()
                                                 .text_size(px(12.))
                                                 .text_color(rgb(palette.text_dimmed))
-                                                .child(
-                                                    "No custom rules — Add one or Import legacy JSON.",
-                                                ),
+                                                .child(self.tr(
+                                                    "settings.keywordHighlightNoRules",
+                                                )),
                                         ),
                                 )
                             })
@@ -289,17 +306,19 @@ impl NyaTermApp {
                                             .flex()
                                             .items_center()
                                             .gap_2()
-                                            .cursor_pointer()
-                                            .hover(|this| this.bg(rgb(palette.hover)))
-                                            .on_click(cx.listener({
-                                                let rule_id = rule_id.clone();
-                                                move |this, _, _, cx| {
-                                                    this.expand_keyword_highlight_rule(
-                                                        rule_id.clone(),
-                                                        cx,
-                                                    );
-                                                }
-                                            }))
+                                            .when(keyword_highlighting_enabled, |this| {
+                                                this.cursor_pointer()
+                                                    .hover(|this| this.bg(rgb(palette.hover)))
+                                                    .on_click(cx.listener({
+                                                        let rule_id = rule_id.clone();
+                                                        move |this, _, _, cx| {
+                                                            this.expand_keyword_highlight_rule(
+                                                                rule_id.clone(),
+                                                                cx,
+                                                            );
+                                                        }
+                                                    }))
+                                            })
                                             .child(
                                                 div()
                                                     .size(px(10.))
@@ -318,7 +337,7 @@ impl NyaTermApp {
                                                     .text_color(rgb(palette.text))
                                                     .overflow_hidden()
                                                     .child(if rule.name.trim().is_empty() {
-                                                        "Untitled rule".to_string()
+                                                        untitled_rule_label.to_string()
                                                     } else {
                                                         rule.name.clone()
                                                     }),
@@ -327,24 +346,34 @@ impl NyaTermApp {
                                                 div()
                                                     .text_size(px(10.))
                                                     .text_color(rgb(palette.text_muted))
-                                                    .child(format!("{pattern_count} patterns")),
+                                                    .child(
+                                                        pattern_count_template.replace(
+                                                            "{{count}}",
+                                                            &pattern_count.to_string(),
+                                                        ),
+                                                    ),
                                             )
-                                            .child(settings_switch(
+                                            .child(keyword_highlight_rule_switch(
                                                 palette,
                                                 format!("settings-keyword-rule-enabled-{}", rule.id),
                                                 rule.enabled,
+                                                keyword_highlighting_enabled,
                                                 cx.listener(move |this, _, _, cx| {
+                                                    cx.stop_propagation();
                                                     this.toggle_keyword_highlight_rule(
                                                         rule_id_toggle.clone(),
                                                         cx,
                                                     );
                                                 }),
                                             ))
-                                            .child(small_button(
+                                            .child(keyword_highlight_icon_button(
                                                 palette,
                                                 format!("settings-keyword-rule-delete-{}", rule.id),
-                                                "Delete",
+                                                "icons/fe/delete.svg",
+                                                self.tr("common.delete"),
+                                                keyword_highlighting_enabled,
                                                 cx.listener(move |this, _, _, cx| {
+                                                    cx.stop_propagation();
                                                     this.remove_keyword_highlight_rule(
                                                         rule_id_delete.clone(),
                                                         cx,
@@ -369,17 +398,26 @@ impl NyaTermApp {
                                                 .flex()
                                                 .flex_col()
                                                 .gap_3()
-                                                .track_focus(&self.keyword_highlight_focus)
-                                                .on_key_down(cx.listener(
-                                                    |this, event: &KeyDownEvent, _, cx| {
-                                                        this.handle_keyword_highlight_key_down(
-                                                            event, cx,
-                                                        );
-                                                    },
-                                                ))
+                                                .when(keyword_highlighting_enabled, |this| {
+                                                    this.track_focus(
+                                                        &self.keyword_highlight_focus,
+                                                    )
+                                                    .on_key_down(cx.listener(
+                                                        |this,
+                                                         event: &KeyDownEvent,
+                                                         _,
+                                                         cx| {
+                                                            this.handle_keyword_highlight_key_down(
+                                                                event, cx,
+                                                            );
+                                                        },
+                                                    ))
+                                                })
                                                 .child(settings_form_row(
                                                     palette,
-                                                    "Name",
+                                                    self.tr(
+                                                        "settings.keywordHighlightRuleName",
+                                                    ),
                                                     None,
                                                     div()
                                                         .id(SharedString::from(format!(
@@ -401,19 +439,29 @@ impl NyaTermApp {
                                                         .items_center()
                                                         .text_size(px(12.))
                                                         .text_color(rgb(palette.text))
-                                                        .cursor_pointer()
                                                         .child(name_value)
-                                                        .on_click(cx.listener({
-                                                            let rule_id = rule_id.clone();
-                                                            move |this, _, window, cx| {
-                                                                this.focus_keyword_highlight_field(
-                                                                    rule_id.clone(),
-                                                                    KeywordHighlightEditorField::Name,
-                                                                    window,
-                                                                    cx,
-                                                                );
-                                                            }
-                                                        })),
+                                                        .when(
+                                                            keyword_highlighting_enabled,
+                                                            |this| {
+                                                                this.cursor_pointer().on_click(
+                                                                    cx.listener({
+                                                                        let rule_id =
+                                                                            rule_id.clone();
+                                                                        move |this,
+                                                                              _,
+                                                                              window,
+                                                                              cx| {
+                                                                            this.focus_keyword_highlight_field(
+                                                                                rule_id.clone(),
+                                                                                KeywordHighlightEditorField::Name,
+                                                                                window,
+                                                                                cx,
+                                                                            );
+                                                                        }
+                                                                    }),
+                                                                )
+                                                            },
+                                                        ),
                                                 ))
                                                 .child(
                                                     div()
@@ -426,9 +474,9 @@ impl NyaTermApp {
                                                                 .text_color(rgb(
                                                                     palette.text_muted,
                                                                 ))
-                                                                .child(
-                                                                    "Patterns (one regex per line)",
-                                                                ),
+                                                                .child(self.tr(
+                                                                    "settings.keywordHighlightRulePatterns",
+                                                                )),
                                                         )
                                                         .child(
                                                             div()
@@ -451,19 +499,24 @@ impl NyaTermApp {
                                                                 .text_size(px(11.))
                                                                 .text_color(rgb(palette.text))
                                                                 .line_height(px(16.))
-                                                                .cursor_pointer()
                                                                 .child(patterns_value)
-                                                                .on_click(cx.listener({
-                                                                    let rule_id = rule_id.clone();
-                                                                    move |this, _, window, cx| {
-                                                                        this.focus_keyword_highlight_field(
-                                                                            rule_id.clone(),
-                                                                            KeywordHighlightEditorField::Patterns,
-                                                                            window,
-                                                                            cx,
-                                                                        );
-                                                                    }
-                                                                })),
+                                                                .when(
+                                                                    keyword_highlighting_enabled,
+                                                                    |this| {
+                                                                        this.cursor_pointer()
+                                                                            .on_click(cx.listener({
+                                                                                let rule_id = rule_id.clone();
+                                                                                move |this, _, window, cx| {
+                                                                                    this.focus_keyword_highlight_field(
+                                                                                        rule_id.clone(),
+                                                                                        KeywordHighlightEditorField::Patterns,
+                                                                                        window,
+                                                                                        cx,
+                                                                                    );
+                                                                                }
+                                                                            }))
+                                                                    },
+                                                                ),
                                                         ),
                                                 )
                                                 .child(
@@ -473,7 +526,9 @@ impl NyaTermApp {
                                                         .gap_2()
                                                         .child(settings_form_row(
                                                             palette,
-                                                            "Dark color",
+                                                            self.tr(
+                                                                "settings.keywordHighlightDarkPalette",
+                                                            ),
                                                             None,
                                                             div()
                                                                 .flex()
@@ -524,23 +579,23 @@ impl NyaTermApp {
                                                                         ))
                                                                         .flex()
                                                                         .items_center()
-                                                                        .cursor_pointer()
                                                                         .child(dark_value)
-                                                                        .on_click(cx.listener({
-                                                                            let rule_id =
-                                                                                rule_id.clone();
-                                                                            move |this,
-                                                                                  _,
-                                                                                  window,
-                                                                                  cx| {
-                                                                                this.focus_keyword_highlight_field(
-                                                                                    rule_id.clone(),
-                                                                                    KeywordHighlightEditorField::ColorDark,
-                                                                                    window,
-                                                                                    cx,
-                                                                                );
-                                                                            }
-                                                                        })),
+                                                                        .when(
+                                                                            keyword_highlighting_enabled,
+                                                                            |this| {
+                                                                                this.cursor_pointer().on_click(cx.listener({
+                                                                                    let rule_id = rule_id.clone();
+                                                                                    move |this, _, window, cx| {
+                                                                                        this.focus_keyword_highlight_field(
+                                                                                            rule_id.clone(),
+                                                                                            KeywordHighlightEditorField::ColorDark,
+                                                                                            window,
+                                                                                            cx,
+                                                                                        );
+                                                                                    }
+                                                                                }))
+                                                                            },
+                                                                        ),
                                                                 ),
                                                         ))
                                                         .child(
@@ -568,23 +623,29 @@ impl NyaTermApp {
                                                                             .border_color(rgb(
                                                                                 palette.border,
                                                                             ))
-                                                                            .cursor_pointer()
-                                                                            .on_click(cx.listener(
-                                                                                move |this, _, _, cx| {
-                                                                                    this.set_keyword_highlight_rule_color(
-                                                                                        rid.clone(),
-                                                                                        true,
-                                                                                        &value,
-                                                                                        cx,
-                                                                                    );
+                                                                            .when(
+                                                                                keyword_highlighting_enabled,
+                                                                                |this| {
+                                                                                    this.cursor_pointer().on_click(cx.listener(
+                                                                                        move |this, _, _, cx| {
+                                                                                            this.set_keyword_highlight_rule_color(
+                                                                                                rid.clone(),
+                                                                                                true,
+                                                                                                &value,
+                                                                                                cx,
+                                                                                            );
+                                                                                        },
+                                                                                    ))
                                                                                 },
-                                                                            ))
+                                                                            )
                                                                     },
                                                                 )),
                                                         )
                                                         .child(settings_form_row(
                                                             palette,
-                                                            "Light color",
+                                                            self.tr(
+                                                                "settings.keywordHighlightLightPalette",
+                                                            ),
                                                             None,
                                                             div()
                                                                 .flex()
@@ -635,23 +696,23 @@ impl NyaTermApp {
                                                                         ))
                                                                         .flex()
                                                                         .items_center()
-                                                                        .cursor_pointer()
                                                                         .child(light_value)
-                                                                        .on_click(cx.listener({
-                                                                            let rule_id =
-                                                                                rule_id.clone();
-                                                                            move |this,
-                                                                                  _,
-                                                                                  window,
-                                                                                  cx| {
-                                                                                this.focus_keyword_highlight_field(
-                                                                                    rule_id.clone(),
-                                                                                    KeywordHighlightEditorField::ColorLight,
-                                                                                    window,
-                                                                                    cx,
-                                                                                );
-                                                                            }
-                                                                        })),
+                                                                        .when(
+                                                                            keyword_highlighting_enabled,
+                                                                            |this| {
+                                                                                this.cursor_pointer().on_click(cx.listener({
+                                                                                    let rule_id = rule_id.clone();
+                                                                                    move |this, _, window, cx| {
+                                                                                        this.focus_keyword_highlight_field(
+                                                                                            rule_id.clone(),
+                                                                                            KeywordHighlightEditorField::ColorLight,
+                                                                                            window,
+                                                                                            cx,
+                                                                                        );
+                                                                                    }
+                                                                                }))
+                                                                            },
+                                                                        ),
                                                                 ),
                                                         ))
                                                         .child(
@@ -688,21 +749,22 @@ impl NyaTermApp {
                                                                                 .border_color(rgb(
                                                                                     palette.border,
                                                                                 ))
-                                                                                .cursor_pointer()
-                                                                                .on_click(
-                                                                                    cx.listener(
-                                                                                        move |this,
-                                                                                              _,
-                                                                                              _,
-                                                                                              cx| {
-                                                                                            this.set_keyword_highlight_rule_color(
-                                                                                                rid.clone(),
-                                                                                                false,
-                                                                                                &value,
-                                                                                                cx,
-                                                                                            );
-                                                                                        },
-                                                                                    ),
+                                                                                .when(
+                                                                                    keyword_highlighting_enabled,
+                                                                                    |this| {
+                                                                                        this.cursor_pointer().on_click(
+                                                                                            cx.listener(
+                                                                                                move |this, _, _, cx| {
+                                                                                                    this.set_keyword_highlight_rule_color(
+                                                                                                        rid.clone(),
+                                                                                                        false,
+                                                                                                        &value,
+                                                                                                        cx,
+                                                                                                    );
+                                                                                                },
+                                                                                            ),
+                                                                                        )
+                                                                                    },
                                                                                 )
                                                                         },
                                                                     ),
@@ -712,8 +774,107 @@ impl NyaTermApp {
                                         )
                                     })
                             })),
-                    )
-                }),
+                ),
         )
     }
+}
+
+fn keyword_highlight_action_button(
+    palette: ThemePalette,
+    id: impl Into<String>,
+    icon_path: &'static str,
+    label: &'static str,
+    enabled: bool,
+    on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
+) -> impl IntoElement {
+    let hover_bg = palette.hover;
+    let hover_text = palette.text;
+
+    div()
+        .id(SharedString::from(id.into()))
+        .h(px(28.))
+        .px_3()
+        .flex()
+        .items_center()
+        .rounded_sm()
+        .border_1()
+        .border_color(rgb(palette.border))
+        .bg(rgb(palette.surface_elevated))
+        .text_color(rgb(palette.text))
+        .text_xs()
+        .child(svg().size(px(14.)).flex_none().path(icon_path))
+        .child(div().ml_1().child(label))
+        .when(enabled, |this| {
+            this.cursor_pointer()
+                .hover(move |this| this.bg(rgb(hover_bg)).text_color(rgb(hover_text)))
+                .on_click(on_click)
+        })
+}
+
+fn keyword_highlight_icon_button(
+    palette: ThemePalette,
+    id: impl Into<String>,
+    icon_path: &'static str,
+    tooltip: &'static str,
+    enabled: bool,
+    on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
+) -> impl IntoElement {
+    let hover_bg = rgba((palette.danger << 8) | 0x18);
+
+    div()
+        .id(SharedString::from(id.into()))
+        .size(px(28.))
+        .flex()
+        .items_center()
+        .justify_center()
+        .rounded_sm()
+        .text_color(rgb(palette.danger))
+        .child(svg().size(px(15.)).path(icon_path))
+        .tooltip(move |_, cx| cx.new(|_| ChromeTooltip::new(tooltip)).into())
+        .when(enabled, |this| {
+            this.cursor_pointer()
+                .hover(move |this| this.bg(hover_bg))
+                .on_click(on_click)
+        })
+}
+
+fn keyword_highlight_rule_switch(
+    palette: ThemePalette,
+    id: impl Into<String>,
+    checked: bool,
+    enabled: bool,
+    on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
+) -> impl IntoElement {
+    let on_bg = palette.primary;
+    let off_bg = palette.border;
+    let on_hover = palette.primary_hover;
+    let off_hover = palette.hover;
+
+    div()
+        .id(SharedString::from(id.into()))
+        .h(px(22.))
+        .w(px(40.))
+        .flex()
+        .items_center()
+        .rounded_full()
+        .px(px(2.))
+        .bg(if checked { rgb(on_bg) } else { rgb(off_bg) })
+        .when(enabled, |this| {
+            this.cursor_pointer()
+                .hover(move |this| {
+                    this.bg(if checked {
+                        rgb(on_hover)
+                    } else {
+                        rgb(off_hover)
+                    })
+                })
+                .on_click(on_click)
+        })
+        .child(
+            div()
+                .size(px(18.))
+                .rounded_full()
+                .bg(rgb(0xffffff))
+                .when(checked, |this| this.ml_auto()),
+        )
 }

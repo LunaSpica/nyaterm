@@ -8,9 +8,8 @@ use nyaterm_transport::SftpDuplicatePolicy;
 use crate::models::{
     AiActionEditorField, AiActionListKind, AiCredentialEditorField, AiInputField,
     CloudSyncConflictState, CloudSyncInputField, ConfigPathPromptKind, DiagnosticsPathPromptKind,
-    KeywordHighlightEditorField, KeywordHighlightPathPromptKind, SearchEngineEditorField,
-    SettingsTab, SnapshotPasswordPromptKind, SnapshotPasswordPromptState, TerminalSearchMode,
-    TranslateInputField,
+    KeywordHighlightEditorField, SearchEngineEditorField, SettingsTab, SnapshotPasswordPromptKind,
+    SnapshotPasswordPromptState, TerminalSearchMode, TranslateInputField,
 };
 use crate::theme::ThemePalette;
 use crate::widgets::{small_button, status_pill};
