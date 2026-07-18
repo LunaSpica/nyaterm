@@ -81,6 +81,19 @@ pub(in crate::features::pages::transfers) fn property_row(
         )
 }
 
+pub(in crate::features::pages::transfers) fn property_section_heading(
+    palette: crate::theme::ThemePalette,
+    label: &'static str,
+) -> impl IntoElement {
+    div()
+        .mt_4()
+        .mb_2()
+        .text_size(px(10.))
+        .font_weight(FontWeight(800.))
+        .text_color(rgb(palette.text_muted))
+        .child(label.to_ascii_uppercase())
+}
+
 pub(in crate::features::pages::transfers) fn property_input_row(
     palette: crate::theme::ThemePalette,
     id: &'static str,

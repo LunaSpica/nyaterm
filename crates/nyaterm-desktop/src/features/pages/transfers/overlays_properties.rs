@@ -75,6 +75,8 @@ impl NyaTermApp {
             .unwrap_or_else(|| "-".to_string());
         let loading = properties.is_none();
         let can_save = !loading && !state.saving;
+        let dialog_width = (self.last_viewport_size.0 - 32.).min(460.).max(280.);
+        let dialog_max_height = (self.last_viewport_size.1 * 0.75).clamp(320., 720.);
 
         div()
             .id(SharedString::from("transfer-properties-overlay"))
@@ -99,7 +101,10 @@ impl NyaTermApp {
             .child(
                 div()
                     .id(SharedString::from("transfer-properties-dialog"))
-                    .w(px(500.))
+                    .w(px(dialog_width))
+                    .max_h(px(dialog_max_height))
+                    .overflow_y_scroll()
+                    .scrollbar_width(px(8.))
                     .rounded_md()
                     .border_1()
                     .border_color(rgb(palette.border))
@@ -131,6 +136,10 @@ impl NyaTermApp {
                                 rgb(palette.hover),
                             )),
                     )
+                    .child(property_section_heading(
+                        palette,
+                        self.tr("fileExplorer.general"),
+                    ))
                     .child(
                         div()
                             .mt_4()
@@ -201,6 +210,10 @@ impl NyaTermApp {
                                 ""
                             }),
                     )
+                    .child(property_section_heading(
+                        palette,
+                        self.tr("fileExplorer.ownership"),
+                    ))
                     .child(
                         div()
                             .mt_4()
@@ -212,21 +225,6 @@ impl NyaTermApp {
                             .flex()
                             .flex_col()
                             .gap_2()
-                            .child(property_input_row(
-                                palette,
-                                "transfer-properties-mode-input",
-                                self.tr("fileExplorer.octal"),
-                                &state.mode_value,
-                                state.focused_field == TransferPropertiesField::Mode,
-                                loading || state.saving,
-                                cx.listener(|this, _, window, cx| {
-                                    if let Some(state) = this.transfer_properties.as_mut() {
-                                        state.focused_field = TransferPropertiesField::Mode;
-                                    }
-                                    window.focus(&this.transfer_properties_focus);
-                                    cx.notify();
-                                }),
-                            ))
                             .child(property_input_row(
                                 palette,
                                 "transfer-properties-owner-input",
@@ -252,6 +250,25 @@ impl NyaTermApp {
                                 cx.listener(|this, _, window, cx| {
                                     if let Some(state) = this.transfer_properties.as_mut() {
                                         state.focused_field = TransferPropertiesField::Group;
+                                    }
+                                    window.focus(&this.transfer_properties_focus);
+                                    cx.notify();
+                                }),
+                            ))
+                            .child(property_section_heading(
+                                palette,
+                                self.tr("fileExplorer.permissions"),
+                            ))
+                            .child(property_input_row(
+                                palette,
+                                "transfer-properties-mode-input",
+                                self.tr("fileExplorer.octal"),
+                                &state.mode_value,
+                                state.focused_field == TransferPropertiesField::Mode,
+                                loading || state.saving,
+                                cx.listener(|this, _, window, cx| {
+                                    if let Some(state) = this.transfer_properties.as_mut() {
+                                        state.focused_field = TransferPropertiesField::Mode;
                                     }
                                     window.focus(&this.transfer_properties_focus);
                                     cx.notify();
@@ -310,21 +327,6 @@ impl NyaTermApp {
                             .gap_2()
                             .child(small_button(
                                 palette,
-                                "transfer-properties-copy-path",
-                                self.tr("fileExplorer.cmCopyPath"),
-                                {
-                                    let path = entry.path.clone();
-                                    cx.listener(move |this, _, _, cx| {
-                                        cx.write_to_clipboard(ClipboardItem::new_string(
-                                            path.clone(),
-                                        ));
-                                        this.terminal_status = "copied remote path".to_string();
-                                        cx.notify();
-                                    })
-                                },
-                            ))
-                            .child(small_button(
-                                palette,
                                 "transfer-properties-save",
                                 if state.saving {
                                     self.tr("common.saving")
@@ -340,7 +342,7 @@ impl NyaTermApp {
                             .child(small_button(
                                 palette,
                                 "transfer-properties-close",
-                                self.tr("common.close"),
+                                self.tr("common.cancel"),
                                 cx.listener(|this, _, _, cx| {
                                     this.close_transfer_properties(cx);
                                 }),
