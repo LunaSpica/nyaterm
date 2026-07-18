@@ -535,12 +535,8 @@ impl NyaTermApp {
                 SharedString::from(label)
             }
             NavItem::ActiveSessions => {
-                let count = self.live_session_count();
-                if count == 0 {
-                    SharedString::from("")
-                } else {
-                    SharedString::from(count.to_string())
-                }
+                let count = self.ordered_session_count();
+                SharedString::from(count.to_string())
             }
             // Tauri NetworkPanel header shows active tab profile count.
             NavItem::Tunnels => {
@@ -548,11 +544,7 @@ impl NyaTermApp {
                     NetworkTab::Tunnels => self.tunnels.len(),
                     NetworkTab::Proxies => self.proxies.len(),
                 };
-                if count == 0 {
-                    SharedString::from("")
-                } else {
-                    SharedString::from(count.to_string())
-                }
+                SharedString::from(count.to_string())
             }
             NavItem::Transfers => {
                 if self.transfer_browser_entries.is_empty() {
@@ -600,11 +592,7 @@ impl NyaTermApp {
             NavItem::Recording => {
                 // Badge reflects open session panes (local metadata), not transport lock.
                 let count = self.ordered_session_count();
-                if count == 0 {
-                    SharedString::from("")
-                } else {
-                    SharedString::from(count.to_string())
-                }
+                SharedString::from(count.to_string())
             }
             NavItem::SyncBackupHistory => {
                 let count = self.cloud_sync_history.len();

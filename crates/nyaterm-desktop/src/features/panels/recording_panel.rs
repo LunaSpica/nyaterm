@@ -8,12 +8,11 @@ impl NyaTermApp {
         let palette = self.theme_palette();
         let active_session_id = self.active_session_id.clone();
         let sessions = self.ordered_sessions();
-        let session_count = sessions.len();
-        let recording_count = sessions
-            .iter()
-            .filter(|session| self.recording_manager.is_recording(&session.id))
-            .count();
         let query = self.recording_session_filter_query();
+        let no_sessions_label = self.tr("panel.noActiveSessions").to_string();
+        let no_matches_label = self.tr("activeSessions.noMatches").to_string();
+        let search_placeholder = self.tr("recording.searchPlaceholder").to_string();
+        let recording_label = self.tr("recording.recording").to_string();
 
         let mut session_rows = div().flex().flex_col().gap_1().p_2();
         let mut visible_count = 0usize;
@@ -24,7 +23,7 @@ impl NyaTermApp {
                     .text_center()
                     .text_size(px(11.))
                     .text_color(rgb(palette.text_dimmed))
-                    .child("No active sessions"),
+                    .child(no_sessions_label.clone()),
             );
         } else {
             for session in sessions {
@@ -138,7 +137,7 @@ impl NyaTermApp {
                                                     .bg(rgb(0x3d1418))
                                                     .text_size(px(10.))
                                                     .text_color(rgb(palette.danger))
-                                                    .child("● REC"),
+                                                    .child(format!("● {recording_label}")),
                                             )
                                         }),
                                 ),
@@ -220,17 +219,10 @@ impl NyaTermApp {
                         .text_center()
                         .text_size(px(11.))
                         .text_color(rgb(palette.text_dimmed))
-                        .child("No matching sessions"),
+                        .child(no_matches_label.clone()),
                 );
             }
         }
-
-        let count_label = if query.is_empty() {
-            session_count.to_string()
-        } else {
-            format!("{visible_count}/{session_count}")
-        };
-        let _ = recording_count;
 
         // Tauri RecordingPanel: PanelHeader(meta count) + search strip + dense session rows.
         // Shared stack already renders PanelHeader; body is search + list only.
@@ -242,7 +234,7 @@ impl NyaTermApp {
             .bg(rgb(palette.surface))
             .child(
                 div()
-                    .h(px(36.))
+                    .h(px(40.))
                     .flex_none()
                     .px_2()
                     .border_b_1()
@@ -290,18 +282,12 @@ impl NyaTermApp {
                                             rgb(palette.text)
                                         })
                                         .child(if self.recording_search_draft.is_empty() {
-                                            "Search sessions".to_string()
+                                            search_placeholder
                                         } else {
                                             self.recording_search_draft.clone()
                                         }),
                                 ),
                         ),
-                    )
-                    .child(
-                        div()
-                            .text_size(px(11.))
-                            .text_color(rgb(palette.text_dimmed))
-                            .child(count_label),
                     ),
             )
             .child(
