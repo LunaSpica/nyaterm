@@ -98,39 +98,6 @@ impl NyaTermApp {
         next
     }
 
-    pub(in crate::features) fn save_ai_settings(&mut self, cx: &mut Context<Self>) {
-        let next = self.pending_ai_settings();
-        if self.defer_settings_persistence(cx) {
-            self.ai_settings = next;
-            self.ai_secret_draft.clear();
-            self.sync_ai_drafts_from_active_profile();
-            self.ai_status = "AI settings staged".to_string();
-            return;
-        }
-        match ConnectionStore::open_with_portable_key_path(
-            self.runtime.config_dir(),
-            self.runtime.portable_key_path().map(ToOwned::to_owned),
-        )
-        .and_then(|store| store.save_ai_settings(next))
-        {
-            Ok(saved) => {
-                self.ai_settings = saved;
-                self.ai_secret_draft.clear();
-                self.sync_ai_drafts_from_active_profile();
-                self.refresh_ai_usage_counts();
-                self.ai_status = "AI settings saved".to_string();
-                self.store_status.message = "AI settings saved".to_string();
-                self.store_status.ready = true;
-            }
-            Err(error) => {
-                self.ai_status = format!("AI settings save failed: {error}");
-                self.store_status.message = self.ai_status.clone();
-                self.store_status.ready = false;
-            }
-        }
-        cx.notify();
-    }
-
     /// Persist current `ai_settings` without rewriting active profile drafts (Tauri live update).
 
     pub(in crate::features) fn persist_ai_settings_now(&mut self, cx: &mut Context<Self>) {
