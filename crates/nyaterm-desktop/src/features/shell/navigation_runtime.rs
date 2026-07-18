@@ -11,6 +11,7 @@ impl NyaTermApp {
                 self.settings_previous_left_collapsed = Some(self.left_sidebar_collapsed);
                 self.settings_previous_right_collapsed = Some(self.right_inspector_collapsed);
             }
+            self.begin_settings_draft();
             if let Some(group) = self.settings_active_tab.expandable_group_id() {
                 self.settings_expanded_groups.insert(group.to_string());
             }
@@ -105,18 +106,7 @@ impl NyaTermApp {
     }
 
     pub(in crate::features) fn close_settings(&mut self, cx: &mut Context<Self>) {
-        self.main_mode = MainMode::Workspace;
-        self.left_sidebar_collapsed = self
-            .settings_previous_left_collapsed
-            .take()
-            .unwrap_or_else(|| self.active_left_panel.is_none());
-        self.right_inspector_collapsed = self
-            .settings_previous_right_collapsed
-            .take()
-            .unwrap_or_else(|| self.active_right_panel.is_none());
-        self.terminal_status = "workspace restored".to_string();
-        self.persist_ui_layout();
-        cx.notify();
+        self.cancel_settings(cx);
     }
 
     pub(in crate::features) fn toggle_left_sidebar(&mut self, cx: &mut Context<Self>) {

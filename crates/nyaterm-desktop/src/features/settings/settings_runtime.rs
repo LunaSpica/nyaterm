@@ -4,6 +4,8 @@ use super::*;
 mod helpers;
 use helpers::*;
 
+#[path = "settings_runtime/draft.rs"]
+mod draft;
 #[path = "settings_runtime/general_interaction.rs"]
 mod general_interaction;
 #[path = "settings_runtime/recording_transfer.rs"]

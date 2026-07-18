@@ -227,6 +227,7 @@ impl NyaTermApp {
             .filter_map(|(key, value)| (*value > 0).then(|| (key.clone(), (*value as f32) / 1000.)))
             .collect::<HashMap<_, _>>();
         let panel_multi_open = settings.ui_panel_multi_open;
+        let settings_master_password_enabled = settings.has_master_password;
         let translate_target_language = translation_settings.target_language.clone();
         let mut terminal_output_decoder = TerminalOutputDecoder::default();
         terminal_output_decoder.set_encoding(&settings.interaction_default_encoding);
@@ -420,6 +421,9 @@ impl NyaTermApp {
             keyword_highlight_edit_field: KeywordHighlightEditorField::Name,
             keyword_highlight_focus: cx.focus_handle(),
             settings,
+            settings_master_password_enabled,
+            settings_master_password_draft: String::new(),
+            settings_master_password_focus: cx.focus_handle(),
             keybinding_recording_id: None,
             keybinding_pending_keys: None,
             keybinding_search_draft: String::new(),
@@ -741,6 +745,7 @@ impl NyaTermApp {
             main_mode: MainMode::Workspace,
             settings_active_tab: SettingsTab::General,
             settings_expanded_groups: HashSet::from(["workspace".to_string()]),
+            settings_draft_snapshot: None,
             settings_previous_left_collapsed: None,
             settings_previous_right_collapsed: None,
             active_left_panel,

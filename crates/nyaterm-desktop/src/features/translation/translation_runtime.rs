@@ -46,18 +46,13 @@ impl NyaTermApp {
     }
 
     pub(in crate::features) fn save_translation_settings(&mut self, cx: &mut Context<Self>) {
-        let mut next = self.translation_settings.clone();
-        if !self.translation_secret_draft.deepl_api_key.is_empty() {
-            next.deepl_api_key = self.translation_secret_draft.deepl_api_key.clone();
-        }
-        if !self.translation_secret_draft.baidu_app_key.is_empty() {
-            next.baidu_app_key = self.translation_secret_draft.baidu_app_key.clone();
-        }
-        if !self.translation_secret_draft.ali_app_key.is_empty() {
-            next.ali_app_key = self.translation_secret_draft.ali_app_key.clone();
-        }
-        if !self.translation_secret_draft.youdao_app_key.is_empty() {
-            next.youdao_app_key = self.translation_secret_draft.youdao_app_key.clone();
+        let next = self.pending_translation_settings();
+        if self.defer_settings_persistence(cx) {
+            self.translation_settings = next;
+            self.translation_secret_draft = TranslationSecretDraft::default();
+            self.translate_target_language = self.translation_settings.target_language.clone();
+            self.translate_status = "translation settings staged".to_string();
+            return;
         }
 
         match ConnectionStore::open_with_portable_key_path(

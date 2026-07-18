@@ -145,6 +145,124 @@ impl NyaTermApp {
                             .child(self.settings_active_panel(backup_snapshot_prompt, cx)),
                     ),
             )
+            .child(self.settings_action_footer(cx))
+    }
+
+    fn settings_action_footer(&mut self, cx: &mut Context<Self>) -> impl IntoElement {
+        let palette = self.theme_palette();
+        let dirty = self.settings_draft_dirty();
+        let validation_error = dirty.then(|| self.pending_settings_cloud_error()).flatten();
+        let apply_disabled = !dirty || validation_error.is_some();
+        let confirm_disabled = validation_error.is_some();
+        let status = validation_error.clone().unwrap_or_else(|| {
+            if dirty {
+                "Unsaved changes"
+            } else {
+                "Settings are up to date"
+            }
+            .to_string()
+        });
+
+        div()
+            .h(px(48.))
+            .flex_none()
+            .flex()
+            .items_center()
+            .justify_between()
+            .gap_3()
+            .px_3()
+            .border_t_1()
+            .border_color(rgb(palette.border))
+            .bg(rgb(palette.section_header))
+            .child(
+                div()
+                    .min_w_0()
+                    .text_size(px(11.))
+                    .text_color(if validation_error.is_some() {
+                        rgb(palette.warning)
+                    } else {
+                        rgb(palette.text_muted)
+                    })
+                    .child(status),
+            )
+            .child(
+                div()
+                    .flex()
+                    .items_center()
+                    .gap_2()
+                    .child(
+                        div()
+                            .id("settings-cancel")
+                            .h(px(28.))
+                            .px_3()
+                            .flex()
+                            .items_center()
+                            .rounded_md()
+                            .border_1()
+                            .border_color(rgb(palette.border))
+                            .text_size(px(11.))
+                            .text_color(rgb(palette.text))
+                            .cursor_pointer()
+                            .hover(move |this| this.bg(rgb(palette.hover)))
+                            .child("Cancel")
+                            .on_click(cx.listener(|this, _, _, cx| {
+                                this.cancel_settings(cx);
+                            })),
+                    )
+                    .child(
+                        div()
+                            .id("settings-apply")
+                            .h(px(28.))
+                            .px_3()
+                            .flex()
+                            .items_center()
+                            .rounded_md()
+                            .border_1()
+                            .border_color(rgb(palette.border))
+                            .text_size(px(11.))
+                            .text_color(if apply_disabled {
+                                rgb(palette.text_dimmed)
+                            } else {
+                                rgb(palette.text)
+                            })
+                            .when(!apply_disabled, |this| {
+                                this.cursor_pointer()
+                                    .hover(move |this| this.bg(rgb(palette.hover)))
+                                    .on_click(cx.listener(|this, _, _, cx| {
+                                        this.apply_settings_draft(false, cx);
+                                    }))
+                            })
+                            .child("Apply"),
+                    )
+                    .child(
+                        div()
+                            .id("settings-confirm")
+                            .h(px(28.))
+                            .px_3()
+                            .flex()
+                            .items_center()
+                            .rounded_md()
+                            .bg(if confirm_disabled {
+                                rgb(palette.surface_elevated)
+                            } else {
+                                rgb(palette.accent)
+                            })
+                            .text_size(px(11.))
+                            .font_weight(FontWeight(600.))
+                            .text_color(if confirm_disabled {
+                                rgb(palette.text_dimmed)
+                            } else {
+                                rgb(0xffffff)
+                            })
+                            .when(!confirm_disabled, |this| {
+                                this.cursor_pointer()
+                                    .on_click(cx.listener(|this, _, _, cx| {
+                                        this.confirm_settings_draft(cx);
+                                    }))
+                            })
+                            .child("Confirm"),
+                    ),
+            )
     }
 
     fn settings_sidebar(&mut self, cx: &mut Context<Self>) -> impl IntoElement {

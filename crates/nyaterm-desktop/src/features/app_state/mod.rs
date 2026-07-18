@@ -5,7 +5,7 @@ mod types;
 
 pub(in crate::features) use types::{
     PendingSavedConnectionStart, PendingSessionStart, SavedConnectionStartOptions,
-    SessionPaneState, TerminalRuntimeUiState,
+    SessionPaneState, SettingsDraftSnapshot, TerminalRuntimeUiState,
 };
 
 pub struct NyaTermApp {
@@ -192,6 +192,9 @@ pub struct NyaTermApp {
     pub(in crate::features) keyword_highlight_edit_field: KeywordHighlightEditorField,
     pub(in crate::features) keyword_highlight_focus: FocusHandle,
     pub(in crate::features) settings: AppSettingsSummary,
+    pub(in crate::features) settings_master_password_enabled: bool,
+    pub(in crate::features) settings_master_password_draft: String,
+    pub(in crate::features) settings_master_password_focus: FocusHandle,
     pub(in crate::features) keybinding_recording_id: Option<String>,
     pub(in crate::features) keybinding_pending_keys: Option<String>,
     pub(in crate::features) keybinding_search_draft: String,
@@ -556,6 +559,8 @@ pub struct NyaTermApp {
     pub(in crate::features) settings_active_tab: SettingsTab,
     /// Expanded multi-item groups in the settings sidebar (Tauri keeps this local to the page).
     pub(in crate::features) settings_expanded_groups: HashSet<String>,
+    /// Committed values captured when the in-window settings page opens.
+    pub(in crate::features) settings_draft_snapshot: Option<SettingsDraftSnapshot>,
     /// Main workspace panel state to restore after leaving the in-window settings page.
     pub(in crate::features) settings_previous_left_collapsed: Option<bool>,
     pub(in crate::features) settings_previous_right_collapsed: Option<bool>,

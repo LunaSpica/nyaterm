@@ -209,7 +209,7 @@ impl NyaTermApp {
         self.save_appearance_settings(cx);
     }
 
-    fn invalidate_terminal_cell_metrics(&mut self) {
+    pub(in crate::features) fn invalidate_terminal_cell_metrics(&mut self) {
         self.terminal_cell_metrics = None;
         self.sync_terminal_cell_metrics_to_screens();
         self.resize_all_known_terminal_surfaces();
@@ -435,6 +435,10 @@ impl NyaTermApp {
     }
 
     fn save_appearance_settings(&mut self, cx: &mut Context<Self>) {
+        if self.defer_settings_persistence(cx) {
+            self.refresh_visible_terminal_surfaces(cx);
+            return;
+        }
         match ConnectionStore::open_with_portable_key_path(
             self.runtime.config_dir(),
             self.runtime.portable_key_path().map(ToOwned::to_owned),

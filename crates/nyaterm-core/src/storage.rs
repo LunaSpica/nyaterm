@@ -1575,6 +1575,52 @@ impl ConnectionStore {
         Ok(stored == password)
     }
 
+    pub fn save_master_password(
+        &self,
+        next_password: Option<&str>,
+    ) -> Result<AppSettingsSummary, StorageError> {
+        if next_password.is_some_and(str::is_empty) {
+            return Err(StorageError::InvalidData(
+                "Master password cannot be empty when enabled".to_string(),
+            ));
+        }
+
+        let bootstrap = CredentialCrypto::new(self.portable_key_path.clone(), None);
+        let current_password = self
+            .load_encrypted_master_password()?
+            .map(|token| bootstrap.decrypt_settings_secret(&token))
+            .transpose()?;
+        let rewrapped_master_key = self
+            .load_master_key_token()?
+            .map(|token| {
+                CredentialCrypto::new(self.portable_key_path.clone(), current_password.clone())
+                    .rewrap_master_key_token(&token, next_password)
+            })
+            .transpose()?;
+
+        let mut value = self.load_settings_value()?;
+        let encoded_password = next_password
+            .map(|password| bootstrap.encrypt_settings_secret(password))
+            .transpose()?;
+        set_nested_json_value(
+            &mut value,
+            &["security", "master_password"],
+            encoded_password
+                .map(serde_json::Value::String)
+                .unwrap_or(serde_json::Value::Null),
+        );
+
+        let txn = self.db.begin_write()?;
+        write_json_in_txn(&txn, SETTINGS_TABLE, SETTINGS_DEFAULT, &value)?;
+        if let Some(token) = rewrapped_master_key.as_deref() {
+            txn.open_table(META_TABLE)?.insert(META_MASTER_KEY, token)?;
+            txn.open_table(TEXT_DOCS_TABLE)?
+                .insert(LEGACY_TEXT_MASTER_KEY, token)?;
+        }
+        txn.commit()?;
+        self.load_app_settings_summary()
+    }
+
     pub fn save_host_key_policy(&self, policy: &str) -> Result<AppSettingsSummary, StorageError> {
         let policy = normalize_host_key_policy(policy);
         let mut value = self.load_settings_value()?;
@@ -6791,6 +6837,67 @@ mod tests {
                 .expect("verify incorrect")
         );
 
+        std::fs::remove_dir_all(dir).ok();
+    }
+
+    #[test]
+    fn changing_master_password_preserves_encrypted_cloud_secrets() {
+        let dir = unique_temp_dir("change-master-password");
+        let store = ConnectionStore::open(&dir).expect("store");
+        let mut cloud = CloudSyncSettings::default();
+        cloud.webdav.password = Some("cloud-secret".to_string());
+        store
+            .save_cloud_sync_settings(cloud)
+            .expect("save cloud secret");
+
+        let summary = store
+            .save_master_password(Some("first-password"))
+            .expect("set password");
+        assert!(summary.has_master_password);
+        assert!(
+            store
+                .verify_master_password("first-password")
+                .expect("verify")
+        );
+        assert_eq!(
+            store
+                .load_cloud_sync_settings()
+                .expect("load after setting password")
+                .webdav
+                .password
+                .as_deref(),
+            Some("cloud-secret")
+        );
+
+        store
+            .save_master_password(Some("second-password"))
+            .expect("change password");
+        assert!(
+            store
+                .verify_master_password("second-password")
+                .expect("verify")
+        );
+        assert_eq!(
+            store
+                .load_cloud_sync_settings()
+                .expect("load after changing password")
+                .webdav
+                .password
+                .as_deref(),
+            Some("cloud-secret")
+        );
+
+        let summary = store.save_master_password(None).expect("remove password");
+        assert!(!summary.has_master_password);
+        assert_eq!(
+            store
+                .load_cloud_sync_settings()
+                .expect("load after removing password")
+                .webdav
+                .password
+                .as_deref(),
+            Some("cloud-secret")
+        );
         std::fs::remove_dir_all(dir).ok();
     }
 

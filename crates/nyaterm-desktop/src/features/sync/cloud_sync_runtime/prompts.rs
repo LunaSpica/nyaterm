@@ -2,10 +2,16 @@ use super::*;
 
 impl NyaTermApp {
     pub(in crate::features) fn prompt_local_cloud_sync_push(&mut self, cx: &mut Context<Self>) {
+        if self.block_cloud_sync_for_settings_draft(cx) {
+            return;
+        }
         self.start_snapshot_password_prompt(SnapshotPasswordPromptKind::CloudPush, cx);
     }
 
     pub(in crate::features) fn prompt_local_cloud_sync_pull(&mut self, cx: &mut Context<Self>) {
+        if self.block_cloud_sync_for_settings_draft(cx) {
+            return;
+        }
         if self.active_session_id.is_some() || self.has_pending_session_start() {
             self.terminal_status = "close active session before pulling cloud sync".to_string();
             cx.notify();
@@ -15,10 +21,16 @@ impl NyaTermApp {
     }
 
     pub(in crate::features) fn prompt_provider_cloud_sync_push(&mut self, cx: &mut Context<Self>) {
+        if self.block_cloud_sync_for_settings_draft(cx) {
+            return;
+        }
         self.start_snapshot_password_prompt(SnapshotPasswordPromptKind::CloudProviderPush, cx);
     }
 
     pub(in crate::features) fn prompt_provider_cloud_sync_pull(&mut self, cx: &mut Context<Self>) {
+        if self.block_cloud_sync_for_settings_draft(cx) {
+            return;
+        }
         if self.active_session_id.is_some() || self.has_pending_session_start() {
             self.terminal_status =
                 "close active session before pulling provider cloud sync".to_string();
@@ -33,6 +45,9 @@ impl NyaTermApp {
         provider_action: bool,
         cx: &mut Context<Self>,
     ) {
+        if self.block_cloud_sync_for_settings_draft(cx) {
+            return;
+        }
         let kind = if provider_action {
             SnapshotPasswordPromptKind::CloudProviderForcePush
         } else {
@@ -46,6 +61,9 @@ impl NyaTermApp {
         provider_action: bool,
         cx: &mut Context<Self>,
     ) {
+        if self.block_cloud_sync_for_settings_draft(cx) {
+            return;
+        }
         if self.active_session_id.is_some() || self.has_pending_session_start() {
             self.terminal_status = if provider_action {
                 "close active session before force pulling provider cloud sync"

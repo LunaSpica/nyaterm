@@ -19,6 +19,9 @@ impl NyaTermApp {
 
     fn save_keyword_highlights(&mut self, cx: &mut Context<Self>) {
         self.invalidate_paint_theme_caches();
+        if self.defer_settings_persistence(cx) {
+            return;
+        }
         match ConnectionStore::open_with_portable_key_path(
             self.runtime.config_dir(),
             self.runtime.portable_key_path().map(ToOwned::to_owned),
@@ -42,6 +45,9 @@ impl NyaTermApp {
     }
 
     pub(in crate::features) fn prompt_keyword_highlight_import(&mut self, cx: &mut Context<Self>) {
+        if self.block_import_for_settings_draft(cx) {
+            return;
+        }
         if self.keyword_highlight_path_prompt.is_some() {
             self.terminal_status = "keyword highlight import picker is already open".to_string();
             cx.notify();
@@ -103,6 +109,7 @@ impl NyaTermApp {
                 total_rules,
             } => {
                 self.refresh_keyword_highlights();
+                self.rebase_open_settings_draft();
                 self.terminal_status = format!(
                     "imported {imported_rules} keyword highlight rule(s), updated {updated_rules}, total {total_rules}"
                 );

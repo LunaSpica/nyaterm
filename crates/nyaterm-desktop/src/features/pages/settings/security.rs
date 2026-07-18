@@ -6,12 +6,25 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
         let palette = self.theme_palette();
-        let master_password_status = if self.settings.has_master_password {
+        let master_password_status = if !self.settings_master_password_enabled {
+            "Disabled"
+        } else if !self.settings_master_password_draft.is_empty() {
+            "New password staged"
+        } else if self.settings.has_master_password {
             "Configured"
         } else if self.cloud_sync_settings.enabled {
             "Required for cloud sync"
         } else {
-            "Not set"
+            "Password required"
+        };
+        let master_password_display = if self.settings_master_password_draft.is_empty() {
+            if self.settings.has_master_password {
+                "Stored password unchanged".to_string()
+            } else {
+                " ".to_string()
+            }
+        } else {
+            "*".repeat(self.settings_master_password_draft.chars().count().min(24))
         };
         let idle_label = if self.settings.idle_lock_minutes == 0 {
             "Manual only".to_string()
@@ -30,23 +43,74 @@ impl NyaTermApp {
                     .flex()
                     .flex_col()
                     .gap_3()
+                    .child(settings_form_row(
+                        palette,
+                        "Enable master password",
+                        Some(SharedString::from(
+                            "Required while cloud sync is enabled.",
+                        )),
+                        settings_switch(
+                            palette,
+                            "settings-master-password-enabled",
+                            self.settings_master_password_enabled,
+                            cx.listener(|this, _, _, cx| {
+                                this.toggle_settings_master_password(cx);
+                            }),
+                        ),
+                    ))
                     .child(settings_form_row(palette,
                         "Status",
                         Some(SharedString::from(master_password_status)),
                         div()
                             .text_size(px(11.))
                             .font_weight(FontWeight(600.))
-                            .text_color(if self.settings.has_master_password {
+                            .text_color(if self.settings_master_password_enabled
+                                && (self.settings.has_master_password
+                                    || !self.settings_master_password_draft.is_empty())
+                            {
                                 rgb(palette.success)
                             } else {
                                 rgb(palette.warning)
                             })
-                            .child(if self.settings.has_master_password {
+                            .child(if self.settings_master_password_enabled
+                                && (self.settings.has_master_password
+                                    || !self.settings_master_password_draft.is_empty())
+                            {
                                 "Ready"
                             } else {
                                 "Pending"
                             }),
                     ))
+                    .when(self.settings_master_password_enabled, |this| {
+                        this.child(settings_form_row(
+                            palette,
+                            if self.settings.has_master_password {
+                                "New password"
+                            } else {
+                                "Password"
+                            },
+                            Some(SharedString::from(if self.settings.has_master_password {
+                                "Leave unchanged to keep the stored password."
+                            } else {
+                                "Enter a non-empty password before applying."
+                            })),
+                            transfer_input(
+                                "settings-master-password-input",
+                                "Master password",
+                                master_password_display,
+                                !self.settings_master_password_draft.is_empty(),
+                                palette,
+                            )
+                            .track_focus(&self.settings_master_password_focus)
+                            .on_click(cx.listener(|this, _, window, cx| {
+                                window.focus(&this.settings_master_password_focus);
+                                cx.notify();
+                            }))
+                            .on_key_down(cx.listener(|this, event: &KeyDownEvent, _, cx| {
+                                this.handle_settings_master_password_key_down(event, cx);
+                            })),
+                        ))
+                    })
                     .child(settings_form_row(palette,
                         "Cloud sync dependency",
                         Some(SharedString::from(

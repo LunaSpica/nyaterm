@@ -88,6 +88,13 @@ impl NyaTermApp {
         success_message: String,
         cx: &mut Context<Self>,
     ) {
+        self.settings.keybindings = keybindings.clone();
+        if self.defer_settings_persistence(cx) {
+            self.keybinding_recording_id = None;
+            self.keybinding_pending_keys = None;
+            self.terminal_status = success_message.replace("saved", "staged");
+            return;
+        }
         match ConnectionStore::open_with_portable_key_path(
             self.runtime.config_dir(),
             self.runtime.portable_key_path().map(ToOwned::to_owned),

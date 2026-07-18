@@ -64,6 +64,27 @@ impl CredentialCrypto {
         }
     }
 
+    pub fn encrypt_settings_secret(
+        &self,
+        plaintext: &str,
+    ) -> Result<String, CredentialCryptoError> {
+        let key = self.derive_wrapping_key(None)?;
+        encrypt_bytes(plaintext.as_bytes(), &key)
+    }
+
+    pub fn rewrap_master_key_token(
+        &self,
+        token: &str,
+        next_password: Option<&str>,
+    ) -> Result<String, CredentialCryptoError> {
+        let raw = B64.decode(token.trim())?;
+        let (master_key, _) =
+            self.unwrap_master_key_with_compatible_wrapping(&raw, self.master_password.as_deref())?;
+        let next_password = next_password.filter(|value| !value.is_empty());
+        let wrapping_key = self.derive_wrapping_key(next_password)?;
+        encrypt_bytes(master_key.as_slice(), &wrapping_key)
+    }
+
     pub fn decrypt_secret(
         &self,
         master_key_token: &str,
@@ -272,6 +293,38 @@ mod tests {
                 .decrypt_secret(&master_key_token, &secret)
                 .expect("decrypt secret"),
             "cloud-token"
+        );
+    }
+
+    #[test]
+    fn rewraps_master_key_between_fallback_and_password_keys() {
+        let fallback = CredentialCrypto::default();
+        let original_token = fallback
+            .generate_master_key_token()
+            .expect("generate master key");
+        let secret = fallback
+            .encrypt_secret(&original_token, "preserved-secret")
+            .expect("encrypt secret");
+
+        let password_token = fallback
+            .rewrap_master_key_token(&original_token, Some("swordfish"))
+            .expect("wrap with password");
+        let password_crypto = CredentialCrypto::new(None, Some("swordfish".to_string()));
+        assert_eq!(
+            password_crypto
+                .decrypt_secret(&password_token, &secret)
+                .expect("decrypt with password"),
+            "preserved-secret"
+        );
+
+        let fallback_token = password_crypto
+            .rewrap_master_key_token(&password_token, None)
+            .expect("wrap with fallback");
+        assert_eq!(
+            fallback
+                .decrypt_secret(&fallback_token, &secret)
+                .expect("decrypt with fallback"),
+            "preserved-secret"
         );
     }
 

@@ -21,7 +21,7 @@ impl NyaTermApp {
     ) {
         self.settings.startup_restore_window_layout = !self.settings.startup_restore_window_layout;
         self.save_general_settings(cx);
-        if !self.settings.startup_restore_window_layout {
+        if !self.settings.startup_restore_window_layout && self.settings_draft_snapshot.is_none() {
             // Clear stored layouts when the user disables restore.
             let _ = ConnectionStore::open_with_portable_key_path(
                 self.runtime.config_dir(),
@@ -77,6 +77,9 @@ impl NyaTermApp {
     }
 
     pub(in crate::features) fn save_diagnostics_settings(&mut self, cx: &mut Context<Self>) {
+        if self.defer_settings_persistence(cx) {
+            return;
+        }
         match ConnectionStore::open_with_portable_key_path(
             self.runtime.config_dir(),
             self.runtime.portable_key_path().map(ToOwned::to_owned),
@@ -99,6 +102,9 @@ impl NyaTermApp {
     }
 
     pub(in crate::features) fn save_general_settings(&mut self, cx: &mut Context<Self>) {
+        if self.defer_settings_persistence(cx) {
+            return;
+        }
         match ConnectionStore::open_with_portable_key_path(
             self.runtime.config_dir(),
             self.runtime.portable_key_path().map(ToOwned::to_owned),
@@ -139,7 +145,9 @@ impl NyaTermApp {
     pub(in crate::features) fn toggle_command_suggestions(&mut self, cx: &mut Context<Self>) {
         self.settings.interaction_command_suggestions_enabled =
             !self.settings.interaction_command_suggestions_enabled;
-        if !self.settings.interaction_command_suggestions_enabled {
+        if !self.settings.interaction_command_suggestions_enabled
+            && self.settings_draft_snapshot.is_none()
+        {
             self.command_suggestions = None;
             self.command_input_tracker = TerminalInputState::new();
             self.command_suggestions_suppressed = false;
@@ -214,6 +222,9 @@ impl NyaTermApp {
     }
 
     pub(in crate::features) fn save_interaction_settings(&mut self, cx: &mut Context<Self>) {
+        if self.defer_settings_persistence(cx) {
+            return;
+        }
         match ConnectionStore::open_with_portable_key_path(
             self.runtime.config_dir(),
             self.runtime.portable_key_path().map(ToOwned::to_owned),
@@ -254,6 +265,9 @@ impl NyaTermApp {
     }
 
     pub(in crate::features) fn save_screen_lock_settings(&mut self, cx: &mut Context<Self>) {
+        if self.defer_settings_persistence(cx) {
+            return;
+        }
         match ConnectionStore::open_with_portable_key_path(
             self.runtime.config_dir(),
             self.runtime.portable_key_path().map(ToOwned::to_owned),

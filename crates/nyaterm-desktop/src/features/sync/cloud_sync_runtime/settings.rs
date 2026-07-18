@@ -12,6 +12,18 @@ impl NyaTermApp {
     }
 
     pub(in crate::features) fn toggle_cloud_sync_enabled(&mut self, cx: &mut Context<Self>) {
+        if !self.cloud_sync_settings.enabled
+            && (!self.settings_master_password_enabled
+                || (!self.settings.has_master_password
+                    && self.settings_master_password_draft.is_empty()))
+        {
+            self.settings_active_tab = SettingsTab::Security;
+            self.cloud_sync_status =
+                "configure a master password before enabling cloud sync".to_string();
+            self.terminal_status = self.cloud_sync_status.clone();
+            cx.notify();
+            return;
+        }
         self.cloud_sync_settings.enabled = !self.cloud_sync_settings.enabled;
         self.cloud_sync_status = if self.cloud_sync_settings.enabled {
             "cloud sync enabled; save to persist"
@@ -35,116 +47,12 @@ impl NyaTermApp {
     }
 
     pub(in crate::features) fn save_cloud_sync_settings(&mut self, cx: &mut Context<Self>) {
-        let mut next = self.cloud_sync_settings.clone();
-        if !self.cloud_sync_secret_draft.webdav_password.is_empty() {
-            next.webdav.password = Some(self.cloud_sync_secret_draft.webdav_password.clone());
-        }
-        if !self.cloud_sync_secret_draft.s3_access_key_id.is_empty() {
-            next.s3.access_key_id = Some(self.cloud_sync_secret_draft.s3_access_key_id.clone());
-        }
-        if !self.cloud_sync_secret_draft.s3_secret_access_key.is_empty() {
-            next.s3.secret_access_key =
-                Some(self.cloud_sync_secret_draft.s3_secret_access_key.clone());
-        }
-        if !self.cloud_sync_secret_draft.s3_session_token.is_empty() {
-            next.s3.session_token = Some(self.cloud_sync_secret_draft.s3_session_token.clone());
-        }
-        if !self
-            .cloud_sync_secret_draft
-            .google_drive_access_token
-            .is_empty()
-        {
-            next.google_drive.access_token = Some(
-                self.cloud_sync_secret_draft
-                    .google_drive_access_token
-                    .clone(),
-            );
-        }
-        if !self
-            .cloud_sync_secret_draft
-            .google_drive_refresh_token
-            .is_empty()
-        {
-            next.google_drive.refresh_token = Some(
-                self.cloud_sync_secret_draft
-                    .google_drive_refresh_token
-                    .clone(),
-            );
-        }
-        if !self
-            .cloud_sync_secret_draft
-            .google_drive_client_secret
-            .is_empty()
-        {
-            next.google_drive.client_secret = Some(
-                self.cloud_sync_secret_draft
-                    .google_drive_client_secret
-                    .clone(),
-            );
-        }
-        if !self
-            .cloud_sync_secret_draft
-            .onedrive_access_token
-            .is_empty()
-        {
-            next.onedrive.access_token =
-                Some(self.cloud_sync_secret_draft.onedrive_access_token.clone());
-        }
-        if !self
-            .cloud_sync_secret_draft
-            .onedrive_refresh_token
-            .is_empty()
-        {
-            next.onedrive.refresh_token =
-                Some(self.cloud_sync_secret_draft.onedrive_refresh_token.clone());
-        }
-        if !self
-            .cloud_sync_secret_draft
-            .onedrive_client_secret
-            .is_empty()
-        {
-            next.onedrive.client_secret =
-                Some(self.cloud_sync_secret_draft.onedrive_client_secret.clone());
-        }
-        if !self
-            .cloud_sync_secret_draft
-            .aliyun_drive_access_token
-            .is_empty()
-        {
-            next.aliyun_drive.access_token = Some(
-                self.cloud_sync_secret_draft
-                    .aliyun_drive_access_token
-                    .clone(),
-            );
-        }
-        if !self
-            .cloud_sync_secret_draft
-            .aliyun_drive_refresh_token
-            .is_empty()
-        {
-            next.aliyun_drive.refresh_token = Some(
-                self.cloud_sync_secret_draft
-                    .aliyun_drive_refresh_token
-                    .clone(),
-            );
-        }
-        if !self
-            .cloud_sync_secret_draft
-            .aliyun_drive_client_secret
-            .is_empty()
-        {
-            next.aliyun_drive.client_secret = Some(
-                self.cloud_sync_secret_draft
-                    .aliyun_drive_client_secret
-                    .clone(),
-            );
-        }
-        if !self.cloud_sync_secret_draft.gitee_token.is_empty() {
-            next.gitee_snippet.access_token =
-                Some(self.cloud_sync_secret_draft.gitee_token.clone());
-        }
-        if !self.cloud_sync_secret_draft.github_token.is_empty() {
-            next.github_gist.access_token = Some(self.cloud_sync_secret_draft.github_token.clone());
+        let next = self.pending_cloud_sync_settings();
+        if self.defer_settings_persistence(cx) {
+            self.cloud_sync_settings = next;
+            self.cloud_sync_secret_draft = CloudSyncSecretDraft::default();
+            self.cloud_sync_status = "cloud sync settings staged".to_string();
+            return;
         }
 
         match ConnectionStore::open_with_portable_key_path(

@@ -1,5 +1,21 @@
 use super::*;
 
+#[derive(Debug, Clone)]
+pub(in crate::features) struct SettingsDraftSnapshot {
+    pub settings: AppSettingsSummary,
+    pub ai_settings: AiSettings,
+    pub ai_model_draft: String,
+    pub ai_base_url_draft: String,
+    pub ai_secret_draft: String,
+    pub cloud_sync_settings: CloudSyncSettings,
+    pub cloud_sync_secret_draft: CloudSyncSecretDraft,
+    pub translation_settings: TranslationSettings,
+    pub translation_secret_draft: TranslationSecretDraft,
+    pub keyword_highlights: KeywordHighlightConfig,
+    pub master_password_enabled: bool,
+    pub master_password_draft: String,
+}
+
 pub(in crate::features) struct TerminalRuntimeUiState {
     pub event_pump_started: bool,
     pub session_event_backlog_active: bool,

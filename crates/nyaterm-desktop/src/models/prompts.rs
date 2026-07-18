@@ -118,7 +118,7 @@ impl TranslateInputField {
     }
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub(crate) struct CloudSyncSecretDraft {
     pub(crate) webdav_password: String,
     pub(crate) s3_access_key_id: String,
@@ -137,7 +137,7 @@ pub(crate) struct CloudSyncSecretDraft {
     pub(crate) github_token: String,
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub(crate) struct TranslationSecretDraft {
     pub(crate) deepl_api_key: String,
     pub(crate) baidu_app_key: String,

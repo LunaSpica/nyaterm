@@ -17,7 +17,9 @@ impl NyaTermApp {
     ) {
         let next = (self.settings.terminal_scrollback_lines as i32 + delta).clamp(100, 100_000);
         self.settings.terminal_scrollback_lines = next as u32;
-        self.enforce_terminal_scrollback_limit();
+        if self.settings_draft_snapshot.is_none() {
+            self.enforce_terminal_scrollback_limit();
+        }
         self.save_terminal_settings(cx);
     }
 
@@ -116,6 +118,9 @@ impl NyaTermApp {
     }
 
     pub(in crate::features) fn save_terminal_settings(&mut self, cx: &mut Context<Self>) {
+        if self.defer_settings_persistence(cx) {
+            return;
+        }
         match ConnectionStore::open_with_portable_key_path(
             self.runtime.config_dir(),
             self.runtime.portable_key_path().map(ToOwned::to_owned),

@@ -85,6 +85,9 @@ impl NyaTermApp {
     }
 
     pub(in crate::features) fn prompt_config_import(&mut self, cx: &mut Context<Self>) {
+        if self.block_import_for_settings_draft(cx) {
+            return;
+        }
         if self.config_path_prompt.is_some() {
             self.terminal_status = "config path picker is already open".to_string();
             cx.notify();
@@ -135,6 +138,9 @@ impl NyaTermApp {
     }
 
     pub(in crate::features) fn prompt_portable_snapshot_import(&mut self, cx: &mut Context<Self>) {
+        if self.block_import_for_settings_draft(cx) {
+            return;
+        }
         if self.config_path_prompt.is_some() {
             self.terminal_status = "config path picker is already open".to_string();
             cx.notify();
@@ -188,6 +194,9 @@ impl NyaTermApp {
         &mut self,
         cx: &mut Context<Self>,
     ) {
+        if self.block_import_for_settings_draft(cx) {
+            return;
+        }
         if self.active_session_id.is_some() || self.has_pending_session_start() {
             self.terminal_status = "close active session before importing config".to_string();
             cx.notify();
@@ -491,6 +500,7 @@ impl NyaTermApp {
             }
             ConfigPathPromptResult::Imported(info) => {
                 self.refresh_store_from_runtime();
+                self.rebase_open_settings_draft();
                 let safety = info
                     .safety_backup_path
                     .as_ref()
@@ -616,6 +626,14 @@ impl NyaTermApp {
                         self.cloud_sync_settings = store
                             .load_cloud_sync_settings()
                             .unwrap_or_else(|_| self.cloud_sync_settings.clone());
+                        self.cloud_sync_secret_draft = CloudSyncSecretDraft::default();
+                        self.ai_settings = store
+                            .load_ai_settings()
+                            .unwrap_or_else(|_| self.ai_settings.clone());
+                        self.ai_secret_draft.clear();
+                        self.sync_ai_drafts_from_active_profile();
+                        self.settings_master_password_enabled = self.settings.has_master_password;
+                        self.settings_master_password_draft.clear();
                         self.cloud_sync_state = store
                             .load_cloud_sync_state()
                             .unwrap_or_else(|_| self.cloud_sync_state.clone());

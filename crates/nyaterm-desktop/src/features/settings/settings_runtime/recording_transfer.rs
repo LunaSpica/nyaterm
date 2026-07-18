@@ -6,6 +6,11 @@ impl NyaTermApp {
         policy: &'static str,
         cx: &mut Context<Self>,
     ) {
+        self.settings.host_key_policy = policy.to_string();
+        if self.defer_settings_persistence(cx) {
+            self.terminal_status = format!("host key policy staged as {policy}");
+            return;
+        }
         match ConnectionStore::open_with_portable_key_path(
             self.runtime.config_dir(),
             self.runtime.portable_key_path().map(ToOwned::to_owned),
@@ -60,6 +65,9 @@ impl NyaTermApp {
     pub(in crate::features) fn save_recording_settings(&mut self, cx: &mut Context<Self>) {
         self.recording_manager
             .set_memory_limit(self.settings.recording_memory_limit_bytes as usize);
+        if self.defer_settings_persistence(cx) {
+            return;
+        }
         match ConnectionStore::open_with_portable_key_path(
             self.runtime.config_dir(),
             self.runtime.portable_key_path().map(ToOwned::to_owned),
@@ -179,6 +187,9 @@ impl NyaTermApp {
         success_status: &'static str,
         cx: &mut Context<Self>,
     ) {
+        if self.defer_settings_persistence(cx) {
+            return;
+        }
         match ConnectionStore::open_with_portable_key_path(
             self.runtime.config_dir(),
             self.runtime.portable_key_path().map(ToOwned::to_owned),

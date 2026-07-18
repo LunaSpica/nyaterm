@@ -7,6 +7,9 @@ impl NyaTermApp {
         force: bool,
         cx: &mut Context<Self>,
     ) {
+        if self.block_cloud_sync_for_settings_draft(cx) {
+            return;
+        }
         let options = self.local_cloud_sync_options(master_password);
         let state = self.cloud_sync_state.clone();
         let started_at = Instant::now();
@@ -81,6 +84,9 @@ impl NyaTermApp {
         force: bool,
         cx: &mut Context<Self>,
     ) {
+        if self.block_cloud_sync_for_settings_draft(cx) {
+            return;
+        }
         let options = self.local_cloud_sync_options(master_password);
         let state = self.cloud_sync_state.clone();
         let started_at = Instant::now();
@@ -156,6 +162,9 @@ impl NyaTermApp {
         force: bool,
         cx: &mut Context<Self>,
     ) {
+        if self.block_cloud_sync_for_settings_draft(cx) {
+            return;
+        }
         let options = self.local_cloud_sync_options(master_password);
         let state = self.cloud_sync_state.clone();
         let settings = self.cloud_sync_settings.clone();
@@ -232,6 +241,9 @@ impl NyaTermApp {
         force: bool,
         cx: &mut Context<Self>,
     ) {
+        if self.block_cloud_sync_for_settings_draft(cx) {
+            return;
+        }
         let options = self.local_cloud_sync_options(master_password);
         let state = self.cloud_sync_state.clone();
         let settings = self.cloud_sync_settings.clone();

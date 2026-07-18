@@ -1,7 +1,7 @@
 use super::*;
 
 impl NyaTermApp {
-    pub(in crate::features) fn save_ai_settings(&mut self, cx: &mut Context<Self>) {
+    pub(in crate::features) fn pending_ai_settings(&self) -> AiSettings {
         let mut next = self.ai_settings.clone();
         let active_id = next.active_profile_id.clone();
         let mut active_kind = None;
@@ -95,7 +95,18 @@ impl NyaTermApp {
                 next.default_model_id = Some(model_id);
             }
         }
+        next
+    }
 
+    pub(in crate::features) fn save_ai_settings(&mut self, cx: &mut Context<Self>) {
+        let next = self.pending_ai_settings();
+        if self.defer_settings_persistence(cx) {
+            self.ai_settings = next;
+            self.ai_secret_draft.clear();
+            self.sync_ai_drafts_from_active_profile();
+            self.ai_status = "AI settings staged".to_string();
+            return;
+        }
         match ConnectionStore::open_with_portable_key_path(
             self.runtime.config_dir(),
             self.runtime.portable_key_path().map(ToOwned::to_owned),
@@ -123,6 +134,10 @@ impl NyaTermApp {
     /// Persist current `ai_settings` without rewriting active profile drafts (Tauri live update).
 
     pub(in crate::features) fn persist_ai_settings_now(&mut self, cx: &mut Context<Self>) {
+        if self.defer_settings_persistence(cx) {
+            self.ai_status = "AI settings staged".to_string();
+            return;
+        }
         let next = self.ai_settings.clone();
         match ConnectionStore::open_with_portable_key_path(
             self.runtime.config_dir(),
