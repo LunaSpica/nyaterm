@@ -45,6 +45,7 @@ impl NyaTermApp {
 
     pub(super) fn drain_runtime_background_events(
         &mut self,
+        window: &mut Window,
         cx: &mut Context<Self>,
         started_at: Instant,
         timings: &mut RuntimeBackgroundDrainTimings,
@@ -80,7 +81,7 @@ impl NyaTermApp {
             self.drain_pending_credential_autofill_detection(cx)
         );
         drain_stage!(recording, self.drain_recording_pipeline_events());
-        drain_stage!(transfer, self.drain_transfer_events(cx));
+        drain_stage!(transfer, self.drain_transfer_events(window, cx));
         drain_stage!(
             ai,
             self.drain_ai_discovery_events(cx)
@@ -180,7 +181,7 @@ impl NyaTermApp {
         dirty |= self.drain_session_events(cx);
         let session_events_duration = stage_started_at.elapsed();
 
-        let data = self.drive_runtime_data_plane(tick_started_at, cx);
+        let data = self.drive_runtime_data_plane(tick_started_at, window, cx);
         dirty |= data.dirty;
         self.terminal_runtime.last_session_start_drain_duration = control.timings.session_start;
         self.maybe_log_slow_runtime_background_event_drain(
@@ -443,6 +444,7 @@ impl NyaTermApp {
     pub(super) fn drive_runtime_data_plane(
         &mut self,
         tick_started_at: Instant,
+        window: &mut Window,
         cx: &mut Context<Self>,
     ) -> RuntimeDataPlaneResult {
         let background_started_at = Instant::now();
@@ -475,6 +477,7 @@ impl NyaTermApp {
         let defer_terminal_frame_apply =
             defer_terminal_frame_after_output || terminal_frame_apply_paced;
         let dirty = self.drain_runtime_background_events(
+            window,
             cx,
             background_started_at,
             &mut background_timings,

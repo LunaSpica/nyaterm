@@ -249,6 +249,7 @@ pub(crate) enum TransferJobOutput {
         remote_path: String,
         parent_path: String,
         entries: Vec<SftpFileEntry>,
+        open_after_create: bool,
     },
     CreatedSymlink {
         link_path: String,

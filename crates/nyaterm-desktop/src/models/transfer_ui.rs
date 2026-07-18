@@ -100,6 +100,7 @@ pub(crate) struct TransferNewFileState {
     pub(crate) parent_path: String,
     pub(crate) value: String,
     pub(crate) mode: u32,
+    pub(crate) open_after_create: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

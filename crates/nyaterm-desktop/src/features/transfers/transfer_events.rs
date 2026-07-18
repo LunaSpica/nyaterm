@@ -1,6 +1,8 @@
 use super::*;
 use std::collections::{HashSet, VecDeque};
 
+use nyaterm_transport::SftpFileType;
+
 const TRANSFER_EVENT_DRAIN_LIMIT: usize = 256;
 
 #[derive(Clone)]
@@ -88,7 +90,11 @@ impl NyaTermApp {
         self.transfer_selected_remote_paths.clear();
     }
 
-    pub(super) fn drain_transfer_events(&mut self, cx: &mut Context<Self>) -> bool {
+    pub(super) fn drain_transfer_events(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> bool {
         if self.transfer_jobs.is_empty() {
             return false;
         }
@@ -119,6 +125,7 @@ impl NyaTermApp {
                 None;
             let mut external_sync_prompt_to_open: Option<String> = None;
             let mut zmodem_upload_after_probe: Option<(String, Vec<PathBuf>)> = None;
+            let mut open_after_create: Option<SftpFileEntry> = None;
             let event_finished = matches!(&event.event, TransferJobEvent::Finished(_));
             let event_failed = matches!(&event.event, TransferJobEvent::Finished(Err(_)));
             let cleanup_internal_job_id = (event_finished
@@ -331,13 +338,14 @@ impl NyaTermApp {
                     remote_path,
                     parent_path,
                     entries,
+                    open_after_create: should_open,
                 })) => {
                     job.status = TransferJobStatus::Completed;
                     job.detail = format!("Created {remote_path}");
                     self.transfer_browser_path = parent_path.clone();
                     self.transfer_browser_entries = entries.clone();
                     self.transfer_browser_status = format!("{} item(s)", entries.len());
-                    job.entries = entries;
+                    job.entries = entries.clone();
                     job.summary = None;
                     job.progress = None;
                     job.control = None;
@@ -348,6 +356,28 @@ impl NyaTermApp {
                     self.transfer_remote_path = remote_path.clone();
                     self.terminal_status =
                         format!("SFTP file created in {parent_path}: {remote_path}");
+                    if should_open && job_session_id == self.active_session_id {
+                        open_after_create = Some(
+                            entries
+                                .iter()
+                                .find(|entry| entry.path == remote_path)
+                                .cloned()
+                                .unwrap_or_else(|| SftpFileEntry {
+                                    name: remote_path
+                                        .rsplit('/')
+                                        .next()
+                                        .unwrap_or(remote_path.as_str())
+                                        .to_string(),
+                                    path: remote_path.clone(),
+                                    file_type: SftpFileType::File,
+                                    size: Some(0),
+                                    permissions: None,
+                                    owner: String::new(),
+                                    group: String::new(),
+                                    modified_at: None,
+                                }),
+                        );
+                    }
                 }
                 TransferJobEvent::Finished(Ok(TransferJobOutput::CreatedSymlink {
                     link_path,
@@ -760,6 +790,12 @@ impl NyaTermApp {
             }
             if let Some((session_id, files)) = zmodem_upload_after_probe {
                 self.begin_zmodem_upload_after_probe(session_id, files, cx);
+            }
+            if let Some(entry) = open_after_create
+                && inactive_browser_snapshot.is_none()
+                && self.active_session_id == job_session_id
+            {
+                self.open_transfer_default(entry, window, cx);
             }
             if let Some(snapshot) = inactive_browser_snapshot {
                 if let Some(session_id) = job_session_id.as_deref() {

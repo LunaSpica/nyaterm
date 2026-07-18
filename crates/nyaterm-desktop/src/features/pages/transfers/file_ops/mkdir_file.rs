@@ -13,7 +13,7 @@ impl NyaTermApp {
         };
         self.transfer_new_folder = Some(TransferNewFolderState {
             parent_path,
-            value: "New Folder".to_string(),
+            value: String::new(),
             mode: 0o755,
             open_after_create: false,
         });
@@ -166,8 +166,9 @@ impl NyaTermApp {
         };
         self.transfer_new_file = Some(TransferNewFileState {
             parent_path,
-            value: "new-file.txt".to_string(),
+            value: String::new(),
             mode: 0o644,
+            open_after_create: false,
         });
         self.terminal_status = "SFTP new file opened".to_string();
         window.focus(&self.transfer_new_file_focus);
@@ -198,7 +199,14 @@ impl NyaTermApp {
         }
         self.transfer_new_file = None;
         let remote_path = remote_child_path(&state.parent_path, &name);
-        self.start_sftp_create_file_job(remote_path, state.parent_path, state.mode, window, cx);
+        self.start_sftp_create_file_job(
+            remote_path,
+            state.parent_path,
+            state.mode,
+            state.open_after_create,
+            window,
+            cx,
+        );
     }
 
     pub(in crate::features) fn handle_transfer_new_file_key_down(
@@ -247,6 +255,7 @@ impl NyaTermApp {
         remote_path: String,
         parent_path: String,
         mode: u32,
+        open_after_create: bool,
         _window: &mut Window,
         cx: &mut Context<Self>,
     ) {
@@ -282,6 +291,7 @@ impl NyaTermApp {
                     remote_path,
                     parent_path,
                     entries,
+                    open_after_create,
                 })
                 .map_err(|error| error.to_string());
             let _ = transfer_tx.send(TransferJobResult {
