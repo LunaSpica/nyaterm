@@ -296,6 +296,7 @@ impl NyaTermApp {
             network_delete_confirm: None,
             network_group_editor: None,
             network_group_delete_confirm: None,
+            network_item_menu: None,
             network_move_picker: None,
             network_expanded_sections: HashSet::new(),
             network_tunnel_editor: None,

@@ -16,7 +16,7 @@ pub(in crate::features::pages::tunnels) fn network_tunnel_editor_panel(
                 .find(|connection| connection.id == id)
                 .map(|connection| connection.name.clone())
         })
-        .unwrap_or_else(|| "Select SSH connection".to_string());
+        .unwrap_or_else(|| app.tr("network.connectionPickerPlaceholder").to_string());
     let group_label = editor
         .group_id
         .as_deref()
@@ -26,11 +26,11 @@ pub(in crate::features::pages::tunnels) fn network_tunnel_editor_panel(
                 .find(|group| group.id == id)
                 .map(|group| group.name.clone())
         })
-        .unwrap_or_else(|| "Ungrouped".to_string());
+        .unwrap_or_else(|| app.tr("network.ungrouped").to_string());
     let mode_label = match editor.tunnel_type.as_str() {
-        "remote" => "Remote",
-        "dynamic" => "Dynamic",
-        _ => "Local",
+        "remote" => app.tr("network.remoteTunnel"),
+        "dynamic" => app.tr("network.dynamicTunnel"),
+        _ => app.tr("network.localTunnel"),
     };
     let preview = tunnel_editor_preview(&editor);
 
@@ -57,16 +57,16 @@ pub(in crate::features::pages::tunnels) fn network_tunnel_editor_panel(
                                 .font_weight(FontWeight(700.))
                                 .text_color(rgb(palette.text))
                                 .child(if editor.id.is_some() {
-                                    "Edit Tunnel"
+                                    app.tr("network.editTunnel")
                                 } else {
-                                    "New Tunnel"
+                                    app.tr("network.newTunnel")
                                 }),
                         )
                         .child(
                             div()
                                 .text_size(px(12.))
                                 .text_color(rgb(palette.text_muted))
-                                .child("Configure SSH local, remote, or dynamic port forwarding."),
+                                .child(app.tr("network.tunnelDialogDescription")),
                         ),
                 )
                 .child(status_pill(
@@ -83,7 +83,7 @@ pub(in crate::features::pages::tunnels) fn network_tunnel_editor_panel(
                 .child(tunnel_editor_input(
                     palette,
                     "network-tunnel-editor-name",
-                    "Tunnel name",
+                    app.tr("network.tunnelName"),
                     editor.name.clone(),
                     editor.focused_field == NetworkTunnelEditorField::Name,
                     NetworkTunnelEditorField::Name,
@@ -93,7 +93,7 @@ pub(in crate::features::pages::tunnels) fn network_tunnel_editor_panel(
                 .child(tunnel_editor_selector(
                     palette,
                     "network-tunnel-editor-type",
-                    "Type",
+                    app.tr("network.tunnelType"),
                     mode_label.to_string(),
                     cx.listener(|this, _, _, cx| {
                         this.cycle_network_tunnel_type(cx);
@@ -102,7 +102,7 @@ pub(in crate::features::pages::tunnels) fn network_tunnel_editor_panel(
                 .child(tunnel_editor_selector(
                     palette,
                     "network-tunnel-editor-group",
-                    "Group",
+                    app.tr("network.group"),
                     group_label,
                     cx.listener(|this, _, _, cx| {
                         this.cycle_network_tunnel_group(cx);
@@ -117,7 +117,7 @@ pub(in crate::features::pages::tunnels) fn network_tunnel_editor_panel(
                 .child(tunnel_editor_selector(
                     palette,
                     "network-tunnel-editor-connection",
-                    "SSH connection",
+                    app.tr("network.savedConnection"),
                     connection_label,
                     cx.listener(|this, _, _, cx| {
                         this.cycle_network_tunnel_connection(cx);
@@ -127,9 +127,9 @@ pub(in crate::features::pages::tunnels) fn network_tunnel_editor_panel(
                     palette,
                     "network-tunnel-editor-listen-port",
                     match editor.tunnel_type.as_str() {
-                        "remote" => "Remote listen port",
-                        "dynamic" => "SOCKS listen port",
-                        _ => "Local listen port",
+                        "remote" => app.tr("network.listenPortRemote"),
+                        "dynamic" => app.tr("network.listenPortDynamic"),
+                        _ => app.tr("network.listenPortLocal"),
                     },
                     editor.listen_port.clone(),
                     editor.focused_field == NetworkTunnelEditorField::ListenPort,
@@ -148,8 +148,8 @@ pub(in crate::features::pages::tunnels) fn network_tunnel_editor_panel(
                         palette,
                         "network-tunnel-editor-target-host",
                         match editor.tunnel_type.as_str() {
-                            "remote" => "Remote target host",
-                            _ => "Local target host",
+                            "remote" => app.tr("network.targetHostRemote"),
+                            _ => app.tr("network.targetHostLocal"),
                         },
                         editor.target_host.clone(),
                         editor.focused_field == NetworkTunnelEditorField::TargetHost,
@@ -161,8 +161,8 @@ pub(in crate::features::pages::tunnels) fn network_tunnel_editor_panel(
                         palette,
                         "network-tunnel-editor-target-port",
                         match editor.tunnel_type.as_str() {
-                            "remote" => "Remote target port",
-                            _ => "Local target port",
+                            "remote" => app.tr("network.targetPortRemote"),
+                            _ => app.tr("network.targetPortLocal"),
                         },
                         editor.target_port.clone(),
                         editor.focused_field == NetworkTunnelEditorField::TargetPort,
@@ -180,7 +180,7 @@ pub(in crate::features::pages::tunnels) fn network_tunnel_editor_panel(
                 .child(tunnel_editor_option(
                     palette,
                     "network-tunnel-editor-bind-local",
-                    "Localhost only",
+                    app.tr("network.bindLocalhostOnly"),
                     "127.0.0.1",
                     editor.bind_localhost,
                     cx.listener(|this, _, _, cx| {
@@ -190,7 +190,7 @@ pub(in crate::features::pages::tunnels) fn network_tunnel_editor_panel(
                 .child(tunnel_editor_option(
                     palette,
                     "network-tunnel-editor-bind-all",
-                    "All interfaces",
+                    app.tr("network.bindAllInterfaces"),
                     "0.0.0.0",
                     !editor.bind_localhost,
                     cx.listener(|this, _, _, cx| {
@@ -200,8 +200,8 @@ pub(in crate::features::pages::tunnels) fn network_tunnel_editor_panel(
                 .child(tunnel_editor_option(
                     palette,
                     "network-tunnel-editor-auto",
-                    "Auto open",
-                    "with connection",
+                    app.tr("network.autoOpen"),
+                    app.tr("network.tunnelConnectionHint"),
                     editor.auto_open,
                     cx.listener(|this, _, _, cx| {
                         this.toggle_network_tunnel_auto_open(cx);
@@ -222,7 +222,7 @@ pub(in crate::features::pages::tunnels) fn network_tunnel_editor_panel(
                     div()
                         .text_xs()
                         .text_color(rgb(palette.text_muted))
-                        .child("Preview"),
+                        .child(app.tr("network.tunnelPreview")),
                 )
                 .child(
                     div()
@@ -236,10 +236,11 @@ pub(in crate::features::pages::tunnels) fn network_tunnel_editor_panel(
             this.child(div().text_xs().text_color(rgb(palette.danger)).child(error))
         })
         .child(network_dialog_footer(
+            app,
             palette,
             "network-tunnel-editor-cancel",
             "network-tunnel-editor-save",
-            "Save",
+            app.tr("common.save"),
             cx.listener(|this, _, _, cx| {
                 this.close_network_tunnel_editor(cx);
             }),

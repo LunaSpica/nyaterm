@@ -12,7 +12,7 @@ pub(in crate::features::pages::tunnels) fn proxy_network_row(
             .command
             .as_deref()
             .filter(|command| !command.trim().is_empty())
-            .unwrap_or("ProxyCommand not configured")
+            .unwrap_or_else(|| app.tr("network.proxyCommand"))
             .to_string()
     } else if let Some(username) = proxy.username.as_deref().filter(|value| !value.is_empty()) {
         format!("{username}@{}:{}", proxy.host, proxy.port)
@@ -23,6 +23,10 @@ pub(in crate::features::pages::tunnels) fn proxy_network_row(
     let proxy_id_for_edit = proxy.id.clone();
     let proxy_id_for_delete = proxy.id.clone();
     let proxy_label_for_delete = proxy.name.clone();
+    let menu_open = app
+        .network_item_menu
+        .as_ref()
+        .is_some_and(|menu| menu.tab == NetworkTab::Proxies && menu.id == proxy.id);
 
     // Tauri ProxyRow: name, protocol, address; overflow actions on the right.
     div()
@@ -65,71 +69,36 @@ pub(in crate::features::pages::tunnels) fn proxy_network_row(
                         .child(truncate_preview(&address, 92)),
                 ),
         )
-        .child(
-            div()
-                .flex()
-                .items_center()
-                .gap_1()
-                .child(proxy_icon_action(
-                    palette,
-                    format!("proxy-edit-{}", proxy.id),
-                    "icons/net/edit.svg",
-                    cx.listener(move |this, _, window, cx| {
-                        this.open_network_proxy_editor(Some(proxy_id_for_edit.clone()), window, cx);
-                    }),
-                ))
-                .when(!app.proxy_groups.is_empty(), |this| {
-                    this.child(proxy_icon_action(
-                        palette,
-                        format!("proxy-move-group-{}", proxy.id),
-                        "icons/net/move.svg",
-                        cx.listener(move |this, _, _, cx| {
-                            this.open_network_move_picker(
-                                NetworkTab::Proxies,
-                                proxy_id_for_move.clone(),
-                                cx,
-                            );
-                        }),
-                    ))
-                })
-                .child(proxy_icon_action(
-                    palette,
-                    format!("proxy-delete-{}", proxy.id),
-                    "icons/net/delete.svg",
-                    cx.listener(move |this, _, _, cx| {
-                        this.open_network_delete_confirm(
-                            NetworkTab::Proxies,
-                            proxy_id_for_delete.clone(),
-                            proxy_label_for_delete.clone(),
-                            cx,
-                        );
-                    }),
-                )),
-        )
-}
-
-fn proxy_icon_action(
-    palette: crate::theme::ThemePalette,
-    id: impl Into<String>,
-    label: &'static str,
-    on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
-) -> impl IntoElement {
-    div()
-        .id(gpui::SharedString::from(id.into()))
-        .size(px(24.))
-        .flex()
-        .items_center()
-        .justify_center()
-        .rounded_md()
-        .text_size(px(12.))
-        .text_color(rgb(palette.text_muted))
-        .cursor_pointer()
-        .hover(|this| {
-            this.bg(rgb(palette.surface_elevated))
-                .text_color(rgb(palette.text))
-        })
-        .child(svg().size(px(14.)).flex_none().path(label))
-        .on_click(on_click)
+        .child(network_item_overflow_menu(
+            palette,
+            format!("proxy-actions-{}", proxy.id),
+            menu_open,
+            app.tr("common.more"),
+            app.tr("common.edit"),
+            app.tr("network.moveToGroup"),
+            app.tr("common.delete"),
+            !app.proxy_groups.is_empty(),
+            cx.listener({
+                let id = proxy.id.clone();
+                move |this, _, _, cx| {
+                    this.toggle_network_item_menu(NetworkTab::Proxies, id.clone(), cx)
+                }
+            }),
+            cx.listener(move |this, _, window, cx| {
+                this.open_network_proxy_editor(Some(proxy_id_for_edit.clone()), window, cx);
+            }),
+            cx.listener(move |this, _, _, cx| {
+                this.open_network_move_picker(NetworkTab::Proxies, proxy_id_for_move.clone(), cx);
+            }),
+            cx.listener(move |this, _, _, cx| {
+                this.open_network_delete_confirm(
+                    NetworkTab::Proxies,
+                    proxy_id_for_delete.clone(),
+                    proxy_label_for_delete.clone(),
+                    cx,
+                );
+            }),
+        ))
 }
 
 pub(in crate::features::pages::tunnels) fn proxy_move_picker(
@@ -137,21 +106,31 @@ pub(in crate::features::pages::tunnels) fn proxy_move_picker(
     proxy_id: String,
     current_group_id: Option<String>,
     groups: &[ProxyGroup],
+    app: &NyaTermApp,
     cx: &mut Context<NyaTermApp>,
 ) -> gpui::Div {
     let mut targets = div().flex().flex_wrap().items_center().gap_2();
     if current_group_id.is_none() {
-        targets = targets.child(status_pill(
-            "Ungrouped · current",
-            rgb(palette.link),
-            rgb(palette.hover),
-        ));
+        targets = targets.child(
+            div()
+                .rounded_md()
+                .px_2()
+                .py_1()
+                .text_size(px(11.))
+                .text_color(rgb(palette.link))
+                .bg(rgb(palette.hover))
+                .child(format!(
+                    "{} · {}",
+                    app.tr("network.ungrouped"),
+                    app.tr("network.current")
+                )),
+        );
     } else {
         let target_id = proxy_id.clone();
         targets = targets.child(small_button(
             palette,
             format!("network-proxy-move-{proxy_id}-ungrouped"),
-            "Ungrouped",
+            app.tr("network.ungrouped"),
             cx.listener(move |this, _, _, cx| {
                 this.move_proxy_to_group(target_id.clone(), None, cx);
             }),
@@ -161,7 +140,7 @@ pub(in crate::features::pages::tunnels) fn proxy_move_picker(
     for group in groups {
         if current_group_id.as_deref() == Some(group.id.as_str()) {
             targets = targets.child(status_pill(
-                "current",
+                app.tr("network.current"),
                 rgb(palette.success),
                 rgb(palette.hover),
             ));
@@ -177,7 +156,7 @@ pub(in crate::features::pages::tunnels) fn proxy_move_picker(
             targets = targets.child(small_button(
                 palette,
                 format!("network-proxy-move-{proxy_id}-{}", group.id),
-                "Move Here",
+                app.tr("network.moveHere"),
                 cx.listener(move |this, _, _, cx| {
                     this.move_proxy_to_group(target_id.clone(), Some(group_id.clone()), cx);
                 }),
@@ -206,7 +185,7 @@ pub(in crate::features::pages::tunnels) fn proxy_move_picker(
                 .text_xs()
                 .font_weight(FontWeight(700.))
                 .text_color(rgb(palette.text))
-                .child("Move to"),
+                .child(app.tr("network.moveToGroup")),
         )
         .child(targets)
 }

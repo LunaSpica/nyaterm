@@ -53,6 +53,7 @@ pub struct NyaTermApp {
     pub(in crate::features) network_delete_confirm: Option<NetworkDeleteConfirmState>,
     pub(in crate::features) network_group_editor: Option<NetworkGroupEditorState>,
     pub(in crate::features) network_group_delete_confirm: Option<NetworkGroupDeleteConfirmState>,
+    pub(in crate::features) network_item_menu: Option<NetworkItemMenuState>,
     pub(in crate::features) network_move_picker: Option<NetworkMovePickerState>,
     pub(in crate::features) network_expanded_sections: HashSet<String>,
     pub(in crate::features) network_tunnel_editor: Option<NetworkTunnelEditorState>,

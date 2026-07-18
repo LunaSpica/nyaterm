@@ -1,4 +1,4 @@
-use super::common::{network_dialog_footer, network_modal_shell};
+use super::common::{network_dialog_footer, network_item_overflow_menu, network_modal_shell};
 use super::tunnel::tunnel_editor_selector;
 use super::*;
 

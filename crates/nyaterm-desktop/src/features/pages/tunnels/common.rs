@@ -1,5 +1,7 @@
 use super::*;
 
+use crate::features::ChromeTooltip;
+
 pub(super) fn network_tab_button(
     id: impl Into<String>,
     label: String,
@@ -39,11 +41,129 @@ pub(super) fn network_tab_button(
         .on_click(on_click)
 }
 
-pub(super) fn network_delete_confirm_panel(
+pub(super) fn network_item_overflow_menu(
     palette: crate::theme::ThemePalette,
+    id: impl Into<String>,
+    open: bool,
+    more_label: &'static str,
+    edit_label: &'static str,
+    move_label: &'static str,
+    delete_label: &'static str,
+    can_move: bool,
+    on_toggle: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
+    on_edit: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
+    on_move: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
+    on_delete: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
+) -> impl IntoElement {
+    let id = id.into();
+    div()
+        .relative()
+        .child(
+            div()
+                .id(gpui::SharedString::from(format!("{id}-trigger")))
+                .size(px(26.))
+                .flex()
+                .items_center()
+                .justify_center()
+                .rounded_md()
+                .text_color(rgb(palette.text_muted))
+                .cursor_pointer()
+                .hover(|this| {
+                    this.bg(rgb(palette.surface_elevated))
+                        .text_color(rgb(palette.text))
+                })
+                .when(open, |this| this.bg(rgb(palette.surface_elevated)))
+                .child(
+                    svg()
+                        .size(px(14.))
+                        .flex_none()
+                        .path("icons/session/more.svg"),
+                )
+                .tooltip(move |_, cx| cx.new(|_| ChromeTooltip::new(more_label)).into())
+                .on_click(on_toggle),
+        )
+        .when(open, |this| {
+            this.child(
+                div()
+                    .id(gpui::SharedString::from(format!("{id}-menu")))
+                    .absolute()
+                    .top(px(28.))
+                    .right_0()
+                    .w(px(164.))
+                    .rounded_md()
+                    .border_1()
+                    .border_color(rgb(palette.border))
+                    .bg(rgb(palette.surface))
+                    .shadow_lg()
+                    .py_1()
+                    .flex()
+                    .flex_col()
+                    .on_click(|_, _, cx| cx.stop_propagation())
+                    .child(network_item_menu_entry(
+                        palette,
+                        format!("{id}-edit"),
+                        "icons/net/edit.svg",
+                        edit_label,
+                        false,
+                        on_edit,
+                    ))
+                    .when(can_move, |this| {
+                        this.child(network_item_menu_entry(
+                            palette,
+                            format!("{id}-move"),
+                            "icons/net/move.svg",
+                            move_label,
+                            false,
+                            on_move,
+                        ))
+                    })
+                    .child(div().h(px(1.)).mx_2().my_1().bg(rgb(palette.border)))
+                    .child(network_item_menu_entry(
+                        palette,
+                        format!("{id}-delete"),
+                        "icons/net/delete.svg",
+                        delete_label,
+                        true,
+                        on_delete,
+                    )),
+            )
+        })
+}
+
+fn network_item_menu_entry(
+    palette: crate::theme::ThemePalette,
+    id: impl Into<String>,
+    icon_path: &'static str,
+    label: &'static str,
+    danger: bool,
+    on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
+) -> impl IntoElement {
+    div()
+        .id(gpui::SharedString::from(id.into()))
+        .h(px(30.))
+        .px_3()
+        .flex()
+        .items_center()
+        .gap_2()
+        .text_size(px(12.))
+        .text_color(rgb(if danger { palette.danger } else { palette.text }))
+        .cursor_pointer()
+        .hover(|this| this.bg(rgb(palette.hover)))
+        .child(svg().size(px(14.)).flex_none().path(icon_path))
+        .child(label)
+        .on_click(on_click)
+}
+
+pub(super) fn network_delete_confirm_panel(
+    app: &NyaTermApp,
     confirm: NetworkDeleteConfirmState,
     cx: &mut Context<NyaTermApp>,
 ) -> impl IntoElement {
+    let palette = app.theme_palette();
+    let type_label = match confirm.tab {
+        NetworkTab::Tunnels => app.tr("network.tunnelConfig"),
+        NetworkTab::Proxies => app.tr("network.proxyConfig"),
+    };
     let card = div()
         .p_4()
         .flex()
@@ -53,24 +173,24 @@ pub(super) fn network_delete_confirm_panel(
             div()
                 .text_size(px(15.))
                 .font_weight(FontWeight(700.))
-                .text_color(rgb(0xfda4af))
-                .child(format!("Delete {} profile?", confirm.tab.label())),
+                .text_color(rgb(palette.text))
+                .child(format!("{} {type_label}", app.tr("common.delete"))),
         )
         .child(
             div()
                 .text_size(px(12.))
                 .text_color(rgb(palette.text))
-                .child(format!(
-                    "{} · {}",
-                    truncate_preview(&confirm.label, 72),
-                    truncate_preview(&confirm.id, 32)
-                )),
+                .child(
+                    app.tr("common.deletingConfirm")
+                        .replace("{{name}}", &confirm.label),
+                ),
         )
         .child(network_dialog_footer(
+            app,
             palette,
             "network-delete-cancel",
             "network-delete-confirm",
-            "Delete",
+            app.tr("common.delete"),
             cx.listener(|this, _, _, cx| {
                 this.cancel_network_delete(cx);
             }),
@@ -82,11 +202,12 @@ pub(super) fn network_delete_confirm_panel(
 }
 
 pub(super) fn network_group_editor_panel(
-    palette: crate::theme::ThemePalette,
+    app: &NyaTermApp,
     editor: NetworkGroupEditorState,
     focus: &gpui::FocusHandle,
     cx: &mut Context<NyaTermApp>,
 ) -> impl IntoElement {
+    let palette = app.theme_palette();
     let card = div()
         .p_4()
         .flex()
@@ -104,21 +225,30 @@ pub(super) fn network_group_editor_panel(
                         .font_weight(FontWeight(700.))
                         .text_color(rgb(palette.text))
                         .child(if editor.id.is_some() {
-                            format!("Rename {} group", editor.tab.label())
+                            app.tr("network.renameGroup")
                         } else {
-                            format!("New {} group", editor.tab.label())
+                            app.tr("network.newGroup")
                         }),
                 )
                 .child(status_pill(
-                    editor.tab.label(),
+                    match editor.tab {
+                        NetworkTab::Tunnels => app.tr("network.tunnels"),
+                        NetworkTab::Proxies => app.tr("network.proxyConfig"),
+                    },
                     rgb(0x93c5fd),
                     rgb(0x17233a),
                 )),
         )
         .child(
+            div()
+                .text_size(px(12.))
+                .text_color(rgb(palette.text_muted))
+                .child(app.tr("network.groupDialogDescription")),
+        )
+        .child(
             transfer_input(
                 "network-group-editor-name",
-                "Group name",
+                app.tr("network.groupName"),
                 editor.name.clone(),
                 true,
                 palette,
@@ -142,10 +272,11 @@ pub(super) fn network_group_editor_panel(
             )
         })
         .child(network_dialog_footer(
+            app,
             palette,
             "network-group-editor-cancel",
             "network-group-editor-save",
-            "Save",
+            app.tr("common.save"),
             cx.listener(|this, _, _, cx| {
                 this.close_network_group_editor(cx);
             }),
@@ -157,10 +288,15 @@ pub(super) fn network_group_editor_panel(
 }
 
 pub(super) fn network_group_delete_confirm_panel(
-    palette: crate::theme::ThemePalette,
+    app: &NyaTermApp,
     confirm: NetworkGroupDeleteConfirmState,
     cx: &mut Context<NyaTermApp>,
 ) -> impl IntoElement {
+    let palette = app.theme_palette();
+    let description = app
+        .tr("network.deleteGroupConfirm")
+        .replace("{{name}}", &confirm.label)
+        .replace("{{count}}", &confirm.item_count.to_string());
     let card = div()
         .p_4()
         .flex()
@@ -170,24 +306,21 @@ pub(super) fn network_group_delete_confirm_panel(
             div()
                 .text_size(px(15.))
                 .font_weight(FontWeight(700.))
-                .text_color(rgb(0xfda4af))
-                .child(format!("Delete {} group?", confirm.tab.label())),
+                .text_color(rgb(palette.text))
+                .child(app.tr("network.deleteGroup")),
         )
         .child(
             div()
                 .text_size(px(12.))
                 .text_color(rgb(palette.text))
-                .child(format!(
-                    "{} · {} item(s) will be removed",
-                    truncate_preview(&confirm.label, 72),
-                    confirm.item_count
-                )),
+                .child(description),
         )
         .child(network_dialog_footer(
+            app,
             palette,
             "network-group-delete-cancel",
             "network-group-delete-confirm",
-            "Delete",
+            app.tr("common.delete"),
             cx.listener(|this, _, _, cx| {
                 this.cancel_network_group_delete(cx);
             }),
@@ -208,6 +341,7 @@ pub(super) fn network_modal_shell(
 }
 
 pub(super) fn network_dialog_footer(
+    app: &NyaTermApp,
     palette: crate::theme::ThemePalette,
     cancel_id: impl Into<String>,
     save_id: impl Into<String>,
@@ -215,5 +349,13 @@ pub(super) fn network_dialog_footer(
     on_cancel: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
     on_save: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
 ) -> impl IntoElement {
-    modal_dialog_footer(palette, cancel_id, save_id, save_label, on_cancel, on_save)
+    modal_dialog_footer_localized(
+        palette,
+        cancel_id,
+        save_id,
+        app.tr("common.cancel"),
+        save_label,
+        on_cancel,
+        on_save,
+    )
 }

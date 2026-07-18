@@ -11,6 +11,7 @@ pub(in crate::features::pages::tunnels) struct ProxySection {
 pub(in crate::features::pages::tunnels) fn proxy_sections(
     proxies: &[ProxyConfig],
     groups: &[ProxyGroup],
+    ungrouped_label: &'static str,
 ) -> Vec<ProxySection> {
     let valid_group_ids = groups
         .iter()
@@ -45,7 +46,7 @@ pub(in crate::features::pages::tunnels) fn proxy_sections(
     if !ungrouped.is_empty() || sections.is_empty() {
         sections.push(ProxySection {
             id: "__ungrouped__".to_string(),
-            label: "Ungrouped".to_string(),
+            label: ungrouped_label.to_string(),
             group: None,
             proxies: ungrouped,
         });
@@ -79,7 +80,7 @@ pub(in crate::features::pages::tunnels) fn proxy_section(
                 .py_2()
                 .text_size(px(11.))
                 .text_color(rgb(palette.text_muted))
-                .child("No proxies in this group."),
+                .child(app.tr("network.groupEmpty")),
         );
     } else {
         for proxy in section.proxies {
@@ -98,6 +99,7 @@ pub(in crate::features::pages::tunnels) fn proxy_section(
                             proxy.id.clone(),
                             proxy.group_id.clone(),
                             &app.proxy_groups,
+                            app,
                             cx,
                         ))
                     }),
@@ -114,7 +116,6 @@ pub(in crate::features::pages::tunnels) fn proxy_section(
         .border_1()
         .border_color(rgb(palette.border))
         .bg(rgb(palette.surface))
-        .overflow_hidden()
         .child(
             div()
                 .id(gpui::SharedString::from(format!(
@@ -187,38 +188,44 @@ pub(in crate::features::pages::tunnels) fn proxy_section(
                     let rename_id = group.id.clone();
                     let delete_id = group.id.clone();
                     let delete_label = group.name.clone();
-                    this.child(
-                        div()
-                            .flex()
-                            .items_center()
-                            .gap_1()
-                            .child(small_button(
-                                palette,
-                                format!("proxy-group-rename-{}", group.id),
-                                "Rename",
-                                cx.listener(move |this, _, _, cx| {
-                                    this.open_network_group_editor(
-                                        NetworkTab::Proxies,
-                                        Some(rename_id.clone()),
-                                        cx,
-                                    );
-                                }),
-                            ))
-                            .child(small_button(
-                                palette,
-                                format!("proxy-group-delete-{}", group.id),
-                                "Delete",
-                                cx.listener(move |this, _, _, cx| {
-                                    this.open_network_group_delete_confirm(
-                                        NetworkTab::Proxies,
-                                        delete_id.clone(),
-                                        delete_label.clone(),
-                                        item_count,
-                                        cx,
-                                    );
-                                }),
-                            )),
-                    )
+                    let menu_id = format!("group:{}", group.id);
+                    let menu_open = app
+                        .network_item_menu
+                        .as_ref()
+                        .is_some_and(|menu| menu.tab == NetworkTab::Proxies && menu.id == menu_id);
+                    this.child(network_item_overflow_menu(
+                        palette,
+                        format!("proxy-group-actions-{}", group.id),
+                        menu_open,
+                        app.tr("common.more"),
+                        app.tr("network.renameGroup"),
+                        app.tr("network.moveToGroup"),
+                        app.tr("network.deleteGroup"),
+                        false,
+                        cx.listener({
+                            let id = menu_id.clone();
+                            move |this, _, _, cx| {
+                                this.toggle_network_item_menu(NetworkTab::Proxies, id.clone(), cx);
+                            }
+                        }),
+                        cx.listener(move |this, _, _, cx| {
+                            this.open_network_group_editor(
+                                NetworkTab::Proxies,
+                                Some(rename_id.clone()),
+                                cx,
+                            );
+                        }),
+                        cx.listener(|_, _, _, _| {}),
+                        cx.listener(move |this, _, _, cx| {
+                            this.open_network_group_delete_confirm(
+                                NetworkTab::Proxies,
+                                delete_id.clone(),
+                                delete_label.clone(),
+                                item_count,
+                                cx,
+                            );
+                        }),
+                    ))
                 }),
         )
         .when(!collapsed, |this| this.child(rows))

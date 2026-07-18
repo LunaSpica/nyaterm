@@ -17,10 +17,10 @@ pub(in crate::features::pages::tunnels) fn network_proxy_editor_panel(
                 .find(|group| group.id == id)
                 .map(|group| group.name.clone())
         })
-        .unwrap_or_else(|| "Ungrouped".to_string());
+        .unwrap_or_else(|| app.tr("network.ungrouped").to_string());
     let password_value = if editor.password.is_empty() {
         if editor.existing_password.is_some() || editor.password_id.is_some() {
-            "keep existing".to_string()
+            app.tr("network.proxyPasswordKeep").to_string()
         } else {
             String::new()
         }
@@ -51,19 +51,23 @@ pub(in crate::features::pages::tunnels) fn network_proxy_editor_panel(
                                 .font_weight(FontWeight(700.))
                                 .text_color(rgb(palette.text))
                                 .child(if editor.id.is_some() {
-                                    "Edit Proxy"
+                                    app.tr("network.editProxy")
                                 } else {
-                                    "New Proxy"
+                                    app.tr("network.newProxy")
                                 }),
                         )
                         .child(
                             div()
                                 .text_size(px(12.))
                                 .text_color(rgb(palette.text_muted))
-                                .child("Configure SOCKS, HTTP, or ProxyCommand routing for SSH connections."),
+                                .child(app.tr("network.proxyDialogDescription")),
                         ),
                 )
-                .child(status_pill(protocol_label, rgb(palette.link), rgb(palette.hover))),
+                .child(status_pill(
+                    protocol_label,
+                    rgb(palette.link),
+                    rgb(palette.hover),
+                )),
         )
         .child(
             div()
@@ -73,7 +77,7 @@ pub(in crate::features::pages::tunnels) fn network_proxy_editor_panel(
                 .child(tunnel_editor_selector(
                     palette,
                     "network-proxy-editor-protocol",
-                    "Protocol",
+                    app.tr("network.protocol"),
                     protocol_label.to_string(),
                     cx.listener(|this, _, _, cx| {
                         this.cycle_network_proxy_protocol(cx);
@@ -82,7 +86,7 @@ pub(in crate::features::pages::tunnels) fn network_proxy_editor_panel(
                 .child(proxy_editor_input(
                     palette,
                     "network-proxy-editor-name",
-                    "Proxy name",
+                    app.tr("network.proxyName"),
                     editor.name.clone(),
                     editor.focused_field == NetworkProxyEditorField::Name,
                     NetworkProxyEditorField::Name,
@@ -92,7 +96,7 @@ pub(in crate::features::pages::tunnels) fn network_proxy_editor_panel(
                 .child(tunnel_editor_selector(
                     palette,
                     "network-proxy-editor-group",
-                    "Group",
+                    app.tr("network.group"),
                     group_label,
                     cx.listener(|this, _, _, cx| {
                         this.cycle_network_proxy_group(cx);
@@ -103,7 +107,7 @@ pub(in crate::features::pages::tunnels) fn network_proxy_editor_panel(
             this.child(proxy_editor_input(
                 palette,
                 "network-proxy-editor-command",
-                "ProxyCommand",
+                app.tr("network.proxyCommand"),
                 editor.command.clone(),
                 editor.focused_field == NetworkProxyEditorField::Command,
                 NetworkProxyEditorField::Command,
@@ -114,7 +118,7 @@ pub(in crate::features::pages::tunnels) fn network_proxy_editor_panel(
                 div()
                     .text_xs()
                     .text_color(rgb(palette.text_muted))
-                    .child("Use Shift+Enter for a new line. Enter saves the proxy profile."),
+                    .child(app.tr("network.proxyCommandHint")),
             )
         })
         .when(!editor.is_proxy_command(), |this| {
@@ -126,7 +130,7 @@ pub(in crate::features::pages::tunnels) fn network_proxy_editor_panel(
                     .child(proxy_editor_input(
                         palette,
                         "network-proxy-editor-host",
-                        "Host",
+                        app.tr("dialog.host"),
                         editor.host.clone(),
                         editor.focused_field == NetworkProxyEditorField::Host,
                         NetworkProxyEditorField::Host,
@@ -136,7 +140,7 @@ pub(in crate::features::pages::tunnels) fn network_proxy_editor_panel(
                     .child(proxy_editor_input(
                         palette,
                         "network-proxy-editor-port",
-                        "Port",
+                        app.tr("dialog.port"),
                         editor.port.clone(),
                         editor.focused_field == NetworkProxyEditorField::Port,
                         NetworkProxyEditorField::Port,
@@ -152,7 +156,7 @@ pub(in crate::features::pages::tunnels) fn network_proxy_editor_panel(
                     .child(proxy_editor_input(
                         palette,
                         "network-proxy-editor-username",
-                        "Username",
+                        app.tr("network.proxyUsername"),
                         editor.username.clone(),
                         editor.focused_field == NetworkProxyEditorField::Username,
                         NetworkProxyEditorField::Username,
@@ -162,7 +166,7 @@ pub(in crate::features::pages::tunnels) fn network_proxy_editor_panel(
                     .child(proxy_editor_input(
                         palette,
                         "network-proxy-editor-password",
-                        "Password",
+                        app.tr("network.proxyPassword"),
                         password_value,
                         editor.focused_field == NetworkProxyEditorField::Password,
                         NetworkProxyEditorField::Password,
@@ -181,7 +185,12 @@ pub(in crate::features::pages::tunnels) fn network_proxy_editor_panel(
                 .flex()
                 .flex_col()
                 .gap_1()
-                .child(div().text_xs().text_color(rgb(palette.text_muted)).child("Preview"))
+                .child(
+                    div()
+                        .text_xs()
+                        .text_color(rgb(palette.text_muted))
+                        .child(app.tr("network.tunnelPreview")),
+                )
                 .child(
                     div()
                         .font_family(crate::features::gpui_code_font_family())
@@ -193,10 +202,12 @@ pub(in crate::features::pages::tunnels) fn network_proxy_editor_panel(
         .when_some(editor.error.clone(), |this, error| {
             this.child(div().text_xs().text_color(rgb(palette.danger)).child(error))
         })
-        .child(network_dialog_footer(palette,
+        .child(network_dialog_footer(
+            app,
+            palette,
             "network-proxy-editor-cancel",
             "network-proxy-editor-save",
-            "Save",
+            app.tr("common.save"),
             cx.listener(|this, _, _, cx| {
                 this.close_network_proxy_editor(cx);
             }),

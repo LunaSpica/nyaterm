@@ -7,6 +7,15 @@ pub(in crate::features::pages::tunnels) fn tunnel_network_row(
     open_info: Option<SshTunnelInfo>,
     pending: bool,
     group_count: usize,
+    menu_open: bool,
+    more_label: &'static str,
+    edit_label: &'static str,
+    move_label: &'static str,
+    delete_label: &'static str,
+    open_status_label: &'static str,
+    closed_status_label: &'static str,
+    mode_label: &'static str,
+    on_toggle: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
     on_open: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
     on_close: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
     on_edit: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
@@ -18,9 +27,9 @@ pub(in crate::features::pages::tunnels) fn tunnel_network_row(
     let status = if pending {
         "pending"
     } else if is_open {
-        "open"
+        open_status_label
     } else if supported {
-        "closed"
+        closed_status_label
     } else {
         "porting"
     };
@@ -107,7 +116,7 @@ pub(in crate::features::pages::tunnels) fn tunnel_network_row(
                         .child(format!(
                             "{} · {}",
                             truncate_preview(&connection_label, 44),
-                            tunnel_mode_label(tunnel)
+                            mode_label
                         )),
                 )
                 .child(
@@ -126,24 +135,18 @@ pub(in crate::features::pages::tunnels) fn tunnel_network_row(
                 .items_center()
                 .gap_1()
                 .child(toggle)
-                .child(network_icon_action(
+                .child(network_item_overflow_menu(
                     palette,
-                    format!("network-tunnel-edit-{}", tunnel.id),
-                    "icons/net/edit.svg",
+                    format!("network-tunnel-actions-{}", tunnel.id),
+                    menu_open,
+                    more_label,
+                    edit_label,
+                    move_label,
+                    delete_label,
+                    group_count > 0,
+                    on_toggle,
                     on_edit,
-                ))
-                .when(group_count > 0, |this| {
-                    this.child(network_icon_action(
-                        palette,
-                        format!("network-tunnel-move-{}", tunnel.id),
-                        "icons/net/move.svg",
-                        on_move,
-                    ))
-                })
-                .child(network_icon_action(
-                    palette,
-                    format!("network-tunnel-delete-{}", tunnel.id),
-                    "icons/net/delete.svg",
+                    on_move,
                     on_delete,
                 )),
         )
@@ -185,30 +188,6 @@ fn network_switch_button(
                 .when(on, |this| this.ml_auto())
                 .when(!on, |this| this.mr_auto()),
         )
-        .on_click(on_click)
-}
-
-fn network_icon_action(
-    palette: crate::theme::ThemePalette,
-    id: impl Into<String>,
-    label: &'static str,
-    on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
-) -> impl IntoElement {
-    div()
-        .id(gpui::SharedString::from(id.into()))
-        .size(px(24.))
-        .flex()
-        .items_center()
-        .justify_center()
-        .rounded_md()
-        .text_size(px(12.))
-        .text_color(rgb(palette.text_muted))
-        .cursor_pointer()
-        .hover(|this| {
-            this.bg(rgb(palette.surface_elevated))
-                .text_color(rgb(palette.text))
-        })
-        .child(svg().size(px(14.)).flex_none().path(label))
         .on_click(on_click)
 }
 

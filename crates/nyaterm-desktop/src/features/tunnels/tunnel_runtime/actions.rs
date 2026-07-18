@@ -3,12 +3,32 @@ use super::*;
 const TUNNEL_EVENT_DRAIN_LIMIT: usize = 32;
 
 impl NyaTermApp {
+    pub(in crate::features) fn toggle_network_item_menu(
+        &mut self,
+        tab: NetworkTab,
+        id: String,
+        cx: &mut Context<Self>,
+    ) {
+        if self
+            .network_item_menu
+            .as_ref()
+            .is_some_and(|menu| menu.tab == tab && menu.id == id)
+        {
+            self.network_item_menu = None;
+        } else {
+            self.network_item_menu = Some(NetworkItemMenuState { tab, id });
+            self.network_move_picker = None;
+        }
+        cx.notify();
+    }
+
     pub(in crate::features) fn open_network_move_picker(
         &mut self,
         tab: NetworkTab,
         id: String,
         cx: &mut Context<Self>,
     ) {
+        self.network_item_menu = None;
         if self
             .network_move_picker
             .as_ref()
@@ -137,6 +157,7 @@ impl NyaTermApp {
         label: String,
         cx: &mut Context<Self>,
     ) {
+        self.network_item_menu = None;
         self.network_delete_confirm = Some(NetworkDeleteConfirmState { tab, id, label });
         self.terminal_status = "network delete confirmation opened".to_string();
         cx.notify();

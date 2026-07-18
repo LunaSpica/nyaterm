@@ -43,6 +43,7 @@ impl NyaTermApp {
             focused_field: NetworkProxyEditorField::Name,
             error: None,
         });
+        self.network_item_menu = None;
         self.network_tab = NetworkTab::Proxies;
         self.terminal_status = "proxy editor opened".to_string();
         window.focus(&self.network_proxy_editor_focus);

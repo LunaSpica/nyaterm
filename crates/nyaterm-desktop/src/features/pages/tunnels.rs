@@ -10,8 +10,8 @@ use crate::widgets::{small_button, status_pill};
 use super::super::{
     NetworkDeleteConfirmState, NetworkGroupDeleteConfirmState, NetworkGroupEditorState,
     NetworkProxyEditorField, NetworkProxyEditorState, NetworkTab, NetworkTunnelEditorField,
-    NetworkTunnelEditorState, NyaTermApp, modal_dialog_footer, modal_dialog_shell, transfer_input,
-    tunnel_endpoint, tunnel_mode, tunnel_mode_label, tunnel_name,
+    NetworkTunnelEditorState, NyaTermApp, modal_dialog_footer_localized, modal_dialog_shell,
+    transfer_input, tunnel_endpoint, tunnel_mode, tunnel_name,
 };
 use nyaterm_core::{ProxyConfig, ProxyGroup, TunnelConfig, TunnelGroup, truncate_preview};
 use nyaterm_transport::SshTunnelInfo;
@@ -40,8 +40,16 @@ impl NyaTermApp {
             .into_iter()
             .map(|info| (info.id.clone(), info))
             .collect::<HashMap<_, _>>();
-        let sections = tunnel_sections(palette, &self.tunnels, &self.tunnel_groups);
-        let proxy_sections = proxy_sections(&self.proxies, &self.proxy_groups);
+        let sections = tunnel_sections(
+            &self.tunnels,
+            &self.tunnel_groups,
+            self.tr("network.ungrouped"),
+        );
+        let proxy_sections = proxy_sections(
+            &self.proxies,
+            &self.proxy_groups,
+            self.tr("network.ungrouped"),
+        );
         let mut tunnel_list = div().flex().flex_col().gap_2();
         if self.tunnels.is_empty() && self.tunnel_groups.is_empty() {
             let (title, description) = if self.connections.is_empty() {
@@ -205,11 +213,11 @@ impl NyaTermApp {
             )
             // Tauri-style Dialog overlays (absolute) above the panel body.
             .when_some(self.network_delete_confirm.clone(), |this, confirm| {
-                this.child(network_delete_confirm_panel(palette, confirm, cx))
+                this.child(network_delete_confirm_panel(self, confirm, cx))
             })
             .when_some(self.network_group_editor.clone(), |this, editor| {
                 this.child(network_group_editor_panel(
-                    palette,
+                    self,
                     editor,
                     &self.network_group_editor_focus,
                     cx,
@@ -217,9 +225,7 @@ impl NyaTermApp {
             })
             .when_some(
                 self.network_group_delete_confirm.clone(),
-                |this, confirm| {
-                    this.child(network_group_delete_confirm_panel(palette, confirm, cx))
-                },
+                |this, confirm| this.child(network_group_delete_confirm_panel(self, confirm, cx)),
             )
             .when_some(self.network_tunnel_editor.clone(), |this, editor| {
                 this.child(network_tunnel_editor_panel(

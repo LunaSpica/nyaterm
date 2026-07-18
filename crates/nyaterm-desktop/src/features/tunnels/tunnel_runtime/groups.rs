@@ -7,6 +7,7 @@ impl NyaTermApp {
         group_id: Option<String>,
         cx: &mut Context<Self>,
     ) {
+        self.network_item_menu = None;
         let name = match (tab, group_id.as_deref()) {
             (NetworkTab::Tunnels, Some(id)) => self
                 .tunnel_groups
@@ -197,6 +198,7 @@ impl NyaTermApp {
         item_count: usize,
         cx: &mut Context<Self>,
     ) {
+        self.network_item_menu = None;
         self.network_group_delete_confirm = Some(NetworkGroupDeleteConfirmState {
             tab,
             id,

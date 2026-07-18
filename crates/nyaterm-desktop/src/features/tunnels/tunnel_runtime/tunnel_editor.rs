@@ -3,6 +3,7 @@ use super::*;
 impl NyaTermApp {
     pub(in crate::features) fn set_network_tab(&mut self, tab: NetworkTab, cx: &mut Context<Self>) {
         self.network_tab = tab;
+        self.network_item_menu = None;
         self.network_move_picker = None;
         self.terminal_status = format!("network tab set to {}", tab.label());
         cx.notify();
@@ -14,6 +15,7 @@ impl NyaTermApp {
         section_id: String,
         cx: &mut Context<Self>,
     ) {
+        self.network_item_menu = None;
         let key = network_section_key(tab, &section_id);
         if self.network_expanded_sections.remove(&key) {
             self.network_move_picker = None;
@@ -71,6 +73,7 @@ impl NyaTermApp {
             focused_field: NetworkTunnelEditorField::Name,
             error: None,
         });
+        self.network_item_menu = None;
         self.network_tab = NetworkTab::Tunnels;
         self.terminal_status = "tunnel editor opened".to_string();
         window.focus(&self.network_tunnel_editor_focus);

@@ -86,7 +86,7 @@ pub(super) use crate::models::{
     GithubGistAuthJobEvent, GithubGistAuthState, KeywordHighlightEditorField,
     KeywordHighlightPathPromptKind, KeywordHighlightPathPromptResult, MainMode,
     MultiLinePasteDraft, NavItem, NetworkDeleteConfirmState, NetworkGroupDeleteConfirmState,
-    NetworkGroupEditorState, NetworkMovePickerState, NetworkProxyEditorField,
+    NetworkGroupEditorState, NetworkItemMenuState, NetworkMovePickerState, NetworkProxyEditorField,
     NetworkProxyEditorState, NetworkTab, NetworkTunnelEditorField, NetworkTunnelEditorState,
     PanelResizeSide, PanelResizeState, PanelSide, PanelStackResizeState, PendingCredentialAutofill,
     QuickCommandCategoryDeleteState, QuickCommandCategoryMenuState,

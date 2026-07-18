@@ -9,9 +9,9 @@ pub(in crate::features::pages::tunnels) struct TunnelSection {
 }
 
 pub(in crate::features::pages::tunnels) fn tunnel_sections(
-    _palette: crate::theme::ThemePalette,
     tunnels: &[TunnelConfig],
     groups: &[TunnelGroup],
+    ungrouped_label: &'static str,
 ) -> Vec<TunnelSection> {
     let valid_group_ids = groups
         .iter()
@@ -46,7 +46,7 @@ pub(in crate::features::pages::tunnels) fn tunnel_sections(
     if !ungrouped.is_empty() || sections.is_empty() {
         sections.push(TunnelSection {
             id: "__ungrouped__".to_string(),
-            label: "Ungrouped".to_string(),
+            label: ungrouped_label.to_string(),
             group: None,
             tunnels: ungrouped,
         });
@@ -81,7 +81,7 @@ pub(in crate::features::pages::tunnels) fn tunnel_section(
                 .py_2()
                 .text_size(px(11.))
                 .text_color(rgb(palette.text_muted))
-                .child("No tunnels in this group."),
+                .child(app.tr("network.groupEmpty")),
         );
     } else {
         for tunnel in section.tunnels {
@@ -96,7 +96,12 @@ pub(in crate::features::pages::tunnels) fn tunnel_section(
                         .find(|connection| connection.id == id)
                         .map(|connection| connection.name.clone())
                 })
-                .unwrap_or_else(|| "Missing connection".to_string());
+                .unwrap_or_else(|| app.tr("network.connectionMissing").to_string());
+            let mode_label = match tunnel.tunnel_type.as_str() {
+                "remote" => app.tr("network.remoteTunnel"),
+                "dynamic" => app.tr("network.dynamicTunnel"),
+                _ => app.tr("network.localTunnel"),
+            };
             let tunnel_for_open = tunnel.clone();
             let tunnel_id_for_close = tunnel.id.clone();
             let tunnel_id_for_edit = tunnel.id.clone();
@@ -107,6 +112,10 @@ pub(in crate::features::pages::tunnels) fn tunnel_section(
                 .network_move_picker
                 .as_ref()
                 .is_some_and(|picker| picker.tab == NetworkTab::Tunnels && picker.id == tunnel.id);
+            let menu_open = app
+                .network_item_menu
+                .as_ref()
+                .is_some_and(|menu| menu.tab == NetworkTab::Tunnels && menu.id == tunnel.id);
             let current_group_id = tunnel.group_id.clone();
             rows = rows.child(
                 div()
@@ -119,6 +128,20 @@ pub(in crate::features::pages::tunnels) fn tunnel_section(
                         open_info,
                         pending,
                         app.tunnel_groups.len(),
+                        menu_open,
+                        app.tr("common.more"),
+                        app.tr("common.edit"),
+                        app.tr("network.moveToGroup"),
+                        app.tr("common.delete"),
+                        app.tr("network.tunnelOpen"),
+                        app.tr("network.tunnelClosed"),
+                        mode_label,
+                        cx.listener({
+                            let id = tunnel.id.clone();
+                            move |this, _, _, cx| {
+                                this.toggle_network_item_menu(NetworkTab::Tunnels, id.clone(), cx);
+                            }
+                        }),
                         cx.listener(move |this, _, window, cx| {
                             this.start_tunnel_job(tunnel_for_open.clone(), window, cx);
                         }),
@@ -154,6 +177,7 @@ pub(in crate::features::pages::tunnels) fn tunnel_section(
                             tunnel.id.clone(),
                             current_group_id,
                             &app.tunnel_groups,
+                            app,
                             cx,
                         ))
                     }),
@@ -170,7 +194,6 @@ pub(in crate::features::pages::tunnels) fn tunnel_section(
         .border_1()
         .border_color(rgb(palette.border))
         .bg(rgb(palette.surface))
-        .overflow_hidden()
         .child(
             div()
                 .id(gpui::SharedString::from(format!(
@@ -243,38 +266,44 @@ pub(in crate::features::pages::tunnels) fn tunnel_section(
                     let rename_id = group.id.clone();
                     let delete_id = group.id.clone();
                     let delete_label = group.name.clone();
-                    this.child(
-                        div()
-                            .flex()
-                            .items_center()
-                            .gap_1()
-                            .child(small_button(
-                                palette,
-                                format!("tunnel-group-rename-{}", group.id),
-                                "Rename",
-                                cx.listener(move |this, _, _, cx| {
-                                    this.open_network_group_editor(
-                                        NetworkTab::Tunnels,
-                                        Some(rename_id.clone()),
-                                        cx,
-                                    );
-                                }),
-                            ))
-                            .child(small_button(
-                                palette,
-                                format!("tunnel-group-delete-{}", group.id),
-                                "Delete",
-                                cx.listener(move |this, _, _, cx| {
-                                    this.open_network_group_delete_confirm(
-                                        NetworkTab::Tunnels,
-                                        delete_id.clone(),
-                                        delete_label.clone(),
-                                        item_count,
-                                        cx,
-                                    );
-                                }),
-                            )),
-                    )
+                    let menu_id = format!("group:{}", group.id);
+                    let menu_open = app
+                        .network_item_menu
+                        .as_ref()
+                        .is_some_and(|menu| menu.tab == NetworkTab::Tunnels && menu.id == menu_id);
+                    this.child(network_item_overflow_menu(
+                        palette,
+                        format!("tunnel-group-actions-{}", group.id),
+                        menu_open,
+                        app.tr("common.more"),
+                        app.tr("network.renameGroup"),
+                        app.tr("network.moveToGroup"),
+                        app.tr("network.deleteGroup"),
+                        false,
+                        cx.listener({
+                            let id = menu_id.clone();
+                            move |this, _, _, cx| {
+                                this.toggle_network_item_menu(NetworkTab::Tunnels, id.clone(), cx);
+                            }
+                        }),
+                        cx.listener(move |this, _, _, cx| {
+                            this.open_network_group_editor(
+                                NetworkTab::Tunnels,
+                                Some(rename_id.clone()),
+                                cx,
+                            );
+                        }),
+                        cx.listener(|_, _, _, _| {}),
+                        cx.listener(move |this, _, _, cx| {
+                            this.open_network_group_delete_confirm(
+                                NetworkTab::Tunnels,
+                                delete_id.clone(),
+                                delete_label.clone(),
+                                item_count,
+                                cx,
+                            );
+                        }),
+                    ))
                 }),
         )
         .when(!collapsed, |this| this.child(rows))
@@ -285,21 +314,31 @@ fn tunnel_move_picker(
     tunnel_id: String,
     current_group_id: Option<String>,
     groups: &[TunnelGroup],
+    app: &NyaTermApp,
     cx: &mut Context<NyaTermApp>,
 ) -> gpui::Div {
     let mut targets = div().flex().flex_wrap().items_center().gap_2();
     if current_group_id.is_none() {
-        targets = targets.child(status_pill(
-            "Ungrouped · current",
-            rgb(palette.link),
-            rgb(palette.hover),
-        ));
+        targets = targets.child(
+            div()
+                .rounded_md()
+                .px_2()
+                .py_1()
+                .text_size(px(11.))
+                .text_color(rgb(palette.link))
+                .bg(rgb(palette.hover))
+                .child(format!(
+                    "{} · {}",
+                    app.tr("network.ungrouped"),
+                    app.tr("network.current")
+                )),
+        );
     } else {
         let target_id = tunnel_id.clone();
         targets = targets.child(small_button(
             palette,
             format!("network-tunnel-move-{tunnel_id}-ungrouped"),
-            "Ungrouped",
+            app.tr("network.ungrouped"),
             cx.listener(move |this, _, _, cx| {
                 this.move_tunnel_to_group(target_id.clone(), None, cx);
             }),
@@ -309,7 +348,7 @@ fn tunnel_move_picker(
     for group in groups {
         if current_group_id.as_deref() == Some(group.id.as_str()) {
             targets = targets.child(status_pill(
-                "current",
+                app.tr("network.current"),
                 rgb(palette.success),
                 rgb(palette.hover),
             ));
@@ -325,7 +364,7 @@ fn tunnel_move_picker(
             targets = targets.child(small_button(
                 palette,
                 format!("network-tunnel-move-{tunnel_id}-{}", group.id),
-                "Move Here",
+                app.tr("network.moveHere"),
                 cx.listener(move |this, _, _, cx| {
                     this.move_tunnel_to_group(target_id.clone(), Some(group_id.clone()), cx);
                 }),
@@ -354,7 +393,7 @@ fn tunnel_move_picker(
                 .text_xs()
                 .font_weight(FontWeight(700.))
                 .text_color(rgb(palette.text))
-                .child("Move to"),
+                .child(app.tr("network.moveToGroup")),
         )
         .child(targets)
 }

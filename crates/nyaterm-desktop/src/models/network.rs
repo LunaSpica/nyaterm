@@ -42,6 +42,12 @@ pub(crate) struct NetworkMovePickerState {
     pub(crate) id: String,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct NetworkItemMenuState {
+    pub(crate) tab: NetworkTab,
+    pub(crate) id: String,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum NetworkTunnelEditorField {
     Name,
