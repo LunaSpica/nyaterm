@@ -246,7 +246,10 @@ impl NyaTermApp {
         self.terminal_session_surface_bounds.remove(session_id);
         self.session_command_history.remove(session_id);
         self.transfer_browser_session_cache.remove(session_id);
-        self.transfer_external_sync_prompts.remove(session_id);
+        self.transfer_external_sync_prompts
+            .retain(|_, prompt| prompt.session_id.as_deref() != Some(session_id));
+        self.transfer_external_sync_windows
+            .retain(|prompt_id, _| self.transfer_external_sync_prompts.contains_key(prompt_id));
         if self
             .transfer_properties
             .as_ref()

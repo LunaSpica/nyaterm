@@ -107,6 +107,7 @@ pub(in crate::features) use terminal_surface::{
 };
 #[path = "terminal/terminal_surface_entity.rs"]
 mod terminal_surface_entity;
+mod transfer_external_sync_window;
 pub(in crate::features) use terminal_surface_entity::{
     FULL_SHELL_PAINT_COUNT, TERMINAL_SURFACE_PAINT_COUNT, TerminalSurface, full_shell_paint_count,
     terminal_snapshot_anchor_row_for_display_offset, terminal_snapshot_covers_display_offset,
@@ -190,6 +191,7 @@ pub(in crate::features) use tab_mouse::{
     ChromeTooltip, SessionTabDragPayload, SessionTabDragPreview, SessionTabTooltip,
     TAB_MOUSE_ACTIONS, TabMouseActionTarget, tab_mouse_action_label,
 };
+pub(in crate::features) use transfer_external_sync_window::TransferExternalSyncWindow;
 pub(in crate::features) use transfer_widgets::{
     compact_transfer_job_row, duplicate_decision_label, duplicate_policy_label, entry_kind_label,
     format_file_size, format_transfer_progress, transfer_input, transfer_job_title,

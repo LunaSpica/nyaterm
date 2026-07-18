@@ -394,10 +394,7 @@ impl NyaTermApp {
             self.transfer_editor.as_ref().is_some_and(|state| {
                 state.session_id.as_deref() == self.active_session_id.as_deref()
             }) && self.remote_editor_window.is_none();
-        let transfer_external_sync_open = self
-            .active_session_id
-            .as_ref()
-            .is_some_and(|session_id| self.transfer_external_sync_prompts.contains_key(session_id));
+        let transfer_external_sync_open = self.active_external_editor_sync_prompt().is_some();
 
         content
             .when(
@@ -561,6 +558,7 @@ impl NyaTermApp {
         self.settings_window.is_some()
             || self.quick_command_window.is_some()
             || self.connection_editor_window.is_some()
+            || !self.transfer_external_sync_windows.is_empty()
     }
 
     fn activate_modal_child_window(&mut self, cx: &mut Context<Self>) -> bool {
@@ -568,8 +566,10 @@ impl NyaTermApp {
             self.activate_settings_window(cx)
         } else if self.quick_command_window.is_some() {
             self.activate_quick_command_window(cx)
-        } else {
+        } else if self.connection_editor_window.is_some() {
             self.activate_connection_editor_window(cx)
+        } else {
+            self.activate_transfer_external_sync_window(cx)
         }
     }
 

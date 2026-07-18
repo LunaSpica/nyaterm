@@ -560,6 +560,7 @@ impl NyaTermApp {
             remote_editor_window: None,
             transfer_unknown_file: None,
             transfer_external_sync_prompts: HashMap::new(),
+            transfer_external_sync_windows: HashMap::new(),
             transfer_external_always_uploads: HashSet::new(),
             recording_path_prompt: None,
             config_path_prompt: None,

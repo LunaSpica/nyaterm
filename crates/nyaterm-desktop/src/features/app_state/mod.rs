@@ -340,6 +340,8 @@ pub struct NyaTermApp {
     pub(in crate::features) transfer_unknown_file: Option<TransferUnknownFileState>,
     pub(in crate::features) transfer_external_sync_prompts:
         HashMap<String, TransferExternalSyncPromptState>,
+    pub(in crate::features) transfer_external_sync_windows:
+        HashMap<String, WindowHandle<TransferExternalSyncWindow>>,
     pub(in crate::features) transfer_external_always_uploads: HashSet<String>,
     pub(in crate::features) recording_path_prompt: Option<RecordingPathPromptKind>,
     pub(in crate::features) config_path_prompt: Option<ConfigPathPromptKind>,

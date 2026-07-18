@@ -209,19 +209,30 @@ impl NyaTermApp {
         });
     }
 
-    pub(in crate::features) fn upload_pending_external_editor_sync(
+    pub(in crate::features) fn active_external_editor_sync_prompt(
+        &self,
+    ) -> Option<(String, TransferExternalSyncPromptState)> {
+        let active_session_id = self.active_session_id.as_deref()?;
+        self.transfer_external_sync_prompts
+            .iter()
+            .find(|(prompt_id, prompt)| {
+                prompt.session_id.as_deref() == Some(active_session_id)
+                    && !self.transfer_external_sync_windows.contains_key(*prompt_id)
+            })
+            .map(|(prompt_id, prompt)| (prompt_id.clone(), prompt.clone()))
+    }
+
+    pub(in crate::features) fn upload_external_editor_sync_prompt(
         &mut self,
+        prompt_id: &str,
         always: bool,
         cx: &mut Context<Self>,
     ) {
-        let Some(session_id) = self.active_session_id.clone() else {
+        let Some(prompt) = self.transfer_external_sync_prompts.remove(prompt_id) else {
             cx.notify();
             return;
         };
-        let Some(prompt) = self.transfer_external_sync_prompts.remove(&session_id) else {
-            cx.notify();
-            return;
-        };
+        self.transfer_external_sync_windows.remove(prompt_id);
         let watch_key = external_editor_watch_key(&prompt.remote_path, &prompt.local_path);
         if always {
             self.transfer_external_always_uploads.insert(watch_key);
@@ -235,13 +246,13 @@ impl NyaTermApp {
         );
     }
 
-    pub(in crate::features) fn ignore_pending_external_editor_sync(
+    pub(in crate::features) fn ignore_external_editor_sync_prompt(
         &mut self,
+        prompt_id: &str,
         cx: &mut Context<Self>,
     ) {
-        if let Some(session_id) = self.active_session_id.as_deref() {
-            self.transfer_external_sync_prompts.remove(session_id);
-        }
+        self.transfer_external_sync_prompts.remove(prompt_id);
+        self.transfer_external_sync_windows.remove(prompt_id);
         self.terminal_status = "external edit sync skipped".to_string();
         cx.notify();
     }

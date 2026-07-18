@@ -1,34 +1,106 @@
 use super::*;
-use crate::features::{TransferExternalSyncPromptState, metric};
 use gpui::rgba;
-use std::path::PathBuf;
+
+#[derive(Clone, Copy)]
+enum ExternalSyncButtonStyle {
+    Ghost,
+    Outline,
+    Primary,
+}
+
+fn external_sync_button(
+    palette: crate::theme::ThemePalette,
+    id: &'static str,
+    label: &'static str,
+    style: ExternalSyncButtonStyle,
+    on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
+) -> impl IntoElement {
+    let transparent = rgba(0x00000000);
+    let (background, border, text) = match style {
+        ExternalSyncButtonStyle::Ghost => (transparent, transparent, rgb(palette.text_muted)),
+        ExternalSyncButtonStyle::Outline => (
+            rgb(palette.bg).into(),
+            rgb(palette.border).into(),
+            rgb(palette.text),
+        ),
+        ExternalSyncButtonStyle::Primary => (
+            rgb(palette.accent).into(),
+            rgb(palette.accent).into(),
+            rgb(palette.bg),
+        ),
+    };
+    div()
+        .id(SharedString::from(id))
+        .h(px(28.))
+        .px_3()
+        .flex()
+        .items_center()
+        .rounded_sm()
+        .border_1()
+        .border_color(border)
+        .bg(background)
+        .text_color(text)
+        .text_xs()
+        .cursor_pointer()
+        .hover(move |this| match style {
+            ExternalSyncButtonStyle::Primary => this.bg(rgba((palette.accent << 8) | 0xe8)),
+            ExternalSyncButtonStyle::Ghost | ExternalSyncButtonStyle::Outline => {
+                this.bg(rgb(palette.hover)).text_color(rgb(palette.text))
+            }
+        })
+        .child(label)
+        .on_click(on_click)
+}
 
 impl NyaTermApp {
     pub(in crate::features) fn transfer_external_sync_prompt_overlay(
         &mut self,
         cx: &mut Context<Self>,
-    ) -> impl IntoElement {
+    ) -> AnyElement {
+        let Some((prompt_id, prompt)) = self.active_external_editor_sync_prompt() else {
+            return div().into_any_element();
+        };
+        self.transfer_external_sync_prompt_surface(prompt_id, prompt, false, cx)
+    }
+
+    pub(in crate::features) fn transfer_external_sync_window_view(
+        &mut self,
+        prompt_id: String,
+        prompt: TransferExternalSyncPromptState,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
+        self.transfer_external_sync_prompt_surface(prompt_id, prompt, true, cx)
+    }
+
+    fn transfer_external_sync_prompt_surface(
+        &mut self,
+        prompt_id: String,
+        prompt: TransferExternalSyncPromptState,
+        standalone: bool,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
         let palette = self.theme_palette();
-        let prompt = self
-            .active_session_id
-            .as_ref()
-            .and_then(|session_id| self.transfer_external_sync_prompts.get(session_id))
-            .cloned()
-            .unwrap_or(TransferExternalSyncPromptState {
-                session_id: None,
-                job_id: String::new(),
-                remote_path: String::new(),
-                local_path: PathBuf::new(),
-            });
+        let title = self.tr("fileExplorer.fileModified");
+        let prompt_label = self.tr("fileExplorer.uploadPrompt");
+        let cancel_label = self.tr("common.cancel");
+        let always_label = self.tr("fileExplorer.alwaysUpload");
+        let upload_once_label = self.tr("fileExplorer.uploadOnce");
+        let ignore_prompt_id = prompt_id.clone();
+        let always_prompt_id = prompt_id.clone();
+        let upload_prompt_id = prompt_id.clone();
 
         div()
             .id(SharedString::from("transfer-external-sync-overlay"))
-            .absolute()
-            .top_0()
-            .bottom_0()
-            .left_0()
-            .right_0()
-            .bg(rgba(0x020617dd))
+            .when(!standalone, |this| {
+                this.absolute()
+                    .top_0()
+                    .bottom_0()
+                    .left_0()
+                    .right_0()
+                    .bg(rgba(0x020617dd))
+                    .p_3()
+            })
+            .when(standalone, |this| this.size_full().bg(rgb(palette.bg)))
             .flex()
             .items_center()
             .justify_center()
@@ -37,89 +109,102 @@ impl NyaTermApp {
                 window.focus(&this.transfer_external_sync_focus);
                 cx.notify();
             }))
-            .on_key_down(cx.listener(|this, event: &KeyDownEvent, _, cx| {
+            .on_key_down(cx.listener(move |this, event: &KeyDownEvent, _, cx| {
                 cx.stop_propagation();
                 if event.keystroke.key.as_str() == "escape" {
-                    this.ignore_pending_external_editor_sync(cx);
+                    this.ignore_external_editor_sync_prompt(&ignore_prompt_id, cx);
                 }
             }))
             .child(
                 div()
-                    .w(px(520.))
-                    .rounded_md()
-                    .border_1()
-                    .border_color(rgb(palette.border))
+                    .w_full()
+                    .when(standalone, |this| this.size_full())
+                    .when(!standalone, |this| {
+                        this.max_w(px(440.))
+                            .rounded_md()
+                            .border_1()
+                            .border_color(rgb(palette.border))
+                            .shadow_lg()
+                    })
                     .bg(rgb(palette.bg))
-                    .shadow_lg()
                     .p_4()
                     .flex()
                     .flex_col()
                     .gap_3()
+                    .child(div().text_sm().font_weight(FontWeight(700.)).child(title))
                     .child(
                         div()
+                            .flex_1()
+                            .min_h_0()
                             .flex()
-                            .items_center()
-                            .justify_between()
-                            .gap_3()
+                            .flex_col()
+                            .gap_2()
                             .child(
                                 div()
-                                    .text_sm()
-                                    .font_weight(FontWeight(800.))
-                                    .child("External File Modified"),
+                                    .text_size(px(13.))
+                                    .text_color(rgb(palette.text))
+                                    .child(prompt_label),
                             )
-                            .child(status_pill(
-                                "sync pending",
-                                rgb(palette.warning),
-                                rgb(0x3a2d10),
-                            )),
+                            .child(
+                                div()
+                                    .rounded_md()
+                                    .border_1()
+                                    .border_color(rgb(palette.border))
+                                    .bg(rgb(palette.input))
+                                    .px_3()
+                                    .py_2()
+                                    .font_family(crate::features::gpui_code_font_family())
+                                    .text_xs()
+                                    .text_color(rgb(palette.text_muted))
+                                    .child(truncate_preview(&prompt.remote_path, 120)),
+                            ),
                     )
                     .child(
                         div()
-                            .text_xs()
-                            .text_color(rgb(palette.text_muted))
-                            .child("The externally opened file changed locally."),
-                    )
-                    .child(metric(
-                        palette,
-                        "Remote",
-                        truncate_preview(&prompt.remote_path, 58),
-                    ))
-                    .child(metric(
-                        palette,
-                        "Local",
-                        truncate_preview(&prompt.local_path.display().to_string(), 58),
-                    ))
-                    .child(
-                        div()
+                            .pt_3()
+                            .border_t_1()
+                            .border_color(rgb(palette.border))
                             .flex()
                             .justify_end()
                             .gap_2()
-                            .child(small_button(
+                            .child(external_sync_button(
                                 palette,
                                 "transfer-external-sync-ignore",
-                                "Ignore",
-                                cx.listener(|this, _, _, cx| {
-                                    this.ignore_pending_external_editor_sync(cx);
+                                cancel_label,
+                                ExternalSyncButtonStyle::Ghost,
+                                cx.listener(move |this, _, _, cx| {
+                                    this.ignore_external_editor_sync_prompt(&prompt_id, cx);
                                 }),
                             ))
-                            .child(small_button(
-                                palette,
-                                "transfer-external-sync-upload",
-                                "Upload",
-                                cx.listener(|this, _, _, cx| {
-                                    this.upload_pending_external_editor_sync(false, cx);
-                                }),
-                            ))
-                            .child(small_button(
+                            .child(external_sync_button(
                                 palette,
                                 "transfer-external-sync-always",
-                                "Always Upload",
-                                cx.listener(|this, _, _, cx| {
-                                    this.upload_pending_external_editor_sync(true, cx);
+                                always_label,
+                                ExternalSyncButtonStyle::Outline,
+                                cx.listener(move |this, _, _, cx| {
+                                    this.upload_external_editor_sync_prompt(
+                                        &always_prompt_id,
+                                        true,
+                                        cx,
+                                    );
+                                }),
+                            ))
+                            .child(external_sync_button(
+                                palette,
+                                "transfer-external-sync-upload",
+                                upload_once_label,
+                                ExternalSyncButtonStyle::Primary,
+                                cx.listener(move |this, _, _, cx| {
+                                    this.upload_external_editor_sync_prompt(
+                                        &upload_prompt_id,
+                                        false,
+                                        cx,
+                                    );
                                 }),
                             )),
                     ),
             )
+            .into_any_element()
     }
 
     pub(in crate::features) fn transfer_editor_overlay(

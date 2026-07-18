@@ -107,6 +107,7 @@ impl NyaTermApp {
             let job = &mut self.transfer_jobs[job_index];
             let mut external_sync_to_start: Option<(Option<String>, String, String, PathBuf)> =
                 None;
+            let mut external_sync_prompt_to_open: Option<String> = None;
             let mut zmodem_upload_after_probe: Option<(String, Vec<PathBuf>)> = None;
             let event_finished = matches!(&event.event, TransferJobEvent::Finished(_));
             let event_failed = matches!(&event.event, TransferJobEvent::Finished(Err(_)));
@@ -135,15 +136,17 @@ impl NyaTermApp {
                             local_path.clone(),
                         ));
                     } else if let Some(session_id) = job_session_id.clone() {
+                        let prompt_id = job.id.clone();
                         self.transfer_external_sync_prompts.insert(
-                            session_id,
+                            prompt_id.clone(),
                             TransferExternalSyncPromptState {
-                                session_id: job_session_id.clone(),
+                                session_id: Some(session_id),
                                 job_id: job.id.clone(),
                                 remote_path: remote_path.clone(),
                                 local_path: local_path.clone(),
                             },
                         );
+                        external_sync_prompt_to_open = Some(prompt_id);
                         self.terminal_status =
                             format!("external edit changed: {}", local_path.display());
                     }
@@ -709,6 +712,9 @@ impl NyaTermApp {
             }
             if let Some(job_id) = cleanup_internal_job_id {
                 self.transfer_jobs.retain(|job| job.id != job_id);
+            }
+            if let Some(prompt_id) = external_sync_prompt_to_open {
+                self.open_transfer_external_sync_window(prompt_id, cx);
             }
         }
         dirty
