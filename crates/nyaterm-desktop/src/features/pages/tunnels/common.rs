@@ -2,7 +2,7 @@ use super::*;
 
 pub(super) fn network_tab_button(
     id: impl Into<String>,
-    label: &'static str,
+    label: String,
     active: bool,
     palette: crate::theme::ThemePalette,
     on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,

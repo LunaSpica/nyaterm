@@ -5,7 +5,7 @@ use gpui::{
 
 use std::collections::{HashMap, HashSet};
 
-use crate::widgets::{empty_panel, small_button, status_pill};
+use crate::widgets::{small_button, status_pill};
 
 use super::super::{
     NetworkDeleteConfirmState, NetworkGroupDeleteConfirmState, NetworkGroupEditorState,
@@ -42,23 +42,24 @@ impl NyaTermApp {
             .collect::<HashMap<_, _>>();
         let sections = tunnel_sections(palette, &self.tunnels, &self.tunnel_groups);
         let proxy_sections = proxy_sections(&self.proxies, &self.proxy_groups);
-        let missing_connections = self
-            .tunnels
-            .iter()
-            .filter(|tunnel| {
-                tunnel.connection_id.as_deref().is_none_or(|id| {
-                    !self
-                        .connections
-                        .iter()
-                        .any(|connection| connection.id == id)
-                })
-            })
-            .count();
         let mut tunnel_list = div().flex().flex_col().gap_2();
-        if self.tunnels.is_empty() {
-            tunnel_list = tunnel_list.child(empty_panel(
-                "No saved tunnels were found in the native runtime directory yet.",
-                self.theme_palette(),
+        if self.tunnels.is_empty() && self.tunnel_groups.is_empty() {
+            let (title, description) = if self.connections.is_empty() {
+                (
+                    self.tr("network.noConnections").to_string(),
+                    self.tr("network.noConnectionsHint").to_string(),
+                )
+            } else {
+                (
+                    self.tr("network.noTunnels").to_string(),
+                    self.tr("network.tunnelEmptyHint").to_string(),
+                )
+            };
+            tunnel_list = tunnel_list.child(network_empty_state(
+                palette,
+                "icons/network.svg",
+                title,
+                description,
             ));
         } else {
             for section in sections {
@@ -68,10 +69,12 @@ impl NyaTermApp {
         }
 
         let mut proxy_list = div().flex().flex_col().gap_2();
-        if self.proxies.is_empty() {
-            proxy_list = proxy_list.child(empty_panel(
-                "No saved proxies were found in the native runtime directory yet.",
-                self.theme_palette(),
+        if self.proxies.is_empty() && self.proxy_groups.is_empty() {
+            proxy_list = proxy_list.child(network_empty_state(
+                palette,
+                "icons/network.svg",
+                self.tr("network.noProxyConfigs").to_string(),
+                self.tr("network.proxyEmptyHint").to_string(),
             ));
         } else {
             for section in proxy_sections {
@@ -83,9 +86,10 @@ impl NyaTermApp {
         // scroll(p-3) > Tabs(grid-cols-2) > config row (label + New Group/New item) > grouped list.
         // Network create/edit/delete use modal dialogs (Tauri Dialog) over the panel.
         let config_label = match self.network_tab {
-            NetworkTab::Tunnels => "Tunnel Config",
-            NetworkTab::Proxies => "Proxy Config",
+            NetworkTab::Tunnels => self.tr("network.tunnelConfig").to_string(),
+            NetworkTab::Proxies => self.tr("network.proxyConfig").to_string(),
         };
+        let has_connections = !self.connections.is_empty();
 
         div()
             .flex()
@@ -93,134 +97,111 @@ impl NyaTermApp {
             .size_full()
             .overflow_hidden()
             .bg(rgb(self.theme_palette().surface))
-            .when(
-                self.network_tab == NetworkTab::Tunnels && missing_connections > 0,
-                |this| {
-                    this.child(
-                        div()
-                            .mx_2()
-                            .mt_2()
-                            .rounded_md()
-                            .border_1()
-                            .border_color(rgb(0xfacc15))
-                            .bg(rgb(0x2f260f))
-                            .px_2()
-                            .py_1()
-                            .text_xs()
-                            .text_color(rgb(0xfef3c7))
-                            .child(format!(
-                                "{missing_connections} tunnel profile(s) reference missing SSH connections."
-                            )),
-                    )
-                },
-            )
             .child(
-                div()
-                    .flex_1()
-                    .min_h_0()
-                    .overflow_hidden()
-                    .child(
-                        div()
-                            .id("network-list-scroll")
-                            .size_full()
-                            .overflow_scroll()
-                            .scrollbar_width(px(6.))
-                            .p_2()
-                            .flex()
-                            .flex_col()
-                            .gap_2()
-                            // TabsList grid-cols-2 h-8
-                            .child(
-                                div()
-                                    .h(px(32.))
-                                    .w_full()
-                                    .flex()
-                                    .items_center()
-                                    .gap_1()
-                                    .rounded_md()
-                                    .border_1()
-                                    .border_color(rgb(self.theme_palette().border))
-                                    .bg(rgb(self.theme_palette().input))
-                                    .p(px(2.))
-                                    .child(
-                                        network_tab_button(
-                                            "network-tab-tunnels",
-                                            "Tunnels",
-                                            self.network_tab == NetworkTab::Tunnels, self.theme_palette(), cx.listener(|this, _, _, cx| {
-                                                this.set_network_tab(NetworkTab::Tunnels, cx);
+                div().flex_1().min_h_0().overflow_hidden().child(
+                    div()
+                        .id("network-list-scroll")
+                        .size_full()
+                        .overflow_scroll()
+                        .scrollbar_width(px(6.))
+                        .p_3()
+                        .flex()
+                        .flex_col()
+                        // TabsList grid-cols-2 h-8
+                        .child(
+                            div()
+                                .h(px(32.))
+                                .w_full()
+                                .flex()
+                                .items_center()
+                                .gap_1()
+                                .rounded_md()
+                                .bg(rgb(self.theme_palette().input))
+                                .p_1()
+                                .child(network_tab_button(
+                                    "network-tab-tunnels",
+                                    self.tr("network.tunnels").to_string(),
+                                    self.network_tab == NetworkTab::Tunnels,
+                                    self.theme_palette(),
+                                    cx.listener(|this, _, _, cx| {
+                                        this.set_network_tab(NetworkTab::Tunnels, cx);
+                                    }),
+                                ))
+                                .child(network_tab_button(
+                                    "network-tab-proxies",
+                                    self.tr("network.proxy").to_string(),
+                                    self.network_tab == NetworkTab::Proxies,
+                                    self.theme_palette(),
+                                    cx.listener(|this, _, _, cx| {
+                                        this.set_network_tab(NetworkTab::Proxies, cx);
+                                    }),
+                                )),
+                        )
+                        // Config row: label left, group + new right (Tauri)
+                        .child(
+                            div()
+                                .mt_3()
+                                .flex()
+                                .items_center()
+                                .justify_between()
+                                .gap_2()
+                                .child(
+                                    div()
+                                        .text_size(px(12.))
+                                        .font_weight(FontWeight(600.))
+                                        .text_color(rgb(palette.text))
+                                        .child(config_label),
+                                )
+                                .child(
+                                    div()
+                                        .flex()
+                                        .items_center()
+                                        .gap_1()
+                                        .child(icon_network_action(
+                                            palette,
+                                            "network-group-new",
+                                            "icons/fe/new-folder.svg",
+                                            cx.listener(|this, _, _, cx| {
+                                                this.open_network_group_editor(
+                                                    this.network_tab,
+                                                    None,
+                                                    cx,
+                                                );
                                             }),
-                                        ),
-                                    )
-                                    .child(
-                                        network_tab_button(
-                                            "network-tab-proxies",
-                                            "Proxies",
-                                            self.network_tab == NetworkTab::Proxies, self.theme_palette(), cx.listener(|this, _, _, cx| {
-                                                this.set_network_tab(NetworkTab::Proxies, cx);
-                                            }),
-                                        ),
-                                    ),
-                            )
-                            // Config row: label left, group + new right (Tauri)
-                            .child(
-                                div()
-                                    .flex()
-                                    .items_center()
-                                    .justify_between()
-                                    .gap_2()
-                                    .child(
-                                        div()
-                                            .text_size(px(12.))
-                                            .font_weight(FontWeight(600.))
-                                            .text_color(rgb(palette.text))
-                                            .child(config_label),
-                                    )
-                                    .child(
-                                        div()
-                                            .flex()
-                                            .items_center()
-                                            .gap_1()
-                                            .child(icon_network_action(
+                                        ))
+                                        .when(self.network_tab == NetworkTab::Tunnels, |this| {
+                                            this.child(network_create_button(
                                                 palette,
-                                                "network-group-new",
-                                                "📁+",
-                                                cx.listener(|this, _, _, cx| {
-                                                    this.open_network_group_editor(
-                                                        this.network_tab,
-                                                        None,
-                                                        cx,
+                                                "network-tunnel-new",
+                                                self.tr("network.newTunnel").to_string(),
+                                                has_connections,
+                                                cx.listener(|this, _, window, cx| {
+                                                    this.open_network_tunnel_editor(
+                                                        None, window, cx,
                                                     );
                                                 }),
                                             ))
-                                            .when(self.network_tab == NetworkTab::Tunnels, |this| {
-                                                this.child(small_button(palette,
-                                                    "network-tunnel-new",
-                                                    "+ Tunnel",
-                                                    cx.listener(|this, _, window, cx| {
-                                                        this.open_network_tunnel_editor(
-                                                            None, window, cx,
-                                                        );
-                                                    }),
-                                                ))
-                                            })
-                                            .when(self.network_tab == NetworkTab::Proxies, |this| {
-                                                this.child(small_button(palette,
-                                                    "network-proxy-new",
-                                                    "+ Proxy",
-                                                    cx.listener(|this, _, window, cx| {
-                                                        this.open_network_proxy_editor(
-                                                            None, window, cx,
-                                                        );
-                                                    }),
-                                                ))
-                                            }),
-                                    ),
-                            )
-                            .child(match self.network_tab {
-                                NetworkTab::Tunnels => tunnel_list.into_any_element(),
-                                NetworkTab::Proxies => proxy_list.into_any_element(),
-                            }),
-                    ),
+                                        })
+                                        .when(self.network_tab == NetworkTab::Proxies, |this| {
+                                            this.child(network_create_button(
+                                                palette,
+                                                "network-proxy-new",
+                                                self.tr("network.newProxy").to_string(),
+                                                true,
+                                                cx.listener(|this, _, window, cx| {
+                                                    this.open_network_proxy_editor(
+                                                        None, window, cx,
+                                                    );
+                                                }),
+                                            ))
+                                        }),
+                                ),
+                        )
+                        .child(div().mt_2().child(match self.network_tab {
+                            NetworkTab::Tunnels => tunnel_list.into_any_element(),
+                            NetworkTab::Proxies => proxy_list.into_any_element(),
+                        })),
+                ),
             )
             // Tauri-style Dialog overlays (absolute) above the panel body.
             .when_some(self.network_delete_confirm.clone(), |this, confirm| {
@@ -234,9 +215,12 @@ impl NyaTermApp {
                     cx,
                 ))
             })
-            .when_some(self.network_group_delete_confirm.clone(), |this, confirm| {
-                this.child(network_group_delete_confirm_panel(palette, confirm, cx))
-            })
+            .when_some(
+                self.network_group_delete_confirm.clone(),
+                |this, confirm| {
+                    this.child(network_group_delete_confirm_panel(palette, confirm, cx))
+                },
+            )
             .when_some(self.network_tunnel_editor.clone(), |this, editor| {
                 this.child(network_tunnel_editor_panel(
                     palette,
@@ -261,7 +245,7 @@ impl NyaTermApp {
 fn icon_network_action(
     palette: crate::theme::ThemePalette,
     id: impl Into<String>,
-    label: &'static str,
+    icon_path: &'static str,
     on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
 ) -> impl IntoElement {
     div()
@@ -271,13 +255,79 @@ fn icon_network_action(
         .items_center()
         .justify_center()
         .rounded_md()
-        .text_size(px(12.))
         .text_color(rgb(palette.text_muted))
         .cursor_pointer()
         .hover(|this| {
             this.bg(rgb(palette.surface_elevated))
                 .text_color(rgb(palette.text))
         })
-        .child(label)
+        .child(svg().size(px(16.)).flex_none().path(icon_path))
         .on_click(on_click)
+}
+
+fn network_create_button(
+    palette: crate::theme::ThemePalette,
+    id: impl Into<String>,
+    label: String,
+    enabled: bool,
+    on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
+) -> impl IntoElement {
+    div()
+        .id(gpui::SharedString::from(id.into()))
+        .h(px(28.))
+        .px_2()
+        .flex()
+        .items_center()
+        .gap_1()
+        .rounded_md()
+        .text_size(px(12.))
+        .text_color(rgb(palette.link))
+        .when(enabled, |this| {
+            this.cursor_pointer()
+                .hover(|this| this.bg(rgb(palette.hover)).text_color(rgb(palette.text)))
+                .on_click(on_click)
+        })
+        .when(!enabled, |this| this.opacity(0.4))
+        .child(svg().size(px(16.)).flex_none().path("icons/conn/add.svg"))
+        .child(label)
+}
+
+fn network_empty_state(
+    palette: crate::theme::ThemePalette,
+    icon_path: &'static str,
+    title: String,
+    description: String,
+) -> impl IntoElement {
+    div()
+        .min_h(px(132.))
+        .rounded_md()
+        .border_1()
+        .border_color(rgb(palette.border))
+        .px_4()
+        .py_5()
+        .flex()
+        .flex_col()
+        .items_center()
+        .justify_center()
+        .gap_2()
+        .text_center()
+        .child(
+            svg()
+                .size(px(24.))
+                .path(icon_path)
+                .text_color(rgb(palette.text_dimmed)),
+        )
+        .child(
+            div()
+                .text_size(px(12.))
+                .font_weight(FontWeight(600.))
+                .text_color(rgb(palette.text))
+                .child(title),
+        )
+        .child(
+            div()
+                .text_size(px(11.))
+                .text_color(rgb(palette.text_dimmed))
+                .child(description),
+        )
 }
