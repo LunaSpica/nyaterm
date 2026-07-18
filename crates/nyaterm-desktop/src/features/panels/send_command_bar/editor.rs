@@ -109,7 +109,7 @@ impl NyaTermApp {
                                             .text_size(px(10.))
                                             .font_weight(FontWeight(600.))
                                             .text_color(rgb(palette.text_dimmed))
-                                            .child("HEX Editor"),
+                                            .child(self.tr("serialSend.hexEditor")),
                                     )
                                     .child(
                                         div()
@@ -120,7 +120,7 @@ impl NyaTermApp {
                                                 rgb(palette.text_dimmed)
                                             })
                                             .child(if validation_error {
-                                                "Invalid hex input. Use hex characters (0-9, A-F) separated by spaces."
+                                                self.tr("serialSend.hexError")
                                             } else {
                                                 ""
                                             }),
@@ -224,18 +224,22 @@ impl NyaTermApp {
                                             .text_size(px(10.))
                                             .font_weight(FontWeight(600.))
                                             .text_color(rgb(palette.text_dimmed))
-                                            .child("Preview"),
+                                            .child(self.tr("serialSend.hexPreview")),
                                     )
-                                            .child(
-                                                div()
-                                                    .text_size(px(10.))
-                                                    .text_color(rgb(palette.text_dimmed))
-                                                    .child(match byte_count {
-                                                        Some(n) => format!("{n} bytes"),
-                                                        None => "0 bytes".to_string(),
-                                                    }),
-                                            ),
-                                    )
+                                    .child(
+                                        div()
+                                            .text_size(px(10.))
+                                            .text_color(rgb(palette.text_dimmed))
+                                            .child(match byte_count {
+                                                Some(n) => self
+                                                    .tr("serialSend.hexByteCount")
+                                                    .replace("{{count}}", &n.to_string()),
+                                                None => self
+                                                    .tr("serialSend.hexByteCount")
+                                                    .replace("{{count}}", "0"),
+                                            }),
+                                    ),
+                            )
                             .child(
                                 div()
                                     .id(SharedString::from("bottom-command-hex-preview-scroll"))
@@ -271,6 +275,8 @@ impl NyaTermApp {
                 palette,
                 is_sending,
                 send_disabled,
+                self.tr("serialSend.send"),
+                self.tr("serialSend.stop"),
                 cx.listener(|this, _, _, cx| {
                     if this.send_command_sending {
                         this.stop_send_command(cx);
@@ -346,8 +352,11 @@ fn send_command_floating_action_button(
     palette: crate::theme::ThemePalette,
     is_sending: bool,
     disabled: bool,
+    send_label: &'static str,
+    stop_label: &'static str,
     on_click: impl Fn(&gpui::ClickEvent, &mut gpui::Window, &mut gpui::App) + 'static,
 ) -> impl IntoElement {
+    let tooltip = if is_sending { stop_label } else { send_label };
     div()
         .id(SharedString::from("bottom-command-floating-send"))
         .absolute()
@@ -371,6 +380,7 @@ fn send_command_floating_action_button(
         } else {
             "icons/send.svg"
         }))
+        .tooltip(move |_, cx| cx.new(|_| ChromeTooltip::new(tooltip)).into())
         .when(!disabled, |this| {
             this.cursor_pointer()
                 .hover(move |this| {

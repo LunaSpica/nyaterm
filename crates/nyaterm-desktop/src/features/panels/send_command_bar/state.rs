@@ -22,11 +22,11 @@ impl NyaTermApp {
         let active_kind = self.active_session_kind();
         let group_targets = self.send_command_group_target_options();
         let target_kind = match active_kind {
-            Some(SessionKind::Serial) => "Serial Data",
+            Some(SessionKind::Serial) => self.tr("serialSend.serialData"),
             Some(SessionKind::RawTcp) => "Raw TCP",
             Some(SessionKind::Telnet) => "Telnet",
-            Some(SessionKind::Ssh | SessionKind::LocalPty) => "Shell Command",
-            None => "No session",
+            Some(SessionKind::Ssh | SessionKind::LocalPty) => self.tr("serialSend.shellCommand"),
+            None => self.tr("serialSend.unavailable"),
         };
         let is_serial_text_line = matches!(active_kind, Some(SessionKind::Serial))
             && self.send_command_data_type == SendCommandDataType::Text
@@ -46,9 +46,9 @@ impl NyaTermApp {
             truncate_preview(&self.send_command_draft.replace('\n', "\\n"), 96)
         };
         let input_hint = if self.send_command_data_type == SendCommandDataType::Hex {
-            "e.g. 48 65 6C 6C 6F"
+            self.tr("serialSend.hexPlaceholder")
         } else {
-            "Type command or payload…"
+            self.tr("serialSend.textPlaceholder")
         };
         let count_label = self
             .send_command_count
@@ -56,7 +56,7 @@ impl NyaTermApp {
             .unwrap_or_else(|| "∞".to_string());
         let interval_label = format!("{:.2}", self.send_command_interval_seconds);
         let line_ending_label = match self.send_command_line_ending {
-            SendCommandLineEnding::None => "None",
+            SendCommandLineEnding::None => self.tr("serialSend.noLineEnding"),
             SendCommandLineEnding::Cr => "CR",
             SendCommandLineEnding::Lf => "LF",
             SendCommandLineEnding::Crlf => "CR+LF",
@@ -78,19 +78,31 @@ impl NyaTermApp {
         };
         let progress_label = if is_sending {
             if infinite_progress {
-                format!(
-                    "Sending ∞ · round {} · {} unit(s)",
-                    self.send_command_progress_round.max(1),
-                    progress_completed
-                )
+                let round = self.tr("serialSend.shellProgressInfinite").replace(
+                    "{{current}}",
+                    &self.send_command_progress_round.max(1).to_string(),
+                );
+                let units = self
+                    .tr("serialSend.shellProgressUnits")
+                    .replace("{{completed}}", &progress_completed.to_string())
+                    .replace("{{total}}", "∞");
+                format!("{round} · {units}")
             } else {
-                format!(
-                    "Sending {}/{} · round {}/{}",
-                    progress_completed,
-                    self.send_command_progress_total,
-                    self.send_command_progress_round.max(1),
-                    self.send_command_progress_rounds.max(1)
-                )
+                let units = self
+                    .tr("serialSend.shellProgressUnits")
+                    .replace("{{completed}}", &progress_completed.to_string())
+                    .replace("{{total}}", &self.send_command_progress_total.to_string());
+                let round = self
+                    .tr("serialSend.shellProgressRound")
+                    .replace(
+                        "{{current}}",
+                        &self.send_command_progress_round.max(1).to_string(),
+                    )
+                    .replace(
+                        "{{total}}",
+                        &self.send_command_progress_rounds.max(1).to_string(),
+                    );
+                format!("{units} · {round}")
             }
         } else {
             String::new()

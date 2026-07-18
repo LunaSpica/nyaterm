@@ -19,7 +19,7 @@ impl NyaTermApp {
                     .text_size(px(11.))
                     .font_weight(FontWeight(500.))
                     .text_color(rgb(palette.text))
-                    .child("Command Send"),
+                    .child(self.tr("serialSend.title")),
             )
             .child(
                 div()
