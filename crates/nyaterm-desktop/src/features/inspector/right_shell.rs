@@ -27,7 +27,6 @@ impl NyaTermApp {
             NavItem::Stats => "resource monitor",
             NavItem::Processes => "process manager",
             NavItem::Docker => "docker manager",
-            NavItem::Translation => "translation",
             NavItem::Recording => "recording",
             other => other.label(),
         }

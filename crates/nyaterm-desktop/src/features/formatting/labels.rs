@@ -409,22 +409,6 @@ pub(in crate::features) fn format_permissions_octal(mode: u32) -> String {
     format!("{:04o}", mode & 0o7777)
 }
 
-pub(in crate::features) fn configured_status(secret: &str) -> String {
-    if secret.trim().is_empty() {
-        "missing".to_string()
-    } else {
-        "configured".to_string()
-    }
-}
-
-pub(in crate::features) fn configured_pair_status(id: &str, secret: &str) -> String {
-    if id.trim().is_empty() || secret.trim().is_empty() {
-        "missing".to_string()
-    } else {
-        "configured".to_string()
-    }
-}
-
 pub(in crate::features) fn trim_terminal_output_to(output: &mut String, max_bytes: usize) {
     if max_bytes == 0 || output.len() <= max_bytes {
         return;

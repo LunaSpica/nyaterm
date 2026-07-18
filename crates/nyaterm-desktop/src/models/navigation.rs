@@ -9,7 +9,6 @@ pub(crate) enum NavItem {
     Stats,
     Processes,
     Docker,
-    Translation,
     Transfers,
     Settings,
     Migration,
@@ -29,7 +28,6 @@ impl NavItem {
             NavItem::Stats => "panel.resourceMonitor",
             NavItem::Processes => "panel.processManager",
             NavItem::Docker => "panel.dockerManager",
-            NavItem::Translation => "settings.translation",
             NavItem::Transfers => "panel.fileExplorer",
             NavItem::Settings => "settings.title",
             NavItem::AiAssistant => "ai.title",
@@ -50,7 +48,6 @@ impl NavItem {
             NavItem::Stats => "Resource Monitor",
             NavItem::Processes => "Process Manager",
             NavItem::Docker => "Docker",
-            NavItem::Translation => "Translation",
             NavItem::Transfers => "File Explorer",
             NavItem::Settings => "Settings",
             NavItem::Migration => "Migration",
@@ -72,7 +69,6 @@ impl NavItem {
             NavItem::Stats => "Res",
             NavItem::Processes => "Proc",
             NavItem::Docker => "Dock",
-            NavItem::Translation => "Trans",
             NavItem::Transfers => "Files",
             NavItem::Settings => "Set",
             NavItem::Migration => "Mig",
@@ -100,7 +96,6 @@ impl NavItem {
             NavItem::SyncBackupHistory => "Cloud Sync",
             NavItem::SecurityAuth => "Security",
             NavItem::Recording => "Recording",
-            NavItem::Translation => "Translation",
             NavItem::Migration => "Migration",
             NavItem::Settings => "Settings",
             NavItem::Workspace => "Workspace",
@@ -116,7 +111,6 @@ impl NavItem {
             NavItem::Stats => "◔",
             NavItem::Processes => "☰",
             NavItem::Docker => "🐋",
-            NavItem::Translation => "文",
             NavItem::Transfers => "📁",
             NavItem::Settings => "⚙",
             NavItem::Migration => "⇪",
@@ -145,7 +139,6 @@ impl NavItem {
             NavItem::Processes => "icons/processes.svg",
             NavItem::Docker => "icons/docker.svg",
             NavItem::Recording => "icons/record.svg",
-            NavItem::Translation => "icons/translation.svg",
             NavItem::Migration => "icons/migration.svg",
             NavItem::Workspace => return None,
         })
@@ -172,7 +165,6 @@ impl NavItem {
                 | NavItem::Stats
                 | NavItem::Processes
                 | NavItem::Docker
-                | NavItem::Translation
                 | NavItem::Recording
                 | NavItem::Workspace
         )
@@ -191,7 +183,6 @@ impl NavItem {
             NavItem::Stats => "resourceMonitor",
             NavItem::Processes => "processManager",
             NavItem::Docker => "dockerManager",
-            NavItem::Translation => "translation",
             NavItem::Transfers => "fileExplorer",
             NavItem::Settings => "settings",
             NavItem::Migration => "migration",
@@ -212,7 +203,6 @@ impl NavItem {
             "stats" | "resourceMonitor" => Some(NavItem::Stats),
             "processes" | "processManager" => Some(NavItem::Processes),
             "docker" | "dockerManager" => Some(NavItem::Docker),
-            "translation" => Some(NavItem::Translation),
             "fileExplorer" | "fileTransfer" | "transfers" => Some(NavItem::Transfers),
             "settings" => Some(NavItem::Settings),
             "migration" => Some(NavItem::Migration),

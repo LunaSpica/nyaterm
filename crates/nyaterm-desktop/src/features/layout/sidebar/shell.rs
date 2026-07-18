@@ -66,7 +66,6 @@ impl NyaTermApp {
                 self.tr("dockerManager.disabled"),
             )
             .into_any_element(),
-            NavItem::Translation => self.translation_view(cx).into_any_element(),
             NavItem::Recording => self.recording_panel(cx).into_any_element(),
             NavItem::Workspace | NavItem::Settings => {
                 self.left_workspace_summary(cx).into_any_element()
