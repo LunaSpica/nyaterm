@@ -125,6 +125,8 @@ impl NyaTermApp {
             move |window, cx| {
                 window.on_window_should_close(cx, move |_, cx| {
                     close_app.update(cx, |app, cx| {
+                        app.connection_icon_picker_open = false;
+                        app.connection_editor_menu = None;
                         app.connection_editor = None;
                         app.connection_editor_window = None;
                         app.terminal_status = "connection editor closed".to_string();

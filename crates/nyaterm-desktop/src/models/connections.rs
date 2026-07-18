@@ -47,6 +47,22 @@ impl ConnectionKindTab {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum ConnectionEditorMenu {
+    Authentication,
+    Group,
+    SshKey,
+    Otp,
+    Proxy,
+    ProxyJump,
+    Backspace,
+    SerialPort,
+    BaudRate,
+    DataBits,
+    Parity,
+    StopBits,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum ConnectionEditorField {
     Name,
     Description,
@@ -119,6 +135,7 @@ pub(crate) struct ConnectionEditorState {
     pub(crate) kind: ConnectionKindTab,
     pub(crate) name: String,
     pub(crate) description: String,
+    pub(crate) icon: Option<String>,
     pub(crate) group_id: Option<String>,
     pub(crate) host: String,
     pub(crate) port: String,

@@ -306,18 +306,180 @@ pub(super) fn kind_chip(
         .font_weight(FontWeight(700.))
         .cursor_pointer()
         .text_color(if selected {
-            rgb(0xffffff)
+            rgb(palette.on_primary)
         } else {
             rgb(palette.text_muted)
         })
         .bg(if selected {
-            rgb(palette.success)
+            rgb(palette.primary)
         } else {
             rgb(palette.surface_elevated)
         })
         .hover(|this| this.bg(rgb(palette.border)))
         .child(label)
         .on_click(on_click)
+}
+
+pub(super) fn connection_kind_tab(
+    palette: crate::theme::ThemePalette,
+    label: impl Into<SharedString>,
+    selected: bool,
+    on_click: impl Fn(&gpui::ClickEvent, &mut gpui::Window, &mut gpui::App) + 'static,
+) -> impl IntoElement {
+    let label = label.into();
+    div()
+        .id(SharedString::from(format!("connection-kind-tab-{label}")))
+        .h(px(28.))
+        .flex_1()
+        .min_w_0()
+        .flex()
+        .items_center()
+        .justify_center()
+        .rounded_sm()
+        .border_1()
+        .border_color(if selected {
+            rgba((palette.primary << 8) | 0x66)
+        } else {
+            rgba(0x00000000)
+        })
+        .text_xs()
+        .font_weight(FontWeight(600.))
+        .cursor_pointer()
+        .text_color(if selected {
+            rgb(palette.primary)
+        } else {
+            rgb(palette.text_muted)
+        })
+        .bg(if selected {
+            rgba((palette.primary << 8) | 0x18)
+        } else {
+            rgba(0x00000000)
+        })
+        .hover(|this| this.bg(rgb(palette.hover)).text_color(rgb(palette.text)))
+        .child(label)
+        .on_click(on_click)
+}
+
+#[derive(Clone)]
+pub(super) struct ConnectionEditorChoice {
+    pub value: Option<String>,
+    pub label: String,
+    pub selected: bool,
+}
+
+pub(super) fn connection_editor_select(
+    palette: crate::theme::ThemePalette,
+    id: &'static str,
+    label: impl Into<SharedString>,
+    value: impl Into<SharedString>,
+    menu: ConnectionEditorMenu,
+    open: bool,
+    options: Vec<ConnectionEditorChoice>,
+    cx: &mut Context<NyaTermApp>,
+) -> impl IntoElement {
+    let label = label.into();
+    let show_label = !label.is_empty();
+    let value = value.into();
+    let mut option_list = div()
+        .id(SharedString::from(format!("{id}-options")))
+        .max_h(px(144.))
+        .flex()
+        .flex_col()
+        .gap_1()
+        .overflow_scroll();
+    for (index, option) in options.into_iter().enumerate() {
+        let option_value = option.value.clone();
+        option_list = option_list.child(
+            div()
+                .id(SharedString::from(format!("{id}-option-{index}")))
+                .min_h(px(26.))
+                .px_2()
+                .flex()
+                .items_center()
+                .rounded_sm()
+                .text_xs()
+                .cursor_pointer()
+                .text_color(if option.selected {
+                    rgb(palette.primary)
+                } else {
+                    rgb(palette.text)
+                })
+                .bg(if option.selected {
+                    rgba((palette.primary << 8) | 0x18)
+                } else {
+                    rgba(0x00000000)
+                })
+                .hover(|this| this.bg(rgb(palette.hover)))
+                .child(option.label)
+                .on_click(cx.listener(move |this, _, _, cx| {
+                    this.set_connection_editor_menu_value(menu, option_value.as_deref(), cx);
+                })),
+        );
+    }
+
+    div()
+        .id(SharedString::from(id))
+        .relative()
+        .min_w_0()
+        .flex_1()
+        .flex()
+        .flex_col()
+        .gap_1()
+        .when(show_label, |this| {
+            this.child(
+                div()
+                    .text_xs()
+                    .text_color(rgb(palette.text_muted))
+                    .child(label),
+            )
+        })
+        .child(
+            div()
+                .id(SharedString::from(format!("{id}-trigger")))
+                .h(px(30.))
+                .min_w_0()
+                .px_2()
+                .flex()
+                .items_center()
+                .justify_between()
+                .gap_2()
+                .rounded_sm()
+                .border_1()
+                .border_color(if open {
+                    rgb(palette.primary)
+                } else {
+                    rgb(palette.border)
+                })
+                .bg(rgb(palette.input))
+                .text_xs()
+                .text_color(rgb(palette.text))
+                .cursor_pointer()
+                .hover(|this| this.bg(rgb(palette.hover)))
+                .child(div().min_w_0().overflow_hidden().child(value))
+                .child(
+                    div()
+                        .flex_none()
+                        .text_size(px(10.))
+                        .text_color(rgb(palette.text_dimmed))
+                        .child(if open { "▴" } else { "▾" }),
+                )
+                .on_click(cx.listener(move |this, _, _, cx| {
+                    this.toggle_connection_editor_menu(menu, cx);
+                })),
+        )
+        .when(open, |this| {
+            this.child(
+                div()
+                    .mt_1()
+                    .p_1()
+                    .rounded_md()
+                    .border_1()
+                    .border_color(rgb(palette.border))
+                    .bg(rgb(palette.surface_elevated))
+                    .shadow_lg()
+                    .child(option_list),
+            )
+        })
 }
 
 pub(super) fn toggle_chip(
@@ -328,26 +490,46 @@ pub(super) fn toggle_chip(
 ) -> impl IntoElement {
     div()
         .id(SharedString::from(format!("connection-toggle-{label}")))
-        .h(px(22.))
+        .h(px(28.))
         .px_2()
         .flex()
         .items_center()
-        .rounded_sm()
+        .gap_2()
+        .rounded_md()
+        .border_1()
+        .border_color(rgb(palette.border))
         .text_size(px(10.))
-        .font_weight(FontWeight(700.))
+        .font_weight(FontWeight(500.))
         .cursor_pointer()
         .text_color(if selected {
-            rgb(palette.success)
+            rgb(palette.text)
         } else {
             rgb(palette.text_muted)
         })
-        .bg(if selected {
-            rgb(0x12261a)
-        } else {
-            rgb(palette.surface_elevated)
-        })
-        .hover(|this| this.bg(rgb(palette.border)))
-        .child(label)
+        .bg(rgb(palette.input))
+        .hover(|this| this.bg(rgb(palette.hover)))
+        .child(div().min_w_0().child(label))
+        .child(
+            div()
+                .w(px(28.))
+                .h(px(16.))
+                .flex()
+                .items_center()
+                .justify_start()
+                .when(selected, |this| this.justify_end())
+                .px(px(2.))
+                .rounded_full()
+                .bg(if selected {
+                    rgb(palette.primary)
+                } else {
+                    rgb(palette.border)
+                })
+                .child(div().size(px(12.)).rounded_full().bg(if selected {
+                    rgb(palette.on_primary)
+                } else {
+                    rgb(palette.text_dimmed)
+                })),
+        )
         .on_click(on_click)
 }
 

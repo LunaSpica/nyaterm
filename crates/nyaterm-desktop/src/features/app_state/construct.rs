@@ -271,6 +271,8 @@ impl NyaTermApp {
             connection_editor: None,
             connection_editor_window: None,
             connection_editor_focus: cx.focus_handle(),
+            connection_icon_picker_open: false,
+            connection_editor_menu: None,
             connection_group_editor: None,
             connection_group_editor_focus: cx.focus_handle(),
             connection_delete_confirm: None,

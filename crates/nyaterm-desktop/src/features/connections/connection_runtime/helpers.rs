@@ -22,6 +22,7 @@ pub(super) fn connection_editor_from_saved(
         kind: ConnectionKindTab::from_connection_type(&connection.config),
         name: connection.name,
         description: connection.description.unwrap_or_default(),
+        icon: connection.icon,
         group_id: connection.group_id,
         host: String::new(),
         port: String::new(),
@@ -301,7 +302,7 @@ pub(super) fn build_saved_connection_from_editor(
             .filter(|value| !value.trim().is_empty()),
         description: non_empty_optional(&editor.description),
         sort_order: 0,
-        icon: None,
+        icon: editor.icon.clone().filter(|value| !value.trim().is_empty()),
         auth,
         network,
         post_login,
@@ -331,28 +332,46 @@ pub(super) fn non_empty_or(value: String, fallback: &str) -> String {
     }
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn connection_editor_round_trip_preserves_icon() {
+        let connection = SavedConnection {
+            id: "connection-1".to_string(),
+            name: "Local".to_string(),
+            config: ConnectionType::LocalTerminal {
+                shell_path: "bash".to_string(),
+                shell_args: String::new(),
+                working_dir: None,
+                ai_execution_profile: AiExecutionProfile::Posix,
+            },
+            group_id: None,
+            description: None,
+            sort_order: 0,
+            icon: Some("linux".to_string()),
+            auth: None,
+            network: None,
+            post_login: None,
+            created_at_ms: None,
+            updated_at_ms: None,
+            last_used_at_ms: None,
+        };
+
+        let editor = connection_editor_from_saved(connection, false);
+        assert_eq!(editor.icon.as_deref(), Some("linux"));
+        let saved = build_saved_connection_from_editor(&editor).expect("valid connection");
+        assert_eq!(saved.icon.as_deref(), Some("linux"));
+    }
+}
+
 pub(super) fn non_empty_optional(value: &str) -> Option<String> {
     let trimmed = value.trim();
     if trimmed.is_empty() {
         None
     } else {
         Some(trimmed.to_string())
-    }
-}
-
-pub(super) fn next_optional_id<'a>(
-    current: Option<&str>,
-    ids: impl IntoIterator<Item = &'a str>,
-) -> Option<String> {
-    let ids = ids.into_iter().collect::<Vec<_>>();
-    if ids.is_empty() {
-        return None;
-    }
-    let current_index = current.and_then(|value| ids.iter().position(|id| *id == value));
-    match current_index {
-        None => Some(ids[0].to_string()),
-        Some(index) if index + 1 < ids.len() => Some(ids[index + 1].to_string()),
-        Some(_) => None,
     }
 }
 

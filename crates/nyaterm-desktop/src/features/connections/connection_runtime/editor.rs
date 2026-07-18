@@ -28,6 +28,7 @@ impl NyaTermApp {
                 kind: ConnectionKindTab::Ssh,
                 name: String::new(),
                 description: String::new(),
+                icon: None,
                 group_id: parent_group_id.filter(|value| !value.trim().is_empty()),
                 host: String::new(),
                 port: "22".to_string(),
@@ -65,6 +66,8 @@ impl NyaTermApp {
             }
         };
 
+        self.connection_icon_picker_open = false;
+        self.connection_editor_menu = None;
         self.connection_editor = Some(editor);
         self.terminal_status = "connection editor opened".to_string();
         if !self.open_connection_editor_window(cx) {
@@ -74,9 +77,90 @@ impl NyaTermApp {
     }
 
     pub(in crate::features) fn close_connection_editor(&mut self, cx: &mut Context<Self>) {
+        self.connection_icon_picker_open = false;
+        self.connection_editor_menu = None;
         self.connection_editor = None;
         self.connection_editor_window = None;
         self.terminal_status = "connection editor closed".to_string();
+        cx.notify();
+    }
+
+    pub(in crate::features) fn toggle_connection_icon_picker(&mut self, cx: &mut Context<Self>) {
+        self.connection_editor_menu = None;
+        self.connection_icon_picker_open = !self.connection_icon_picker_open;
+        cx.notify();
+    }
+
+    pub(in crate::features) fn set_connection_editor_icon(
+        &mut self,
+        icon: Option<&str>,
+        cx: &mut Context<Self>,
+    ) {
+        self.connection_icon_picker_open = false;
+        self.connection_editor_menu = None;
+        if let Some(editor) = self.connection_editor.as_mut() {
+            editor.icon = icon
+                .map(str::trim)
+                .filter(|icon| !icon.is_empty())
+                .map(ToOwned::to_owned);
+            editor.error = None;
+        }
+        cx.notify();
+    }
+
+    pub(in crate::features) fn toggle_connection_editor_menu(
+        &mut self,
+        menu: ConnectionEditorMenu,
+        cx: &mut Context<Self>,
+    ) {
+        self.connection_icon_picker_open = false;
+        self.connection_editor_menu = (self.connection_editor_menu != Some(menu)).then_some(menu);
+        cx.notify();
+    }
+
+    pub(in crate::features) fn set_connection_editor_menu_value(
+        &mut self,
+        menu: ConnectionEditorMenu,
+        value: Option<&str>,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(editor) = self.connection_editor.as_mut() else {
+            return;
+        };
+        let value = value.map(ToOwned::to_owned);
+        match menu {
+            ConnectionEditorMenu::Authentication => {
+                editor.auth_mode = value.unwrap_or_else(|| "password".to_string())
+            }
+            ConnectionEditorMenu::Group => editor.group_id = value,
+            ConnectionEditorMenu::SshKey => editor.key_id = value,
+            ConnectionEditorMenu::Otp => {
+                editor.otp_id = value;
+                if editor.otp_id.is_none() {
+                    editor.auto_fill_otp = false;
+                }
+            }
+            ConnectionEditorMenu::Proxy => editor.proxy_id = value,
+            ConnectionEditorMenu::ProxyJump => editor.proxy_jump_id = value,
+            ConnectionEditorMenu::Backspace => {
+                editor.backspace_mode = value.unwrap_or_else(|| "del".to_string())
+            }
+            ConnectionEditorMenu::SerialPort => editor.serial_port = value.unwrap_or_default(),
+            ConnectionEditorMenu::BaudRate => {
+                editor.baud_rate = value.unwrap_or_else(|| "115200".to_string())
+            }
+            ConnectionEditorMenu::DataBits => {
+                editor.data_bits = value.unwrap_or_else(|| "8".to_string())
+            }
+            ConnectionEditorMenu::Parity => {
+                editor.parity = value.unwrap_or_else(|| "none".to_string())
+            }
+            ConnectionEditorMenu::StopBits => {
+                editor.stop_bits = value.unwrap_or_else(|| "1".to_string())
+            }
+        }
+        editor.error = None;
+        self.connection_editor_menu = None;
         cx.notify();
     }
 
@@ -86,6 +170,8 @@ impl NyaTermApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        self.connection_icon_picker_open = false;
+        self.connection_editor_menu = None;
         if let Some(editor) = self.connection_editor.as_mut() {
             editor.focused_field = field;
             editor.error = None;
@@ -99,6 +185,8 @@ impl NyaTermApp {
         kind: ConnectionKindTab,
         cx: &mut Context<Self>,
     ) {
+        self.connection_icon_picker_open = false;
+        self.connection_editor_menu = None;
         if let Some(editor) = self.connection_editor.as_mut() {
             editor.kind = kind;
             editor.focused_field = ConnectionEditorField::Name;
@@ -121,206 +209,6 @@ impl NyaTermApp {
             };
             editor.error = None;
             self.terminal_status = format!("connection type set to {}", kind.label());
-        }
-        cx.notify();
-    }
-
-    pub(in crate::features) fn cycle_connection_editor_auth_mode(
-        &mut self,
-        cx: &mut Context<Self>,
-    ) {
-        if let Some(editor) = self.connection_editor.as_mut() {
-            editor.auth_mode = match editor.auth_mode.as_str() {
-                "none" => "password",
-                "password" => "key",
-                _ => "none",
-            }
-            .to_string();
-            editor.error = None;
-            self.terminal_status = format!("auth mode set to {}", editor.auth_mode);
-        }
-        cx.notify();
-    }
-
-    pub(in crate::features) fn cycle_connection_editor_group(&mut self, cx: &mut Context<Self>) {
-        let group_ids = self
-            .connection_groups
-            .iter()
-            .map(|group| group.id.as_str())
-            .collect::<Vec<_>>();
-        if let Some(editor) = self.connection_editor.as_mut() {
-            editor.group_id = next_optional_id(editor.group_id.as_deref(), group_ids.into_iter());
-            editor.error = None;
-            self.terminal_status = "connection group changed".to_string();
-        }
-        cx.notify();
-    }
-
-    pub(in crate::features) fn cycle_connection_editor_key(&mut self, cx: &mut Context<Self>) {
-        let key_ids = self
-            .connection_ssh_keys
-            .iter()
-            .map(|key| key.id.as_str())
-            .collect::<Vec<_>>();
-        if let Some(editor) = self.connection_editor.as_mut() {
-            editor.key_id = next_optional_id(editor.key_id.as_deref(), key_ids.into_iter());
-            editor.error = None;
-            self.terminal_status = "SSH key selection changed".to_string();
-        }
-        cx.notify();
-    }
-
-    pub(in crate::features) fn cycle_connection_editor_otp(&mut self, cx: &mut Context<Self>) {
-        let otp_ids = self
-            .connection_otp_entries
-            .iter()
-            .map(|entry| entry.id.as_str())
-            .collect::<Vec<_>>();
-        if let Some(editor) = self.connection_editor.as_mut() {
-            editor.otp_id = next_optional_id(editor.otp_id.as_deref(), otp_ids.into_iter());
-            editor.error = None;
-            self.terminal_status = "OTP selection changed".to_string();
-        }
-        cx.notify();
-    }
-
-    pub(in crate::features) fn cycle_connection_editor_proxy(&mut self, cx: &mut Context<Self>) {
-        let proxy_ids = self
-            .proxies
-            .iter()
-            .map(|proxy| proxy.id.as_str())
-            .collect::<Vec<_>>();
-        if let Some(editor) = self.connection_editor.as_mut() {
-            editor.proxy_id = next_optional_id(editor.proxy_id.as_deref(), proxy_ids.into_iter());
-            editor.error = None;
-            self.terminal_status = "proxy selection changed".to_string();
-        }
-        cx.notify();
-    }
-
-    pub(in crate::features) fn cycle_connection_editor_jump(&mut self, cx: &mut Context<Self>) {
-        let current_id = self
-            .connection_editor
-            .as_ref()
-            .and_then(|editor| editor.id.clone());
-        let jump_ids = self
-            .connections
-            .iter()
-            .filter(|connection| matches!(&connection.config, ConnectionType::Ssh { .. }))
-            .filter(|connection| current_id.as_deref() != Some(connection.id.as_str()))
-            .map(|connection| connection.id.as_str())
-            .collect::<Vec<_>>();
-        if let Some(editor) = self.connection_editor.as_mut() {
-            editor.proxy_jump_id =
-                next_optional_id(editor.proxy_jump_id.as_deref(), jump_ids.into_iter());
-            editor.error = None;
-            self.terminal_status = "proxy jump selection changed".to_string();
-        }
-        cx.notify();
-    }
-
-    pub(in crate::features) fn cycle_connection_editor_backspace(
-        &mut self,
-        cx: &mut Context<Self>,
-    ) {
-        if let Some(editor) = self.connection_editor.as_mut() {
-            editor.backspace_mode = match editor.backspace_mode.as_str() {
-                "ctrl-h" | "bs" | "ctrl_h" => "del".to_string(),
-                _ => "ctrl-h".to_string(),
-            };
-            editor.error = None;
-            self.terminal_status = format!("backspace mode: {}", editor.backspace_mode);
-        }
-        cx.notify();
-    }
-
-    pub(in crate::features) fn cycle_connection_editor_serial_port(
-        &mut self,
-        cx: &mut Context<Self>,
-    ) {
-        if self.connection_serial_ports.is_empty() {
-            self.refresh_connection_serial_ports();
-        }
-        let ports = self.connection_serial_ports.clone();
-        if ports.is_empty() {
-            self.terminal_status = "no serial ports detected".to_string();
-            cx.notify();
-            return;
-        }
-        if let Some(editor) = self.connection_editor.as_mut() {
-            let current = ports
-                .iter()
-                .position(|port| port == &editor.serial_port)
-                .unwrap_or(ports.len().saturating_sub(1));
-            let next = (current + 1) % ports.len();
-            editor.serial_port = ports[next].clone();
-            editor.error = None;
-            self.terminal_status = format!("serial port set to {}", editor.serial_port);
-        }
-        cx.notify();
-    }
-
-    pub(in crate::features) fn cycle_connection_editor_data_bits(
-        &mut self,
-        cx: &mut Context<Self>,
-    ) {
-        if let Some(editor) = self.connection_editor.as_mut() {
-            editor.data_bits = match editor.data_bits.trim() {
-                "5" => "6".to_string(),
-                "6" => "7".to_string(),
-                "7" => "8".to_string(),
-                _ => "5".to_string(),
-            };
-            self.terminal_status = format!("serial data bits: {}", editor.data_bits);
-        }
-        cx.notify();
-    }
-
-    pub(in crate::features) fn cycle_connection_editor_parity(&mut self, cx: &mut Context<Self>) {
-        if let Some(editor) = self.connection_editor.as_mut() {
-            editor.parity = match editor.parity.trim().to_ascii_lowercase().as_str() {
-                "none" => "odd".to_string(),
-                "odd" => "even".to_string(),
-                "even" => "mark".to_string(),
-                "mark" => "space".to_string(),
-                _ => "none".to_string(),
-            };
-            self.terminal_status = format!("serial parity: {}", editor.parity);
-        }
-        cx.notify();
-    }
-
-    pub(in crate::features) fn cycle_connection_editor_stop_bits(
-        &mut self,
-        cx: &mut Context<Self>,
-    ) {
-        if let Some(editor) = self.connection_editor.as_mut() {
-            editor.stop_bits = match editor.stop_bits.trim() {
-                "1" => "1.5".to_string(),
-                "1.5" => "2".to_string(),
-                _ => "1".to_string(),
-            };
-            self.terminal_status = format!("serial stop bits: {}", editor.stop_bits);
-        }
-        cx.notify();
-    }
-
-    pub(in crate::features) fn cycle_connection_editor_baud_preset(
-        &mut self,
-        cx: &mut Context<Self>,
-    ) {
-        const PRESETS: &[&str] = &[
-            "9600", "19200", "38400", "57600", "115200", "230400", "460800", "921600",
-        ];
-        if let Some(editor) = self.connection_editor.as_mut() {
-            let current = editor.baud_rate.trim();
-            let next = PRESETS
-                .iter()
-                .position(|preset| *preset == current)
-                .map(|index| PRESETS[(index + 1) % PRESETS.len()])
-                .unwrap_or("115200");
-            editor.baud_rate = next.to_string();
-            self.terminal_status = format!("serial baud: {}", editor.baud_rate);
         }
         cx.notify();
     }
@@ -413,7 +301,9 @@ impl NyaTermApp {
     ) {
         if let Some(editor) = self.connection_editor.as_mut() {
             match flag {
-                ConnectionEditorToggle::AutoFillOtp => editor.auto_fill_otp = !editor.auto_fill_otp,
+                ConnectionEditorToggle::AutoFillOtp => {
+                    editor.auto_fill_otp = editor.otp_id.is_some() && !editor.auto_fill_otp
+                }
                 ConnectionEditorToggle::X11 => editor.x11_forwarding = !editor.x11_forwarding,
                 ConnectionEditorToggle::RawTcp => editor.raw_tcp_cli = !editor.raw_tcp_cli,
                 ConnectionEditorToggle::LocalEcho => editor.local_echo = !editor.local_echo,
@@ -440,6 +330,15 @@ impl NyaTermApp {
 
         match keystroke.key.as_str() {
             "escape" => {
+                if self.connection_icon_picker_open {
+                    self.connection_icon_picker_open = false;
+                    cx.notify();
+                    return;
+                }
+                if self.connection_editor_menu.take().is_some() {
+                    cx.notify();
+                    return;
+                }
                 self.close_connection_editor(cx);
                 return;
             }
@@ -517,6 +416,8 @@ impl NyaTermApp {
         match self.persist_saved_connection(built.clone()) {
             Ok(saved) => {
                 let connect_after_save = editor.connect_after_save;
+                self.connection_icon_picker_open = false;
+                self.connection_editor_menu = None;
                 self.connection_editor = None;
                 self.connection_editor_window = None;
                 self.selected_connection_ids.clear();

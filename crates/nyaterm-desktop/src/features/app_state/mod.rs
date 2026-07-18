@@ -32,6 +32,8 @@ pub struct NyaTermApp {
     pub(in crate::features) connection_editor: Option<ConnectionEditorState>,
     pub(in crate::features) connection_editor_window: Option<WindowHandle<ConnectionEditorWindow>>,
     pub(in crate::features) connection_editor_focus: FocusHandle,
+    pub(in crate::features) connection_icon_picker_open: bool,
+    pub(in crate::features) connection_editor_menu: Option<ConnectionEditorMenu>,
     pub(in crate::features) connection_group_editor: Option<ConnectionGroupEditorState>,
     pub(in crate::features) connection_group_editor_focus: FocusHandle,
     pub(in crate::features) connection_delete_confirm: Option<ConnectionDeleteConfirmState>,

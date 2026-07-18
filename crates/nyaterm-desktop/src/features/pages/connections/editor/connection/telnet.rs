@@ -3,6 +3,8 @@ use super::*;
 pub(super) fn connection_editor_telnet_section(
     palette: crate::theme::ThemePalette,
     editor: &ConnectionEditorState,
+    backspace_options: Vec<ConnectionEditorChoice>,
+    open_menu: Option<ConnectionEditorMenu>,
     language: &str,
     cx: &mut Context<NyaTermApp>,
 ) -> gpui::Div {
@@ -41,34 +43,21 @@ pub(super) fn connection_editor_telnet_section(
                     }),
                 )),
         )
+        .child(connection_editor_select(
+            palette,
+            "connection-editor-telnet-backspace",
+            tr("dialog.backspaceMode"),
+            backspace_value,
+            ConnectionEditorMenu::Backspace,
+            open_menu == Some(ConnectionEditorMenu::Backspace),
+            backspace_options,
+            cx,
+        ))
         .child(
             div()
                 .flex()
                 .items_center()
-                .justify_between()
-                .gap_2()
-                .child(
-                    div()
-                        .text_xs()
-                        .text_color(rgb(palette.text_muted))
-                        .child(format!(
-                            "{} · {backspace_value}",
-                            tr("dialog.backspaceMode")
-                        )),
-                )
-                .child(small_button(
-                    palette,
-                    "connection-editor-telnet-backspace",
-                    tr("common.more"),
-                    cx.listener(|this, _, _, cx| {
-                        this.cycle_connection_editor_backspace(cx);
-                    }),
-                )),
-        )
-        .child(
-            div()
-                .flex()
-                .items_center()
+                .flex_wrap()
                 .gap_1()
                 .child(toggle_chip(
                     palette,

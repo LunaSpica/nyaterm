@@ -8,6 +8,13 @@ pub(super) fn connection_editor_ssh_section(
     otp_label: String,
     proxy_label: String,
     jump_label: String,
+    auth_options: Vec<ConnectionEditorChoice>,
+    key_options: Vec<ConnectionEditorChoice>,
+    otp_options: Vec<ConnectionEditorChoice>,
+    proxy_options: Vec<ConnectionEditorChoice>,
+    jump_options: Vec<ConnectionEditorChoice>,
+    backspace_options: Vec<ConnectionEditorChoice>,
+    open_menu: Option<ConnectionEditorMenu>,
     language: &str,
     cx: &mut Context<NyaTermApp>,
 ) -> gpui::Div {
@@ -61,27 +68,16 @@ pub(super) fn connection_editor_ssh_section(
                 this.focus_connection_editor_field(ConnectionEditorField::Username, window, cx);
             }),
         ))
-        .child(
-            div()
-                .flex()
-                .items_center()
-                .justify_between()
-                .gap_2()
-                .child(
-                    div()
-                        .text_xs()
-                        .text_color(rgb(palette.text_muted))
-                        .child(format!("{} · {auth_value}", tr("dialog.authentication"))),
-                )
-                .child(small_button(
-                    palette,
-                    "connection-editor-auth",
-                    tr("common.more"),
-                    cx.listener(|this, _, _, cx| {
-                        this.cycle_connection_editor_auth_mode(cx);
-                    }),
-                )),
-        )
+        .child(connection_editor_select(
+            palette,
+            "connection-editor-auth",
+            tr("dialog.authentication"),
+            auth_value,
+            ConnectionEditorMenu::Authentication,
+            open_menu == Some(ConnectionEditorMenu::Authentication),
+            auth_options,
+            cx,
+        ))
         .when(editor.auth_mode == "password", |this| {
             this.child(editor_field(
                 palette,
@@ -97,154 +93,63 @@ pub(super) fn connection_editor_ssh_section(
         .when(
             editor.auth_mode == "key" || editor.auth_mode == "certificate",
             |this| {
-                this.child(
-                    div()
-                        .flex()
-                        .items_center()
-                        .justify_between()
-                        .gap_2()
-                        .child(
-                            div()
-                                .text_xs()
-                                .text_color(rgb(palette.text_muted))
-                                .child(format!(
-                                    "{} · {}",
-                                    tr("dialog.privateKey"),
-                                    truncate_preview(&key_label, 24)
-                                )),
-                        )
-                        .child(small_button(
-                            palette,
-                            "connection-editor-key",
-                            tr("common.more"),
-                            cx.listener(|this, _, _, cx| {
-                                this.cycle_connection_editor_key(cx);
-                            }),
-                        )),
-                )
+                this.child(connection_editor_select(
+                    palette,
+                    "connection-editor-key",
+                    tr("dialog.privateKey"),
+                    truncate_preview(&key_label, 36),
+                    ConnectionEditorMenu::SshKey,
+                    open_menu == Some(ConnectionEditorMenu::SshKey),
+                    key_options,
+                    cx,
+                ))
             },
         )
+        .child(connection_editor_select(
+            palette,
+            "connection-editor-otp",
+            tr("dialog.selectOtp"),
+            truncate_preview(&otp_label, 36),
+            ConnectionEditorMenu::Otp,
+            open_menu == Some(ConnectionEditorMenu::Otp),
+            otp_options,
+            cx,
+        ))
+        .child(connection_editor_select(
+            palette,
+            "connection-editor-proxy",
+            tr("dialog.proxySelect"),
+            truncate_preview(&proxy_label, 48),
+            ConnectionEditorMenu::Proxy,
+            open_menu == Some(ConnectionEditorMenu::Proxy),
+            proxy_options,
+            cx,
+        ))
+        .child(connection_editor_select(
+            palette,
+            "connection-editor-jump",
+            tr("dialog.proxyJump"),
+            truncate_preview(&jump_label, 48),
+            ConnectionEditorMenu::ProxyJump,
+            open_menu == Some(ConnectionEditorMenu::ProxyJump),
+            jump_options,
+            cx,
+        ))
+        .child(connection_editor_select(
+            palette,
+            "connection-editor-backspace",
+            tr("dialog.backspaceMode"),
+            backspace_value,
+            ConnectionEditorMenu::Backspace,
+            open_menu == Some(ConnectionEditorMenu::Backspace),
+            backspace_options,
+            cx,
+        ))
         .child(
             div()
                 .flex()
                 .items_center()
-                .justify_between()
-                .gap_2()
-                .child(
-                    div()
-                        .text_xs()
-                        .text_color(rgb(palette.text_muted))
-                        .child(format!(
-                            "{} · {}",
-                            tr("dialog.selectOtp"),
-                            truncate_preview(&otp_label, 24)
-                        )),
-                )
-                .child(small_button(
-                    palette,
-                    "connection-editor-otp",
-                    tr("common.more"),
-                    cx.listener(|this, _, _, cx| {
-                        this.cycle_connection_editor_otp(cx);
-                    }),
-                )),
-        )
-        .child(
-            div()
-                .flex()
-                .items_center()
-                .justify_between()
-                .gap_2()
-                .child(
-                    div().min_w_0().flex_1().flex().flex_col().gap_1().child(
-                        div()
-                            .text_xs()
-                            .text_color(rgb(palette.text_muted))
-                            .child(format!(
-                                "{} · {}",
-                                tr("dialog.proxySelect"),
-                                truncate_preview(&proxy_label, 36)
-                            )),
-                    ),
-                )
-                .child(small_button(
-                    palette,
-                    "connection-editor-proxy",
-                    tr("common.more"),
-                    cx.listener(|this, _, _, cx| {
-                        this.cycle_connection_editor_proxy(cx);
-                    }),
-                )),
-        )
-        .child(
-            div()
-                .flex()
-                .items_center()
-                .justify_between()
-                .gap_2()
-                .child(
-                    div().min_w_0().flex_1().flex().flex_col().gap_1().child(
-                        div()
-                            .text_xs()
-                            .text_color(rgb(palette.text_muted))
-                            .child(format!(
-                                "{} · {}",
-                                tr("dialog.proxyJump"),
-                                truncate_preview(&jump_label, 36)
-                            )),
-                    ),
-                )
-                .child(small_button(
-                    palette,
-                    "connection-editor-jump",
-                    tr("common.more"),
-                    cx.listener(|this, _, _, cx| {
-                        this.cycle_connection_editor_jump(cx);
-                    }),
-                )),
-        )
-        .child(
-            div()
-                .flex()
-                .items_center()
-                .justify_between()
-                .gap_2()
-                .child(
-                    div()
-                        .min_w_0()
-                        .flex_1()
-                        .flex()
-                        .flex_col()
-                        .gap_1()
-                        .child(
-                            div()
-                                .text_xs()
-                                .text_color(rgb(palette.text_muted))
-                                .child(format!(
-                                    "{} · {backspace_value}",
-                                    tr("dialog.backspaceMode")
-                                )),
-                        )
-                        .child(
-                            div()
-                                .text_size(px(10.))
-                                .text_color(rgb(palette.text_dimmed))
-                                .child(tr("dialog.sshBackspaceModeDesc")),
-                        ),
-                )
-                .child(small_button(
-                    palette,
-                    "connection-editor-backspace",
-                    tr("common.more"),
-                    cx.listener(|this, _, _, cx| {
-                        this.cycle_connection_editor_backspace(cx);
-                    }),
-                )),
-        )
-        .child(
-            div()
-                .flex()
-                .items_center()
+                .flex_wrap()
                 .gap_1()
                 .child(toggle_chip(
                     palette,

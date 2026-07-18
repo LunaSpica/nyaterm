@@ -6,6 +6,37 @@ pub(in crate::features) struct ConnectionIconDef {
     pub glyph: &'static str,
 }
 
+/// Keys exposed by the Tauri connection icon picker, in its display order.
+pub(in crate::features) const CONNECTION_ICON_OPTIONS: &[&str] = &[
+    "server",
+    "server-emerald",
+    "server-amber",
+    "server-rose",
+    "server-violet",
+    "server-cyan",
+    "server-slate",
+    "windows",
+    "apple",
+    "android",
+    "linux",
+    "ubuntu",
+    "debian",
+    "centos",
+    "fedora",
+    "arch",
+    "manjaro",
+    "opensuse",
+    "rocky",
+    "alma",
+    "alpine",
+    "kali",
+    "mint",
+    "nixos",
+    "gentoo",
+    "freebsd",
+    "raspberrypi",
+];
+
 pub(in crate::features) fn resolve_connection_icon(
     icon_key: Option<&str>,
     kind: &str,
