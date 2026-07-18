@@ -129,8 +129,8 @@ impl NyaTermApp {
             for (tab_index, session) in sessions.into_iter().enumerate() {
                 let display_name = self.session_display_name_by_info(&session);
                 let session_id = session.id.clone();
-                let actions_session_id = session.id.clone();
                 let close_session_id = session.id.clone();
+                let tab_group_name = SharedString::from(format!("session-tab-group-{session_id}"));
                 let tab_number = tab_index + 1;
                 let kind_icon = session_kind_icon_path(session.kind);
                 let tooltip_title = display_name.clone();
@@ -210,8 +210,9 @@ impl NyaTermApp {
                 tabs = tabs.child(
                     div()
                         .id(SharedString::from(format!("session-tab-{session_id}")))
+                        .group(tab_group_name.clone())
                         .h_full()
-                        .min_w(px(162.))
+                        .min_w(px(118.))
                         .max_w(px(236.))
                         .px_3()
                         .flex()
@@ -343,29 +344,6 @@ impl NyaTermApp {
                         .child(
                             div()
                                 .id(SharedString::from(format!(
-                                    "session-tab-actions-{actions_session_id}"
-                                )))
-                                .size(px(22.))
-                                .flex()
-                                .items_center()
-                                .justify_center()
-                                .rounded_sm()
-                                .text_xs()
-                                .font_weight(FontWeight(800.))
-                                .text_color(rgb(palette.text_muted))
-                                .hover(|this| {
-                                    this.bg(rgb(palette.border))
-                                        .text_color(rgb(palette.success))
-                                })
-                                .child(svg().size(px(12.)).path("icons/conn/more.svg"))
-                                .on_click(cx.listener(move |this, _, window, cx| {
-                                    cx.stop_propagation();
-                                    this.open_tab_actions(actions_session_id.clone(), window, cx);
-                                })),
-                        )
-                        .child(
-                            div()
-                                .id(SharedString::from(format!(
                                     "session-tab-close-{close_session_id}"
                                 )))
                                 .size(px(18.))
@@ -375,6 +353,12 @@ impl NyaTermApp {
                                 .rounded_sm()
                                 .text_xs()
                                 .text_color(rgb(palette.text_muted))
+                                .when(!is_active, |this| {
+                                    this.opacity(0.)
+                                        .group_hover(tab_group_name.clone(), |style| {
+                                            style.opacity(1.)
+                                        })
+                                })
                                 .hover(|this| {
                                     this.bg(rgb(palette.border)).text_color(rgb(palette.danger))
                                 })
@@ -521,8 +505,8 @@ impl NyaTermApp {
         let open_tabs_menu = self.open_tabs_menu_open;
         let new_session_menu = self.new_session_menu_open;
         let tab_strip_has_overflow = self.session_tab_strip_scroll.max_offset().width > px(0.);
-        // Tauri shows Open Tabs when the strip overflows; keep a small-count fallback.
-        let show_open_tabs_menu = tab_strip_has_overflow || session_count >= 4 || open_tabs_menu;
+        // Tauri shows Open Tabs only when the strip actually overflows.
+        let show_open_tabs_menu = tab_strip_has_overflow || open_tabs_menu;
 
         let mut session_actions = div()
             .h_full()
