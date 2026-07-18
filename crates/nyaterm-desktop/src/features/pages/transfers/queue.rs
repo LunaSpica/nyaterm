@@ -36,7 +36,7 @@ impl NyaTermApp {
             )
         });
         let download_path = if self.transfer_local_path.trim().is_empty() {
-            "download path unset".to_string()
+            format!("{}: -", self.tr("fileTransfer.downloadPath"))
         } else {
             truncate_preview(&self.transfer_local_path, 48)
         };
@@ -52,7 +52,7 @@ impl NyaTermApp {
                     .py_6()
                     .text_size(px(11.))
                     .text_color(rgb(palette.text_dimmed))
-                    .child("Connect to a session"),
+                    .child(self.tr("fileExplorer.connectToSession")),
             );
         } else if visible_jobs.is_empty() {
             list = list.child(
@@ -64,7 +64,7 @@ impl NyaTermApp {
                     .py_6()
                     .text_size(px(11.))
                     .text_color(rgb(palette.text_dimmed))
-                    .child("No transfers"),
+                    .child(self.tr("fileTransfer.noTransfers")),
             );
         } else {
             list = list.gap(px(2.)).p_1();
@@ -94,7 +94,7 @@ impl NyaTermApp {
                 this.handle_transfer_queue_key_down(event, cx);
             }))
             .child(panel_header_with_actions(
-                "File Transfer",
+                self.tr("panel.fileTransfer"),
                 "",
                 palette,
                 Some(

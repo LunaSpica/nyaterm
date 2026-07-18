@@ -120,7 +120,7 @@ impl NyaTermApp {
                                 .child(context_menu_button(
                                     palette,
                                     "transfer-context-current-refresh",
-                                    "Refresh",
+                                    self.tr("fileExplorer.cmRefresh"),
                                     cx.listener(|this, _, window, cx| {
                                         this.close_transfer_browser_context_menu(cx);
                                         this.refresh_transfer_browser(window, cx);
@@ -129,7 +129,7 @@ impl NyaTermApp {
                                 .child(context_menu_button(
                                     palette,
                                     "transfer-context-current-upload-file",
-                                    "Upload File",
+                                    self.tr("fileExplorer.cmUpload"),
                                     cx.listener(|this, _, _, cx| {
                                         this.close_transfer_browser_context_menu(cx);
                                         this.prompt_transfer_browser_upload_path(
@@ -141,7 +141,7 @@ impl NyaTermApp {
                                 .child(context_menu_button(
                                     palette,
                                     "transfer-context-current-upload-folder",
-                                    "Upload Folder",
+                                    self.tr("fileExplorer.uploadFolder"),
                                     cx.listener(|this, _, _, cx| {
                                         this.close_transfer_browser_context_menu(cx);
                                         this.prompt_transfer_browser_upload_path(
@@ -156,7 +156,7 @@ impl NyaTermApp {
                                 .child(context_menu_button(
                                     palette,
                                     "transfer-context-current-new-file",
-                                    "New File",
+                                    self.tr("fileExplorer.newFile"),
                                     cx.listener(|this, _, window, cx| {
                                         this.close_transfer_browser_context_menu(cx);
                                         this.open_transfer_new_file_dialog(window, cx);
@@ -165,7 +165,7 @@ impl NyaTermApp {
                                 .child(context_menu_button(
                                     palette,
                                     "transfer-context-current-new-folder",
-                                    "New Folder",
+                                    self.tr("fileExplorer.newFolder"),
                                     cx.listener(|this, _, window, cx| {
                                         this.close_transfer_browser_context_menu(cx);
                                         this.open_transfer_new_folder_dialog(window, cx);
@@ -174,7 +174,7 @@ impl NyaTermApp {
                                 .child(context_menu_button(
                                     palette,
                                     "transfer-context-current-new-symlink",
-                                    "New Symlink",
+                                    self.tr("fileExplorer.newSymlink"),
                                     cx.listener(|this, _, window, cx| {
                                         this.close_transfer_browser_context_menu(cx);
                                         this.open_transfer_new_symlink_dialog(window, cx);
@@ -186,7 +186,7 @@ impl NyaTermApp {
                                 .child(context_menu_button(
                                     palette,
                                     "transfer-context-current-copy-path",
-                                    "Copy Directory Path",
+                                    self.tr("fileExplorer.cmCopyDirPath"),
                                     cx.listener(|this, _, _, cx| {
                                         this.close_transfer_browser_context_menu(cx);
                                         this.copy_current_transfer_browser_path(cx);
@@ -195,7 +195,7 @@ impl NyaTermApp {
                                 .child(context_menu_button(
                                     palette,
                                     "transfer-context-current-send-path",
-                                    "Send Directory Path",
+                                    self.tr("fileExplorer.cmTerminalDirPath"),
                                     cx.listener(|this, _, _, cx| {
                                         this.close_transfer_browser_context_menu(cx);
                                         this.send_current_transfer_browser_path_to_terminal(cx);
@@ -205,7 +205,7 @@ impl NyaTermApp {
                         .child(context_menu_group(palette).child(context_menu_button(
                             palette,
                             "transfer-context-current-properties",
-                            "Properties",
+                            self.tr("fileExplorer.cmProperties"),
                             cx.listener(|this, _, window, cx| {
                                 this.close_transfer_browser_context_menu(cx);
                                 this.open_current_transfer_browser_properties(window, cx);
@@ -218,7 +218,7 @@ impl NyaTermApp {
                                 .child(context_menu_button(
                                     palette,
                                     "transfer-context-parent-up",
-                                    "Go Up",
+                                    self.tr("fileExplorer.goUp"),
                                     cx.listener(|this, _, window, cx| {
                                         this.close_transfer_browser_context_menu(cx);
                                         this.open_transfer_parent_directory(window, cx);
@@ -227,7 +227,7 @@ impl NyaTermApp {
                                 .child(context_menu_button(
                                     palette,
                                     "transfer-context-parent-refresh",
-                                    "Refresh",
+                                    self.tr("fileExplorer.cmRefresh"),
                                     cx.listener(|this, _, window, cx| {
                                         this.close_transfer_browser_context_menu(cx);
                                         this.refresh_transfer_browser(window, cx);
@@ -241,7 +241,7 @@ impl NyaTermApp {
                                 .child(context_menu_button(
                                     palette,
                                     "transfer-context-refresh",
-                                    "Refresh",
+                                    self.tr("fileExplorer.cmRefresh"),
                                     cx.listener(|this, _, window, cx| {
                                         this.close_transfer_browser_context_menu(cx);
                                         this.refresh_transfer_browser(window, cx);
@@ -250,7 +250,7 @@ impl NyaTermApp {
                                 .child(context_menu_button(
                                     palette,
                                     "transfer-context-upload-file",
-                                    "Upload File",
+                                    self.tr("fileExplorer.cmUpload"),
                                     cx.listener(|this, _, _, cx| {
                                         this.close_transfer_browser_context_menu(cx);
                                         this.prompt_transfer_browser_upload_path(
@@ -262,7 +262,7 @@ impl NyaTermApp {
                                 .child(context_menu_button(
                                     palette,
                                     "transfer-context-upload-folder",
-                                    "Upload Folder",
+                                    self.tr("fileExplorer.uploadFolder"),
                                     cx.listener(|this, _, _, cx| {
                                         this.close_transfer_browser_context_menu(cx);
                                         this.prompt_transfer_browser_upload_path(
@@ -274,7 +274,7 @@ impl NyaTermApp {
                                 .child(context_menu_button(
                                     palette,
                                     "transfer-context-download",
-                                    "Download",
+                                    self.tr("fileExplorer.cmDownload"),
                                     cx.listener(|this, _, window, cx| {
                                         this.close_transfer_browser_context_menu(cx);
                                         this.start_selected_sftp_download_jobs(window, cx);
@@ -288,7 +288,7 @@ impl NyaTermApp {
                                 .child(context_menu_button(
                                     palette,
                                     "transfer-context-open",
-                                    "Open",
+                                    self.tr("fileExplorer.cmOpen"),
                                     cx.listener(|this, _, window, cx| {
                                         this.close_transfer_browser_context_menu(cx);
                                         this.open_selected_transfer_default(window, cx);
@@ -298,7 +298,7 @@ impl NyaTermApp {
                                     this.child(context_menu_button(
                                         palette,
                                         "transfer-context-open-internal",
-                                        "Open Internal",
+                                        self.tr("fileExplorer.cmOpenInternalEditor"),
                                         cx.listener(|this, _, window, cx| {
                                             this.close_transfer_browser_context_menu(cx);
                                             this.open_selected_transfer_editor(window, cx);
@@ -309,7 +309,7 @@ impl NyaTermApp {
                                     this.child(context_menu_button(
                                         palette,
                                         "transfer-context-open-external",
-                                        "Open External",
+                                        self.tr("fileExplorer.cmOpenExternalEditor"),
                                         cx.listener(|this, _, window, cx| {
                                             this.close_transfer_browser_context_menu(cx);
                                             this.open_selected_transfer_external(window, cx);
@@ -319,7 +319,7 @@ impl NyaTermApp {
                                 .child(context_menu_button(
                                     palette,
                                     "transfer-context-rename",
-                                    "Rename",
+                                    self.tr("fileExplorer.cmRename"),
                                     cx.listener(|this, _, window, cx| {
                                         this.close_transfer_browser_context_menu(cx);
                                         this.open_transfer_rename_dialog(window, cx);
@@ -328,7 +328,7 @@ impl NyaTermApp {
                                 .child(context_menu_button(
                                     palette,
                                     "transfer-context-move",
-                                    "Move",
+                                    self.tr("fileExplorer.cmMove"),
                                     cx.listener(|this, _, window, cx| {
                                         let Some(path) = this.transfer_selected_remote_path.clone()
                                         else {
@@ -342,7 +342,7 @@ impl NyaTermApp {
                                 .child(context_menu_button(
                                     palette,
                                     "transfer-context-delete",
-                                    "Delete",
+                                    self.tr("fileExplorer.cmDelete"),
                                     cx.listener(|this, _, window, cx| {
                                         this.close_transfer_browser_context_menu(cx);
                                         this.open_selected_transfer_delete_dialog(window, cx);
@@ -357,7 +357,7 @@ impl NyaTermApp {
                             this.child(context_menu_group(palette).child(context_menu_button(
                                 palette,
                                 "transfer-context-favorite",
-                                "Add Favorite",
+                                self.tr("fileExplorer.addToFavorites"),
                                 cx.listener(move |this, _, _, cx| {
                                     this.close_transfer_browser_context_menu(cx);
                                     this.add_transfer_browser_favorite_path(
@@ -374,7 +374,7 @@ impl NyaTermApp {
                                 .child(context_menu_button(
                                     palette,
                                     "transfer-context-copy-path",
-                                    "Copy Path",
+                                    self.tr("fileExplorer.cmCopyPath"),
                                     cx.listener(|this, _, _, cx| {
                                         this.close_transfer_browser_context_menu(cx);
                                         this.copy_selected_transfer_path(
@@ -386,7 +386,7 @@ impl NyaTermApp {
                                 .child(context_menu_button(
                                     palette,
                                     "transfer-context-copy-name",
-                                    "Copy Name",
+                                    self.tr("fileExplorer.cmCopyName"),
                                     cx.listener(|this, _, _, cx| {
                                         this.close_transfer_browser_context_menu(cx);
                                         this.copy_selected_transfer_path(
@@ -398,7 +398,7 @@ impl NyaTermApp {
                                 .child(context_menu_button(
                                     palette,
                                     "transfer-context-copy-dir",
-                                    "Copy Directory",
+                                    self.tr("fileExplorer.cmCopyDirPath"),
                                     cx.listener(|this, _, _, cx| {
                                         this.close_transfer_browser_context_menu(cx);
                                         this.copy_selected_transfer_path(
@@ -415,7 +415,7 @@ impl NyaTermApp {
                                 .child(context_menu_button(
                                     palette,
                                     "transfer-context-send-path",
-                                    "Send Path",
+                                    self.tr("fileExplorer.cmTerminalPath"),
                                     cx.listener(|this, _, _, cx| {
                                         this.close_transfer_browser_context_menu(cx);
                                         this.send_selected_transfer_path_to_terminal(
@@ -427,7 +427,7 @@ impl NyaTermApp {
                                 .child(context_menu_button(
                                     palette,
                                     "transfer-context-send-name",
-                                    "Send Name",
+                                    self.tr("fileExplorer.cmTerminalName"),
                                     cx.listener(|this, _, _, cx| {
                                         this.close_transfer_browser_context_menu(cx);
                                         this.send_selected_transfer_path_to_terminal(
@@ -439,7 +439,7 @@ impl NyaTermApp {
                                 .child(context_menu_button(
                                     palette,
                                     "transfer-context-send-dir",
-                                    "Send Directory",
+                                    self.tr("fileExplorer.cmTerminalDirPath"),
                                     cx.listener(|this, _, _, cx| {
                                         this.close_transfer_browser_context_menu(cx);
                                         this.send_selected_transfer_path_to_terminal(
@@ -454,7 +454,7 @@ impl NyaTermApp {
                         this.child(context_menu_group(palette).child(context_menu_button(
                             palette,
                             "transfer-context-properties",
-                            "Properties",
+                            self.tr("fileExplorer.cmProperties"),
                             cx.listener(|this, _, window, cx| {
                                 this.close_transfer_browser_context_menu(cx);
                                 this.open_selected_transfer_properties(window, cx);

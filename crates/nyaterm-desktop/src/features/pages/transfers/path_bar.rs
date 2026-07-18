@@ -21,7 +21,7 @@ impl NyaTermApp {
             .take(5)
             .collect::<Vec<_>>();
         let path_draft_value = if self.transfer_browser_path_draft.is_empty() {
-            "Type remote path".to_string()
+            self.tr("fileExplorer.editPath").to_string()
         } else {
             format!("{}|", self.transfer_browser_path_draft)
         };

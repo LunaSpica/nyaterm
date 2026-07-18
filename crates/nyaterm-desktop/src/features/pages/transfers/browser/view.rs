@@ -30,7 +30,7 @@ impl NyaTermApp {
         let search_active = !self.transfer_browser_search.trim().is_empty();
         let search_expanded = self.transfer_browser_search_expanded || search_active;
         let search_value = if self.transfer_browser_search.is_empty() {
-            "Search remote files".to_string()
+            self.tr("fileExplorer.searchPlaceholder").to_string()
         } else {
             self.transfer_browser_search.clone()
         };
@@ -67,9 +67,9 @@ impl NyaTermApp {
                             .text_size(px(12.))
                             .text_color(rgb(palette.text_muted))
                             .child(if self.active_session_id.is_some() {
-                                "Unsupported session"
+                                self.tr("fileExplorer.unsupportedSession")
                             } else {
-                                "Connect to an SSH session"
+                                self.tr("fileExplorer.connectToSession")
                             }),
                     )
                     .child(
@@ -77,9 +77,9 @@ impl NyaTermApp {
                             .text_size(px(11.))
                             .text_color(rgb(palette.text_dimmed))
                             .child(if self.active_session_id.is_some() {
-                                "File Explorer requires an active SSH session."
+                                self.tr("fileExplorer.unsupportedSessionDesc")
                             } else {
-                                "Open an SSH connection to browse remote files."
+                                self.tr("fileExplorer.connectToSession")
                             }),
                     ),
             );
@@ -93,7 +93,7 @@ impl NyaTermApp {
                     .py_8()
                     .text_size(px(12.))
                     .text_color(rgb(palette.text_dimmed))
-                    .child("Loading remote directory..."),
+                    .child(self.tr("fileExplorer.loading")),
             );
         } else if self.transfer_browser_entries.is_empty() {
             rows = rows.child(
@@ -115,7 +115,7 @@ impl NyaTermApp {
                             div()
                                 .text_size(px(12.))
                                 .text_color(rgb(palette.text_muted))
-                                .child("No remote entries loaded")
+                                .child(self.tr("fileExplorer.emptyDirectory"))
                         },
                     )
                     .child(
@@ -135,7 +135,7 @@ impl NyaTermApp {
                     .py_8()
                     .text_size(px(11.))
                     .text_color(rgb(palette.text_dimmed))
-                    .child("No remote entries match the current search."),
+                    .child(self.tr("fileExplorer.noSearchResults")),
             );
         } else {
             // Tauri File Explorer virtual list (30px rows, overscan, spacer padding).
@@ -193,7 +193,7 @@ impl NyaTermApp {
                 this.child(
                     div()
                         .relative()
-                        .h(px(30.))
+                        .h(px(36.))
                         .px_1()
                         .border_b_1()
                         .border_color(rgb(palette.border))

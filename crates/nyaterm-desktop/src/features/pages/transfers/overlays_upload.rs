@@ -68,7 +68,7 @@ impl NyaTermApp {
                         palette,
                         "transfer-browser-upload-menu-files",
                         "icons/fe/upload.svg",
-                        "Upload Files",
+                        self.tr("fileExplorer.upload"),
                         cx.listener(|this, _, _, cx| {
                             this.close_transfer_browser_upload_menu(cx);
                             this.prompt_transfer_browser_upload_path(
@@ -81,7 +81,7 @@ impl NyaTermApp {
                         palette,
                         "transfer-browser-upload-menu-folder",
                         "icons/fe/upload-folder.svg",
-                        "Upload Folder",
+                        self.tr("fileExplorer.uploadFolder"),
                         cx.listener(|this, _, _, cx| {
                             this.close_transfer_browser_upload_menu(cx);
                             this.prompt_transfer_browser_upload_path(
