@@ -5,132 +5,7 @@ impl NyaTermApp {
         &mut self,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
-        let palette = self.theme_palette();
-        div()
-            .flex()
-            .flex_col()
-            .gap_3()
-            .child(settings_form_section(
-                palette,
-                Some("Terminal search"),
-                Some("Default flags for in-buffer find."),
-                div()
-                    .flex()
-                    .flex_col()
-                    .gap_3()
-                    .child(settings_form_row(
-                        palette,
-                        "Search mode",
-                        Some(SharedString::from(
-                            "Buffer searches the live terminal; History searches session logs.",
-                        )),
-                        div()
-                            .flex()
-                            .gap_1()
-                            .child(settings_choice_chip(
-                                palette,
-                                "settings-search-mode-buffer",
-                                "Buffer",
-                                self.terminal_search_mode == TerminalSearchMode::Buffer,
-                                cx.listener(|this, _, _, cx| {
-                                    this.terminal_search_mode = TerminalSearchMode::Buffer;
-                                    this.terminal_search_active_index = 0;
-                                    this.refresh_terminal_search_state(cx);
-                                }),
-                            ))
-                            .child(settings_choice_chip(
-                                palette,
-                                "settings-search-mode-history",
-                                "History",
-                                self.terminal_search_mode == TerminalSearchMode::History,
-                                cx.listener(|this, _, _, cx| {
-                                    this.terminal_search_mode = TerminalSearchMode::History;
-                                    this.terminal_search_active_index = 0;
-                                    this.refresh_terminal_search_state(cx);
-                                }),
-                            )),
-                    ))
-                    .child(settings_form_row(
-                        palette,
-                        "Case sensitive",
-                        None,
-                        settings_switch(
-                            palette,
-                            "settings-search-case",
-                            self.terminal_search_case_sensitive,
-                            cx.listener(|this, _, _, cx| {
-                                this.terminal_search_case_sensitive =
-                                    !this.terminal_search_case_sensitive;
-                                this.terminal_search_active_index = 0;
-                                this.refresh_terminal_search_state(cx);
-                            }),
-                        ),
-                    ))
-                    .child(settings_form_row(
-                        palette,
-                        "Regular expression",
-                        None,
-                        settings_switch(
-                            palette,
-                            "settings-search-regex",
-                            self.terminal_search_regex,
-                            cx.listener(|this, _, _, cx| {
-                                this.terminal_search_regex = !this.terminal_search_regex;
-                                this.terminal_search_active_index = 0;
-                                this.refresh_terminal_search_state(cx);
-                            }),
-                        ),
-                    ))
-                    .child(settings_form_row(
-                        palette,
-                        "Whole word",
-                        None,
-                        settings_switch(
-                            palette,
-                            "settings-search-word",
-                            self.terminal_search_whole_word,
-                            cx.listener(|this, _, _, cx| {
-                                this.terminal_search_whole_word = !this.terminal_search_whole_word;
-                                this.terminal_search_active_index = 0;
-                                this.refresh_terminal_search_state(cx);
-                            }),
-                        ),
-                    ))
-                    .child(settings_form_row(
-                        palette,
-                        "Open search",
-                        Some(SharedString::from(
-                            "Focus the terminal search bar in the workspace.",
-                        )),
-                        small_button(
-                            palette,
-                            "settings-search-open",
-                            "Open",
-                            cx.listener(|this, _, window, cx| {
-                                this.open_terminal_search(window, cx);
-                            }),
-                        ),
-                    )),
-            ))
-            .child(settings_form_section(
-                palette,
-                Some("Command search"),
-                Some("Shared matcher sources for history and quick commands."),
-                settings_form_row(
-                    palette,
-                    "Catalog",
-                    Some(SharedString::from(format!(
-                        "{} history · {} quick commands",
-                        self.command_history.len(),
-                        self.quick_commands.len()
-                    ))),
-                    div()
-                        .text_size(px(11.))
-                        .text_color(rgb(palette.text_muted))
-                        .child("Native fuzzy"),
-                ),
-            ))
-            .child(self.online_search_engines_settings_section(cx))
+        self.online_search_engines_settings_section(cx)
     }
 
     pub(in crate::features) fn online_search_engines_settings_section(
@@ -139,49 +14,34 @@ impl NyaTermApp {
     ) -> impl IntoElement {
         let palette = self.theme_palette();
         let engines = self.settings.search_custom_engines.clone();
-        let menu_count = engines.iter().filter(|engine| engine.show_in_menu).count();
         let edit_index = self.search_engine_edit_index;
         let expanded_index = self.search_engine_expanded_index;
+        let icon_picker_index = self.search_engine_icon_picker_index;
+        let actions_index = self.search_engine_actions_index;
         let edit_field = self.search_engine_edit_field;
-
-        settings_form_section(
+        let add_action = search_engine_text_button(
             palette,
-            Some("Online search engines"),
-            Some("Engines shown on the terminal selection context menu (Tauri Search tab)."),
+            "settings-search-engine-add",
+            "icons/conn/add.svg",
+            self.tr("common.add"),
+            false,
+            true,
+            cx.listener(|this, _, window, cx| {
+                this.add_search_engine(cx);
+                window.focus(&this.search_engine_focus);
+            }),
+        )
+        .into_any_element();
+
+        search_engine_settings_section(
+            palette,
+            self.tr("settings.customEngines"),
+            self.tr("settings.engineUrlHint"),
+            add_action,
             div()
                 .flex()
                 .flex_col()
                 .gap_3()
-                .child(settings_form_row(
-                    palette,
-                    "Catalog",
-                    Some(SharedString::from(format!(
-                        "{} engines · {} in menu",
-                        engines.len(),
-                        menu_count
-                    ))),
-                    div()
-                        .flex()
-                        .items_center()
-                        .gap_1()
-                        .child(small_button(
-                            palette,
-                            "settings-search-engine-add",
-                            "Add",
-                            cx.listener(|this, _, window, cx| {
-                                this.add_search_engine(cx);
-                                window.focus(&this.search_engine_focus);
-                            }),
-                        ))
-                        .child(small_button(
-                            palette,
-                            "settings-search-engine-reset",
-                            "Reset",
-                            cx.listener(|this, _, _, cx| {
-                                this.reset_search_engines(cx);
-                            }),
-                        )),
-                ))
                 .when(engines.is_empty(), |this| {
                     this.child(
                         div()
@@ -194,221 +54,607 @@ impl NyaTermApp {
                             .flex()
                             .items_center()
                             .justify_center()
-                            .child(
-                                div()
-                                    .text_size(px(12.))
-                                    .text_color(rgb(palette.text_dimmed))
-                                    .child(
-                                        "No custom engines — Add one for selection online search.",
-                                    ),
-                            ),
+                            .text_size(px(12.))
+                            .text_color(rgb(palette.text_dimmed))
+                            .child(self.tr("settings.noCustomEngines")),
                     )
                 })
-                .children(engines.into_iter().enumerate().map(|(index, engine)| {
-                    let is_open = expanded_index == Some(index);
-                    let name_active =
-                        edit_index == Some(index) && edit_field == SearchEngineEditorField::Name;
-                    let url_active =
-                        edit_index == Some(index) && edit_field == SearchEngineEditorField::Url;
-                    let name_value = if engine.name.is_empty() {
-                        " ".to_string()
-                    } else {
-                        engine.name.clone()
-                    };
-                    let url_value = if engine.url_template.is_empty() {
-                        " ".to_string()
-                    } else {
-                        engine.url_template.clone()
-                    };
-                    let has_placeholder = engine.url_template.contains("%s");
-                    let icon_label = search_engine_icon_label(engine.icon.as_deref());
-                    let icon_color = search_engine_icon_color(engine.icon.as_deref());
-                    div()
-                        .id(SharedString::from(format!(
-                            "settings-search-engine-{index}"
-                        )))
-                        .rounded_md()
-                        .border_1()
-                        .border_color(rgb(palette.border))
-                        .bg(rgb(palette.input))
-                        .overflow_hidden()
-                        .flex()
-                        .flex_col()
-                        .child(
-                            div()
-                                .id(SharedString::from(format!(
-                                    "settings-search-engine-header-{index}"
-                                )))
-                                .px_3()
-                                .py_2()
-                                .flex()
-                                .items_center()
-                                .gap_2()
-                                .cursor_pointer()
-                                .hover(|this| this.bg(rgb(palette.hover)))
-                                .on_click(cx.listener(move |this, _, _, cx| {
-                                    this.expand_search_engine(index, cx);
-                                }))
-                                .child(
-                                    div()
-                                        .id(SharedString::from(format!(
-                                            "settings-search-engine-icon-{index}"
-                                        )))
-                                        .size(px(22.))
-                                        .rounded_md()
-                                        .bg(rgb(palette.bg))
-                                        .border_1()
-                                        .border_color(rgb(palette.border))
-                                        .flex()
-                                        .items_center()
-                                        .justify_center()
-                                        .text_size(px(10.))
-                                        .font_weight(FontWeight(700.))
-                                        .text_color(rgb(icon_color))
-                                        .child(icon_label)
-                                        .on_click(cx.listener(move |this, _, _, cx| {
-                                            this.cycle_search_engine_icon(index, cx);
-                                        })),
-                                )
-                                .child(
-                                    div()
-                                        .min_w_0()
-                                        .flex_1()
-                                        .flex()
-                                        .flex_col()
-                                        .child(
-                                            div()
-                                                .text_size(px(12.))
-                                                .font_weight(FontWeight(700.))
-                                                .text_color(rgb(palette.text))
-                                                .overflow_hidden()
-                                                .child(if engine.name.trim().is_empty() {
-                                                    "Unnamed engine".to_string()
-                                                } else {
-                                                    engine.name.clone()
-                                                }),
-                                        )
-                                        .child(
-                                            div()
-                                                .text_size(px(10.))
-                                                .text_color(rgb(palette.text_muted))
-                                                .overflow_hidden()
-                                                .child(if engine.url_template.trim().is_empty() {
-                                                    "No URL template".to_string()
-                                                } else {
-                                                    truncate_preview(&engine.url_template, 48)
-                                                }),
-                                        ),
-                                )
-                                .child(settings_switch(
-                                    palette,
-                                    format!("settings-search-engine-menu-{index}"),
-                                    engine.show_in_menu,
-                                    cx.listener(move |this, _, _, cx| {
-                                        this.toggle_search_engine_in_menu(index, cx);
-                                    }),
-                                ))
-                                .child(small_button(
-                                    palette,
-                                    format!("settings-search-engine-test-{index}"),
-                                    "Test",
-                                    cx.listener(move |this, _, _, cx| {
-                                        this.test_search_engine(index, cx);
-                                    }),
-                                ))
-                                .child(small_button(
-                                    palette,
-                                    format!("settings-search-engine-del-{index}"),
-                                    "Delete",
-                                    cx.listener(move |this, _, _, cx| {
-                                        this.remove_search_engine(index, cx);
-                                    }),
-                                ))
-                                .child(
-                                    div()
-                                        .text_size(px(11.))
-                                        .text_color(rgb(palette.text_dimmed))
-                                        .child(if is_open { "▾" } else { "▸" }),
-                                ),
-                        )
-                        .when(is_open, |this| {
-                            this.child(
+                .when(!engines.is_empty(), |this| {
+                    this.child(
+                        div()
+                            .rounded_md()
+                            .border_1()
+                            .border_color(rgb(palette.border))
+                            .bg(rgb(palette.input))
+                            .overflow_hidden()
+                            .children(engines.into_iter().enumerate().map(|(index, engine)| {
+                                let is_open = expanded_index == Some(index);
+                                let icon_picker_open = icon_picker_index == Some(index);
+                                let actions_open = actions_index == Some(index);
+                                let name_active = edit_index == Some(index)
+                                    && edit_field == SearchEngineEditorField::Name;
+                                let url_active = edit_index == Some(index)
+                                    && edit_field == SearchEngineEditorField::Url;
+                                let name_value = if engine.name.is_empty() {
+                                    " ".to_string()
+                                } else {
+                                    engine.name.clone()
+                                };
+                                let url_value = if engine.url_template.is_empty() {
+                                    " ".to_string()
+                                } else {
+                                    engine.url_template.clone()
+                                };
+                                let has_placeholder = engine.url_template.contains("%s");
+                                let icon_label = engine
+                                    .icon
+                                    .as_deref()
+                                    .map(|icon| search_engine_icon_label(Some(icon)))
+                                    .unwrap_or_else(|| "+".to_string());
+                                let icon_color = search_engine_icon_color(engine.icon.as_deref());
+                                let select_icon_label = self.tr("settings.selectIcon");
+                                let show_menu_label = self.tr("settings.showInSearchMenu");
+                                let actions_label = self.tr("settings.searchEngineActions");
+
                                 div()
-                                    .border_t_1()
-                                    .border_color(rgb(palette.border))
-                                    .bg(rgb(palette.bg))
-                                    .px_3()
-                                    .py_3()
+                                    .id(SharedString::from(format!(
+                                        "settings-search-engine-{index}"
+                                    )))
+                                    .when(index > 0, |this| {
+                                        this.border_t_1().border_color(rgb(palette.border))
+                                    })
                                     .flex()
                                     .flex_col()
-                                    .gap_2()
-                                    .child(
-                                        transfer_input(
-                                            format!("settings-search-engine-name-{index}"),
-                                            "Name",
-                                            name_value,
-                                            name_active,
-                                            palette,
-                                        )
-                                        .track_focus(&self.search_engine_focus)
-                                        .on_click(cx.listener(move |this, _, window, cx| {
-                                            this.focus_search_engine_field(
-                                                index,
-                                                SearchEngineEditorField::Name,
-                                                window,
-                                                cx,
-                                            );
-                                        }))
-                                        .on_key_down(
-                                            cx.listener(|this, event: &KeyDownEvent, _, cx| {
-                                                cx.stop_propagation();
-                                                this.handle_search_engine_key_down(event, cx);
-                                            }),
-                                        ),
-                                    )
-                                    .child(
-                                        transfer_input(
-                                            format!("settings-search-engine-url-{index}"),
-                                            "URL template (%s = query)",
-                                            url_value,
-                                            url_active,
-                                            palette,
-                                        )
-                                        .track_focus(&self.search_engine_focus)
-                                        .on_click(cx.listener(move |this, _, window, cx| {
-                                            this.focus_search_engine_field(
-                                                index,
-                                                SearchEngineEditorField::Url,
-                                                window,
-                                                cx,
-                                            );
-                                        }))
-                                        .on_key_down(
-                                            cx.listener(|this, event: &KeyDownEvent, _, cx| {
-                                                cx.stop_propagation();
-                                                this.handle_search_engine_key_down(event, cx);
-                                            }),
-                                        ),
-                                    )
                                     .child(
                                         div()
-                                            .text_size(px(10.))
-                                            .text_color(rgb(if has_placeholder {
-                                                palette.text_muted
-                                            } else {
-                                                palette.danger
-                                            }))
-                                            .child(if has_placeholder {
-                                                "Ready — Test opens the URL with query \"nyaterm\"."
-                                                    .to_string()
-                                            } else {
-                                                "URL should include %s for the selected text"
-                                                    .to_string()
-                                            }),
-                                    ),
-                            )
-                        })
-                })),
+                                            .px_3()
+                                            .py_3()
+                                            .flex()
+                                            .items_start()
+                                            .gap_3()
+                                            .child(
+                                                div()
+                                                    .id(SharedString::from(format!(
+                                                        "settings-search-engine-icon-{index}"
+                                                    )))
+                                                    .mt(px(2.))
+                                                    .size(px(36.))
+                                                    .rounded_md()
+                                                    .bg(rgb(palette.bg))
+                                                    .border_1()
+                                                    .border_color(if icon_picker_open {
+                                                        rgb(palette.link)
+                                                    } else {
+                                                        rgb(palette.border)
+                                                    })
+                                                    .flex()
+                                                    .items_center()
+                                                    .justify_center()
+                                                    .text_size(px(11.))
+                                                    .font_weight(FontWeight(700.))
+                                                    .text_color(rgb(icon_color))
+                                                    .cursor_pointer()
+                                                    .hover(|this| this.bg(rgb(palette.hover)))
+                                                    .tooltip(move |_, cx| {
+                                                        cx.new(|_| {
+                                                            ChromeTooltip::new(select_icon_label)
+                                                        })
+                                                        .into()
+                                                    })
+                                                    .child(icon_label)
+                                                    .on_click(cx.listener(move |this, _, _, cx| {
+                                                        if this.search_engine_icon_picker_index
+                                                            == Some(index)
+                                                        {
+                                                            this.search_engine_icon_picker_index =
+                                                                None;
+                                                        } else {
+                                                            this.search_engine_icon_picker_index =
+                                                                Some(index);
+                                                        }
+                                                        this.search_engine_actions_index = None;
+                                                        cx.notify();
+                                                    })),
+                                            )
+                                            .child(
+                                                div()
+                                                    .min_w_0()
+                                                    .flex_1()
+                                                    .py(px(2.))
+                                                    .child(
+                                                        div()
+                                                            .text_size(px(12.))
+                                                            .font_weight(FontWeight(600.))
+                                                            .text_color(rgb(palette.text))
+                                                            .overflow_hidden()
+                                                            .child(if engine.name.trim().is_empty() {
+                                                                self.tr("settings.engineName")
+                                                                    .to_string()
+                                                            } else {
+                                                                engine.name.clone()
+                                                            }),
+                                                    )
+                                                    .child(
+                                                        div()
+                                                            .mt_1()
+                                                            .text_size(px(10.))
+                                                            .text_color(rgb(if has_placeholder {
+                                                                palette.text_muted
+                                                            } else {
+                                                                palette.danger
+                                                            }))
+                                                            .overflow_hidden()
+                                                            .child(
+                                                                if engine
+                                                                    .url_template
+                                                                    .trim()
+                                                                    .is_empty()
+                                                                {
+                                                                    self.tr("settings.engineUrl")
+                                                                        .to_string()
+                                                                } else {
+                                                                    truncate_preview(
+                                                                        &engine.url_template,
+                                                                        56,
+                                                                    )
+                                                                },
+                                                            ),
+                                                    ),
+                                            )
+                                            .child(
+                                                div()
+                                                    .flex_none()
+                                                    .flex()
+                                                    .items_center()
+                                                    .gap_2()
+                                                    .child(
+                                                        div()
+                                                            .id(SharedString::from(format!(
+                                                                "settings-search-engine-menu-tip-{index}"
+                                                            )))
+                                                            .tooltip(move |_, cx| {
+                                                                cx.new(|_| {
+                                                                    ChromeTooltip::new(
+                                                                        show_menu_label,
+                                                                    )
+                                                                })
+                                                                .into()
+                                                            })
+                                                            .child(settings_switch(
+                                                                palette,
+                                                                format!(
+                                                                    "settings-search-engine-menu-{index}"
+                                                                ),
+                                                                engine.show_in_menu,
+                                                                cx.listener(
+                                                                    move |this, _, _, cx| {
+                                                                        this.toggle_search_engine_in_menu(
+                                                                            index, cx,
+                                                                        );
+                                                                    },
+                                                                ),
+                                                            )),
+                                                    )
+                                                    .child(search_engine_icon_button(
+                                                        palette,
+                                                        format!(
+                                                            "settings-search-engine-actions-{index}"
+                                                        ),
+                                                        "icons/session/more.svg",
+                                                        actions_label,
+                                                        actions_open,
+                                                        cx.listener(move |this, _, _, cx| {
+                                                            if this.search_engine_actions_index
+                                                                == Some(index)
+                                                            {
+                                                                this.search_engine_actions_index =
+                                                                    None;
+                                                            } else {
+                                                                this.search_engine_actions_index =
+                                                                    Some(index);
+                                                            }
+                                                            this.search_engine_icon_picker_index =
+                                                                None;
+                                                            cx.notify();
+                                                        }),
+                                                    )),
+                                            ),
+                                    )
+                                    .when(icon_picker_open, |this| {
+                                        this.child(search_engine_icon_picker(
+                                            palette,
+                                            index,
+                                            engine.icon.as_deref(),
+                                            self.tr("common.remove"),
+                                            cx,
+                                        ))
+                                    })
+                                    .when(actions_open, |this| {
+                                        this.child(
+                                            div()
+                                                .border_t_1()
+                                                .border_color(rgb(palette.border))
+                                                .px_3()
+                                                .py_2()
+                                                .flex()
+                                                .items_center()
+                                                .justify_end()
+                                                .gap_1()
+                                                .child(search_engine_text_button(
+                                                    palette,
+                                                    format!(
+                                                        "settings-search-engine-edit-{index}"
+                                                    ),
+                                                    "icons/net/edit.svg",
+                                                    self.tr("common.edit"),
+                                                    false,
+                                                    true,
+                                                    cx.listener(move |this, _, _, cx| {
+                                                        this.expand_search_engine(index, cx);
+                                                    }),
+                                                ))
+                                                .child(search_engine_text_button(
+                                                    palette,
+                                                    format!(
+                                                        "settings-search-engine-test-{index}"
+                                                    ),
+                                                    "icons/fe/forward.svg",
+                                                    self.tr("settings.testSearchEngine"),
+                                                    false,
+                                                    has_placeholder,
+                                                    cx.listener(move |this, _, _, cx| {
+                                                        this.search_engine_actions_index = None;
+                                                        this.test_search_engine(index, cx);
+                                                    }),
+                                                ))
+                                                .child(search_engine_text_button(
+                                                    palette,
+                                                    format!(
+                                                        "settings-search-engine-delete-{index}"
+                                                    ),
+                                                    "icons/fe/delete.svg",
+                                                    self.tr("common.delete"),
+                                                    true,
+                                                    true,
+                                                    cx.listener(move |this, _, _, cx| {
+                                                        this.remove_search_engine(index, cx);
+                                                    }),
+                                                )),
+                                        )
+                                    })
+                                    .when(is_open, |this| {
+                                        this.child(
+                                            div()
+                                                .border_t_1()
+                                                .border_color(rgb(palette.border))
+                                                .bg(rgb(palette.bg))
+                                                .px_3()
+                                                .py_3()
+                                                .flex()
+                                                .flex_col()
+                                                .gap_3()
+                                                .child(
+                                                    div()
+                                                        .flex()
+                                                        .flex_col()
+                                                        .gap_2()
+                                                        .child(
+                                                            div()
+                                                                .text_size(px(11.))
+                                                                .font_weight(FontWeight(500.))
+                                                                .text_color(rgb(
+                                                                    palette.text_muted,
+                                                                ))
+                                                                .child(self.tr(
+                                                                    "settings.engineName",
+                                                                )),
+                                                        )
+                                                        .child(
+                                                            transfer_input(
+                                                                format!(
+                                                                    "settings-search-engine-name-{index}"
+                                                                ),
+                                                                self.tr("settings.engineName"),
+                                                                name_value,
+                                                                name_active,
+                                                                palette,
+                                                            )
+                                                            .track_focus(
+                                                                &self.search_engine_focus,
+                                                            )
+                                                            .on_click(cx.listener(
+                                                                move |this, _, window, cx| {
+                                                                    this.focus_search_engine_field(
+                                                                        index,
+                                                                        SearchEngineEditorField::Name,
+                                                                        window,
+                                                                        cx,
+                                                                    );
+                                                                },
+                                                            ))
+                                                            .on_key_down(cx.listener(
+                                                                |this,
+                                                                 event: &KeyDownEvent,
+                                                                 _,
+                                                                 cx| {
+                                                                    cx.stop_propagation();
+                                                                    this.handle_search_engine_key_down(
+                                                                        event, cx,
+                                                                    );
+                                                                },
+                                                            )),
+                                                        ),
+                                                )
+                                                .child(
+                                                    div()
+                                                        .flex()
+                                                        .flex_col()
+                                                        .gap_2()
+                                                        .child(
+                                                            div()
+                                                                .text_size(px(11.))
+                                                                .font_weight(FontWeight(500.))
+                                                                .text_color(rgb(
+                                                                    palette.text_muted,
+                                                                ))
+                                                                .child(self.tr(
+                                                                    "settings.engineUrl",
+                                                                )),
+                                                        )
+                                                        .child(
+                                                            transfer_input(
+                                                                format!(
+                                                                    "settings-search-engine-url-{index}"
+                                                                ),
+                                                                "https://google.com/search?q=%s",
+                                                                url_value,
+                                                                url_active,
+                                                                palette,
+                                                            )
+                                                            .track_focus(
+                                                                &self.search_engine_focus,
+                                                            )
+                                                            .on_click(cx.listener(
+                                                                move |this, _, window, cx| {
+                                                                    this.focus_search_engine_field(
+                                                                        index,
+                                                                        SearchEngineEditorField::Url,
+                                                                        window,
+                                                                        cx,
+                                                                    );
+                                                                },
+                                                            ))
+                                                            .on_key_down(cx.listener(
+                                                                |this,
+                                                                 event: &KeyDownEvent,
+                                                                 _,
+                                                                 cx| {
+                                                                    cx.stop_propagation();
+                                                                    this.handle_search_engine_key_down(
+                                                                        event, cx,
+                                                                    );
+                                                                },
+                                                            )),
+                                                        )
+                                                        .child(
+                                                            div()
+                                                                .text_size(px(10.))
+                                                                .text_color(rgb(
+                                                                    if has_placeholder {
+                                                                        palette.text_muted
+                                                                    } else {
+                                                                        palette.danger
+                                                                    },
+                                                                ))
+                                                                .child(if has_placeholder {
+                                                                    self.tr(
+                                                                        "settings.engineUrlHint",
+                                                                    )
+                                                                } else {
+                                                                    self.tr(
+                                                                        "settings.engineUrlInvalid",
+                                                                    )
+                                                                }),
+                                                        ),
+                                                ),
+                                        )
+                                    })
+                            })),
+                    )
+                }),
         )
     }
+}
+
+fn search_engine_icon_picker(
+    palette: ThemePalette,
+    index: usize,
+    selected_icon: Option<&str>,
+    clear_label: &'static str,
+    cx: &mut Context<NyaTermApp>,
+) -> impl IntoElement {
+    div()
+        .border_t_1()
+        .border_color(rgb(palette.border))
+        .bg(rgb(palette.bg))
+        .px_3()
+        .py_2()
+        .grid()
+        .grid_cols(6)
+        .gap_1()
+        .child(search_engine_icon_choice(
+            palette,
+            format!("settings-search-engine-icon-clear-{index}"),
+            "x".to_string(),
+            clear_label.to_string(),
+            palette.text_muted,
+            selected_icon.is_none(),
+            cx.listener(move |this, _, _, cx| {
+                this.set_search_engine_icon(index, None, cx);
+            }),
+        ))
+        .children(SEARCH_ENGINE_ICON_IDS.iter().map(|icon| {
+            let icon_id = (*icon).to_string();
+            search_engine_icon_choice(
+                palette,
+                format!("settings-search-engine-icon-{index}-{icon}"),
+                search_engine_icon_label(Some(icon)),
+                (*icon).to_string(),
+                search_engine_icon_color(Some(icon)),
+                selected_icon == Some(*icon),
+                cx.listener(move |this, _, _, cx| {
+                    this.set_search_engine_icon(index, Some(&icon_id), cx);
+                }),
+            )
+        }))
+}
+
+fn search_engine_icon_choice(
+    palette: ThemePalette,
+    id: String,
+    label: String,
+    tooltip: String,
+    color: u32,
+    selected: bool,
+    on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
+) -> impl IntoElement {
+    div()
+        .id(SharedString::from(id))
+        .h(px(28.))
+        .rounded_sm()
+        .border_1()
+        .border_color(if selected {
+            rgb(palette.primary)
+        } else {
+            rgb(palette.border)
+        })
+        .bg(if selected {
+            rgb(palette.hover)
+        } else {
+            rgb(palette.input)
+        })
+        .flex()
+        .items_center()
+        .justify_center()
+        .text_size(px(10.))
+        .font_weight(FontWeight(700.))
+        .text_color(rgb(color))
+        .cursor_pointer()
+        .hover(|this| this.bg(rgb(palette.hover)))
+        .tooltip(move |_, cx| cx.new(|_| ChromeTooltip::new(tooltip.clone())).into())
+        .child(label)
+        .on_click(on_click)
+}
+
+fn search_engine_settings_section(
+    palette: ThemePalette,
+    title: &'static str,
+    desc: &'static str,
+    action: impl IntoElement,
+    content: impl IntoElement,
+) -> impl IntoElement {
+    div()
+        .rounded_lg()
+        .border_1()
+        .border_color(rgb(palette.border))
+        .bg(rgb(palette.surface))
+        .overflow_hidden()
+        .child(
+            div()
+                .px_4()
+                .py_3()
+                .border_b_1()
+                .border_color(rgb(palette.surface_elevated))
+                .flex()
+                .items_start()
+                .justify_between()
+                .gap_3()
+                .child(
+                    div()
+                        .min_w_0()
+                        .flex_1()
+                        .child(
+                            div()
+                                .text_size(px(13.))
+                                .font_weight(FontWeight(600.))
+                                .text_color(rgb(palette.text))
+                                .child(title),
+                        )
+                        .child(
+                            div()
+                                .mt_1()
+                                .text_size(px(11.))
+                                .text_color(rgb(palette.text_dimmed))
+                                .child(desc),
+                        ),
+                )
+                .child(action),
+        )
+        .child(div().px_4().py_3().child(content))
+}
+
+fn search_engine_icon_button(
+    palette: ThemePalette,
+    id: String,
+    icon_path: &'static str,
+    tooltip: &'static str,
+    active: bool,
+    on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
+) -> impl IntoElement {
+    div()
+        .id(SharedString::from(id))
+        .size(px(28.))
+        .rounded_sm()
+        .flex()
+        .items_center()
+        .justify_center()
+        .bg(if active {
+            rgb(palette.hover)
+        } else {
+            rgb(0x00000000)
+        })
+        .text_color(rgb(palette.text_muted))
+        .cursor_pointer()
+        .hover(|this| this.bg(rgb(palette.hover)).text_color(rgb(palette.text)))
+        .tooltip(move |_, cx| cx.new(|_| ChromeTooltip::new(tooltip)).into())
+        .child(svg().size(px(15.)).path(icon_path))
+        .on_click(on_click)
+}
+
+fn search_engine_text_button(
+    palette: ThemePalette,
+    id: impl Into<String>,
+    icon_path: &'static str,
+    label: &'static str,
+    destructive: bool,
+    enabled: bool,
+    on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
+) -> impl IntoElement {
+    let hover = if destructive {
+        rgba((palette.danger << 8) | 0x18)
+    } else {
+        rgb(palette.hover)
+    };
+    div()
+        .id(SharedString::from(id.into()))
+        .h(px(28.))
+        .px_2()
+        .rounded_sm()
+        .flex()
+        .items_center()
+        .gap_1()
+        .text_size(px(11.))
+        .text_color(rgb(if destructive {
+            palette.danger
+        } else {
+            palette.primary
+        }))
+        .opacity(if enabled { 1.0 } else { 0.45 })
+        .child(svg().size(px(14.)).path(icon_path))
+        .child(label)
+        .when(enabled, |this| {
+            this.cursor_pointer()
+                .hover(move |this| this.bg(hover))
+                .on_click(on_click)
+        })
 }

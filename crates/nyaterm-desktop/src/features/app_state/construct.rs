@@ -375,6 +375,8 @@ impl NyaTermApp {
             terminal_history_search_result: None,
             search_engine_edit_index: None,
             search_engine_expanded_index: None,
+            search_engine_icon_picker_index: None,
+            search_engine_actions_index: None,
             search_engine_edit_field: SearchEngineEditorField::Name,
             search_engine_focus: cx.focus_handle(),
             terminal_scrollbar_dragging: false,

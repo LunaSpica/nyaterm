@@ -7,12 +7,14 @@ impl NyaTermApp {
             SearchEngineConfig {
                 name: "New Engine".to_string(),
                 url_template: "https://example.com/search?q=%s".to_string(),
-                icon: Some("default".to_string()),
+                icon: None,
                 show_in_menu: true,
             },
         );
         self.search_engine_expanded_index = Some(0);
         self.search_engine_edit_index = Some(0);
+        self.search_engine_icon_picker_index = None;
+        self.search_engine_actions_index = None;
         self.search_engine_edit_field = SearchEngineEditorField::Name;
         self.save_terminal_settings(cx);
         self.terminal_status = "search engine added".to_string();
@@ -27,9 +29,8 @@ impl NyaTermApp {
             return;
         }
         self.settings.search_custom_engines.remove(index);
-        if self.settings.search_custom_engines.is_empty() {
-            self.settings.search_custom_engines = default_search_engines();
-        }
+        self.search_engine_icon_picker_index = None;
+        self.search_engine_actions_index = None;
         if self.search_engine_expanded_index == Some(index) {
             self.search_engine_expanded_index = None;
         } else if let Some(edit) = self.search_engine_expanded_index {
@@ -48,39 +49,19 @@ impl NyaTermApp {
         self.terminal_status = "search engine removed".to_string();
     }
 
-    pub(in crate::features) fn cycle_search_engine_icon(
+    pub(in crate::features) fn set_search_engine_icon(
         &mut self,
         index: usize,
+        icon: Option<&str>,
         cx: &mut Context<Self>,
     ) {
         let Some(engine) = self.settings.search_custom_engines.get_mut(index) else {
             return;
         };
-        const ICONS: &[&str] = &[
-            "google",
-            "bing",
-            "duckduckgo",
-            "github",
-            "gitlab",
-            "baidu",
-            "yahoo",
-            "youtube",
-            "bilibili",
-            "zhihu",
-            "openai",
-            "claude",
-            "gemini",
-            "default",
-        ];
-        let current = engine.icon.as_deref().unwrap_or("default");
-        let next = ICONS
-            .iter()
-            .position(|icon| *icon == current)
-            .map(|i| ICONS[(i + 1) % ICONS.len()])
-            .unwrap_or("google");
-        engine.icon = Some(next.to_string());
+        engine.icon = icon.map(str::to_string);
+        self.search_engine_icon_picker_index = None;
         self.save_terminal_settings(cx);
-        self.terminal_status = format!("search engine icon: {next}");
+        self.terminal_status = "search engine icon updated".to_string();
     }
 
     pub(in crate::features) fn toggle_search_engine_in_menu(
@@ -173,13 +154,6 @@ impl NyaTermApp {
         }
     }
 
-    pub(in crate::features) fn reset_search_engines(&mut self, cx: &mut Context<Self>) {
-        self.settings.search_custom_engines = default_search_engines();
-        self.search_engine_edit_index = None;
-        self.save_terminal_settings(cx);
-        self.terminal_status = "search engines reset to defaults".to_string();
-    }
-
     pub(in crate::features) fn expand_search_engine(
         &mut self,
         index: usize,
@@ -191,6 +165,8 @@ impl NyaTermApp {
         } else {
             self.search_engine_expanded_index = Some(index);
         }
+        self.search_engine_icon_picker_index = None;
+        self.search_engine_actions_index = None;
         cx.notify();
     }
 
@@ -263,12 +239,6 @@ impl NyaTermApp {
     }
 
     pub(in crate::features) fn normalize_search_engines(&mut self) {
-        self.settings.search_custom_engines.retain(|engine| {
-            !engine.name.trim().is_empty() && !engine.url_template.trim().is_empty()
-        });
-        if self.settings.search_custom_engines.is_empty() {
-            self.settings.search_custom_engines = default_search_engines();
-        }
         for engine in &mut self.settings.search_custom_engines {
             engine.name = engine.name.trim().to_string();
             engine.url_template = engine.url_template.trim().to_string();

@@ -9,7 +9,7 @@ use crate::models::{
     AiActionEditorField, AiActionListKind, AiCredentialEditorField, AiInputField,
     CloudSyncConflictState, CloudSyncInputField, ConfigPathPromptKind, DiagnosticsPathPromptKind,
     KeywordHighlightEditorField, SearchEngineEditorField, SettingsTab, SnapshotPasswordPromptKind,
-    SnapshotPasswordPromptState, TerminalSearchMode, TranslateInputField,
+    SnapshotPasswordPromptState, TranslateInputField,
 };
 use crate::theme::ThemePalette;
 use crate::widgets::{small_button, status_pill};

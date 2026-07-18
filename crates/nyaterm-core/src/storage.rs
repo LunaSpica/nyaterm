@@ -4815,6 +4815,9 @@ fn load_search_engines(value: &serde_json::Value) -> Vec<SearchEngineConfig> {
     };
     let mut engines = Vec::new();
     for item in arr {
+        if !item.is_object() {
+            continue;
+        }
         let name = item
             .get("name")
             .and_then(|v| v.as_str())
@@ -4827,9 +4830,6 @@ fn load_search_engines(value: &serde_json::Value) -> Vec<SearchEngineConfig> {
             .unwrap_or("")
             .trim()
             .to_string();
-        if name.is_empty() || url_template.is_empty() {
-            continue;
-        }
         let show_in_menu = item
             .get("show_in_menu")
             .and_then(|v| v.as_bool())
@@ -4847,11 +4847,7 @@ fn load_search_engines(value: &serde_json::Value) -> Vec<SearchEngineConfig> {
             show_in_menu,
         });
     }
-    if engines.is_empty() {
-        default_search_engines()
-    } else {
-        engines
-    }
+    engines
 }
 
 fn search_engines_to_json(engines: &[SearchEngineConfig]) -> serde_json::Value {
@@ -6071,6 +6067,35 @@ mod tests {
             raw["appearance"]["font_weight_bold"],
             serde_json::json!(800)
         );
+        std::fs::remove_dir_all(dir).ok();
+    }
+
+    #[test]
+    fn save_empty_search_engine_list_roundtrip() {
+        let dir = unique_temp_dir("settings-empty-search-engines");
+        let store = ConnectionStore::open(&dir).expect("store");
+        let mut summary = store.load_app_settings_summary().expect("load");
+        assert!(!summary.search_custom_engines.is_empty());
+
+        summary.search_custom_engines.clear();
+        let saved = store.save_terminal_settings(&summary).expect("save");
+        assert!(saved.search_custom_engines.is_empty());
+
+        let raw = store.load_settings_value().expect("raw");
+        assert_eq!(raw["search"]["custom_engines"], serde_json::json!([]));
+
+        summary.search_custom_engines = vec![SearchEngineConfig {
+            name: String::new(),
+            url_template: String::new(),
+            icon: None,
+            show_in_menu: true,
+        }];
+        let saved = store
+            .save_terminal_settings(&summary)
+            .expect("save blank engine");
+        assert_eq!(saved.search_custom_engines.len(), 1);
+        assert!(saved.search_custom_engines[0].name.is_empty());
+        assert!(saved.search_custom_engines[0].url_template.is_empty());
         std::fs::remove_dir_all(dir).ok();
     }
 

@@ -130,6 +130,23 @@ pub(super) fn settings_toggle_button(
         .on_click(on_click)
 }
 
+pub(super) const SEARCH_ENGINE_ICON_IDS: &[&str] = &[
+    "google",
+    "bing",
+    "duckduckgo",
+    "github",
+    "gitlab",
+    "baidu",
+    "yahoo",
+    "youtube",
+    "bilibili",
+    "zhihu",
+    "openai",
+    "claude",
+    "gemini",
+    "default",
+];
+
 pub(super) fn search_engine_icon_label(icon: Option<&str>) -> String {
     match icon.unwrap_or("default") {
         "google" => "G".into(),
