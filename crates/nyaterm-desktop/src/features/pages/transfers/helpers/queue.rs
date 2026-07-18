@@ -62,9 +62,11 @@ pub(in crate::features::pages::transfers) fn queue_action_button(
     palette: crate::theme::ThemePalette,
     id: impl Into<String>,
     icon_path: &'static str,
+    tooltip: impl Into<String>,
     enabled: bool,
     on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
 ) -> impl IntoElement {
+    let tooltip = tooltip.into();
     div()
         .id(SharedString::from(id.into()))
         .size(px(28.))
@@ -85,6 +87,10 @@ pub(in crate::features::pages::transfers) fn queue_action_button(
         })
         .when(!enabled, |this| this.opacity(0.45))
         .when(enabled, |this| this.on_click(on_click))
+        .tooltip(move |_, cx| {
+            cx.new(|_| crate::features::ChromeTooltip::new(tooltip.clone()))
+                .into()
+        })
         .child(svg().size(px(16.)).flex_none().path(icon_path))
 }
 

@@ -294,6 +294,7 @@ impl NyaTermApp {
                             palette,
                             "transfer-browser-new-file",
                             "icons/fe/new-file.svg",
+                            self.tr("fileExplorer.newFile"),
                             cx.listener(|this, _, window, cx| {
                                 this.open_transfer_new_file_dialog(window, cx);
                             }),
@@ -302,16 +303,22 @@ impl NyaTermApp {
                             palette,
                             "transfer-browser-new-folder",
                             "icons/fe/new-folder.svg",
+                            self.tr("fileExplorer.newFolder"),
                             cx.listener(|this, _, window, cx| {
                                 this.open_transfer_new_folder_dialog(window, cx);
                             }),
                         ))
                         .child(transfer_toolbar_divider(palette))
-                        .child(compact_transfer_upload_menu_button(palette, cx))
+                        .child(compact_transfer_upload_menu_button(
+                            palette,
+                            self.tr("fileExplorer.upload"),
+                            cx,
+                        ))
                         .child(compact_transfer_toolbar_button_enabled(
                             palette,
                             "transfer-browser-download-selected",
                             "icons/fe/download.svg",
+                            self.tr("fileExplorer.downloadSelected"),
                             selected_count > 0,
                             cx.listener(|this, _, window, cx| {
                                 this.start_selected_sftp_download_jobs(window, cx);
@@ -321,6 +328,7 @@ impl NyaTermApp {
                             palette,
                             "transfer-browser-delete-selected",
                             "icons/fe/delete.svg",
+                            self.tr("fileExplorer.delete"),
                             selected_count > 0,
                             cx.listener(|this, _, window, cx| {
                                 this.open_selected_transfer_delete_dialog(window, cx);
@@ -331,6 +339,7 @@ impl NyaTermApp {
                             palette,
                             "transfer-browser-go-up",
                             "icons/fe/up.svg",
+                            self.tr("fileExplorer.goUp"),
                             cx.listener(|this, _, window, cx| {
                                 this.open_transfer_parent_directory(window, cx);
                             }),
@@ -339,6 +348,7 @@ impl NyaTermApp {
                             palette,
                             "transfer-browser-refresh",
                             "icons/fe/refresh.svg",
+                            self.tr("fileExplorer.refresh"),
                             cx.listener(|this, _, window, cx| {
                                 this.refresh_transfer_browser(window, cx);
                             }),
@@ -348,6 +358,7 @@ impl NyaTermApp {
                             palette,
                             "transfer-browser-expand-search",
                             "icons/fe/search.svg",
+                            self.tr("fileExplorer.search"),
                             search_active || search_expanded,
                             cx.listener(|this, _, window, cx| {
                                 this.transfer_browser_search_expanded = true;
@@ -628,6 +639,11 @@ impl NyaTermApp {
                                 palette,
                                 "transfer-browser-footer-sync-cwd",
                                 "icons/fe/sync.svg",
+                                if cwd_tracking_available {
+                                    self.tr("fileExplorer.syncTerminalPath")
+                                } else {
+                                    self.tr("fileExplorer.cwdTrackingUnavailable")
+                                },
                                 cwd_tracking_available,
                                 cx.listener(|this, _, window, cx| {
                                     this.start_transfer_sync_cwd_job(window, cx);
@@ -637,6 +653,11 @@ impl NyaTermApp {
                                 palette,
                                 "transfer-browser-footer-auto-sync",
                                 "icons/fe/sync.svg",
+                                if cwd_tracking_available {
+                                    self.tr("fileExplorer.autoSyncTerminalPath")
+                                } else {
+                                    self.tr("fileExplorer.cwdTrackingUnavailable")
+                                },
                                 auto_sync_cwd,
                                 cwd_tracking_available,
                                 cx.listener(|this, _, window, cx| {
@@ -647,6 +668,7 @@ impl NyaTermApp {
                                 palette,
                                 "transfer-browser-footer-send-path",
                                 "icons/fe/paste.svg",
+                                self.tr("fileExplorer.sendToTerminal"),
                                 true,
                                 cx.listener(|this, _, _, cx| {
                                     this.send_current_transfer_browser_path_to_terminal(cx);

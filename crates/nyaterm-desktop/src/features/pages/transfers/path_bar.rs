@@ -120,6 +120,13 @@ impl NyaTermApp {
                                 this.bg(rgb(palette.surface_elevated))
                                     .text_color(rgb(palette.text))
                             })
+                            .tooltip({
+                                let label = self.tr("fileExplorer.favorites").to_string();
+                                move |_, cx| {
+                                    cx.new(|_| crate::features::ChromeTooltip::new(label.clone()))
+                                        .into()
+                                }
+                            })
                             .on_mouse_down(
                                 MouseButton::Left,
                                 cx.listener(|this, event: &MouseDownEvent, _window, cx| {

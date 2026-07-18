@@ -4,9 +4,11 @@ pub(super) fn compact_transfer_footer_button(
     palette: crate::theme::ThemePalette,
     id: impl Into<String>,
     icon_path: &'static str,
+    tooltip: impl Into<String>,
     enabled: bool,
     on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
 ) -> impl IntoElement {
+    let tooltip = tooltip.into();
     // Tauri footer icons: h-6 w-6 (24px)
     let mut button = div()
         .id(SharedString::from(id.into()))
@@ -19,6 +21,10 @@ pub(super) fn compact_transfer_footer_button(
         .hover(|this| {
             this.bg(rgb(palette.surface_elevated))
                 .text_color(rgb(palette.text))
+        })
+        .tooltip(move |_, cx| {
+            cx.new(|_| crate::features::ChromeTooltip::new(tooltip.clone()))
+                .into()
         })
         .child(svg().size(px(14.)).flex_none().path(icon_path));
     if enabled {
@@ -33,10 +39,12 @@ pub(super) fn compact_transfer_footer_button_active(
     palette: crate::theme::ThemePalette,
     id: impl Into<String>,
     icon_path: &'static str,
+    tooltip: impl Into<String>,
     active: bool,
     enabled: bool,
     on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
 ) -> impl IntoElement {
+    let tooltip = tooltip.into();
     let color = if active {
         rgb(palette.link)
     } else {
@@ -63,6 +71,10 @@ pub(super) fn compact_transfer_footer_button_active(
                     rgb(palette.text)
                 })
         })
+        .tooltip(move |_, cx| {
+            cx.new(|_| crate::features::ChromeTooltip::new(tooltip.clone()))
+                .into()
+        })
         .child(svg().size(px(14.)).flex_none().path(icon_path));
     if enabled {
         button = button.cursor_pointer().on_click(on_click);
@@ -74,8 +86,10 @@ pub(super) fn compact_transfer_footer_button_active(
 
 pub(super) fn compact_transfer_upload_menu_button(
     palette: crate::theme::ThemePalette,
+    tooltip: impl Into<String>,
     cx: &mut Context<NyaTermApp>,
 ) -> impl IntoElement {
+    let tooltip = tooltip.into();
     // Tauri: single Upload icon opens DropdownMenu (Upload Files / Upload Folder).
     div()
         .id(SharedString::from("transfer-browser-upload"))
@@ -90,6 +104,10 @@ pub(super) fn compact_transfer_upload_menu_button(
             this.bg(rgb(palette.surface_elevated))
                 .text_color(rgb(palette.text))
         })
+        .tooltip(move |_, cx| {
+            cx.new(|_| crate::features::ChromeTooltip::new(tooltip.clone()))
+                .into()
+        })
         .child(svg().size(px(16.)).flex_none().path("icons/fe/upload.svg"))
         .on_mouse_down(
             MouseButton::Left,
@@ -103,8 +121,10 @@ pub(super) fn compact_transfer_toolbar_button(
     palette: crate::theme::ThemePalette,
     id: impl Into<String>,
     icon_path: &'static str,
+    tooltip: impl Into<String>,
     on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
 ) -> impl IntoElement {
+    let tooltip = tooltip.into();
     // Tauri FileExplorerToolbar: h-7 ghost icon buttons, muted until hover.
     div()
         .id(SharedString::from(id.into()))
@@ -119,6 +139,10 @@ pub(super) fn compact_transfer_toolbar_button(
             this.bg(rgb(palette.surface_elevated))
                 .text_color(rgb(palette.text))
         })
+        .tooltip(move |_, cx| {
+            cx.new(|_| crate::features::ChromeTooltip::new(tooltip.clone()))
+                .into()
+        })
         .child(svg().size(px(16.)).flex_none().path(icon_path))
         .on_click(on_click)
 }
@@ -127,9 +151,11 @@ pub(super) fn compact_transfer_toolbar_button_enabled(
     palette: crate::theme::ThemePalette,
     id: impl Into<String>,
     icon_path: &'static str,
+    tooltip: impl Into<String>,
     enabled: bool,
     on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
 ) -> impl IntoElement {
+    let tooltip = tooltip.into();
     div()
         .id(SharedString::from(id.into()))
         .size(px(28.))
@@ -143,6 +169,10 @@ pub(super) fn compact_transfer_toolbar_button_enabled(
             rgb(palette.text_dimmed)
         })
         .opacity(if enabled { 1.0 } else { 0.45 })
+        .tooltip(move |_, cx| {
+            cx.new(|_| crate::features::ChromeTooltip::new(tooltip.clone()))
+                .into()
+        })
         .child(svg().size(px(16.)).flex_none().path(icon_path))
         .when(enabled, |this| {
             this.cursor_pointer()
@@ -158,9 +188,11 @@ pub(super) fn compact_transfer_toolbar_button_active(
     palette: crate::theme::ThemePalette,
     id: impl Into<String>,
     icon_path: &'static str,
+    tooltip: impl Into<String>,
     active: bool,
     on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
 ) -> impl IntoElement {
+    let tooltip = tooltip.into();
     let color = if active {
         rgb(palette.link)
     } else {
@@ -187,6 +219,10 @@ pub(super) fn compact_transfer_toolbar_button_active(
                 } else {
                     rgb(palette.text)
                 })
+        })
+        .tooltip(move |_, cx| {
+            cx.new(|_| crate::features::ChromeTooltip::new(tooltip.clone()))
+                .into()
         })
         .child(svg().size(px(16.)).flex_none().path(icon_path))
         .on_click(on_click)
