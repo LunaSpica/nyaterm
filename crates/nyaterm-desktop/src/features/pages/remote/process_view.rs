@@ -289,111 +289,91 @@ impl NyaTermApp {
                     ),
             )
             .child(
-                // Column header follows Tauri mode: hide Mem (narrow) / User (non-wide); compact label strip.
-                div()
-                    .when(mode != ProcessDisplayMode::Compact, |this| {
-                        let cols = match mode {
-                            ProcessDisplayMode::Narrow => 4,
-                            ProcessDisplayMode::Medium => 5,
-                            _ => 6,
-                        };
-                        this.h(px(26.))
-                            .flex_none()
-                            .px_2()
-                            .border_b_1()
-                            .border_color(rgb(palette.border))
-                            .bg(rgb(palette.input))
-                            .grid()
-                            .grid_cols(cols)
-                            .gap_1()
-                            .items_center()
-                            .overflow_hidden()
-                            .child(process_sort_button(
+                // Match Tauri's responsive columns and hide the header entirely in compact mode.
+                div().when(mode != ProcessDisplayMode::Compact, |this| {
+                    let cols = match mode {
+                        ProcessDisplayMode::Narrow => 4,
+                        ProcessDisplayMode::Medium => 5,
+                        _ => 6,
+                    };
+                    this.h(px(26.))
+                        .flex_none()
+                        .px_2()
+                        .border_b_1()
+                        .border_color(rgb(palette.border))
+                        .bg(rgb(palette.input))
+                        .grid()
+                        .grid_cols(cols)
+                        .gap_1()
+                        .items_center()
+                        .overflow_hidden()
+                        .child(process_sort_button(
+                            palette,
+                            "process-sort-command",
+                            "Process",
+                            self.process_sort_key == RemoteProcessSortKey::Command,
+                            self.process_sort_direction,
+                            false,
+                            cx.listener(|this, _, _, cx| {
+                                this.toggle_process_sort(RemoteProcessSortKey::Command, cx);
+                            }),
+                        ))
+                        .child(process_sort_button(
+                            palette,
+                            "process-sort-pid",
+                            "PID",
+                            self.process_sort_key == RemoteProcessSortKey::Pid,
+                            self.process_sort_direction,
+                            true,
+                            cx.listener(|this, _, _, cx| {
+                                this.toggle_process_sort(RemoteProcessSortKey::Pid, cx);
+                            }),
+                        ))
+                        .child(process_sort_button(
+                            palette,
+                            "process-sort-cpu",
+                            "CPU",
+                            self.process_sort_key == RemoteProcessSortKey::Cpu,
+                            self.process_sort_direction,
+                            true,
+                            cx.listener(|this, _, _, cx| {
+                                this.toggle_process_sort(RemoteProcessSortKey::Cpu, cx);
+                            }),
+                        ))
+                        .when(
+                            !matches!(
+                                mode,
+                                ProcessDisplayMode::Narrow | ProcessDisplayMode::Compact
+                            ),
+                            |this| {
+                                this.child(process_sort_button(
+                                    palette,
+                                    "process-sort-memory",
+                                    "Mem",
+                                    self.process_sort_key == RemoteProcessSortKey::Memory,
+                                    self.process_sort_direction,
+                                    true,
+                                    cx.listener(|this, _, _, cx| {
+                                        this.toggle_process_sort(RemoteProcessSortKey::Memory, cx);
+                                    }),
+                                ))
+                            },
+                        )
+                        .when(mode == ProcessDisplayMode::Wide, |this| {
+                            this.child(process_sort_button(
                                 palette,
-                                "process-sort-command",
-                                "Process",
-                                self.process_sort_key == RemoteProcessSortKey::Command,
+                                "process-sort-user",
+                                "User",
+                                self.process_sort_key == RemoteProcessSortKey::User,
                                 self.process_sort_direction,
                                 false,
                                 cx.listener(|this, _, _, cx| {
-                                    this.toggle_process_sort(RemoteProcessSortKey::Command, cx);
+                                    this.toggle_process_sort(RemoteProcessSortKey::User, cx);
                                 }),
                             ))
-                            .child(process_sort_button(
-                                palette,
-                                "process-sort-pid",
-                                "PID",
-                                self.process_sort_key == RemoteProcessSortKey::Pid,
-                                self.process_sort_direction,
-                                true,
-                                cx.listener(|this, _, _, cx| {
-                                    this.toggle_process_sort(RemoteProcessSortKey::Pid, cx);
-                                }),
-                            ))
-                            .child(process_sort_button(
-                                palette,
-                                "process-sort-cpu",
-                                "CPU",
-                                self.process_sort_key == RemoteProcessSortKey::Cpu,
-                                self.process_sort_direction,
-                                true,
-                                cx.listener(|this, _, _, cx| {
-                                    this.toggle_process_sort(RemoteProcessSortKey::Cpu, cx);
-                                }),
-                            ))
-                            .when(
-                                !matches!(
-                                    mode,
-                                    ProcessDisplayMode::Narrow | ProcessDisplayMode::Compact
-                                ),
-                                |this| {
-                                    this.child(process_sort_button(
-                                        palette,
-                                        "process-sort-memory",
-                                        "Mem",
-                                        self.process_sort_key == RemoteProcessSortKey::Memory,
-                                        self.process_sort_direction,
-                                        true,
-                                        cx.listener(|this, _, _, cx| {
-                                            this.toggle_process_sort(
-                                                RemoteProcessSortKey::Memory,
-                                                cx,
-                                            );
-                                        }),
-                                    ))
-                                },
-                            )
-                            .when(mode == ProcessDisplayMode::Wide, |this| {
-                                this.child(process_sort_button(
-                                    palette,
-                                    "process-sort-user",
-                                    "User",
-                                    self.process_sort_key == RemoteProcessSortKey::User,
-                                    self.process_sort_direction,
-                                    false,
-                                    cx.listener(|this, _, _, cx| {
-                                        this.toggle_process_sort(RemoteProcessSortKey::User, cx);
-                                    }),
-                                ))
-                            })
-                            .child(div().w_full())
-                    })
-                    .when(mode == ProcessDisplayMode::Compact, |this| {
-                        this.h(px(22.))
-                            .flex_none()
-                            .px_2()
-                            .border_b_1()
-                            .border_color(rgb(palette.border))
-                            .bg(rgb(palette.bg))
-                            .flex()
-                            .items_center()
-                            .child(
-                                div()
-                                    .text_size(px(10.))
-                                    .text_color(rgb(0x6e7681))
-                                    .child("Processes · compact"),
-                            )
-                    }),
+                        })
+                        .child(div().w_full())
+                }),
             )
             .child(
                 div()
