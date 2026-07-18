@@ -71,6 +71,7 @@ impl NyaTermApp {
         let group_id_for_edit = section.group_id.clone();
         let group_id_for_delete = section.group_id.clone();
         let group_label = section.label.clone();
+        let empty_group_label = self.tr("savedConnections.emptyGroup");
         let count = section.total_count;
         let mut body = div().flex().flex_col();
 
@@ -83,7 +84,7 @@ impl NyaTermApp {
                         .pl(px(connection_tree_indent_px(section.depth + 1)))
                         .text_size(px(11.))
                         .text_color(rgb(palette.text_dimmed))
-                        .child("Empty group"),
+                        .child(empty_group_label),
                 );
             } else {
                 for connection in section.connections {

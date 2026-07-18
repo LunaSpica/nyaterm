@@ -18,6 +18,10 @@ impl NyaTermApp {
             .sum::<usize>();
         let selected_connections = self.selected_connections();
         let selected_count = selected_connections.len();
+        let empty_connections_label = self.tr("savedConnections.empty");
+        let empty_connections_hint = self.tr("savedConnections.emptyHint");
+        let no_results_label = self.tr("savedConnections.noResults");
+        let empty_group_label = self.tr("savedConnections.emptyGroup");
 
         // Flatten expanded tree for virtual window (group header 28px, connection 34px).
         let flat_rows = flatten_connection_rows(&sections, &self.expanded_connection_groups);
@@ -108,13 +112,13 @@ impl NyaTermApp {
                         div()
                             .text_size(px(12.))
                             .text_color(rgb(palette.text_muted))
-                            .child("No saved connections"),
+                            .child(empty_connections_label),
                     )
                     .child(
                         div()
                             .text_size(px(11.))
                             .text_color(rgb(palette.text_dimmed))
-                            .child("Create one or open a temporary SSH link."),
+                            .child(empty_connections_hint),
                     ),
             );
         } else if visible_count == 0 {
@@ -124,7 +128,7 @@ impl NyaTermApp {
                     .py_8()
                     .text_size(px(11.))
                     .text_color(rgb(palette.text_dimmed))
-                    .child("No connections match the current search."),
+                    .child(no_results_label),
             );
         } else {
             let mut rows = div().flex().flex_col();
@@ -148,7 +152,7 @@ impl NyaTermApp {
                                 .h(px(28.))
                                 .text_size(px(11.))
                                 .text_color(rgb(palette.text_dimmed))
-                                .child("Empty group"),
+                                .child(empty_group_label),
                         );
                     }
                     ConnectionListRow::Connection { connection, depth } => {
@@ -201,7 +205,7 @@ impl NyaTermApp {
     ) -> impl IntoElement {
         let _ = visible_count;
         let search_value = if self.connection_search_draft.is_empty() {
-            "Filter connections".to_string()
+            self.tr("savedConnections.filter").to_string()
         } else {
             self.connection_search_draft.clone()
         };
@@ -354,7 +358,7 @@ impl NyaTermApp {
                                 .child(menu_item(
                                     palette,
                                     "connections-export",
-                                    "Export config",
+                                    self.tr("settings.exportConfig"),
                                     cx.listener(|this, _, _, cx| {
                                         this.connections_more_menu_open = false;
                                         this.prompt_config_export(cx);
@@ -363,7 +367,7 @@ impl NyaTermApp {
                                 .child(menu_item(
                                     palette,
                                     "connections-import",
-                                    "Import config",
+                                    self.tr("settings.importConfig"),
                                     cx.listener(|this, _, _, cx| {
                                         this.connections_more_menu_open = false;
                                         this.prompt_config_import(cx);
@@ -372,7 +376,7 @@ impl NyaTermApp {
                                 .child(menu_item(
                                     palette,
                                     "connections-refresh",
-                                    "Refresh",
+                                    self.tr("common.refresh"),
                                     cx.listener(|this, _, _, cx| {
                                         this.connections_more_menu_open = false;
                                         this.refresh_store_from_runtime();
@@ -383,7 +387,7 @@ impl NyaTermApp {
                                 .child(menu_item(
                                     palette,
                                     "connections-local",
-                                    "Local shell",
+                                    self.tr("dialog.openLocalShell"),
                                     cx.listener(|this, _, window, cx| {
                                         this.connections_more_menu_open = false;
                                         this.start_local_session(window, cx);
@@ -400,6 +404,9 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
         let palette = self.theme_palette();
+        let selected_label = self
+            .tr("savedConnections.selectedCount")
+            .replace("{{count}}", &selected_count.to_string());
         // Tauri multi-select strip under search bar.
         div()
             .h(px(30.))
@@ -417,7 +424,7 @@ impl NyaTermApp {
                     .text_size(px(11.))
                     .font_weight(FontWeight(600.))
                     .text_color(rgb(palette.link))
-                    .child(format!("{selected_count} selected")),
+                    .child(selected_label),
             )
             .child(
                 div()
@@ -436,7 +443,7 @@ impl NyaTermApp {
                     .on_click(cx.listener(|this, _, window, cx| {
                         this.start_selected_saved_connections(window, cx);
                     }))
-                    .child("Open"),
+                    .child(self.tr("savedConnections.connectSelected")),
             )
             .child(
                 div()
@@ -453,7 +460,7 @@ impl NyaTermApp {
                     .on_click(cx.listener(|this, _, _, cx| {
                         this.copy_selected_connections(cx);
                     }))
-                    .child("Copy"),
+                    .child(self.tr("savedConnections.copy")),
             )
             .child(
                 div()
@@ -470,7 +477,7 @@ impl NyaTermApp {
                     .on_click(cx.listener(|this, _, _, cx| {
                         this.delete_selected_connections(cx);
                     }))
-                    .child("Delete"),
+                    .child(self.tr("savedConnections.delete")),
             )
             .child(
                 div()
@@ -490,7 +497,7 @@ impl NyaTermApp {
                     .on_click(cx.listener(|this, _, _, cx| {
                         this.clear_selected_connections(cx);
                     }))
-                    .child("Clear"),
+                    .child(self.tr("syncGroup.deselectAll")),
             )
     }
 }

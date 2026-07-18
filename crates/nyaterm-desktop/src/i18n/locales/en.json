@@ -1046,6 +1046,9 @@
   "savedConnections": {
     "auth": "Auth",
     "baudRate": "Baud rate",
+    "empty": "No saved connections",
+    "emptyGroup": "Empty folder",
+    "emptyHint": "Create a connection or open a temporary SSH link.",
     "clearAll": "Clear All",
     "clearAllConfirm": "Clear all connections and folders? This can't be undone.",
     "clearAllSuccess": "Connections cleared",
@@ -1091,6 +1094,7 @@
     "rename": "Rename",
     "renameFolder": "Rename Folder",
     "serialPort": "Serial port",
+    "selectedCount": "{{count}} selected",
     "shellArgs": "Shell args",
     "sortDefault": "Custom Order",
     "sortNameAsc": "Name A → Z",
