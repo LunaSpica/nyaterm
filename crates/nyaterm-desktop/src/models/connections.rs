@@ -56,6 +56,7 @@ pub(crate) enum ConnectionEditorMenu {
     Proxy,
     ProxyJump,
     Backspace,
+    TelnetEnterMode,
     SerialPort,
     BaudRate,
     DataBits,
@@ -78,6 +79,12 @@ pub(crate) enum ConnectionEditorAdvancedTab {
     PostLogin,
     X11,
     Backspace,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum ConnectionEditorTelnetTab {
+    Input,
+    Compatibility,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -231,13 +238,19 @@ pub(crate) struct ConnectionEditorState {
     pub(crate) parity: String,
     pub(crate) stop_bits: String,
     pub(crate) raw_tcp_cli: bool,
+    pub(crate) telnet_enter_mode: String,
     pub(crate) local_echo: bool,
+    pub(crate) local_line_edit: bool,
+    pub(crate) force_character_at_a_time: bool,
+    pub(crate) send_naws: bool,
+    pub(crate) send_sga: bool,
     pub(crate) post_login_enabled: bool,
     pub(crate) post_login_command: String,
     pub(crate) post_login_delay_ms: String,
     pub(crate) advanced_open: bool,
     pub(crate) advanced_network_tab: ConnectionEditorAdvancedTab,
     pub(crate) advanced_behavior_tab: ConnectionEditorAdvancedTab,
+    pub(crate) telnet_advanced_tab: ConnectionEditorTelnetTab,
     pub(crate) connect_after_save: bool,
     pub(crate) focused_field: ConnectionEditorField,
     pub(crate) error: Option<String>,

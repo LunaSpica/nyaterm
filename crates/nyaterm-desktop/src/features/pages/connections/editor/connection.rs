@@ -55,27 +55,21 @@ impl NyaTermApp {
         let group_label = editor
             .group_id
             .as_deref()
-            .and_then(|id| {
-                self.connection_groups
-                    .iter()
-                    .find(|group| group.id == id)
-                    .map(|group| group.name.clone())
-            })
-            .unwrap_or_else(|| self.tr("network.ungrouped").to_string());
+            .and_then(|id| connection_group_path_label(&self.connection_groups, id))
+            .unwrap_or_else(|| none_label.to_string());
         let mut group_options = vec![ConnectionEditorChoice {
             value: None,
             label: none_label.to_string(),
             selected: editor.group_id.is_none(),
         }];
-        group_options.extend(
-            self.connection_groups
-                .iter()
-                .map(|group| ConnectionEditorChoice {
-                    value: Some(group.id.clone()),
-                    label: group.name.clone(),
-                    selected: editor.group_id.as_deref() == Some(group.id.as_str()),
-                }),
-        );
+        group_options.extend(self.connection_groups.iter().map(|group| {
+            ConnectionEditorChoice {
+                value: Some(group.id.clone()),
+                label: connection_group_path_label(&self.connection_groups, &group.id)
+                    .unwrap_or_else(|| group.name.clone()),
+                selected: editor.group_id.as_deref() == Some(group.id.as_str()),
+            }
+        }));
         let key_label = editor
             .key_id
             .as_deref()
@@ -329,6 +323,8 @@ impl NyaTermApp {
         let icon_key = editor.icon.as_deref();
         let icon_def = resolve_connection_icon(icon_key, editor.kind.label());
         let icon_picker_open = self.connection_icon_picker_open;
+        let validation_error = self.connection_editor_validation_error(&editor);
+        let save_enabled = validation_error.is_none();
         let mut icon_grid = div().grid().grid_cols(7).gap_1();
         for icon_key in CONNECTION_ICON_OPTIONS {
             let icon = resolve_connection_icon(Some(icon_key), editor.kind.label());
@@ -501,32 +497,41 @@ impl NyaTermApp {
                     .flex()
                     .flex_col()
                     .gap_2()
-                    .child(div().flex().items_end().gap_2().child(icon_picker).child(
-                        div().min_w_0().flex_1().child(editor_field(
-                            palette,
-                            "connection-editor-name",
-                            name_label,
-                            editor.name.clone(),
-                            editor.focused_field == ConnectionEditorField::Name,
-                            cx.listener(|this, _, window, cx| {
-                                this.focus_connection_editor_field(
-                                    ConnectionEditorField::Name,
-                                    window,
+                    .child(
+                        div()
+                            .flex()
+                            .flex_wrap()
+                            .items_end()
+                            .gap_3()
+                            .child(icon_picker)
+                            .child(div().min_w(px(192.)).flex_1().child(editor_field(
+                                palette,
+                                "connection-editor-name",
+                                name_label,
+                                editor.name.clone(),
+                                editor.focused_field == ConnectionEditorField::Name,
+                                cx.listener(|this, _, window, cx| {
+                                    this.focus_connection_editor_field(
+                                        ConnectionEditorField::Name,
+                                        window,
+                                        cx,
+                                    );
+                                }),
+                            )))
+                            .child(div().min_w(px(192.)).max_w(px(288.)).flex_1().child(
+                                connection_editor_select(
+                                    palette,
+                                    "connection-editor-group",
+                                    group_title,
+                                    group_label,
+                                    ConnectionEditorMenu::Group,
+                                    self.connection_editor_menu
+                                        == Some(ConnectionEditorMenu::Group),
+                                    group_options,
                                     cx,
-                                );
-                            }),
-                        )),
-                    ))
-                    .child(connection_editor_select(
-                        palette,
-                        "connection-editor-group",
-                        group_title,
-                        group_label,
-                        ConnectionEditorMenu::Group,
-                        self.connection_editor_menu == Some(ConnectionEditorMenu::Group),
-                        group_options,
-                        cx,
-                    ))
+                                ),
+                            )),
+                    )
                     .when(editor.kind == ConnectionKindTab::Ssh, |this| {
                         this.child(connection_editor_ssh_section(
                             palette,
@@ -610,24 +615,43 @@ impl NyaTermApp {
                     .border_color(rgb(palette.border))
                     .flex()
                     .items_center()
-                    .justify_end()
-                    .gap_2()
-                    .child(small_button(
-                        palette,
-                        "connection-editor-close",
-                        cancel_label,
-                        cx.listener(|this, _, _, cx| {
-                            this.close_connection_editor(cx);
-                        }),
-                    ))
-                    .child(small_button(
-                        palette,
-                        "connection-editor-save",
-                        save_label,
-                        cx.listener(|this, _, window, cx| {
-                            this.save_connection_editor(window, cx);
-                        }),
-                    )),
+                    .justify_between()
+                    .gap_3()
+                    .child(
+                        div()
+                            .min_w_0()
+                            .flex_1()
+                            .text_size(px(10.))
+                            .text_color(rgb(palette.danger))
+                            .child(validation_error.unwrap_or_default()),
+                    )
+                    .child(
+                        div()
+                            .flex_none()
+                            .flex()
+                            .items_center()
+                            .gap_2()
+                            .child(connection_editor_footer_button(
+                                palette,
+                                "connection-editor-close",
+                                cancel_label,
+                                false,
+                                true,
+                                cx.listener(|this, _, _, cx| {
+                                    this.close_connection_editor(cx);
+                                }),
+                            ))
+                            .child(connection_editor_footer_button(
+                                palette,
+                                "connection-editor-save",
+                                save_label,
+                                true,
+                                save_enabled,
+                                cx.listener(|this, _, window, cx| {
+                                    this.save_connection_editor(window, cx);
+                                }),
+                            )),
+                    ),
             );
         if native_window {
             div()
@@ -640,6 +664,65 @@ impl NyaTermApp {
             modal_dialog_shell(palette, "connection-editor-modal", 560., card).into_any_element()
         }
     }
+}
+
+fn connection_group_path_label(groups: &[Group], group_id: &str) -> Option<String> {
+    let mut parts = Vec::new();
+    let mut next = Some(group_id);
+    let mut seen = HashSet::new();
+    while let Some(id) = next {
+        if !seen.insert(id.to_string()) {
+            break;
+        }
+        let group = groups.iter().find(|group| group.id == id)?;
+        parts.push(group.name.clone());
+        next = group.parent_id.as_deref();
+    }
+    parts.reverse();
+    Some(parts.join(" / "))
+}
+
+fn connection_editor_footer_button(
+    palette: crate::theme::ThemePalette,
+    id: &'static str,
+    label: &'static str,
+    primary: bool,
+    enabled: bool,
+    on_click: impl Fn(&gpui::ClickEvent, &mut gpui::Window, &mut gpui::App) + 'static,
+) -> impl IntoElement {
+    let background = if primary {
+        palette.primary
+    } else {
+        palette.surface_elevated
+    };
+    let text = if primary {
+        palette.on_primary
+    } else {
+        palette.text
+    };
+    div()
+        .id(id)
+        .h(px(28.))
+        .px_3()
+        .flex()
+        .items_center()
+        .rounded_sm()
+        .border_1()
+        .border_color(if primary {
+            rgb(palette.primary)
+        } else {
+            rgb(palette.border)
+        })
+        .bg(rgb(background))
+        .text_color(rgb(text))
+        .text_xs()
+        .opacity(if enabled { 1.0 } else { 0.45 })
+        .when(enabled, |this| {
+            this.cursor_pointer()
+                .hover(move |this| this.opacity(0.86))
+                .on_click(on_click)
+        })
+        .child(label)
 }
 
 fn connection_proxy_jump_would_cycle(

@@ -1,6 +1,13 @@
 use super::*;
 
 impl NyaTermApp {
+    pub(in crate::features) fn connection_editor_validation_error(
+        &self,
+        editor: &ConnectionEditorState,
+    ) -> Option<String> {
+        build_saved_connection_from_editor(editor).err()
+    }
+
     pub(in crate::features) fn open_connection_editor(
         &mut self,
         connection_id: Option<String>,
@@ -58,13 +65,19 @@ impl NyaTermApp {
                 parity: "none".to_string(),
                 stop_bits: "1".to_string(),
                 raw_tcp_cli: false,
+                telnet_enter_mode: "cr".to_string(),
                 local_echo: false,
+                local_line_edit: false,
+                force_character_at_a_time: false,
+                send_naws: true,
+                send_sga: true,
                 post_login_enabled: false,
                 post_login_command: String::new(),
                 post_login_delay_ms: "1000".to_string(),
                 advanced_open: false,
                 advanced_network_tab: ConnectionEditorAdvancedTab::Proxy,
                 advanced_behavior_tab: ConnectionEditorAdvancedTab::PostLogin,
+                telnet_advanced_tab: ConnectionEditorTelnetTab::Input,
                 connect_after_save,
                 focused_field: ConnectionEditorField::Name,
                 error: None,
@@ -158,6 +171,9 @@ impl NyaTermApp {
             ConnectionEditorMenu::Backspace => {
                 editor.backspace_mode = value.unwrap_or_else(|| "del".to_string())
             }
+            ConnectionEditorMenu::TelnetEnterMode => {
+                editor.telnet_enter_mode = value.unwrap_or_else(|| "cr".to_string())
+            }
             ConnectionEditorMenu::SerialPort => editor.serial_port = value.unwrap_or_default(),
             ConnectionEditorMenu::BaudRate => {
                 editor.baud_rate = value.unwrap_or_else(|| "115200".to_string())
@@ -223,6 +239,19 @@ impl NyaTermApp {
             {
                 editor.focused_field = ConnectionEditorField::Name;
             }
+        }
+        self.connection_editor_menu = None;
+        cx.notify();
+    }
+
+    pub(in crate::features) fn set_connection_editor_telnet_tab(
+        &mut self,
+        tab: ConnectionEditorTelnetTab,
+        cx: &mut Context<Self>,
+    ) {
+        if let Some(editor) = self.connection_editor.as_mut() {
+            editor.telnet_advanced_tab = tab;
+            editor.error = None;
         }
         self.connection_editor_menu = None;
         cx.notify();
@@ -369,8 +398,29 @@ impl NyaTermApp {
                     editor.auto_fill_otp = editor.otp_id.is_some() && !editor.auto_fill_otp
                 }
                 ConnectionEditorToggle::X11 => editor.x11_forwarding = !editor.x11_forwarding,
-                ConnectionEditorToggle::RawTcp => editor.raw_tcp_cli = !editor.raw_tcp_cli,
+                ConnectionEditorToggle::RawTcp => {
+                    editor.raw_tcp_cli = !editor.raw_tcp_cli;
+                    if editor.raw_tcp_cli {
+                        editor.telnet_enter_mode = "cr".to_string();
+                    }
+                }
                 ConnectionEditorToggle::LocalEcho => editor.local_echo = !editor.local_echo,
+                ConnectionEditorToggle::LocalLineEdit => {
+                    editor.local_line_edit = !editor.local_line_edit
+                }
+                ConnectionEditorToggle::ForceCharacterAtATime => {
+                    editor.force_character_at_a_time = !editor.force_character_at_a_time
+                }
+                ConnectionEditorToggle::SendNaws => {
+                    if !editor.raw_tcp_cli {
+                        editor.send_naws = !editor.send_naws;
+                    }
+                }
+                ConnectionEditorToggle::SendSga => {
+                    if !editor.raw_tcp_cli {
+                        editor.send_sga = !editor.send_sga;
+                    }
+                }
                 ConnectionEditorToggle::PostLogin => {
                     editor.post_login_enabled = !editor.post_login_enabled
                 }

@@ -55,13 +55,19 @@ pub(super) fn connection_editor_from_saved(
         parity: "none".to_string(),
         stop_bits: "1".to_string(),
         raw_tcp_cli: false,
+        telnet_enter_mode: "cr".to_string(),
         local_echo: false,
+        local_line_edit: false,
+        force_character_at_a_time: false,
+        send_naws: true,
+        send_sga: true,
         post_login_enabled: post_login.enabled,
         post_login_command: post_login.command,
         post_login_delay_ms: post_login.delay_ms.to_string(),
         advanced_open: false,
         advanced_network_tab: ConnectionEditorAdvancedTab::Proxy,
         advanced_behavior_tab: ConnectionEditorAdvancedTab::PostLogin,
+        telnet_advanced_tab: ConnectionEditorTelnetTab::Input,
         connect_after_save,
         focused_field: ConnectionEditorField::Name,
         error: None,
@@ -96,14 +102,24 @@ pub(super) fn connection_editor_from_saved(
             host,
             port,
             raw_tcp_cli,
+            enter_mode,
             local_echo,
+            local_line_edit,
+            force_character_at_a_time,
+            send_naws,
+            send_sga,
             backspace_mode,
             ..
         } => {
             editor.host = host;
             editor.port = port.to_string();
             editor.raw_tcp_cli = raw_tcp_cli;
+            editor.telnet_enter_mode = enter_mode;
             editor.local_echo = local_echo;
+            editor.local_line_edit = local_line_edit;
+            editor.force_character_at_a_time = force_character_at_a_time;
+            editor.send_naws = send_naws;
+            editor.send_sga = send_sga;
             editor.backspace_mode = backspace_mode;
         }
         ConnectionType::Serial {
@@ -147,11 +163,6 @@ pub(super) fn connection_editor_field_mut(editor: &mut ConnectionEditorState) ->
 pub(super) fn build_saved_connection_from_editor(
     editor: &ConnectionEditorState,
 ) -> Result<SavedConnection, String> {
-    let name = editor.name.trim().to_string();
-    if name.is_empty() {
-        return Err("Connection name is required".to_string());
-    }
-
     let config = match editor.kind {
         ConnectionKindTab::Ssh => {
             let host = editor.host.trim().to_string();
@@ -172,12 +183,18 @@ pub(super) fn build_saved_connection_from_editor(
                 x11_forwarding: editor.x11_forwarding,
             }
         }
-        ConnectionKindTab::Local => ConnectionType::LocalTerminal {
-            shell_path: editor.shell_path.trim().to_string(),
-            shell_args: editor.shell_args.trim().to_string(),
-            working_dir: non_empty_optional(&editor.working_dir),
-            ai_execution_profile: AiExecutionProfile::Posix,
-        },
+        ConnectionKindTab::Local => {
+            let shell_path = editor.shell_path.trim().to_string();
+            if shell_path.is_empty() {
+                return Err("Shell path is required".to_string());
+            }
+            ConnectionType::LocalTerminal {
+                shell_path,
+                shell_args: editor.shell_args.trim().to_string(),
+                working_dir: non_empty_optional(&editor.working_dir),
+                ai_execution_profile: AiExecutionProfile::Posix,
+            }
+        }
         ConnectionKindTab::Telnet => {
             let host = editor.host.trim().to_string();
             if host.is_empty() {
@@ -190,12 +207,12 @@ pub(super) fn build_saved_connection_from_editor(
                 ai_execution_profile: AiExecutionProfile::Auto,
                 backspace_mode: non_empty_or(editor.backspace_mode.clone(), "del"),
                 raw_tcp_cli: editor.raw_tcp_cli,
-                enter_mode: "crlf".to_string(),
+                enter_mode: non_empty_or(editor.telnet_enter_mode.clone(), "cr"),
                 local_echo: editor.local_echo,
-                local_line_edit: false,
-                force_character_at_a_time: false,
-                send_naws: true,
-                send_sga: true,
+                local_line_edit: editor.local_line_edit,
+                force_character_at_a_time: editor.force_character_at_a_time,
+                send_naws: editor.send_naws,
+                send_sga: editor.send_sga,
             }
         }
         ConnectionKindTab::Serial => {
@@ -227,6 +244,32 @@ pub(super) fn build_saved_connection_from_editor(
                 backspace_mode: non_empty_or(editor.backspace_mode.clone(), "del"),
             }
         }
+    };
+
+    if editor.kind == ConnectionKindTab::Ssh {
+        if editor.post_login_enabled && editor.post_login_command.trim().is_empty() {
+            return Err("Post-login command is required".to_string());
+        }
+        let delay = editor
+            .post_login_delay_ms
+            .trim()
+            .parse::<u64>()
+            .map_err(|_| "Post-login delay must be between 0 and 60000 ms".to_string())?;
+        if delay > 60_000 {
+            return Err("Post-login delay must be between 0 and 60000 ms".to_string());
+        }
+    }
+
+    let name = if editor.name.trim().is_empty() {
+        match &config {
+            ConnectionType::Ssh { host, port, .. } | ConnectionType::Telnet { host, port, .. } => {
+                format!("{host}:{port}")
+            }
+            ConnectionType::LocalTerminal { .. } => "Local Terminal".to_string(),
+            ConnectionType::Serial { port_name, .. } => port_name.clone(),
+        }
+    } else {
+        editor.name.trim().to_string()
     };
 
     let auth = match editor.kind {
@@ -435,6 +478,56 @@ mod tests {
             Some("password-1")
         );
     }
+
+    #[test]
+    fn connection_editor_round_trip_preserves_telnet_behavior() {
+        let connection = SavedConnection {
+            id: "connection-telnet".to_string(),
+            name: "Telnet".to_string(),
+            config: ConnectionType::Telnet {
+                host: "device.local".to_string(),
+                port: 2323,
+                ai_execution_profile: AiExecutionProfile::Auto,
+                backspace_mode: "ctrl_h".to_string(),
+                raw_tcp_cli: true,
+                enter_mode: "lf".to_string(),
+                local_echo: true,
+                local_line_edit: true,
+                force_character_at_a_time: true,
+                send_naws: false,
+                send_sga: false,
+            },
+            group_id: None,
+            description: None,
+            sort_order: 0,
+            icon: None,
+            auth: None,
+            network: None,
+            post_login: None,
+            created_at_ms: None,
+            updated_at_ms: None,
+            last_used_at_ms: None,
+        };
+
+        let editor = connection_editor_from_saved(connection, false);
+        let saved = build_saved_connection_from_editor(&editor).expect("valid connection");
+        let ConnectionType::Telnet {
+            enter_mode,
+            local_line_edit,
+            force_character_at_a_time,
+            send_naws,
+            send_sga,
+            ..
+        } = saved.config
+        else {
+            panic!("expected telnet connection");
+        };
+        assert_eq!(enter_mode, "lf");
+        assert!(local_line_edit);
+        assert!(force_character_at_a_time);
+        assert!(!send_naws);
+        assert!(!send_sga);
+    }
 }
 
 pub(super) fn non_empty_optional(value: &str) -> Option<String> {
@@ -511,6 +604,10 @@ pub(in crate::features) enum ConnectionEditorToggle {
     X11,
     RawTcp,
     LocalEcho,
+    LocalLineEdit,
+    ForceCharacterAtATime,
+    SendNaws,
+    SendSga,
     PostLogin,
     Advanced,
 }
