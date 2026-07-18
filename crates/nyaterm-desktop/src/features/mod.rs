@@ -62,6 +62,7 @@ mod recording_runtime;
 mod remote_editor_window;
 #[path = "remote/remote_runtime.rs"]
 mod remote_runtime;
+mod remote_text_editor;
 mod root;
 mod runtime_jobs;
 #[path = "settings/security_runtime.rs"]
@@ -180,6 +181,7 @@ pub(in crate::features) use quick_command_runtime::{
 };
 pub(in crate::features) use quick_command_window::QuickCommandWindow;
 pub(in crate::features) use remote_editor_window::RemoteFileEditorWindow;
+pub(in crate::features) use remote_text_editor::RemoteTextEditor;
 pub(in crate::features) use runtime_jobs::{
     ActivitySide, AiAgentBackgroundTarget, AiAgentLoopState, AiAgentStepStatus, AiAgentStepView,
     AiChatJobOutput, AiChatJobResult, AiChatWorkerEvent, AiDiscoveryJobResult, DockerJobOutput,

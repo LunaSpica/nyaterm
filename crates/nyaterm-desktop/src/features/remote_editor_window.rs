@@ -1,12 +1,16 @@
+use std::collections::{HashMap, HashSet};
+
 use gpui::{
     AppContext, Bounds, Context, Entity, IntoElement, Render, Subscription, TitlebarOptions,
     Window, WindowBounds, WindowHandle, WindowOptions, div, prelude::*, px, rgb, size,
 };
 
-use super::NyaTermApp;
+use super::{NyaTermApp, RemoteTextEditor};
 
 pub(in crate::features) struct RemoteFileEditorWindow {
     app: Entity<NyaTermApp>,
+    editors: HashMap<String, Entity<RemoteTextEditor>>,
+    active_editor_id: Option<String>,
     _app_subscription: Subscription,
 }
 
@@ -15,6 +19,8 @@ impl RemoteFileEditorWindow {
         let app_subscription = cx.observe(&app, |_, _, cx| cx.notify());
         Self {
             app,
+            editors: HashMap::new(),
+            active_editor_id: None,
             _app_subscription: app_subscription,
         }
     }
@@ -31,35 +37,60 @@ impl Render for RemoteFileEditorWindow {
             return div().size_full().into_any_element();
         }
 
-        let (palette, font_family, font_size, title) = self.app.read_with(cx, |app, _| {
-            let workspace = app.transfer_editor.as_ref().expect("editor checked above");
-            let editor = workspace
-                .active_tab()
-                .expect("open editor workspace has an active tab");
-            let name = if editor.name.trim().is_empty() {
-                &editor.remote_path
-            } else {
-                &editor.name
-            };
-            (
-                app.theme_palette(),
-                app.gpui_ui_font_family(),
-                app.settings.ui_font_size.clamp(12, 24) as f32,
-                format!(
-                    "{}{}",
-                    if workspace.tabs.iter().any(|tab| tab.dirty) {
-                        "* "
-                    } else {
-                        ""
-                    },
-                    name
-                ),
-            )
-        });
+        let (palette, font_family, font_size, title, active_tab, tab_ids) =
+            self.app.read_with(cx, |app, _| {
+                let workspace = app.transfer_editor.as_ref().expect("editor checked above");
+                let editor = workspace
+                    .active_tab()
+                    .expect("open editor workspace has an active tab");
+                let name = if editor.name.trim().is_empty() {
+                    &editor.remote_path
+                } else {
+                    &editor.name
+                };
+                (
+                    app.theme_palette(),
+                    app.gpui_ui_font_family(),
+                    app.settings.ui_font_size.clamp(12, 24) as f32,
+                    format!(
+                        "{}{}",
+                        if workspace.tabs.iter().any(|tab| tab.dirty) {
+                            "* "
+                        } else {
+                            ""
+                        },
+                        name
+                    ),
+                    editor.clone(),
+                    workspace
+                        .tabs
+                        .iter()
+                        .map(|tab| tab.id.clone())
+                        .collect::<HashSet<_>>(),
+                )
+            });
+        self.editors.retain(|tab_id, _| tab_ids.contains(tab_id));
+        if !self.editors.contains_key(&active_tab.id) {
+            let editor = cx.new(|cx| RemoteTextEditor::new(self.app.clone(), &active_tab, cx));
+            self.editors.insert(active_tab.id.clone(), editor);
+        }
+        let editor = self
+            .editors
+            .get(&active_tab.id)
+            .expect("active editor created above")
+            .clone();
+        editor.update(cx, |editor, cx| editor.sync_from_tab(&active_tab, cx));
+        if self.active_editor_id.as_deref() != Some(active_tab.id.as_str()) {
+            self.active_editor_id = Some(active_tab.id.clone());
+            if active_tab.focused_field == crate::models::TransferEditorField::Content {
+                window.focus(&editor.read(cx).focus_handle());
+            }
+        }
         window.set_window_title(&title);
-        let content = self
-            .app
-            .update(cx, |app, cx| app.transfer_editor_window_view(cx));
+        let cursor_position = editor.read(cx).cursor_position();
+        let content = self.app.update(cx, |app, cx| {
+            app.transfer_editor_window_view(editor, cursor_position, cx)
+        });
 
         div()
             .size_full()
@@ -111,8 +142,6 @@ impl NyaTermApp {
                         should_close
                     })
                 });
-                let editor_focus = view_app.read(cx).transfer_editor_focus.clone();
-                window.focus(&editor_focus);
                 cx.new(|cx| RemoteFileEditorWindow::new(view_app, cx))
             },
         );

@@ -1,5 +1,5 @@
 use gpui::{
-    AnyElement, App, ClickEvent, ClipboardItem, Context, FontWeight, Hsla, IntoElement,
+    AnyElement, App, ClickEvent, ClipboardItem, Context, Entity, FontWeight, Hsla, IntoElement,
     KeyDownEvent, MouseButton, MouseDownEvent, MouseMoveEvent, MouseUpEvent, ScrollDelta,
     ScrollWheelEvent, SharedString, Timer, Window, div, prelude::*, px, rgb, svg,
 };
@@ -28,8 +28,8 @@ use crate::widgets::{small_button, status_pill};
 use nyaterm_core::{AiCustomActionConfig, ConnectionStore};
 
 use super::super::{
-    NyaTermApp, entry_kind_label, format_file_size, panel_header_with_actions, transfer_entry_icon,
-    transfer_job_title, transfer_status_label, truncate_preview,
+    NyaTermApp, RemoteTextEditor, entry_kind_label, format_file_size, panel_header_with_actions,
+    transfer_entry_icon, transfer_job_title, transfer_status_label, truncate_preview,
 };
 
 #[path = "transfers/browser.rs"]

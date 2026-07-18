@@ -1,0 +1,1084 @@
+use std::ops::Range;
+
+use gpui::{
+    App, Bounds, ClipboardItem, Context, CursorStyle, Element, ElementId, ElementInputHandler,
+    Entity, EntityInputHandler, FocusHandle, Focusable, GlobalElementId, HighlightStyle,
+    InspectorElementId, IntoElement, KeyDownEvent, LayoutId, MouseButton, MouseDownEvent,
+    MouseMoveEvent, MouseUpEvent, PaintQuad, Pixels, Point, Render, ScrollHandle, SharedString,
+    StyledText, TextLayout, UTF16Selection, UnderlineStyle, Window, div, fill, prelude::*, px,
+    relative, rgb, rgba, size,
+};
+
+use super::{NyaTermApp, gpui_code_font_family};
+use crate::models::{TransferEditorField, TransferEditorState};
+
+const UNDO_LIMIT: usize = 64;
+
+#[derive(Clone)]
+struct EditSnapshot {
+    content: String,
+    anchor: usize,
+    head: usize,
+}
+
+pub(in crate::features) struct RemoteTextEditor {
+    app: Entity<NyaTermApp>,
+    tab_id: String,
+    focus_handle: FocusHandle,
+    content: String,
+    anchor: usize,
+    head: usize,
+    marked_range: Option<Range<usize>>,
+    last_layout: Option<TextLayout>,
+    selecting: bool,
+    read_only: bool,
+    scroll: ScrollHandle,
+    scroll_cursor_pending: bool,
+    search_query: String,
+    active_match: usize,
+    undo_stack: Vec<EditSnapshot>,
+    redo_stack: Vec<EditSnapshot>,
+}
+
+impl RemoteTextEditor {
+    pub(in crate::features) fn new(
+        app: Entity<NyaTermApp>,
+        tab: &TransferEditorState,
+        cx: &mut Context<Self>,
+    ) -> Self {
+        let cursor = tab.content.len();
+        Self {
+            app,
+            tab_id: tab.id.clone(),
+            focus_handle: cx.focus_handle(),
+            content: tab.content.clone(),
+            anchor: cursor,
+            head: cursor,
+            marked_range: None,
+            last_layout: None,
+            selecting: false,
+            read_only: tab.loading || tab.saving,
+            scroll: ScrollHandle::new(),
+            scroll_cursor_pending: true,
+            search_query: tab.search_query.clone(),
+            active_match: tab.active_match,
+            undo_stack: Vec::new(),
+            redo_stack: Vec::new(),
+        }
+    }
+
+    pub(in crate::features) fn sync_from_tab(
+        &mut self,
+        tab: &TransferEditorState,
+        cx: &mut Context<Self>,
+    ) {
+        let mut changed = false;
+        if self.content != tab.content {
+            self.content = tab.content.clone();
+            let cursor = nearest_char_boundary(&self.content, self.head.min(self.content.len()));
+            self.anchor = cursor;
+            self.head = cursor;
+            self.marked_range = None;
+            self.last_layout = None;
+            self.undo_stack.clear();
+            self.redo_stack.clear();
+            self.scroll_cursor_pending = true;
+            changed = true;
+        }
+        let read_only = tab.loading || tab.saving;
+        if self.read_only != read_only {
+            self.read_only = read_only;
+            changed = true;
+        }
+        if self.search_query != tab.search_query || self.active_match != tab.active_match {
+            self.search_query = tab.search_query.clone();
+            self.active_match = tab.active_match;
+            if self.search_query.is_empty() {
+                self.anchor = self.head;
+            } else if let Some((start, matched)) = self
+                .content
+                .match_indices(&self.search_query)
+                .nth(self.active_match)
+            {
+                self.anchor = start;
+                self.head = start + matched.len();
+                self.scroll_cursor_pending = true;
+            }
+            changed = true;
+        }
+        if changed {
+            cx.notify();
+        }
+    }
+
+    pub(in crate::features) fn cursor_position(&self) -> (usize, usize) {
+        let cursor = self.head.min(self.content.len());
+        let before = &self.content[..cursor];
+        let line = before.bytes().filter(|byte| *byte == b'\n').count() + 1;
+        let line_start = before.rfind('\n').map(|index| index + 1).unwrap_or(0);
+        let column = self.content[line_start..cursor].chars().count() + 1;
+        (line, column)
+    }
+
+    pub(in crate::features) fn focus_handle(&self) -> FocusHandle {
+        self.focus_handle.clone()
+    }
+
+    fn selected_range(&self) -> Range<usize> {
+        self.anchor.min(self.head)..self.anchor.max(self.head)
+    }
+
+    fn selection_reversed(&self) -> bool {
+        self.head < self.anchor
+    }
+
+    fn snapshot(&self) -> EditSnapshot {
+        EditSnapshot {
+            content: self.content.clone(),
+            anchor: self.anchor,
+            head: self.head,
+        }
+    }
+
+    fn push_undo(&mut self) {
+        self.undo_stack.push(self.snapshot());
+        if self.undo_stack.len() > UNDO_LIMIT {
+            self.undo_stack.remove(0);
+        }
+        self.redo_stack.clear();
+    }
+
+    fn restore_snapshot(&mut self, snapshot: EditSnapshot, cx: &mut Context<Self>) {
+        self.content = snapshot.content;
+        self.anchor = snapshot.anchor.min(self.content.len());
+        self.head = snapshot.head.min(self.content.len());
+        self.marked_range = None;
+        self.last_layout = None;
+        self.scroll_cursor_pending = true;
+        self.sync_content_to_app(cx);
+        cx.notify();
+    }
+
+    fn undo(&mut self, cx: &mut Context<Self>) {
+        if self.read_only {
+            return;
+        }
+        let Some(snapshot) = self.undo_stack.pop() else {
+            return;
+        };
+        self.redo_stack.push(self.snapshot());
+        self.restore_snapshot(snapshot, cx);
+    }
+
+    fn redo(&mut self, cx: &mut Context<Self>) {
+        if self.read_only {
+            return;
+        }
+        let Some(snapshot) = self.redo_stack.pop() else {
+            return;
+        };
+        self.undo_stack.push(self.snapshot());
+        self.restore_snapshot(snapshot, cx);
+    }
+
+    fn sync_content_to_app(&self, cx: &mut Context<Self>) {
+        let tab_id = self.tab_id.clone();
+        let content = self.content.clone();
+        self.app.update(cx, move |app, cx| {
+            let Some(workspace) = app.transfer_editor.as_mut() else {
+                return;
+            };
+            workspace.close_confirm = false;
+            workspace.pending_close_tab_id = None;
+            workspace.close_after_save_all = false;
+            let Some(tab) = workspace.tabs.iter_mut().find(|tab| tab.id == tab_id) else {
+                return;
+            };
+            if tab.content != content {
+                tab.content = content;
+                tab.dirty = true;
+                tab.conflict = false;
+                tab.close_after_save = false;
+                tab.reload_confirm = false;
+                tab.error = None;
+            }
+            tab.focused_field = TransferEditorField::Content;
+            app.mark_user_activity();
+            cx.notify();
+        });
+    }
+
+    fn notify_cursor_changed(&self, cx: &mut Context<Self>) {
+        self.app.update(cx, |app, cx| {
+            app.mark_user_activity();
+            cx.notify();
+        });
+    }
+
+    fn replace_byte_range(
+        &mut self,
+        range: Range<usize>,
+        new_text: &str,
+        record_undo: bool,
+        cx: &mut Context<Self>,
+    ) {
+        if self.read_only {
+            return;
+        }
+        let start = nearest_char_boundary(&self.content, range.start.min(self.content.len()));
+        let end =
+            nearest_char_boundary(&self.content, range.end.min(self.content.len())).max(start);
+        if record_undo {
+            self.push_undo();
+        }
+        self.content.replace_range(start..end, new_text);
+        let cursor = start + new_text.len();
+        self.anchor = cursor;
+        self.head = cursor;
+        self.marked_range = None;
+        self.last_layout = None;
+        self.scroll_cursor_pending = true;
+        self.sync_content_to_app(cx);
+        cx.notify();
+    }
+
+    fn move_cursor(&mut self, offset: usize, extend: bool, cx: &mut Context<Self>) {
+        let offset = nearest_char_boundary(&self.content, offset.min(self.content.len()));
+        if extend {
+            self.head = offset;
+        } else {
+            self.anchor = offset;
+            self.head = offset;
+        }
+        self.marked_range = None;
+        self.scroll_cursor_pending = true;
+        self.notify_cursor_changed(cx);
+        cx.notify();
+    }
+
+    fn move_left(&mut self, extend: bool, by_word: bool, cx: &mut Context<Self>) {
+        if !extend && self.anchor != self.head {
+            self.move_cursor(self.selected_range().start, false, cx);
+            return;
+        }
+        let target = if by_word {
+            previous_word_boundary(&self.content, self.head)
+        } else {
+            previous_char_boundary(&self.content, self.head)
+        };
+        self.move_cursor(target, extend, cx);
+    }
+
+    fn move_right(&mut self, extend: bool, by_word: bool, cx: &mut Context<Self>) {
+        if !extend && self.anchor != self.head {
+            self.move_cursor(self.selected_range().end, false, cx);
+            return;
+        }
+        let target = if by_word {
+            next_word_boundary(&self.content, self.head)
+        } else {
+            next_char_boundary(&self.content, self.head)
+        };
+        self.move_cursor(target, extend, cx);
+    }
+
+    fn move_vertical(&mut self, delta: isize, extend: bool, cx: &mut Context<Self>) {
+        let cursor = self.head.min(self.content.len());
+        let current_start = line_start(&self.content, cursor);
+        let column = self.content[current_start..cursor].chars().count();
+        let target_start = if delta < 0 {
+            if current_start == 0 {
+                0
+            } else {
+                line_start(&self.content, current_start - 1)
+            }
+        } else {
+            let current_end = line_end(&self.content, cursor);
+            if current_end >= self.content.len() {
+                current_start
+            } else {
+                current_end + 1
+            }
+        };
+        let target_end = line_end(&self.content, target_start);
+        let target = byte_offset_for_char_column(&self.content, target_start, target_end, column);
+        self.move_cursor(target, extend, cx);
+    }
+
+    fn select_word_at(&mut self, offset: usize, cx: &mut Context<Self>) {
+        let (start, end) = word_bounds(&self.content, offset);
+        self.anchor = start;
+        self.head = end;
+        self.scroll_cursor_pending = true;
+        self.notify_cursor_changed(cx);
+        cx.notify();
+    }
+
+    fn select_line_at(&mut self, offset: usize, cx: &mut Context<Self>) {
+        let start = line_start(&self.content, offset);
+        let mut end = line_end(&self.content, offset);
+        if end < self.content.len() {
+            end += 1;
+        }
+        self.anchor = start;
+        self.head = end;
+        self.scroll_cursor_pending = true;
+        self.notify_cursor_changed(cx);
+        cx.notify();
+    }
+
+    fn index_for_point(&self, position: Point<Pixels>) -> usize {
+        let Some(layout) = self.last_layout.as_ref() else {
+            return self.content.len();
+        };
+        let index = layout
+            .index_for_position(position)
+            .unwrap_or_else(|index| index)
+            .min(self.content.len());
+        nearest_char_boundary(&self.content, index)
+    }
+
+    fn on_mouse_down(
+        &mut self,
+        event: &MouseDownEvent,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        cx.stop_propagation();
+        window.focus(&self.focus_handle);
+        self.app.update(cx, |app, cx| {
+            if let Some(tab) = app.active_transfer_editor_tab_mut() {
+                tab.focused_field = TransferEditorField::Content;
+            }
+            cx.notify();
+        });
+        let index = self.index_for_point(event.position);
+        if event.click_count >= 3 {
+            self.select_line_at(index, cx);
+            self.selecting = false;
+        } else if event.click_count == 2 {
+            self.select_word_at(index, cx);
+            self.selecting = false;
+        } else {
+            if event.modifiers.shift {
+                self.head = index;
+            } else {
+                self.anchor = index;
+                self.head = index;
+            }
+            self.selecting = true;
+            self.scroll_cursor_pending = true;
+            self.notify_cursor_changed(cx);
+            cx.notify();
+        }
+    }
+
+    fn on_mouse_move(
+        &mut self,
+        event: &MouseMoveEvent,
+        _window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if self.selecting {
+            self.head = self.index_for_point(event.position);
+            self.scroll_cursor_pending = true;
+            self.notify_cursor_changed(cx);
+            cx.notify();
+        }
+    }
+
+    fn on_mouse_up(&mut self, _: &MouseUpEvent, _: &mut Window, cx: &mut Context<Self>) {
+        self.selecting = false;
+        cx.stop_propagation();
+    }
+
+    fn on_key_down(&mut self, event: &KeyDownEvent, window: &mut Window, cx: &mut Context<Self>) {
+        let key = event.keystroke.key.as_str();
+        let modifiers = event.keystroke.modifiers;
+        let primary = modifiers.platform || modifiers.control;
+        let extend = modifiers.shift;
+
+        if primary && !modifiers.alt {
+            let handled = match key {
+                "a" => {
+                    self.anchor = 0;
+                    self.head = self.content.len();
+                    self.scroll_cursor_pending = true;
+                    self.notify_cursor_changed(cx);
+                    cx.notify();
+                    true
+                }
+                "c" => {
+                    self.copy_selection(cx);
+                    true
+                }
+                "x" if !self.read_only => {
+                    self.cut_selection(cx);
+                    true
+                }
+                "v" if !self.read_only => {
+                    self.paste(window, cx);
+                    true
+                }
+                "z" if modifiers.shift => {
+                    self.redo(cx);
+                    true
+                }
+                "z" => {
+                    self.undo(cx);
+                    true
+                }
+                "y" => {
+                    self.redo(cx);
+                    true
+                }
+                "s" => {
+                    self.app.update(cx, |app, cx| {
+                        app.save_transfer_editor(false, window, cx);
+                    });
+                    true
+                }
+                "f" => {
+                    self.app.update(cx, |app, cx| {
+                        if let Some(tab) = app.active_transfer_editor_tab_mut() {
+                            tab.focused_field = TransferEditorField::Search;
+                        }
+                        window.focus(&app.transfer_editor_focus);
+                        cx.notify();
+                    });
+                    true
+                }
+                "left" => {
+                    self.move_left(extend, true, cx);
+                    true
+                }
+                "right" => {
+                    self.move_right(extend, true, cx);
+                    true
+                }
+                _ => false,
+            };
+            if handled {
+                cx.stop_propagation();
+            }
+            return;
+        }
+
+        let handled = match key {
+            "left" => {
+                self.move_left(extend, false, cx);
+                true
+            }
+            "right" => {
+                self.move_right(extend, false, cx);
+                true
+            }
+            "up" => {
+                self.move_vertical(-1, extend, cx);
+                true
+            }
+            "down" => {
+                self.move_vertical(1, extend, cx);
+                true
+            }
+            "home" => {
+                self.move_cursor(line_start(&self.content, self.head), extend, cx);
+                true
+            }
+            "end" => {
+                self.move_cursor(line_end(&self.content, self.head), extend, cx);
+                true
+            }
+            "backspace" if !self.read_only => {
+                let range = self.selected_range();
+                let range = if range.is_empty() {
+                    previous_char_boundary(&self.content, self.head)..self.head
+                } else {
+                    range
+                };
+                if !range.is_empty() {
+                    self.replace_byte_range(range, "", true, cx);
+                }
+                true
+            }
+            "delete" if !self.read_only => {
+                let range = self.selected_range();
+                let range = if range.is_empty() {
+                    self.head..next_char_boundary(&self.content, self.head)
+                } else {
+                    range
+                };
+                if !range.is_empty() {
+                    self.replace_byte_range(range, "", true, cx);
+                }
+                true
+            }
+            "enter" if !self.read_only => {
+                self.replace_byte_range(self.selected_range(), "\n", true, cx);
+                true
+            }
+            "tab" if !self.read_only => {
+                self.replace_byte_range(self.selected_range(), "    ", true, cx);
+                true
+            }
+            _ => false,
+        };
+        if handled {
+            cx.stop_propagation();
+        }
+    }
+
+    fn copy_selection(&self, cx: &mut Context<Self>) {
+        let range = self.selected_range();
+        if !range.is_empty() {
+            cx.write_to_clipboard(ClipboardItem::new_string(self.content[range].to_string()));
+        }
+    }
+
+    fn cut_selection(&mut self, cx: &mut Context<Self>) {
+        let range = self.selected_range();
+        if range.is_empty() {
+            return;
+        }
+        cx.write_to_clipboard(ClipboardItem::new_string(
+            self.content[range.clone()].to_string(),
+        ));
+        self.replace_byte_range(range, "", true, cx);
+    }
+
+    fn paste(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
+        let Some(text) = cx.read_from_clipboard().and_then(|item| item.text()) else {
+            return;
+        };
+        self.replace_byte_range(self.selected_range(), &text.replace("\r\n", "\n"), true, cx);
+    }
+
+    fn ensure_cursor_visible(&mut self) {
+        if !self.scroll_cursor_pending {
+            return;
+        }
+        self.scroll_cursor_pending = false;
+        let Some(layout) = self.last_layout.as_ref() else {
+            return;
+        };
+        let Some(cursor) = layout.position_for_index(self.head.min(self.content.len())) else {
+            return;
+        };
+        let viewport = self.scroll.bounds();
+        if viewport.size.width <= px(0.) || viewport.size.height <= px(0.) {
+            return;
+        }
+        let line_height = layout.line_height();
+        let mut offset = self.scroll.offset();
+        if cursor.y < viewport.top() {
+            offset.y += viewport.top() - cursor.y;
+        } else if cursor.y + line_height > viewport.bottom() {
+            offset.y -= cursor.y + line_height - viewport.bottom();
+        }
+        let max = self.scroll.max_offset();
+        offset.x = offset.x.clamp(-max.width, px(0.));
+        offset.y = offset.y.clamp(-max.height, px(0.));
+        self.scroll.set_offset(offset);
+    }
+}
+
+impl EntityInputHandler for RemoteTextEditor {
+    fn text_for_range(
+        &mut self,
+        range_utf16: Range<usize>,
+        actual_range: &mut Option<Range<usize>>,
+        _window: &mut Window,
+        _cx: &mut Context<Self>,
+    ) -> Option<String> {
+        let range = self.range_from_utf16(&range_utf16);
+        actual_range.replace(self.range_to_utf16(&range));
+        Some(self.content[range].to_string())
+    }
+
+    fn selected_text_range(
+        &mut self,
+        _ignore_disabled_input: bool,
+        _window: &mut Window,
+        _cx: &mut Context<Self>,
+    ) -> Option<UTF16Selection> {
+        Some(UTF16Selection {
+            range: self.range_to_utf16(&self.selected_range()),
+            reversed: self.selection_reversed(),
+        })
+    }
+
+    fn marked_text_range(
+        &self,
+        _window: &mut Window,
+        _cx: &mut Context<Self>,
+    ) -> Option<Range<usize>> {
+        self.marked_range
+            .as_ref()
+            .map(|range| self.range_to_utf16(range))
+    }
+
+    fn unmark_text(&mut self, _window: &mut Window, _cx: &mut Context<Self>) {
+        self.marked_range = None;
+    }
+
+    fn replace_text_in_range(
+        &mut self,
+        range_utf16: Option<Range<usize>>,
+        new_text: &str,
+        _window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if self.read_only {
+            return;
+        }
+        let range = range_utf16
+            .as_ref()
+            .map(|range| self.range_from_utf16(range))
+            .or_else(|| self.marked_range.clone())
+            .unwrap_or_else(|| self.selected_range());
+        let record_undo = self.marked_range.is_none();
+        self.replace_byte_range(range, new_text, record_undo, cx);
+    }
+
+    fn replace_and_mark_text_in_range(
+        &mut self,
+        range_utf16: Option<Range<usize>>,
+        new_text: &str,
+        new_selected_range_utf16: Option<Range<usize>>,
+        _window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if self.read_only {
+            return;
+        }
+        let range = range_utf16
+            .as_ref()
+            .map(|range| self.range_from_utf16(range))
+            .or_else(|| self.marked_range.clone())
+            .unwrap_or_else(|| self.selected_range());
+        let record_undo = self.marked_range.is_none();
+        let start = range.start;
+        self.replace_byte_range(range, new_text, record_undo, cx);
+        if new_text.is_empty() {
+            self.marked_range = None;
+            return;
+        }
+        self.marked_range = Some(start..start + new_text.len());
+        if let Some(selected) = new_selected_range_utf16 {
+            let relative_start = utf16_to_utf8(new_text, selected.start);
+            let relative_end = utf16_to_utf8(new_text, selected.end);
+            self.anchor = start + relative_start;
+            self.head = start + relative_end;
+        }
+        cx.notify();
+    }
+
+    fn bounds_for_range(
+        &mut self,
+        range_utf16: Range<usize>,
+        _bounds: Bounds<Pixels>,
+        _window: &mut Window,
+        _cx: &mut Context<Self>,
+    ) -> Option<Bounds<Pixels>> {
+        let layout = self.last_layout.as_ref()?;
+        let range = self.range_from_utf16(&range_utf16);
+        let position = layout.position_for_index(range.end)?;
+        Some(Bounds::new(position, size(px(2.), layout.line_height())))
+    }
+
+    fn character_index_for_point(
+        &mut self,
+        position: Point<Pixels>,
+        _window: &mut Window,
+        _cx: &mut Context<Self>,
+    ) -> Option<usize> {
+        Some(self.offset_to_utf16(self.index_for_point(position)))
+    }
+}
+
+impl RemoteTextEditor {
+    fn offset_from_utf16(&self, offset: usize) -> usize {
+        utf16_to_utf8(&self.content, offset)
+    }
+
+    fn offset_to_utf16(&self, offset: usize) -> usize {
+        self.content[..nearest_char_boundary(&self.content, offset.min(self.content.len()))]
+            .encode_utf16()
+            .count()
+    }
+
+    fn range_from_utf16(&self, range: &Range<usize>) -> Range<usize> {
+        self.offset_from_utf16(range.start)..self.offset_from_utf16(range.end)
+    }
+
+    fn range_to_utf16(&self, range: &Range<usize>) -> Range<usize> {
+        self.offset_to_utf16(range.start)..self.offset_to_utf16(range.end)
+    }
+}
+
+impl Focusable for RemoteTextEditor {
+    fn focus_handle(&self, _: &App) -> FocusHandle {
+        self.focus_handle.clone()
+    }
+}
+
+impl Render for RemoteTextEditor {
+    fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let palette = self.app.read(cx).theme_palette();
+        let selection = self.selected_range();
+        let display_text = if self.content.is_empty() {
+            SharedString::from(" ")
+        } else {
+            SharedString::from(self.content.clone())
+        };
+        let mut highlights = Vec::new();
+        if !selection.is_empty() {
+            highlights.push((
+                selection,
+                HighlightStyle {
+                    background_color: Some(rgba(0x2f81f750).into()),
+                    ..Default::default()
+                },
+            ));
+        } else if let Some(marked_range) = self.marked_range.clone() {
+            highlights.push((
+                marked_range,
+                HighlightStyle {
+                    underline: Some(UnderlineStyle {
+                        color: Some(rgb(palette.text).into()),
+                        thickness: px(1.),
+                        wavy: false,
+                    }),
+                    ..Default::default()
+                },
+            ));
+        }
+        let text = StyledText::new(display_text).with_highlights(highlights);
+
+        div()
+            .id(SharedString::from(format!(
+                "remote-text-editor-{}",
+                self.tab_id
+            )))
+            .size_full()
+            .key_context("RemoteTextEditor")
+            .track_focus(&self.focus_handle)
+            .cursor(CursorStyle::IBeam)
+            .bg(rgb(palette.input))
+            .font_family(gpui_code_font_family())
+            .text_size(px(13.))
+            .line_height(px(20.))
+            .whitespace_normal()
+            .overflow_y_scroll()
+            .overflow_x_hidden()
+            .track_scroll(&self.scroll)
+            .on_key_down(cx.listener(Self::on_key_down))
+            .on_click(cx.listener(|_, _, _, cx| cx.stop_propagation()))
+            .on_mouse_down(MouseButton::Left, cx.listener(Self::on_mouse_down))
+            .on_mouse_move(cx.listener(Self::on_mouse_move))
+            .on_mouse_up(MouseButton::Left, cx.listener(Self::on_mouse_up))
+            .on_mouse_up_out(MouseButton::Left, cx.listener(Self::on_mouse_up))
+            .child(
+                div()
+                    .w_full()
+                    .min_h(relative(1.))
+                    .p_3()
+                    .child(RemoteTextElement {
+                        editor: cx.entity(),
+                        text,
+                    }),
+            )
+    }
+}
+
+struct RemoteTextElement {
+    editor: Entity<RemoteTextEditor>,
+    text: StyledText,
+}
+
+impl IntoElement for RemoteTextElement {
+    type Element = Self;
+
+    fn into_element(self) -> Self::Element {
+        self
+    }
+}
+
+impl Element for RemoteTextElement {
+    type RequestLayoutState = ();
+    type PrepaintState = Option<PaintQuad>;
+
+    fn id(&self) -> Option<ElementId> {
+        None
+    }
+
+    fn source_location(&self) -> Option<&'static core::panic::Location<'static>> {
+        None
+    }
+
+    fn request_layout(
+        &mut self,
+        id: Option<&GlobalElementId>,
+        inspector_id: Option<&InspectorElementId>,
+        window: &mut Window,
+        cx: &mut App,
+    ) -> (LayoutId, Self::RequestLayoutState) {
+        self.text.request_layout(id, inspector_id, window, cx)
+    }
+
+    fn prepaint(
+        &mut self,
+        id: Option<&GlobalElementId>,
+        inspector_id: Option<&InspectorElementId>,
+        bounds: Bounds<Pixels>,
+        state: &mut Self::RequestLayoutState,
+        window: &mut Window,
+        cx: &mut App,
+    ) -> Self::PrepaintState {
+        self.text
+            .prepaint(id, inspector_id, bounds, state, window, cx);
+        let editor = self.editor.read(cx);
+        if !editor.selected_range().is_empty() {
+            return None;
+        }
+        let layout = self.text.layout();
+        let position = layout.position_for_index(editor.head.min(editor.content.len()))?;
+        Some(fill(
+            Bounds::new(position, size(px(1.5), layout.line_height())),
+            rgb(editor.app.read(cx).theme_palette().accent),
+        ))
+    }
+
+    fn paint(
+        &mut self,
+        id: Option<&GlobalElementId>,
+        inspector_id: Option<&InspectorElementId>,
+        bounds: Bounds<Pixels>,
+        state: &mut Self::RequestLayoutState,
+        cursor: &mut Self::PrepaintState,
+        window: &mut Window,
+        cx: &mut App,
+    ) {
+        let focus_handle = self.editor.read(cx).focus_handle.clone();
+        window.handle_input(
+            &focus_handle,
+            ElementInputHandler::new(bounds, self.editor.clone()),
+            cx,
+        );
+        self.text
+            .paint(id, inspector_id, bounds, state, &mut (), window, cx);
+        if focus_handle.is_focused(window)
+            && let Some(cursor) = cursor.take()
+        {
+            window.paint_quad(cursor);
+        }
+        let layout = self.text.layout().clone();
+        self.editor.update(cx, |editor, cx| {
+            editor.last_layout = Some(layout);
+            if editor.scroll_cursor_pending {
+                editor.ensure_cursor_visible();
+                cx.notify();
+            }
+        });
+    }
+}
+
+fn nearest_char_boundary(content: &str, mut offset: usize) -> usize {
+    offset = offset.min(content.len());
+    while offset > 0 && !content.is_char_boundary(offset) {
+        offset -= 1;
+    }
+    offset
+}
+
+fn previous_char_boundary(content: &str, offset: usize) -> usize {
+    let offset = nearest_char_boundary(content, offset);
+    content[..offset]
+        .char_indices()
+        .next_back()
+        .map(|(index, _)| index)
+        .unwrap_or(0)
+}
+
+fn next_char_boundary(content: &str, offset: usize) -> usize {
+    let offset = nearest_char_boundary(content, offset);
+    content[offset..]
+        .chars()
+        .next()
+        .map(|ch| offset + ch.len_utf8())
+        .unwrap_or(content.len())
+}
+
+fn is_word_char(ch: char) -> bool {
+    ch.is_alphanumeric() || ch == '_'
+}
+
+fn previous_word_boundary(content: &str, offset: usize) -> usize {
+    let mut cursor = nearest_char_boundary(content, offset);
+    while cursor > 0 {
+        let previous = previous_char_boundary(content, cursor);
+        let ch = content[previous..cursor].chars().next().unwrap_or(' ');
+        if !ch.is_whitespace() {
+            break;
+        }
+        cursor = previous;
+    }
+    let word_kind = cursor
+        .checked_sub(1)
+        .and_then(|_| {
+            let previous = previous_char_boundary(content, cursor);
+            content[previous..cursor].chars().next()
+        })
+        .map(is_word_char);
+    while cursor > 0 {
+        let previous = previous_char_boundary(content, cursor);
+        let ch = content[previous..cursor].chars().next().unwrap_or(' ');
+        if Some(is_word_char(ch)) != word_kind || ch.is_whitespace() {
+            break;
+        }
+        cursor = previous;
+    }
+    cursor
+}
+
+fn next_word_boundary(content: &str, offset: usize) -> usize {
+    let mut cursor = nearest_char_boundary(content, offset);
+    let word_kind = content[cursor..].chars().next().map(is_word_char);
+    while cursor < content.len() {
+        let next = next_char_boundary(content, cursor);
+        let ch = content[cursor..next].chars().next().unwrap_or(' ');
+        if Some(is_word_char(ch)) != word_kind || ch.is_whitespace() {
+            break;
+        }
+        cursor = next;
+    }
+    while cursor < content.len() {
+        let next = next_char_boundary(content, cursor);
+        let ch = content[cursor..next].chars().next().unwrap_or(' ');
+        if !ch.is_whitespace() {
+            break;
+        }
+        cursor = next;
+    }
+    cursor
+}
+
+fn word_bounds(content: &str, offset: usize) -> (usize, usize) {
+    if content.is_empty() {
+        return (0, 0);
+    }
+    let mut offset = nearest_char_boundary(content, offset.min(content.len()));
+    if offset == content.len() {
+        offset = previous_char_boundary(content, offset);
+    }
+    let next = next_char_boundary(content, offset);
+    let target = content[offset..next].chars().next().unwrap_or(' ');
+    if target == '\n' {
+        return (offset, next);
+    }
+    let target_word = is_word_char(target);
+    let target_whitespace = target.is_whitespace();
+    let same_kind = |ch: char| {
+        if target_whitespace {
+            ch.is_whitespace() && ch != '\n'
+        } else if target_word {
+            is_word_char(ch)
+        } else {
+            !is_word_char(ch) && !ch.is_whitespace()
+        }
+    };
+    let mut start = offset;
+    while start > 0 {
+        let previous = previous_char_boundary(content, start);
+        let ch = content[previous..start].chars().next().unwrap_or(' ');
+        if !same_kind(ch) {
+            break;
+        }
+        start = previous;
+    }
+    let mut end = next;
+    while end < content.len() {
+        let next = next_char_boundary(content, end);
+        let ch = content[end..next].chars().next().unwrap_or(' ');
+        if !same_kind(ch) {
+            break;
+        }
+        end = next;
+    }
+    (start, end)
+}
+
+fn line_start(content: &str, offset: usize) -> usize {
+    let offset = nearest_char_boundary(content, offset);
+    content[..offset]
+        .rfind('\n')
+        .map(|index| index + 1)
+        .unwrap_or(0)
+}
+
+fn line_end(content: &str, offset: usize) -> usize {
+    let offset = nearest_char_boundary(content, offset);
+    content[offset..]
+        .find('\n')
+        .map(|index| offset + index)
+        .unwrap_or(content.len())
+}
+
+fn byte_offset_for_char_column(content: &str, start: usize, end: usize, column: usize) -> usize {
+    content[start..end]
+        .char_indices()
+        .nth(column)
+        .map(|(offset, _)| start + offset)
+        .unwrap_or(end)
+}
+
+fn utf16_to_utf8(content: &str, offset: usize) -> usize {
+    let mut utf8_offset = 0;
+    let mut utf16_offset = 0;
+    for ch in content.chars() {
+        if utf16_offset >= offset {
+            break;
+        }
+        utf16_offset += ch.len_utf16();
+        utf8_offset += ch.len_utf8();
+    }
+    utf8_offset
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn editor_boundaries_preserve_utf8_characters() {
+        let content = "a你🙂b";
+        assert_eq!(next_char_boundary(content, 1), 4);
+        assert_eq!(next_char_boundary(content, 4), 8);
+        assert_eq!(previous_char_boundary(content, 8), 4);
+        assert_eq!(nearest_char_boundary(content, 7), 4);
+    }
+
+    #[test]
+    fn editor_line_navigation_clamps_to_target_line() {
+        let content = "abcdef\nxy\n1234";
+        assert_eq!(line_start(content, 5), 0);
+        assert_eq!(line_start(content, 9), 7);
+        assert_eq!(line_end(content, 7), 9);
+        assert_eq!(byte_offset_for_char_column(content, 7, 9, 5), 9);
+    }
+
+    #[test]
+    fn editor_word_bounds_group_words_and_punctuation() {
+        assert_eq!(word_bounds("hello, world", 2), (0, 5));
+        assert_eq!(word_bounds("hello, world", 5), (5, 6));
+        assert_eq!(word_bounds("hello, world", 8), (7, 12));
+    }
+
+    #[test]
+    fn editor_utf16_offsets_round_trip_surrogate_pairs() {
+        let content = "a🙂你";
+        assert_eq!(utf16_to_utf8(content, 1), 1);
+        assert_eq!(utf16_to_utf8(content, 3), 5);
+        assert_eq!(utf16_to_utf8(content, 4), content.len());
+    }
+}

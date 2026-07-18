@@ -211,19 +211,24 @@ impl NyaTermApp {
         &mut self,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
-        self.transfer_editor_surface(false, cx)
+        self.transfer_editor_surface(false, None, None, cx)
     }
 
     pub(in crate::features) fn transfer_editor_window_view(
         &mut self,
+        editor: Entity<RemoteTextEditor>,
+        cursor_position: (usize, usize),
         cx: &mut Context<Self>,
     ) -> AnyElement {
-        self.transfer_editor_surface(true, cx).into_any_element()
+        self.transfer_editor_surface(true, Some(editor), Some(cursor_position), cx)
+            .into_any_element()
     }
 
     fn transfer_editor_surface(
         &mut self,
         standalone: bool,
+        native_editor: Option<Entity<RemoteTextEditor>>,
+        cursor_position: Option<(usize, usize)>,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
         let palette = self.theme_palette();
@@ -296,6 +301,16 @@ impl NyaTermApp {
         };
         let line_count = state.content.lines().count().max(1);
         let byte_count = state.content.len();
+        let (cursor_line, cursor_column) = cursor_position.unwrap_or_else(|| {
+            let before = state.content.as_str();
+            let line = before.bytes().filter(|byte| *byte == b'\n').count() + 1;
+            let line_start = before.rfind('\n').map(|index| index + 1).unwrap_or(0);
+            (line, before[line_start..].chars().count() + 1)
+        });
+        let cursor_label = self
+            .tr("fileEditor.lineColumn")
+            .replace("{{line}}", &cursor_line.to_string())
+            .replace("{{column}}", &cursor_column.to_string());
         let search_matches = editor_search_matches(&state.content, &state.search_query);
         let active_match = state
             .active_match
@@ -308,6 +323,7 @@ impl NyaTermApp {
             state.search_query.clone()
         };
         let active_tab_id = state.id.clone();
+        let has_native_editor = native_editor.is_some();
         let mut tab_strip = div()
             .id("transfer-editor-tabs")
             .absolute()
@@ -447,8 +463,10 @@ impl NyaTermApp {
                 cx.notify();
             }))
             .on_key_down(cx.listener(|this, event: &KeyDownEvent, window, cx| {
-                cx.stop_propagation();
-                this.handle_transfer_editor_key_down(event, window, cx);
+                if this.transfer_editor_focus.is_focused(window) {
+                    cx.stop_propagation();
+                    this.handle_transfer_editor_key_down(event, window, cx);
+                }
             }))
             .child(
                 div()
@@ -640,22 +658,40 @@ impl NyaTermApp {
                             .border_1()
                             .border_color(rgb(palette.border))
                             .bg(rgb(palette.input))
-                            .p_3()
-                            .font_family(crate::features::gpui_code_font_family())
-                            .text_xs()
-                            .text_color(if state.loading {
-                                rgb(palette.text_muted)
-                            } else {
-                                rgb(palette.text)
-                            })
+                            .relative()
                             .overflow_hidden()
-                            .child(if state.loading {
-                                SharedString::from(loading_label)
-                            } else if content_preview.is_empty() {
-                                SharedString::from("")
-                            } else {
-                                SharedString::from(content_preview)
-                            }),
+                            .when_some(native_editor, |this, editor| this.child(editor))
+                            .when(has_native_editor && state.loading, |this| {
+                                this.child(
+                                    div()
+                                        .absolute()
+                                        .inset_0()
+                                        .flex()
+                                        .items_center()
+                                        .justify_center()
+                                        .bg(rgba((palette.bg << 8) | 0xe6))
+                                        .text_sm()
+                                        .text_color(rgb(palette.text_muted))
+                                        .child(loading_label),
+                                )
+                            })
+                            .when(!has_native_editor, |this| {
+                                this.p_3()
+                                    .font_family(crate::features::gpui_code_font_family())
+                                    .text_xs()
+                                    .text_color(if state.loading {
+                                        rgb(palette.text_muted)
+                                    } else {
+                                        rgb(palette.text)
+                                    })
+                                    .child(if state.loading {
+                                        SharedString::from(loading_label)
+                                    } else if content_preview.is_empty() {
+                                        SharedString::from("")
+                                    } else {
+                                        SharedString::from(content_preview)
+                                    })
+                            })
                     )
                     .child(
                         div()
@@ -665,7 +701,9 @@ impl NyaTermApp {
                             .justify_between()
                             .gap_3()
                             .child(div().text_xs().text_color(rgb(palette.text_muted)).child(
-                                format!("{line_count} {lines_label} · {byte_count} {bytes_label}"),
+                                format!(
+                                    "{cursor_label} · {line_count} {lines_label} · {byte_count} {bytes_label}"
+                                ),
                             ))
                             .child(
                                 div()
