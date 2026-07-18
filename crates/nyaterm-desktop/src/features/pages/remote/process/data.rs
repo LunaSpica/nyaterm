@@ -152,8 +152,8 @@ pub(in crate::features::pages::remote) fn process_details_height_px(
 ) -> f32 {
     // Native densified shells (Tauri uses 176/218/274).
     match mode {
-        ProcessDisplayMode::Compact => 168.,
-        ProcessDisplayMode::Narrow => 140.,
-        _ => 114.,
+        ProcessDisplayMode::Compact => 274.,
+        ProcessDisplayMode::Narrow => 218.,
+        _ => 176.,
     }
 }
