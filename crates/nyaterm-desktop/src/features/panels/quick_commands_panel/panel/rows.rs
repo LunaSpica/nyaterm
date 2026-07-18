@@ -46,16 +46,12 @@ impl NyaTermApp {
                             .text_color(rgb(palette.text_muted))
                             .path("icons/conn/terminal.svg"),
                     )
-                    .child(if total_commands == 0 {
-                        "No quick commands saved yet."
-                    } else {
-                        "No quick commands match the current filters."
-                    })
+                    .child(self.tr("quickCommands.noCommandsFound"))
                     .when(total_commands == 0, |this| {
                         this.child(small_button(
                             palette,
                             "quick-command-empty-add",
-                            "Add Command",
+                            self.tr("quickCommands.addCommand"),
                             cx.listener(|this, _, window, cx| {
                                 this.open_new_quick_command_editor(window, cx);
                             }),

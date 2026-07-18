@@ -23,8 +23,12 @@ impl NyaTermApp {
             .iter()
             .filter(|command| command.pinned.unwrap_or_default())
             .count();
-        let categories =
-            quick_command_category_options(&self.quick_commands, &self.quick_command_categories);
+        let categories = quick_command_category_options(
+            &self.quick_commands,
+            &self.quick_command_categories,
+            self.tr("quickCommands.allCategories"),
+            self.tr("quickCommands.uncategorized"),
+        );
         let palette = self.theme_palette();
         let view_icon = match self.quick_command_view_mode {
             QuickCommandViewMode::List => "icons/view-list.svg",
@@ -59,7 +63,7 @@ impl NyaTermApp {
                             .text_size(px(11.))
                             .font_weight(FontWeight(700.))
                             .text_color(rgb(palette.text_muted))
-                            .child("QUICK COMMANDS"),
+                            .child(self.tr("panel.quickCommands")),
                     )
                     .child(
                         div()
@@ -114,7 +118,7 @@ impl NyaTermApp {
                                         rgb(palette.text)
                                     })
                                     .child(if self.quick_command_search_draft.is_empty() {
-                                        "Search".to_string()
+                                        self.tr("quickCommands.search").to_string()
                                     } else {
                                         truncate_preview(&self.quick_command_search_draft, 18)
                                     }),
@@ -125,6 +129,10 @@ impl NyaTermApp {
                         palette,
                         self.quick_command_sort_mode,
                         self.quick_command_sort_menu_open,
+                        self.tr("quickCommands.sort"),
+                        self.tr("quickCommands.sortByCreated"),
+                        self.tr("quickCommands.sortByName"),
+                        self.tr("quickCommands.sortByUseCount"),
                         cx,
                     ))
                     .child(quick_command_view_menu_button(
@@ -132,6 +140,10 @@ impl NyaTermApp {
                         self.quick_command_view_mode,
                         view_icon,
                         self.quick_command_view_menu_open,
+                        self.tr("quickCommands.viewMode"),
+                        self.tr("quickCommands.listMode"),
+                        self.tr("quickCommands.compactListMode"),
+                        self.tr("quickCommands.tileMode"),
                         cx,
                     ))
                     .child(quick_command_toolbar_divider(palette))
@@ -140,7 +152,7 @@ impl NyaTermApp {
                         "quick-command-add",
                         "icons/conn/add.svg",
                         false,
-                        "Add command",
+                        self.tr("quickCommands.addCommand"),
                         cx.listener(|this, _, window, cx| {
                             this.close_quick_command_toolbar_popovers();
                             this.open_new_quick_command_editor(window, cx);
@@ -151,7 +163,7 @@ impl NyaTermApp {
                         "quick-command-import",
                         "icons/import.svg",
                         self.quick_command_import_path_prompt.is_some(),
-                        "Import",
+                        self.tr("quickCommands.import"),
                         cx.listener(|this, _, window, cx| {
                             this.close_quick_command_toolbar_popovers();
                             this.open_quick_command_import_dialog(window, cx);
@@ -163,6 +175,9 @@ impl NyaTermApp {
                         self.quick_command_ai_popover_open,
                         self.quick_command_ai_prompt_draft.clone(),
                         self.quick_command_ai_focus.clone(),
+                        self.tr("ai.generateCommand"),
+                        self.tr("ai.placeholder"),
+                        self.tr("ai.generate"),
                         cx,
                     )),
             )
@@ -206,6 +221,10 @@ fn quick_command_sort_menu_button(
     palette: crate::theme::ThemePalette,
     current: QuickCommandSortMode,
     open: bool,
+    sort_label: &'static str,
+    created_label: &'static str,
+    name_label: &'static str,
+    usage_label: &'static str,
     cx: &mut Context<NyaTermApp>,
 ) -> impl IntoElement {
     div()
@@ -215,7 +234,11 @@ fn quick_command_sort_menu_button(
             "quick-command-sort",
             "icons/conn/sort.svg",
             current != QuickCommandSortMode::Created || open,
-            format!("Sort · {}", quick_command_sort_mode_label(current)),
+            format!(
+                "{} · {}",
+                sort_label,
+                quick_command_sort_mode_label(current, created_label, name_label, usage_label)
+            ),
             cx.listener(|this, _, _, cx| {
                 this.quick_command_sort_menu_open = !this.quick_command_sort_menu_open;
                 if this.quick_command_sort_menu_open {
@@ -232,7 +255,7 @@ fn quick_command_sort_menu_button(
                     .child(quick_command_toolbar_menu_item(
                         palette,
                         "quick-command-sort-created",
-                        "Created",
+                        created_label,
                         current == QuickCommandSortMode::Created,
                         cx.listener(|this, _, _, cx| {
                             this.set_quick_command_sort_mode(QuickCommandSortMode::Created, cx);
@@ -241,7 +264,7 @@ fn quick_command_sort_menu_button(
                     .child(quick_command_toolbar_menu_item(
                         palette,
                         "quick-command-sort-name",
-                        "Name",
+                        name_label,
                         current == QuickCommandSortMode::Name,
                         cx.listener(|this, _, _, cx| {
                             this.set_quick_command_sort_mode(QuickCommandSortMode::Name, cx);
@@ -250,7 +273,7 @@ fn quick_command_sort_menu_button(
                     .child(quick_command_toolbar_menu_item(
                         palette,
                         "quick-command-sort-usage",
-                        "Use count",
+                        usage_label,
                         current == QuickCommandSortMode::Usage,
                         cx.listener(|this, _, _, cx| {
                             this.set_quick_command_sort_mode(QuickCommandSortMode::Usage, cx);
@@ -265,6 +288,10 @@ fn quick_command_view_menu_button(
     current: QuickCommandViewMode,
     icon_path: &'static str,
     open: bool,
+    view_label: &'static str,
+    list_label: &'static str,
+    compact_label: &'static str,
+    tile_label: &'static str,
     cx: &mut Context<NyaTermApp>,
 ) -> impl IntoElement {
     div()
@@ -274,7 +301,11 @@ fn quick_command_view_menu_button(
             "quick-command-view",
             icon_path,
             true,
-            format!("View · {}", quick_command_view_mode_label(current)),
+            format!(
+                "{} · {}",
+                view_label,
+                quick_command_view_mode_label(current, list_label, compact_label, tile_label)
+            ),
             cx.listener(|this, _, _, cx| {
                 this.quick_command_view_menu_open = !this.quick_command_view_menu_open;
                 if this.quick_command_view_menu_open {
@@ -291,7 +322,7 @@ fn quick_command_view_menu_button(
                     .child(quick_command_toolbar_menu_item(
                         palette,
                         "quick-command-view-list",
-                        "List",
+                        list_label,
                         current == QuickCommandViewMode::List,
                         cx.listener(|this, _, _, cx| {
                             this.set_quick_command_view_mode(QuickCommandViewMode::List, cx);
@@ -300,7 +331,7 @@ fn quick_command_view_menu_button(
                     .child(quick_command_toolbar_menu_item(
                         palette,
                         "quick-command-view-compact",
-                        "Compact",
+                        compact_label,
                         current == QuickCommandViewMode::Compact,
                         cx.listener(|this, _, _, cx| {
                             this.set_quick_command_view_mode(QuickCommandViewMode::Compact, cx);
@@ -309,7 +340,7 @@ fn quick_command_view_menu_button(
                     .child(quick_command_toolbar_menu_item(
                         palette,
                         "quick-command-view-tile",
-                        "Tile",
+                        tile_label,
                         current == QuickCommandViewMode::Tile,
                         cx.listener(|this, _, _, cx| {
                             this.set_quick_command_view_mode(QuickCommandViewMode::Tile, cx);
@@ -324,6 +355,9 @@ fn quick_command_ai_popover_button(
     open: bool,
     prompt: String,
     focus: FocusHandle,
+    button_label: &'static str,
+    placeholder: &'static str,
+    generate_label: &'static str,
     cx: &mut Context<NyaTermApp>,
 ) -> impl IntoElement {
     let can_generate = !prompt.trim().is_empty();
@@ -334,7 +368,7 @@ fn quick_command_ai_popover_button(
             "quick-command-ai",
             "icons/ai.svg",
             open,
-            "Generate command",
+            button_label,
             cx.listener(|this, _, window, cx| {
                 this.toggle_quick_command_ai_popover(window, cx);
             }),
@@ -364,7 +398,7 @@ fn quick_command_ai_popover_button(
                             .text_size(px(12.))
                             .font_weight(FontWeight(600.))
                             .text_color(rgb(palette.text))
-                            .child("Generate command"),
+                            .child(button_label),
                     )
                     .child(
                         div()
@@ -398,7 +432,7 @@ fn quick_command_ai_popover_button(
                                         rgb(palette.text)
                                     })
                                     .child(if prompt.trim().is_empty() {
-                                        "Describe the command you want...".to_string()
+                                        placeholder.to_string()
                                     } else {
                                         truncate_preview(&prompt, 44)
                                     }),
@@ -433,7 +467,7 @@ fn quick_command_ai_popover_button(
                                     })
                                 })
                                 .child(svg().size(px(13.)).flex_none().path("icons/ai.svg"))
-                                .child("Generate")
+                                .child(generate_label)
                                 .when(can_generate, |this| {
                                     this.on_click(cx.listener(|this, _, window, cx| {
                                         this.submit_quick_command_ai_prompt(window, cx);
@@ -544,18 +578,28 @@ fn quick_command_toolbar_divider(palette: crate::theme::ThemePalette) -> impl In
         .bg(rgb(palette.border))
 }
 
-fn quick_command_view_mode_label(mode: QuickCommandViewMode) -> &'static str {
+fn quick_command_view_mode_label(
+    mode: QuickCommandViewMode,
+    list_label: &'static str,
+    compact_label: &'static str,
+    tile_label: &'static str,
+) -> &'static str {
     match mode {
-        QuickCommandViewMode::List => "List",
-        QuickCommandViewMode::Compact => "Compact",
-        QuickCommandViewMode::Tile => "Tile",
+        QuickCommandViewMode::List => list_label,
+        QuickCommandViewMode::Compact => compact_label,
+        QuickCommandViewMode::Tile => tile_label,
     }
 }
 
-fn quick_command_sort_mode_label(mode: QuickCommandSortMode) -> &'static str {
+fn quick_command_sort_mode_label(
+    mode: QuickCommandSortMode,
+    created_label: &'static str,
+    name_label: &'static str,
+    usage_label: &'static str,
+) -> &'static str {
     match mode {
-        QuickCommandSortMode::Created => "Created",
-        QuickCommandSortMode::Name => "Name",
-        QuickCommandSortMode::Usage => "Use count",
+        QuickCommandSortMode::Created => created_label,
+        QuickCommandSortMode::Name => name_label,
+        QuickCommandSortMode::Usage => usage_label,
     }
 }

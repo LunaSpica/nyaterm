@@ -10,10 +10,12 @@ pub(in crate::features::panels) struct QuickCommandCategoryOption {
 pub(in crate::features::panels) fn quick_command_category_options(
     commands: &[QuickCommand],
     categories: &[QuickCommandCategory],
+    all_label: &'static str,
+    uncategorized_label: &'static str,
 ) -> Vec<QuickCommandCategoryOption> {
     let mut options = vec![QuickCommandCategoryOption {
         id: "all".to_string(),
-        label: "All".to_string(),
+        label: all_label.to_string(),
         count: commands.len(),
         manageable: false,
     }];
@@ -43,7 +45,7 @@ pub(in crate::features::panels) fn quick_command_category_options(
         .count();
     options.push(QuickCommandCategoryOption {
         id: "uncategorized".to_string(),
-        label: "Unsorted".to_string(),
+        label: uncategorized_label.to_string(),
         count: uncategorized,
         manageable: false,
     });
