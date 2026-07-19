@@ -57,13 +57,12 @@ impl NyaTermApp {
                                 .items_center()
                                 .justify_center()
                                 .rounded_sm()
-                                .text_size(px(16.))
                                 .text_color(rgb(palette.text_muted))
                                 .cursor_pointer()
                                 .hover(|this| {
                                     this.bg(rgb(palette.hover)).text_color(rgb(palette.text))
                                 })
-                                .child("☰")
+                                .child(svg().size(px(16.)).path("icons/menu/menu.svg"))
                                 .on_click(cx.listener(|this, _, _, cx| {
                                     this.toggle_mobile_left_drawer(cx);
                                 })),
@@ -124,13 +123,12 @@ impl NyaTermApp {
                                 .items_center()
                                 .justify_center()
                                 .rounded_sm()
-                                .text_size(px(15.))
                                 .text_color(rgb(palette.text_muted))
                                 .cursor_pointer()
                                 .hover(|this| {
                                     this.bg(rgb(palette.hover)).text_color(rgb(palette.text))
                                 })
-                                .child("◧")
+                                .child(svg().size(px(16.)).path("icons/menu/sidebar.svg"))
                                 .on_click(cx.listener(|this, _, _, cx| {
                                     this.toggle_mobile_right_drawer(cx);
                                 })),

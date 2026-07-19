@@ -30,6 +30,8 @@ impl NyaTermApp {
                     .child(title_menu_item(
                         palette,
                         "title-file-new-session",
+                        Some("icons/conn/add.svg"),
+                        false,
                         tr("menu.newSession"),
                         Some(shortcut("tab.newSession", "Ctrl+Shift+N")),
                         cx.listener(|this, _, window, cx| {
@@ -45,6 +47,8 @@ impl NyaTermApp {
                     .child(title_menu_item(
                         palette,
                         "title-file-import",
+                        Some("icons/import.svg"),
+                        false,
                         tr("settings.importConfig"),
                         None,
                         cx.listener(|this, _, _, cx| {
@@ -55,6 +59,8 @@ impl NyaTermApp {
                     .child(title_menu_item(
                         palette,
                         "title-file-export",
+                        Some("icons/menu/export.svg"),
+                        false,
                         tr("settings.exportConfig"),
                         None,
                         cx.listener(|this, _, _, cx| {
@@ -68,12 +74,14 @@ impl NyaTermApp {
                     .child(self.title_menu_submenu_trigger(
                         TitleMenuSubmenu::Theme,
                         "title-view-theme",
+                        Some("icons/menu/palette.svg"),
                         tr("menu.theme"),
                         cx,
                     ))
                     .child(self.title_menu_submenu_trigger(
                         TitleMenuSubmenu::Language,
                         "title-view-language",
+                        Some("icons/translation.svg"),
                         tr("menu.language"),
                         cx,
                     ))
@@ -81,6 +89,8 @@ impl NyaTermApp {
                     .child(title_menu_item(
                         palette,
                         "title-view-zoom-in",
+                        Some("icons/menu/zoom-in.svg"),
+                        false,
                         tr("menu.zoomIn"),
                         Some(shortcut("view.zoomIn", "Ctrl+=")),
                         cx.listener(|this, _, _, cx| {
@@ -91,6 +101,8 @@ impl NyaTermApp {
                     .child(title_menu_item(
                         palette,
                         "title-view-zoom-out",
+                        Some("icons/menu/zoom-out.svg"),
+                        false,
                         tr("menu.zoomOut"),
                         Some(shortcut("view.zoomOut", "Ctrl+-")),
                         cx.listener(|this, _, _, cx| {
@@ -101,6 +113,8 @@ impl NyaTermApp {
                     .child(title_menu_item(
                         palette,
                         "title-view-reset-zoom",
+                        Some("icons/menu/reset.svg"),
+                        false,
                         tr("menu.resetZoom"),
                         Some(shortcut("view.resetZoom", "Ctrl+0")),
                         cx.listener(|this, _, _, cx| {
@@ -114,6 +128,8 @@ impl NyaTermApp {
                     .child(title_menu_item(
                         palette,
                         "title-term-command-palette",
+                        Some("icons/fe/search.svg"),
+                        false,
                         tr("menu.commandPalette"),
                         Some(shortcut("tab.quickSwitch", "Ctrl+Shift+S")),
                         cx.listener(|this, _, window, cx| {
@@ -125,6 +141,7 @@ impl NyaTermApp {
                     .child(self.title_menu_submenu_trigger(
                         TitleMenuSubmenu::SmartSplit,
                         "title-term-smart-split",
+                        Some("icons/menu/split.svg"),
                         tr("menu.smartSplit"),
                         cx,
                     ))
@@ -132,6 +149,7 @@ impl NyaTermApp {
                     .child(self.title_menu_submenu_trigger(
                         TitleMenuSubmenu::SyncInput,
                         "title-term-sync-input",
+                        Some("icons/sync.svg"),
                         tr("menu.syncInput"),
                         cx,
                     ))
@@ -139,11 +157,9 @@ impl NyaTermApp {
                     .child(title_menu_item(
                         palette,
                         "title-term-broadcast",
-                        if self.broadcast_to_all {
-                            format!("{} ✓", tr("menu.broadcastToAll"))
-                        } else {
-                            tr("menu.broadcastToAll").to_string()
-                        },
+                        Some("icons/menu/broadcast.svg"),
+                        self.broadcast_to_all,
+                        tr("menu.broadcastToAll"),
                         None,
                         cx.listener(|this, _, _, cx| {
                             this.close_title_menu(cx);
@@ -154,6 +170,8 @@ impl NyaTermApp {
                     .child(title_menu_item(
                         palette,
                         "title-term-clear",
+                        Some("icons/fe/delete.svg"),
+                        false,
                         tr("menu.clearTerminal"),
                         Some(shortcut("terminal.clear", "Ctrl+L")),
                         cx.listener(|this, _, _, cx| {
@@ -164,6 +182,8 @@ impl NyaTermApp {
                     .child(title_menu_item(
                         palette,
                         "title-term-reset-size",
+                        Some("icons/menu/fit.svg"),
+                        false,
                         tr("menu.resetTerminalSize"),
                         None,
                         cx.listener(|this, _, _, cx| {
@@ -190,6 +210,8 @@ impl NyaTermApp {
                     .child(title_menu_item(
                         palette,
                         "title-help-docs",
+                        Some("icons/menu/book.svg"),
+                        false,
                         tr("menu.documentation"),
                         None,
                         cx.listener(|this, _, _, cx| {
@@ -200,6 +222,8 @@ impl NyaTermApp {
                     .child(title_menu_item(
                         palette,
                         "title-help-update",
+                        Some("icons/menu/update.svg"),
+                        false,
                         update_label,
                         None,
                         cx.listener(|this, _, _, cx| {
@@ -210,6 +234,8 @@ impl NyaTermApp {
                     .child(title_menu_item(
                         palette,
                         "title-help-logs",
+                        Some("icons/menu/article.svg"),
+                        false,
                         tr("menu.viewLogs"),
                         None,
                         cx.listener(|this, _, _, cx| {
@@ -221,6 +247,8 @@ impl NyaTermApp {
                     .child(title_menu_item(
                         palette,
                         "title-help-about",
+                        Some("icons/menu/info.svg"),
+                        false,
                         format!("{} NyaTerm", tr("menu.about")),
                         None,
                         cx.listener(|this, _, _, cx| {
@@ -240,6 +268,7 @@ impl NyaTermApp {
         &self,
         submenu: TitleMenuSubmenu,
         id: &'static str,
+        icon: Option<&'static str>,
         label: &'static str,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
@@ -248,6 +277,7 @@ impl NyaTermApp {
         title_menu_submenu_trigger(
             palette,
             id,
+            icon,
             label,
             open,
             cx.listener(move |this, hovered: &bool, _, cx| {
@@ -300,14 +330,11 @@ impl NyaTermApp {
                     let selected = current == theme
                         || (current == "catppuccin" && theme == "catppuccin-mocha");
                     let label = crate::theme::appearance_theme_label(theme);
-                    let label = if selected {
-                        format!("✓ {label}")
-                    } else {
-                        label.to_string()
-                    };
                     menu = menu.child(title_menu_item(
                         palette,
                         format!("title-theme-{theme}"),
+                        None,
+                        selected,
                         label,
                         None,
                         cx.listener(move |this, _, _, cx| {
@@ -324,7 +351,9 @@ impl NyaTermApp {
                     .child(title_menu_item(
                         palette,
                         "title-language-en",
-                        if english { "✓ English" } else { "English" },
+                        None,
+                        english,
+                        "English",
                         None,
                         cx.listener(|this, _, _, cx| {
                             this.close_title_menu(cx);
@@ -334,7 +363,9 @@ impl NyaTermApp {
                     .child(title_menu_item(
                         palette,
                         "title-language-zh",
-                        if chinese { "✓ 中文" } else { "中文" },
+                        None,
+                        chinese,
+                        "中文",
                         None,
                         cx.listener(|this, _, _, cx| {
                             this.close_title_menu(cx);
@@ -347,6 +378,8 @@ impl NyaTermApp {
                     .child(title_menu_item(
                         palette,
                         "title-smart-split-auto",
+                        Some("icons/view-grid.svg"),
+                        false,
                         self.tr("menu.autoTile"),
                         None,
                         cx.listener(|this, _, _, cx| {
@@ -357,6 +390,8 @@ impl NyaTermApp {
                     .child(title_menu_item(
                         palette,
                         "title-smart-split-horizontal",
+                        Some("icons/menu/horizontal.svg"),
+                        false,
                         self.tr("menu.tileHorizontally"),
                         None,
                         cx.listener(|this, _, _, cx| {
@@ -367,6 +402,8 @@ impl NyaTermApp {
                     .child(title_menu_item(
                         palette,
                         "title-smart-split-vertical",
+                        Some("icons/menu/vertical.svg"),
+                        false,
                         self.tr("menu.tileVertically"),
                         None,
                         cx.listener(|this, _, _, cx| {
@@ -379,6 +416,8 @@ impl NyaTermApp {
                 menu = menu.child(title_menu_item(
                     palette,
                     "title-sync-manage-groups",
+                    Some("icons/settings.svg"),
+                    false,
                     self.tr("menu.manageGroups"),
                     Some(self.display_shortcut_for("terminal.manageSyncGroups", "Ctrl+Shift+G")),
                     cx.listener(|this, _, window, cx| {
