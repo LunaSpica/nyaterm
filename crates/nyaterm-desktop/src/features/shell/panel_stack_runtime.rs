@@ -457,7 +457,13 @@ impl NyaTermApp {
                         .flex()
                         .flex_col()
                         .overflow_hidden()
-                        .child(panel_header_with_actions(title, meta, palette, actions))
+                        .child(panel_header_with_actions(
+                            title,
+                            meta,
+                            palette,
+                            self.shell_transparent_color(palette.section_header),
+                            actions,
+                        ))
                         .child(div().flex_1().min_h_0().overflow_hidden().child(body)),
                 );
                 if index + 1 < count {
@@ -510,7 +516,13 @@ impl NyaTermApp {
             .size_full()
             .flex()
             .flex_col()
-            .child(panel_header_with_actions(title, meta, palette, actions))
+            .child(panel_header_with_actions(
+                title,
+                meta,
+                palette,
+                self.shell_transparent_color(palette.section_header),
+                actions,
+            ))
             .child(div().flex_1().min_h_0().overflow_hidden().child(body))
     }
 

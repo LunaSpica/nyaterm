@@ -84,7 +84,7 @@ impl NyaTermApp {
             .flex()
             .flex_col()
             .overflow_hidden()
-            .bg(rgb(palette.surface))
+            .bg(self.shell_surface_color(palette.surface))
             .track_focus(&self.transfer_queue_focus)
             .on_click(cx.listener(|this, _, window, cx| {
                 window.focus(&this.transfer_queue_focus);
@@ -97,6 +97,7 @@ impl NyaTermApp {
                 self.tr("panel.fileTransfer"),
                 "",
                 palette,
+                self.shell_transparent_color(palette.section_header),
                 Some(
                     div()
                         .flex()

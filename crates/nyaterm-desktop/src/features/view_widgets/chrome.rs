@@ -163,6 +163,7 @@ pub(in crate::features) fn panel_header_with_actions(
     title: impl Into<SharedString>,
     meta: impl Into<SharedString>,
     palette: ThemePalette,
+    background: gpui::Rgba,
     actions: Option<AnyElement>,
 ) -> impl IntoElement {
     // Tauri PanelHeader: min-h-9, uppercase tracked title + dimmed meta/actions.
@@ -179,7 +180,7 @@ pub(in crate::features) fn panel_header_with_actions(
         .px_3()
         .border_b_1()
         .border_color(rgb(palette.border))
-        .bg(rgb(palette.section_header))
+        .bg(background)
         .child(
             div()
                 .min_w_0()
