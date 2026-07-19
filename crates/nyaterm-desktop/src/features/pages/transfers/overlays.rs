@@ -1,5 +1,6 @@
 use super::*;
 use crate::features::TransferJobDeleteState;
+use gpui::rgba;
 
 impl NyaTermApp {
     pub(in crate::features) fn transfer_job_delete_overlay(
@@ -14,6 +15,9 @@ impl NyaTermApp {
                 job_id: String::new(),
                 title: String::new(),
             });
+        let description = self
+            .tr("fileTransfer.deleteConfirmDesc")
+            .replace("{{name}}", &state.title);
 
         div()
             .id(SharedString::from("transfer-job-delete-overlay"))
@@ -22,7 +26,7 @@ impl NyaTermApp {
             .bottom_0()
             .left_0()
             .right_0()
-            .bg(rgb(0x030508))
+            .bg(rgba(0x00000099))
             .flex()
             .items_center()
             .justify_center()
@@ -41,7 +45,7 @@ impl NyaTermApp {
             }))
             .child(
                 div()
-                    .w(px(460.))
+                    .w(px(380.))
                     .rounded_md()
                     .border_1()
                     .border_color(rgb(palette.border))
@@ -50,46 +54,29 @@ impl NyaTermApp {
                     .p_4()
                     .flex()
                     .flex_col()
-                    .gap_3()
+                    .gap_2()
                     .child(
                         div()
-                            .flex()
-                            .items_center()
-                            .justify_between()
-                            .gap_3()
-                            .child(
-                                div()
-                                    .text_sm()
-                                    .font_weight(FontWeight(800.))
-                                    .child("Delete Transfer"),
-                            )
-                            .child(status_pill("queue item", rgb(0xfca5a5), rgb(0x3a1717))),
+                            .text_sm()
+                            .font_weight(FontWeight(700.))
+                            .child(self.tr("fileTransfer.deleteConfirmTitle")),
                     )
                     .child(
                         div()
                             .text_xs()
-                            .text_color(rgb(0xaeb7c8))
-                            .child("Remove this transfer from the queue history."),
+                            .text_color(rgb(palette.text_muted))
+                            .child(description),
                     )
                     .child(
                         div()
-                            .rounded_sm()
-                            .bg(rgb(palette.input))
-                            .p_3()
-                            .font_family(crate::features::gpui_code_font_family())
-                            .text_xs()
-                            .text_color(rgb(palette.text))
-                            .child(truncate_preview(&state.title, 64)),
-                    )
-                    .child(
-                        div()
+                            .mt_1()
                             .flex()
                             .justify_end()
                             .gap_2()
                             .child(small_button(
                                 palette,
                                 "transfer-job-delete-cancel",
-                                "Cancel",
+                                self.tr("dialog.cancel"),
                                 cx.listener(|this, _, _, cx| {
                                     this.cancel_delete_transfer_job(cx);
                                 }),
@@ -97,7 +84,7 @@ impl NyaTermApp {
                             .child(small_button(
                                 palette,
                                 "transfer-job-delete-confirm",
-                                "Delete",
+                                self.tr("fileTransfer.delete"),
                                 cx.listener(|this, _, _, cx| {
                                     this.confirm_delete_transfer_job(cx);
                                 }),
@@ -176,7 +163,7 @@ impl NyaTermApp {
                     .child(transfer_job_menu_button(
                         palette,
                         "transfer-job-menu-pause",
-                        "Pause",
+                        self.tr("fileTransfer.pause"),
                         can_pause,
                         cx.listener(move |this, _, _, cx| {
                             this.transfer_job_menu = None;
@@ -186,7 +173,7 @@ impl NyaTermApp {
                     .child(transfer_job_menu_button(
                         palette,
                         "transfer-job-menu-resume",
-                        "Resume",
+                        self.tr("fileTransfer.resume"),
                         can_resume,
                         cx.listener(move |this, _, _, cx| {
                             this.transfer_job_menu = None;
@@ -196,7 +183,7 @@ impl NyaTermApp {
                     .child(transfer_job_menu_button(
                         palette,
                         "transfer-job-menu-retry",
-                        "Retry",
+                        self.tr("fileTransfer.retry"),
                         can_retry,
                         cx.listener(move |this, _, window, cx| {
                             this.transfer_job_menu = None;
@@ -206,7 +193,7 @@ impl NyaTermApp {
                     .child(transfer_job_menu_button(
                         palette,
                         "transfer-job-menu-cancel",
-                        "Cancel",
+                        self.tr("fileTransfer.cancel"),
                         can_cancel,
                         cx.listener(move |this, _, _, cx| {
                             this.transfer_job_menu = None;
@@ -217,7 +204,7 @@ impl NyaTermApp {
                     .child(transfer_job_menu_button(
                         palette,
                         "transfer-job-menu-open-target",
-                        "Open Target Directory",
+                        self.tr("fileTransfer.openTargetDirectory"),
                         can_open_target,
                         cx.listener(move |this, _, _, cx| {
                             this.transfer_job_menu = None;
@@ -228,7 +215,7 @@ impl NyaTermApp {
                     .child(transfer_job_menu_button(
                         palette,
                         "transfer-job-menu-delete",
-                        "Delete",
+                        self.tr("fileTransfer.delete"),
                         can_delete,
                         cx.listener(move |this, _, _, cx| {
                             this.transfer_job_menu = None;
