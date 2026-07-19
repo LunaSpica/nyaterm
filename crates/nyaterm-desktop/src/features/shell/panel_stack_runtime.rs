@@ -413,10 +413,12 @@ impl NyaTermApp {
 
         let open_ids = self.side_open_panel_ids(side);
         let mut stack = if open_ids.is_empty() {
-            let fallback = self
-                .activity_bar_layout
-                .first_panel_on_side(side)
-                .unwrap_or(NavItem::Workspace);
+            let fallback = match side {
+                PanelSide::Left => self.current_left_panel(),
+                PanelSide::Right => self.current_right_panel(),
+            }
+            .or_else(|| self.activity_bar_layout.first_panel_on_side(side))
+            .unwrap_or(NavItem::Workspace);
             self.single_side_panel(side, fallback, cx)
         } else if open_ids.len() == 1 || !self.panel_multi_open {
             let panel = open_ids

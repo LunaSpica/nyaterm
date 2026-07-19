@@ -347,6 +347,7 @@ impl NyaTermApp {
                         .text_size(px(8.))
                         .font_weight(FontWeight(500.))
                         .text_center()
+                        .whitespace_normal()
                         .text_color(if selected {
                             active_color
                         } else {
