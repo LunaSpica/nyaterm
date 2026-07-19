@@ -2,6 +2,7 @@ use super::*;
 
 pub(in crate::features::pages::remote) fn docker_compose_services_panel(
     palette: crate::theme::ThemePalette,
+    menu_bg: gpui::Rgba,
     project_name: String,
     config_files: Option<String>,
     project_key: String,
@@ -75,6 +76,7 @@ pub(in crate::features::pages::remote) fn docker_compose_services_panel(
                 let menu_open = open_menu_id == Some(service_menu_id.as_str());
                 rows = rows.child(docker_compose_service_row(
                     palette,
+                    menu_bg,
                     project_name.clone(),
                     config_files.clone(),
                     service,
@@ -102,6 +104,7 @@ pub(in crate::features::pages::remote) fn docker_compose_services_panel(
 
 pub(in crate::features::pages::remote) fn docker_compose_service_row(
     palette: crate::theme::ThemePalette,
+    menu_bg: gpui::Rgba,
     project_name: String,
     config_files: Option<String>,
     service: DockerComposeService,
@@ -218,6 +221,7 @@ pub(in crate::features::pages::remote) fn docker_compose_service_row(
                     .when(menu_open, |this| {
                         this.child(docker_compose_service_action_menu(
                             palette,
+                            menu_bg,
                             project_name,
                             config_files,
                             service_name,

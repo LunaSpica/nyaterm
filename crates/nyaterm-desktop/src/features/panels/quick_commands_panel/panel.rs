@@ -30,6 +30,8 @@ impl NyaTermApp {
             self.tr("quickCommands.uncategorized"),
         );
         let palette = self.theme_palette();
+        let popover_bg = self.shell_surface_color(palette.surface);
+        let input_bg = self.shell_surface_color(palette.bg);
         let view_icon = match self.quick_command_view_mode {
             QuickCommandViewMode::List => "icons/view-list.svg",
             QuickCommandViewMode::Compact => "icons/view-compact.svg",
@@ -84,7 +86,7 @@ impl NyaTermApp {
                             .rounded_md()
                             .border_1()
                             .border_color(rgb(palette.border))
-                            .bg(rgb(palette.bg))
+                            .bg(input_bg)
                             .px_2()
                             .flex()
                             .items_center()
@@ -127,6 +129,7 @@ impl NyaTermApp {
                     .child(quick_command_toolbar_divider(palette))
                     .child(quick_command_sort_menu_button(
                         palette,
+                        popover_bg,
                         self.quick_command_sort_mode,
                         self.quick_command_sort_menu_open,
                         self.tr("quickCommands.sort"),
@@ -137,6 +140,7 @@ impl NyaTermApp {
                     ))
                     .child(quick_command_view_menu_button(
                         palette,
+                        popover_bg,
                         self.quick_command_view_mode,
                         view_icon,
                         self.quick_command_view_menu_open,
@@ -172,6 +176,8 @@ impl NyaTermApp {
                     .child(quick_command_toolbar_divider(palette))
                     .child(quick_command_ai_popover_button(
                         palette,
+                        popover_bg,
+                        input_bg,
                         self.quick_command_ai_popover_open,
                         self.quick_command_ai_prompt_draft.clone(),
                         self.quick_command_ai_focus.clone(),
@@ -219,6 +225,7 @@ impl NyaTermApp {
 
 fn quick_command_sort_menu_button(
     palette: crate::theme::ThemePalette,
+    popover_bg: gpui::Rgba,
     current: QuickCommandSortMode,
     open: bool,
     sort_label: &'static str,
@@ -251,7 +258,7 @@ fn quick_command_sort_menu_button(
         ))
         .when(open, |this| {
             this.child(
-                quick_command_toolbar_dropdown(palette, "quick-command-sort-menu")
+                quick_command_toolbar_dropdown(palette, popover_bg, "quick-command-sort-menu")
                     .child(quick_command_toolbar_menu_item(
                         palette,
                         "quick-command-sort-created",
@@ -285,6 +292,7 @@ fn quick_command_sort_menu_button(
 
 fn quick_command_view_menu_button(
     palette: crate::theme::ThemePalette,
+    popover_bg: gpui::Rgba,
     current: QuickCommandViewMode,
     icon_path: &'static str,
     open: bool,
@@ -318,7 +326,7 @@ fn quick_command_view_menu_button(
         ))
         .when(open, |this| {
             this.child(
-                quick_command_toolbar_dropdown(palette, "quick-command-view-menu")
+                quick_command_toolbar_dropdown(palette, popover_bg, "quick-command-view-menu")
                     .child(quick_command_toolbar_menu_item(
                         palette,
                         "quick-command-view-list",
@@ -352,6 +360,8 @@ fn quick_command_view_menu_button(
 
 fn quick_command_ai_popover_button(
     palette: crate::theme::ThemePalette,
+    popover_bg: gpui::Rgba,
+    input_bg: gpui::Rgba,
     open: bool,
     prompt: String,
     focus: FocusHandle,
@@ -384,7 +394,7 @@ fn quick_command_ai_popover_button(
                     .rounded_md()
                     .border_1()
                     .border_color(rgb(palette.border))
-                    .bg(rgb(palette.surface))
+                    .bg(popover_bg)
                     .shadow_lg()
                     .p_3()
                     .flex()
@@ -407,7 +417,7 @@ fn quick_command_ai_popover_button(
                             .rounded_md()
                             .border_1()
                             .border_color(rgb(palette.border))
-                            .bg(rgb(palette.bg))
+                            .bg(input_bg)
                             .px_2()
                             .flex()
                             .items_center()
@@ -510,6 +520,7 @@ fn quick_command_toolbar_icon_button(
 
 fn quick_command_toolbar_dropdown(
     palette: crate::theme::ThemePalette,
+    popover_bg: gpui::Rgba,
     id: &'static str,
 ) -> gpui::Stateful<gpui::Div> {
     div()
@@ -521,7 +532,7 @@ fn quick_command_toolbar_dropdown(
         .rounded_md()
         .border_1()
         .border_color(rgb(palette.border))
-        .bg(rgb(palette.surface))
+        .bg(popover_bg)
         .shadow_lg()
         .py_1()
         .flex()

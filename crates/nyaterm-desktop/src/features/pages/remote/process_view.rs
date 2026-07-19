@@ -7,6 +7,7 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
         let palette = self.theme_palette();
+        let menu_bg = self.shell_surface_color(palette.surface);
         let table_labels = ProcessTableLabels {
             process: self.tr("processManager.process"),
             pid: self.tr("processManager.sortPid"),
@@ -155,6 +156,7 @@ impl NyaTermApp {
                 rows = rows.child(
                     process_table_row(
                         palette,
+                        menu_bg,
                         process,
                         mode,
                         table_labels,

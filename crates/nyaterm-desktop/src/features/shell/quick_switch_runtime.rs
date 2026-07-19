@@ -36,10 +36,6 @@ impl NyaTermApp {
         for session in self.ordered_sessions() {
             let title = self.session_display_name_by_info(&session);
             let active = self.active_session_id.as_deref() == Some(session.id.as_str());
-            let unread = self
-                .terminal_views
-                .get(&session.id)
-                .is_some_and(|view| view.has_unread);
             let mut subtitle = format!(
                 "{} - {}",
                 session_kind_label(session.kind),
@@ -54,7 +50,6 @@ impl NyaTermApp {
                 title,
                 subtitle,
                 active,
-                unread,
             });
         }
 

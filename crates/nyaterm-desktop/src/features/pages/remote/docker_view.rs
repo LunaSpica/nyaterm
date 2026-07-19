@@ -129,9 +129,11 @@ impl NyaTermApp {
         }
 
         let palette = self.theme_palette();
+        let menu_bg = self.shell_surface_color(palette.surface);
         let docker_content = match active_tab {
             DockerTab::Containers => docker_containers_panel(
                 palette,
+                menu_bg,
                 self.docker_overview.is_some(),
                 self.active_ssh_config.is_some(),
                 overview.available,
@@ -169,6 +171,7 @@ impl NyaTermApp {
             .into_any_element(),
             DockerTab::Compose => docker_compose_panel(
                 palette,
+                menu_bg,
                 &filtered_compose_projects,
                 &self.docker_compose_expanded,
                 &self.docker_compose_services,

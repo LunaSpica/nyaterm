@@ -100,6 +100,7 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
         let palette = self.theme_palette();
+        let hover_bg = self.shell_surface_color(palette.hover);
         // Tauri openTabsMenuItems is reversed (rightmost first) but keeps global ordinals.
         let ordered = self.ordered_tab_sessions();
         let ordinals: std::collections::HashMap<String, usize> = ordered
@@ -121,7 +122,7 @@ impl NyaTermApp {
             .rounded_md()
             .border_1()
             .border_color(rgb(palette.border))
-            .bg(rgb(palette.surface))
+            .bg(self.shell_surface_color(palette.surface))
             .shadow_lg()
             .py_1()
             .flex()
@@ -175,11 +176,11 @@ impl NyaTermApp {
                         .gap_2()
                         .cursor_pointer()
                         .bg(if is_active {
-                            rgb(palette.hover)
+                            self.shell_surface_color(palette.hover)
                         } else {
-                            rgb(palette.surface)
+                            rgba(0x00000000)
                         })
-                        .hover(|this| this.bg(rgb(palette.hover)))
+                        .hover(move |this| this.bg(hover_bg))
                         .on_click(cx.listener(move |this, _, window, cx| {
                             this.close_open_tabs_menu(cx);
                             this.select_session(session_id.clone(), cx);
@@ -261,6 +262,7 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
         let palette = self.theme_palette();
+        let hover_bg = self.shell_surface_color(palette.hover);
         let new_session_label = self.tr("terminal.newSession");
         let all_sessions_label = self.tr("terminal.allSessions");
         let shell_sessions_label = self.tr("terminal.shellSessions");
@@ -310,7 +312,7 @@ impl NyaTermApp {
             .rounded_md()
             .border_1()
             .border_color(rgb(palette.border))
-            .bg(rgb(palette.surface))
+            .bg(self.shell_surface_color(palette.surface))
             .shadow_lg()
             .py_1()
             .flex()
@@ -324,7 +326,7 @@ impl NyaTermApp {
                     .items_center()
                     .gap_2()
                     .cursor_pointer()
-                    .hover(|this| this.bg(rgb(palette.hover)))
+                    .hover(move |this| this.bg(hover_bg))
                     .on_hover(cx.listener(|this, hovered: &bool, _, cx| {
                         if *hovered {
                             this.close_new_session_all_sessions_menu(cx);
@@ -357,11 +359,11 @@ impl NyaTermApp {
                     .gap_2()
                     .cursor_pointer()
                     .bg(if all_sessions_open {
-                        rgb(palette.hover)
+                        self.shell_surface_color(palette.hover)
                     } else {
-                        rgb(palette.surface)
+                        rgba(0x00000000)
                     })
-                    .hover(|this| this.bg(rgb(palette.hover)))
+                    .hover(move |this| this.bg(hover_bg))
                     .on_hover(cx.listener(|this, hovered: &bool, _, cx| {
                         if *hovered {
                             this.open_new_session_all_sessions_menu(cx);
@@ -538,7 +540,7 @@ impl NyaTermApp {
             .rounded_md()
             .border_1()
             .border_color(rgb(palette.border))
-            .bg(rgb(palette.surface))
+            .bg(self.shell_surface_color(palette.surface))
             .shadow_lg()
             .py_1()
             .flex()
@@ -586,6 +588,7 @@ impl NyaTermApp {
         depth: usize,
         cx: &mut Context<Self>,
     ) -> AnyElement {
+        let hover_bg = self.shell_surface_color(palette.hover);
         let group_id = group.id.clone();
         let hover_group_id = group_id.clone();
         let click_group_id = group_id.clone();
@@ -600,12 +603,12 @@ impl NyaTermApp {
             .items_center()
             .gap_2()
             .bg(if selected {
-                rgb(palette.hover)
+                self.shell_surface_color(palette.hover)
             } else {
-                rgb(palette.surface)
+                rgba(0x00000000)
             })
             .cursor_pointer()
-            .hover(|this| this.bg(rgb(palette.hover)))
+            .hover(move |this| this.bg(hover_bg))
             .on_hover(cx.listener(move |this, hovered: &bool, _, cx| {
                 if *hovered {
                     this.open_new_session_group_menu(hover_group_id.clone(), depth, cx);
@@ -645,6 +648,7 @@ impl NyaTermApp {
         depth: usize,
         cx: &mut Context<Self>,
     ) -> AnyElement {
+        let hover_bg = self.shell_surface_color(palette.hover);
         let connection_id = connection.id.clone();
         let icon = match &connection.config {
             ConnectionType::Ssh { .. } => "icons/conn/server.svg",
@@ -662,7 +666,7 @@ impl NyaTermApp {
             .items_center()
             .gap_2()
             .cursor_pointer()
-            .hover(|this| this.bg(rgb(palette.hover)))
+            .hover(move |this| this.bg(hover_bg))
             .on_hover(cx.listener(move |this, hovered: &bool, _, cx| {
                 if *hovered {
                     this.truncate_new_session_group_menu(depth, cx);
@@ -750,6 +754,7 @@ impl NyaTermApp {
         connection: SavedConnection,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
+        let hover_bg = self.shell_surface_color(palette.hover);
         let connection_id = connection.id.clone();
         let name = connection.name.clone();
         let kind = connection.kind_label();
@@ -775,7 +780,7 @@ impl NyaTermApp {
             .items_center()
             .gap_2()
             .cursor_pointer()
-            .hover(|this| this.bg(rgb(palette.hover)))
+            .hover(move |this| this.bg(hover_bg))
             .on_hover(cx.listener(|this, hovered: &bool, _, cx| {
                 if *hovered {
                     this.close_new_session_all_sessions_menu(cx);

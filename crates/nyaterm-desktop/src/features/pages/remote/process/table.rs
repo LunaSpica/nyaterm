@@ -72,6 +72,7 @@ pub(in crate::features::pages::remote) fn process_table_header(
 
 pub(in crate::features::pages::remote) fn process_table_row(
     palette: ThemePalette,
+    menu_bg: gpui::Rgba,
     process: &RemoteProcess,
     mode: ProcessDisplayMode,
     labels: ProcessTableLabels,
@@ -136,7 +137,7 @@ pub(in crate::features::pages::remote) fn process_table_row(
                     .rounded_md()
                     .border_1()
                     .border_color(rgb(palette.border))
-                    .bg(rgb(palette.surface))
+                    .bg(menu_bg)
                     .shadow_lg()
                     .py_1()
                     .flex()

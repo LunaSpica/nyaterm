@@ -2,6 +2,7 @@ use super::*;
 
 pub(in crate::features::pages::remote) fn docker_compose_project_action_menu(
     palette: crate::theme::ThemePalette,
+    menu_bg: gpui::Rgba,
     project_name: String,
     config_files: Option<String>,
     project_key: &str,
@@ -20,7 +21,7 @@ pub(in crate::features::pages::remote) fn docker_compose_project_action_menu(
         .rounded_md()
         .border_1()
         .border_color(rgb(palette.border))
-        .bg(rgb(palette.surface))
+        .bg(menu_bg)
         .shadow_lg()
         .py_1()
         .flex()
@@ -92,6 +93,7 @@ pub(in crate::features::pages::remote) fn docker_compose_project_action_menu(
 
 pub(in crate::features::pages::remote) fn docker_compose_service_action_menu(
     palette: crate::theme::ThemePalette,
+    menu_bg: gpui::Rgba,
     project_name: String,
     config_files: Option<String>,
     service_name: String,
@@ -112,7 +114,7 @@ pub(in crate::features::pages::remote) fn docker_compose_service_action_menu(
         .rounded_md()
         .border_1()
         .border_color(rgb(palette.border))
-        .bg(rgb(palette.surface))
+        .bg(menu_bg)
         .shadow_lg()
         .py_1()
         .flex()

@@ -3,6 +3,7 @@ use gpui::SharedString;
 
 pub(in crate::features::pages::remote) fn docker_containers_panel(
     palette: crate::theme::ThemePalette,
+    menu_bg: gpui::Rgba,
     has_snapshot: bool,
     has_session: bool,
     docker_available: bool,
@@ -87,7 +88,7 @@ pub(in crate::features::pages::remote) fn docker_containers_panel(
     for container in visible {
         let menu_open = open_menu_id == Some(container.id.as_str());
         rows = rows.child(docker_container_row(
-            palette, container, menu_open, labels, cx,
+            palette, menu_bg, container, menu_open, labels, cx,
         ));
     }
     if pad_bottom > 0. {
@@ -123,6 +124,7 @@ pub(in crate::features::pages::remote) fn docker_containers_panel(
 
 fn docker_container_row(
     palette: crate::theme::ThemePalette,
+    menu_bg: gpui::Rgba,
     container: DockerContainer,
     menu_open: bool,
     labels: DockerLabels,
@@ -263,6 +265,7 @@ fn docker_container_row(
                     .when(menu_open, |this| {
                         this.child(docker_container_action_menu(
                             palette,
+                            menu_bg,
                             container_id.clone(),
                             container.name.clone(),
                             running,
@@ -276,6 +279,7 @@ fn docker_container_row(
 
 fn docker_container_action_menu(
     palette: crate::theme::ThemePalette,
+    menu_bg: gpui::Rgba,
     container_id: String,
     container_name: String,
     running: bool,
@@ -302,7 +306,7 @@ fn docker_container_action_menu(
         .rounded_md()
         .border_1()
         .border_color(rgb(palette.border))
-        .bg(rgb(palette.surface))
+        .bg(menu_bg)
         .shadow_lg()
         .py_1()
         .flex()

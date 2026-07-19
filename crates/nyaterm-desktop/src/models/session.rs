@@ -88,7 +88,6 @@ pub(crate) enum QuickSwitchItem {
         title: String,
         subtitle: String,
         active: bool,
-        unread: bool,
     },
     Connection {
         connection: SavedConnection,

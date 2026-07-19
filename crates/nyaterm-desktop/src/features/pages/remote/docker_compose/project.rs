@@ -2,6 +2,7 @@ use super::*;
 
 pub(in crate::features::pages::remote) fn docker_compose_panel(
     palette: crate::theme::ThemePalette,
+    menu_bg: gpui::Rgba,
     projects: &[DockerComposeProject],
     expanded_projects: &HashSet<String>,
     services_by_project: &HashMap<String, Vec<DockerComposeService>>,
@@ -27,6 +28,7 @@ pub(in crate::features::pages::remote) fn docker_compose_panel(
             let project_menu_open = open_menu_id == Some(project_menu_id.as_str());
             rows = rows.child(docker_compose_project_row(
                 palette,
+                menu_bg,
                 project,
                 &key,
                 expanded,
@@ -46,6 +48,7 @@ pub(in crate::features::pages::remote) fn docker_compose_panel(
 
 pub(in crate::features::pages::remote) fn docker_compose_project_row(
     palette: crate::theme::ThemePalette,
+    menu_bg: gpui::Rgba,
     project: &DockerComposeProject,
     project_key: &str,
     expanded: bool,
@@ -203,6 +206,7 @@ pub(in crate::features::pages::remote) fn docker_compose_project_row(
                             .when(menu_open, |this| {
                                 this.child(docker_compose_project_action_menu(
                                     palette,
+                                    menu_bg,
                                     project_name.clone(),
                                     config_files.clone(),
                                     &key_for_toggle,
@@ -216,6 +220,7 @@ pub(in crate::features::pages::remote) fn docker_compose_project_row(
         .when(expanded, |this| {
             this.child(docker_compose_services_panel(
                 palette,
+                menu_bg,
                 project_name,
                 config_files,
                 project_key.to_string(),

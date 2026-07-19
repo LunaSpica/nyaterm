@@ -24,6 +24,8 @@ impl NyaTermApp {
                 )
             };
         let list_max_height = (self.last_viewport_size.1 * 0.55).clamp(160., 384.);
+        let selected_row_bg = rgba((palette.primary << 8) | 0x26);
+        let hover_row_bg = self.shell_surface_color(palette.hover);
         let mut rows = div()
             .id(SharedString::from("quick-switch-results"))
             .max_h(px(list_max_height))
@@ -51,34 +53,22 @@ impl NyaTermApp {
                 let selected = index == selected_index;
                 let item_for_click = item.clone();
                 let badge = match &item {
-                    QuickSwitchItem::Session { active, unread, .. } => {
+                    QuickSwitchItem::Session { active, .. } => {
                         if *active {
                             status_pill(
                                 self.tr("sessionQuickSwitcher.active"),
-                                rgb(palette.success),
-                                rgb(palette.hover),
-                            )
-                            .into_any_element()
-                        } else if *unread {
-                            status_pill(
-                                self.tr("sessionQuickSwitcher.unread"),
-                                rgb(palette.warning),
-                                rgb(palette.hover),
+                                rgb(palette.primary),
+                                rgba((palette.primary << 8) | 0x1a),
                             )
                             .into_any_element()
                         } else {
-                            status_pill(
-                                self.tr("sessionQuickSwitcher.open"),
-                                rgb(palette.link),
-                                rgb(palette.hover),
-                            )
-                            .into_any_element()
+                            div().into_any_element()
                         }
                     }
                     QuickSwitchItem::Connection { .. } => status_pill(
                         self.tr("sessionQuickSwitcher.saved"),
-                        rgb(0xc4b5fd),
-                        rgb(0x2b2142),
+                        rgb(palette.text_muted),
+                        self.shell_surface_color(palette.hover),
                     )
                     .into_any_element(),
                     QuickSwitchItem::Pending { .. } => status_pill(
@@ -101,15 +91,15 @@ impl NyaTermApp {
                         .flex()
                         .items_center()
                         .gap_3()
-                        .border_b_1()
-                        .border_color(rgb(palette.border))
                         .bg(if selected {
-                            rgb(palette.hover)
+                            selected_row_bg
                         } else {
-                            rgb(palette.input)
+                            rgba(0x00000000)
                         })
                         .cursor_pointer()
-                        .hover(|this| this.bg(rgb(palette.hover)))
+                        .when(!selected, |this| {
+                            this.hover(move |this| this.bg(hover_row_bg))
+                        })
                         .child(
                             div()
                                 .min_w_0()
@@ -120,7 +110,7 @@ impl NyaTermApp {
                                 .child(
                                     div()
                                         .text_sm()
-                                        .font_weight(FontWeight(800.))
+                                        .font_weight(FontWeight(500.))
                                         .text_color(rgb(palette.text))
                                         .overflow_hidden()
                                         .child(truncate_preview(item.title(), 54)),
@@ -149,15 +139,15 @@ impl NyaTermApp {
             .bottom_0()
             .left_0()
             .right_0()
-            .bg(rgba(0x000000d9))
+            .bg(rgba(0x00000080))
             .flex()
             .items_start()
             .justify_center()
-            .pt(px((viewport_h * 0.18).max(48.)))
+            .pt(px(viewport_h * 0.18))
             .track_focus(&self.quick_switch_focus)
             .on_click(cx.listener(|this, _, window, cx| {
-                window.focus(&this.quick_switch_focus);
-                cx.notify();
+                this.close_quick_switch(cx);
+                window.focus(&this.terminal_focus);
             }))
             .on_key_down(cx.listener(|this, event: &KeyDownEvent, window, cx| {
                 cx.stop_propagation();
@@ -166,15 +156,16 @@ impl NyaTermApp {
             .child(
                 div()
                     .id(SharedString::from("quick-switch-dialog"))
-                    .w(px((viewport_w - 32.).clamp(280., 640.)))
+                    .w(px((viewport_w - 32.).clamp(1., 640.)))
                     .max_w_full()
                     .mx_4()
                     .rounded_md()
                     .border_1()
                     .border_color(rgb(palette.border))
-                    .bg(rgb(palette.bg))
+                    .bg(self.shell_surface_color(palette.bg))
                     .shadow_lg()
                     .overflow_hidden()
+                    .on_click(|_, _, cx| cx.stop_propagation())
                     .child(
                         div()
                             .relative()
@@ -185,19 +176,13 @@ impl NyaTermApp {
                             .px_3()
                             .border_b_1()
                             .border_color(rgb(palette.border))
-                            .bg(rgb(0x0f131a))
+                            .bg(rgba(0x00000000))
                             .child(
-                                div()
-                                    .size(px(18.))
-                                    .rounded_sm()
-                                    .border_1()
-                                    .border_color(rgb(palette.border))
-                                    .flex()
-                                    .items_center()
-                                    .justify_center()
-                                    .text_xs()
-                                    .text_color(rgb(palette.link))
-                                    .child("/"),
+                                svg()
+                                    .size(px(16.))
+                                    .flex_none()
+                                    .path("icons/fe/search.svg")
+                                    .text_color(rgb(palette.text_muted)),
                             )
                             .child(
                                 div()
@@ -242,7 +227,7 @@ impl NyaTermApp {
                             .px_3()
                             .border_t_1()
                             .border_color(rgb(palette.border))
-                            .bg(rgb(0x0f131a))
+                            .bg(rgba(0x00000000))
                             .child(div().text_xs().text_color(rgb(palette.text_muted)).child(
                                 format!(
                                     "Enter {} / Esc {}",
@@ -254,26 +239,27 @@ impl NyaTermApp {
                                 div()
                                     .flex()
                                     .items_center()
-                                    .gap_2()
-                                    .child(small_button(
-                                        palette,
-                                        "quick-switch-new-ssh",
-                                        self.tr("sessionQuickSwitcher.newSsh"),
-                                        cx.listener(|this, _, window, cx| {
-                                            this.quick_switch_open = false;
-                                            this.open_connection_editor(
-                                                None, None, true, window, cx,
-                                            );
-                                        }),
-                                    ))
-                                    .child(small_button(
-                                        palette,
-                                        "quick-switch-close",
-                                        self.tr("sessionQuickSwitcher.close"),
-                                        cx.listener(|this, _, _, cx| {
-                                            this.close_quick_switch(cx);
-                                        }),
-                                    )),
+                                    .child(
+                                        div()
+                                            .id("quick-switch-new-ssh")
+                                            .h(px(28.))
+                                            .px_3()
+                                            .flex()
+                                            .items_center()
+                                            .rounded_sm()
+                                            .bg(rgb(palette.primary))
+                                            .text_color(rgb(palette.on_primary))
+                                            .text_xs()
+                                            .cursor_pointer()
+                                            .hover(|this| this.bg(rgb(palette.primary_hover)))
+                                            .child(self.tr("sessionQuickSwitcher.newSsh"))
+                                            .on_click(cx.listener(|this, _, window, cx| {
+                                                this.quick_switch_open = false;
+                                                this.open_connection_editor(
+                                                    None, None, true, window, cx,
+                                                );
+                                            })),
+                                    ),
                             ),
                     ),
             )
