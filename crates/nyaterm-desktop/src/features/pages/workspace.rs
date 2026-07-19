@@ -67,7 +67,6 @@ impl NyaTermApp {
                     .flex_1()
                     .min_h_0()
                     .min_w_0()
-                    .p_1()
                     .bg(rgb(palette.bg))
                     .child(self.render_terminal_window_node(window_root, cx))
                     .into_any_element();
@@ -77,13 +76,13 @@ impl NyaTermApp {
             return self.terminal_canvas(cx).into_any_element();
         };
 
+        let show_chrome = root.is_split();
         div()
             .flex_1()
             .min_h_0()
             .min_w_0()
-            .p_1()
             .bg(rgb(palette.bg))
-            .child(self.render_workspace_pane_node(root, true, cx))
+            .child(self.render_workspace_pane_node(root, show_chrome, cx))
             .into_any_element()
     }
 }

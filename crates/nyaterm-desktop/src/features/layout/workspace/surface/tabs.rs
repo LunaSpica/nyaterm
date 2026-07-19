@@ -155,22 +155,7 @@ impl NyaTermApp {
                     .map(|root| root.session_ids())
                     .unwrap_or_else(|| vec![session.id.clone()]);
                 let is_disconnected = leaf_ids.iter().any(|id| self.is_session_disconnected(id));
-                let is_split_tab = self
-                    .session_pane_roots
-                    .get(&session.id)
-                    .is_some_and(|root| root.is_split());
-                let pane_count = self
-                    .session_pane_roots
-                    .get(&session.id)
-                    .map(|root| root.session_ids().len())
-                    .unwrap_or(1);
-                let tab_title = if is_disconnected {
-                    format!("{} · disconnected", truncate_preview(&display_name, 20))
-                } else if is_split_tab {
-                    format!("{} · {pane_count}p", truncate_preview(&display_name, 22))
-                } else {
-                    truncate_preview(&display_name, 28)
-                };
+                let tab_title = truncate_preview(&display_name, 28);
                 let has_unread = leaf_ids.iter().any(|id| {
                     self.terminal_views
                         .get(id)

@@ -106,22 +106,7 @@ impl NyaTermApp {
                         display_name: title.clone(),
                         kind_label,
                     };
-                    let is_split_tab = self
-                        .session_pane_roots
-                        .get(tab_id)
-                        .is_some_and(|root| root.is_split());
-                    let pane_count = self
-                        .session_pane_roots
-                        .get(tab_id)
-                        .map(|root| root.session_ids().len())
-                        .unwrap_or(1);
-                    let tab_title = if is_disconnected {
-                        format!("{} · disconnected", truncate_preview(&title, 14))
-                    } else if is_split_tab {
-                        format!("{} · {pane_count}p", truncate_preview(&title, 12))
-                    } else {
-                        truncate_preview(&title, 18)
-                    };
+                    let tab_title = truncate_preview(&title, 18);
                     let tooltip_title = title.clone();
                     let tooltip_lines = self.session_tab_tooltip_lines(tab_id);
                     strip = strip.child(
