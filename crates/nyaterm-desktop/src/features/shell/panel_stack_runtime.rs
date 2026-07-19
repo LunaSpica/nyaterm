@@ -594,14 +594,7 @@ impl NyaTermApp {
                 let count = self.ordered_session_count();
                 SharedString::from(count.to_string())
             }
-            NavItem::SyncBackupHistory => {
-                let count = self.cloud_sync_history.len();
-                if count == 0 {
-                    SharedString::from("")
-                } else {
-                    SharedString::from(count.to_string())
-                }
-            }
+            NavItem::SyncBackupHistory => SharedString::from(""),
             _ => SharedString::from(""),
         }
     }
@@ -807,6 +800,24 @@ impl NyaTermApp {
                                 }),
                         )
                         .into_any_element(),
+                )
+            }
+            NavItem::SyncBackupHistory => {
+                let palette = self.theme_palette();
+                Some(
+                    header_svg_icon_button(
+                        palette,
+                        "sync-history-header-refresh",
+                        "icons/fe/refresh.svg",
+                        self.tr("resourceMonitor.refresh"),
+                        true,
+                        cx.listener(|this, _, _, cx| {
+                            this.refresh_cloud_sync_history();
+                            this.terminal_status = "cloud sync history refreshed".to_string();
+                            cx.notify();
+                        }),
+                    )
+                    .into_any_element(),
                 )
             }
             _ => None,

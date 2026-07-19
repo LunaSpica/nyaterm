@@ -30,36 +30,6 @@ pub(in crate::features) fn activity_icon(
     }
 }
 
-/// Compact ghost icon button with bundled SVG (Tauri ToolbarIconButton h-7).
-pub(in crate::features) fn toolbar_svg_button(
-    palette: ThemePalette,
-    id: impl Into<SharedString>,
-    icon_path: &'static str,
-    on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
-) -> impl IntoElement {
-    div()
-        .id(id.into())
-        .size(px(28.))
-        .flex()
-        .items_center()
-        .justify_center()
-        .rounded_md()
-        .text_color(rgb(palette.text_muted))
-        .cursor_pointer()
-        .hover(|this| {
-            this.bg(rgb(palette.surface_elevated))
-                .text_color(rgb(palette.text))
-        })
-        .child(
-            svg()
-                .size(px(16.))
-                .flex_none()
-                .path(icon_path)
-                .text_color(rgb(palette.text_muted)),
-        )
-        .on_click(on_click)
-}
-
 /// Faded NyaTerm logo used by empty workspace (Tauri EmptyWorkspaceState).
 pub(in crate::features) fn nyaterm_logo_mark(
     palette: ThemePalette,

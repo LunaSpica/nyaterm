@@ -188,18 +188,7 @@ impl NyaTermApp {
                                     .text_color(rgb(palette.text_muted))
                                     .overflow_hidden()
                                     .child(provider_label),
-                            )
-                            .child(toolbar_svg_button(
-                                palette,
-                                SharedString::from("sync-history-refresh"),
-                                "icons/fe/refresh.svg",
-                                cx.listener(|this, _, _, cx| {
-                                    this.refresh_cloud_sync_history();
-                                    this.terminal_status =
-                                        "cloud sync history refreshed".to_string();
-                                    cx.notify();
-                                }),
-                            )),
+                            ),
                     )
                     .when(
                         !status_message.trim().is_empty() && conflict.is_none(),
