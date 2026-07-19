@@ -149,7 +149,7 @@ impl NyaTermApp {
         match node {
             WorkspacePaneNode::Leaf { session_id } => {
                 let is_active = self.active_session_id.as_deref() == Some(session_id.as_str());
-                let content = self.workspace_session_content(session_id.clone(), true, cx);
+                let content = self.workspace_session_content(session_id.clone(), show_chrome, cx);
                 let focus_id = session_id.clone();
                 let mut pane = div()
                     .id(SharedString::from(format!("workspace-leaf-{session_id}")))
