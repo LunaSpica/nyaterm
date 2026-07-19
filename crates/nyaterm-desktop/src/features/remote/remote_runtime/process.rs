@@ -266,7 +266,7 @@ impl NyaTermApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        if matches!(signal, "KILL" | "STOP") {
+        if signal == "KILL" {
             let command = self
                 .processes
                 .iter()
