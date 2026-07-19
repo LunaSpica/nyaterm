@@ -310,6 +310,7 @@ impl NyaTermApp {
                                         group_id_for_edit.clone().unwrap_or_default()
                                     ),
                                     "icons/net/edit.svg",
+                                    self.tr("savedConnections.renameFolder"),
                                     cx.listener(move |this, _, window, cx| {
                                         cx.stop_propagation();
                                         this.open_connection_group_editor(
@@ -327,6 +328,7 @@ impl NyaTermApp {
                                         group_id_for_delete.clone().unwrap_or_default()
                                     ),
                                     "icons/net/delete.svg",
+                                    self.tr("savedConnections.deleteFolder"),
                                     cx.listener(move |this, _, _, cx| {
                                         cx.stop_propagation();
                                         if let Some(group_id) = group_id_for_delete.clone() {
@@ -542,6 +544,7 @@ impl NyaTermApp {
                         palette,
                         format!("connection-connect-{}", connection.id),
                         "icons/conn/connect.svg",
+                        self.tr("savedConnections.connect"),
                         cx.listener(move |this, _, window, cx| {
                             this.start_saved_connection(connect_connection.clone(), window, cx);
                         }),
@@ -550,6 +553,7 @@ impl NyaTermApp {
                         palette,
                         format!("connection-edit-{}", connection.id),
                         "icons/net/edit.svg",
+                        self.tr("savedConnections.edit"),
                         cx.listener(move |this, _, window, cx| {
                             this.open_connection_editor(
                                 Some(edit_id.clone()),
@@ -564,6 +568,7 @@ impl NyaTermApp {
                         palette,
                         format!("connection-delete-{}", connection.id),
                         "icons/net/delete.svg",
+                        self.tr("savedConnections.delete"),
                         cx.listener(move |this, _, _, cx| {
                             this.open_connection_delete_confirm(delete_id.clone(), cx);
                         }),

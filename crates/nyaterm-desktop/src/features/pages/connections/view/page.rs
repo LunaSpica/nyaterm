@@ -169,6 +169,11 @@ impl NyaTermApp {
             ConnectionSortMode::NameAsc => "A↑",
             ConnectionSortMode::NameDesc => "A↓",
         };
+        let sort_tooltip = self.tr(match self.connection_sort_mode {
+            ConnectionSortMode::Default => "savedConnections.sortDefault",
+            ConnectionSortMode::NameAsc => "savedConnections.sortNameAsc",
+            ConnectionSortMode::NameDesc => "savedConnections.sortNameDesc",
+        });
         let more_open = self.connections_more_menu_open;
 
         // Tauri search strip: px-2 py-1.5, input h-7.
@@ -255,6 +260,7 @@ impl NyaTermApp {
                 palette,
                 "connections-sort",
                 sort_label,
+                sort_tooltip,
                 cx.listener(|this, _, _, cx| {
                     this.cycle_connection_sort_mode(cx);
                 }),
@@ -263,6 +269,7 @@ impl NyaTermApp {
                 palette,
                 "connections-temp-ssh",
                 "icons/conn/flash.svg",
+                self.tr("temporarySsh.title"),
                 cx.listener(|this, _, window, cx| {
                     this.open_temporary_ssh_link_dialog(window, cx);
                 }),
@@ -271,6 +278,7 @@ impl NyaTermApp {
                 palette,
                 "connections-new-group",
                 "icons/conn/folder.svg",
+                self.tr("savedConnections.newFolder"),
                 cx.listener(|this, _, window, cx| {
                     this.open_connection_group_editor(None, None, window, cx);
                 }),
@@ -279,6 +287,7 @@ impl NyaTermApp {
                 palette,
                 "connections-new",
                 "icons/conn/add.svg",
+                self.tr("savedConnections.newConnection"),
                 cx.listener(|this, _, window, cx| {
                     this.open_connection_editor(None, None, false, window, cx);
                 }),
@@ -290,6 +299,7 @@ impl NyaTermApp {
                         palette,
                         "connections-more",
                         "icons/conn/more.svg",
+                        self.tr("common.more"),
                         cx.listener(|this, _, _, cx| {
                             this.connections_more_menu_open = !this.connections_more_menu_open;
                             cx.notify();

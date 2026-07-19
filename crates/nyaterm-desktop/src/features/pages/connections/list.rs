@@ -806,10 +806,12 @@ pub(super) fn icon_action_button(
     palette: crate::theme::ThemePalette,
     id: impl Into<String>,
     label: &'static str,
+    tooltip: impl Into<String>,
     on_click: impl Fn(&gpui::ClickEvent, &mut gpui::Window, &mut gpui::App) + 'static,
 ) -> impl IntoElement {
     // label may be a glyph fallback or an icons/*.svg path.
     let is_svg = label.starts_with("icons/") && label.ends_with(".svg");
+    let tooltip = tooltip.into();
     div()
         .id(SharedString::from(id.into()))
         .size(px(24.))
@@ -825,6 +827,10 @@ pub(super) fn icon_action_button(
                 .text_color(rgb(palette.text))
         })
         .on_click(on_click)
+        .tooltip(move |_, cx| {
+            cx.new(|_| crate::features::ChromeTooltip::new(tooltip.clone()))
+                .into()
+        })
         .when(is_svg, |this| {
             this.child(svg().size(px(14.)).flex_none().path(label))
         })
