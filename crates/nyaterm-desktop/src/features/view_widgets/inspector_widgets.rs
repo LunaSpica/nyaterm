@@ -288,24 +288,58 @@ pub(in crate::features) fn tab_menu_item_enabled(
     enabled: bool,
     on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
 ) -> impl IntoElement {
+    let id = id.into();
     let label = label.into();
+    let icon_path = match id.as_str() {
+        "tab-ctx-rename" => Some("icons/session/rename.svg"),
+        "tab-ctx-copy-name" | "tab-ctx-copy-ip" | "tab-ctx-copy-ssh" => {
+            Some("icons/copy.svg")
+        }
+        "tab-ctx-duplicate" => Some("icons/transfer/play.svg"),
+        "tab-ctx-duplicate-run" | "tab-ctx-multiplex-run" => Some("icons/commands.svg"),
+        "tab-ctx-multiplex" | "tab-ctx-smart-split" => Some("icons/menu/split.svg"),
+        "tab-ctx-reconnect" => Some("icons/session/reconnect.svg"),
+        "tab-ctx-disconnect" => Some("icons/session/disconnect.svg"),
+        "tab-ctx-ai-explain" | "tab-ctx-ai-analyze" => Some("icons/ai.svg"),
+        "tab-ctx-split-h" | "tab-ctx-window-below" | "tab-ctx-tile-h" => {
+            Some("icons/menu/horizontal.svg")
+        }
+        "tab-ctx-split-v" | "tab-ctx-window-right" | "tab-ctx-tile-v"
+        | "tab-ctx-close-right" => Some("icons/menu/vertical.svg"),
+        "tab-ctx-unsplit" | "tab-ctx-window-flat" => Some("icons/menu/fit.svg"),
+        "tab-ctx-close" => Some("icons/window/close.svg"),
+        "tab-ctx-close-all" => Some("icons/transfer/clear-all.svg"),
+        "tab-ctx-close-others" => Some("icons/sessions.svg"),
+        "tab-ctx-info" => Some("icons/menu/info.svg"),
+        _ => None,
+    };
     let text_color = if enabled {
         rgb(palette.text)
     } else {
         rgb(palette.text_dimmed)
     };
     div()
-        .id(SharedString::from(id.into()))
+        .id(SharedString::from(id))
         .h(px(28.))
         .px_3()
         .flex()
         .items_center()
+        .gap_2()
         .text_size(px(12.))
         .text_color(text_color)
         .when(enabled, |this| {
             this.cursor_pointer()
                 .hover(|this| this.bg(rgb(palette.hover)))
                 .on_click(on_click)
+        })
+        .when_some(icon_path, |this, icon_path| {
+            this.child(
+                svg()
+                    .size(px(14.))
+                    .flex_none()
+                    .path(icon_path)
+                    .text_color(text_color),
+            )
         })
         .child(div().min_w_0().flex_1().child(label))
 }

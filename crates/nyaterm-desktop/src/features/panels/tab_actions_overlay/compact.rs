@@ -5,8 +5,8 @@ impl NyaTermApp {
         &mut self,
         palette: ThemePalette,
         session_id: String,
-        session: &SessionInfo,
-        display_name: &str,
+        _session: &SessionInfo,
+        _display_name: &str,
         active_color: Option<u32>,
         can_copy_ssh: bool,
         can_spawn_session: bool,
@@ -25,8 +25,9 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) -> gpui::AnyElement {
         let (viewport_w, viewport_h) = self.last_viewport_size;
+        let menu_max_height = (viewport_h - 16.).clamp(160., 560.);
         let (menu_x, menu_y) = if let Some((x, y)) = self.tab_actions_anchor {
-            clamp_tab_actions_position(x, y, 240., 560., viewport_w, viewport_h)
+            clamp_tab_actions_position(x, y, 240., menu_max_height, viewport_w, viewport_h)
         } else {
             (((viewport_w - 240.).max(16.) * 0.5).max(8.), 74.0)
         };
@@ -128,7 +129,7 @@ impl NyaTermApp {
                     .left(px(menu_x))
                     .top(px(menu_y))
                     .w(px(240.))
-                    .max_h(px(560.))
+                    .max_h(px(menu_max_height))
                     .overflow_y_scroll()
                     .rounded_md()
                     .border_1()
@@ -142,34 +143,19 @@ impl NyaTermApp {
                     .child(
                         div()
                             .px_3()
-                            .pb_1()
-                            .pt_1()
-                            .border_b_1()
-                            .border_color(rgb(palette.border))
-                            .child(
-                                div()
-                                    .text_size(px(11.))
-                                    .font_weight(FontWeight(700.))
-                                    .text_color(rgb(palette.text))
-                                    .child(truncate_preview(display_name, 28)),
-                            )
-                            .child(
-                                div()
-                                    .text_size(px(10.))
-                                    .text_color(rgb(palette.text_dimmed))
-                                    .child(format!(
-                                        "{} · {}",
-                                        session_kind_label(session.kind),
-                                        short_id(&session.id)
-                                    )),
-                            ),
-                    )
-                    .child(
-                        div()
-                            .px_3()
-                            .pt_1()
+                            .h(px(28.))
+                            .flex()
+                            .items_center()
+                            .gap_2()
                             .text_size(px(10.))
                             .text_color(rgb(palette.text_muted))
+                            .child(
+                                svg()
+                                    .size(px(14.))
+                                    .flex_none()
+                                    .path("icons/menu/palette.svg")
+                                    .text_color(rgb(palette.text_muted)),
+                            )
                             .child(self.tr("tabCtx.setColor")),
                     )
                     .child(color_row)
