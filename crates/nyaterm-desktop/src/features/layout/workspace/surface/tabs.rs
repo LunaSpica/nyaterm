@@ -119,7 +119,7 @@ impl NyaTermApp {
                     .text_xs()
                     .text_color(rgb(palette.text_muted))
                     .hover(|this| this.bg(rgb(palette.border)).text_color(rgb(palette.danger)))
-                    .child("x")
+                    .child(svg().size(px(13.)).path("icons/window/close.svg"))
                     .on_click(cx.listener(move |this, _, _, cx| {
                         cx.stop_propagation();
                         this.close_pending_session_start(close_request_id.clone(), cx);
@@ -222,7 +222,7 @@ impl NyaTermApp {
                     .text_xs()
                     .text_color(rgb(palette.text_muted))
                     .hover(|this| this.bg(rgb(palette.border)).text_color(rgb(palette.danger)))
-                    .child("x")
+                    .child(svg().size(px(13.)).path("icons/window/close.svg"))
                     .on_click(cx.listener(move |this, _, _, cx| {
                         cx.stop_propagation();
                         this.close_failed_session_start(close_request_id.clone(), cx);
@@ -588,7 +588,7 @@ impl NyaTermApp {
                             .hover(|this| {
                                 this.bg(rgb(palette.border)).text_color(rgb(palette.danger))
                             })
-                            .child("x")
+                            .child(svg().size(px(13.)).path("icons/window/close.svg"))
                             .on_click(cx.listener(move |this, _, _, cx| {
                                 cx.stop_propagation();
                                 this.close_session(close_session_id.clone(), cx);
