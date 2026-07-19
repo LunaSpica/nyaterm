@@ -7,7 +7,7 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) -> gpui::Stateful<gpui::Div> {
         let mut body = security_auth_body_base("security-otp-body");
-        let actions_enabled = self.security_otp_editor.is_none();
+        let actions_enabled = self.security_otp_editor.is_none() && !self.security_otp_qr_importing;
         let has_entries = !self.connection_otp_entries.is_empty();
         body = body.child(
             div()
@@ -29,6 +29,19 @@ impl NyaTermApp {
                         .flex()
                         .items_center()
                         .gap_1()
+                        .child(security_toolbar_action_button(
+                            palette,
+                            "security-otp-scan-qr",
+                            if self.security_otp_qr_importing {
+                                self.tr("otpManager.scanningQr")
+                            } else {
+                                self.tr("otpManager.scanQr")
+                            },
+                            actions_enabled,
+                            cx.listener(|this, _, _, cx| {
+                                this.import_security_otp_from_qr(cx);
+                            }),
+                        ))
                         .child(security_toolbar_action_button(
                             palette,
                             "security-otp-refresh-visible",

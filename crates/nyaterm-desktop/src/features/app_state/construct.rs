@@ -834,6 +834,7 @@ impl NyaTermApp {
             security_key_editor_focus: cx.focus_handle(),
             security_otp_editor: None,
             security_otp_editor_focus: cx.focus_handle(),
+            security_otp_qr_importing: false,
             security_password_editor: None,
             security_password_editor_focus: cx.focus_handle(),
             security_credential_editor: None,

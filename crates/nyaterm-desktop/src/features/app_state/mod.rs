@@ -654,6 +654,7 @@ pub struct NyaTermApp {
     pub(in crate::features) security_key_editor_focus: FocusHandle,
     pub(in crate::features) security_otp_editor: Option<SecurityOtpEditorState>,
     pub(in crate::features) security_otp_editor_focus: FocusHandle,
+    pub(in crate::features) security_otp_qr_importing: bool,
     pub(in crate::features) security_password_editor: Option<SecurityPasswordEditorState>,
     pub(in crate::features) security_password_editor_focus: FocusHandle,
     pub(in crate::features) security_credential_editor: Option<SecurityCredentialEditorState>,

@@ -1,6 +1,108 @@
 use super::*;
 
 impl NyaTermApp {
+    pub(in crate::features) fn import_security_otp_from_qr(&mut self, cx: &mut Context<Self>) {
+        if self.security_otp_qr_importing || self.security_otp_editor.is_some() {
+            return;
+        }
+        let options = PathPromptOptions {
+            files: true,
+            directories: false,
+            multiple: false,
+            prompt: Some(SharedString::from(self.tr("otpManager.selectQrImage"))),
+        };
+        let receiver = cx.prompt_for_paths(options);
+        self.security_otp_qr_importing = true;
+        self.security_status = self.tr("otpManager.scanningQr").to_string();
+        cx.spawn(async move |this, cx| {
+            let selected = match receiver.await {
+                Ok(Ok(Some(paths))) => paths.into_iter().next(),
+                _ => None,
+            };
+            let result = selected
+                .map(|path| decode_security_otp_qr(&path))
+                .transpose();
+            let _ = this.update(cx, |this, cx| {
+                this.security_otp_qr_importing = false;
+                match result {
+                    Ok(Some(editor)) => {
+                        this.security_otp_editor = Some(editor);
+                        this.security_key_editor = None;
+                        this.security_password_editor = None;
+                        this.security_credential_editor = None;
+                        this.security_delete_confirm = None;
+                        this.security_status = this.tr("otpManager.scanQr").to_string();
+                    }
+                    Ok(None) => {
+                        this.security_status = this.tr("common.cancel").to_string();
+                    }
+                    Err(error) => {
+                        this.security_status =
+                            format!("{}: {error}", this.tr("otpManager.qrImportFailed"));
+                        this.terminal_status = this.security_status.clone();
+                    }
+                }
+                cx.notify();
+            });
+        })
+        .detach();
+        cx.notify();
+    }
+}
+
+fn decode_security_otp_qr(path: &std::path::Path) -> Result<SecurityOtpEditorState, String> {
+    let image = image::open(path).map_err(|error| format!("failed to open image: {error}"))?;
+    let gray = image.to_luma8();
+    let mut prepared = rqrr::PreparedImage::prepare(gray);
+    let grid = prepared
+        .detect_grids()
+        .into_iter()
+        .next()
+        .ok_or_else(|| "no QR code found in the image".to_string())?;
+    let (_, uri) = grid
+        .decode()
+        .map_err(|error| format!("failed to decode QR code: {error}"))?;
+
+    if uri.starts_with("otpauth://totp/") {
+        let totp = nyaterm_otp::Totp::from_uri(&uri)
+            .map_err(|error| format!("invalid TOTP URI: {error}"))?;
+        Ok(SecurityOtpEditorState {
+            id: None,
+            otp_type: "totp".to_string(),
+            issuer: totp.issuer().to_string(),
+            username: totp.label().to_string(),
+            secret: totp.secret().into_base32(),
+            algorithm: totp.alg().to_string(),
+            digits: totp.digits().to_string(),
+            period: totp.period().to_string(),
+            counter: "0".to_string(),
+            has_secret: false,
+            focused_field: SecurityOtpEditorField::Issuer,
+            error: None,
+        })
+    } else if uri.starts_with("otpauth://hotp/") {
+        let hotp = nyaterm_otp::Hotp::from_uri(&uri)
+            .map_err(|error| format!("invalid HOTP URI: {error}"))?;
+        Ok(SecurityOtpEditorState {
+            id: None,
+            otp_type: "hotp".to_string(),
+            issuer: hotp.issuer().to_string(),
+            username: hotp.label().to_string(),
+            secret: hotp.secret().into_base32(),
+            algorithm: hotp.alg().to_string(),
+            digits: hotp.digits().to_string(),
+            period: "30".to_string(),
+            counter: hotp.counter().to_string(),
+            has_secret: false,
+            focused_field: SecurityOtpEditorField::Issuer,
+            error: None,
+        })
+    } else {
+        Err("QR image does not contain an otpauth URI".to_string())
+    }
+}
+
+impl NyaTermApp {
     pub(in crate::features) fn open_security_otp_editor(
         &mut self,
         otp_id: Option<String>,

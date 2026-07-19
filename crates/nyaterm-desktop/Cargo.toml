@@ -22,6 +22,7 @@ nyaterm-terminal-gpui.workspace = true
 nyaterm-transport.workspace = true
 nyaterm-ui.workspace = true
 regex.workspace = true
+rqrr = "0.9"
 serde.workspace = true
 serde_json.workspace = true
 sha2.workspace = true
