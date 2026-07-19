@@ -153,7 +153,8 @@ pub(in crate::features) use ai_jobs::{
 };
 pub use app_state::NyaTermApp;
 pub(in crate::features) use app_state::{
-    PendingSavedConnectionStart, PendingSessionStart, SavedConnectionStartOptions, SessionPaneState,
+    FailedSessionStart, PendingSavedConnectionStart, PendingSessionStart,
+    SavedConnectionStartOptions, SessionPaneState,
 };
 pub(in crate::features) use appearance::{
     appearance_font_options, appearance_font_stack, gpui_code_font_family,

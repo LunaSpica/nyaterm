@@ -12,9 +12,17 @@ fn pending_session_start_display_name(pending: &PendingSessionStart) -> String {
         .to_string()
 }
 
+fn failed_session_start_display_name(failed: &FailedSessionStart) -> String {
+    pending_session_start_display_name(&failed.pending)
+}
+
 impl NyaTermApp {
     pub(in crate::features) fn has_pending_session_start(&self) -> bool {
         !self.pending_session_starts.is_empty()
+    }
+
+    pub(in crate::features) fn has_failed_session_start(&self) -> bool {
+        !self.failed_session_starts.is_empty()
     }
 
     pub(in crate::features) fn pending_session_display_name(&self) -> Option<String> {
@@ -31,6 +39,29 @@ impl NyaTermApp {
             .map(pending_session_start_display_name)
     }
 
+    pub(in crate::features) fn active_failed_session(&self) -> Option<&FailedSessionStart> {
+        self.active_failed_session_start
+            .as_deref()
+            .and_then(|request_id| self.failed_session_starts.get(request_id))
+    }
+
+    pub(in crate::features) fn failed_session_display_name(&self) -> Option<String> {
+        self.active_failed_session()
+            .or_else(|| {
+                self.failed_session_starts.values().min_by(|left, right| {
+                    left.pending
+                        .requested_at
+                        .cmp(&right.pending.requested_at)
+                        .then_with(|| {
+                            left.pending
+                                .connection_name
+                                .cmp(&right.pending.connection_name)
+                        })
+                })
+            })
+            .map(failed_session_start_display_name)
+    }
+
     pub(in crate::features) fn select_pending_session_start(
         &mut self,
         request_id: String,
@@ -40,6 +71,7 @@ impl NyaTermApp {
             return;
         }
         self.active_pending_session_start = Some(request_id);
+        self.active_failed_session_start = None;
         self.open_tabs_menu_open = false;
         self.new_session_menu_open = false;
         self.selected_nav = NavItem::Workspace;
@@ -68,10 +100,83 @@ impl NyaTermApp {
                         .then_with(|| left_id.cmp(right_id))
                 })
                 .map(|(request_id, _)| request_id.clone());
+            if self.active_pending_session_start.is_none() {
+                self.active_failed_session_start = self
+                    .failed_session_starts
+                    .iter()
+                    .max_by(|(left_id, left), (right_id, right)| {
+                        left.pending
+                            .requested_at
+                            .cmp(&right.pending.requested_at)
+                            .then_with(|| left_id.cmp(right_id))
+                    })
+                    .map(|(request_id, _)| request_id.clone());
+            }
         }
         self.terminal_status = format!(
             "cancelled connection {}",
             pending_session_start_display_name(&pending)
+        );
+        cx.notify();
+    }
+
+    pub(in crate::features) fn select_failed_session_start(
+        &mut self,
+        request_id: String,
+        cx: &mut Context<Self>,
+    ) {
+        if !self.failed_session_starts.contains_key(&request_id) {
+            return;
+        }
+        self.active_failed_session_start = Some(request_id);
+        self.active_pending_session_start = None;
+        self.open_tabs_menu_open = false;
+        self.new_session_menu_open = false;
+        self.selected_nav = NavItem::Workspace;
+        self.main_mode = MainMode::Workspace;
+        cx.notify();
+    }
+
+    pub(in crate::features) fn close_failed_session_start(
+        &mut self,
+        request_id: String,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(failed) = self.failed_session_starts.remove(&request_id) else {
+            return;
+        };
+        self.session_pane_states.remove(&request_id);
+        if self.active_failed_session_start.as_deref() == Some(request_id.as_str()) {
+            self.active_failed_session_start = None;
+            self.active_pending_session_start = self
+                .pending_session_starts
+                .iter()
+                .max_by(|(left_id, left), (right_id, right)| {
+                    left.requested_at
+                        .cmp(&right.requested_at)
+                        .then_with(|| left_id.cmp(right_id))
+                })
+                .map(|(request_id, _)| request_id.clone());
+            if self.active_pending_session_start.is_none() {
+                self.active_failed_session_start = self
+                    .failed_session_starts
+                    .iter()
+                    .max_by(|(left_id, left), (right_id, right)| {
+                        left.pending
+                            .requested_at
+                            .cmp(&right.pending.requested_at)
+                            .then_with(|| left_id.cmp(right_id))
+                    })
+                    .map(|(request_id, _)| request_id.clone());
+            }
+        }
+        if self.failed_session_starts.is_empty() {
+            self.last_connect_failure_name = None;
+            self.last_connect_failure_error = None;
+        }
+        self.terminal_status = format!(
+            "closed failed connection {}",
+            failed_session_start_display_name(&failed)
         );
         cx.notify();
     }
@@ -140,6 +245,7 @@ impl NyaTermApp {
             },
         );
         self.active_pending_session_start = Some(request_id.clone());
+        self.active_failed_session_start = None;
         self.terminal_status = status_message;
         // Status + connecting tab already show progress; avoid full terminal decode
         // work on the click path before the worker even starts.
@@ -626,6 +732,18 @@ impl NyaTermApp {
                     let _ = self.pending_reconnect_replace_id.take();
                     self.last_connect_failure_name = Some(connection_name.clone());
                     self.last_connect_failure_error = Some(error.clone());
+                    if let Some(pending) = pending {
+                        self.failed_session_starts.insert(
+                            request_id.clone(),
+                            FailedSessionStart {
+                                pending,
+                                error: error.clone(),
+                            },
+                        );
+                        if was_active_pending {
+                            self.active_failed_session_start = Some(request_id.clone());
+                        }
+                    }
                     self.session_pane_states.insert(
                         request_id.clone(),
                         SessionPaneState::Failed {

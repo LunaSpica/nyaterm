@@ -118,6 +118,16 @@ pub(in crate::features) struct PendingSessionStart {
     pub source_connection_id: Option<String>,
 }
 
+/// A session start that remains visible after its worker failed.
+///
+/// Tauri keeps the failed pane in its original tab, so the GPUI shell must
+/// retain the pending metadata instead of reducing the failure to a global
+/// banner.
+pub(in crate::features) struct FailedSessionStart {
+    pub pending: PendingSessionStart,
+    pub error: String,
+}
+
 #[derive(Clone, Default)]
 pub(in crate::features) struct SavedConnectionStartOptions {
     pub custom_name: Option<String>,

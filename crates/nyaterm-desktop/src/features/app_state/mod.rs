@@ -4,8 +4,8 @@ mod construct;
 mod types;
 
 pub(in crate::features) use types::{
-    PendingSavedConnectionStart, PendingSessionStart, SavedConnectionStartOptions,
-    SessionPaneState, SettingsDraftSnapshot, TerminalRuntimeUiState,
+    FailedSessionStart, PendingSavedConnectionStart, PendingSessionStart,
+    SavedConnectionStartOptions, SessionPaneState, SettingsDraftSnapshot, TerminalRuntimeUiState,
 };
 
 pub struct NyaTermApp {
@@ -478,6 +478,8 @@ pub struct NyaTermApp {
     pub(in crate::features) active_duplicate_prompt: Option<SftpDuplicatePromptState>,
     pub(in crate::features) pending_session_starts: HashMap<String, PendingSessionStart>,
     pub(in crate::features) active_pending_session_start: Option<String>,
+    pub(in crate::features) failed_session_starts: HashMap<String, FailedSessionStart>,
+    pub(in crate::features) active_failed_session_start: Option<String>,
     /// Session starts removed from the UI while their worker may still finish.
     pub(in crate::features) cancelled_session_start_requests: HashSet<String>,
     pub(in crate::features) session_pane_states: HashMap<String, SessionPaneState>,

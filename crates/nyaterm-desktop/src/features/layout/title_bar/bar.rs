@@ -184,6 +184,16 @@ impl NyaTermApp {
     }
 
     pub(in crate::features) fn title_context_label(&self) -> String {
+        if self.active_pending_session_start.is_some()
+            && let Some(pending) = self.pending_session_display_name()
+        {
+            return pending;
+        }
+        if self.active_failed_session_start.is_some()
+            && let Some(failed) = self.failed_session_display_name()
+        {
+            return failed;
+        }
         if let Some(session_id) = self.active_session_id.as_deref() {
             let tab_root = self.tab_root_for_session(session_id);
             let name = self
@@ -206,6 +216,9 @@ impl NyaTermApp {
         if let Some(pending) = self.pending_session_display_name() {
             return pending;
         }
+        if let Some(failed) = self.failed_session_display_name() {
+            return failed;
+        }
         if let Some(failed) = self.last_connect_failure_name.as_ref() {
             return failed.clone();
         }
@@ -213,6 +226,12 @@ impl NyaTermApp {
     }
 
     fn title_context_icon(&self) -> Option<&'static str> {
+        if self.active_pending_session_start.is_some() {
+            return Some("icons/conn/connect.svg");
+        }
+        if self.active_failed_session_start.is_some() {
+            return Some("icons/session/disconnect.svg");
+        }
         if let Some(session_id) = self.active_session_id.as_deref() {
             return self
                 .session_info(session_id)
@@ -221,7 +240,7 @@ impl NyaTermApp {
         if self.has_pending_session_start() {
             return Some("icons/conn/connect.svg");
         }
-        if self.last_connect_failure_name.is_some() {
+        if self.has_failed_session_start() || self.last_connect_failure_name.is_some() {
             return Some("icons/session/disconnect.svg");
         }
         None

@@ -701,6 +701,8 @@ impl NyaTermApp {
             active_duplicate_prompt: None,
             pending_session_starts: HashMap::new(),
             active_pending_session_start: None,
+            failed_session_starts: HashMap::new(),
+            active_failed_session_start: None,
             cancelled_session_start_requests: HashSet::new(),
             session_pane_states: HashMap::new(),
             pending_reconnect_replace_id: None,

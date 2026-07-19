@@ -112,9 +112,9 @@ impl NyaTermApp {
                         "pending-workspace-spinner",
                         gpui::Animation::new(Duration::from_millis(900)).repeat(),
                         |svg, delta| {
-                            svg.with_transformation(gpui::Transformation::rotate(
-                                gpui::percentage(delta),
-                            ))
+                            svg.with_transformation(gpui::Transformation::rotate(gpui::percentage(
+                                delta,
+                            )))
                         },
                     ),
             )
@@ -131,7 +131,11 @@ impl NyaTermApp {
 
     pub(in crate::features) fn failed_workspace_state(&self) -> impl IntoElement {
         let palette = self.theme_palette();
-        let error = self.last_connect_failure_error.clone().unwrap_or_default();
+        let error = self
+            .active_failed_session()
+            .map(|failed| failed.error.clone())
+            .or_else(|| self.last_connect_failure_error.clone())
+            .unwrap_or_default();
 
         div()
             .flex_1()
