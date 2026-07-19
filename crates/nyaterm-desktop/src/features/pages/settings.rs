@@ -733,23 +733,23 @@ pub(super) fn settings_form_section(
     div()
         .rounded_lg()
         .border_1()
-        .border_color(rgb(palette.border))
-        .bg(rgb(palette.surface))
+        .border_color(rgba((palette.border << 8) | 0xb3))
+        .bg(rgba((palette.surface << 8) | 0x99))
         .overflow_hidden()
         .when(title.is_some() || desc.is_some(), |this| {
             this.child(
                 div()
                     .px_4()
-                    .py_3()
+                    .py_4()
                     .border_b_1()
-                    .border_color(rgb(palette.surface_elevated))
+                    .border_color(rgba((palette.surface_elevated << 8) | 0x99))
                     .flex()
                     .flex_col()
                     .gap_1()
                     .when_some(title, |this, title| {
                         this.child(
                             div()
-                                .text_size(px(13.))
+                                .text_size(px(14.))
                                 .font_weight(FontWeight(600.))
                                 .text_color(rgb(palette.text))
                                 .child(title),
@@ -758,14 +758,14 @@ pub(super) fn settings_form_section(
                     .when_some(desc, |this, desc| {
                         this.child(
                             div()
-                                .text_size(px(11.))
+                                .text_size(px(12.))
                                 .text_color(rgb(palette.text_dimmed))
                                 .child(desc),
                         )
                     }),
             )
         })
-        .child(div().px_4().py_3().flex().flex_col().gap_3().child(content))
+        .child(div().px_4().py_4().flex().flex_col().gap_4().child(content))
 }
 
 /// Tauri SettingRow: label/desc left, control right.
@@ -790,7 +790,7 @@ pub(super) fn settings_form_row(
                 .gap_1()
                 .child(
                     div()
-                        .text_size(px(13.))
+                        .text_size(px(14.))
                         .font_weight(FontWeight(500.))
                         .text_color(rgb(palette.text))
                         .child(label),
@@ -798,7 +798,7 @@ pub(super) fn settings_form_row(
                 .when_some(desc, |this, desc| {
                     this.child(
                         div()
-                            .text_size(px(11.))
+                        .text_size(px(12.))
                             .text_color(rgb(palette.text_dimmed))
                             .child(desc),
                     )

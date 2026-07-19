@@ -556,15 +556,15 @@ fn search_engine_settings_section(
     div()
         .rounded_lg()
         .border_1()
-        .border_color(rgb(palette.border))
-        .bg(rgb(palette.surface))
+        .border_color(rgba((palette.border << 8) | 0xb3))
+        .bg(rgba((palette.surface << 8) | 0x99))
         .overflow_hidden()
         .child(
             div()
                 .px_4()
-                .py_3()
+                .py_4()
                 .border_b_1()
-                .border_color(rgb(palette.surface_elevated))
+                .border_color(rgba((palette.surface_elevated << 8) | 0x99))
                 .flex()
                 .items_start()
                 .justify_between()
@@ -575,7 +575,7 @@ fn search_engine_settings_section(
                         .flex_1()
                         .child(
                             div()
-                                .text_size(px(13.))
+                                .text_size(px(14.))
                                 .font_weight(FontWeight(600.))
                                 .text_color(rgb(palette.text))
                                 .child(title),
@@ -583,14 +583,14 @@ fn search_engine_settings_section(
                         .child(
                             div()
                                 .mt_1()
-                                .text_size(px(11.))
+                                .text_size(px(12.))
                                 .text_color(rgb(palette.text_dimmed))
                                 .child(desc),
                         ),
                 )
                 .child(action),
         )
-        .child(div().px_4().py_3().child(content))
+        .child(div().px_4().py_4().child(content))
 }
 
 fn search_engine_icon_button(
