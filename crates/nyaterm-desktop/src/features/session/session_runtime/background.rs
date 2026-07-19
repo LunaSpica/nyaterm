@@ -2,28 +2,78 @@ use super::*;
 
 const SESSION_START_EVENT_DRAIN_LIMIT: usize = 8;
 
+fn pending_session_start_display_name(pending: &PendingSessionStart) -> String {
+    pending
+        .custom_name
+        .as_deref()
+        .map(str::trim)
+        .filter(|name| !name.is_empty())
+        .unwrap_or(&pending.connection_name)
+        .to_string()
+}
+
 impl NyaTermApp {
     pub(in crate::features) fn has_pending_session_start(&self) -> bool {
         !self.pending_session_starts.is_empty()
     }
 
     pub(in crate::features) fn pending_session_display_name(&self) -> Option<String> {
-        self.pending_session_starts
-            .values()
-            .min_by(|left, right| {
-                left.requested_at
-                    .cmp(&right.requested_at)
-                    .then_with(|| left.connection_name.cmp(&right.connection_name))
+        self.active_pending_session_start
+            .as_deref()
+            .and_then(|request_id| self.pending_session_starts.get(request_id))
+            .or_else(|| {
+                self.pending_session_starts.values().min_by(|left, right| {
+                    left.requested_at
+                        .cmp(&right.requested_at)
+                        .then_with(|| left.connection_name.cmp(&right.connection_name))
+                })
             })
-            .map(|pending| {
-                pending
-                    .custom_name
-                    .as_deref()
-                    .map(str::trim)
-                    .filter(|name| !name.is_empty())
-                    .unwrap_or(&pending.connection_name)
-                    .to_string()
-            })
+            .map(pending_session_start_display_name)
+    }
+
+    pub(in crate::features) fn select_pending_session_start(
+        &mut self,
+        request_id: String,
+        cx: &mut Context<Self>,
+    ) {
+        if !self.pending_session_starts.contains_key(&request_id) {
+            return;
+        }
+        self.active_pending_session_start = Some(request_id);
+        self.open_tabs_menu_open = false;
+        self.new_session_menu_open = false;
+        self.selected_nav = NavItem::Workspace;
+        self.main_mode = MainMode::Workspace;
+        cx.notify();
+    }
+
+    pub(in crate::features) fn close_pending_session_start(
+        &mut self,
+        request_id: String,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(pending) = self.pending_session_starts.remove(&request_id) else {
+            return;
+        };
+        self.cancelled_session_start_requests
+            .insert(request_id.clone());
+        self.session_pane_states.remove(&request_id);
+        if self.active_pending_session_start.as_deref() == Some(request_id.as_str()) {
+            self.active_pending_session_start = self
+                .pending_session_starts
+                .iter()
+                .max_by(|(left_id, left), (right_id, right)| {
+                    left.requested_at
+                        .cmp(&right.requested_at)
+                        .then_with(|| left_id.cmp(right_id))
+                })
+                .map(|(request_id, _)| request_id.clone());
+        }
+        self.terminal_status = format!(
+            "cancelled connection {}",
+            pending_session_start_display_name(&pending)
+        );
+        cx.notify();
     }
 
     pub(in crate::features) fn pending_session_status_source(&self) -> Option<(String, Instant)> {
@@ -89,6 +139,7 @@ impl NyaTermApp {
                 source_connection_id,
             },
         );
+        self.active_pending_session_start = Some(request_id.clone());
         self.terminal_status = status_message;
         // Status + connecting tab already show progress; avoid full terminal decode
         // work on the click path before the worker even starts.
@@ -339,17 +390,41 @@ impl NyaTermApp {
         &mut self,
         cx: &mut Context<Self>,
     ) -> bool {
-        if self.pending_session_starts.is_empty() {
-            return false;
-        }
         let mut dirty = false;
         for _ in 0..SESSION_START_EVENT_DRAIN_LIMIT {
             let Ok(event) = self.session_start_rx.try_recv() else {
                 break;
             };
             dirty = true;
-            let pending = self.pending_session_starts.remove(&event.request_id);
             let request_id = event.request_id.clone();
+            if self
+                .cancelled_session_start_requests
+                .remove(&event.request_id)
+            {
+                self.session_pane_states.remove(&event.request_id);
+                if let Ok(success) = event.result {
+                    let session_id = success.session_info.id;
+                    if let Err(error) = self.session_manager.close(&session_id) {
+                        tracing::warn!(
+                            request_id = %request_id,
+                            session_id = %session_id,
+                            error = %error,
+                            "failed to close cancelled session start result"
+                        );
+                    }
+                }
+                tracing::debug!(
+                    request_id = %request_id,
+                    "discarded cancelled session start result"
+                );
+                continue;
+            }
+            let was_active_pending =
+                self.active_pending_session_start.as_deref() == Some(event.request_id.as_str());
+            let pending = self.pending_session_starts.remove(&event.request_id);
+            if was_active_pending {
+                self.active_pending_session_start = None;
+            }
             let connection_name = event.connection_name.clone();
             let kind = pending
                 .as_ref()
@@ -480,7 +555,12 @@ impl NyaTermApp {
                             session_id: session_id.clone(),
                         },
                     );
-                    self.activate_session_id(&session_id);
+                    if was_active_pending
+                        || (self.active_pending_session_start.is_none()
+                            && self.active_session_id.is_none())
+                    {
+                        self.activate_session_id(&session_id);
+                    }
                     // First connected frames often land with a login banner burst.
                     // Enter degraded paint immediately so tab-strip/status repaint
                     // does not stack full terminal decorations on connect.

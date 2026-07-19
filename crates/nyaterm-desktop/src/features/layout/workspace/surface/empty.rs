@@ -107,7 +107,16 @@ impl NyaTermApp {
                 svg()
                     .size(px(28.))
                     .path("icons/conn/connect.svg")
-                    .text_color(rgb(palette.primary)),
+                    .text_color(rgb(palette.primary))
+                    .with_animation(
+                        "pending-workspace-spinner",
+                        gpui::Animation::new(Duration::from_millis(900)).repeat(),
+                        |svg, delta| {
+                            svg.with_transformation(gpui::Transformation::rotate(
+                                gpui::percentage(delta),
+                            ))
+                        },
+                    ),
             )
             .child(
                 div()

@@ -23,7 +23,7 @@ impl NyaTermApp {
         self.publish_store_snapshots(cx);
     }
 
-    fn root_chrome(&mut self, cx: &mut Context<Self>) -> Stateful<Div> {
+    fn root_chrome(&mut self, window: &mut Window, cx: &mut Context<Self>) -> Stateful<Div> {
         self.ensure_paint_theme_caches();
         let palette = self.theme_palette();
         let wallpaper_path = self
@@ -219,7 +219,7 @@ impl NyaTermApp {
                     .flex_col()
                     .size_full()
                     .opacity(content_opacity)
-                    .child(self.title_bar(cx))
+                    .child(self.title_bar(window, cx))
                     .child(self.workspace_surface(palette, cx)),
             )
     }
@@ -252,12 +252,18 @@ impl NyaTermApp {
                 .into_any_element()
         } else {
             let compact_layout = !cfg!(target_os = "macos");
+            let has_left_activity_items = self.activity_side_has_items(ActivitySide::Left);
+            let has_right_activity_items = self.activity_side_has_items(ActivitySide::Right);
             let left_overlay_mode = compact_layout && self.last_viewport_size.0 < 1024.;
             let right_overlay_mode = compact_layout && self.last_viewport_size.0 < 768.;
-            let left_drawer_open =
-                left_overlay_mode && self.mobile_left_open && self.left_side_open();
-            let right_drawer_open =
-                right_overlay_mode && self.mobile_right_open && self.right_side_open();
+            let left_drawer_open = has_left_activity_items
+                && left_overlay_mode
+                && self.mobile_left_open
+                && self.left_side_open();
+            let right_drawer_open = has_right_activity_items
+                && right_overlay_mode
+                && self.mobile_right_open
+                && self.right_side_open();
             let mut surface = div()
                 .flex()
                 .flex_1()
@@ -265,17 +271,27 @@ impl NyaTermApp {
                 .relative()
                 .overflow_hidden()
                 .bg(rgb(palette.bg))
-                .child(self.activity_bar(ActivitySide::Left, cx))
-                .when(self.left_side_open() && !left_overlay_mode, |this| {
+                .when(has_left_activity_items, |this| {
+                    this.child(self.activity_bar(ActivitySide::Left, cx))
+                })
+                .when(
+                    has_left_activity_items && self.left_side_open() && !left_overlay_mode,
+                    |this| {
                     this.child(self.sidebar(cx))
                         .child(self.panel_resize_handle(PanelResizeSide::Left, cx))
-                })
+                    },
+                )
                 .child(self.main_surface(cx))
-                .when(self.right_side_open() && !right_overlay_mode, |this| {
-                    this.child(self.panel_resize_handle(PanelResizeSide::Right, cx))
-                        .child(self.right_panel(cx))
-                })
-                .child(self.activity_bar(ActivitySide::Right, cx));
+                .when(
+                    has_right_activity_items && self.right_side_open() && !right_overlay_mode,
+                    |this| {
+                        this.child(self.panel_resize_handle(PanelResizeSide::Right, cx))
+                            .child(self.right_panel(cx))
+                    },
+                )
+                .when(has_right_activity_items, |this| {
+                    this.child(self.activity_bar(ActivitySide::Right, cx))
+                });
 
             if self.terminal_windows_is_multi_leaf() && self.new_session_menu_open {
                 surface = surface.child(self.render_new_session_menu(cx));
@@ -385,7 +401,12 @@ impl NyaTermApp {
             )
     }
 
-    fn overlay_host(&mut self, content: Stateful<Div>, cx: &mut Context<Self>) -> Stateful<Div> {
+    fn overlay_host(
+        &mut self,
+        content: Stateful<Div>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> Stateful<Div> {
         let overlay = self
             .stores
             .overlays
@@ -566,7 +587,7 @@ impl NyaTermApp {
                 this.child(self.activity_bar_context_menu_overlay(cx))
             })
             .when(overlay.locked, |this| {
-                this.child(self.lock_screen_overlay(cx))
+                this.child(self.lock_screen_overlay(window, cx))
             })
             .when(self.about_open, |this| this.child(self.about_overlay(cx)))
             .when(self.update_dialog_open, |this| {
@@ -687,7 +708,7 @@ mod tests {
 }
 
 impl Render for NyaTermApp {
-    fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let render_started_at = Instant::now();
         FULL_SHELL_PAINT_COUNT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         self.terminal_runtime.full_shell_paint_count = self
@@ -695,10 +716,10 @@ impl Render for NyaTermApp {
             .full_shell_paint_count
             .saturating_add(1);
         let root_started_at = Instant::now();
-        let content = self.root_chrome(cx);
+        let content = self.root_chrome(window, cx);
         let root_duration = root_started_at.elapsed();
         let overlay_started_at = Instant::now();
-        let output = self.overlay_host(content, cx);
+        let output = self.overlay_host(content, window, cx);
         let overlay_duration = overlay_started_at.elapsed();
         let render_duration = render_started_at.elapsed();
         if render_duration >= Duration::from_millis(12)

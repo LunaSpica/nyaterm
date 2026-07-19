@@ -405,6 +405,7 @@ impl NyaTermApp {
 
         // Common idle path: no connecting sessions and no auth/SFTP prompts.
         if self.pending_session_starts.is_empty()
+            && self.cancelled_session_start_requests.is_empty()
             && self.pending_saved_connection_queue.is_empty()
             && self.active_host_key_prompt.is_none()
             && self.active_credential_prompt.is_none()

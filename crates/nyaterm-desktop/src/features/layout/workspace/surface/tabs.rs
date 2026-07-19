@@ -12,6 +12,121 @@ fn pending_tab_insert_index(
 }
 
 impl NyaTermApp {
+    fn pending_session_tab(
+        &mut self,
+        request_id: String,
+        pending_name: String,
+        tab_number: usize,
+        active: bool,
+        cx: &mut Context<Self>,
+    ) -> impl IntoElement {
+        let palette = self.theme_palette();
+        let close_request_id = request_id.clone();
+        let spinner_id = SharedString::from(format!("pending-session-spinner-{request_id}"));
+        div()
+            .id(SharedString::from(format!(
+                "pending-session-tab-{request_id}"
+            )))
+            .h_full()
+            .min_w(px(118.))
+            .max_w(px(236.))
+            .px_3()
+            .flex()
+            .items_center()
+            .gap_2()
+            .relative()
+            .border_r_1()
+            .border_color(rgb(palette.border))
+            .bg(if active {
+                rgb(palette.hover)
+            } else {
+                rgb(palette.bg)
+            })
+            .cursor_pointer()
+            .hover(|this| this.bg(rgb(palette.hover)))
+            .when(active, |this| {
+                this.child(
+                    div()
+                        .absolute()
+                        .top_0()
+                        .left_0()
+                        .right_0()
+                        .h(px(2.))
+                        .bg(rgb(palette.primary)),
+                )
+            })
+            .child(
+                div()
+                    .size(px(14.))
+                    .flex()
+                    .items_center()
+                    .justify_center()
+                    .child(
+                        svg()
+                            .size(px(12.))
+                            .path("icons/conn/connect.svg")
+                            .text_color(rgb(palette.primary))
+                            .with_animation(
+                                spinner_id,
+                                gpui::Animation::new(Duration::from_millis(900)).repeat(),
+                                |svg, delta| {
+                                    svg.with_transformation(gpui::Transformation::rotate(
+                                        gpui::percentage(delta),
+                                    ))
+                                },
+                            ),
+                    ),
+            )
+            .child(
+                div()
+                    .min_w(px(12.))
+                    .text_size(px(11.))
+                    .font_weight(FontWeight(700.))
+                    .text_color(rgb(palette.text_muted))
+                    .child(format!("{tab_number}")),
+            )
+            .child(
+                div()
+                    .min_w_0()
+                    .flex_1()
+                    .text_size(px(12.))
+                    .font_weight(if active {
+                        FontWeight(600.)
+                    } else {
+                        FontWeight(500.)
+                    })
+                    .text_color(if active {
+                        rgb(palette.text)
+                    } else {
+                        rgb(palette.text_muted)
+                    })
+                    .overflow_hidden()
+                    .child(truncate_preview(&pending_name, 28)),
+            )
+            .child(
+                div()
+                    .id(SharedString::from(format!(
+                        "pending-session-tab-close-{close_request_id}"
+                    )))
+                    .size(px(18.))
+                    .flex()
+                    .items_center()
+                    .justify_center()
+                    .rounded_sm()
+                    .text_xs()
+                    .text_color(rgb(palette.text_muted))
+                    .hover(|this| this.bg(rgb(palette.border)).text_color(rgb(palette.danger)))
+                    .child("x")
+                    .on_click(cx.listener(move |this, _, _, cx| {
+                        cx.stop_propagation();
+                        this.close_pending_session_start(close_request_id.clone(), cx);
+                    })),
+            )
+            .on_click(cx.listener(move |this, _, _, cx| {
+                this.select_pending_session_start(request_id.clone(), cx);
+            }))
+    }
+
     pub(in crate::features) fn main_surface(&mut self, cx: &mut Context<Self>) -> impl IntoElement {
         // The main surface always hosts the terminal workspace. Side panels are
         // rendered by the shell around this surface to match the Tauri layout.
@@ -34,8 +149,8 @@ impl NyaTermApp {
         let session_count = sessions.len();
         let mut pending_tabs = self
             .pending_session_starts
-            .values()
-            .map(|pending| {
+            .iter()
+            .map(|(request_id, pending)| {
                 let name = pending
                     .custom_name
                     .as_deref()
@@ -52,6 +167,7 @@ impl NyaTermApp {
                     index,
                     pending.requested_at,
                     pending.connection_name.clone(),
+                    request_id.clone(),
                     name,
                 )
             })
@@ -67,7 +183,7 @@ impl NyaTermApp {
                 if let Some(index) = sessions.iter().position(|session| session.id == active_id) {
                     let pending_count = pending_tabs
                         .iter()
-                        .filter(|(pending_index, _, _, _)| *pending_index <= index)
+                        .filter(|(pending_index, _, _, _, _)| *pending_index <= index)
                         .count();
                     let child_index = index + pending_count;
                     self.session_tab_strip_scroll.scroll_to_item(child_index);
@@ -87,69 +203,20 @@ impl NyaTermApp {
             .overflow_y_hidden()
             .track_scroll(&self.session_tab_strip_scroll);
 
-        let render_pending_tab = |pending_name: &str, tab_number: usize| {
-            div()
-                .h_full()
-                .min_w(px(118.))
-                .max_w(px(236.))
-                .px_3()
-                .flex()
-                .items_center()
-                .gap_2()
-                .relative()
-                .border_r_1()
-                .border_color(rgb(palette.border))
-                .bg(rgb(palette.hover))
-                .child(
-                    div()
-                        .absolute()
-                        .top_0()
-                        .left_0()
-                        .right_0()
-                        .h(px(2.))
-                        .bg(rgb(palette.primary)),
-                )
-                .child(
-                    div()
-                        .size(px(14.))
-                        .flex()
-                        .items_center()
-                        .justify_center()
-                        .child(
-                            svg()
-                                .size(px(12.))
-                                .path("icons/conn/connect.svg")
-                                .text_color(rgb(palette.primary)),
-                        ),
-                )
-                .child(
-                    div()
-                        .min_w(px(12.))
-                        .text_size(px(11.))
-                        .font_weight(FontWeight(700.))
-                        .text_color(rgb(palette.text_muted))
-                        .child(format!("{tab_number}")),
-                )
-                .child(
-                    div()
-                        .min_w_0()
-                        .flex_1()
-                        .text_size(px(12.))
-                        .font_weight(FontWeight(600.))
-                        .text_color(rgb(palette.text))
-                        .overflow_hidden()
-                        .child(truncate_preview(pending_name, 28)),
-                )
-        };
-
         let mut pending_cursor = 0usize;
         for (tab_index, session) in sessions.into_iter().enumerate() {
             while pending_cursor < pending_tabs.len() && pending_tabs[pending_cursor].0 == tab_index
             {
-                let pending_name = &pending_tabs[pending_cursor].3;
-                tabs = tabs.child(render_pending_tab(
+                let pending_request_id = pending_tabs[pending_cursor].3.clone();
+                let pending_name = pending_tabs[pending_cursor].4.clone();
+                let active = self.active_pending_session_start.as_deref()
+                    == Some(pending_request_id.as_str());
+                tabs = tabs.child(self.pending_session_tab(
+                    pending_request_id,
                     pending_name,
                     tab_index + pending_cursor + 1,
+                    active,
+                    cx,
                 ));
                 pending_cursor += 1;
             }
@@ -389,10 +456,16 @@ impl NyaTermApp {
             );
         }
         while pending_cursor < pending_tabs.len() {
-            let pending_name = &pending_tabs[pending_cursor].3;
-            tabs = tabs.child(render_pending_tab(
+            let pending_request_id = pending_tabs[pending_cursor].3.clone();
+            let pending_name = pending_tabs[pending_cursor].4.clone();
+            let active =
+                self.active_pending_session_start.as_deref() == Some(pending_request_id.as_str());
+            tabs = tabs.child(self.pending_session_tab(
+                pending_request_id,
                 pending_name,
                 session_count + pending_cursor + 1,
+                active,
+                cx,
             ));
             pending_cursor += 1;
         }

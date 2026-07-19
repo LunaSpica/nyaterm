@@ -3,6 +3,7 @@ use super::*;
 impl NyaTermApp {
     pub(in crate::features) fn lock_screen_overlay(
         &mut self,
+        window: &mut Window,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
         let palette = self.theme_palette();
@@ -61,21 +62,25 @@ impl NyaTermApp {
                     .child(window_control_button(
                         palette,
                         "lock-window-min",
-                        "–",
+                        "icons/window/minimize.svg",
                         WindowControlArea::Min,
                         |_, window, _| window.minimize_window(),
                     ))
                     .child(window_control_button(
                         palette,
                         "lock-window-max",
-                        "□",
+                        if window.is_maximized() {
+                            "icons/window/restore.svg"
+                        } else {
+                            "icons/window/maximize.svg"
+                        },
                         WindowControlArea::Max,
                         |_, window, _| window.zoom_window(),
                     ))
                     .child(window_control_button(
                         palette,
                         "lock-window-close",
-                        "×",
+                        "icons/window/close.svg",
                         WindowControlArea::Close,
                         |_, window, _| window.remove_window(),
                     )),

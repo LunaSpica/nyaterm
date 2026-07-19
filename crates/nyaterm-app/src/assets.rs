@@ -24,6 +24,10 @@ const ICON_FILES: &[&str] = &[
     "icons/record.svg",
     "icons/lock.svg",
     "icons/chevron-down.svg",
+    "icons/window/minimize.svg",
+    "icons/window/maximize.svg",
+    "icons/window/restore.svg",
+    "icons/window/close.svg",
     "icons/session/more.svg",
     "icons/session/save.svg",
     "icons/session/stop.svg",
@@ -101,6 +105,10 @@ fn icon_bytes(path: &str) -> Option<&'static [u8]> {
         "icons/record.svg" => Some(include_bytes!("../assets/icons/record.svg")),
         "icons/lock.svg" => Some(include_bytes!("../assets/icons/lock.svg")),
         "icons/chevron-down.svg" => Some(include_bytes!("../assets/icons/chevron-down.svg")),
+        "icons/window/minimize.svg" => Some(include_bytes!("../assets/icons/window/minimize.svg")),
+        "icons/window/maximize.svg" => Some(include_bytes!("../assets/icons/window/maximize.svg")),
+        "icons/window/restore.svg" => Some(include_bytes!("../assets/icons/window/restore.svg")),
+        "icons/window/close.svg" => Some(include_bytes!("../assets/icons/window/close.svg")),
         "icons/session/more.svg" => Some(include_bytes!("../assets/icons/session/more.svg")),
         "icons/session/save.svg" => Some(include_bytes!("../assets/icons/session/save.svg")),
         "icons/session/stop.svg" => Some(include_bytes!("../assets/icons/session/stop.svg")),
@@ -179,6 +187,7 @@ impl AssetSource for NyaTermAssets {
             || normalized == "icons/conn"
             || normalized == "icons/fe"
             || normalized == "icons/ai"
+            || normalized == "icons/window"
         {
             Ok(ICON_FILES.iter().map(|item| (*item).into()).collect())
         } else {

@@ -62,6 +62,16 @@ impl Render for ActivityBarDragPreview {
 }
 
 impl NyaTermApp {
+    pub(in crate::features) fn activity_side_has_items(&self, side: ActivitySide) -> bool {
+        let zones = match side {
+            ActivitySide::Left => [ActivityBarZone::LeftTop, ActivityBarZone::LeftBottom],
+            ActivitySide::Right => [ActivityBarZone::RightTop, ActivityBarZone::RightBottom],
+        };
+        zones
+            .into_iter()
+            .any(|zone| !self.activity_bar_layout.zone(zone).is_empty())
+    }
+
     pub(in crate::features) fn activity_entries_for_zone(
         &self,
         zone: ActivityBarZone,

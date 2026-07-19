@@ -59,6 +59,7 @@ impl Render for ConnectionEditorWindow {
                 title,
                 None,
                 false,
+                window.is_maximized(),
                 move |_, window, cx| {
                     close_app.update(cx, |app, cx| app.close_connection_editor(cx));
                     window.remove_window();

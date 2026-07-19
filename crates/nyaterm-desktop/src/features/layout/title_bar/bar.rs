@@ -1,7 +1,11 @@
 use super::*;
 
 impl NyaTermApp {
-    pub(in crate::features) fn title_bar(&mut self, cx: &mut Context<Self>) -> impl IntoElement {
+    pub(in crate::features) fn title_bar(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> impl IntoElement {
         let palette = self.theme_palette();
         let macos = cfg!(target_os = "macos");
         let compact_layout = !cfg!(target_os = "macos");
@@ -149,7 +153,7 @@ impl NyaTermApp {
                         this.child(window_control_button(
                             palette,
                             "window-min",
-                            "–",
+                            "icons/window/minimize.svg",
                             WindowControlArea::Min,
                             cx.listener(|this, _, window, cx| {
                                 this.handle_window_minimize(window, cx);
@@ -158,14 +162,18 @@ impl NyaTermApp {
                         .child(window_control_button(
                             palette,
                             "window-max",
-                            "□",
+                            if window.is_maximized() {
+                                "icons/window/restore.svg"
+                            } else {
+                                "icons/window/maximize.svg"
+                            },
                             WindowControlArea::Max,
                             |_, window, _| window.zoom_window(),
                         ))
                         .child(window_control_button(
                             palette,
                             "window-close",
-                            "×",
+                            "icons/window/close.svg",
                             WindowControlArea::Close,
                             cx.listener(|this, _, window, cx| {
                                 this.handle_window_close_request(window, cx);

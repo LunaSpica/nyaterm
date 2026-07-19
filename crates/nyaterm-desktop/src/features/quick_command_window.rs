@@ -60,6 +60,7 @@ impl Render for QuickCommandWindow {
                 title,
                 None,
                 false,
+                window.is_maximized(),
                 move |_, window, cx| {
                     close_app.update(cx, |app, cx| app.close_quick_command_editor(cx));
                     window.remove_window();

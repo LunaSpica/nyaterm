@@ -107,6 +107,7 @@ impl Render for RemoteFileEditorWindow {
                 title,
                 Some("icons/files.svg"),
                 true,
+                window.is_maximized(),
                 move |_, window, cx| {
                     let should_close = close_app.update(cx, |app, cx| {
                         app.close_transfer_editor(cx);

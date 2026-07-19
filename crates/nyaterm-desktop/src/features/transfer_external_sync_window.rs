@@ -70,6 +70,7 @@ impl Render for TransferExternalSyncWindow {
                 title,
                 Some("icons/sync.svg"),
                 false,
+                window.is_maximized(),
                 move |_, window, cx| {
                     close_app.update(cx, |app, cx| {
                         app.ignore_external_editor_sync_prompt(&close_prompt_id, cx);

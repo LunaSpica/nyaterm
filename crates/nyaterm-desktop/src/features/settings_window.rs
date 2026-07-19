@@ -61,6 +61,7 @@ impl Render for SettingsWindow {
                 title,
                 Some("icons/settings.svg"),
                 false,
+                window.is_maximized(),
                 move |_, window, cx| {
                     close_app.update(cx, |app, cx| app.cancel_settings(cx));
                     window.remove_window();

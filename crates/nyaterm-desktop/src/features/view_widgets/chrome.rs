@@ -39,7 +39,7 @@ pub(in crate::features) fn menu_bar_button(
 pub(in crate::features) fn window_control_button(
     palette: ThemePalette,
     id: &'static str,
-    label: &'static str,
+    icon_path: &'static str,
     area: WindowControlArea,
     on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
 ) -> impl IntoElement {
@@ -50,7 +50,6 @@ pub(in crate::features) fn window_control_button(
         .flex()
         .items_center()
         .justify_center()
-        .text_xs()
         .text_color(rgb(palette.text_muted))
         .window_control_area(area)
         .cursor_pointer()
@@ -61,7 +60,7 @@ pub(in crate::features) fn window_control_button(
                 this.bg(rgb(palette.hover)).text_color(rgb(palette.text))
             }
         })
-        .child(label)
+        .child(svg().size(px(16.)).flex_none().path(icon_path))
         .on_click(on_click)
 }
 
@@ -70,6 +69,7 @@ pub(in crate::features) fn child_window_header(
     title: impl Into<SharedString>,
     icon_path: Option<&'static str>,
     window_controls: bool,
+    is_maximized: bool,
     on_close: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
 ) -> impl IntoElement {
     let title = title.into();
@@ -121,14 +121,18 @@ pub(in crate::features) fn child_window_header(
                     this.child(window_control_button(
                         palette,
                         "child-window-min",
-                        "-",
+                        "icons/window/minimize.svg",
                         WindowControlArea::Min,
                         |_, window, _| window.minimize_window(),
                     ))
                     .child(window_control_button(
                         palette,
                         "child-window-max",
-                        "□",
+                        if is_maximized {
+                            "icons/window/restore.svg"
+                        } else {
+                            "icons/window/maximize.svg"
+                        },
                         WindowControlArea::Max,
                         |_, window, _| window.zoom_window(),
                     ))
@@ -137,7 +141,7 @@ pub(in crate::features) fn child_window_header(
                     this.child(window_control_button(
                         palette,
                         "child-window-close",
-                        "×",
+                        "icons/window/close.svg",
                         WindowControlArea::Close,
                         on_close,
                     ))
