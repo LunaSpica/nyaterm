@@ -86,8 +86,7 @@ pub(in crate::features::pages::transfers) fn property_section_heading(
     label: &'static str,
 ) -> impl IntoElement {
     div()
-        .mt_4()
-        .mb_2()
+        .mb_3()
         .text_size(px(10.))
         .font_weight(FontWeight(800.))
         .text_color(rgb(palette.text_muted))
