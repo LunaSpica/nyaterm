@@ -343,7 +343,7 @@ impl NyaTermApp {
                     )
                     .child(terminal_search_icon_button(
                         "terminal-search-close",
-                        "x",
+                        "icons/window/close.svg",
                         self.theme_palette(),
                         cx.listener(|this, _, window, cx| {
                             this.close_terminal_search(window, cx);
@@ -416,7 +416,7 @@ impl NyaTermApp {
                         |this| {
                             this.child(terminal_search_icon_button(
                                 "terminal-search-prev",
-                                "^",
+                                "icons/chevron-up.svg",
                                 self.theme_palette(),
                                 cx.listener(|this, _, _, cx| {
                                     this.navigate_terminal_search(-1, cx);
@@ -424,7 +424,7 @@ impl NyaTermApp {
                             ))
                             .child(terminal_search_icon_button(
                                 "terminal-search-next",
-                                "v",
+                                "icons/chevron-down.svg",
                                 self.theme_palette(),
                                 cx.listener(|this, _, _, cx| {
                                     this.navigate_terminal_search(1, cx);
@@ -470,7 +470,7 @@ fn terminal_search_mode_button(
 
 fn terminal_search_icon_button(
     id: impl Into<String>,
-    label: &'static str,
+    icon_path: &'static str,
     palette: ThemePalette,
     on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
 ) -> impl IntoElement {
@@ -482,10 +482,9 @@ fn terminal_search_icon_button(
         .justify_center()
         .rounded_sm()
         .text_color(rgb(palette.text_muted))
-        .text_size(px(14.))
         .cursor_pointer()
         .hover(|this| this.opacity(0.8))
-        .child(label)
+        .child(svg().size(px(14.)).path(icon_path))
         .on_click(on_click)
 }
 
