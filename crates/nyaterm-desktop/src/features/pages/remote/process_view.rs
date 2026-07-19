@@ -280,10 +280,12 @@ impl NyaTermApp {
             .size_full()
             .relative()
             .overflow_hidden()
+            .p(px(10.))
+            .gap(px(10.))
             .bg(self.shell_transparent_color(palette.surface))
             .child(
                 div()
-                    .h(px(36.))
+                    .h(px(32.))
                     .flex_none()
                     .px_2()
                     .border_b_1()
@@ -301,7 +303,7 @@ impl NyaTermApp {
                                 true,
                                 self.theme_palette(),
                             )
-                            .h(px(28.))
+                            .h(px(32.))
                             .track_focus(&self.process_search_focus)
                             .on_click(cx.listener(|this, _, window, cx| {
                                 window.focus(&this.process_search_focus);
@@ -345,7 +347,7 @@ impl NyaTermApp {
                         ProcessDisplayMode::Medium => 5,
                         _ => 6,
                     };
-                    this.h(px(26.))
+                    this.h(px(32.))
                         .flex_none()
                         .px_2()
                         .border_b_1()
@@ -432,6 +434,9 @@ impl NyaTermApp {
                     .overflow_hidden()
                     .flex()
                     .flex_col()
+                    .rounded_md()
+                    .border_1()
+                    .border_color(rgb(palette.border))
                     .on_scroll_wheel(cx.listener(move |this, event: &ScrollWheelEvent, _, cx| {
                         let max_offset = total_filtered
                             .saturating_sub(PROCESS_VIEWPORT_ROWS.min(total_filtered));

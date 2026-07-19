@@ -192,6 +192,8 @@ impl NyaTermApp {
             .size_full()
             .relative()
             .overflow_hidden()
+            .p(px(10.))
+            .gap(px(10.))
             .bg(self.shell_transparent_color(palette.surface))
             .when(
                 self.docker_overview
@@ -211,7 +213,7 @@ impl NyaTermApp {
             )
             .child(
                 div()
-                    .h(px(36.))
+                    .h(px(32.))
                     .flex_none()
                     .px_2()
                     .border_b_1()
@@ -229,7 +231,7 @@ impl NyaTermApp {
                                 true,
                                 self.theme_palette(),
                             )
-                            .h(px(28.))
+                            .h(px(32.))
                             .track_focus(&self.docker_search_focus)
                             .on_click(cx.listener(|this, _, window, cx| {
                                 window.focus(&this.docker_search_focus);

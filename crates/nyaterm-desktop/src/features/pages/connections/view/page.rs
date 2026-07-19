@@ -32,7 +32,7 @@ impl NyaTermApp {
             .flex_1()
             .min_h_0()
             .overflow_y_scroll()
-            .p_1()
+            .p(px(6.))
             .flex()
             .flex_col()
             .on_mouse_down(
@@ -125,7 +125,7 @@ impl NyaTermApp {
             .flex_col()
             .size_full()
             .overflow_hidden()
-            .bg(self.shell_surface_color(palette.surface))
+            .bg(self.shell_transparent_color(palette.surface))
             .child(self.connections_search_bar(visible_count, cx))
             .when(selected_count > 0, |this| {
                 this.child(self.connections_selection_strip(selected_count, cx))

@@ -68,8 +68,6 @@ impl NyaTermApp {
             .map(|id| self.expanded_connection_groups.contains(id))
             .unwrap_or(true);
         let group_id = section.group_id.clone();
-        let group_id_for_edit = section.group_id.clone();
-        let group_id_for_delete = section.group_id.clone();
         let group_label = section.label.clone();
         let empty_group_label = self.tr("savedConnections.emptyGroup");
         let count = section.total_count;
@@ -112,9 +110,10 @@ impl NyaTermApp {
                     .flex()
                     .items_center()
                     .justify_between()
-                    .gap_2()
+                    .gap(px(6.))
                     .px_2()
                     .pl(px(8. + section.depth as f32 * 16.))
+                    .rounded_sm()
                     .cursor_pointer()
                     .bg({
                         let drop_inside =
@@ -264,7 +263,7 @@ impl NyaTermApp {
                         div()
                             .flex()
                             .items_center()
-                            .gap_2()
+                            .gap(px(6.))
                             .min_w_0()
                             .child(
                                 svg()
@@ -285,9 +284,12 @@ impl NyaTermApp {
                             ))
                             .child(
                                 div()
+                                    .min_w_0()
+                                    .flex_1()
                                     .text_xs()
-                                    .font_weight(FontWeight(700.))
-                                    .text_color(rgb(palette.text))
+                                    .font_weight(FontWeight(500.))
+                                    .text_color(rgb(palette.text_muted))
+                                    .overflow_hidden()
                                     .child(truncate_preview(&group_label, 28)),
                             )
                             .child(
@@ -296,52 +298,7 @@ impl NyaTermApp {
                                     .text_color(rgb(palette.text_dimmed))
                                     .child(count.to_string()),
                             ),
-                    )
-                    .when(!section.is_root, |this| {
-                        let show_group_actions = section.group_id.as_ref().is_some_and(|id| {
-                            self.hovered_connection_group_id.as_deref() == Some(id.as_str())
-                        });
-                        this.child(
-                            div()
-                                .flex()
-                                .items_center()
-                                .gap_1()
-                                .opacity(if show_group_actions { 1. } else { 0. })
-                                .child(icon_action_button(
-                                    palette,
-                                    format!(
-                                        "connection-group-edit-{}",
-                                        group_id_for_edit.clone().unwrap_or_default()
-                                    ),
-                                    "icons/net/edit.svg",
-                                    self.tr("savedConnections.renameFolder"),
-                                    cx.listener(move |this, _, window, cx| {
-                                        cx.stop_propagation();
-                                        this.open_connection_group_editor(
-                                            group_id_for_edit.clone(),
-                                            None,
-                                            window,
-                                            cx,
-                                        );
-                                    }),
-                                ))
-                                .child(icon_action_button(
-                                    palette,
-                                    format!(
-                                        "connection-group-delete-{}",
-                                        group_id_for_delete.clone().unwrap_or_default()
-                                    ),
-                                    "icons/net/delete.svg",
-                                    self.tr("savedConnections.deleteFolder"),
-                                    cx.listener(move |this, _, _, cx| {
-                                        cx.stop_propagation();
-                                        if let Some(group_id) = group_id_for_delete.clone() {
-                                            this.open_connection_group_delete_confirm(group_id, cx);
-                                        }
-                                    }),
-                                )),
-                        )
-                    }),
+                    ),
             )
             .child(body)
     }
@@ -363,7 +320,7 @@ impl NyaTermApp {
         let menu_id = connection.id.clone();
         let kind = connection.kind_label();
         let icon_def = resolve_connection_icon(connection.icon.as_deref(), kind);
-        let show_actions = hovered || selected;
+        let show_actions = hovered;
         let details_tooltip = self.connection_details_tooltip(connection.clone());
         let _endpoint = connection.endpoint();
         let _last_used = format_last_used_ms(connection.last_used_at_ms);
