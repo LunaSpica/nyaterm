@@ -4,7 +4,9 @@ use crate::features::terminal_runtime::{
     terminal_local_scroll_delta_lines_from_state, terminal_scroll_needs_text_first_repaint,
     terminal_scroll_track_ratio, terminal_visual_scroll_active_for_state,
 };
-use crate::features::terminal_selection_runtime::terminal_gutter_metrics;
+use crate::features::terminal_selection_runtime::{
+    terminal_gutter_metrics, terminal_line_number_digits,
+};
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
@@ -1621,8 +1623,9 @@ impl Render for TerminalSurface {
                 self.show_timestamps,
                 self.show_timestamp_ms,
                 self.show_line_numbers,
-                5,
+                terminal_line_number_digits(snapshot.as_ref()),
             );
+            let line_number_digits = terminal_line_number_digits(snapshot.as_ref());
             let ts_w = gutter_metrics.timestamp_width;
             let ln_w = gutter_metrics.line_number_width;
             let abs_start = snapshot
@@ -1658,7 +1661,11 @@ impl Render for TerminalSurface {
                     String::new()
                 };
                 let line_label = if self.show_line_numbers {
-                    format!("{:>5}", abs_start + line_index + 1)
+                    format!(
+                        "{:>width$}",
+                        abs_start + line_index + 1,
+                        width = line_number_digits,
+                    )
                 } else {
                     String::new()
                 };

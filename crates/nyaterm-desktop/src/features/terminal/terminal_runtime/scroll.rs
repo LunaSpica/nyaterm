@@ -1382,7 +1382,7 @@ impl NyaTermApp {
                 })
             })
             .or(self.terminal_surface_bounds)?;
-        Some(self.terminal_resize_geometry_for_bounds(bounds))
+        Some(self.terminal_resize_geometry_for_bounds_for_session(bounds, session_id))
     }
 
     pub(in crate::features) fn desired_terminal_grid_size_for_bounds(
@@ -1397,9 +1397,20 @@ impl NyaTermApp {
         &self,
         bounds: gpui::Bounds<gpui::Pixels>,
     ) -> TerminalResizeGeometry {
+        self.terminal_resize_geometry_for_bounds_for_session(
+            bounds,
+            self.active_session_id.as_deref(),
+        )
+    }
+
+    pub(in crate::features) fn terminal_resize_geometry_for_bounds_for_session(
+        &self,
+        bounds: gpui::Bounds<gpui::Pixels>,
+        session_id: Option<&str>,
+    ) -> TerminalResizeGeometry {
         let (cell_w, cell_h) = self.terminal_cell_size();
         let insets = self.terminal_content_insets();
-        let gutter = self.terminal_gutter_width_px();
+        let gutter = self.terminal_gutter_width_px_for_session(session_id);
         terminal_resize_geometry_for_size_with_insets(
             f32::from(bounds.size.width),
             f32::from(bounds.size.height),
@@ -1459,7 +1470,7 @@ impl NyaTermApp {
             rows,
             pixel_width,
             pixel_height,
-        } = self.terminal_resize_geometry_for_bounds(bounds);
+        } = self.terminal_resize_geometry_for_bounds_for_session(bounds, session_id);
         if let Some(session_id) = session_id.filter(|id| !id.is_empty()) {
             let Some(view) = self.terminal_views.get_mut(session_id) else {
                 return false;

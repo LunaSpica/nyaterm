@@ -70,13 +70,22 @@ impl NyaTermApp {
     }
 
     pub(in crate::features) fn terminal_gutter_width_px(&self) -> f32 {
+        self.terminal_gutter_width_px_for_session(self.active_session_id.as_deref())
+    }
+
+    pub(in crate::features) fn terminal_gutter_width_px_for_session(
+        &self,
+        session_id: Option<&str>,
+    ) -> f32 {
         let (cell_w, _) = self.terminal_cell_size();
+        let display_offset = self.terminal_display_offset_for_session(session_id);
+        let snapshot = self.terminal_snapshot_for_session(session_id, display_offset);
         terminal_gutter_metrics(
             cell_w,
             self.settings.terminal_show_timestamps,
             self.settings.terminal_show_timestamp_milliseconds,
             self.settings.terminal_show_line_numbers,
-            5,
+            terminal_line_number_digits(snapshot.as_ref()),
         )
         .total_width()
     }
@@ -88,14 +97,24 @@ impl NyaTermApp {
             true,
             self.settings.terminal_show_timestamp_milliseconds,
             false,
-            5,
+            1,
         )
         .timestamp_width
     }
 
     pub(in crate::features) fn terminal_line_number_gutter_width_px(&self) -> f32 {
         let (cell_w, _) = self.terminal_cell_size();
-        terminal_gutter_metrics(cell_w, false, false, true, 5).line_number_width
+        let display_offset = self.active_terminal_display_offset();
+        let snapshot =
+            self.terminal_snapshot_for_session(self.active_session_id.as_deref(), display_offset);
+        terminal_gutter_metrics(
+            cell_w,
+            false,
+            false,
+            true,
+            terminal_line_number_digits(snapshot.as_ref()),
+        )
+        .line_number_width
     }
 
     pub(in crate::features) fn active_terminal_grid_size(&self) -> (usize, usize) {
@@ -181,7 +200,7 @@ impl NyaTermApp {
             .or(self.terminal_surface_bounds)?;
         let (cell_w, cell_h) = self.terminal_cell_size();
         let insets = self.terminal_content_insets();
-        let gutter = self.terminal_gutter_width_px();
+        let gutter = self.terminal_gutter_width_px_for_session(session_id);
         let (rows, cols) = self.terminal_grid_size_for_session(session_id);
         let display_offset = self.terminal_display_offset_for_session(session_id);
         let snapshot = self.terminal_snapshot_for_session(session_id, display_offset);
@@ -345,6 +364,20 @@ pub(in crate::features) fn terminal_gutter_metrics(
     }
 }
 
+pub(in crate::features) fn terminal_line_number_digits(
+    snapshot: &nyaterm_terminal::TerminalSnapshot,
+) -> usize {
+    let visible_end = snapshot
+        .total_rows
+        .saturating_sub(snapshot.display_offset)
+        .max(1);
+    terminal_line_number_digits_for_end(visible_end)
+}
+
+fn terminal_line_number_digits_for_end(visible_end: usize) -> usize {
+    visible_end.max(1).to_string().len()
+}
+
 pub(in crate::features) fn terminal_snapshot_row_for_viewport_row(
     snapshot: &nyaterm_terminal::TerminalSnapshot,
     display_offset: usize,
@@ -442,6 +475,15 @@ mod tests {
                 + metrics.gap_width
                 + metrics.trailing_padding_width
         );
+    }
+
+    #[test]
+    fn gutter_line_number_digits_follow_visible_absolute_end() {
+        assert_eq!(terminal_line_number_digits_for_end(0), 1);
+        assert_eq!(terminal_line_number_digits_for_end(9), 1);
+        assert_eq!(terminal_line_number_digits_for_end(10), 2);
+        assert_eq!(terminal_line_number_digits_for_end(99_999), 5);
+        assert_eq!(terminal_line_number_digits_for_end(100_000), 6);
     }
 
     #[test]

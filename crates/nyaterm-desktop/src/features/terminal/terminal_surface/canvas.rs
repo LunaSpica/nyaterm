@@ -1,5 +1,7 @@
 use super::*;
-use crate::features::terminal_selection_runtime::terminal_gutter_metrics;
+use crate::features::terminal_selection_runtime::{
+    terminal_gutter_metrics, terminal_line_number_digits,
+};
 use crate::models::TerminalPerformanceMode;
 
 impl NyaTermApp {
@@ -302,7 +304,9 @@ impl NyaTermApp {
         .then(|| self.terminal_ime_marked_text.clone());
         let ime_preedit_position = ime_preedit_text.as_ref().map(|_| {
             let insets = self.terminal_content_insets();
-            let gutter = self.terminal_gutter_width_px();
+            let gutter = self.terminal_gutter_width_px_for_session(
+                (!session_id.is_empty()).then_some(session_id.as_str()),
+            );
             let row = if cursor_row == usize::MAX {
                 line_count.saturating_sub(1)
             } else {
@@ -315,15 +319,16 @@ impl NyaTermApp {
             )
         });
         let gutter = if session_id.is_empty() && gutter_enabled {
+            let line_number_digits = terminal_line_number_digits(snapshot.as_ref());
             let gutter_metrics = terminal_gutter_metrics(
                 cell_w,
                 show_timestamps,
                 show_timestamp_ms,
                 show_line_numbers,
-                5,
+                line_number_digits,
             );
-            let ts_w = self.terminal_timestamp_gutter_width_px();
-            let ln_w = self.terminal_line_number_gutter_width_px();
+            let ts_w = gutter_metrics.timestamp_width;
+            let ln_w = gutter_metrics.line_number_width;
             let mut gutter = div()
                 .flex()
                 .flex_col()
@@ -350,7 +355,11 @@ impl NyaTermApp {
                     String::new()
                 };
                 let line_label = if show_line_numbers {
-                    format!("{:>5}", abs_start + line_index + 1)
+                    format!(
+                        "{:>width$}",
+                        abs_start + line_index + 1,
+                        width = line_number_digits,
+                    )
                 } else {
                     String::new()
                 };

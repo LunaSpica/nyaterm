@@ -607,7 +607,7 @@ impl NyaTermApp {
             self.terminal_cell_size(),
             insets.left,
             insets.top,
-            self.terminal_gutter_width_px(),
+            self.terminal_gutter_width_px_for_session(session_id),
             self.last_viewport_size,
             cursor_row,
             cursor_col,

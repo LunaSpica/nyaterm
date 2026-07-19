@@ -17,7 +17,9 @@ pub(in crate::features) use helpers::*;
 mod action_links;
 #[path = "terminal_selection_runtime/metrics.rs"]
 mod metrics;
-pub(in crate::features) use metrics::{terminal_cell_for_visual_geometry, terminal_gutter_metrics};
+pub(in crate::features) use metrics::{
+    terminal_cell_for_visual_geometry, terminal_gutter_metrics, terminal_line_number_digits,
+};
 #[path = "terminal_selection_runtime/selection.rs"]
 mod selection;
 #[path = "terminal_selection_runtime/smart_input.rs"]
