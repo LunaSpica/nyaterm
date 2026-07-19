@@ -81,13 +81,12 @@ pub(super) fn send_command_select_trigger(
         .child(
             div()
                 .flex_none()
-                .text_size(px(10.))
                 .text_color(if open {
                     rgb(palette.link)
                 } else {
                     rgb(palette.text_dimmed)
                 })
-                .child("v"),
+                .child(svg().size(px(13.)).path("icons/chevron-down.svg")),
         )
         .when(!disabled, |this| this.on_click(on_click))
 }
