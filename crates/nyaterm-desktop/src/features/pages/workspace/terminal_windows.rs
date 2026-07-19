@@ -17,19 +17,15 @@ impl NyaTermApp {
                     .clone()
                     .or_else(|| tab_ids.first().cloned())
                     .unwrap_or_default();
-                let focused_leaf =
-                    self.focused_terminal_window_leaf_id.as_deref() == Some(id.as_str());
                 let drop_zone = self
                     .terminal_window_drop
                     .as_ref()
                     .filter(|(leaf, _)| leaf == &id)
                     .map(|(_, zone)| *zone);
                 let mut strip = div()
-                    .h(px(30.))
+                    .h(px(36.))
                     .flex()
                     .items_center()
-                    .gap_1()
-                    .px_1()
                     .border_b_1()
                     .border_color(rgb(palette.border))
                     .bg(rgb(palette.surface));
@@ -97,9 +93,9 @@ impl NyaTermApp {
                     let bg = if let Some(custom_color) = custom_color {
                         rgba((custom_color << 8) | if is_active_tab { 0x24 } else { 0x14 })
                     } else if is_active_tab {
-                        rgb(palette.hover)
+                        rgb(palette.bg)
                     } else {
-                        rgb(palette.surface)
+                        rgba(0x00000000)
                     };
                     let drag_payload = SessionTabDragPayload {
                         session_id: tab_id.clone(),
@@ -112,24 +108,21 @@ impl NyaTermApp {
                     strip = strip.child(
                         div()
                             .id(SharedString::from(format!("tw-tab-{leaf_id}-{select_id}")))
-                            .h(px(24.))
-                            .px_1()
-                            .pl_2()
-                            .rounded_sm()
+                            .h_full()
+                            .min_w(px(118.))
+                            .max_w(px(236.))
+                            .pl_3()
+                            .pr_2()
                             .flex()
                             .items_center()
-                            .gap_1()
+                            .gap_2()
                             .relative()
                             .cursor_pointer()
                             .cursor_move()
                             .bg(bg)
                             .when(is_disconnected, |this| this.opacity(0.78))
-                            .border_1()
-                            .border_color(if is_active_tab {
-                                rgb(palette.link)
-                            } else {
-                                rgb(palette.border)
-                            })
+                            .border_r_1()
+                            .border_color(rgb(palette.border))
                             .when(is_active_tab, |this| {
                                 this.child(
                                     div()
@@ -210,17 +203,17 @@ impl NyaTermApp {
                             ))
                             .child(
                                 div()
-                                    .size(px(12.))
+                                    .size(px(14.))
                                     .flex()
                                     .items_center()
                                     .justify_center()
-                                    .child(svg().size(px(10.)).path(kind_icon).text_color(accent)),
+                                    .child(svg().size(px(14.)).path(kind_icon).text_color(accent)),
                             )
                             .when(tab_number > 0, |this| {
                                 this.child(
                                     div()
-                                        .min_w(px(10.))
-                                        .text_size(px(10.))
+                                        .min_w(px(12.))
+                                        .text_size(px(12.))
                                         .font_weight(FontWeight(700.))
                                         .text_color(rgb(palette.text_dimmed))
                                         .child(format!("{tab_number}")),
@@ -229,6 +222,7 @@ impl NyaTermApp {
                             .child(
                                 div()
                                     .min_w_0()
+                                    .max_w(px(160.))
                                     .text_xs()
                                     .font_weight(FontWeight(if is_active_tab {
                                         700.
@@ -268,7 +262,7 @@ impl NyaTermApp {
                             .child(
                                 div()
                                     .id(SharedString::from(format!("tw-tab-close-{id}-{close_id}")))
-                                    .size(px(16.))
+                                    .size(px(18.))
                                     .flex()
                                     .items_center()
                                     .justify_center()
@@ -289,11 +283,14 @@ impl NyaTermApp {
                 strip = strip.child(
                     div()
                         .id(SharedString::from(format!("tw-leaf-add-{id}")))
-                        .size(px(22.))
+                        .h_full()
+                        .w(px(36.))
+                        .flex_none()
                         .flex()
                         .items_center()
                         .justify_center()
-                        .rounded_sm()
+                        .border_l_1()
+                        .border_color(rgb(palette.border))
                         .text_xs()
                         .font_weight(FontWeight(700.))
                         .text_color(rgb(palette.text_muted))
@@ -362,13 +359,8 @@ impl NyaTermApp {
                     .min_w_0()
                     .flex()
                     .flex_col()
-                    .rounded_sm()
                     .border_1()
-                    .border_color(if focused_leaf {
-                        rgb(palette.link)
-                    } else {
-                        rgb(palette.border)
-                    })
+                    .border_color(rgb(palette.border))
                     .overflow_hidden()
                     .on_mouse_down(
                         gpui::MouseButton::Left,
