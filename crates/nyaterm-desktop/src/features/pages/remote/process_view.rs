@@ -1,5 +1,5 @@
 use super::*;
-use gpui::SharedString;
+use gpui::{SharedString, rgba};
 
 impl NyaTermApp {
     pub(in crate::features) fn processes_view(
@@ -101,32 +101,6 @@ impl NyaTermApp {
             .map(row_height)
             .sum::<f32>();
 
-        let top_cpu = self
-            .processes
-            .iter()
-            .max_by(|left, right| {
-                left.cpu_percent
-                    .partial_cmp(&right.cpu_percent)
-                    .unwrap_or(std::cmp::Ordering::Equal)
-            })
-            .map(|process| format!("{:.1}% · {}", process.cpu_percent, process.command))
-            .unwrap_or_else(|| "0.0%".to_string());
-        let top_memory = self
-            .processes
-            .iter()
-            .max_by(|left, right| {
-                left.memory_percent
-                    .partial_cmp(&right.memory_percent)
-                    .unwrap_or(std::cmp::Ordering::Equal)
-            })
-            .map(|process| format!("{:.1}% · {}", process.memory_percent, process.command))
-            .unwrap_or_else(|| "0.0%".to_string());
-        let user_count = self
-            .processes
-            .iter()
-            .map(|process| process.user.as_str())
-            .collect::<std::collections::HashSet<_>>()
-            .len();
         let selected_process = self
             .process_selected_pid
             .and_then(|pid| self.processes.iter().find(|process| process.pid == pid))
@@ -252,28 +226,7 @@ impl NyaTermApp {
 
         // Tauri ProcessManager shell: dense search toolbar + sort strip + scrollable table.
         let palette = self.theme_palette();
-        let count_label = if total_filtered > PROCESS_VIEWPORT_ROWS {
-            format!(
-                "{window_start}-{window_end}/{total_filtered} · {} {} · {} {}",
-                self.processes.len(),
-                self.tr("processManager.total"),
-                user_count,
-                self.tr("processManager.users")
-            )
-        } else {
-            format!(
-                "{}/{} · {} {}",
-                filtered_processes.len(),
-                self.processes.len(),
-                user_count,
-                self.tr("processManager.users")
-            )
-        };
-        let top_label = format!(
-            "CPU {} · MEM {}",
-            truncate_preview(&top_cpu, 28),
-            truncate_preview(&top_memory, 28)
-        );
+        let count_label = self.processes.len().to_string();
         div()
             .flex()
             .flex_col()
@@ -287,13 +240,9 @@ impl NyaTermApp {
                 div()
                     .h(px(32.))
                     .flex_none()
-                    .px_2()
-                    .border_b_1()
-                    .border_color(rgb(palette.border))
-                    .bg(self.shell_transparent_color(palette.section_header))
                     .flex()
                     .items_center()
-                    .gap_1()
+                    .gap_2()
                     .child(
                         div().flex_1().min_w_0().child(
                             transfer_input(
@@ -319,146 +268,160 @@ impl NyaTermApp {
                     )
                     .child(
                         div()
+                            .h(px(32.))
+                            .px_2()
+                            .rounded_md()
+                            .border_1()
+                            .border_color(rgba((palette.link << 8) | 0x4d))
+                            .bg(rgba((palette.link << 8) | 0x1a))
                             .flex()
-                            .flex_col()
-                            .items_end()
+                            .items_center()
+                            .gap_1()
                             .child(
                                 div()
                                     .text_size(px(11.))
-                                    .text_color(rgb(palette.text_muted))
+                                    .text_color(rgb(palette.link))
                                     .child(count_label),
-                            )
-                            .child(
-                                div()
-                                    .max_w(px(220.))
-                                    .font_family(crate::features::gpui_code_font_family())
-                                    .text_size(px(10.))
-                                    .text_color(rgb(palette.text_dimmed))
-                                    .overflow_hidden()
-                                    .child(top_label),
                             ),
                     ),
             )
             .child(
-                // Match Tauri's responsive columns and hide the header entirely in compact mode.
-                div().when(mode != ProcessDisplayMode::Compact, |this| {
-                    let cols = match mode {
-                        ProcessDisplayMode::Narrow => 4,
-                        ProcessDisplayMode::Medium => 5,
-                        _ => 6,
-                    };
-                    this.h(px(32.))
-                        .flex_none()
-                        .px_2()
-                        .border_b_1()
-                        .border_color(rgb(palette.border))
-                        .bg(rgb(palette.input))
-                        .grid()
-                        .grid_cols(cols)
-                        .gap_1()
-                        .items_center()
-                        .overflow_hidden()
-                        .child(process_sort_button(
-                            palette,
-                            "process-sort-command",
-                            self.tr("processManager.process"),
-                            self.process_sort_key == RemoteProcessSortKey::Command,
-                            self.process_sort_direction,
-                            false,
-                            cx.listener(|this, _, _, cx| {
-                                this.toggle_process_sort(RemoteProcessSortKey::Command, cx);
-                            }),
-                        ))
-                        .child(process_sort_button(
-                            palette,
-                            "process-sort-pid",
-                            self.tr("processManager.sortPid"),
-                            self.process_sort_key == RemoteProcessSortKey::Pid,
-                            self.process_sort_direction,
-                            true,
-                            cx.listener(|this, _, _, cx| {
-                                this.toggle_process_sort(RemoteProcessSortKey::Pid, cx);
-                            }),
-                        ))
-                        .child(process_sort_button(
-                            palette,
-                            "process-sort-cpu",
-                            self.tr("processManager.sortCpu"),
-                            self.process_sort_key == RemoteProcessSortKey::Cpu,
-                            self.process_sort_direction,
-                            true,
-                            cx.listener(|this, _, _, cx| {
-                                this.toggle_process_sort(RemoteProcessSortKey::Cpu, cx);
-                            }),
-                        ))
-                        .when(
-                            !matches!(
-                                mode,
-                                ProcessDisplayMode::Narrow | ProcessDisplayMode::Compact
-                            ),
-                            |this| {
-                                this.child(process_sort_button(
-                                    palette,
-                                    "process-sort-memory",
-                                    self.tr("processManager.sortMemory"),
-                                    self.process_sort_key == RemoteProcessSortKey::Memory,
-                                    self.process_sort_direction,
-                                    true,
-                                    cx.listener(|this, _, _, cx| {
-                                        this.toggle_process_sort(RemoteProcessSortKey::Memory, cx);
-                                    }),
-                                ))
-                            },
-                        )
-                        .when(mode == ProcessDisplayMode::Wide, |this| {
-                            this.child(process_sort_button(
-                                palette,
-                                "process-sort-user",
-                                self.tr("processManager.user"),
-                                self.process_sort_key == RemoteProcessSortKey::User,
-                                self.process_sort_direction,
-                                false,
-                                cx.listener(|this, _, _, cx| {
-                                    this.toggle_process_sort(RemoteProcessSortKey::User, cx);
-                                }),
-                            ))
-                        })
-                        .child(div().w_full())
-                }),
-            )
-            .child(
                 div()
-                    .id(SharedString::from("process-list-scroll"))
                     .flex_1()
                     .min_h_0()
                     .overflow_hidden()
-                    .flex()
-                    .flex_col()
                     .rounded_md()
                     .border_1()
                     .border_color(rgb(palette.border))
-                    .on_scroll_wheel(cx.listener(move |this, event: &ScrollWheelEvent, _, cx| {
-                        let max_offset = total_filtered
-                            .saturating_sub(PROCESS_VIEWPORT_ROWS.min(total_filtered));
-                        if max_offset == 0 {
-                            return;
-                        }
-                        let delta_rows = match event.delta {
-                            ScrollDelta::Lines(delta) => delta.y,
-                            ScrollDelta::Pixels(delta) => f32::from(delta.y) / process_row_px,
-                        };
-                        // Match GPUI list semantics: scroll_top -= delta.y
-                        let next = (this.process_list_offset as f32 - delta_rows)
-                            .round()
-                            .clamp(0., max_offset as f32)
-                            as usize;
-                        if next != this.process_list_offset {
-                            this.process_list_offset = next;
-                            cx.stop_propagation();
-                            cx.notify();
-                        }
-                    }))
-                    .child(rows),
+                    .flex()
+                    .flex_col()
+                    .child(
+                        // Match Tauri's responsive columns and hide the header entirely in compact mode.
+                        div().when(mode != ProcessDisplayMode::Compact, |this| {
+                            let cols = match mode {
+                                ProcessDisplayMode::Narrow => 4,
+                                ProcessDisplayMode::Medium => 5,
+                                _ => 6,
+                            };
+                            this.h(px(32.))
+                                .flex_none()
+                                .px_2()
+                                .border_b_1()
+                                .border_color(rgb(palette.border))
+                                .grid()
+                                .grid_cols(cols)
+                                .gap_1()
+                                .items_center()
+                                .overflow_hidden()
+                                .child(process_sort_button(
+                                    palette,
+                                    "process-sort-command",
+                                    self.tr("processManager.process"),
+                                    self.process_sort_key == RemoteProcessSortKey::Command,
+                                    self.process_sort_direction,
+                                    false,
+                                    cx.listener(|this, _, _, cx| {
+                                        this.toggle_process_sort(RemoteProcessSortKey::Command, cx);
+                                    }),
+                                ))
+                                .child(process_sort_button(
+                                    palette,
+                                    "process-sort-pid",
+                                    self.tr("processManager.sortPid"),
+                                    self.process_sort_key == RemoteProcessSortKey::Pid,
+                                    self.process_sort_direction,
+                                    true,
+                                    cx.listener(|this, _, _, cx| {
+                                        this.toggle_process_sort(RemoteProcessSortKey::Pid, cx);
+                                    }),
+                                ))
+                                .child(process_sort_button(
+                                    palette,
+                                    "process-sort-cpu",
+                                    self.tr("processManager.sortCpu"),
+                                    self.process_sort_key == RemoteProcessSortKey::Cpu,
+                                    self.process_sort_direction,
+                                    true,
+                                    cx.listener(|this, _, _, cx| {
+                                        this.toggle_process_sort(RemoteProcessSortKey::Cpu, cx);
+                                    }),
+                                ))
+                                .when(
+                                    !matches!(
+                                        mode,
+                                        ProcessDisplayMode::Narrow | ProcessDisplayMode::Compact
+                                    ),
+                                    |this| {
+                                        this.child(process_sort_button(
+                                            palette,
+                                            "process-sort-memory",
+                                            self.tr("processManager.sortMemory"),
+                                            self.process_sort_key == RemoteProcessSortKey::Memory,
+                                            self.process_sort_direction,
+                                            true,
+                                            cx.listener(|this, _, _, cx| {
+                                                this.toggle_process_sort(
+                                                    RemoteProcessSortKey::Memory,
+                                                    cx,
+                                                );
+                                            }),
+                                        ))
+                                    },
+                                )
+                                .when(mode == ProcessDisplayMode::Wide, |this| {
+                                    this.child(process_sort_button(
+                                        palette,
+                                        "process-sort-user",
+                                        self.tr("processManager.user"),
+                                        self.process_sort_key == RemoteProcessSortKey::User,
+                                        self.process_sort_direction,
+                                        false,
+                                        cx.listener(|this, _, _, cx| {
+                                            this.toggle_process_sort(
+                                                RemoteProcessSortKey::User,
+                                                cx,
+                                            );
+                                        }),
+                                    ))
+                                })
+                                .child(div().w_full())
+                        }),
+                    )
+                    .child(
+                        div()
+                            .id(SharedString::from("process-list-scroll"))
+                            .flex_1()
+                            .min_h_0()
+                            .overflow_hidden()
+                            .flex()
+                            .flex_col()
+                            .on_scroll_wheel(cx.listener(
+                                move |this, event: &ScrollWheelEvent, _, cx| {
+                                    let max_offset = total_filtered
+                                        .saturating_sub(PROCESS_VIEWPORT_ROWS.min(total_filtered));
+                                    if max_offset == 0 {
+                                        return;
+                                    }
+                                    let delta_rows = match event.delta {
+                                        ScrollDelta::Lines(delta) => delta.y,
+                                        ScrollDelta::Pixels(delta) => {
+                                            f32::from(delta.y) / process_row_px
+                                        }
+                                    };
+                                    // Match GPUI list semantics: scroll_top -= delta.y
+                                    let next = (this.process_list_offset as f32 - delta_rows)
+                                        .round()
+                                        .clamp(0., max_offset as f32)
+                                        as usize;
+                                    if next != this.process_list_offset {
+                                        this.process_list_offset = next;
+                                        cx.stop_propagation();
+                                        cx.notify();
+                                    }
+                                },
+                            ))
+                            .child(rows),
+                    ),
             )
             .when_some(self.process_signal_confirm.clone(), |this, confirm| {
                 this.child(process_signal_confirm_panel(

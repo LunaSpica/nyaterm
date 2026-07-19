@@ -1,7 +1,7 @@
 use super::*;
 use gpui::{ScrollDelta, ScrollWheelEvent, SharedString};
 
-const DOCKER_RESOURCE_ROW_PX: f32 = 68.; // 64px Tauri row + gap
+const DOCKER_RESOURCE_ROW_PX: f32 = 64.;
 const DOCKER_RESOURCE_VIEWPORT_ROWS: usize = 14;
 const DOCKER_RESOURCE_OVERSCAN: usize = 6;
 
@@ -19,7 +19,7 @@ pub(in crate::features::pages::remote) fn docker_images_panel(
     let total = images.len();
     let (window_start, window_end, pad_top, pad_bottom, scroll_offset) =
         docker_resource_window(total, list_offset);
-    let mut rows = div().flex().flex_col().gap_1();
+    let mut rows = div().flex().flex_col().gap(px(6.));
     if pad_top > 0. {
         rows = rows.child(div().h(px(pad_top)).w_full().flex_none());
     }
@@ -78,7 +78,7 @@ pub(in crate::features::pages::remote) fn docker_volumes_panel(
     let total = volumes.len();
     let (window_start, window_end, pad_top, pad_bottom, scroll_offset) =
         docker_resource_window(total, list_offset);
-    let mut rows = div().flex().flex_col().gap_1();
+    let mut rows = div().flex().flex_col().gap(px(6.));
     if pad_top > 0. {
         rows = rows.child(div().h(px(pad_top)).w_full().flex_none());
     }
@@ -131,7 +131,7 @@ pub(in crate::features::pages::remote) fn docker_networks_panel(
     let total = networks.len();
     let (window_start, window_end, pad_top, pad_bottom, scroll_offset) =
         docker_resource_window(total, list_offset);
-    let mut rows = div().flex().flex_col().gap_1();
+    let mut rows = div().flex().flex_col().gap(px(6.));
     if pad_top > 0. {
         rows = rows.child(div().h(px(pad_top)).w_full().flex_none());
     }
@@ -270,10 +270,9 @@ pub(in crate::features::pages::remote) fn docker_resource_static_panel(
         .size_full()
         .overflow_scroll()
         .scrollbar_width(px(6.))
-        .p_2()
         .flex()
         .flex_col()
-        .gap_1()
+        .gap(px(6.))
         .child(rows)
 }
 
@@ -284,11 +283,10 @@ pub(in crate::features::pages::remote) fn docker_resource_row(
 ) -> gpui::Div {
     // ~64px Tauri SIMPLE_ROW_HEIGHT-ish dense resource row (slightly tighter chrome).
     div()
-        .h(px(64.))
+        .h(px(58.))
         .rounded_md()
         .border_1()
         .border_color(rgb(palette.border))
-        .bg(rgb(palette.section_header))
         .px_3()
         .flex()
         .items_center()

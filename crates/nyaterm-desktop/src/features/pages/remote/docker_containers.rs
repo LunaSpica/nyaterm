@@ -1,5 +1,5 @@
 use super::*;
-use gpui::SharedString;
+use gpui::{SharedString, rgba};
 
 pub(in crate::features::pages::remote) fn docker_containers_panel(
     palette: crate::theme::ThemePalette,
@@ -65,7 +65,7 @@ pub(in crate::features::pages::remote) fn docker_containers_panel(
     });
 
     // Tauri-like virtual list: fixed row slot, overscan window, spacer padding + wheel.
-    const DOCKER_ROW_PX: f32 = 68.; // 66px Tauri row + gap
+    const DOCKER_ROW_PX: f32 = 66.;
     const DOCKER_VIEWPORT_ROWS: usize = 16;
     const DOCKER_OVERSCAN: usize = 6;
     let total = containers.len();
@@ -81,7 +81,7 @@ pub(in crate::features::pages::remote) fn docker_containers_panel(
     let pad_top = (window_start as f32) * DOCKER_ROW_PX;
     let pad_bottom = ((total.saturating_sub(window_end)) as f32) * DOCKER_ROW_PX;
 
-    let mut rows = div().flex().flex_col().gap_1().p_2();
+    let mut rows = div().flex().flex_col().gap(px(6.));
     if pad_top > 0. {
         rows = rows.child(div().h(px(pad_top)).w_full().flex_none());
     }
@@ -141,13 +141,13 @@ fn docker_container_row(
     div()
         .id(SharedString::from(format!("docker-container-{short}")))
         .relative()
-        .h(px(66.))
+        .h(px(60.))
         .rounded_md()
         .border_1()
         .border_color(rgb(palette.border))
         // Left accent bar painted as absolute child.
-        .bg(rgb(palette.section_header))
-        .hover(|this| this.bg(rgb(0x18202b)))
+        .bg(rgba((palette.surface_elevated << 8) | 0x08))
+        .hover(move |this| this.bg(rgba((palette.link << 8) | 0x0f)))
         .cursor_pointer()
         .overflow_hidden()
         .child(
@@ -170,7 +170,7 @@ fn docker_container_row(
                 .flex()
                 .flex_col()
                 .justify_center()
-                .gap(px(2.))
+                .gap(px(6.))
                 .child(
                     div()
                         .flex()
@@ -209,36 +209,6 @@ fn docker_container_row(
                         )
                         .child(div().flex_none().child(short.clone())),
                 )
-                .child(
-                    div()
-                        .flex()
-                        .items_center()
-                        .gap_2()
-                        .font_family(crate::features::gpui_code_font_family())
-                        .text_size(px(10.))
-                        .text_color(rgb(palette.border))
-                        .child(
-                            div()
-                                .min_w_0()
-                                .flex_1()
-                                .overflow_hidden()
-                                .child(truncate_preview(
-                                    if container.ports.trim().is_empty() {
-                                        container.status.as_str()
-                                    } else {
-                                        container.ports.as_str()
-                                    },
-                                    56,
-                                )),
-                        )
-                        .when(!container.created_at.trim().is_empty(), |this| {
-                            this.child(
-                                div()
-                                    .flex_none()
-                                    .child(truncate_preview(&container.created_at, 18)),
-                            )
-                        }),
-                ),
         )
         .on_click(cx.listener(move |this, _, window, cx| {
             this.docker_container_menu_id = None;
