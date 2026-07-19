@@ -211,16 +211,14 @@ impl NyaTermApp {
             .and_then(NavItem::from_persistence_id)
             .filter(|item| {
                 activity_bar_layout.side_for_entry(item.persistence_id()) == Some(PanelSide::Left)
-            })
-            .or_else(|| activity_bar_layout.first_panel_on_side(PanelSide::Left));
+            });
         let active_right_panel = settings
             .ui_active_right_panel
             .as_deref()
             .and_then(NavItem::from_persistence_id)
             .filter(|item| {
                 activity_bar_layout.side_for_entry(item.persistence_id()) == Some(PanelSide::Right)
-            })
-            .or_else(|| activity_bar_layout.first_panel_on_side(PanelSide::Right));
+            });
         let left_sidebar_collapsed = settings.ui_left_panel_collapsed;
         let right_inspector_collapsed = settings.ui_right_panel_collapsed;
         let security_secrets_unlocked = !settings.has_master_password;

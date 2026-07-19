@@ -97,29 +97,13 @@ impl NyaTermApp {
             .ui_active_left_panel
             .as_deref()
             .and_then(NavItem::from_persistence_id)
-            .filter(|item| self.panel_side_for_item(*item) == Some(PanelSide::Left))
-            .or_else(|| {
-                self.active_left_panel
-                    .filter(|item| self.panel_side_for_item(*item) == Some(PanelSide::Left))
-            })
-            .or_else(|| {
-                self.activity_bar_layout
-                    .first_panel_on_side(PanelSide::Left)
-            });
+            .filter(|item| self.panel_side_for_item(*item) == Some(PanelSide::Left));
         self.active_right_panel = self
             .settings
             .ui_active_right_panel
             .as_deref()
             .and_then(NavItem::from_persistence_id)
-            .filter(|item| self.panel_side_for_item(*item) == Some(PanelSide::Right))
-            .or_else(|| {
-                self.active_right_panel
-                    .filter(|item| self.panel_side_for_item(*item) == Some(PanelSide::Right))
-            })
-            .or_else(|| {
-                self.activity_bar_layout
-                    .first_panel_on_side(PanelSide::Right)
-            });
+            .filter(|item| self.panel_side_for_item(*item) == Some(PanelSide::Right));
         self.left_sidebar_collapsed = self.settings.ui_left_panel_collapsed;
         self.right_inspector_collapsed = self.settings.ui_right_panel_collapsed;
         self.apply_panel_stack_from_settings();
