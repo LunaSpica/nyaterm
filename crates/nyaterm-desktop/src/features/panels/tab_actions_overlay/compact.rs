@@ -18,23 +18,22 @@ impl NyaTermApp {
         can_close_inactive: bool,
         can_close_right: bool,
         can_unsplit: bool,
-        can_merge_windows: bool,
         visible_for_ai: String,
         buffer_for_ai: String,
         _session_count: usize,
         cx: &mut Context<Self>,
     ) -> gpui::AnyElement {
         let (viewport_w, viewport_h) = self.last_viewport_size;
-        let menu_max_height = (viewport_h - 16.).clamp(160., 560.);
+        let menu_max_height = (viewport_h - 16.).clamp(160., 440.);
         let (menu_x, menu_y) = if let Some((x, y)) = self.tab_actions_anchor {
             clamp_tab_actions_position(x, y, 240., menu_max_height, viewport_w, viewport_h)
         } else {
             (((viewport_w - 240.).max(16.) * 0.5).max(8.), 74.0)
         };
+        let active_submenu = self.tab_actions_submenu;
 
         let mut color_row = div()
-            .px_3()
-            .py_1()
+            .p_2()
             .flex()
             .flex_wrap()
             .gap_1()
@@ -45,7 +44,7 @@ impl NyaTermApp {
             color_row = color_row.child(
                 div()
                     .id(SharedString::from(format!("tab-ctx-color-{name}")))
-                    .size(px(16.))
+                    .size(px(20.))
                     .rounded_full()
                     .border_1()
                     .border_color(if selected {
@@ -56,6 +55,13 @@ impl NyaTermApp {
                     .bg(rgb(color))
                     .cursor_pointer()
                     .hover(|this| this.border_color(rgb(palette.text)))
+                    .tooltip({
+                        let label = name.to_string();
+                        move |_, cx| {
+                            cx.new(|_| crate::features::ChromeTooltip::new(label.clone()))
+                                .into()
+                        }
+                    })
                     .on_click(cx.listener(move |this, _, _, cx| {
                         cx.stop_propagation();
                         this.select_session(color_session_id.clone(), cx);
@@ -64,38 +70,15 @@ impl NyaTermApp {
                     })),
             );
         }
-        let reset_color_session_id = session_id.clone();
-        color_row = color_row.child(
-            div()
-                .id(SharedString::from("tab-ctx-color-reset"))
-                .h(px(18.))
-                .px_2()
-                .rounded_sm()
-                .text_size(px(10.))
-                .text_color(rgb(palette.text_muted))
-                .cursor_pointer()
-                .hover(|this| this.bg(rgb(palette.hover)).text_color(rgb(palette.text)))
-                .child(self.tr("tabCtx.resetColor"))
-                .on_click(cx.listener(move |this, _, _, cx| {
-                    cx.stop_propagation();
-                    this.select_session(reset_color_session_id.clone(), cx);
-                    this.close_tab_actions(cx);
-                    this.set_active_session_tab_color(None, cx);
-                })),
-        );
-
         let rename_session_id = session_id.clone();
         let copy_name_session_id = session_id.clone();
         let copy_host_session_id = session_id.clone();
-        let copy_ssh_session_id = session_id.clone();
         let duplicate_session_id = session_id.clone();
         let multiplex_session_id = session_id.clone();
         let startup_session_id = session_id.clone();
         let multiplex_startup_session_id = session_id.clone();
         let split_horizontal_session_id = session_id.clone();
         let split_vertical_session_id = session_id.clone();
-        let window_leaf_right_session_id = session_id.clone();
-        let window_leaf_below_session_id = session_id.clone();
         let reconnect_session_id = session_id.clone();
         let disconnect_session_id = session_id.clone();
         let info_session_id = session_id.clone();
@@ -103,6 +86,188 @@ impl NyaTermApp {
         let right_anchor = session_id.clone();
         let explain_session_id = session_id.clone();
         let analyze_session_id = session_id.clone();
+
+        let submenu_panel = active_submenu.map(|submenu| {
+            let submenu_width = if submenu == TabActionsSubmenu::Color {
+                176.
+            } else {
+                240.
+            };
+            let submenu_height = match submenu {
+                TabActionsSubmenu::Color => 104.,
+                TabActionsSubmenu::SshAdvanced | TabActionsSubmenu::Ai => 64.,
+            };
+            let trigger_offset = match submenu {
+                TabActionsSubmenu::Color => 0.,
+                TabActionsSubmenu::SshAdvanced => 168.,
+                TabActionsSubmenu::Ai => 252.,
+            };
+            let (submenu_x, submenu_y) = tab_actions_submenu_position(
+                menu_x,
+                menu_y,
+                240.,
+                submenu_width,
+                trigger_offset,
+                submenu_height,
+                viewport_w,
+                viewport_h,
+            );
+            let mut panel = div()
+                .id(SharedString::from("tab-actions-submenu"))
+                .absolute()
+                .left(px(submenu_x))
+                .top(px(submenu_y))
+                .w(px(submenu_width))
+                .max_h(px((viewport_h - 16.).max(80.)))
+                .overflow_y_scroll()
+                .rounded_md()
+                .border_1()
+                .border_color(rgb(palette.border))
+                .bg(self.shell_surface_color(palette.surface))
+                .shadow_lg()
+                .py_1()
+                .flex()
+                .flex_col()
+                .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
+                .on_click(|_, _, cx| cx.stop_propagation());
+
+            match submenu {
+                TabActionsSubmenu::Color => {
+                    panel = panel.child(color_row);
+                    if active_color.is_some() {
+                        let reset_color_session_id = session_id.clone();
+                        panel = panel.child(tab_menu_separator(palette)).child(tab_menu_item(
+                            palette,
+                            "tab-ctx-color-reset",
+                            self.tr("tabCtx.resetColor"),
+                            cx.listener(move |this, _, _, cx| {
+                                this.select_session(reset_color_session_id.clone(), cx);
+                                this.close_tab_actions(cx);
+                                this.set_active_session_tab_color(None, cx);
+                            }),
+                        ));
+                    }
+                }
+                TabActionsSubmenu::SshAdvanced => {
+                    panel = panel
+                        .child(tab_menu_item_enabled(
+                            palette,
+                            "tab-ctx-multiplex",
+                            self.tr("tabCtx.multiplexSsh"),
+                            can_multiplex,
+                            cx.listener(move |this, _, window, cx| {
+                                this.select_session(multiplex_session_id.clone(), cx);
+                                this.close_tab_actions(cx);
+                                if this
+                                    .active_session_busy_actions
+                                    .contains_key(&multiplex_session_id)
+                                    || this.is_session_disconnected(&multiplex_session_id)
+                                {
+                                    this.terminal_status =
+                                        "SSH multiplex is unavailable for this session".to_string();
+                                    cx.notify();
+                                    return;
+                                }
+                                this.multiplex_active_ssh_session(window, cx);
+                            }),
+                        ))
+                        .child(tab_menu_item_enabled(
+                            palette,
+                            "tab-ctx-multiplex-run",
+                            self.tr("tabCtx.multiplexSshWithCommand"),
+                            can_multiplex,
+                            cx.listener(move |this, _, window, cx| {
+                                this.select_session(multiplex_startup_session_id.clone(), cx);
+                                this.close_tab_actions(cx);
+                                if this
+                                    .active_session_busy_actions
+                                    .contains_key(&multiplex_startup_session_id)
+                                    || this.is_session_disconnected(&multiplex_startup_session_id)
+                                {
+                                    this.terminal_status =
+                                        "SSH multiplex is unavailable for this session".to_string();
+                                    cx.notify();
+                                    return;
+                                }
+                                this.open_startup_command_dialog_for(
+                                    StartupCommandAction::Multiplex,
+                                    window,
+                                    cx,
+                                );
+                            }),
+                        ));
+                }
+                TabActionsSubmenu::Ai => {
+                    panel = panel
+                        .child(tab_menu_item_enabled(
+                            palette,
+                            "tab-ctx-ai-explain",
+                            self.tr("ai.explainRecent"),
+                            can_use_ai,
+                            cx.listener(move |this, _, window, cx| {
+                                this.select_session(explain_session_id.clone(), cx);
+                                this.close_tab_actions(cx);
+                                if this
+                                    .active_session_busy_actions
+                                    .contains_key(&explain_session_id)
+                                    || this.is_session_disconnected(&explain_session_id)
+                                {
+                                    this.ai_status =
+                                        "terminal session unavailable for AI".to_string();
+                                    cx.notify();
+                                    return;
+                                }
+                                if visible_for_ai.trim().is_empty() {
+                                    this.ai_status =
+                                        "terminal visible screen is empty".to_string();
+                                } else {
+                                    this.ai_prompt_draft = format!(
+                                        "Explain this terminal output:\n\n{}",
+                                        visible_for_ai
+                                    );
+                                    this.ai_status =
+                                        "terminal output loaded into AI prompt".to_string();
+                                    window.focus(&this.ai_chat_focus);
+                                }
+                                cx.notify();
+                            }),
+                        ))
+                        .child(tab_menu_item_enabled(
+                            palette,
+                            "tab-ctx-ai-analyze",
+                            self.tr("ai.analyzeError"),
+                            can_use_ai,
+                            cx.listener(move |this, _, window, cx| {
+                                this.select_session(analyze_session_id.clone(), cx);
+                                this.close_tab_actions(cx);
+                                if this
+                                    .active_session_busy_actions
+                                    .contains_key(&analyze_session_id)
+                                    || this.is_session_disconnected(&analyze_session_id)
+                                {
+                                    this.ai_status =
+                                        "terminal session unavailable for AI".to_string();
+                                    cx.notify();
+                                    return;
+                                }
+                                if buffer_for_ai.trim().is_empty() {
+                                    this.ai_status = "terminal buffer is empty".to_string();
+                                } else {
+                                    this.ai_prompt_draft = format!(
+                                        "Analyze this terminal buffer for errors, risks, and next actions:\n\n{}",
+                                        buffer_for_ai
+                                    );
+                                    this.ai_status =
+                                        "terminal buffer loaded into AI prompt".to_string();
+                                    window.focus(&this.ai_chat_focus);
+                                }
+                                cx.notify();
+                            }),
+                        ));
+                }
+            }
+            panel
+        });
 
         div()
             .id(SharedString::from("tab-actions-overlay"))
@@ -140,26 +305,22 @@ impl NyaTermApp {
                     .flex()
                     .flex_col()
                     .on_click(|_, _, cx| cx.stop_propagation())
-                    .child(
-                        div()
-                            .px_3()
-                            .h(px(28.))
-                            .flex()
-                            .items_center()
-                            .gap_2()
-                            .text_size(px(10.))
-                            .text_color(rgb(palette.text_muted))
-                            .child(
-                                svg()
-                                    .size(px(14.))
-                                    .flex_none()
-                                    .path("icons/menu/palette.svg")
-                                    .text_color(rgb(palette.text_muted)),
-                            )
-                            .child(self.tr("tabCtx.setColor")),
-                    )
-                    .child(color_row)
-                    .child(tab_menu_separator(palette))
+                    .child(tab_actions_submenu_item(
+                        palette,
+                        "tab-ctx-set-color",
+                        "icons/menu/palette.svg",
+                        self.tr("tabCtx.setColor"),
+                        true,
+                        active_submenu == Some(TabActionsSubmenu::Color),
+                        cx.listener(|this, hovered: &bool, _, cx| {
+                            if *hovered {
+                                this.open_tab_actions_submenu(TabActionsSubmenu::Color, cx);
+                            }
+                        }),
+                        cx.listener(|this, _, _, cx| {
+                            this.open_tab_actions_submenu(TabActionsSubmenu::Color, cx);
+                        }),
+                    ))
                     .child(tab_menu_item(
                         palette,
                         "tab-ctx-rename",
@@ -190,18 +351,6 @@ impl NyaTermApp {
                             this.copy_active_session_ssh_host(cx);
                         }),
                     ))
-                    .when(can_copy_ssh, |this| {
-                        this.child(tab_menu_item(
-                            palette,
-                            "tab-ctx-copy-ssh",
-                            self.tr("tabCtx.copySshAddress"),
-                            cx.listener(move |this, _, _, cx| {
-                                this.select_session(copy_ssh_session_id.clone(), cx);
-                                this.close_tab_actions(cx);
-                                this.copy_active_session_ssh_address(cx);
-                            }),
-                        ))
-                    })
                     .child(tab_menu_separator(palette))
                     .child(tab_menu_item_enabled(
                         palette,
@@ -237,50 +386,22 @@ impl NyaTermApp {
                             this.open_startup_command_dialog(window, cx);
                         }),
                     ))
-                    .child(tab_menu_item_enabled(
+                    .child(tab_actions_submenu_item(
                         palette,
-                        "tab-ctx-multiplex",
-                        self.tr("tabCtx.multiplexSsh"),
+                        "tab-ctx-ssh-advanced",
+                        "icons/menu/split.svg",
+                        self.tr("tabCtx.sshAdvanced"),
                         can_multiplex,
-                        cx.listener(move |this, _, window, cx| {
-                            this.select_session(multiplex_session_id.clone(), cx);
-                            this.close_tab_actions(cx);
-                            if this
-                                .active_session_busy_actions
-                                .contains_key(&multiplex_session_id)
-                                || this.is_session_disconnected(&multiplex_session_id)
-                            {
-                                this.terminal_status =
-                                    "SSH multiplex is unavailable for this session".to_string();
-                                cx.notify();
-                                return;
+                        active_submenu == Some(TabActionsSubmenu::SshAdvanced),
+                        cx.listener(move |this, hovered: &bool, _, cx| {
+                            if *hovered && can_multiplex {
+                                this.open_tab_actions_submenu(TabActionsSubmenu::SshAdvanced, cx);
                             }
-                            this.multiplex_active_ssh_session(window, cx);
                         }),
-                    ))
-                    .child(tab_menu_item_enabled(
-                        palette,
-                        "tab-ctx-multiplex-run",
-                        self.tr("tabCtx.multiplexSshWithCommand"),
-                        can_multiplex,
-                        cx.listener(move |this, _, window, cx| {
-                            this.select_session(multiplex_startup_session_id.clone(), cx);
-                            this.close_tab_actions(cx);
-                            if this
-                                .active_session_busy_actions
-                                .contains_key(&multiplex_startup_session_id)
-                                || this.is_session_disconnected(&multiplex_startup_session_id)
-                            {
-                                this.terminal_status =
-                                    "SSH multiplex is unavailable for this session".to_string();
-                                cx.notify();
-                                return;
+                        cx.listener(move |this, _, _, cx| {
+                            if can_multiplex {
+                                this.open_tab_actions_submenu(TabActionsSubmenu::SshAdvanced, cx);
                             }
-                            this.open_startup_command_dialog_for(
-                                StartupCommandAction::Multiplex,
-                                window,
-                                cx,
-                            );
                         }),
                     ))
                     .child(tab_menu_item_enabled(
@@ -320,69 +441,20 @@ impl NyaTermApp {
                             this.disconnect_session(disconnect_session_id.clone(), cx);
                         }),
                     ))
-                    .child(tab_menu_separator(palette))
-                    .child(tab_menu_item_enabled(
+                    .child(tab_actions_submenu_item(
                         palette,
-                        "tab-ctx-ai-explain",
-                        self.tr("ai.explainRecent"),
-                        can_use_ai,
-                        cx.listener(move |this, _, window, cx| {
-                            this.select_session(explain_session_id.clone(), cx);
-                            this.close_tab_actions(cx);
-                            if this
-                                .active_session_busy_actions
-                                .contains_key(&explain_session_id)
-                                || this.is_session_disconnected(&explain_session_id)
-                            {
-                                this.ai_status =
-                                    "terminal session unavailable for AI".to_string();
-                                cx.notify();
-                                return;
+                        "tab-ctx-ai",
+                        "icons/ai.svg",
+                        self.tr("ai.title"),
+                        true,
+                        active_submenu == Some(TabActionsSubmenu::Ai),
+                        cx.listener(|this, hovered: &bool, _, cx| {
+                            if *hovered {
+                                this.open_tab_actions_submenu(TabActionsSubmenu::Ai, cx);
                             }
-                            if visible_for_ai.trim().is_empty() {
-                                this.ai_status = "terminal visible screen is empty".to_string();
-                            } else {
-                                this.ai_prompt_draft = format!(
-                                    "Explain this terminal output:\n\n{}",
-                                    visible_for_ai
-                                );
-                                this.ai_status =
-                                    "terminal output loaded into AI prompt".to_string();
-                                window.focus(&this.ai_chat_focus);
-                            }
-                            cx.notify();
                         }),
-                    ))
-                    .child(tab_menu_item_enabled(
-                        palette,
-                        "tab-ctx-ai-analyze",
-                        self.tr("ai.analyzeError"),
-                        can_use_ai,
-                        cx.listener(move |this, _, window, cx| {
-                            this.select_session(analyze_session_id.clone(), cx);
-                            this.close_tab_actions(cx);
-                            if this
-                                .active_session_busy_actions
-                                .contains_key(&analyze_session_id)
-                                || this.is_session_disconnected(&analyze_session_id)
-                            {
-                                this.ai_status =
-                                    "terminal session unavailable for AI".to_string();
-                                cx.notify();
-                                return;
-                            }
-                            if buffer_for_ai.trim().is_empty() {
-                                this.ai_status = "terminal buffer is empty".to_string();
-                            } else {
-                                this.ai_prompt_draft = format!(
-                                    "Analyze this terminal buffer for errors, risks, and next actions:\n\n{}",
-                                    buffer_for_ai
-                                );
-                                this.ai_status =
-                                    "terminal buffer loaded into AI prompt".to_string();
-                                window.focus(&this.ai_chat_focus);
-                            }
-                            cx.notify();
+                        cx.listener(|this, _, _, cx| {
+                            this.open_tab_actions_submenu(TabActionsSubmenu::Ai, cx);
                         }),
                     ))
                     .child(tab_menu_separator(palette))
@@ -436,72 +508,6 @@ impl NyaTermApp {
                             cx.listener(|this, _, _, cx| {
                                 this.close_tab_actions(cx);
                                 this.unsplit_workspace(cx);
-                            }),
-                        ))
-                    })
-                    .child(tab_menu_item(
-                        palette,
-                        "tab-ctx-window-right",
-                        self.tr("tabActions.windowRight"),
-                        cx.listener(move |this, _, _, cx| {
-                            this.select_session(window_leaf_right_session_id.clone(), cx);
-                            this.close_tab_actions(cx);
-                            this.split_active_tab_to_new_window_leaf(
-                                WorkspaceSplitDirection::Vertical,
-                                SplitEdge::After,
-                                cx,
-                            );
-                        }),
-                    ))
-                    .child(tab_menu_item(
-                        palette,
-                        "tab-ctx-window-below",
-                        self.tr("tabActions.windowBelow"),
-                        cx.listener(move |this, _, _, cx| {
-                            this.select_session(window_leaf_below_session_id.clone(), cx);
-                            this.close_tab_actions(cx);
-                            this.split_active_tab_to_new_window_leaf(
-                                WorkspaceSplitDirection::Horizontal,
-                                SplitEdge::After,
-                                cx,
-                            );
-                        }),
-                    ))
-                    .child(tab_menu_item(
-                        palette,
-                        "tab-ctx-smart-split",
-                        self.tr("tabActions.smartSplit"),
-                        cx.listener(|this, _, _, cx| {
-                            this.close_tab_actions(cx);
-                            this.apply_smart_split(SmartSplitMode::Auto, cx);
-                        }),
-                    ))
-                    .child(tab_menu_item(
-                        palette,
-                        "tab-ctx-tile-h",
-                        self.tr("tabActions.tileHorizontal"),
-                        cx.listener(|this, _, _, cx| {
-                            this.close_tab_actions(cx);
-                            this.apply_smart_split(SmartSplitMode::Horizontal, cx);
-                        }),
-                    ))
-                    .child(tab_menu_item(
-                        palette,
-                        "tab-ctx-tile-v",
-                        self.tr("tabActions.tileVertical"),
-                        cx.listener(|this, _, _, cx| {
-                            this.close_tab_actions(cx);
-                            this.apply_smart_split(SmartSplitMode::Vertical, cx);
-                        }),
-                    ))
-                    .when(can_merge_windows, |this| {
-                        this.child(tab_menu_item(
-                            palette,
-                            "tab-ctx-window-flat",
-                            self.tr("tabActions.mergeWindows"),
-                            cx.listener(|this, _, _, cx| {
-                                this.close_tab_actions(cx);
-                                this.close_terminal_window_layout(cx);
                             }),
                         ))
                     })
@@ -562,6 +568,66 @@ impl NyaTermApp {
                         }),
                     )),
             )
+            .when_some(submenu_panel, |this, submenu| this.child(submenu))
             .into_any_element()
     }
+
+    fn open_tab_actions_submenu(
+        &mut self,
+        submenu: TabActionsSubmenu,
+        cx: &mut Context<Self>,
+    ) {
+        if self.tab_actions_submenu != Some(submenu) {
+            self.tab_actions_submenu = Some(submenu);
+            cx.notify();
+        }
+    }
+}
+
+fn tab_actions_submenu_item(
+    palette: ThemePalette,
+    id: impl Into<String>,
+    icon_path: &'static str,
+    label: impl Into<String>,
+    enabled: bool,
+    active: bool,
+    on_hover: impl Fn(&bool, &mut Window, &mut App) + 'static,
+    on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
+) -> impl IntoElement {
+    let text_color = if enabled {
+        rgb(palette.text)
+    } else {
+        rgb(palette.text_dimmed)
+    };
+    div()
+        .id(SharedString::from(id.into()))
+        .h(px(28.))
+        .px_3()
+        .flex()
+        .items_center()
+        .gap_2()
+        .text_size(px(12.))
+        .text_color(text_color)
+        .when(active, |this| this.bg(rgb(palette.hover)))
+        .when(enabled, |this| {
+            this.cursor_pointer()
+                .hover(|this| this.bg(rgb(palette.hover)))
+                .on_hover(on_hover)
+                .on_click(on_click)
+        })
+        .child(
+            svg()
+                .size(px(14.))
+                .flex_none()
+                .path(icon_path)
+                .text_color(text_color),
+        )
+        .child(div().min_w_0().flex_1().child(label.into()))
+        .child(
+            svg()
+                .size(px(12.))
+                .flex_none()
+                .path("icons/fe/forward.svg")
+                .text_color(text_color),
+        )
 }

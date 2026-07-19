@@ -505,6 +505,7 @@ impl NyaTermApp {
         }
         self.tab_actions_session_id = Some(session_id);
         self.tab_actions_anchor = anchor;
+        self.tab_actions_submenu = None;
         self.terminal_status = "tab actions opened".to_string();
         window.focus(&self.tab_actions_focus);
         cx.notify();
@@ -513,6 +514,7 @@ impl NyaTermApp {
     pub(in crate::features) fn close_tab_actions(&mut self, cx: &mut Context<Self>) {
         self.tab_actions_session_id = None;
         self.tab_actions_anchor = None;
+        self.tab_actions_submenu = None;
         self.terminal_status = "tab actions closed".to_string();
         cx.notify();
     }

@@ -36,6 +36,7 @@ impl NyaTermApp {
         else {
             self.tab_actions_session_id = None;
             self.tab_actions_anchor = None;
+            self.tab_actions_submenu = None;
             return div().into_any_element();
         };
 
@@ -63,7 +64,6 @@ impl NyaTermApp {
             .and_then(|root| self.session_pane_roots.get(&root))
             .is_some_and(|root| root.is_split())
             || self.workspace_split.is_some();
-        let can_merge_windows = self.terminal_windows_is_multi_leaf();
         let scroll_offset = self
             .terminal_views
             .get(&session_id)
@@ -95,7 +95,6 @@ impl NyaTermApp {
             can_close_inactive,
             can_close_right,
             can_unsplit,
-            can_merge_windows,
             visible_for_ai,
             buffer_for_ai,
             sessions.len(),

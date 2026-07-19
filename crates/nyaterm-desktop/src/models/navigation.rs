@@ -425,6 +425,13 @@ pub(crate) enum TitleMenuSubmenu {
     SyncInput,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum TabActionsSubmenu {
+    Color,
+    SshAdvanced,
+    Ai,
+}
+
 impl TitleMenu {
     pub(crate) fn i18n_key(self) -> &'static str {
         match self {

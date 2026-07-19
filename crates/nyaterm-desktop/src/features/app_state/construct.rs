@@ -740,6 +740,7 @@ impl NyaTermApp {
             terminal_surfaces: HashMap::new(),
             tab_actions_session_id: None,
             tab_actions_anchor: None,
+            tab_actions_submenu: None,
             tab_actions_focus: cx.focus_handle(),
             close_all_sessions_confirm_open: false,
             pending_quit_after_close_all: false,

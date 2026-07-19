@@ -519,6 +519,7 @@ pub struct NyaTermApp {
     pub(in crate::features) terminal_surfaces: HashMap<String, Entity<TerminalSurface>>,
     pub(in crate::features) tab_actions_session_id: Option<String>,
     pub(in crate::features) tab_actions_anchor: Option<(f32, f32)>,
+    pub(in crate::features) tab_actions_submenu: Option<TabActionsSubmenu>,
     pub(in crate::features) tab_actions_focus: FocusHandle,
     pub(in crate::features) close_all_sessions_confirm_open: bool,
     pub(in crate::features) pending_quit_after_close_all: bool,

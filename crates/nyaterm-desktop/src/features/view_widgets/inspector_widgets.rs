@@ -292,6 +292,7 @@ pub(in crate::features) fn tab_menu_item_enabled(
     let label = label.into();
     let icon_path = match id.as_str() {
         "tab-ctx-rename" => Some("icons/session/rename.svg"),
+        "tab-ctx-color-reset" => Some("icons/window/close.svg"),
         "tab-ctx-copy-name" | "tab-ctx-copy-ip" | "tab-ctx-copy-ssh" => {
             Some("icons/copy.svg")
         }
