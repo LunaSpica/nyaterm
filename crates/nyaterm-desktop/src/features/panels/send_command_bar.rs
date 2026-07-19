@@ -28,7 +28,7 @@ impl NyaTermApp {
             .flex_col()
             .border_t_1()
             .border_color(rgb(palette.border))
-            .bg(rgb(palette.surface))
+            .bg(self.shell_surface_color(palette.surface))
             .child(
                 div()
                     .flex_1()

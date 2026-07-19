@@ -13,7 +13,7 @@ impl NyaTermApp {
                     .flex_none()
                     .border_t_1()
                     .border_color(rgb(palette.border))
-                    .bg(rgb(palette.surface))
+                    .bg(self.shell_surface_color(palette.surface))
                     .child(self.quick_commands_panel(cx))
                     .into_any_element()
             }
@@ -53,7 +53,7 @@ impl NyaTermApp {
             .flex_none()
             .border_t_1()
             .border_color(rgb(palette.border))
-            .bg(rgb(palette.surface))
+            .bg(self.shell_surface_color(palette.surface))
             .p_3()
             .child(
                 div()
@@ -133,7 +133,7 @@ impl NyaTermApp {
             .rounded_md()
             .border_1()
             .border_color(rgb(palette.border))
-            .bg(rgb(palette.surface))
+            .bg(self.shell_surface_color(palette.surface))
             .p_2()
             .cursor_pointer()
             .hover(move |this| this.bg(rgb(palette.hover)))

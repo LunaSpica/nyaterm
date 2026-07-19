@@ -103,7 +103,7 @@ impl NyaTermApp {
                                     .justify_between()
                                     .border_b_1()
                                     .border_color(rgb(palette.surface_elevated))
-                                    .bg(rgb(palette.bg))
+                                    .bg(self.shell_surface_color(palette.bg))
                                     .child(
                                         div()
                                             .text_size(px(10.))
@@ -207,7 +207,7 @@ impl NyaTermApp {
                             .rounded_md()
                             .border_1()
                             .border_color(rgb(palette.border))
-                            .bg(rgb(palette.bg))
+                            .bg(self.shell_surface_color(palette.bg))
                             .px_2()
                             .py_1()
                             .flex()
