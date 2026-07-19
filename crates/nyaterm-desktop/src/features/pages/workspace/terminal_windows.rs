@@ -308,7 +308,7 @@ impl NyaTermApp {
                 let canvas = if active.is_empty() {
                     div().flex_1().into_any_element()
                 } else {
-                    self.workspace_session_content(active.clone(), false, cx)
+                    self.workspace_session_content(active.clone(), cx)
                 };
                 let drop_leaf_id_move = id.clone();
                 let drop_leaf_id_drop = id.clone();

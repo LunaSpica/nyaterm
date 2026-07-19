@@ -7,13 +7,12 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
         let session_id = self.active_session_id.clone().unwrap_or_default();
-        self.terminal_canvas_for(session_id, false, cx)
+        self.terminal_canvas_for(session_id, cx)
     }
 
     pub(in crate::features) fn terminal_canvas_for(
         &mut self,
         session_id: String,
-        show_pane_chrome: bool,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
         let render_started_at = Instant::now();
@@ -427,10 +426,6 @@ impl NyaTermApp {
             }
             div().flex().flex_row().child(grid)
         };
-        let pane_title = self
-            .session_display_name(&session_id)
-            .unwrap_or_else(|| short_id(&session_id).to_string());
-        let sync_group_label = self.active_sync_group_label(&session_id);
         let active_sync_group = self.active_sync_group_for_session(&session_id);
         let show_sync_action_overlay = active_sync_group.is_some() && !session_id.is_empty();
         let sync_is_paused = self.is_session_paused_in_active_sync_group(&session_id);
@@ -515,69 +510,6 @@ impl NyaTermApp {
                     .flex_col()
                     .relative()
                     .bg(rgb(palette.terminal_bg))
-                    .when(show_pane_chrome, |this| {
-                        this.border_1()
-                            .border_color(if is_active {
-                                rgb(palette.link)
-                            } else {
-                                rgb(palette.border)
-                            })
-                            .child(
-                                div()
-                                    .h(px(28.))
-                                    .flex()
-                                    .items_center()
-                                    .justify_between()
-                                    .gap_2()
-                                    .px_2()
-                                    .border_b_1()
-                                    .border_color(rgb(palette.border))
-                                    .bg(if is_active {
-                                        rgb(palette.hover)
-                                    } else {
-                                        rgb(palette.input)
-                                    })
-                                    .child(
-                                        div()
-                                            .min_w_0()
-                                            .text_xs()
-                                            .font_weight(FontWeight(800.))
-                                            .text_color(if is_active {
-                                                rgb(palette.text)
-                                            } else {
-                                                rgb(palette.text_muted)
-                                            })
-                                            .child(truncate_preview(&pane_title, 42)),
-                                    )
-                                    .child(
-                                        div()
-                                            .flex()
-                                            .items_center()
-                                            .gap_1()
-                                            .when_some(sync_group_label.clone(), |this, label| {
-                                                this.child(
-                                                    div()
-                                                        .rounded_sm()
-                                                        .px_2()
-                                                        .py_1()
-                                                        .text_xs()
-                                                        .text_color(rgb(palette.link))
-                                                        .bg(rgb(palette.hover))
-                                                        .child(truncate_preview(&label, 18)),
-                                                )
-                                            })
-                                            .child(status_pill(
-                                                if is_active { "active" } else { "pane" },
-                                                if is_active {
-                                                    rgb(palette.success)
-                                                } else {
-                                                    rgb(palette.link)
-                                                },
-                                                rgb(palette.hover),
-                                            )),
-                                    ),
-                            )
-                    })
                     .track_focus(&self.terminal_focus)
                     .on_key_down(cx.listener(|this, event: &KeyDownEvent, window, cx| {
                         this.mark_user_activity();

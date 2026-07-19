@@ -118,7 +118,6 @@ impl NyaTermApp {
     pub(super) fn workspace_session_content(
         &mut self,
         session_id: String,
-        show_pane_chrome: bool,
         cx: &mut Context<Self>,
     ) -> gpui::AnyElement {
         let reconnect_pending = self
@@ -135,8 +134,7 @@ impl NyaTermApp {
                 .workspace_reconnect_failed_state(session_id, error, cx)
                 .into_any_element();
         }
-        self.terminal_canvas_for(session_id, show_pane_chrome, cx)
-            .into_any_element()
+        self.terminal_canvas_for(session_id, cx).into_any_element()
     }
 
     pub(super) fn render_workspace_pane_node(
@@ -149,7 +147,7 @@ impl NyaTermApp {
         match node {
             WorkspacePaneNode::Leaf { session_id } => {
                 let is_active = self.active_session_id.as_deref() == Some(session_id.as_str());
-                let content = self.workspace_session_content(session_id.clone(), show_chrome, cx);
+                let content = self.workspace_session_content(session_id.clone(), cx);
                 let focus_id = session_id.clone();
                 let mut pane = div()
                     .id(SharedString::from(format!("workspace-leaf-{session_id}")))
