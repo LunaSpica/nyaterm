@@ -337,7 +337,14 @@ impl NyaTermApp {
                 .border_r_1()
                 .border_color(rgb(palette.border));
             for line_index in 0..line_count {
-                let ts_label = if show_timestamps {
+                let is_wrapped = snapshot
+                    .line_wrapped
+                    .get(line_index)
+                    .copied()
+                    .unwrap_or(false);
+                let has_rendered_row =
+                    snapshot.cursor_row == usize::MAX || line_index <= snapshot.cursor_row;
+                let ts_label = if show_timestamps && has_rendered_row && !is_wrapped {
                     snapshot
                         .line_timestamps_ms
                         .get(line_index)
@@ -354,7 +361,7 @@ impl NyaTermApp {
                 } else {
                     String::new()
                 };
-                let line_label = if show_line_numbers {
+                let line_label = if show_line_numbers && has_rendered_row && !is_wrapped {
                     format!(
                         "{:>width$}",
                         abs_start + line_index + 1,

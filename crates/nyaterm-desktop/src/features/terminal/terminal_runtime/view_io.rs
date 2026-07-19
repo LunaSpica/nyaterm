@@ -24,6 +24,7 @@ struct TerminalSnapshotRowSlice {
     styled_line: Vec<nyaterm_terminal::StyledSpan>,
     line_signature: u64,
     line_timestamp_ms: Option<u64>,
+    line_wrapped: bool,
     hyperlink_line: Vec<nyaterm_terminal::HyperlinkSpan>,
     command_mark: Option<nyaterm_terminal::ShellCommandMark>,
 }
@@ -194,6 +195,9 @@ fn terminal_snapshot_with_newer_edge_row(
         .line_timestamps_ms
         .push(*newer.line_timestamps_ms.get(row).unwrap_or(&None));
     snapshot
+        .line_wrapped
+        .push(*newer.line_wrapped.get(row).unwrap_or(&false));
+    snapshot
         .hyperlink_lines
         .push(newer.hyperlink_lines.get(row).cloned().unwrap_or_default());
     snapshot
@@ -236,6 +240,8 @@ fn terminal_snapshot_with_retained_scroll_window(
             Vec::with_capacity(snapshot.line_signatures.len() + older_rows.len());
         let mut line_timestamps_ms =
             Vec::with_capacity(snapshot.line_timestamps_ms.len() + older_rows.len());
+        let mut line_wrapped =
+            Vec::with_capacity(snapshot.line_wrapped.len() + older_rows.len());
         let mut hyperlink_lines =
             Vec::with_capacity(snapshot.hyperlink_lines.len() + older_rows.len());
         let mut command_marks = Vec::with_capacity(snapshot.command_marks.len() + older_rows.len());
@@ -245,6 +251,7 @@ fn terminal_snapshot_with_retained_scroll_window(
             styled_lines.push(row.styled_line);
             line_signatures.push(row.line_signature);
             line_timestamps_ms.push(row.line_timestamp_ms);
+            line_wrapped.push(row.line_wrapped);
             hyperlink_lines.push(row.hyperlink_line);
             command_marks.push(row.command_mark);
         }
@@ -253,6 +260,7 @@ fn terminal_snapshot_with_retained_scroll_window(
         styled_lines.extend(snapshot.styled_lines);
         line_signatures.extend(snapshot.line_signatures);
         line_timestamps_ms.extend(snapshot.line_timestamps_ms);
+        line_wrapped.extend(snapshot.line_wrapped);
         hyperlink_lines.extend(snapshot.hyperlink_lines);
         command_marks.extend(snapshot.command_marks);
         snapshot.cells = cells;
@@ -260,6 +268,7 @@ fn terminal_snapshot_with_retained_scroll_window(
         snapshot.styled_lines = styled_lines;
         snapshot.line_signatures = line_signatures;
         snapshot.line_timestamps_ms = line_timestamps_ms;
+        snapshot.line_wrapped = line_wrapped;
         snapshot.hyperlink_lines = hyperlink_lines;
         snapshot.command_marks = command_marks;
         snapshot.rows = snapshot.rows.saturating_add(older_count);
@@ -271,6 +280,7 @@ fn terminal_snapshot_with_retained_scroll_window(
             snapshot.styled_lines.push(row.styled_line);
             snapshot.line_signatures.push(row.line_signature);
             snapshot.line_timestamps_ms.push(row.line_timestamp_ms);
+            snapshot.line_wrapped.push(row.line_wrapped);
             snapshot.hyperlink_lines.push(row.hyperlink_line);
             snapshot.command_marks.push(row.command_mark);
             snapshot.rows = snapshot.rows.saturating_add(1);
@@ -371,6 +381,7 @@ fn terminal_snapshot_row_slice(
         styled_line: snapshot.styled_lines.get(row).cloned().unwrap_or_default(),
         line_signature: *snapshot.line_signatures.get(row).unwrap_or(&0),
         line_timestamp_ms: *snapshot.line_timestamps_ms.get(row).unwrap_or(&None),
+        line_wrapped: *snapshot.line_wrapped.get(row).unwrap_or(&false),
         hyperlink_line: snapshot
             .hyperlink_lines
             .get(row)

@@ -28,6 +28,7 @@ struct TerminalSurfaceRetainedRow {
     styled_line: Vec<nyaterm_terminal::StyledSpan>,
     line_signature: u64,
     line_timestamp_ms: Option<u64>,
+    line_wrapped: bool,
     hyperlink_line: Vec<nyaterm_terminal::HyperlinkSpan>,
     command_mark: Option<nyaterm_terminal::ShellCommandMark>,
 }
@@ -738,6 +739,7 @@ impl TerminalSurface {
         let mut styled_lines = Vec::with_capacity(viewport_rows);
         let mut line_signatures = Vec::with_capacity(viewport_rows);
         let mut line_timestamps_ms = Vec::with_capacity(viewport_rows);
+        let mut line_wrapped = Vec::with_capacity(viewport_rows);
         let mut hyperlink_lines = Vec::with_capacity(viewport_rows);
         let mut command_marks = Vec::with_capacity(viewport_rows);
 
@@ -756,6 +758,7 @@ impl TerminalSurface {
             styled_lines.push(snapshot.styled_lines.get(row).cloned().unwrap_or_default());
             line_signatures.push(*snapshot.line_signatures.get(row).unwrap_or(&0));
             line_timestamps_ms.push(*snapshot.line_timestamps_ms.get(row).unwrap_or(&None));
+            line_wrapped.push(*snapshot.line_wrapped.get(row).unwrap_or(&false));
             hyperlink_lines.push(
                 snapshot
                     .hyperlink_lines
@@ -776,6 +779,7 @@ impl TerminalSurface {
             styled_lines,
             line_signatures,
             line_timestamps_ms,
+            line_wrapped,
             hyperlink_lines,
             cursor_row: usize::MAX,
             cursor_col: 0,
@@ -806,6 +810,7 @@ impl TerminalSurface {
         let mut styled_lines = Vec::with_capacity(viewport_rows);
         let mut line_signatures = Vec::with_capacity(viewport_rows);
         let mut line_timestamps_ms = Vec::with_capacity(viewport_rows);
+        let mut line_wrapped = Vec::with_capacity(viewport_rows);
         let mut hyperlink_lines = Vec::with_capacity(viewport_rows);
         let mut command_marks = Vec::with_capacity(viewport_rows);
 
@@ -819,6 +824,7 @@ impl TerminalSurface {
             styled_lines.push(row.styled_line.clone());
             line_signatures.push(row.line_signature);
             line_timestamps_ms.push(row.line_timestamp_ms);
+            line_wrapped.push(row.line_wrapped);
             hyperlink_lines.push(row.hyperlink_line.clone());
             command_marks.push(row.command_mark);
         }
@@ -833,6 +839,7 @@ impl TerminalSurface {
             styled_lines,
             line_signatures,
             line_timestamps_ms,
+            line_wrapped,
             hyperlink_lines,
             cursor_row: usize::MAX,
             cursor_col: 0,
@@ -1493,6 +1500,7 @@ fn terminal_surface_retained_row_from_snapshot(
         styled_line: snapshot.styled_lines.get(row).cloned().unwrap_or_default(),
         line_signature: *snapshot.line_signatures.get(row).unwrap_or(&0),
         line_timestamp_ms: *snapshot.line_timestamps_ms.get(row).unwrap_or(&None),
+        line_wrapped: *snapshot.line_wrapped.get(row).unwrap_or(&false),
         hyperlink_line: snapshot
             .hyperlink_lines
             .get(row)
@@ -1649,7 +1657,14 @@ impl Render for TerminalSurface {
                 .border_r_1()
                 .border_color(rgb(palette.border));
             for line_index in visible_gutter_rows {
-                let ts_label = if self.show_timestamps {
+                let is_wrapped = snapshot
+                    .line_wrapped
+                    .get(line_index)
+                    .copied()
+                    .unwrap_or(false);
+                let has_rendered_row =
+                    snapshot.cursor_row == usize::MAX || line_index <= snapshot.cursor_row;
+                let ts_label = if self.show_timestamps && has_rendered_row && !is_wrapped {
                     snapshot
                         .line_timestamps_ms
                         .get(line_index)
@@ -1666,7 +1681,7 @@ impl Render for TerminalSurface {
                 } else {
                     String::new()
                 };
-                let line_label = if self.show_line_numbers {
+                let line_label = if self.show_line_numbers && has_rendered_row && !is_wrapped {
                     format!(
                         "{:>width$}",
                         abs_start + line_index + 1,
@@ -1842,6 +1857,10 @@ mod tests {
         let mut line_timestamps_ms = older.line_timestamps_ms[older_start..].to_vec();
         line_timestamps_ms.extend(snapshot.line_timestamps_ms);
         snapshot.line_timestamps_ms = line_timestamps_ms;
+
+        let mut line_wrapped = older.line_wrapped[older_start..].to_vec();
+        line_wrapped.extend(snapshot.line_wrapped);
+        snapshot.line_wrapped = line_wrapped;
 
         let mut hyperlink_lines = older.hyperlink_lines[older_start..].to_vec();
         hyperlink_lines.extend(snapshot.hyperlink_lines);

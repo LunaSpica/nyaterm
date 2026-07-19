@@ -122,6 +122,8 @@ pub struct TerminalSnapshot {
     pub line_signatures: Vec<u64>,
     /// Wall-clock stamp (unix ms) for each viewport row, if known.
     pub line_timestamps_ms: Vec<Option<u64>>,
+    /// Whether each viewport row continues a wrapped logical line.
+    pub line_wrapped: Vec<bool>,
     /// OSC 8 hyperlink spans per viewport line (char columns).
     pub hyperlink_lines: Vec<Vec<HyperlinkSpan>>,
     pub cursor_row: usize,
@@ -909,6 +911,7 @@ fn snapshot_from_term(
     let display_offset = requested_offset;
     let mut row_cells = vec![Vec::<RenderCell>::with_capacity(cols); rows];
     let mut line_timestamps_ms = vec![None; rows];
+    let mut line_wrapped = vec![false; rows];
     let mut command_marks = vec![None; rows];
 
     let topmost = term.topmost_line();
@@ -920,6 +923,12 @@ fn snapshot_from_term(
         }
         line_timestamps_ms[row] = line_timestamps_by_line.get(&line.0).copied();
         command_marks[row] = command_marks_by_line.get(&line.0).copied();
+        let previous_line = Line(line.0 - 1);
+        line_wrapped[row] = cols > 0
+            && previous_line >= topmost
+            && term.grid()[previous_line][Column(cols - 1)]
+                .flags
+                .contains(Flags::WRAPLINE);
         for col in 0..cols {
             let cell = &term.grid()[line][Column(col)];
             let text = cell_text(cell);
@@ -1010,6 +1019,7 @@ fn snapshot_from_term(
             line_timestamps_ms.resize(rows, None);
             line_timestamps_ms
         },
+        line_wrapped,
         hyperlink_lines,
         cursor_row,
         cursor_col,
@@ -1669,6 +1679,16 @@ mod tests {
         screen.advance(b"hello\nworld");
         assert_eq!(screen.lines()[0], "hello");
         assert!(screen.lines().iter().any(|line| line.contains("world")));
+    }
+
+    #[test]
+    fn snapshots_mark_wrapped_continuation_rows() {
+        let mut screen = TerminalScreen::new(5, 3);
+        screen.advance(b"abcdef");
+        let snapshot = screen.viewport_snapshot(0);
+
+        assert_eq!(snapshot.line_wrapped.first().copied(), Some(false));
+        assert_eq!(snapshot.line_wrapped.get(1).copied(), Some(true));
     }
 
     #[test]
