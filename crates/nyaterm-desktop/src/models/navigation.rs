@@ -60,27 +60,6 @@ impl NavItem {
         }
     }
 
-    pub(crate) fn short_label(self) -> &'static str {
-        // Tauri panel.* short titles used under activity icons when labels are shown.
-        match self {
-            NavItem::Workspace => "Work",
-            NavItem::Connections => "Conn",
-            NavItem::Tunnels => "Net",
-            NavItem::Stats => "Res",
-            NavItem::Processes => "Proc",
-            NavItem::Docker => "Dock",
-            NavItem::Transfers => "Files",
-            NavItem::Settings => "Set",
-            NavItem::Migration => "Mig",
-            NavItem::AiAssistant => "AI",
-            NavItem::ActiveSessions => "Sess",
-            NavItem::CommandHistory => "Hist",
-            NavItem::SecurityAuth => "Auth",
-            NavItem::SyncBackupHistory => "Sync",
-            NavItem::Recording => "Rec",
-        }
-    }
-
     /// Compact panel title used in side PanelHeader (Tauri panel.* keys).
     pub(crate) fn panel_title(self) -> &'static str {
         match self {
@@ -309,16 +288,6 @@ impl ActivityBarEntry {
             Self::QuickCommands => "Quick Commands",
             Self::CommandSend => "Command Send",
             Self::Recording => "Recording",
-            Self::Lock => "Lock",
-        }
-    }
-
-    pub(crate) fn short_label(self) -> &'static str {
-        match self {
-            Self::Panel(item) => item.short_label(),
-            Self::QuickCommands => "Cmd",
-            Self::CommandSend => "Send",
-            Self::Recording => "Rec",
             Self::Lock => "Lock",
         }
     }

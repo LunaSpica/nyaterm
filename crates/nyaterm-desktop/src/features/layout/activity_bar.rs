@@ -264,7 +264,6 @@ impl NyaTermApp {
             .map(|key| self.tr(key))
             .unwrap_or_else(|| entry.label())
             .to_string();
-        let short_label = entry.short_label();
         let palette = self.theme_palette();
         let active_color = rgb(palette.primary);
         let icon_color = if selected {
@@ -344,14 +343,16 @@ impl NyaTermApp {
             .when(show_labels, |this| {
                 this.child(
                     div()
+                        .w_full()
                         .text_size(px(8.))
                         .font_weight(FontWeight(500.))
+                        .text_center()
                         .text_color(if selected {
                             active_color
                         } else {
                             rgb(palette.text_muted)
                         })
-                        .child(short_label),
+                        .child(tooltip.clone()),
                 )
             })
             .cursor_move()
@@ -384,18 +385,7 @@ impl NyaTermApp {
             })
             .tooltip({
                 let title = tooltip.clone();
-                let detail = if show_labels {
-                    None
-                } else {
-                    Some(short_label.to_string())
-                };
-                move |_, cx| {
-                    let mut tip = ChromeTooltip::new(title.clone());
-                    if let Some(detail) = detail.clone() {
-                        tip = tip.with_detail(detail);
-                    }
-                    cx.new(|_| tip).into()
-                }
+                move |_, cx| cx.new(|_| ChromeTooltip::new(title.clone())).into()
             })
             .on_click(cx.listener(move |this, _, window, cx| {
                 this.activate_activity_entry(entry, window, cx);
