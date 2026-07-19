@@ -88,6 +88,26 @@ fn transfer_dialog_width(viewport_width: f32, preferred_width: f32) -> f32 {
     preferred_width.min((viewport_width - 32.).max(240.))
 }
 
+fn transfer_menu_position(
+    x: f32,
+    y: f32,
+    menu_width: f32,
+    preferred_height: f32,
+    viewport_width: f32,
+    viewport_height: f32,
+) -> (f32, f32, f32) {
+    let margin = 8.;
+    let max_height = (viewport_height - margin * 2.).max(80.);
+    let height = preferred_height.min(max_height);
+    let max_x = (viewport_width - menu_width - margin).max(margin);
+    let max_y = (viewport_height - height - margin).max(margin);
+    (
+        x.clamp(margin, max_x),
+        y.clamp(margin, max_y),
+        max_height,
+    )
+}
+
 impl NyaTermApp {
     pub(in crate::features) fn transfers_view(
         &mut self,
@@ -134,12 +154,24 @@ impl NyaTermApp {
 
 #[cfg(test)]
 mod tests {
-    use super::transfer_dialog_width;
+    use super::{transfer_dialog_width, transfer_menu_position};
 
     #[test]
     fn dialog_width_uses_preferred_size_with_narrow_viewport_fallback() {
         assert_eq!(transfer_dialog_width(1280., 500.), 500.);
         assert_eq!(transfer_dialog_width(420., 500.), 388.);
         assert_eq!(transfer_dialog_width(200., 500.), 240.);
+    }
+
+    #[test]
+    fn menu_position_stays_inside_viewport() {
+        assert_eq!(
+            transfer_menu_position(1200., 760., 268., 360., 1280., 800.),
+            (1004., 432., 784.)
+        );
+        assert_eq!(
+            transfer_menu_position(500., 500., 268., 560., 300., 240.),
+            (24., 8., 224.)
+        );
     }
 }

@@ -132,6 +132,15 @@ impl NyaTermApp {
         let retry_id = state.job_id.clone();
         let open_id = state.job_id.clone();
         let delete_id = state.job_id.clone();
+        let (viewport_w, viewport_h) = self.last_viewport_size;
+        let (menu_x, menu_y, menu_max_height) = transfer_menu_position(
+            f32::from(state.x),
+            f32::from(state.y),
+            190.,
+            250.,
+            viewport_w,
+            viewport_h,
+        );
 
         div()
             .id(SharedString::from("transfer-job-menu-overlay"))
@@ -147,9 +156,11 @@ impl NyaTermApp {
                 div()
                     .id(SharedString::from("transfer-job-menu"))
                     .absolute()
-                    .top(state.y)
-                    .left(state.x)
+                    .top(px(menu_y))
+                    .left(px(menu_x))
                     .w(px(190.))
+                    .max_h(px(menu_max_height))
+                    .overflow_y_scroll()
                     .rounded_md()
                     .border_1()
                     .border_color(rgb(palette.border))

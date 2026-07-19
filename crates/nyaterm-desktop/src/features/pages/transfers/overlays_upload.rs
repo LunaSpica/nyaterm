@@ -35,6 +35,15 @@ impl NyaTermApp {
                 x: px(24.),
                 y: px(24.),
             });
+        let (viewport_w, viewport_h) = self.last_viewport_size;
+        let (menu_x, menu_y, menu_max_height) = transfer_menu_position(
+            f32::from(state.x),
+            f32::from(state.y),
+            176.,
+            80.,
+            viewport_w,
+            viewport_h,
+        );
 
         div()
             .id(SharedString::from("transfer-browser-upload-menu-overlay"))
@@ -50,9 +59,11 @@ impl NyaTermApp {
                 div()
                     .id(SharedString::from("transfer-browser-upload-menu"))
                     .absolute()
-                    .top(state.y)
-                    .left(state.x)
+                    .top(px(menu_y))
+                    .left(px(menu_x))
                     .w(px(176.))
+                    .max_h(px(menu_max_height))
+                    .overflow_y_scroll()
                     .rounded_md()
                     .border_1()
                     .border_color(rgb(palette.border))

@@ -31,6 +31,22 @@ impl NyaTermApp {
             .map(|entry| self.enabled_transfer_file_ai_actions_for_entry(entry))
             .unwrap_or_default();
         let has_ai_actions = !selected_file_ai_actions.is_empty();
+        let (viewport_w, viewport_h) = self.last_viewport_size;
+        let preferred_height = if state.is_current_directory {
+            380.
+        } else if state.is_parent {
+            150.
+        } else {
+            560. + if has_ai_actions { 96. } else { 0. }
+        };
+        let (menu_x, menu_y, menu_max_height) = transfer_menu_position(
+            f32::from(state.x),
+            f32::from(state.y),
+            268.,
+            preferred_height,
+            viewport_w,
+            viewport_h,
+        );
 
         let mut ai_actions = div().flex().flex_col().gap_1();
         for action in selected_file_ai_actions {
@@ -66,9 +82,11 @@ impl NyaTermApp {
                 div()
                     .id(SharedString::from("transfer-browser-context-menu"))
                     .absolute()
-                    .top(state.y)
-                    .left(state.x)
+                    .top(px(menu_y))
+                    .left(px(menu_x))
                     .w(px(268.))
+                    .max_h(px(menu_max_height))
+                    .overflow_y_scroll()
                     .rounded_md()
                     .border_1()
                     .border_color(rgb(palette.border))

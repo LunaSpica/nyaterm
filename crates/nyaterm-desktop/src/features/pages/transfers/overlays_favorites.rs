@@ -40,6 +40,15 @@ impl NyaTermApp {
             .iter()
             .cloned()
             .collect::<Vec<_>>();
+        let (viewport_w, viewport_h) = self.last_viewport_size;
+        let (menu_x, menu_y, menu_max_height) = transfer_menu_position(
+            f32::from(state.x),
+            f32::from(state.y),
+            300.,
+            96. + favorite_paths.len() as f32 * 38.,
+            viewport_w,
+            viewport_h,
+        );
 
         let mut list = div().flex().flex_col().gap_1();
         for path in favorite_paths {
@@ -104,7 +113,7 @@ impl NyaTermApp {
                                 cx.stop_propagation();
                                 this.remove_transfer_browser_favorite_path(remove_path.clone(), cx);
                             }))
-                            .child("x"),
+                            .child(svg().size(px(14.)).path("icons/fe/bookmark-remove.svg")),
                     ),
             );
         }
@@ -125,9 +134,11 @@ impl NyaTermApp {
                 div()
                     .id(SharedString::from("transfer-browser-favorites-menu"))
                     .absolute()
-                    .top(state.y)
-                    .left(state.x)
+                    .top(px(menu_y))
+                    .left(px(menu_x))
                     .w(px(300.))
+                    .max_h(px(menu_max_height))
+                    .overflow_y_scroll()
                     .rounded_md()
                     .border_1()
                     .border_color(rgb(palette.border))

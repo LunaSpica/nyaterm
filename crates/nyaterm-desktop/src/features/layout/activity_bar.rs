@@ -125,7 +125,9 @@ impl NyaTermApp {
                             .w(px(14.))
                             .flex_none()
                             .text_color(rgb(palette.link))
-                            .child(if show_labels { "✓" } else { "" }),
+                            .when(show_labels, |this| {
+                                this.child(svg().size(px(13.)).path("icons/check.svg"))
+                            }),
                     )
                     .child(show_labels_label),
             );
@@ -290,7 +292,7 @@ impl NyaTermApp {
                     .flex()
                     .flex_col()
                     .items_center()
-                    .gap_1()
+                    .gap(px(2.))
             })
             .when(!show_labels, |this| {
                 this.w_full()
@@ -313,8 +315,8 @@ impl NyaTermApp {
             .child(
                 div()
                     .absolute()
-                    .top(px(8.))
-                    .bottom(px(8.))
+                    .top(px(4.))
+                    .bottom(px(4.))
                     .w(px(2.))
                     .rounded_full()
                     .bg(indicator)
@@ -325,7 +327,7 @@ impl NyaTermApp {
                 icon_path,
                 glyph,
                 icon_color.into(),
-                if show_labels { 18. } else { 20. },
+                18.,
             ))
             .when(show_labels, |this| {
                 this.child(
