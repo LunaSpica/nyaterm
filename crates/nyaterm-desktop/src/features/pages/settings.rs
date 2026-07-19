@@ -778,6 +778,7 @@ pub(super) fn settings_form_row(
     let label = label.into();
     div()
         .flex()
+        .flex_wrap()
         .items_start()
         .justify_between()
         .gap_4()
@@ -807,6 +808,8 @@ pub(super) fn settings_form_row(
         .child(
             div()
                 .flex_none()
+                .min_w_0()
+                .max_w_full()
                 .flex()
                 .items_center()
                 .justify_end()

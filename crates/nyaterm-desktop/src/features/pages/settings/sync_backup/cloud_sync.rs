@@ -67,7 +67,8 @@ impl NyaTermApp {
         }
 
         div()
-            .w(px(220.))
+            .w_full()
+            .max_w(px(220.))
             .flex()
             .flex_col()
             .opacity(if enabled { 1.0 } else { 0.45 })

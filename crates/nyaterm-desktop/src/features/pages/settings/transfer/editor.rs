@@ -55,7 +55,8 @@ impl NyaTermApp {
                     self.tr("settings.defaultEditor"),
                     Some(SharedString::from(self.tr("settings.defaultEditorDesc"))),
                     div()
-                        .w(px(260.))
+                        .w_full()
+                        .max_w(px(260.))
                         .flex()
                         .flex_col()
                         .gap_1()

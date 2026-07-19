@@ -26,7 +26,8 @@ impl NyaTermApp {
                     self.tr("settings.recordingPath"),
                     Some(SharedString::from(self.tr("settings.recordingPathDesc"))),
                     div()
-                        .w(px(260.))
+                        .w_full()
+                        .max_w(px(260.))
                         .flex()
                         .flex_col()
                         .gap_1()

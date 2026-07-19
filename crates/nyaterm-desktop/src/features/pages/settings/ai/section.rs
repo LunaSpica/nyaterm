@@ -115,7 +115,7 @@ impl NyaTermApp {
                         palette,
                         self.tr("ai.requestUserAgent"),
                         Some(SharedString::from(self.tr("ai.requestUserAgentDesc"))),
-                        div().w(px(300.)).child(self.ai_input(
+                        div().w_full().max_w(px(300.)).child(self.ai_input(
                             "ai-request-user-agent",
                             self.tr("ai.requestUserAgent"),
                             self.ai_settings.request_user_agent.clone(),
