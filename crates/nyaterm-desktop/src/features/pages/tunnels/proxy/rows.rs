@@ -30,13 +30,11 @@ pub(in crate::features::pages::tunnels) fn proxy_network_row(
 
     // Tauri ProxyRow: name, protocol, address; overflow actions on the right.
     div()
-        .border_t_1()
-        .border_color(rgb(palette.surface_elevated))
-        .px_2()
-        .py_2()
+        .px_3()
+        .py(px(10.))
         .flex()
         .items_center()
-        .gap_2()
+        .gap(px(12.))
         .hover(|this| this.bg(rgb(palette.hover)))
         .child(
             div()
@@ -46,7 +44,7 @@ pub(in crate::features::pages::tunnels) fn proxy_network_row(
                 .flex_col()
                 .child(
                     div()
-                        .text_size(px(12.))
+                        .text_size(px(14.))
                         .font_weight(FontWeight(600.))
                         .text_color(rgb(palette.text))
                         .overflow_hidden()
@@ -55,7 +53,7 @@ pub(in crate::features::pages::tunnels) fn proxy_network_row(
                 .child(
                     div()
                         .mt(px(1.))
-                        .text_size(px(11.))
+                        .text_size(px(12.))
                         .text_color(rgb(palette.text_muted))
                         .child(proxy_protocol_label(&proxy.protocol)),
                 )
@@ -63,7 +61,7 @@ pub(in crate::features::pages::tunnels) fn proxy_network_row(
                     div()
                         .mt(px(1.))
                         .font_family(crate::features::gpui_code_font_family())
-                        .text_size(px(10.))
+                        .text_size(px(11.))
                         .text_color(rgb(palette.text_dimmed))
                         .overflow_hidden()
                         .child(truncate_preview(&address, 92)),

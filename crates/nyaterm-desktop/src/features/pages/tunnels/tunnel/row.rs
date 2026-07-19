@@ -69,13 +69,11 @@ pub(in crate::features::pages::tunnels) fn tunnel_network_row(
 
     // Tauri: px-3 py-2.5; side-panel density uses slightly tighter mono stack.
     div()
-        .border_t_1()
-        .border_color(rgb(palette.surface_elevated))
-        .px_2()
-        .py_2()
+        .px_3()
+        .py(px(10.))
         .flex()
         .items_center()
-        .gap_2()
+        .gap(px(12.))
         .hover(|this| this.bg(rgb(palette.hover)))
         .child(
             div()
@@ -92,7 +90,7 @@ pub(in crate::features::pages::tunnels) fn tunnel_network_row(
                         .child(
                             div()
                                 .min_w_0()
-                                .text_size(px(12.))
+                                .text_size(px(14.))
                                 .font_weight(FontWeight(600.))
                                 .text_color(rgb(palette.text))
                                 .overflow_hidden()
@@ -111,7 +109,7 @@ pub(in crate::features::pages::tunnels) fn tunnel_network_row(
                 .child(
                     div()
                         .mt(px(1.))
-                        .text_size(px(11.))
+                        .text_size(px(12.))
                         .text_color(rgb(palette.text_muted))
                         .overflow_hidden()
                         .child(format!(
@@ -124,7 +122,7 @@ pub(in crate::features::pages::tunnels) fn tunnel_network_row(
                     div()
                         .mt(px(1.))
                         .font_family(crate::features::gpui_code_font_family())
-                        .text_size(px(10.))
+                        .text_size(px(11.))
                         .text_color(rgb(palette.text_dimmed))
                         .overflow_hidden()
                         .child(truncate_preview(&tunnel_endpoint(tunnel, &listen), 88)),

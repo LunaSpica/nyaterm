@@ -1,4 +1,5 @@
 use super::*;
+use gpui::rgba;
 
 #[derive(Debug, Clone)]
 pub(in crate::features::pages::tunnels) struct TunnelSection {
@@ -63,11 +64,6 @@ pub(in crate::features::pages::tunnels) fn tunnel_section(
     cx: &mut Context<NyaTermApp>,
 ) -> impl IntoElement {
     let item_count = section.tunnels.len();
-    let open_count = section
-        .tunnels
-        .iter()
-        .filter(|tunnel| open_tunnels.contains_key(&tunnel.id))
-        .count();
     let section_key = format!("tunnel:{}", section.id);
     let collapsed = !app.network_expanded_sections.contains(&section_key);
     let section_id_for_toggle = section.id.clone();
@@ -84,7 +80,7 @@ pub(in crate::features::pages::tunnels) fn tunnel_section(
                 .child(app.tr("network.groupEmpty")),
         );
     } else {
-        for tunnel in section.tunnels {
+        for (index, tunnel) in section.tunnels.into_iter().enumerate() {
             let open_info = open_tunnels.get(&tunnel.id).cloned();
             let pending = app.pending_tunnels.iter().any(|id| id == &tunnel.id);
             let connection_label = tunnel
@@ -121,6 +117,9 @@ pub(in crate::features::pages::tunnels) fn tunnel_section(
                 div()
                     .flex()
                     .flex_col()
+                    .when(index + 1 < item_count, |this| {
+                        this.border_b_1().border_color(rgb(palette.border))
+                    })
                     .child(tunnel_network_row(
                         palette,
                         app.shell_surface_color(palette.surface),
@@ -194,20 +193,19 @@ pub(in crate::features::pages::tunnels) fn tunnel_section(
         .rounded_md()
         .border_1()
         .border_color(rgb(palette.border))
-        .bg(rgb(palette.surface))
         .child(
             div()
                 .id(gpui::SharedString::from(format!(
                     "tunnel-section-header-{}",
                     section.id
                 )))
-                .h(px(30.))
+                .h(px(32.))
                 .px_3()
                 .flex()
                 .items_center()
                 .justify_between()
                 .gap_2()
-                .bg(rgb(palette.input))
+                .bg(rgba((palette.hover << 8) | 0x8c))
                 .cursor_pointer()
                 .hover(|this| this.bg(rgb(palette.hover)))
                 .on_click({
@@ -250,23 +248,9 @@ pub(in crate::features::pages::tunnels) fn tunnel_section(
                                 .px_1()
                                 .text_size(px(10.))
                                 .text_color(rgb(palette.text_muted))
-                                .bg(rgb(palette.surface_elevated))
+                                .bg(rgba((palette.text_muted << 8) | 0x1f))
                                 .child(item_count.to_string()),
                         ),
-                )
-                .child(
-                    div()
-                        .flex()
-                        .items_center()
-                        .gap_1()
-                        .when(open_count > 0, |this| {
-                            this.child(
-                                div()
-                                    .text_size(px(10.))
-                                    .text_color(rgb(palette.success))
-                                    .child(format!("{open_count} open")),
-                            )
-                        }),
                 )
                 .when_some(section.group.clone(), |this, group| {
                     let rename_id = group.id.clone();

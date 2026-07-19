@@ -1,4 +1,5 @@
 use super::*;
+use gpui::rgba;
 
 #[derive(Debug, Clone)]
 pub(in crate::features::pages::tunnels) struct ProxySection {
@@ -62,11 +63,6 @@ pub(in crate::features::pages::tunnels) fn proxy_section(
     cx: &mut Context<NyaTermApp>,
 ) -> impl IntoElement {
     let item_count = section.proxies.len();
-    let command_count = section
-        .proxies
-        .iter()
-        .filter(|proxy| proxy.protocol == "proxycommand")
-        .count();
     let section_key = format!("proxy:{}", section.id);
     let collapsed = !app.network_expanded_sections.contains(&section_key);
     let section_id_for_toggle = section.id.clone();
@@ -83,7 +79,7 @@ pub(in crate::features::pages::tunnels) fn proxy_section(
                 .child(app.tr("network.groupEmpty")),
         );
     } else {
-        for proxy in section.proxies {
+        for (index, proxy) in section.proxies.into_iter().enumerate() {
             let move_picker_open = app
                 .network_move_picker
                 .as_ref()
@@ -92,6 +88,9 @@ pub(in crate::features::pages::tunnels) fn proxy_section(
                 div()
                     .flex()
                     .flex_col()
+                    .when(index + 1 < item_count, |this| {
+                        this.border_b_1().border_color(rgb(palette.border))
+                    })
                     .child(proxy_network_row(&proxy, app, cx))
                     .when(move_picker_open, |this| {
                         this.child(proxy_move_picker(
@@ -115,20 +114,19 @@ pub(in crate::features::pages::tunnels) fn proxy_section(
         .rounded_md()
         .border_1()
         .border_color(rgb(palette.border))
-        .bg(rgb(palette.surface))
         .child(
             div()
                 .id(gpui::SharedString::from(format!(
                     "proxy-section-header-{}",
                     section.id
                 )))
-                .h(px(30.))
+                .h(px(32.))
                 .px_3()
                 .flex()
                 .items_center()
                 .justify_between()
                 .gap_2()
-                .bg(rgb(palette.input))
+                .bg(rgba((palette.hover << 8) | 0x8c))
                 .cursor_pointer()
                 .hover(|this| this.bg(rgb(palette.hover)))
                 .on_click({
@@ -171,23 +169,9 @@ pub(in crate::features::pages::tunnels) fn proxy_section(
                                 .px_1()
                                 .text_size(px(10.))
                                 .text_color(rgb(palette.text_muted))
-                                .bg(rgb(palette.surface_elevated))
+                                .bg(rgba((palette.text_muted << 8) | 0x1f))
                                 .child(item_count.to_string()),
                         ),
-                )
-                .child(
-                    div()
-                        .flex()
-                        .items_center()
-                        .gap_1()
-                        .when(command_count > 0, |this| {
-                            this.child(
-                                div()
-                                    .text_size(px(10.))
-                                    .text_color(rgb(0xa371f7))
-                                    .child(format!("{command_count} cmd")),
-                            )
-                        }),
                 )
                 .when_some(section.group.clone(), |this, group| {
                     let rename_id = group.id.clone();
