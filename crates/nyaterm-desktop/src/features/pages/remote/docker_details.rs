@@ -73,7 +73,7 @@ pub(in crate::features::pages::remote) fn docker_details_panel(
                     ),
             );
 
-        return modal_dialog_shell(palette, dialog_bg, "docker-details-modal", 680., card)
+        return modal_dialog_shell(palette, dialog_bg, "docker-details-modal", 620., card)
             .into_any_element();
     };
 
@@ -157,19 +157,9 @@ pub(in crate::features::pages::remote) fn docker_details_panel(
         }
     }
 
-    let details_id = container_id
-        .as_deref()
-        .map(compact_id)
-        .unwrap_or_else(|| "unknown".to_string());
     let details_title = container
         .as_ref()
-        .map(|container| {
-            format!(
-                "{} · {}",
-                labels.container_details,
-                truncate_preview(&container.name, 40)
-            )
-        })
+        .map(|container| truncate_preview(&container.name, 40))
         .unwrap_or_else(|| labels.container_details.to_string());
     let details_state = container.as_ref().map(|container| container.state.clone());
     let networks_value = docker_networks_value(&details);
@@ -194,17 +184,6 @@ pub(in crate::features::pages::remote) fn docker_details_panel(
                 }),
             ));
     }
-    actions = actions.child(
-        div()
-            .rounded_sm()
-            .px_2()
-            .py_1()
-            .text_xs()
-            .text_color(rgb(0x93c5fd))
-            .bg(rgb(0x17233a))
-            .child(details_id),
-    );
-
     let card = div()
         .id("docker-details-scroll")
         .max_h(px(600.))
@@ -248,7 +227,7 @@ pub(in crate::features::pages::remote) fn docker_details_panel(
                 .grid()
                 .grid_cols(3)
                 .gap_2()
-                .child(metric(
+                .child(docker_metric(
                     palette,
                     labels.cpu,
                     details
@@ -257,7 +236,7 @@ pub(in crate::features::pages::remote) fn docker_details_panel(
                         .map(|stats| format!("{:.1}%", stats.cpu_percent))
                         .unwrap_or_else(|| "n/a".to_string()),
                 ))
-                .child(metric(
+                .child(docker_metric(
                     palette,
                     labels.memory,
                     details
@@ -266,7 +245,7 @@ pub(in crate::features::pages::remote) fn docker_details_panel(
                         .map(|stats| format!("{:.1}%", stats.memory_percent))
                         .unwrap_or_else(|| "n/a".to_string()),
                 ))
-                .child(metric(
+                .child(docker_metric(
                     palette,
                     labels.pids,
                     details
@@ -276,7 +255,7 @@ pub(in crate::features::pages::remote) fn docker_details_panel(
                         .unwrap_or_else(|| "n/a".to_string()),
                 )),
         )
-        .when_some(container, |this, container| {
+        .when_some(container.clone(), |this, container| {
             this.child(
                 div()
                     .rounded_sm()
@@ -364,23 +343,6 @@ pub(in crate::features::pages::remote) fn docker_details_panel(
                         labels.copy,
                         cx,
                     ))
-                    .child(docker_detail_line(
-                        palette,
-                        labels.ports,
-                        if container.ports.trim().is_empty() {
-                            "-".to_string()
-                        } else {
-                            docker_ports_value(&container.ports)
-                        },
-                        if container.ports.trim().is_empty() {
-                            "-".to_string()
-                        } else {
-                            truncate_preview(&docker_ports_value(&container.ports), 96)
-                        },
-                        true,
-                        labels.copy,
-                        cx,
-                    )),
             )
         })
         .child(
@@ -455,6 +417,25 @@ pub(in crate::features::pages::remote) fn docker_details_panel(
                                 .text_color(rgb(palette.text))
                                 .child(labels.networking),
                         )
+                        .when_some(container.as_ref(), |this, container| {
+                            this.child(docker_detail_line(
+                                palette,
+                                labels.ports,
+                                if container.ports.trim().is_empty() {
+                                    "-".to_string()
+                                } else {
+                                    docker_ports_value(&container.ports)
+                                },
+                                if container.ports.trim().is_empty() {
+                                    "-".to_string()
+                                } else {
+                                    truncate_preview(&docker_ports_value(&container.ports), 96)
+                                },
+                                true,
+                                labels.copy,
+                                cx,
+                            ))
+                        })
                         .child(docker_detail_line(
                             palette,
                             labels.networks,
@@ -543,6 +524,32 @@ pub(in crate::features::pages::remote) fn docker_details_panel(
         );
 
     modal_dialog_shell(palette, dialog_bg, "docker-details-modal", 620., card).into_any_element()
+}
+
+fn docker_metric(
+    palette: crate::theme::ThemePalette,
+    label: &'static str,
+    value: impl Into<gpui::SharedString>,
+) -> impl IntoElement {
+    div()
+        .rounded_sm()
+        .bg(rgb(palette.surface))
+        .px_3()
+        .py_2()
+        .child(
+            div()
+                .text_size(px(10.))
+                .text_color(rgb(palette.text_muted))
+                .child(label),
+        )
+        .child(
+            div()
+                .mt_1()
+                .font_family(crate::features::gpui_code_font_family())
+                .text_size(px(11.))
+                .text_color(rgb(palette.text))
+                .child(value.into()),
+        )
 }
 
 fn docker_detail_line(
