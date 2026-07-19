@@ -16,15 +16,6 @@ impl NyaTermApp {
         let switch_terminal_label = self.tr("app.switchTerminal");
 
         let palette = self.theme_palette();
-        let failure_banner = if let (Some(name), Some(error)) = (
-            self.last_connect_failure_name.clone(),
-            self.last_connect_failure_error.clone(),
-        ) {
-            Some((name, error))
-        } else {
-            None
-        };
-        let connecting_status = self.pending_session_status_label();
         let terminal_palette = self.terminal_theme_palette();
         div()
             .flex_1()
@@ -46,57 +37,6 @@ impl NyaTermApp {
                             .mb_9()
                             .child(nyaterm_logo_mark(terminal_palette, 256., 0.13)),
                     )
-                    .when_some(connecting_status, |this, status| {
-                        this.child(
-                            div()
-                                .mb_4()
-                                .w(px(480.))
-                                .max_w_full()
-                                .px_3()
-                                .py_2()
-                                .rounded_md()
-                                .border_1()
-                                .border_color(rgb(palette.warning))
-                                .bg(rgba((palette.warning << 8) | 0x18))
-                                .child(
-                                    div()
-                                        .text_size(px(12.))
-                                        .font_weight(FontWeight(700.))
-                                        .text_color(rgb(palette.warning))
-                                        .child(status),
-                                ),
-                        )
-                    })
-                    .when_some(failure_banner, |this, (name, error)| {
-                        this.child(
-                            div()
-                                .mb_4()
-                                .w(px(480.))
-                                .max_w_full()
-                                .px_3()
-                                .py_2()
-                                .rounded_md()
-                                .border_1()
-                                .border_color(rgb(palette.danger))
-                                .bg(rgba((palette.danger << 8) | 0x18))
-                                .flex()
-                                .flex_col()
-                                .gap_1()
-                                .child(
-                                    div()
-                                        .text_size(px(12.))
-                                        .font_weight(FontWeight(700.))
-                                        .text_color(rgb(palette.danger))
-                                        .child(format!("Failed to start {name}")),
-                                )
-                                .child(
-                                    div()
-                                        .text_size(px(11.))
-                                        .text_color(rgb(palette.text_muted))
-                                        .child(truncate_preview(&error, 120)),
-                                ),
-                        )
-                    })
                     .child(
                         // Tauri EmptyWorkspaceState: grid w-fit max-w-[30rem] gap-x-4 gap-y-3
                         div()
@@ -144,6 +84,82 @@ impl NyaTermApp {
                                     this.open_quick_switch(window, cx);
                                 }),
                             )),
+                    ),
+            )
+    }
+
+    pub(in crate::features) fn pending_workspace_state(&self) -> impl IntoElement {
+        let palette = self.theme_palette();
+        let name = self
+            .pending_session_display_name()
+            .unwrap_or_else(|| self.tr("terminal.connecting").to_string());
+
+        div()
+            .flex_1()
+            .min_h_0()
+            .flex()
+            .flex_col()
+            .items_center()
+            .justify_center()
+            .gap_3()
+            .bg(rgb(self.terminal_theme_palette().terminal_bg))
+            .child(
+                svg()
+                    .size(px(28.))
+                    .path("icons/conn/connect.svg")
+                    .text_color(rgb(palette.primary)),
+            )
+            .child(
+                div()
+                    .max_w(px(320.))
+                    .px_4()
+                    .text_center()
+                    .text_size(px(12.))
+                    .text_color(rgb(palette.text_dimmed))
+                    .child(name),
+            )
+    }
+
+    pub(in crate::features) fn failed_workspace_state(&self) -> impl IntoElement {
+        let palette = self.theme_palette();
+        let error = self.last_connect_failure_error.clone().unwrap_or_default();
+
+        div()
+            .flex_1()
+            .min_h_0()
+            .flex()
+            .flex_col()
+            .items_center()
+            .justify_center()
+            .gap_3()
+            .bg(rgb(self.terminal_theme_palette().terminal_bg))
+            .child(
+                svg()
+                    .size(px(32.))
+                    .path("icons/session/disconnect.svg")
+                    .text_color(rgb(palette.danger)),
+            )
+            .child(
+                div()
+                    .flex()
+                    .flex_col()
+                    .items_center()
+                    .gap_1()
+                    .px_6()
+                    .text_center()
+                    .child(
+                        div()
+                            .text_size(px(13.))
+                            .font_weight(FontWeight(600.))
+                            .text_color(rgb(palette.text))
+                            .child(self.tr("terminal.connectionFailed")),
+                    )
+                    .child(
+                        div()
+                            .max_w(px(320.))
+                            .text_size(px(11.))
+                            .text_color(rgb(palette.text_dimmed))
+                            .child(truncate_preview(&error, 160)),
                     ),
             )
     }

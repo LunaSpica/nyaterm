@@ -7,6 +7,8 @@ impl NyaTermApp {
         let compact_layout = !cfg!(target_os = "macos");
         let narrow_left = compact_layout && self.last_viewport_size.0 < 1024.;
         let narrow_right = compact_layout && self.last_viewport_size.0 < 768.;
+        let context_icon = self.title_context_icon();
+        let context_label = self.title_context_label();
         // Match Tauri Header: h-10.
         div()
             .h(px(40.))
@@ -86,10 +88,22 @@ impl NyaTermApp {
                     .child(
                         div()
                             .max_w(px(520.))
+                            .flex()
+                            .items_center()
+                            .gap_2()
                             .overflow_hidden()
                             .text_xs()
                             .text_color(rgb(palette.text_muted))
-                            .child(self.title_context_label()),
+                            .when_some(context_icon, |this, icon_path| {
+                                this.child(
+                                    svg()
+                                        .size(px(14.))
+                                        .flex_none()
+                                        .path(icon_path)
+                                        .text_color(rgb(palette.text_muted)),
+                                )
+                            })
+                            .child(div().min_w_0().overflow_hidden().child(context_label)),
                     ),
             )
             .child(
@@ -164,51 +178,45 @@ impl NyaTermApp {
     pub(in crate::features) fn title_context_label(&self) -> String {
         if let Some(session_id) = self.active_session_id.as_deref() {
             let tab_root = self.tab_root_for_session(session_id);
-            let leaf_name = self
-                .session_display_name(session_id)
-                .unwrap_or_else(|| short_id(session_id).to_string());
-            let name = if tab_root != session_id {
-                let tab_name = self
-                    .session_display_name(&tab_root)
-                    .unwrap_or_else(|| short_id(&tab_root).to_string());
-                if tab_name == leaf_name {
-                    leaf_name
-                } else {
-                    format!("{tab_name} › {leaf_name}")
-                }
-            } else {
-                leaf_name
-            };
-            let mut parts = vec![name];
-            if let Some(endpoint) = self.session_endpoint(session_id) {
-                parts.push(endpoint);
-            }
-            if self.is_session_disconnected(session_id) {
-                parts.push("disconnected".to_string());
-            } else if self
-                .session_pane_roots
+            let name = self
+                .session_display_name(&tab_root)
+                .unwrap_or_else(|| short_id(&tab_root).to_string());
+            let has_custom_name = self
+                .session_custom_names
                 .get(&tab_root)
-                .is_some_and(|root| root.is_split())
+                .is_some_and(|value| !value.trim().is_empty());
+            if !has_custom_name
+                && self
+                    .session_info(session_id)
+                    .is_some_and(|session| session.kind == SessionKind::Ssh)
+                && let Some(endpoint) = self.session_endpoint(session_id)
             {
-                let count = self
-                    .session_pane_roots
-                    .get(&tab_root)
-                    .map(|root| root.session_ids().len())
-                    .unwrap_or(1);
-                parts.push(format!("{count} panes"));
+                return format!("{name} — {endpoint}");
             }
-            return parts.join(" · ");
+            return name;
         }
-        if let Some(pending) = self.pending_session_status_label() {
+        if let Some(pending) = self.pending_session_display_name() {
             return pending;
         }
-        if let (Some(failed), Some(error)) = (
-            self.last_connect_failure_name.as_ref(),
-            self.last_connect_failure_error.as_ref(),
-        ) {
-            return format!("Failed {failed} · {}", truncate_preview(error, 40));
+        if let Some(failed) = self.last_connect_failure_name.as_ref() {
+            return failed.clone();
         }
         "NyaTerm".to_string()
+    }
+
+    fn title_context_icon(&self) -> Option<&'static str> {
+        if let Some(session_id) = self.active_session_id.as_deref() {
+            return self
+                .session_info(session_id)
+                .map(|session| session_kind_icon_path(session.kind));
+        }
+        if self.has_pending_session_start() {
+            return Some("icons/conn/connect.svg");
+        }
+        if self.last_connect_failure_name.is_some() {
+            return Some("icons/session/disconnect.svg");
+        }
+        None
     }
 
     pub(in crate::features) fn left_panel_meta(&self) -> &'static str {

@@ -21,6 +21,8 @@ impl NyaTermApp {
         let palette = self.theme_palette();
         let sessions = self.ordered_tab_sessions();
         let session_count = sessions.len();
+        let has_connect_failure =
+            self.last_connect_failure_name.is_some() && self.last_connect_failure_error.is_some();
         // Child index layout for ScrollHandle: optional connecting tab, then sessions,
         // then optional end drop zone. Failed chrome is trailing after sessions.
         let connecting_tab_present = self.has_pending_session_start();
@@ -107,7 +109,7 @@ impl NyaTermApp {
             );
         }
 
-        if sessions.is_empty() && !self.has_pending_session_start() {
+        if sessions.is_empty() && !self.has_pending_session_start() && !has_connect_failure {
             tabs = tabs.child(
                 div()
                     .h_full()
@@ -504,6 +506,8 @@ impl NyaTermApp {
         // Tauri TabBar trailing chrome: optional open-tabs overflow menu + new session menu.
         let open_tabs_menu = self.open_tabs_menu_open;
         let new_session_menu = self.new_session_menu_open;
+        let open_tabs_label = self.tr("terminal.openTabs").to_string();
+        let new_session_label = self.tr("terminal.newSession").to_string();
         let tab_strip_has_overflow = self.session_tab_strip_scroll.max_offset().width > px(0.);
         // Tauri shows Open Tabs only when the strip actually overflows.
         let show_open_tabs_menu = tab_strip_has_overflow || open_tabs_menu;
@@ -543,7 +547,18 @@ impl NyaTermApp {
                             .text_color(rgb(palette.text_muted))
                             .cursor_pointer()
                             .hover(|this| this.bg(rgb(palette.hover)).text_color(rgb(palette.text)))
-                            .child("▾")
+                            .child(
+                                svg()
+                                    .size(px(16.))
+                                    .flex_none()
+                                    .path("icons/chevron-down.svg"),
+                            )
+                            .tooltip(move |_, cx| {
+                                cx.new(|_| {
+                                    crate::features::ChromeTooltip::new(open_tabs_label.clone())
+                                })
+                                .into()
+                            })
                             .on_click(cx.listener(|this, _, _, cx| {
                                 this.toggle_open_tabs_menu(cx);
                             })),
@@ -577,12 +592,16 @@ impl NyaTermApp {
                         } else {
                             rgb(palette.surface)
                         })
-                        .text_size(px(16.))
-                        .font_weight(FontWeight(700.))
                         .text_color(rgb(palette.text_muted))
                         .cursor_pointer()
                         .hover(|this| this.bg(rgb(palette.hover)).text_color(rgb(palette.text)))
-                        .child("+")
+                        .child(svg().size(px(16.)).flex_none().path("icons/conn/add.svg"))
+                        .tooltip(move |_, cx| {
+                            cx.new(|_| {
+                                crate::features::ChromeTooltip::new(new_session_label.clone())
+                            })
+                            .into()
+                        })
                         .on_click(cx.listener(|this, _, _, cx| {
                             this.toggle_new_session_menu(cx);
                         })),

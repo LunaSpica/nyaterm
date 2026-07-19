@@ -25,13 +25,19 @@ impl NyaTermApp {
         // Do not reconcile/prune layout here — paint must stay pure. Session
         // register/close/idle already keep terminal_windows coherent.
         let multi_leaf = self.terminal_windows_is_multi_leaf();
+        let has_connect_failure =
+            self.last_connect_failure_name.is_some() && self.last_connect_failure_error.is_some();
+        let show_tab_strip = !multi_leaf
+            && (self.ordered_tab_session_count() > 0
+                || self.has_pending_session_start()
+                || has_connect_failure);
         let mut workspace = div()
             .flex_1()
             .min_w_0()
             .flex()
             .flex_col()
             .bg(rgb(palette.bg));
-        if !multi_leaf {
+        if show_tab_strip {
             workspace = workspace.child(self.session_tab_strip(cx));
         }
 
@@ -44,6 +50,13 @@ impl NyaTermApp {
     fn workspace_terminal_area(&mut self, cx: &mut Context<Self>) -> gpui::AnyElement {
         let palette = self.theme_palette();
         if self.active_session_id.is_none() {
+            if self.has_pending_session_start() {
+                return self.pending_workspace_state().into_any_element();
+            }
+            if self.last_connect_failure_name.is_some() && self.last_connect_failure_error.is_some()
+            {
+                return self.failed_workspace_state().into_any_element();
+            }
             return self.empty_workspace_state(cx).into_any_element();
         }
         // Multi-leaf tab windows (Tauri TabWindowsWorkspace) take precedence over

@@ -398,14 +398,6 @@ impl NyaTermApp {
         dirty
     }
 
-    pub(in crate::features) fn pending_session_status_label(&self) -> Option<String> {
-        let name = self.pending_session_display_name()?;
-        Some(pending_session_status_message(
-            &name,
-            self.pending_session_auth_wait().as_ref(),
-        ))
-    }
-
     pub(in crate::features) fn pending_session_tab_detail(&self) -> Option<&'static str> {
         if !self.has_pending_session_start() {
             return None;
