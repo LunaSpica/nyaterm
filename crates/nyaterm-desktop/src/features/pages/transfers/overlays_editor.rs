@@ -470,7 +470,7 @@ impl NyaTermApp {
                                 cx.stop_propagation();
                                 this.close_transfer_editor_tab(&close_tab_id, cx);
                             }))
-                            .child("×"),
+                            .child(svg().size(px(13.)).path("icons/window/close.svg")),
                     ),
             );
 

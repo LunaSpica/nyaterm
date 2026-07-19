@@ -528,7 +528,7 @@ impl NyaTermApp {
                             cx.stop_propagation();
                             this.delete_command_suggestion_history(delete_command.clone(), cx);
                         }))
-                        .child("×"),
+                        .child(svg().size(px(13.)).path("icons/fe/delete.svg")),
                 );
             }
             list = list.child(row);

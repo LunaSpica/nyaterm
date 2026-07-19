@@ -517,7 +517,7 @@ pub(super) fn connection_editor_group_select(
                                                         this.commit_connection_editor_new_group(cx);
                                                     }))
                                             })
-                                            .child("+"),
+                                            .child(svg().size(px(16.)).path("icons/conn/add.svg")),
                                     ),
                             )
                             .child(

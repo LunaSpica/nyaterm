@@ -3,7 +3,7 @@ use gpui::{
     ScrollWheelEvent, Window, div, prelude::*, px, rgb, svg,
 };
 
-use crate::widgets::{empty_panel, icon_button, small_button, status_pill};
+use crate::widgets::{empty_panel, icon_button, small_button, status_pill, svg_icon_button};
 use std::collections::{HashMap, HashSet};
 
 use super::super::{

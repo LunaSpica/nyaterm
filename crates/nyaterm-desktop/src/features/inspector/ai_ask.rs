@@ -299,7 +299,7 @@ impl NyaTermApp {
                                         .on_click(cx.listener(|this, _, _, cx| {
                                             this.clear_ai_quote(cx);
                                         }))
-                                        .child("×"),
+                                        .child(svg().size(px(13.)).path("icons/window/close.svg")),
                                 ),
                         )
                     })
@@ -365,7 +365,7 @@ impl NyaTermApp {
                                                     cx,
                                                 );
                                             }))
-                                            .child("×"),
+                                            .child(svg().size(px(11.)).path("icons/window/close.svg")),
                                     ),
                             );
                         }

@@ -141,6 +141,6 @@ pub(super) use crate::terminal::{
     terminal_text_cells,
 };
 pub(super) use crate::widgets::{
-    capability_line, empty_panel, icon_button, mode_button, session_info_row, small_button,
-    status_pill,
+    capability_line, empty_panel, mode_button, session_info_row, small_button,
+    status_pill, svg_icon_button,
 };

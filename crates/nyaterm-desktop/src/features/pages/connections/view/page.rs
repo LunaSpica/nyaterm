@@ -251,7 +251,7 @@ impl NyaTermApp {
                                     window.focus(&this.connection_search_focus);
                                     cx.notify();
                                 }))
-                                .child("×"),
+                                .child(svg().size(px(13.)).path("icons/window/close.svg")),
                         )
                     }),
             )

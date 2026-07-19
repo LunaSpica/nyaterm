@@ -370,7 +370,7 @@ impl NyaTermApp {
             .px_2()
             .border_b_1()
             .border_color(rgb(palette.border))
-            .bg(rgb(palette.surface))
+            .bg(self.shell_surface_color(palette.surface))
             .child(
                 div()
                     .id(id)
@@ -379,11 +379,10 @@ impl NyaTermApp {
                     .items_center()
                     .justify_center()
                     .rounded_sm()
-                    .text_sm()
                     .text_color(rgb(palette.text_muted))
                     .cursor_pointer()
                     .hover(|this| this.bg(rgb(palette.hover)).text_color(rgb(palette.text)))
-                    .child("×")
+                    .child(svg().size(px(16.)).path("icons/window/close.svg"))
                     .on_click(cx.listener(move |this, _, _, cx| {
                         if left {
                             this.mobile_left_open = false;

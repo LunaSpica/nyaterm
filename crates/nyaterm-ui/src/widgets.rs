@@ -1,6 +1,7 @@
 use crate::theme::ThemePalette;
 use gpui::{
     App, ClickEvent, FontWeight, Hsla, IntoElement, SharedString, Window, div, prelude::*, px, rgb,
+    svg,
 };
 
 fn platform_code_font_family() -> &'static str {
@@ -199,5 +200,29 @@ pub fn icon_button(
                 .text_color(rgb(palette.text))
         })
         .child(label)
+        .on_click(on_click)
+}
+
+pub fn svg_icon_button(
+    id: impl Into<String>,
+    icon_path: &'static str,
+    icon_size: f32,
+    palette: ThemePalette,
+    on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
+) -> impl IntoElement {
+    div()
+        .id(SharedString::from(id.into()))
+        .size(px(24.))
+        .flex()
+        .items_center()
+        .justify_center()
+        .rounded_md()
+        .text_color(rgb(palette.text_muted))
+        .cursor_pointer()
+        .hover(move |this| {
+            this.bg(rgb(palette.surface_elevated))
+                .text_color(rgb(palette.text))
+        })
+        .child(svg().size(px(icon_size)).path(icon_path))
         .on_click(on_click)
 }

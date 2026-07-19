@@ -565,10 +565,11 @@ impl NyaTermApp {
                                         this.load_ai_session_messages(session_id.clone(), cx);
                                     })),
                             )
-                            .child(icon_button(
+                            .child(svg_icon_button(
                                 format!("ai-session-delete-{}", session.id),
-                                "×",
-                                self.theme_palette(),
+                                "icons/fe/delete.svg",
+                                14.,
+                                palette,
                                 cx.listener(move |this, _, _, cx| {
                                     this.delete_ai_session(delete_id.clone(), cx);
                                 }),
@@ -661,7 +662,7 @@ impl NyaTermApp {
                                             window.focus(&this.ai_history_search_focus);
                                             cx.notify();
                                         }))
-                                        .child("×"),
+                                        .child(svg().size(px(13.)).path("icons/window/close.svg")),
                                 )
                             }),
                     ),

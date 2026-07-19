@@ -445,7 +445,9 @@ impl NyaTermApp {
                                                 this.bg(rgb(palette.surface_elevated))
                                                     .text_color(rgb(palette.text))
                                             })
-                                            .child("×")
+                                            .child(
+                                                svg().size(px(13.)).path("icons/window/close.svg"),
+                                            )
                                             .on_click(cx.listener(|this, _, _, cx| {
                                                 if this.transfer_browser_search.is_empty() {
                                                     this.transfer_browser_search_expanded = false;

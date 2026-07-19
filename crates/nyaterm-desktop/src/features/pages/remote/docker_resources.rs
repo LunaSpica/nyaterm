@@ -37,9 +37,10 @@ pub(in crate::features::pages::remote) fn docker_images_panel(
                     image.size
                 ),
             )
-            .child(icon_button(
+            .child(svg_icon_button(
                 format!("docker-image-remove-{}", compact_id(&image_id)),
-                "×",
+                "icons/fe/delete.svg",
+                14.,
                 palette,
                 cx.listener(move |this, _, _, cx| {
                     this.request_docker_confirm(
@@ -89,9 +90,10 @@ pub(in crate::features::pages::remote) fn docker_volumes_panel(
                 volume.name.clone(),
                 labels.volume_driver_label(&volume.driver),
             )
-            .child(icon_button(
+            .child(svg_icon_button(
                 format!("docker-volume-remove-{volume_name}"),
-                "×",
+                "icons/fe/delete.svg",
+                14.,
                 palette,
                 cx.listener(move |this, _, _, cx| {
                     this.request_docker_confirm(
@@ -147,9 +149,10 @@ pub(in crate::features::pages::remote) fn docker_networks_panel(
                     network.scope
                 ),
             )
-            .child(icon_button(
+            .child(svg_icon_button(
                 format!("docker-network-remove-{}", compact_id(&network_id)),
-                "×",
+                "icons/fe/delete.svg",
+                14.,
                 palette,
                 cx.listener(move |this, _, _, cx| {
                     this.request_docker_confirm(

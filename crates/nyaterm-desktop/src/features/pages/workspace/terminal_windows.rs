@@ -28,7 +28,7 @@ impl NyaTermApp {
                     .items_center()
                     .border_b_1()
                     .border_color(rgb(palette.border))
-                    .bg(rgb(palette.surface));
+                    .bg(self.shell_surface_color(palette.surface));
                 let global_index: std::collections::HashMap<String, usize> = self
                     .ordered_tab_sessions()
                     .into_iter()
@@ -93,7 +93,7 @@ impl NyaTermApp {
                     let bg = if let Some(custom_color) = custom_color {
                         rgba((custom_color << 8) | if is_active_tab { 0x24 } else { 0x14 })
                     } else if is_active_tab {
-                        rgb(palette.bg)
+                        self.shell_surface_color(palette.bg)
                     } else {
                         rgba(0x00000000)
                     };
@@ -140,7 +140,7 @@ impl NyaTermApp {
                                         .left_0()
                                         .right_0()
                                         .h(px(1.))
-                                        .bg(rgb(palette.bg)),
+                                        .bg(self.shell_surface_color(palette.bg)),
                                 )
                             })
                             .when(custom_color.is_some(), |this| {
@@ -350,7 +350,7 @@ impl NyaTermApp {
                     )
                     .child(canvas)
                     .when_some(drop_zone, |this, zone| {
-                        this.child(Self::tab_dock_drop_overlay(zone, palette))
+                        this.child(self.tab_dock_drop_overlay(zone, palette))
                     });
                 div()
                     .id(SharedString::from(format!("tw-leaf-{id}")))
@@ -444,7 +444,11 @@ impl NyaTermApp {
         }
     }
 
-    fn tab_dock_drop_overlay(zone: TabDockZone, palette: ThemePalette) -> impl IntoElement {
+    fn tab_dock_drop_overlay(
+        &self,
+        zone: TabDockZone,
+        palette: ThemePalette,
+    ) -> impl IntoElement {
         let label = match zone {
             TabDockZone::Center => "Merge into window",
             TabDockZone::Edge(TabDockEdge::Left) => "Split left",
@@ -483,7 +487,7 @@ impl NyaTermApp {
                     .rounded_sm()
                     .border_1()
                     .border_color(accent)
-                    .bg(rgb(palette.surface))
+                    .bg(self.shell_surface_color(palette.surface))
                     .px_3()
                     .py_1()
                     .text_xs()

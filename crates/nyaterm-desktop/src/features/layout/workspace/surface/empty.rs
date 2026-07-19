@@ -23,7 +23,7 @@ impl NyaTermApp {
             .flex()
             .items_center()
             .justify_center()
-            .bg(rgb(terminal_palette.terminal_bg))
+            .bg(self.shell_surface_color(terminal_palette.terminal_bg))
             .px_6()
             .child(
                 div()
@@ -102,7 +102,7 @@ impl NyaTermApp {
             .items_center()
             .justify_center()
             .gap_3()
-            .bg(rgb(self.terminal_theme_palette().terminal_bg))
+            .bg(self.shell_surface_color(self.terminal_theme_palette().terminal_bg))
             .child(
                 svg()
                     .size(px(28.))
@@ -145,7 +145,7 @@ impl NyaTermApp {
             .items_center()
             .justify_center()
             .gap_3()
-            .bg(rgb(self.terminal_theme_palette().terminal_bg))
+            .bg(self.shell_surface_color(self.terminal_theme_palette().terminal_bg))
             .child(
                 svg()
                     .size(px(32.))
